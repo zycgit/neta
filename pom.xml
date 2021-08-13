@@ -3,44 +3,29 @@
     <!-- Maven Info -->
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.hasor</groupId>
-    <artifactId>cobble</artifactId>
-    <version>4.2.6-SNAPSHOT</version>
-    <packaging>jar</packaging>
-
-    <!-- 配置属性 -->
-    <properties>
-        <wtpversion>2.0</wtpversion>
-        <downloadSources>true</downloadSources>
-        <downloadJavadocs>true</downloadJavadocs>
-        <jacoco.version>0.8.5</jacoco.version>
-        <!--<maven.test.skip>true</maven.test.skip>-->
-        <!--<skipTests>true</skipTests>-->
-        <powermock.version>2.0.6</powermock.version>
-        <project.shortname>Hasor-</project.shortname>
-        <project.website>http://www.hasor.net/</project.website>
-        <project.inceptionYear>2020</project.inceptionYear>
-        <javadocs.bottom><![CDATA[  ]]></javadocs.bottom>
-    </properties>
+    <artifactId>cobble-parent</artifactId>
+    <version>4.4.3-SNAPSHOT</version>
+    <packaging>pom</packaging>
 
     <!-- 项目信息 -->
-    <name>HasorCobble</name>
+    <name>Cobble Parent</name>
     <description>java utils</description>
-    <url>${project.website}</url>
-    <inceptionYear>${project.inceptionYear}</inceptionYear>
+    <url>https://www.hasor.net/</url>
+    <inceptionYear>2022</inceptionYear>
 
     <!-- 授权协议 -->
     <licenses>
         <license>
             <name>The Apache Software License, Version 2.0</name>
-            <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+            <url>https://www.apache.org/licenses/LICENSE-2.0.txt</url>
         </license>
     </licenses>
 
     <!-- SCM -->
     <scm>
-        <connection>scm:git:git@git.oschina.net:zycgit/hasor.git</connection>
-        <developerConnection>scm:git:git@git.oschina.net:zycgit/hasor.git</developerConnection>
-        <url>git@git.oschina.net:zycgit/hasor.git</url>
+        <connection>scm:git:git@git.oschina.net:zycgit/cobble.git</connection>
+        <developerConnection>scm:git:git@git.oschina.net:zycgit/cobble.git</developerConnection>
+        <url>git@git.oschina.net:zycgit/cobble.git</url>
         <tag>HEAD</tag>
     </scm>
 
@@ -51,6 +36,61 @@
             <email>zyc@hasor.net</email>
         </developer>
     </developers>
+
+    <modules>
+        <module>cobble-all</module>
+        <module>cobble-lang</module>
+        <module>cobble-loader</module>
+        <module>cobble-dynamic</module>
+        <module>cobble-settings</module>
+        <module>cobble-logging</module>
+        <module>cobble-bytebuf</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>net.hasor</groupId>
+                <artifactId>cobble-lang</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.hasor</groupId>
+                <artifactId>cobble-logging</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.hasor</groupId>
+                <artifactId>cobble-dynamic</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.hasor</groupId>
+                <artifactId>cobble-settings</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.hasor</groupId>
+                <artifactId>cobble-loader</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.hasor</groupId>
+                <artifactId>cobble-bytebuf</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+    <!-- 公共依赖 -->
+    <dependencies>
+        <dependency>
+            <groupId>junit</groupId>
+            <artifactId>junit</artifactId>
+            <version>4.13.2</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
     <!-- 构建描述 -->
     <build>
@@ -84,17 +124,17 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.1.1</version>
+                <version>3.2.0</version>
                 <configuration>
                     <failOnError>false</failOnError>
                     <failOnWarnings>false</failOnWarnings>
                     <doclint>none</doclint>
                     <additionalJOption>--allow-script-in-comments</additionalJOption>
-                    <excludePackageNames>net.hasor.utils.*,net.hasor.libs.*</excludePackageNames>
+                    <excludePackageNames>net.hasor.cobble.asm.*,net.hasor.cobble.setting.provider.yaml.lib.*</excludePackageNames>
                     <encoding>UTF-8</encoding>
                     <docencoding>UTF-8</docencoding>
-                    <header><![CDATA[ [<a target="_blank" href="http://www.hasor.net">Web Site</a>] ]]></header>
-                    <bottom>${javadocs.bottom}</bottom>
+                    <!-- <header><![CDATA[ [<a target="_blank" href="http://www.hasor.net">Web Site</a>] ]]></header>-->
+                    <!-- <bottom>${javadocs.bottom}</bottom>-->
                 </configuration>
                 <executions>
                     <execution>
@@ -109,20 +149,9 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
-                <version>3.1.0</version>
+                <version>3.2.0</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
-                </configuration>
-            </plugin>
-            <!-- eclipse 插件 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-eclipse-plugin</artifactId>
-                <version>2.10</version>
-                <configuration>
-                    <workspace>${basedir}</workspace>
-                    <downloadSources>${downloadSources}</downloadSources>
-                    <downloadJavadocs>${downloadJavadocs}</downloadJavadocs>
                 </configuration>
             </plugin>
             <!-- Test 失败继续 -->
@@ -138,7 +167,7 @@
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>${jacoco.version}</version>
+                <version>0.8.5</version>
                 <executions>
                     <execution>
                         <goals>
@@ -156,44 +185,6 @@
                 <configuration>
                     <outputDirectory>${project.basedir}/target/jacoco-ut</outputDirectory>
                 </configuration>
-            </plugin>
-            <!-- 把 yaml 的源码和 class 集成到项目中 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-shade-plugin</artifactId>
-                <version>3.2.1</version>
-                <executions>
-                    <execution>
-                        <phase>package</phase>
-                        <goals>
-                            <goal>shade</goal>
-                        </goals>
-                        <configuration>
-                            <createSourcesJar>true</createSourcesJar>
-                            <createDependencyReducedPom>false</createDependencyReducedPom>
-                            <artifactSet>
-                                <includes>
-                                    <include>org.yaml:snakeyaml</include>
-                                    <include>net.hasor:cobble</include>
-                                </includes>
-                            </artifactSet>
-                            <relocations>
-                                <relocation>
-                                    <pattern>org.yaml.snakeyaml</pattern>
-                                    <shadedPattern>net.hasor.utils.setting.provider.yaml</shadedPattern>
-                                </relocation>
-                            </relocations>
-                            <filters>
-                                <filter>
-                                    <artifact>*:*</artifact>
-                                    <excludes>
-                                        <exclude>META-INF/maven/org.yaml/**</exclude>
-                                    </excludes>
-                                </filter>
-                            </filters>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>
@@ -242,7 +233,7 @@
                             <autoVersionSubmodules>true</autoVersionSubmodules>
                             <useReleaseProfile>false</useReleaseProfile>
                             <releaseProfiles>release</releaseProfiles>
-                            <tagNameFormat>Release.${project.shortname}@{project.version}</tagNameFormat>
+                            <tagNameFormat>Release.Cobble-@{project.version}</tagNameFormat>
                             <goals>deploy</goals>
                         </configuration>
                     </plugin>
@@ -250,40 +241,4 @@
             </build>
         </profile>
     </profiles>
-
-    <!-- 公共依赖 -->
-    <dependencies>
-        <dependency>
-            <groupId>org.yaml</groupId>
-            <artifactId>snakeyaml</artifactId>
-            <version>1.27</version>
-            <scope>compile</scope>
-            <optional>true</optional>
-        </dependency>
-
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.12</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>com.alibaba</groupId>
-            <artifactId>fastjson</artifactId>
-            <version>1.2.67</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.powermock</groupId>
-            <artifactId>powermock-module-junit4</artifactId>
-            <version>${powermock.version}</version>
-            <scope>test</scope>
-        </dependency>
-        <dependency>
-            <groupId>org.powermock</groupId>
-            <artifactId>powermock-api-mockito2</artifactId>
-            <version>${powermock.version}</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
 </project>

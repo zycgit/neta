@@ -1,0 +1,38 @@
+.cache
+test-work
+bin
+/out/
+.DS_Store
+_book
+dependency-reduced-pom.xml
+.gradle
+/.gradle/
+
+# nodejs
+package-lock.json
+node_modules
+dist
+npm-debug.logger*
+yarn-debug.logger*
+yarn-error.logger*
+
+# Editor directories and files
+.settings
+target
+.classpath
+.project
+*.iml
+*/*.iml
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+pom.xml.versionsBackup
+
+# codes
+gen/
+logs/*
+hasor-dataql/logs/*
+hasor-rsf/logs/*
