@@ -1,0 +1,82 @@
+package net.hasor.cobble.bytebuf;
+import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
+
+/**
+ * Allows to free direct {@link ByteBuffer}s. by using Cleaner.
+ */
+final class CleanerJava6 extends Cleaner {
+    private static final long   CLEANER_FIELD_OFFSET;
+    private static final Method CLEAN_METHOD;
+    private static final Field  CLEANER_FIELD;
+
+    static {
+        long fieldOffset = -1;
+        Method clean = null;
+        Field cleanerField = null;
+
+        if (hasUnsafe()) {
+            try {
+                final Object cleaner;
+                // If we have sun.misc.Unsafe we will use it as its faster then using reflection, otherwise let us try reflection as last resort.
+                final ByteBuffer direct = ByteBuffer.allocateDirect(1);
+                cleanerField = direct.getClass().getDeclaredField("cleaner");
+                if (!hasUnsafe()) {
+                    cleanerField.setAccessible(true); // We need to make it accessible if we do not use Unsafe as we will access it via reflection.
+                    fieldOffset = UNSAFE.objectFieldOffset(cleanerField);
+                    cleaner = UNSAFE.getObject(direct, fieldOffset);
+                } else {
+                    fieldOffset = -1;
+                    cleaner = cleanerField.get(direct);
+                }
+
+                clean = cleaner.getClass().getDeclaredMethod("clean");
+                clean.invoke(cleaner);
+                logger.debug("java.nio.ByteBuffer.cleaner(): available");
+            } catch (Throwable e) {
+                // We don't have ByteBuffer.cleaner().
+                fieldOffset = -1;
+                clean = null;
+                cleanerField = null;
+
+                if (logger.isDebugEnabled()) {
+                    logger.warn("java.nio.ByteBuffer.cleaner(): unavailable", e);
+                }
+            }
+        } else {
+            logger.debug("java.nio.ByteBuffer.cleaner(): unavailable");
+        }
+
+        CLEANER_FIELD = cleanerField;
+        CLEANER_FIELD_OFFSET = fieldOffset;
+        CLEAN_METHOD = clean;
+    }
+
+    static boolean isSupported() {
+        return CLEANER_FIELD_OFFSET != -1 || CLEANER_FIELD != null;
+    }
+
+    @Override
+    public void freeDirectBuffer(ByteBuffer buffer) {
+        if (!buffer.isDirect()) {
+            return;
+        }
+
+        try {
+            final Object cleaner;
+            // If CLEANER_FIELD_OFFSET == -1 we need to use reflection to access the cleaner, otherwise we can use sun.misc.Unsafe.
+            if (CLEANER_FIELD_OFFSET == -1) {
+                cleaner = CLEANER_FIELD.get(buffer);
+            } else {
+                cleaner = UNSAFE.getObject(buffer, CLEANER_FIELD_OFFSET);
+            }
+
+            if (cleaner != null) {
+                CLEAN_METHOD.invoke(cleaner);
+            }
+        } catch (Throwable e) {
+            UNSAFE.throwException(e);
+        }
+    }
+}
