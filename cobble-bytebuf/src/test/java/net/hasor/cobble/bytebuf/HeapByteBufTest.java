@@ -192,7 +192,7 @@ public class HeapByteBufTest {
 
     @Test
     public void extendTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.heapBuffer(256, 512);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(256, 512);
         byte[] array1 = byteBuf.array();
 
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
@@ -225,10 +225,10 @@ public class HeapByteBufTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf1 = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.heapBuffer();
+        ByteBuf byteBuf1 = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf1.writeBytes(RandomUtils.nextBytes(byteBuf1.capacity()));
 
-        SliceNioByteBuf byteBuf2 = byteBuf1.copy();
+        ByteBuf byteBuf2 = byteBuf1.copy();
 
         assert byteBuf1.array() != byteBuf2.array();
 

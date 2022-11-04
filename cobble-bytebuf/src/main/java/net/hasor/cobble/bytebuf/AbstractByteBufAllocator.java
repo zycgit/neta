@@ -136,7 +136,11 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf pooledHeapBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
-        return new PooledNioByteBuf(Math.min(initialCapacity, maxCapacity), maxCapacity, sliceSize, this.heapNioChunkAllocator);
+        if (maxCapacity < 0) {
+            return new PooledNioByteBuf(initialCapacity, maxCapacity, sliceSize, this.heapNioChunkAllocator);
+        } else {
+            return new PooledNioByteBuf(Math.min(initialCapacity, maxCapacity), maxCapacity, sliceSize, this.heapNioChunkAllocator);
+        }
     }
 
     @Override

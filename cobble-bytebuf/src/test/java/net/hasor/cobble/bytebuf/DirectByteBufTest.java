@@ -195,7 +195,7 @@ public class DirectByteBufTest {
 
     @Test
     public void extendTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer(256, 512);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(256, 512);
         byte[] array1 = byteBuf.array();
 
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
@@ -235,7 +235,7 @@ public class DirectByteBufTest {
 
         List<Object> list = new LinkedList<>();
         for (int i = 0; i < 1000; i++) {
-            SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer();
             byteBuf.writeBytes(result);
             byteBuf.free();
             list.add(byteBuf);
@@ -244,10 +244,10 @@ public class DirectByteBufTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf1 = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
+        ByteBuf byteBuf1 = ByteBufAllocator.DEFAULT.directBuffer();
         byteBuf1.writeBytes(RandomUtils.nextBytes(byteBuf1.capacity()));
 
-        SliceNioByteBuf byteBuf2 = byteBuf1.copy();
+        ByteBuf byteBuf2 = byteBuf1.copy();
 
         assert byteBuf1.array() != byteBuf2.array();
 

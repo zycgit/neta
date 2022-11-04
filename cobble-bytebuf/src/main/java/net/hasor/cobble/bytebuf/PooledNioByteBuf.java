@@ -23,11 +23,11 @@ import java.util.LinkedList;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class PooledNioByteBuf extends AbstractByteBuf {
-    private final LinkedList<NioChunk> buffers = new LinkedList<>();
-    private       int                  capacity;
-    private final int                  sliceSize;
-    private final NioChunkAllocator    chunkAllocator;
-    private       boolean              isFree;
+    protected final LinkedList<NioChunk> buffers = new LinkedList<>();
+    private         int                  capacity;
+    private final   int                  sliceSize;
+    private final   NioChunkAllocator    chunkAllocator;
+    private         boolean              isFree;
 
     protected PooledNioByteBuf(int capacity, int maxCapacity, int sliceSize, NioChunkAllocator chunkAllocator) {
         super(maxCapacity);
@@ -102,7 +102,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
                 off = off + debris;
                 len = len - debris;
                 baseOffset = 0;
-                startBuf++;
+                checkOrCreate(++startBuf);
             } while (len > 0);
         } finally {
             lock.writeLock().unlock();

@@ -4,13 +4,12 @@ import net.hasor.cobble.codec.MD5;
 import org.junit.Test;
 
 import java.nio.BufferOverflowException;
-import java.nio.ByteBuffer;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
-public class PoodHeapByteBufTest {
+public class PooledHeapByteBufTest {
     @Test
     public void writeByteTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
@@ -35,16 +34,18 @@ public class PoodHeapByteBufTest {
         }
 
         byteBuf.markWriter();
+
         assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
-
         byteBuf.markReader();
+
         byteBuf.writeByte((byte) 5);
         byteBuf.writeByte((byte) 6);
         byteBuf.writeByte((byte) 7);
         byteBuf.writeByte((byte) 8);
+        byteBuf.markWriter();
 
         assert byteBuf.readByte() == 5;
         assert byteBuf.readByte() == 6;
@@ -54,81 +55,58 @@ public class PoodHeapByteBufTest {
 
     @Test
     public void writeByteTest02() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
         byteBuf.writeByte((byte) 3);
-
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 0;
-
         byteBuf.markWriter();
+
         assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
         assert byteBuf.readByte() == 3;
-
         byteBuf.markReader();
+
         byteBuf.writeByte((byte) 4);
         byteBuf.writeByte((byte) 5);
         byteBuf.writeByte((byte) 6);
-
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
-
         byteBuf.markWriter();
+
         assert byteBuf.readByte() == 4;
         assert byteBuf.readByte() == 5;
         assert byteBuf.readByte() == 6;
+        byteBuf.markReader();
     }
 
     @Test
     public void writeBytesTest01() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
-
-        // not markIndex yet
-        try {
-            byteBuf.writeByte((byte) 5);
-            assert false;
-        } catch (BufferOverflowException e) {
-            assert true;
-        }
-        try {
-            byteBuf.readByte();
-            assert false;
-        } catch (IndexOutOfBoundsException e) {
-            assert true;
-        }
-
         byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+
         byte[] arrayRead = new byte[6];
+        byteBuf.resetReader();
         byteBuf.readBytes(arrayRead);
         assert arrayRead[0] == 1;
         assert arrayRead[1] == 2;
         assert arrayRead[2] == 3;
         assert arrayRead[3] == 4;
-
         byteBuf.markReader();
+
         byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
-
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 7;
-        assert direct.get(3) == 8;
-
         byteBuf.markWriter();
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
+
+        byteBuf.resetReader();
         byteBuf.readBytes(arrayRead);
         assert arrayRead[0] == 5;
         assert arrayRead[1] == 6;
@@ -138,31 +116,31 @@ public class PoodHeapByteBufTest {
 
     @Test
     public void writeBytesTest02() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 0;
-
         byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+
+        byteBuf.resetReader();
         byte[] arrayRead = new byte[6];
         assert byteBuf.readBytes(arrayRead) == 3;
         assert arrayRead[0] == 1;
         assert arrayRead[1] == 2;
         assert arrayRead[2] == 3;
-
         byteBuf.markReader();
+
         byteBuf.writeBytes(new byte[] { 4, 5, 6 });
-
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
-
         byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 4;
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+
+        byteBuf.resetReader();
         assert byteBuf.readBytes(arrayRead) == 3;
         assert arrayRead[0] == 4;
         assert arrayRead[1] == 5;
@@ -171,7 +149,7 @@ public class PoodHeapByteBufTest {
 
     @Test
     public void writeBytesTest03() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -189,7 +167,7 @@ public class PoodHeapByteBufTest {
 
     @Test
     public void extendTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer(256, 512);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(256, 512, 64);
         byte[] array1 = byteBuf.array();
 
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
@@ -209,9 +187,9 @@ public class PoodHeapByteBufTest {
 
     @Test
     public void freeTest01() {
-        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
+        PooledNioByteBuf byteBuf = (PooledNioByteBuf) ByteBufAllocator.DEFAULT.pooledHeapBuffer();
         byteBuf.free();
-        assert byteBuf.data == null;
+        assert byteBuf.buffers.isEmpty();
 
         try {
             byteBuf.writeByte((byte) 5);
@@ -229,7 +207,7 @@ public class PoodHeapByteBufTest {
 
         List<Object> list = new LinkedList<>();
         for (int i = 0; i < 1000; i++) {
-            SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer();
             byteBuf.writeBytes(result);
             byteBuf.free();
             list.add(byteBuf);
@@ -238,10 +216,10 @@ public class PoodHeapByteBufTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf1 = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
+        ByteBuf byteBuf1 = ByteBufAllocator.DEFAULT.pooledHeapBuffer();
         byteBuf1.writeBytes(RandomUtils.nextBytes(byteBuf1.capacity()));
 
-        SliceNioByteBuf byteBuf2 = byteBuf1.copy();
+        ByteBuf byteBuf2 = byteBuf1.copy();
 
         assert byteBuf1.array() != byteBuf2.array();
 
@@ -253,7 +231,7 @@ public class PoodHeapByteBufTest {
     @Test
     public void errorTest01() {
         try {
-            ByteBufAllocator.DEFAULT.directBuffer(-1);
+            ByteBufAllocator.DEFAULT.pooledHeapBuffer(-1, 123, 64);
             assert false;
         } catch (IllegalArgumentException e) {
             assert e.getMessage().equals("0 > capacity > maxCapacity ( gt 0 or eq -1)");
