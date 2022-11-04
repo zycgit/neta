@@ -16,6 +16,11 @@
 package net.hasor.cobble.bytebuf;
 import java.nio.BufferOverflowException;
 
+/**
+ * 基于 字节数组的 ByteBuf 接口实现。
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
+ */
 public class ArrayByteBuf extends AbstractByteBuf {
     private byte[]  data;
     private boolean isFree;
@@ -26,19 +31,21 @@ public class ArrayByteBuf extends AbstractByteBuf {
         this.isFree = false;
     }
 
-    public ArrayByteBuf(int initialCapacity, int maxCapacity) {
+    public ArrayByteBuf(int capacity, int maxCapacity) {
         super(maxCapacity);
-        this.data = new byte[initialCapacity];
-        this.isFree = false;
-    }
+        if (capacity < 0 || maxCapacity > 0) {
+            if (!(0 < capacity && capacity <= maxCapacity)) {
+                throw new IllegalArgumentException("0 > capacity > maxCapacity ( gt 0 or eq -1)");
+            }
+        }
 
-    public byte[] array() {
-        return this.data;
+        this.data = new byte[capacity];
+        this.isFree = false;
     }
 
     private void checkFree() {
         if (this.isFree) {
-            throw new IllegalStateException("ByteBuf Has been released.");
+            throw new IllegalStateException("has been released.");
         }
     }
 
@@ -140,8 +147,17 @@ public class ArrayByteBuf extends AbstractByteBuf {
         return this.data.length;
     }
 
+    public byte[] array() {
+        return this.data;
+    }
+
     @Override
-    public ByteBuf copy() {
+    public boolean isDirect() {
+        return false;
+    }
+
+    @Override
+    public ArrayByteBuf copy() {
         checkFree();
 
         try {

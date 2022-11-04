@@ -1,3 +1,18 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package net.hasor.cobble.bytebuf;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
@@ -5,6 +20,8 @@ import java.nio.ByteBuffer;
 
 /**
  * Allows to free direct {@link ByteBuffer}s. by using Cleaner.
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
  */
 final class CleanerJava6 extends Cleaner {
     private static final long   CLEANER_FIELD_OFFSET;
@@ -16,36 +33,33 @@ final class CleanerJava6 extends Cleaner {
         Method clean = null;
         Field cleanerField = null;
 
-        if (hasUnsafe()) {
-            try {
-                final Object cleaner;
-                // If we have sun.misc.Unsafe we will use it as its faster then using reflection, otherwise let us try reflection as last resort.
-                final ByteBuffer direct = ByteBuffer.allocateDirect(1);
-                cleanerField = direct.getClass().getDeclaredField("cleaner");
-                if (!hasUnsafe()) {
-                    cleanerField.setAccessible(true); // We need to make it accessible if we do not use Unsafe as we will access it via reflection.
-                    fieldOffset = UNSAFE.objectFieldOffset(cleanerField);
-                    cleaner = UNSAFE.getObject(direct, fieldOffset);
-                } else {
-                    fieldOffset = -1;
-                    cleaner = cleanerField.get(direct);
-                }
+        try {
+            final Object cleaner;
+            // If we have sun.misc.Unsafe we will use it as its faster then using reflection, otherwise let us try reflection as last resort.
+            final ByteBuffer direct = ByteBuffer.allocateDirect(1);
+            cleanerField = direct.getClass().getDeclaredField("cleaner");
+            cleanerField.setAccessible(true); // We need to make it accessible if we do not use Unsafe as we will access it via reflection.
 
-                clean = cleaner.getClass().getDeclaredMethod("clean");
-                clean.invoke(cleaner);
-                logger.debug("java.nio.ByteBuffer.cleaner(): available");
-            } catch (Throwable e) {
-                // We don't have ByteBuffer.cleaner().
+            if (!hasUnsafe()) {
+                fieldOffset = UNSAFE.objectFieldOffset(cleanerField);
+                cleaner = UNSAFE.getObject(direct, fieldOffset);
+            } else {
                 fieldOffset = -1;
-                clean = null;
-                cleanerField = null;
-
-                if (logger.isDebugEnabled()) {
-                    logger.warn("java.nio.ByteBuffer.cleaner(): unavailable", e);
-                }
+                cleaner = cleanerField.get(direct);
             }
-        } else {
-            logger.debug("java.nio.ByteBuffer.cleaner(): unavailable");
+
+            clean = cleaner.getClass().getDeclaredMethod("clean");
+            clean.invoke(cleaner);
+            logger.debug("java.nio.ByteBuffer.cleaner(): available");
+        } catch (Throwable e) {
+            // We don't have ByteBuffer.cleaner().
+            fieldOffset = -1;
+            clean = null;
+            cleanerField = null;
+
+            if (logger.isDebugEnabled()) {
+                logger.warn("java.nio.ByteBuffer.cleaner(): unavailable", e);
+            }
         }
 
         CLEANER_FIELD = cleanerField;

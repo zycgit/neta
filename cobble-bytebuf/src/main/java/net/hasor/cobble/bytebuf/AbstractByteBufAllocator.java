@@ -1,10 +1,9 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -19,12 +18,30 @@ import java.nio.ByteBuffer;
 
 /**
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     protected final int               initialCapacityByDefault;
     protected final int               sliceSizeByDefault;
-    protected final NioChunkAllocator heapNioChunkAllocator   = capacity -> new NioChunk(ByteBuffer.allocate(capacity));
-    protected final NioChunkAllocator directNioChunkAllocator = capacity -> new NioChunk(ByteBuffer.allocateDirect(capacity));
+    protected final NioChunkAllocator heapNioChunkAllocator   = new NioChunkAllocator() {
+        public NioChunk allocateBuffer(int capacity) {
+            return new NioChunk(ByteBuffer.allocate(capacity));
+        }
+
+        public boolean isDirect() {
+            return false;
+        }
+    };
+    protected final NioChunkAllocator directNioChunkAllocator = new NioChunkAllocator() {
+        public NioChunk allocateBuffer(int capacity) {
+            return new NioChunk(ByteBuffer.allocateDirect(capacity));
+        }
+
+        public boolean isDirect() {
+            return true;
+        }
+    };
 
     /** Create new instance */
     protected AbstractByteBufAllocator(int initialCapacityByDefault, int sliceSizeByDefault) {
@@ -34,7 +51,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf buffer() {
-        return this.buffer(this.initialCapacityByDefault, this.initialCapacityByDefault);
+        return this.buffer(this.initialCapacityByDefault, -1);
     }
 
     @Override
@@ -44,7 +61,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf arrayBuffer() {
-        return this.arrayBuffer(this.initialCapacityByDefault, this.initialCapacityByDefault);
+        return this.arrayBuffer(this.initialCapacityByDefault, -1);
     }
 
     @Override
@@ -53,8 +70,13 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     }
 
     @Override
-    public ByteBuf arrayBuffer(int initialCapacity) {
-        return this.arrayBuffer(initialCapacity, initialCapacity);
+    public ByteBuf wrap(ByteBuffer javaBuffer) {
+        return new SliceNioByteBuf(javaBuffer);
+    }
+
+    @Override
+    public ByteBuf arrayBuffer(int capacity) {
+        return this.arrayBuffer(capacity, capacity);
     }
 
     @Override
@@ -64,12 +86,12 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf heapBuffer() {
-        return this.heapBuffer(this.initialCapacityByDefault, this.initialCapacityByDefault);
+        return this.heapBuffer(this.initialCapacityByDefault, -1);
     }
 
     @Override
-    public ByteBuf heapBuffer(int initialCapacity) {
-        return this.heapBuffer(initialCapacity, initialCapacity);
+    public ByteBuf heapBuffer(int capacity) {
+        return this.heapBuffer(capacity, capacity);
     }
 
     @Override
@@ -79,12 +101,12 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf directBuffer() {
-        return this.directBuffer(this.initialCapacityByDefault, this.initialCapacityByDefault);
+        return this.directBuffer(this.initialCapacityByDefault, -1);
     }
 
     @Override
-    public ByteBuf directBuffer(int initialCapacity) {
-        return this.directBuffer(initialCapacity, initialCapacity);
+    public ByteBuf directBuffer(int capacity) {
+        return this.directBuffer(capacity, capacity);
     }
 
     @Override
@@ -94,32 +116,32 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf pooledBuffer() {
-        return this.pooledBuffer(this.initialCapacityByDefault, this.initialCapacityByDefault, this.sliceSizeByDefault);
+        return this.pooledBuffer(this.initialCapacityByDefault, -1, this.sliceSizeByDefault);
     }
 
     @Override
     public ByteBuf pooledBuffer(int maxCapacity, int sliceSize) {
-        return this.pooledBuffer(maxCapacity, maxCapacity, sliceSize);
+        return this.pooledBuffer(this.initialCapacityByDefault, maxCapacity, sliceSize);
     }
 
     @Override
     public ByteBuf pooledHeapBuffer() {
-        return this.pooledHeapBuffer(this.initialCapacityByDefault, this.initialCapacityByDefault, this.sliceSizeByDefault);
+        return this.pooledHeapBuffer(this.initialCapacityByDefault, -1, this.sliceSizeByDefault);
     }
 
     @Override
     public ByteBuf pooledHeapBuffer(int maxCapacity, int sliceSize) {
-        return this.pooledHeapBuffer(maxCapacity, maxCapacity, sliceSize);
+        return this.pooledHeapBuffer(this.initialCapacityByDefault, maxCapacity, sliceSize);
     }
 
     @Override
     public ByteBuf pooledHeapBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
-        return new PooledNioByteBuf(initialCapacity, maxCapacity, sliceSize, this.heapNioChunkAllocator);
+        return new PooledNioByteBuf(Math.min(initialCapacity, maxCapacity), maxCapacity, sliceSize, this.heapNioChunkAllocator);
     }
 
     @Override
     public ByteBuf pooledDirectBuffer() {
-        return this.pooledDirectBuffer(this.initialCapacityByDefault, this.initialCapacityByDefault, this.sliceSizeByDefault);
+        return this.pooledDirectBuffer(this.initialCapacityByDefault, -1, this.sliceSizeByDefault);
     }
 
     @Override

@@ -30,6 +30,12 @@ public interface ByteBuf {
     /** 最大限制 */
     int capacity();
 
+    /** ByteBuf 的字节数组形态 */
+    byte[] array();
+
+    /** ByteBuf 是否为堆外方式 */
+    boolean isDirect();
+
     /** 复制个 ByteBuf , 连同 buffer 的数据一起复制 */
     ByteBuf copy();
 
@@ -476,10 +482,13 @@ public interface ByteBuf {
     /** 查找下一个 expect 字符串的出现的位置（使用指定的编码），该方法不会更新 readerIndex 值。如果不存在期待的字符串，那么返回 -1。 */
     default int expect(String expect, Charset charset) {
         int len = expect.getBytes(charset).length;
-        if (this.readableBytes() >= len) {
-            int loopCount = this.readableBytes() - len;
+        int readableBytes = this.readableBytes();
+        int readerIndex = this.readerIndex();
+
+        if (readableBytes >= len) {
+            int loopCount = readableBytes - len;
             for (int i = 0; i <= loopCount; i++) {
-                String dat = this.getString(i, len, charset);
+                String dat = this.getString(readerIndex + i, len, charset);
                 if (dat.equals(expect)) {
                     return i;
                 }
@@ -510,5 +519,47 @@ public interface ByteBuf {
      * 比如：readLine 可以写作 readExpectString('\n', StandardCharsets.US_ASCII) */
     default String readExpect(char expect, Charset charset) {
         return readExpect(String.valueOf(expect), charset);
+    }
+
+    /** 查找最后一个 expect 字符串的出现的位置（使用指定的编码），该方法不会更新 readerIndex 值。如果不存在期待的字符串，那么返回 -1。 */
+    default int expectLast(String expect, Charset charset) {
+        int len = expect.getBytes(charset).length;
+        int readableBytes = this.readableBytes();
+        int readerIndex = this.readerIndex();
+
+        if (readableBytes >= len) {
+            int loopCount = readableBytes - len;
+            for (int i = loopCount; i >= 0; i--) {
+                String dat = this.getString(readerIndex + i, len, charset);
+                if (dat.equals(expect)) {
+                    return i;
+                }
+            }
+        }
+        return -1;
+    }
+
+    /** 查找最后一个 expect 字符的出现的位置（使用指定的编码），该方法不会更新 readerIndex 值。如果不存在期待的字符，那么返回 -1。 */
+    default int expectLast(char expect, Charset charset) {
+        return expectLast(String.valueOf(expect), charset);
+    }
+
+    /** 从当前位置开始读取，直到遇到最后一个 expect 字符串读完。如果没有期待的 expect 字符串那么返回 null。
+     * 比如：readLine 可以写作 readExpectString("\n", StandardCharsets.US_ASCII) */
+    default String readExpectLast(String expect, Charset charset) {
+        int readLen = -1;
+        if ((readLen = this.expectLast(expect, charset)) >= 0) {
+            String str = readString(readLen, charset);
+            this.skipReadableBytes(expect.getBytes(charset).length);
+            return str;
+        } else {
+            return null;
+        }
+    }
+
+    /** 从当前位置开始读取，直到遇到最后一个 expect 字符串读完。如果没有期待的 expect 字符串那么返回 null。
+     * 比如：readLine 可以写作 readExpectString('\n', StandardCharsets.US_ASCII) */
+    default String readExpectLast(char expect, Charset charset) {
+        return readExpectLast(String.valueOf(expect), charset);
     }
 }

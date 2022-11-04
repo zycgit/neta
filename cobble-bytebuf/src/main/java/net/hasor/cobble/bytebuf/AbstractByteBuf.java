@@ -20,7 +20,11 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 import static net.hasor.cobble.bytebuf.Bits.*;
 
-// readMark <= readIndex <= writerMark <= writerIndex <= capacity
+/**
+ * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
+ */
 public abstract class AbstractByteBuf implements ByteBuf {
     protected       int           markedReaderIndex;
     protected       int           markedWriterIndex;
@@ -336,11 +340,15 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public int getBytes(int offset, byte[] b, int off, int len) {
-        if ((offset + len) < this.writerIndex()) {
+        if ((offset + len) <= this.writerIndex()) {
             return this._getBytes(offset, b, off, len);
         } else {
             int readableBytes = this.writerIndex() - (offset + len);
-            return this._getBytes(offset, b, off, readableBytes);
+            if (readableBytes < 0) {
+                return -1;
+            } else {
+                return this._getBytes(offset, b, off, readableBytes);
+            }
         }
     }
 

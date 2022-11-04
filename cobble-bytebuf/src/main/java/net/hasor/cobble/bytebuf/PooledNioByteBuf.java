@@ -17,6 +17,11 @@ package net.hasor.cobble.bytebuf;
 import java.nio.BufferOverflowException;
 import java.util.LinkedList;
 
+/**
+ * 基于 NioChunk 池化的 ByteBuf 接口实现，提供了扩缩容零拷贝实现
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
+ */
 public class PooledNioByteBuf extends AbstractByteBuf {
     private final LinkedList<NioChunk> buffers = new LinkedList<>();
     private       int                  capacity;
@@ -26,6 +31,12 @@ public class PooledNioByteBuf extends AbstractByteBuf {
 
     protected PooledNioByteBuf(int capacity, int maxCapacity, int sliceSize, NioChunkAllocator chunkAllocator) {
         super(maxCapacity);
+        if (capacity < 0 || maxCapacity > 0) {
+            if (!(0 < capacity && capacity <= maxCapacity)) {
+                throw new IllegalArgumentException("0 > capacity > maxCapacity ( gt 0 or eq -1)");
+            }
+        }
+
         this.capacity = capacity;
         this.sliceSize = sliceSize;
         this.chunkAllocator = chunkAllocator;
@@ -39,8 +50,18 @@ public class PooledNioByteBuf extends AbstractByteBuf {
 
     private void checkFree() {
         if (this.isFree) {
-            throw new IllegalStateException("ByteBuf Has been released.");
+            throw new IllegalStateException("has been released.");
         }
+    }
+
+    private int checkOrCreate(int startBuf) {
+        if (this.buffers.size() <= startBuf) {
+            for (int i = this.buffers.size(); i <= startBuf; i++) {
+                this.buffers.add(this.extendByteBuffer(this.sliceSize));
+            }
+        }
+
+        return startBuf;
     }
 
     @Override
@@ -51,7 +72,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             lock.writeLock().lock();
             int markedReaderIndex = this.getMarkedReaderIndex();
             int targetOffset = markedReaderIndex + offset;
-            int startBuf = targetOffset / this.sliceSize;
+            int startBuf = checkOrCreate(targetOffset / this.sliceSize);
             int baseOffset = targetOffset % this.sliceSize;
 
             this.buffers.get(startBuf).put(baseOffset, b);
@@ -68,7 +89,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             lock.writeLock().lock();
             int markedReaderIndex = this.getMarkedReaderIndex();
             int targetOffset = markedReaderIndex + offset;
-            int startBuf = targetOffset / this.sliceSize;
+            int startBuf = checkOrCreate(targetOffset / this.sliceSize);
             int baseOffset = targetOffset % this.sliceSize;
 
             do {
@@ -99,6 +120,10 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             int startBuf = targetOffset / this.sliceSize;
             int baseOffset = targetOffset % this.sliceSize;
 
+            if (startBuf > this.buffers.size()) {
+                return 0;
+            }
+
             return this.buffers.get(startBuf).get(baseOffset);
         } finally {
             lock.writeLock().unlock();
@@ -120,6 +145,10 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             do {
                 int debris = this.sliceSize - baseOffset;
                 int thisRead = Math.min(debris, len);
+                if (startBuf > this.buffers.size()) {
+                    break;
+                }
+
                 NioChunk buffer = this.buffers.get(startBuf);
 
                 buffer.clearLimit(this.sliceSize);
@@ -198,7 +227,19 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    public ByteBuf copy() {
+    public byte[] array() {
+        byte[] array = new byte[this.capacity()];
+        this.getBytes(0, array);
+        return array;
+    }
+
+    @Override
+    public boolean isDirect() {
+        return this.chunkAllocator.isDirect();
+    }
+
+    @Override
+    public PooledNioByteBuf copy() {
         checkFree();
 
         try {

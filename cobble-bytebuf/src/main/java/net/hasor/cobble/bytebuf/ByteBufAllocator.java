@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import java.nio.ByteBuffer;
+
 /**
- * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
  */
 public interface ByteBufAllocator {
     ByteBufAllocator DEFAULT = ByteBufUtil.DEFAULT_ALLOCATOR;
@@ -44,8 +47,11 @@ public interface ByteBufAllocator {
     /** Allocate a {@link ByteBuf}, with the bytes array. */
     ByteBuf wrap(byte[] bytes);
 
+    /** Allocate a {@link ByteBuf}, with the ByteBuffer. */
+    ByteBuf wrap(ByteBuffer javaBuffer);
+
     /** Allocate a {@link ByteBuf}, with the bytes array. */
-    ByteBuf arrayBuffer(int initialCapacity);
+    ByteBuf arrayBuffer(int capacity);
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
     ByteBuf arrayBuffer(int initialCapacity, int maxCapacity);
@@ -54,7 +60,7 @@ public interface ByteBufAllocator {
     ByteBuf heapBuffer();
 
     /** Allocate a heap {@link ByteBuf} with the given initial capacity. */
-    ByteBuf heapBuffer(int initialCapacity);
+    ByteBuf heapBuffer(int capacity);
 
     /** Allocate a heap {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
     ByteBuf heapBuffer(int initialCapacity, int maxCapacity);
@@ -63,7 +69,7 @@ public interface ByteBufAllocator {
     ByteBuf directBuffer();
 
     /** Allocate a direct {@link ByteBuf} with the given initial capacity. */
-    ByteBuf directBuffer(int initialCapacity);
+    ByteBuf directBuffer(int capacity);
 
     /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
     ByteBuf directBuffer(int initialCapacity, int maxCapacity);

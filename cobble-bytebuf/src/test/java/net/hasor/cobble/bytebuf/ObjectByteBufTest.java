@@ -1,6 +1,8 @@
 package net.hasor.cobble.bytebuf;
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
+
 public class ObjectByteBufTest {
     @Test
     public void intObjectTest01() {
@@ -156,5 +158,20 @@ public class ObjectByteBufTest {
         assert byteBuf.getUInt16LE(0) == 36848;
         assert byteBuf.getUInt24LE(2) == 9433258;
         assert byteBuf.getUInt32LE(5) == 2156916906L;
+    }
+
+    @Test
+    public void stringTest01() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+
+        byteBuf.writeString("hello\n", StandardCharsets.UTF_8);
+        byteBuf.writeString("word\n", StandardCharsets.UTF_8);
+        byteBuf.markWriter();
+
+        assert byteBuf.readExpect('\n', StandardCharsets.UTF_8).equals("hello");
+        assert byteBuf.readExpect('\n', StandardCharsets.UTF_8).equals("word");
+
+        byteBuf.resetReader();
+        assert byteBuf.readExpectLast('\n', StandardCharsets.UTF_8).equals("hello\nword");
     }
 }

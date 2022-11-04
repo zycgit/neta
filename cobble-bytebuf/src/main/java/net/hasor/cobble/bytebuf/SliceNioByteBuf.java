@@ -15,7 +15,13 @@
  */
 package net.hasor.cobble.bytebuf;
 import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
 
+/**
+ * 基于 NioChunk 的 ByteBuf 接口实现。
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
+ */
 public class SliceNioByteBuf extends AbstractByteBuf {
     protected     NioChunk          data;
     private final NioChunkAllocator chunkAllocator;
@@ -23,14 +29,36 @@ public class SliceNioByteBuf extends AbstractByteBuf {
 
     protected SliceNioByteBuf(int capacity, int maxCapacity, NioChunkAllocator chunkAllocator) {
         super(maxCapacity);
+        if (capacity < 0 || maxCapacity > 0) {
+            if (!(0 < capacity && capacity <= maxCapacity)) {
+                throw new IllegalArgumentException("0 > capacity > maxCapacity ( gt 0 or eq -1)");
+            }
+        }
+
         this.data = chunkAllocator.allocateBuffer(capacity);
         this.chunkAllocator = chunkAllocator;
         this.isFree = false;
     }
 
+    protected SliceNioByteBuf(ByteBuffer byteBuffer) {
+        super(byteBuffer.capacity());
+
+        this.data = new NioChunk(byteBuffer);
+        this.chunkAllocator = new NioChunkAllocator() {
+            public NioChunk allocateBuffer(int capacity) {
+                throw new UnsupportedOperationException();
+            }
+
+            public boolean isDirect() {
+                return byteBuffer.isDirect();
+            }
+        };
+        this.isFree = false;
+    }
+
     private void checkFree() {
         if (this.isFree) {
-            throw new IllegalStateException("ByteBuf Has been released.");
+            throw new IllegalStateException("has been released.");
         }
     }
 
@@ -102,7 +130,7 @@ public class SliceNioByteBuf extends AbstractByteBuf {
                 int partA = this.data.capacity() - (baseOffset + offset);
                 int partB = len - partA;
 
-                this.data.clearLimit(this.data.capacity());
+                this.data.clearMaxLimit();
                 this.data.position(baseOffset);
                 this.data.get(b, off, partA);
 
@@ -110,7 +138,7 @@ public class SliceNioByteBuf extends AbstractByteBuf {
                 this.data.get(b, partA, partB);
                 return partA + partB;
             } else {
-                this.data.clearLimit(this.data.capacity());
+                this.data.clearMaxLimit();
                 this.data.get(b, off, len);
                 return len;
             }
@@ -147,13 +175,35 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    public ByteBuf copy() {
+    public byte[] array() {
+        if (this.isDirect()) {
+            byte[] array = new byte[this.data.capacity()];
+            this.data.clearMaxLimit();
+            this.data.byteBuffer().get(array, 0, array.length);
+            return array;
+        } else {
+            return this.data.byteBuffer().array();
+        }
+    }
+
+    @Override
+    public boolean isDirect() {
+        return this.data.isDirect();
+    }
+
+    @Override
+    public SliceNioByteBuf copy() {
         checkFree();
 
         try {
             lock.writeLock().lock();
 
             SliceNioByteBuf copy = new SliceNioByteBuf(this.capacity(), this.getMaxCapacity(), this.chunkAllocator);
+            copy.markedReaderIndex = this.markedReaderIndex;
+            copy.markedWriterIndex = this.markedWriterIndex;
+            copy.readerIndex = this.readerIndex;
+            copy.writerIndex = this.writerIndex;
+
             this.data.deepCopy(copy.data);
 
             return copy;
@@ -171,6 +221,7 @@ public class SliceNioByteBuf extends AbstractByteBuf {
         try {
             lock.writeLock().lock();
             this.data.freeBuffer();
+            this.data = null;
             this.isFree = true;
         } finally {
             lock.writeLock().unlock();

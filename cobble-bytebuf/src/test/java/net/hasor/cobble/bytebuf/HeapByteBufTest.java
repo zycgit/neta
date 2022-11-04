@@ -6,25 +6,22 @@ import org.junit.Test;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.security.NoSuchAlgorithmException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
 
-public class DirectByteBufTest {
+public class HeapByteBufTest {
     @Test
     public void writeByteTest01() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        byte[] array = new byte[4];
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
         byteBuf.writeByte((byte) 3);
         byteBuf.writeByte((byte) 4);
 
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
+        assert array[0] == 1;
+        assert array[1] == 2;
+        assert array[2] == 3;
+        assert array[3] == 4;
 
         // not markIndex yet
         try {
@@ -52,25 +49,25 @@ public class DirectByteBufTest {
         byteBuf.writeByte((byte) 7);
         byteBuf.writeByte((byte) 8);
 
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 7;
-        assert direct.get(3) == 8;
+        assert array[0] == 5;
+        assert array[1] == 6;
+        assert array[2] == 7;
+        assert array[3] == 8;
     }
 
     @Test
     public void writeByteTest02() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        byte[] array = new byte[4];
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
         byteBuf.writeByte((byte) 3);
 
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 0;
+        assert array[0] == 1;
+        assert array[1] == 2;
+        assert array[2] == 3;
+        assert array[3] == 0;
 
         byteBuf.markWriter();
         assert byteBuf.readByte() == 1;
@@ -82,10 +79,10 @@ public class DirectByteBufTest {
         byteBuf.writeByte((byte) 5);
         byteBuf.writeByte((byte) 6);
 
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
+        assert array[0] == 5;
+        assert array[1] == 6;
+        assert array[2] == 3;
+        assert array[3] == 4;
 
         byteBuf.markWriter();
         assert byteBuf.readByte() == 4;
@@ -95,14 +92,14 @@ public class DirectByteBufTest {
 
     @Test
     public void writeBytesTest01() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        byte[] array = new byte[4];
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
+        assert array[0] == 1;
+        assert array[1] == 2;
+        assert array[2] == 3;
+        assert array[3] == 4;
 
         // not markIndex yet
         try {
@@ -129,10 +126,10 @@ public class DirectByteBufTest {
         byteBuf.markReader();
         byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
 
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 7;
-        assert direct.get(3) == 8;
+        assert array[0] == 5;
+        assert array[1] == 6;
+        assert array[2] == 7;
+        assert array[3] == 8;
 
         byteBuf.markWriter();
         byteBuf.readBytes(arrayRead);
@@ -144,14 +141,14 @@ public class DirectByteBufTest {
 
     @Test
     public void writeBytesTest02() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        byte[] array = new byte[4];
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 0;
+        assert array[0] == 1;
+        assert array[1] == 2;
+        assert array[2] == 3;
+        assert array[3] == 0;
 
         byteBuf.markWriter();
         byte[] arrayRead = new byte[6];
@@ -163,10 +160,10 @@ public class DirectByteBufTest {
         byteBuf.markReader();
         byteBuf.writeBytes(new byte[] { 4, 5, 6 });
 
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
+        assert array[0] == 5;
+        assert array[1] == 6;
+        assert array[2] == 3;
+        assert array[3] == 4;
 
         byteBuf.markWriter();
         assert byteBuf.readBytes(arrayRead) == 3;
@@ -177,7 +174,7 @@ public class DirectByteBufTest {
 
     @Test
     public void writeBytesTest03() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -195,12 +192,11 @@ public class DirectByteBufTest {
 
     @Test
     public void extendTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer(256, 512);
+        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.heapBuffer(256, 512);
         byte[] array1 = byteBuf.array();
 
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
-        array1 = byteBuf.array();
-        assert array1 != byteBuf.array();
+        assert array1 == byteBuf.array();
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
         assert array1 != byteBuf.array();
 
@@ -215,7 +211,7 @@ public class DirectByteBufTest {
 
     @Test
     public void freeTest01() {
-        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
+        SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.free();
         assert byteBuf.data == null;
 
@@ -228,23 +224,8 @@ public class DirectByteBufTest {
     }
 
     @Test
-    public void freeTest02() {
-        byte[] result = new byte[10 * 1024 * 1024];
-        Random RANDOM = new Random(System.currentTimeMillis());
-        RANDOM.nextBytes(result);
-
-        List<Object> list = new LinkedList<>();
-        for (int i = 0; i < 1000; i++) {
-            SliceNioByteBuf byteBuf = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
-            byteBuf.writeBytes(result);
-            byteBuf.free();
-            list.add(byteBuf);
-        }
-    }
-
-    @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        SliceNioByteBuf byteBuf1 = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.directBuffer();
+        SliceNioByteBuf byteBuf1 = (SliceNioByteBuf) ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf1.writeBytes(RandomUtils.nextBytes(byteBuf1.capacity()));
 
         SliceNioByteBuf byteBuf2 = byteBuf1.copy();
@@ -259,7 +240,7 @@ public class DirectByteBufTest {
     @Test
     public void errorTest01() {
         try {
-            ByteBufAllocator.DEFAULT.directBuffer(-1);
+            ByteBufAllocator.DEFAULT.heapBuffer(-1);
             assert false;
         } catch (IllegalArgumentException e) {
             assert e.getMessage().equals("0 > capacity > maxCapacity ( gt 0 or eq -1)");

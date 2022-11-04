@@ -10,21 +10,15 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
-public class DirectByteBufTest {
+public class PoodHeapByteBufTest {
     @Test
     public void writeByteTest01() {
-        ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
         byteBuf.writeByte((byte) 3);
         byteBuf.writeByte((byte) 4);
-
-        assert direct.get(0) == 1;
-        assert direct.get(1) == 2;
-        assert direct.get(2) == 3;
-        assert direct.get(3) == 4;
 
         // not markIndex yet
         try {
@@ -52,16 +46,16 @@ public class DirectByteBufTest {
         byteBuf.writeByte((byte) 7);
         byteBuf.writeByte((byte) 8);
 
-        assert direct.get(0) == 5;
-        assert direct.get(1) == 6;
-        assert direct.get(2) == 7;
-        assert direct.get(3) == 8;
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
     }
 
     @Test
     public void writeByteTest02() {
         ByteBuffer direct = ByteBuffer.allocateDirect(4);
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);

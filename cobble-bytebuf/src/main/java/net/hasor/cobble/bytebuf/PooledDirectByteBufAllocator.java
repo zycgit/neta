@@ -1,10 +1,9 @@
 /*
- * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
- * this work for additional information regarding copyright ownership.
- * The ASF licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
  *
  *      http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -16,7 +15,9 @@
  */
 package net.hasor.cobble.bytebuf;
 /**
- * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * ByteBufAllocator 接口实现用于创建池化的堆外 ByteBuf
+ * @version : 2022-11-01
+ * @author 赵永春 (zyc@hasor.net)
  */
 public class PooledDirectByteBufAllocator extends AbstractByteBufAllocator {
     /** Create new instance */
