@@ -246,6 +246,11 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             lock.writeLock().lock();
 
             PooledNioByteBuf copy = new PooledNioByteBuf(this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
+            copy.markedReaderIndex = this.markedReaderIndex;
+            copy.markedWriterIndex = this.markedWriterIndex;
+            copy.readerIndex = this.readerIndex;
+            copy.writerIndex = this.writerIndex;
+
             for (int i = 0; i < this.buffers.size(); i++) {
                 NioChunk form = this.buffers.get(i);
                 NioChunk to = copy.buffers.get(i);
