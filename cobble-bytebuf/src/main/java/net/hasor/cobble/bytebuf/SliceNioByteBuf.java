@@ -25,7 +25,6 @@ import java.nio.ByteBuffer;
 public class SliceNioByteBuf extends AbstractByteBuf {
     protected     NioChunk          data;
     private final NioChunkAllocator chunkAllocator;
-    private       boolean           isFree;
 
     protected SliceNioByteBuf(int capacity, int maxCapacity, NioChunkAllocator chunkAllocator) {
         super(maxCapacity);
@@ -37,7 +36,6 @@ public class SliceNioByteBuf extends AbstractByteBuf {
 
         this.data = chunkAllocator.allocateBuffer(capacity);
         this.chunkAllocator = chunkAllocator;
-        this.isFree = false;
     }
 
     protected SliceNioByteBuf(ByteBuffer byteBuffer) {
@@ -53,13 +51,6 @@ public class SliceNioByteBuf extends AbstractByteBuf {
                 return byteBuffer.isDirect();
             }
         };
-        this.isFree = false;
-    }
-
-    private void checkFree() {
-        if (this.isFree) {
-            throw new IllegalStateException("has been released.");
-        }
     }
 
     @Override
@@ -214,7 +205,7 @@ public class SliceNioByteBuf extends AbstractByteBuf {
 
     @Override
     public void free() {
-        if (this.isFree) {
+        if (this.isFree()) {
             return;
         }
 
@@ -222,7 +213,7 @@ public class SliceNioByteBuf extends AbstractByteBuf {
             lock.writeLock().lock();
             this.data.freeBuffer();
             this.data = null;
-            this.isFree = true;
+            super.free();
         } finally {
             lock.writeLock().unlock();
         }

@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import java.io.IOException;
 import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -31,15 +33,28 @@ public abstract class AbstractByteBuf implements ByteBuf {
     protected       int           readerIndex;
     protected       int           writerIndex;
     private final   int           maxCapacity;
+    private         boolean       isFree;
     protected final ReadWriteLock lock;
 
     protected AbstractByteBuf(int maxCapacity) {
         this.maxCapacity = maxCapacity;
         this.lock = new ReentrantReadWriteLock();
+        this.isFree = false;
     }
 
     public int getMaxCapacity() {
         return this.maxCapacity;
+    }
+
+    protected void checkFree() {
+        if (this.isFree) {
+            throw new IllegalStateException("has been released.");
+        }
+    }
+
+    @Override
+    public boolean isFree() {
+        return this.isFree;
     }
 
     protected abstract void _putByte(int offset, byte b);
@@ -53,12 +68,20 @@ public abstract class AbstractByteBuf implements ByteBuf {
     /** 需要扩充到的目标容量 */
     protected abstract void extendByteBuf(int targetCapacity);
 
-    /** 回收 markedReaderIndex 之前的内存区块 */
-    protected void recycleByteBuf() {
+    /** （before）回收 markedReaderIndex 之前的内存区块 */
+    protected void beforeRecycleByteBuf() throws IOException {
     }
 
-    /** markedWriterIndex 向前推进，有更多的数据可读 */
-    protected void receivedBytes() {
+    /** （after）回收 markedReaderIndex 之前的内存区块 */
+    protected void afterRecycleByteBuf() throws IOException {
+    }
+
+    /** （before）markedWriterIndex 向前推进，有更多的数据可读 */
+    protected void beforeReceivedBytes() throws IOException {
+    }
+
+    /** （after）markedWriterIndex 向前推进，有更多的数据可读 */
+    protected void afterReceivedBytes() throws IOException {
     }
 
     @Override
@@ -70,7 +93,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     // 1. 检查或扩充 Buffer 确保可以写入 writableBytes 所需要的字节数
     // 2. 移动 writerIndex 指针到 writableBytes 字节数之后
     // 3. 返回 writerIndex 变化前的值
-    protected synchronized final int nextWritable(int writableBytes) {
+    protected synchronized int nextWritable(int writableBytes) {
         if (writableBytes > writableBytes()) {
             int targetCapacity = (this.writerIndex + writableBytes) - this.markedReaderIndex;
             this.extendByteBuf(targetCapacity);
@@ -85,7 +108,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     // 1. 检查 Buffer 确保从 readIndex 位置开始可以读取 readableBytes 的字节数。
     // 2. 移动 readIndex 指针到 readableBytes 字节数之后
     // 3. 返回 readIndex 变化前的值
-    protected synchronized final int nextReadable(int readableBytes) {
+    protected synchronized int nextReadable(int readableBytes) {
         int oriReadIndex = this.readerIndex;
         if ((oriReadIndex + readableBytes) <= this.markedWriterIndex) {
             this.readerIndex += readableBytes;
@@ -97,7 +120,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     // readMark <= readIndex <= writerMark           <= writerIndex <= capacity
     //                          writerMark <= offset <= writerIndex
-    protected final int offsetWritable(int offset, int len) {
+    protected int offsetWritable(int offset, int len) {
         if (this.markedWriterIndex <= offset && offset <= this.writerIndex) {
             int targetCapacity = offset + len - this.markedReaderIndex;
             if (targetCapacity > this.capacity()) {
@@ -110,8 +133,9 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     // readMark <= readIndex <= writerMark <= writerIndex <= capacity
     // readMark <= offset    <= writerMark
-    protected final int checkReadable(int offset, int len) {
-        if (this.markedReaderIndex <= offset && offset <= this.markedWriterIndex) {
+    protected int checkReadable(int offset, int len) {
+        int oriReadIndex = this.markedReaderIndex;
+        if ((oriReadIndex + offset + len) <= this.markedWriterIndex) {
             return offset;
         }
         throw new IndexOutOfBoundsException(String.format("read data(%d) out of range. readMark(%d) <= offset(%d) <= writerMark(%d)", len, this.markedReaderIndex, offset, this.markedWriterIndex));
@@ -130,10 +154,11 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public synchronized ByteBuf markReader() {
+    public synchronized ByteBuf markReader() throws IOException {
         if (this.markedReaderIndex != this.readerIndex) {
+            this.beforeRecycleByteBuf();
             this.markedReaderIndex = this.readerIndex;
-            this.recycleByteBuf();
+            this.afterRecycleByteBuf();
         }
         return this;
     }
@@ -154,10 +179,11 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public ByteBuf markWriter() {
+    public ByteBuf markWriter() throws IOException {
         if (this.markedWriterIndex != this.writerIndex) {
+            this.beforeReceivedBytes();
             this.markedWriterIndex = this.writerIndex;
-            this.receivedBytes();
+            this.afterReceivedBytes();
         }
         return this;
     }
@@ -460,5 +486,66 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public long getUInt32LE(int offset) {
         return dencodeUInt32(this, checkReadable(offset, 4), false);
+    }
+
+    @Override
+    public int read(ByteBuffer dst) {
+        int copied = 0;
+        int srcReadableBytes;
+        byte[] buf = new byte[4096];
+
+        while (true) {
+            if ((srcReadableBytes = this.readableBytes()) == 0 || dst.remaining() == 0) {
+                break;
+            }
+
+            int len = Math.min(dst.remaining(), Math.min(buf.length, srcReadableBytes));
+            int readBytes = this.readBytes(buf, 0, len);
+            if (readBytes <= 0) {
+                break;
+            }
+            dst.put(buf, copied, readBytes);
+            copied += readBytes;
+        }
+
+        return copied;
+    }
+
+    @Override
+    public int write(ByteBuffer src) {
+        int copied = 0;
+        byte[] buf = new byte[4096];
+
+        while (true) {
+            if (src.remaining() == 0 || this.writableBytes() == 0) {
+                break;
+            }
+
+            int len = Math.min(this.writableBytes(), Math.min(buf.length, src.remaining()));
+            if (len <= 0) {
+                break;
+            }
+
+            src.get(buf, 0, len);
+            this.writeBytes(buf, 0, len);
+            copied += len;
+        }
+
+        return copied;
+    }
+
+    @Override
+    public boolean isOpen() {
+        return this.isFree();
+    }
+
+    @Override
+    public void close() {
+        this.free();
+    }
+
+    @Override
+    public void free() {
+        this.isFree = true;
     }
 }

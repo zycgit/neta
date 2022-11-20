@@ -14,13 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+import java.nio.channels.ByteChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 /**
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
  */
-public interface ByteBuf {
+public interface ByteBuf extends ByteChannel {
     /** Returns the {@code readerIndex} of this buffer. */
     int readerIndex();
 
@@ -45,6 +48,9 @@ public interface ByteBuf {
     /** 释放 Buffer 占用的内存 */
     void free();
 
+    /** 是否已经释放 */
+    boolean isFree();
+
     /**
      * Returns the number of readable bytes which is equal to
      * {@code (this.writerIndex - this.readerIndex)}.
@@ -64,14 +70,19 @@ public interface ByteBuf {
      * You can reposition the current {@code readerIndex} to the marked {@code readerIndex} by calling {@link #resetReader()}.
      * The initial value of the marked {@code readerIndex} is {@code 0}.
      */
-    ByteBuf markReader();
+    ByteBuf markReader() throws IOException;
 
     /**
      * Marks the current {@code writerIndex} in this buffer.
      * You can reposition the current {@code writerIndex} to the marked {@code writerIndex} by calling {@link #resetWriter()}.
      * The initial value of the marked {@code writerIndex} is {@code 0}.
      */
-    ByteBuf markWriter();
+    ByteBuf markWriter() throws IOException;
+
+    /** same as markWriter() */
+    default ByteBuf flush() throws IOException {
+        return markWriter();
+    }
 
     /**
      * Repositions the current {@code readerIndex} to the marked
@@ -162,6 +173,8 @@ public interface ByteBuf {
     default void writeFloat64LE(double n) {
         writeInt64LE(Double.doubleToRawLongBits(n));
     }
+
+    int write(ByteBuffer src);
 
     /** 字符串会以 str.getBytes(charset) 方式转换为字节数组并写入缓存。返回值是写入的字节数。
      * 如果 writerIndex + [string 字节数组长度] > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
@@ -322,6 +335,8 @@ public interface ByteBuf {
     default double readFloat64LE() {
         return Double.longBitsToDouble(readInt64LE());
     }
+
+    int read(ByteBuffer dst);
 
     /** 读取 len 字节并将其构造成 String，读取后 readerIndex 会增加 len。
      * 如果 readableBytes() < len 则会引发 {@link IndexOutOfBoundsException} 异常 */

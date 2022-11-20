@@ -1,11 +1,12 @@
 package net.hasor.cobble.bytebuf;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 
 public class ObjectByteBufTest {
     @Test
-    public void intObjectTest01() {
+    public void intObjectTest01() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
         byteBuf.writeInt16((short) 30047);
@@ -21,7 +22,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void intObjectTest02() {
+    public void intObjectTest02() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(40);
         byteBuf.skipWritableBytes(40);
 
@@ -38,7 +39,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void intLEObjectTest01() {
+    public void intLEObjectTest01() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
         byteBuf.writeInt16LE((short) 30047);
@@ -54,7 +55,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void intLEObjectTest02() {
+    public void intLEObjectTest02() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(40);
         byteBuf.skipWritableBytes(40);
 
@@ -71,7 +72,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void floatObjectTest01() {
+    public void floatObjectTest01() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
         byteBuf.writeFloat32(999999.999999f);
@@ -83,7 +84,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void floatObjectTest02() {
+    public void floatObjectTest02() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
         byteBuf.skipWritableBytes(40);
 
@@ -96,7 +97,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void floatLEObjectTest01() {
+    public void floatLEObjectTest01() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
         byteBuf.writeFloat32LE(999999.999999f);
@@ -108,7 +109,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void floatLEObjectTest02() {
+    public void floatLEObjectTest02() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
         byteBuf.skipWritableBytes(40);
 
@@ -121,7 +122,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void uIntObjectTest01() {
+    public void uIntObjectTest01() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
         byteBuf.writeByte((byte) -1);
@@ -143,7 +144,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void uIntObjectTest02() {
+    public void uIntObjectTest02() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
         byteBuf.writeInt16LE((short) 36848);
@@ -161,7 +162,7 @@ public class ObjectByteBufTest {
     }
 
     @Test
-    public void stringTest01() {
+    public void stringTest01() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
         byteBuf.writeString("hello\n", StandardCharsets.UTF_8);

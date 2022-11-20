@@ -3,6 +3,7 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.codec.MD5;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.security.NoSuchAlgorithmException;
@@ -12,7 +13,7 @@ import java.util.Random;
 
 public class DirectByteBufTest {
     @Test
-    public void writeByteTest01() {
+    public void writeByteTest01() throws IOException {
         ByteBuffer direct = ByteBuffer.allocateDirect(4);
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
 
@@ -59,7 +60,7 @@ public class DirectByteBufTest {
     }
 
     @Test
-    public void writeByteTest02() {
+    public void writeByteTest02() throws IOException {
         ByteBuffer direct = ByteBuffer.allocateDirect(4);
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
 
@@ -94,7 +95,7 @@ public class DirectByteBufTest {
     }
 
     @Test
-    public void writeBytesTest01() {
+    public void writeBytesTest01() throws IOException {
         ByteBuffer direct = ByteBuffer.allocateDirect(4);
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
 
@@ -143,7 +144,7 @@ public class DirectByteBufTest {
     }
 
     @Test
-    public void writeBytesTest02() {
+    public void writeBytesTest02() throws IOException {
         ByteBuffer direct = ByteBuffer.allocateDirect(4);
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(direct);
 
@@ -176,7 +177,7 @@ public class DirectByteBufTest {
     }
 
     @Test
-    public void writeBytesTest03() {
+    public void writeBytesTest03() throws IOException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
@@ -263,6 +264,17 @@ public class DirectByteBufTest {
             assert false;
         } catch (IllegalArgumentException e) {
             assert e.getMessage().equals("0 > capacity > maxCapacity ( gt 0 or eq -1)");
+        }
+    }
+
+    @Test
+    public void errorTest02() {
+        try {
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
+            byteBuf.getByte(0);
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert e.getMessage().startsWith("read data(1) out of range. readMark(0) <= offset(0) <= writerMark(0)");
         }
     }
 }

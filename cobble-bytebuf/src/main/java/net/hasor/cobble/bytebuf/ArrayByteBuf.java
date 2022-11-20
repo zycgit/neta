@@ -22,13 +22,11 @@ import java.nio.BufferOverflowException;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class ArrayByteBuf extends AbstractByteBuf {
-    private byte[]  data;
-    private boolean isFree;
+    private byte[] data;
 
     public ArrayByteBuf(byte[] initData, int maxCapacity) {
         super(maxCapacity == -1 ? -1 : Math.max(initData.length, maxCapacity));
         this.data = initData;
-        this.isFree = false;
     }
 
     public ArrayByteBuf(int capacity, int maxCapacity) {
@@ -40,13 +38,6 @@ public class ArrayByteBuf extends AbstractByteBuf {
         }
 
         this.data = new byte[capacity];
-        this.isFree = false;
-    }
-
-    private void checkFree() {
-        if (this.isFree) {
-            throw new IllegalStateException("has been released.");
-        }
     }
 
     @Override
@@ -174,14 +165,14 @@ public class ArrayByteBuf extends AbstractByteBuf {
 
     @Override
     public void free() {
-        if (this.isFree) {
+        if (this.isFree()) {
             return;
         }
 
         try {
             lock.writeLock().lock();
             this.data = null;
-            this.isFree = true;
+            super.free();
         } finally {
             lock.writeLock().unlock();
         }

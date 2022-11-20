@@ -27,7 +27,6 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     private         int                  capacity;
     private final   int                  sliceSize;
     private final   NioChunkAllocator    chunkAllocator;
-    private         boolean              isFree;
 
     protected PooledNioByteBuf(int capacity, int maxCapacity, int sliceSize, NioChunkAllocator chunkAllocator) {
         super(maxCapacity);
@@ -40,17 +39,10 @@ public class PooledNioByteBuf extends AbstractByteBuf {
         this.capacity = capacity;
         this.sliceSize = sliceSize;
         this.chunkAllocator = chunkAllocator;
-        this.isFree = false;
 
         int sliceCnt = (int) Math.ceil((capacity) / (double) sliceSize);
         for (int i = 0; i <= sliceCnt; i++) {
             this.buffers.add(this.extendByteBuffer(sliceSize));
-        }
-    }
-
-    private void checkFree() {
-        if (this.isFree) {
-            throw new IllegalStateException("has been released.");
         }
     }
 
@@ -193,7 +185,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
         return this.chunkAllocator.allocateBuffer(capacity);
     }
 
-    protected void recycleByteBuf() {
+    protected void afterRecycleByteBuf() {
         checkFree();
 
         try {
@@ -264,7 +256,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
 
     @Override
     public void free() {
-        if (this.isFree) {
+        if (this.isFree()) {
             return;
         }
 
@@ -274,7 +266,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
                 chunk.freeBuffer();
             }
             this.buffers.clear();
-            this.isFree = true;
+            super.free();
         } finally {
             lock.writeLock().unlock();
         }
