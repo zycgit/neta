@@ -130,6 +130,7 @@ public class SliceNioByteBuf extends AbstractByteBuf {
                 return partA + partB;
             } else {
                 this.data.clearMaxLimit();
+                this.data.position(offset);
                 this.data.get(b, off, len);
                 return len;
             }

@@ -14,6 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import net.hasor.cobble.io.output.hole.BlackHoleOutputStream;
+
+import java.io.ByteArrayInputStream;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -22,9 +27,11 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
-    protected final int               initialCapacityByDefault;
-    protected final int               sliceSizeByDefault;
-    protected final NioChunkAllocator heapNioChunkAllocator   = new NioChunkAllocator() {
+    private final static InputStream       EMPTY_IN                = new ByteArrayInputStream(new byte[0]);
+    private final static OutputStream      EMPTY_OUT               = new BlackHoleOutputStream();
+    protected final      int               initialCapacityByDefault;
+    protected final      int               sliceSizeByDefault;
+    protected final      NioChunkAllocator heapNioChunkAllocator   = new NioChunkAllocator() {
         public NioChunk allocateBuffer(int capacity) {
             return new NioChunk(ByteBuffer.allocate(capacity));
         }
@@ -33,7 +40,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
             return false;
         }
     };
-    protected final NioChunkAllocator directNioChunkAllocator = new NioChunkAllocator() {
+    protected final      NioChunkAllocator directNioChunkAllocator = new NioChunkAllocator() {
         public NioChunk allocateBuffer(int capacity) {
             return new NioChunk(ByteBuffer.allocateDirect(capacity));
         }
@@ -57,6 +64,16 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     @Override
     public ByteBuf buffer(int initialCapacity) {
         return this.buffer(initialCapacity, initialCapacity);
+    }
+
+    @Override
+    public StreamByteBuf streamBuffer(int capacity, InputStream inStream) {
+        return this.streamBuffer(capacity, inStream, EMPTY_OUT);
+    }
+
+    @Override
+    public StreamByteBuf streamBuffer(int capacity, OutputStream outStream) {
+        return this.streamBuffer(capacity, EMPTY_IN, outStream);
     }
 
     @Override
@@ -100,6 +117,21 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     }
 
     @Override
+    public StreamByteBuf heapStreamBuffer(int capacity, InputStream inStream) {
+        return this.heapStreamBuffer(capacity, inStream, EMPTY_OUT);
+    }
+
+    @Override
+    public StreamByteBuf heapStreamBuffer(int capacity, OutputStream outStream) {
+        return this.heapStreamBuffer(capacity, EMPTY_IN, outStream);
+    }
+
+    @Override
+    public StreamByteBuf heapStreamBuffer(int capacity, InputStream inStream, OutputStream outStream) {
+        return new StreamSliceByteBuf(capacity, inStream, outStream, this.heapNioChunkAllocator);
+    }
+
+    @Override
     public ByteBuf directBuffer() {
         return this.directBuffer(this.initialCapacityByDefault, -1);
     }
@@ -112,6 +144,21 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     @Override
     public ByteBuf directBuffer(int initialCapacity, int maxCapacity) {
         return new SliceNioByteBuf(initialCapacity, maxCapacity, this.directNioChunkAllocator);
+    }
+
+    @Override
+    public StreamByteBuf directStreamBuffer(int capacity, InputStream inStream) {
+        return this.directStreamBuffer(capacity, inStream, EMPTY_OUT);
+    }
+
+    @Override
+    public StreamByteBuf directStreamBuffer(int capacity, OutputStream outStream) {
+        return this.directStreamBuffer(capacity, EMPTY_IN, outStream);
+    }
+
+    @Override
+    public StreamByteBuf directStreamBuffer(int capacity, InputStream inStream, OutputStream outStream) {
+        return new StreamSliceByteBuf(capacity, inStream, outStream, this.directNioChunkAllocator);
     }
 
     @Override

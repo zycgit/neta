@@ -185,7 +185,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
         return this.chunkAllocator.allocateBuffer(capacity);
     }
 
-    protected void afterRecycleByteBuf() {
+    protected void recycleByteBuf() {
         checkFree();
 
         try {

@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import java.io.InputStream;
+import java.io.OutputStream;
+
 /**
  * ByteBufAllocator 接口实现用于创建池化的堆外 ByteBuf
  * @version : 2022-11-01
@@ -38,6 +41,11 @@ public class PooledDirectByteBufAllocator extends AbstractByteBufAllocator {
     @Override
     public ByteBuf buffer(int initialCapacity, int maxCapacity) {
         return this.pooledDirectBuffer(initialCapacity, maxCapacity);
+    }
+
+    @Override
+    public StreamByteBuf streamBuffer(int capacity, InputStream inStream, OutputStream outStream) {
+        throw new UnsupportedOperationException();
     }
 
     @Override

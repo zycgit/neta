@@ -68,20 +68,12 @@ public abstract class AbstractByteBuf implements ByteBuf {
     /** 需要扩充到的目标容量 */
     protected abstract void extendByteBuf(int targetCapacity);
 
-    /** （before）回收 markedReaderIndex 之前的内存区块 */
-    protected void beforeRecycleByteBuf() throws IOException {
+    /** 回收 markedReaderIndex 之前的内存区块 */
+    protected void recycleByteBuf() throws IOException {
     }
 
-    /** （after）回收 markedReaderIndex 之前的内存区块 */
-    protected void afterRecycleByteBuf() throws IOException {
-    }
-
-    /** （before）markedWriterIndex 向前推进，有更多的数据可读 */
-    protected void beforeReceivedBytes() throws IOException {
-    }
-
-    /** （after）markedWriterIndex 向前推进，有更多的数据可读 */
-    protected void afterReceivedBytes() throws IOException {
+    /**  markedWriterIndex 向前推进，有更多的数据可读 */
+    protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) throws IOException {
     }
 
     @Override
@@ -156,9 +148,8 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public synchronized ByteBuf markReader() throws IOException {
         if (this.markedReaderIndex != this.readerIndex) {
-            this.beforeRecycleByteBuf();
             this.markedReaderIndex = this.readerIndex;
-            this.afterRecycleByteBuf();
+            this.recycleByteBuf();
         }
         return this;
     }
@@ -181,9 +172,9 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public ByteBuf markWriter() throws IOException {
         if (this.markedWriterIndex != this.writerIndex) {
-            this.beforeReceivedBytes();
+            int lastMarkedWriter = this.markedWriterIndex;
             this.markedWriterIndex = this.writerIndex;
-            this.afterReceivedBytes();
+            this.receivedBytes(lastMarkedWriter, this.markedWriterIndex);
         }
         return this;
     }
