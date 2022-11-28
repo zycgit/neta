@@ -536,12 +536,12 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public void close() {
-        this.free();
+    public void free() {
+        this.isFree = true;
     }
 
     @Override
-    public void free() {
-        this.isFree = true;
+    protected void finalize() {
+        this.free();
     }
 }

@@ -48,6 +48,10 @@ public interface ByteBuf extends ByteChannel {
     /** 释放 Buffer 占用的内存 */
     void free();
 
+    default void close() throws IOException {
+        this.free();
+    }
+
     /** 是否已经释放 */
     boolean isFree();
 
@@ -174,6 +178,7 @@ public interface ByteBuf extends ByteChannel {
         writeInt64LE(Double.doubleToRawLongBits(n));
     }
 
+    /** use copy form src ByteBuffer */
     int write(ByteBuffer src);
 
     /** 字符串会以 str.getBytes(charset) 方式转换为字节数组并写入缓存。返回值是写入的字节数。
@@ -336,6 +341,7 @@ public interface ByteBuf extends ByteChannel {
         return Double.longBitsToDouble(readInt64LE());
     }
 
+    /** use copy to dst */
     int read(ByteBuffer dst);
 
     /** 读取 len 字节并将其构造成 String，读取后 readerIndex 会增加 len。

@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.hasor</groupId>
     <artifactId>cobble-parent</artifactId>
-    <version>4.4.3-SNAPSHOT</version>
+    <version>4.5.4-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <!-- 项目信息 -->
@@ -78,6 +78,17 @@
                 <groupId>net.hasor</groupId>
                 <artifactId>cobble-bytebuf</artifactId>
                 <version>${project.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>org.ow2.asm</groupId>
+                <artifactId>asm</artifactId>
+                <version>9.4</version>
+            </dependency>
+            <dependency>
+                <groupId>org.yaml</groupId>
+                <artifactId>snakeyaml</artifactId>
+                <version>1.33</version>
             </dependency>
         </dependencies>
     </dependencyManagement>
