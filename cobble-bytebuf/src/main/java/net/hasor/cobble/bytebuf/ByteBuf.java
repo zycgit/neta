@@ -42,8 +42,8 @@ public interface ByteBuf extends ByteChannel {
     /** 复制个 ByteBuf , 连同 buffer 的数据一起复制 */
     ByteBuf copy();
 
-    //    /** 返回只读模式的 ByteBuf */
-    //    ByteBuf asReadOnly();
+    /** 返回只读模式的 ByteBuf。只读模式的 如果底层 */
+    ByteBuf asReadOnly();
 
     /** 释放 Buffer 占用的内存 */
     void free();

@@ -190,6 +190,11 @@ public abstract class AbstractByteBuf implements ByteBuf {
         return this.writerIndex;
     }
 
+    @Override
+    public ByteBuf asReadOnly() {
+        return new ReadOnlyByteBuf(this);
+    }
+
     protected int getMarkedWriterIndex() {
         return this.markedWriterIndex;
     }

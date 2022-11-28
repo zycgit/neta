@@ -59,6 +59,11 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public ByteBuf asReadOnly() {
+        return this.byteBuf.asReadOnly();
+    }
+
+    @Override
     public void free() {
         this.byteBuf.free();
     }
