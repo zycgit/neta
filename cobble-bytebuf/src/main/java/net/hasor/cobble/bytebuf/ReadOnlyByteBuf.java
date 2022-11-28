@@ -22,8 +22,12 @@ import java.nio.ReadOnlyBufferException;
 class ReadOnlyByteBuf extends AbstractByteBuf {
     protected ByteBuf byteBuf;
 
-    ReadOnlyByteBuf(ByteBuf byteBuf) {
-        super(byteBuf.capacity());
+    ReadOnlyByteBuf(AbstractByteBuf byteBuf) {
+        super(byteBuf.getMaxCapacity());
+        this.markedReaderIndex = byteBuf.markedReaderIndex;
+        this.markedWriterIndex = byteBuf.markedWriterIndex;
+        this.readerIndex = byteBuf.readerIndex;
+        this.writerIndex = byteBuf.writerIndex;
         this.byteBuf = byteBuf;
     }
 
