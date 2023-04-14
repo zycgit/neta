@@ -31,14 +31,14 @@ public class StreamSliceByteBuf extends SliceNioByteBuf implements StreamByteBuf
     private final InputStream  inStream;
     private final OutputStream outStream;
 
-    protected StreamSliceByteBuf(int capacity, InputStream inStream, OutputStream outStream, NioChunkAllocator chunkAllocator) {
-        super(capacity, capacity, chunkAllocator);
+    protected StreamSliceByteBuf(int window, InputStream inStream, OutputStream outStream, NioChunkAllocator chunkAllocator) {
+        super(window, window, chunkAllocator);
         this.inStream = inStream;
         this.outStream = outStream;
     }
 
-    public boolean loadData(int loadMaxSize) throws IOException {
-        byte[] buf = new byte[loadMaxSize];
+    public boolean fetch() throws IOException {
+        byte[] buf = new byte[this.getMaxCapacity()];
         int len = Math.min(buf.length, this.writableBytes());
         if (len <= 0) {
             return false;

@@ -12,7 +12,7 @@ public class StreamByteBufTest {
         ByteArrayOutputStream outStream = new ByteArrayOutputStream();
         StreamByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapStreamBuffer(4, inStream, outStream);
 
-        while (byteBuf.loadData()) {
+        while (byteBuf.fetch()) {
             while (byteBuf.readableBytes() > 0) {
                 byte b = byteBuf.readByte();
                 byteBuf.markReader();

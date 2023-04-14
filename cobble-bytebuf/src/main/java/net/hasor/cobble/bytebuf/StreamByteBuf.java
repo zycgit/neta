@@ -20,9 +20,5 @@ import java.io.IOException;
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
  */
 public interface StreamByteBuf extends ByteBuf {
-    default boolean loadData() throws IOException {
-        return this.loadData(4096);
-    }
-
-    boolean loadData(int loadMaxSize) throws IOException;
+    boolean fetch() throws IOException;
 }
