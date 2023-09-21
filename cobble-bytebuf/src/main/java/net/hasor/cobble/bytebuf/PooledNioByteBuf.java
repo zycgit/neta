@@ -60,103 +60,84 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int targetOffset = markedReaderIndex + offset;
-            int startBuf = checkOrCreate(targetOffset / this.sliceSize);
-            int baseOffset = targetOffset % this.sliceSize;
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int targetOffset = markedReaderIndex + offset;
+        int startBuf = checkOrCreate(targetOffset / this.sliceSize);
+        int baseOffset = targetOffset % this.sliceSize;
 
-            this.buffers.get(startBuf).put(baseOffset, b);
-        } finally {
-            lock.writeLock().unlock();
-        }
+        this.buffers.get(startBuf).put(baseOffset, b);
     }
 
     @Override
     protected void _putBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int targetOffset = markedReaderIndex + offset;
-            int startBuf = checkOrCreate(targetOffset / this.sliceSize);
-            int baseOffset = targetOffset % this.sliceSize;
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int targetOffset = markedReaderIndex + offset;
+        int startBuf = checkOrCreate(targetOffset / this.sliceSize);
+        int baseOffset = targetOffset % this.sliceSize;
 
-            do {
-                int debris = this.sliceSize - baseOffset;
-                NioChunk buffer = this.buffers.get(startBuf);
+        do {
+            int debris = this.sliceSize - baseOffset;
+            NioChunk buffer = this.buffers.get(startBuf);
 
-                buffer.clearPosition(baseOffset);
-                buffer.put(b, off, Math.min(len, debris));
+            buffer.clearPosition(baseOffset);
+            buffer.put(b, off, Math.min(len, debris));
 
-                off = off + debris;
-                len = len - debris;
-                baseOffset = 0;
-                checkOrCreate(++startBuf);
-            } while (len > 0);
-        } finally {
-            lock.writeLock().unlock();
-        }
+            off = off + debris;
+            len = len - debris;
+            baseOffset = 0;
+            checkOrCreate(++startBuf);
+        } while (len > 0);
     }
 
     @Override
     protected byte _getByte(int offset) {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int targetOffset = markedReaderIndex + offset;
-            int startBuf = targetOffset / this.sliceSize;
-            int baseOffset = targetOffset % this.sliceSize;
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int targetOffset = markedReaderIndex + offset;
+        int startBuf = targetOffset / this.sliceSize;
+        int baseOffset = targetOffset % this.sliceSize;
 
-            if (startBuf > this.buffers.size()) {
-                return 0;
-            }
-
-            return this.buffers.get(startBuf).get(baseOffset);
-        } finally {
-            lock.writeLock().unlock();
+        if (startBuf > this.buffers.size()) {
+            return 0;
         }
+
+        return this.buffers.get(startBuf).get(baseOffset);
     }
 
     @Override
     protected int _getBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        try {
-            lock.readLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int targetOffset = markedReaderIndex + offset;
-            int startBuf = targetOffset / this.sliceSize;
-            int baseOffset = targetOffset % this.sliceSize;
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int targetOffset = markedReaderIndex + offset;
+        int startBuf = targetOffset / this.sliceSize;
+        int baseOffset = targetOffset % this.sliceSize;
 
-            int readBytes = 0;
-            do {
-                int debris = this.sliceSize - baseOffset;
-                int thisRead = Math.min(debris, len);
-                if (startBuf > this.buffers.size()) {
-                    break;
-                }
+        int readBytes = 0;
+        do {
+            int debris = this.sliceSize - baseOffset;
+            int thisRead = Math.min(debris, len);
+            if (startBuf > this.buffers.size()) {
+                break;
+            }
 
-                NioChunk buffer = this.buffers.get(startBuf);
+            NioChunk buffer = this.buffers.get(startBuf);
 
-                buffer.clearLimit(this.sliceSize);
-                buffer.get(b, off, thisRead);
+            buffer.clearLimit(this.sliceSize);
+            buffer.position(baseOffset);
+            buffer.get(b, off, thisRead);
 
-                off += debris;
-                len -= debris;
-                baseOffset = 0;
-                startBuf++;
+            off += debris;
+            len -= debris;
+            baseOffset = 0;
+            startBuf++;
 
-                readBytes += thisRead;
-            } while (len > 0);
-            return readBytes;
-        } finally {
-            lock.readLock().unlock();
-        }
+            readBytes += thisRead;
+        } while (len > 0);
+        return readBytes;
     }
 
     @Override
@@ -167,18 +148,13 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             throw new BufferOverflowException();
         }
 
-        try {
-            lock.writeLock().lock();
-            int sliceCnt = (int) Math.ceil((this.capacity) / (double) this.sliceSize) - this.buffers.size();
+        int sliceCnt = (int) Math.ceil((this.capacity) / (double) this.sliceSize) - this.buffers.size();
 
-            for (int i = 0; i < sliceCnt; i++) {
-                this.buffers.add(this.extendByteBuffer(this.sliceSize));
-            }
-
-            this.capacity = this.buffers.size() * this.sliceSize;
-        } finally {
-            lock.writeLock().unlock();
+        for (int i = 0; i < sliceCnt; i++) {
+            this.buffers.add(this.extendByteBuffer(this.sliceSize));
         }
+
+        this.capacity = this.buffers.size() * this.sliceSize;
     }
 
     protected NioChunk extendByteBuffer(int capacity) {
@@ -188,29 +164,24 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     protected void recycleByteBuf() {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int startBuf = markedReaderIndex / this.sliceSize;
-            if (startBuf > 0) {
-                for (int i = 0; i <= startBuf; i++) {
-                    this.buffers.remove(0).freeBuffer();
-                }
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int startBuf = markedReaderIndex / this.sliceSize;
+        if (startBuf > 0) {
+            for (int i = 0; i <= startBuf; i++) {
+                this.buffers.remove(0).freeBuffer();
             }
-
-            if (this.buffers.isEmpty()) {
-                this.buffers.add(this.extendByteBuffer(this.sliceSize));
-            }
-
-            int cut = this.markedReaderIndex;
-            this.markedReaderIndex = 0;
-            this.markedWriterIndex = this.markedWriterIndex - cut;
-            this.readerIndex = this.readerIndex - cut;
-            this.writerIndex = this.writerIndex - cut;
-            this.capacity = this.buffers.size() * this.sliceSize;
-        } finally {
-            lock.writeLock().unlock();
         }
+
+        if (this.buffers.isEmpty()) {
+            this.buffers.add(this.extendByteBuffer(this.sliceSize));
+        }
+
+        int cut = this.markedReaderIndex;
+        this.markedReaderIndex = 0;
+        this.markedWriterIndex = this.markedWriterIndex - cut;
+        this.readerIndex = this.readerIndex - cut;
+        this.writerIndex = this.writerIndex - cut;
+        this.capacity = this.buffers.size() * this.sliceSize;
     }
 
     @Override
@@ -234,24 +205,18 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     public PooledNioByteBuf copy() {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
+        PooledNioByteBuf copy = new PooledNioByteBuf(this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
+        copy.markedReaderIndex = this.markedReaderIndex;
+        copy.markedWriterIndex = this.markedWriterIndex;
+        copy.readerIndex = this.readerIndex;
+        copy.writerIndex = this.writerIndex;
 
-            PooledNioByteBuf copy = new PooledNioByteBuf(this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
-            copy.markedReaderIndex = this.markedReaderIndex;
-            copy.markedWriterIndex = this.markedWriterIndex;
-            copy.readerIndex = this.readerIndex;
-            copy.writerIndex = this.writerIndex;
-
-            for (int i = 0; i < this.buffers.size(); i++) {
-                NioChunk form = this.buffers.get(i);
-                NioChunk to = copy.buffers.get(i);
-                form.deepCopy(to);
-            }
-            return copy;
-        } finally {
-            lock.writeLock().unlock();
+        for (int i = 0; i < this.buffers.size(); i++) {
+            NioChunk form = this.buffers.get(i);
+            NioChunk to = copy.buffers.get(i);
+            form.deepCopy(to);
         }
+        return copy;
     }
 
     @Override
@@ -260,15 +225,10 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             return;
         }
 
-        try {
-            lock.writeLock().lock();
-            for (NioChunk chunk : this.buffers) {
-                chunk.freeBuffer();
-            }
-            this.buffers.clear();
-            super.free();
-        } finally {
-            lock.writeLock().unlock();
+        for (NioChunk chunk : this.buffers) {
+            chunk.freeBuffer();
         }
+        this.buffers.clear();
+        super.free();
     }
 }

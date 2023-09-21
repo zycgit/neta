@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import net.hasor.cobble.function.EConsumer;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.Charset;
@@ -149,6 +151,11 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public void writeUInt32(long n) {
+        this.byteBuf.writeUInt32(n);
+    }
+
+    @Override
     public void writeInt64(long n) {
         this.byteBuf.writeInt64(n);
     }
@@ -176,6 +183,11 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public void writeInt32LE(int n) {
         this.byteBuf.writeInt32LE(n);
+    }
+
+    @Override
+    public void writeUInt32LE(long n) {
+        this.byteBuf.writeUInt32LE(n);
     }
 
     @Override
@@ -566,5 +578,45 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public void close() throws IOException {
         this.byteBuf.close();
+    }
+
+    @Override
+    public void waitReadable() throws InterruptedException, IOException {
+        this.byteBuf.waitReadable();
+    }
+
+    @Override
+    public void waitReadable(EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+        this.byteBuf.waitReadable(callBack);
+    }
+
+    @Override
+    public void waitReadable(int expect) throws InterruptedException, IOException {
+        this.byteBuf.waitReadable(expect);
+    }
+
+    @Override
+    public void waitReadable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+        this.byteBuf.waitReadable(expect, callBack);
+    }
+
+    @Override
+    public void waitWriteable() throws InterruptedException, IOException {
+        this.byteBuf.waitWriteable();
+    }
+
+    @Override
+    public void waitWriteable(EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+        this.byteBuf.waitWriteable(callBack);
+    }
+
+    @Override
+    public void waitWriteable(int expect) throws InterruptedException, IOException {
+        this.byteBuf.waitWriteable(expect);
+    }
+
+    @Override
+    public void waitWriteable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+        this.byteBuf.waitWriteable(expect, callBack);
     }
 }

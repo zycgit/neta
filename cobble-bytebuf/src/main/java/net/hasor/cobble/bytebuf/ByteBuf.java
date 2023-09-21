@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import net.hasor.cobble.function.EConsumer;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ByteChannel;
@@ -57,11 +59,9 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * Returns the number of readable bytes which is equal to
-     * {@code (this.writerIndex - this.readerIndex)}.
+     * {@code (this.markedWriterIndex - this.readerIndex)}.
      */
-    default int readableBytes() {
-        return this.writerIndex() - this.readerIndex();
-    }
+    int readableBytes();
 
     /**
      * Returns the number of writable bytes which is equal to
@@ -134,6 +134,10 @@ public interface ByteBuf extends ByteChannel {
      * 如果 writerIndex + 4 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
     void writeInt32(int n);
 
+    /** 写入 4 字节的无符号 int（大端字节序），写入后 writerIndex 会 + 4。
+     * 如果 writerIndex + 4 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
+    void writeUInt32(long n);
+
     /** 写入 8 字节的 long（大端字节序），写入后 writerIndex 会 + 8。
      * 如果 writerIndex + 8 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
     void writeInt64(long n);
@@ -161,6 +165,10 @@ public interface ByteBuf extends ByteChannel {
     /** 写入 4 字节的 int（小端字节序），写入后 writerIndex 会 + 4。
      * 如果 writerIndex + 4 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
     void writeInt32LE(int n);
+
+    /** 写入 4 字节的无符号 int（小端字节序），写入后 writerIndex 会 + 4。
+     * 如果 writerIndex + 4 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
+    void writeUInt32LE(long n);
 
     /** 写入 8 字节的 int（小端字节序），写入后 writerIndex 会 + 8。
      * 如果 writerIndex + 8 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
@@ -578,9 +586,72 @@ public interface ByteBuf extends ByteChannel {
         }
     }
 
-    /** 从当前位置开始读取，直到遇到最后一个 expect 字符串读完。如果没有期待的 expect 字符串那么返回 null。
+    /**
+     * 从当前位置开始读取，直到遇到最后一个 expect 字符串读完。如果没有期待的 expect 字符串那么返回 null。
      * 比如：readLine 可以写作 readExpectString('\n', StandardCharsets.US_ASCII) */
     default String readExpectLast(char expect, Charset charset) {
         return readExpectLast(String.valueOf(expect), charset);
     }
+
+    /**
+     * 期待可以对 Buffer 进行读操作。如果缓冲区中有数据可供读，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发读场景下 {@link #waitReadable()} 只能保证一个线程可以读取到数据；若需所有线程都能安全的读需要使用 {@link #waitReadable(EConsumer)} 方法 */
+    default void waitReadable() throws InterruptedException, IOException {
+        this.waitReadable(1, byteBuf -> {
+        });
+    }
+
+    /**
+     * 当缓冲区中有数据可供读时，方法会立刻调用 callBack。
+     * 在多线程并发读场景下，读取线程会逐个进入 callBack，期间若没有足够的数据读取会阻塞后续线程 */
+    default void waitReadable(EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+        this.waitReadable(1, callBack);
+    }
+
+    /**
+     * 期待可以读 expect 参数指定大小的数据。如果缓冲区中有数据可供读，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发读场景下 {@link #waitReadable(int)} 只能保证一个线程可以读取到数据；若需所有线程都能安全的读需要使用 {@link #waitReadable(int, EConsumer)} 方法 */
+    default void waitReadable(int expect) throws InterruptedException, IOException {
+        if (expect <= 0) {
+            throw new IllegalArgumentException("need expect to be gt 0");
+        }
+        this.waitReadable(expect, byteBuf -> {
+        });
+    }
+
+    /**
+     * 期待可以读 expect 参数指定大小的数据，如果缓冲区中有足够数据可供读，方法会立刻调用 callBack否则会进入线程等待状态。
+     * 在多线程并发读场景下，读取线程会逐个进入 callBack，期间若没有足够的数据读取会阻塞后续线程 */
+    void waitReadable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException;
+
+    /**
+     * 期待可以对 Buffer 进行写操作。如果缓冲区中有数据可供写，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发写场景下 {@link #waitWriteable()} 只能保证一个线程可以写数据；若需所有线程都能安全的写需要使用 {@link #waitWriteable(EConsumer)} 方法 */
+    default void waitWriteable() throws InterruptedException, IOException {
+        this.waitWriteable(1, byteBuf -> {
+        });
+    }
+
+    /**
+     * 当缓冲区中可供写时，方法会立刻调用 callBack。
+     * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续写线程 */
+    default void waitWriteable(EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+        this.waitWriteable(1, callBack);
+    }
+
+    /**
+     * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发写场景下 {@link #waitWriteable(int)} 只能保证一个线程可以写入足够的数据；若需所有线程都能安全的写需要使用 {@link #waitWriteable(int, EConsumer)} 方法 */
+    default void waitWriteable(int expect) throws InterruptedException, IOException {
+        if (expect <= 0) {
+            throw new IllegalArgumentException("need expect to be gt 0");
+        }
+        this.waitWriteable(expect, byteBuf -> {
+        });
+    }
+
+    /**
+     * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻调用 callBack否则会进入线程等待状态。
+     * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续线程 */
+    void waitWriteable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException;
 }

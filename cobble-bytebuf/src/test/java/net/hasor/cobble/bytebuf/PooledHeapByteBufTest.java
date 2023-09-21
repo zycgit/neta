@@ -5,6 +5,7 @@ import org.junit.Test;
 
 import java.io.IOException;
 import java.nio.BufferOverflowException;
+import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import java.util.LinkedList;
 import java.util.List;
@@ -248,5 +249,22 @@ public class PooledHeapByteBufTest {
         } catch (IndexOutOfBoundsException e) {
             assert e.getMessage().startsWith("read data(1) out of range. readMark(0) <= offset(0) <= writerMark(0)");
         }
+    }
+
+    @Test
+    public void writeStringTest01() throws IOException {
+        byte[] date = "aaa\nbbb\nccc\n".getBytes(StandardCharsets.US_ASCII);
+
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer();
+        byteBuf.writeBytes(date);
+        byteBuf.markWriter();
+
+        String line1 = byteBuf.readExpect("\n", StandardCharsets.US_ASCII);
+        String line2 = byteBuf.readExpect("\n", StandardCharsets.US_ASCII);
+        String line3 = byteBuf.readExpect("\n", StandardCharsets.US_ASCII);
+
+        assert line1.equals("aaa");
+        assert line2.equals("bbb");
+        assert line3.equals("ccc");
     }
 }

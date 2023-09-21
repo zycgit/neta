@@ -107,6 +107,20 @@ class Bits {
         }
     }
 
+    public static void encodeInt32(AbstractByteBuf bb, int offset, long v, boolean bigEndian) {
+        if (bigEndian) {
+            bb._putByte(offset, long3(v));
+            bb._putByte(offset + 1, long2(v));
+            bb._putByte(offset + 2, long1(v));
+            bb._putByte(offset + 3, long0(v));
+        } else {
+            bb._putByte(offset, long0(v));
+            bb._putByte(offset + 1, long1(v));
+            bb._putByte(offset + 2, long2(v));
+            bb._putByte(offset + 3, long3(v));
+        }
+    }
+
     public static void encodeInt64(AbstractByteBuf bb, int offset, long v, boolean bigEndian) {
         if (bigEndian) {
             bb._putByte(offset, long7(v));

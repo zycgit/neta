@@ -44,34 +44,24 @@ public class ArrayByteBuf extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        try {
-            lock.readLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = (markedReaderIndex + offset) % this.data.length;
-            this.data[baseOffset] = b;
-        } finally {
-            lock.readLock().unlock();
-        }
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = (markedReaderIndex + offset) % this.data.length;
+        this.data[baseOffset] = b;
     }
 
     @Override
     protected void _putBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        try {
-            lock.readLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = markedReaderIndex % this.data.length;
-            if ((baseOffset + offset + len) > this.data.length) {
-                int partA = this.data.length - (baseOffset + offset);
-                int partB = len - partA;
-                System.arraycopy(b, off, this.data, baseOffset, partA);
-                System.arraycopy(b, partA, this.data, offset, partB);
-            } else {
-                System.arraycopy(b, off, this.data, baseOffset + offset, len);
-            }
-        } finally {
-            lock.readLock().unlock();
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = markedReaderIndex % this.data.length;
+        if ((baseOffset + offset + len) > this.data.length) {
+            int partA = this.data.length - (baseOffset + offset);
+            int partB = len - partA;
+            System.arraycopy(b, off, this.data, baseOffset, partA);
+            System.arraycopy(b, partA, this.data, offset, partB);
+        } else {
+            System.arraycopy(b, off, this.data, baseOffset + offset, len);
         }
     }
 
@@ -79,36 +69,26 @@ public class ArrayByteBuf extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        try {
-            lock.readLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = (markedReaderIndex + offset) % this.data.length;
-            return this.data[baseOffset];
-        } finally {
-            lock.readLock().unlock();
-        }
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = (markedReaderIndex + offset) % this.data.length;
+        return this.data[baseOffset];
     }
 
     @Override
     protected int _getBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        try {
-            lock.readLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = markedReaderIndex % this.data.length;
-            if ((baseOffset + offset + len) > this.data.length) {
-                int partA = this.data.length - (baseOffset + offset);
-                int partB = len - partA;
-                System.arraycopy(this.data, baseOffset, b, off, partA);
-                System.arraycopy(this.data, offset, b, partA, partB);
-                return partA + partB;
-            } else {
-                System.arraycopy(this.data, baseOffset + offset, b, off, len);
-                return len;
-            }
-        } finally {
-            lock.readLock().unlock();
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = markedReaderIndex % this.data.length;
+        if ((baseOffset + offset + len) > this.data.length) {
+            int partA = this.data.length - (baseOffset + offset);
+            int partB = len - partA;
+            System.arraycopy(this.data, baseOffset, b, off, partA);
+            System.arraycopy(this.data, offset, b, partA, partB);
+            return partA + partB;
+        } else {
+            System.arraycopy(this.data, baseOffset + offset, b, off, len);
+            return len;
         }
     }
 
@@ -121,14 +101,9 @@ public class ArrayByteBuf extends AbstractByteBuf {
         }
 
         if (targetCapacity > this.data.length) {
-            try {
-                lock.writeLock().lock();
-                byte[] newArray = new byte[targetCapacity];
-                System.arraycopy(this.data, 0, newArray, 0, this.data.length);
-                this.data = newArray;
-            } finally {
-                lock.writeLock().unlock();
-            }
+            byte[] newArray = new byte[targetCapacity];
+            System.arraycopy(this.data, 0, newArray, 0, this.data.length);
+            this.data = newArray;
         }
     }
 
@@ -151,16 +126,10 @@ public class ArrayByteBuf extends AbstractByteBuf {
     public ArrayByteBuf copy() {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
+        ArrayByteBuf copy = new ArrayByteBuf(this.capacity(), this.getMaxCapacity());
+        copy.data = this.data.clone();
 
-            ArrayByteBuf copy = new ArrayByteBuf(this.capacity(), this.getMaxCapacity());
-            copy.data = this.data.clone();
-
-            return copy;
-        } finally {
-            lock.writeLock().unlock();
-        }
+        return copy;
     }
 
     @Override
@@ -169,12 +138,7 @@ public class ArrayByteBuf extends AbstractByteBuf {
             return;
         }
 
-        try {
-            lock.writeLock().lock();
-            this.data = null;
-            super.free();
-        } finally {
-            lock.writeLock().unlock();
-        }
+        this.data = null;
+        super.free();
     }
 }

@@ -57,40 +57,30 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = (markedReaderIndex + offset) % this.data.capacity();
-            this.data.put(baseOffset, b);
-        } finally {
-            lock.writeLock().unlock();
-        }
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = (markedReaderIndex + offset) % this.data.capacity();
+        this.data.put(baseOffset, b);
     }
 
     @Override
     protected void _putBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = markedReaderIndex % this.data.capacity();
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = markedReaderIndex % this.data.capacity();
 
-            if ((baseOffset + offset + len) > this.data.capacity()) {
-                int partA = this.data.capacity() - (baseOffset + offset);
-                int partB = len - partA;
+        if ((baseOffset + offset + len) > this.data.capacity()) {
+            int partA = this.data.capacity() - (baseOffset + offset);
+            int partB = len - partA;
 
-                this.data.clearPosition(baseOffset);
-                this.data.put(b, off, partA);
+            this.data.clearPosition(baseOffset);
+            this.data.put(b, off, partA);
 
-                this.data.clearPosition(offset);
-                this.data.put(b, partA, partB);
-            } else {
-                this.data.clearPosition(baseOffset + offset);
-                this.data.put(b, off, len);
-            }
-        } finally {
-            lock.writeLock().unlock();
+            this.data.clearPosition(offset);
+            this.data.put(b, partA, partB);
+        } else {
+            this.data.clearPosition(baseOffset + offset);
+            this.data.put(b, off, len);
         }
     }
 
@@ -98,44 +88,34 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        try {
-            lock.readLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = (markedReaderIndex + offset) % this.data.capacity();
-            return this.data.get(baseOffset);
-        } finally {
-            lock.readLock().unlock();
-        }
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = (markedReaderIndex + offset) % this.data.capacity();
+        return this.data.get(baseOffset);
     }
 
     @Override
     protected int _getBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        try {
-            lock.readLock().lock();
-            int markedReaderIndex = this.getMarkedReaderIndex();
-            int baseOffset = markedReaderIndex % this.data.capacity();
+        int markedReaderIndex = this.getMarkedReaderIndex();
+        int baseOffset = markedReaderIndex % this.data.capacity();
 
-            if ((baseOffset + offset + len) > this.data.capacity()) {
-                int partA = this.data.capacity() - (baseOffset + offset);
-                int partB = len - partA;
+        if ((baseOffset + offset + len) > this.data.capacity()) {
+            int partA = this.data.capacity() - (baseOffset + offset);
+            int partB = len - partA;
 
-                this.data.clearMaxLimit();
-                this.data.position(baseOffset);
-                this.data.get(b, off, partA);
+            this.data.clearMaxLimit();
+            this.data.position(baseOffset);
+            this.data.get(b, off, partA);
 
-                this.data.position(offset);
-                this.data.get(b, partA, partB);
-                return partA + partB;
-            } else {
-                this.data.clearMaxLimit();
-                this.data.position(offset);
-                this.data.get(b, off, len);
-                return len;
-            }
-        } finally {
-            lock.readLock().unlock();
+            this.data.position(offset);
+            this.data.get(b, partA, partB);
+            return partA + partB;
+        } else {
+            this.data.clearMaxLimit();
+            this.data.position(offset);
+            this.data.get(b, off, len);
+            return len;
         }
     }
 
@@ -147,16 +127,10 @@ public class SliceNioByteBuf extends AbstractByteBuf {
             throw new BufferOverflowException();
         }
 
-        try {
-            lock.writeLock().lock();
+        NioChunk newChunk = this.chunkAllocator.allocateBuffer(targetCapacity);
+        this.data.deepCopy(newChunk);
 
-            NioChunk newChunk = this.chunkAllocator.allocateBuffer(targetCapacity);
-            this.data.deepCopy(newChunk);
-
-            this.data = newChunk;
-        } finally {
-            lock.writeLock().unlock();
-        }
+        this.data = newChunk;
     }
 
     @Override
@@ -187,21 +161,15 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     public SliceNioByteBuf copy() {
         checkFree();
 
-        try {
-            lock.writeLock().lock();
+        SliceNioByteBuf copy = new SliceNioByteBuf(this.capacity(), this.getMaxCapacity(), this.chunkAllocator);
+        copy.markedReaderIndex = this.markedReaderIndex;
+        copy.markedWriterIndex = this.markedWriterIndex;
+        copy.readerIndex = this.readerIndex;
+        copy.writerIndex = this.writerIndex;
 
-            SliceNioByteBuf copy = new SliceNioByteBuf(this.capacity(), this.getMaxCapacity(), this.chunkAllocator);
-            copy.markedReaderIndex = this.markedReaderIndex;
-            copy.markedWriterIndex = this.markedWriterIndex;
-            copy.readerIndex = this.readerIndex;
-            copy.writerIndex = this.writerIndex;
+        this.data.deepCopy(copy.data);
 
-            this.data.deepCopy(copy.data);
-
-            return copy;
-        } finally {
-            lock.writeLock().unlock();
-        }
+        return copy;
     }
 
     @Override
@@ -210,13 +178,8 @@ public class SliceNioByteBuf extends AbstractByteBuf {
             return;
         }
 
-        try {
-            lock.writeLock().lock();
-            this.data.freeBuffer();
-            this.data = null;
-            super.free();
-        } finally {
-            lock.writeLock().unlock();
-        }
+        this.data.freeBuffer();
+        this.data = null;
+        super.free();
     }
 }
