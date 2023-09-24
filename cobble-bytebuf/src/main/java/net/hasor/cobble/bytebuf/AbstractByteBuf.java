@@ -68,11 +68,11 @@ public abstract class AbstractByteBuf implements ByteBuf {
     protected abstract void extendByteBuf(int targetCapacity);
 
     /** 回收 markedReaderIndex 之前的内存区块 */
-    protected void recycleByteBuf() throws IOException {
+    protected void recycleByteBuf() {
     }
 
     /**  markedWriterIndex 向前推进，有更多的数据可读 */
-    protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) throws IOException {
+    protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) {
     }
 
     @Override
@@ -150,7 +150,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public ByteBuf markReader() throws IOException {
+    public ByteBuf markReader() {
         synchronized (this.synchronizedLock) {
             if (this.markedReaderIndex != this.readerIndex) {
                 this.markedReaderIndex = this.readerIndex;
@@ -194,7 +194,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public ByteBuf markWriter() throws IOException {
+    public ByteBuf markWriter() {
         synchronized (this.synchronizedLock) {
             if (this.markedWriterIndex != this.writerIndex) {
                 int lastMarkedWriter = this.markedWriterIndex;
@@ -554,6 +554,29 @@ public abstract class AbstractByteBuf implements ByteBuf {
                 break;
             }
             dst.put(buf, copied, readBytes);
+            copied += readBytes;
+        }
+
+        return copied;
+    }
+
+    @Override
+    public int read(ByteBuf dst) {
+        int copied = 0;
+        int srcReadableBytes;
+        byte[] buf = new byte[4096];
+
+        while (true) {
+            if ((srcReadableBytes = this.readableBytes()) == 0 || !dst.hasWritable()) {
+                break;
+            }
+
+            int len = Math.min(dst.writableBytes(), Math.min(buf.length, srcReadableBytes));
+            int readBytes = this.readBytes(buf, 0, len);
+            if (readBytes <= 0) {
+                break;
+            }
+            dst.writeBytes(buf, copied, readBytes);
             copied += readBytes;
         }
 

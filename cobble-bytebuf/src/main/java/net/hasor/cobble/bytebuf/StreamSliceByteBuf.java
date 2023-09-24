@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
+import net.hasor.cobble.ExceptionUtils;
+
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -59,7 +61,7 @@ public class StreamSliceByteBuf extends SliceNioByteBuf implements StreamByteBuf
     }
 
     @Override
-    protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) throws IOException {
+    protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) {
         int len = currentMarkedWriter - lastMarkedWriter;
         int capacity = this.data.capacity();
         int baseOffset = lastMarkedWriter % capacity;
@@ -89,8 +91,13 @@ public class StreamSliceByteBuf extends SliceNioByteBuf implements StreamByteBuf
                 break;
             }
 
-            this.outStream.write(buf, 0, readBytes);
-            this.outStream.flush();
+            try {
+                this.outStream.write(buf, 0, readBytes);
+                this.outStream.flush();
+            } catch (IOException e) {
+                throw ExceptionUtils.toRuntime(e);
+            }
+
             baseOffset += readBytes;
             len -= readBytes;
         }

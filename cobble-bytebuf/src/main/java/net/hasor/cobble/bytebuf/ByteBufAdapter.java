@@ -81,17 +81,27 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public boolean hasReadable() {
+        return this.byteBuf.hasReadable();
+    }
+
+    @Override
     public int writableBytes() {
         return this.byteBuf.writableBytes();
     }
 
     @Override
-    public ByteBuf markReader() throws IOException {
+    public boolean hasWritable() {
+        return this.byteBuf.hasWritable();
+    }
+
+    @Override
+    public ByteBuf markReader() {
         return this.byteBuf.markReader();
     }
 
     @Override
-    public ByteBuf markWriter() throws IOException {
+    public ByteBuf markWriter() {
         return this.byteBuf.markWriter();
     }
 
@@ -372,6 +382,11 @@ public class ByteBufAdapter implements ByteBuf {
 
     @Override
     public int read(ByteBuffer dst) {
+        return this.byteBuf.read(dst);
+    }
+
+    @Override
+    public int read(ByteBuf dst) {
         return this.byteBuf.read(dst);
     }
 

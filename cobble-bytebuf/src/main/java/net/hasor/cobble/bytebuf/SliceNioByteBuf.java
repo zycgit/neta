@@ -42,6 +42,8 @@ public class SliceNioByteBuf extends AbstractByteBuf {
         super(byteBuffer.capacity());
 
         this.data = new NioChunk(byteBuffer);
+        this.writerIndex = byteBuffer.position();
+        this.markedWriterIndex = byteBuffer.position();
         this.chunkAllocator = new NioChunkAllocator() {
             public NioChunk allocateBuffer(int capacity) {
                 throw new UnsupportedOperationException();

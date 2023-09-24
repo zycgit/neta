@@ -63,25 +63,35 @@ public interface ByteBuf extends ByteChannel {
      */
     int readableBytes();
 
+    /** 可以进行读 */
+    default boolean hasReadable() {
+        return readableBytes() > 0;
+    }
+
     /**
      * Returns the number of writable bytes which is equal to
      * {@code (capacity - (writerIndex - readMark))}.
      */
     int writableBytes();
 
+    /** 可以进行写入 */
+    default boolean hasWritable() {
+        return writableBytes() > 0;
+    }
+
     /**
      * Marks the current {@code readerIndex} in this buffer.
      * You can reposition the current {@code readerIndex} to the marked {@code readerIndex} by calling {@link #resetReader()}.
      * The initial value of the marked {@code readerIndex} is {@code 0}.
      */
-    ByteBuf markReader() throws IOException;
+    ByteBuf markReader();
 
     /**
      * Marks the current {@code writerIndex} in this buffer.
      * You can reposition the current {@code writerIndex} to the marked {@code writerIndex} by calling {@link #resetWriter()}.
      * The initial value of the marked {@code writerIndex} is {@code 0}.
      */
-    ByteBuf markWriter() throws IOException;
+    ByteBuf markWriter();
 
     /** same as markWriter() */
     default ByteBuf flush() throws IOException {
@@ -351,6 +361,9 @@ public interface ByteBuf extends ByteChannel {
 
     /** use copy to dst */
     int read(ByteBuffer dst);
+
+    /** use copy to dst */
+    int read(ByteBuf dst);
 
     /** 读取 len 字节并将其构造成 String，读取后 readerIndex 会增加 len。
      * 如果 readableBytes() < len 则会引发 {@link IndexOutOfBoundsException} 异常 */
