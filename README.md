@@ -5,11 +5,12 @@
 分为 6 个部分（按字母序）：
 
 - cobble-bytebuf，增强的 ByteBuf 工具用于替代 JDK ByteBuf，无需切换读/写模式、缓存扩容零拷贝。
-- cobble-dynamic，基于 ASM 的 Java 动态代理、及类编辑工具。
+- cobble-dynamic，基于 ASM 的 Java 动态代理、可平替 jdk 内置 Proxy类。
 - cobble-lang，一些整理工具类和组建。
 - cobble-loader，资源的扫描/加载、加载器编排、类隔离工具框架。
 - cobble-logging，日志 API 封装（支持：jdk14、log4j、log4j2、nologging、slf4j、stdout）。
 - cobble-settings，提供统一的配置文件访问接口，兼容 properties、xml、yaml 三种文件格式。
+- cobble-net，一个基于 AIO 的 Socket Server/Client 工具。
 
 
 ## release versions and prepare next SNAPSHOT version

@@ -3,7 +3,6 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.codec.MD5;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -11,7 +10,7 @@ import java.security.NoSuchAlgorithmException;
 
 public class HeapByteBufTest {
     @Test
-    public void writeByteTest01() throws IOException {
+    public void writeByteTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
@@ -58,7 +57,7 @@ public class HeapByteBufTest {
     }
 
     @Test
-    public void writeByteTest02() throws IOException {
+    public void writeByteTest02() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
@@ -93,7 +92,7 @@ public class HeapByteBufTest {
     }
 
     @Test
-    public void writeBytesTest01() throws IOException {
+    public void writeBytesTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
@@ -142,7 +141,7 @@ public class HeapByteBufTest {
     }
 
     @Test
-    public void writeBytesTest02() throws IOException {
+    public void writeBytesTest02() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(ByteBuffer.wrap(array));
 
@@ -175,7 +174,7 @@ public class HeapByteBufTest {
     }
 
     @Test
-    public void writeBytesTest03() throws IOException {
+    public void writeBytesTest03() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
@@ -261,7 +260,7 @@ public class HeapByteBufTest {
     }
 
     @Test
-    public void writeStringTest01() throws IOException {
+    public void writeStringTest01() {
         byte[] date = "aaa\nbbb\nccc\n".getBytes(StandardCharsets.US_ASCII);
 
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer();

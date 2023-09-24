@@ -2,7 +2,6 @@ package net.hasor.cobble.bytebuf;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -50,7 +49,7 @@ public class SyncByteBufTest {
     }
 
     @Test
-    public void producerAndConsumer_01() throws InterruptedException, IOException {
+    public void producerAndConsumer_01() throws InterruptedException {
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);
         ByteBuf result = ByteBufAllocator.DEFAULT.arrayBuffer();
         AtomicBoolean stop = new AtomicBoolean(false);
@@ -104,7 +103,7 @@ public class SyncByteBufTest {
     }
 
     @Test
-    public void producerAndConsumer_02() throws InterruptedException, IOException {
+    public void producerAndConsumer_02() throws InterruptedException {
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);
         ByteBuf result = ByteBufAllocator.DEFAULT.arrayBuffer();
         AtomicBoolean stop = new AtomicBoolean(false);
@@ -166,7 +165,7 @@ public class SyncByteBufTest {
     }
 
     @Test
-    public void producerAndConsumer_03() throws InterruptedException, IOException {
+    public void producerAndConsumer_03() throws InterruptedException {
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);

@@ -3,7 +3,6 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.codec.MD5;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
@@ -13,7 +12,7 @@ import java.util.Random;
 
 public class PooledHeapByteBufTest {
     @Test
-    public void writeByteTest01() throws IOException {
+    public void writeByteTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeByte((byte) 1);
@@ -56,7 +55,7 @@ public class PooledHeapByteBufTest {
     }
 
     @Test
-    public void writeByteTest02() throws IOException {
+    public void writeByteTest02() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeByte((byte) 1);
@@ -81,7 +80,7 @@ public class PooledHeapByteBufTest {
     }
 
     @Test
-    public void writeBytesTest01() throws IOException {
+    public void writeBytesTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
@@ -117,7 +116,7 @@ public class PooledHeapByteBufTest {
     }
 
     @Test
-    public void writeBytesTest02() throws IOException {
+    public void writeBytesTest02() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
@@ -150,7 +149,7 @@ public class PooledHeapByteBufTest {
     }
 
     @Test
-    public void writeBytesTest03() throws IOException {
+    public void writeBytesTest03() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(4, 2);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
@@ -252,7 +251,7 @@ public class PooledHeapByteBufTest {
     }
 
     @Test
-    public void writeStringTest01() throws IOException {
+    public void writeStringTest01() {
         byte[] date = "aaa\nbbb\nccc\n".getBytes(StandardCharsets.US_ASCII);
 
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer();
