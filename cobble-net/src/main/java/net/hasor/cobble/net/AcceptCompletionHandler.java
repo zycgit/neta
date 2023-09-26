@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.channels.AsynchronousCloseException;
@@ -38,29 +39,27 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
 
     @Override
     public void completed(AsynchronousSocketChannel result, SocketContext context) {
+        // acceptChannel
         try {
-            // acceptChannel
-            try {
-                if (!context.acceptChannel(result.getRemoteAddress())) {
-                    result.close();
-                    return;
-                }
-            } catch (Exception e) {
-                context.acceptFailed(e);
+            if (!context.acceptChannel(result.getRemoteAddress())) {
+                IOUtils.closeQuietly(result);
                 return;
             }
-
-            // openChannel
-            long channelID = SocketContext.nextID();
-            SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, result, context);
-            SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, result, context);
-            context.openChannel(new NetChannel(channelID, result, rChannel, wChannel, context));
-
-            // read data
-            result.read(rChannel.getSwapBuffer(), context, rChannel);
-        } finally {
-            this.acceptChannel.accept(context, this);
+        } catch (Exception e) {
+            IOUtils.closeQuietly(result);
+            logger.error("ERROR: Accept Failed " + e.getMessage(), e);
+            return;
         }
+
+        // openChannel
+        long channelID = SocketContext.nextID();
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, result, context);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, result, context);
+        context.openChannel(new NetChannel(channelID, result, rChannel, wChannel, context));
+
+        // read data
+        result.read(rChannel.getSwapBuffer(), context, rChannel);
+        this.acceptChannel.accept(context, this);
     }
 
     @Override
@@ -72,7 +71,7 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
                 logger.debug("close SocketServer in AIO-AcceptThread failed, message: " + ee.getMessage());
             }
         } else {
-            context.listenFailed(e);
+            logger.error("ERROR: LISTEN Failed " + e.getMessage(), e);
         }
     }
 }

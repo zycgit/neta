@@ -18,8 +18,10 @@ import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
+import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.charset.StandardCharsets;
@@ -32,7 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetChannel {
+public class NetChannel implements Closeable {
     private static final Logger                    logger = Logger.getLogger(NetChannel.class);
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;
@@ -60,10 +62,87 @@ public class NetChannel {
         this.wSyncLock = new Object();
     }
 
+    /** Socket 连接通道 ID */
     public long getChannelID() {
         return this.channelID;
     }
 
+    /** Socket 连接通道是否关闭 */
+    public boolean isClose() {
+        return this.channel.isOpen();
+    }
+
+    /** 关闭 Socket 通道 */
+    @Override
+    public void close() {
+        if (!isClose()) {
+            IOUtils.closeQuietly(this.channel);
+        }
+    }
+
+    /** 写数据 */
+    public Future<NetChannel> sendData(byte[] bytes) {
+        if (bytes == null || bytes.length == 0) {
+            return new BasicFuture<>(this);
+        }
+
+        ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(bytes);
+        wrap.skipWritableBytes(bytes.length);
+        wrap.markWriter();
+        return sendData(wrap);
+    }
+
+    /** 写数据 */
+    public Future<NetChannel> sendData(ByteBuffer byteBuf) {
+        if (byteBuf == null || !byteBuf.hasRemaining()) {
+            return new BasicFuture<>(this);
+        }
+
+        ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(byteBuf);
+        wrap.skipWritableBytes(byteBuf.position());
+        wrap.markWriter();
+        return sendData(wrap);
+    }
+
+    /** 写数据 */
+    public Future<NetChannel> sendData(ByteBuf byteBuf) {
+        if (byteBuf == null || !byteBuf.hasReadable()) {
+            return new BasicFuture<>(this);
+        }
+
+        Future<NetChannel> future = new BasicFuture<>();
+
+        synchronized (this.wSyncLock) {
+            appendSoSndTask(new SoSndData(byteBuf, future, this));
+        }
+
+        return future;
+    }
+
+    private void appendSoSndTask(SoSndData wTask) {
+        this.wQueue.offer(wTask);
+
+        if (this.wStatus.compareAndSet(false, true)) {
+            SoSndContext wContext = new SoSndContext(this.context, this.wQueue);
+
+            // queue order sending.
+            SoSndTask task = new SoSndTask(this.channelID, this.channel, this.wHandler, wContext);
+
+            // start dispatch, then finish dispatch wStatus set false.
+            this.context.submitSoTask(task, this).onCompleted(net -> {
+                if (wContext.isEmpty()) {
+                    this.wStatus.compareAndSet(true, false);
+                } else {
+                    this.context.submitSoTask(task, net);
+                }
+            });
+        }
+    }
+
+    //
+    //
+    //
+    //
     final void notifyRcv() {
         synchronized (this.rSyncLock) {
             this.rSyncLock.notifyAll();
@@ -91,76 +170,11 @@ public class NetChannel {
     public ByteBuf getRecByteBuf() {
         return this.rHandler.getRcvBuffer();
     }
+
     //    /** 读数据 */
     //    public Future<NetChannel> readData() {
     //        return null;
     //        //        return this.rChannel.getRcvBuffer();
     //    }
 
-    /** 写数据 */
-    public Future<NetChannel> sendData(byte[] bytes) {
-        if (bytes == null || bytes.length == 0) {
-            return new BasicFuture<>(this);
-        }
-
-        Future<NetChannel> future = new BasicFuture<>();
-        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(bytes);
-
-        synchronized (this.wSyncLock) {
-            appendSoSndTask(new SoSndData(buf, future, this));
-        }
-
-        return future;
-    }
-
-    /** 写数据 */
-    public Future<NetChannel> sendData(ByteBuf byteBuf) {
-        if (byteBuf == null || !byteBuf.hasReadable()) {
-            return new BasicFuture<>(this);
-        }
-
-        Future<NetChannel> future = new BasicFuture<>();
-
-        synchronized (this.wSyncLock) {
-            appendSoSndTask(new SoSndData(byteBuf, future, this));
-        }
-
-        return future;
-    }
-
-    /** 写数据 */
-    public Future<NetChannel> sendData(ByteBuffer byteBuf) {
-        if (byteBuf == null || !byteBuf.hasRemaining()) {
-            return new BasicFuture<>(this);
-        }
-
-        Future<NetChannel> future = new BasicFuture<>();
-        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(byteBuf);
-
-        synchronized (this.wSyncLock) {
-            appendSoSndTask(new SoSndData(buf, future, this));
-        }
-
-        return future;
-    }
-
-    private void appendSoSndTask(SoSndData wTask) {
-        this.wQueue.offer(wTask);
-
-        if (this.wStatus.compareAndSet(false, true)) {
-            SoSndContext wContext = new SoSndContext(this.context, this.wQueue);
-
-            // queue order sending.
-            SoSndTask task = new SoSndTask(this.channelID, this.channel, this.wHandler, wContext);
-
-            // start dispatch, then finish dispatch wStatus set false.
-            this.context.submitSoTask(task, this).onCompleted(net -> {
-                if (wContext.isEmpty()) {
-                    this.wStatus.compareAndSet(true, false);
-                } else {
-                    this.context.submitSoTask(task, net);
-                }
-            });
-        }
-    }
 }

@@ -24,14 +24,20 @@ import net.hasor.cobble.concurrent.future.Future;
  */
 class SoSndData {
 
+    private final long               dataSize;
     private final ByteBuf            data;
     private final Future<NetChannel> future;
     private final NetChannel         result;
 
     public SoSndData(ByteBuf data, Future<NetChannel> future, NetChannel result) {
+        this.dataSize = data.readableBytes();
         this.data = data;
         this.future = future;
         this.result = result;
+    }
+
+    public long getDataSize() {
+        return this.dataSize;
     }
 
     public boolean hasReadable() {

@@ -22,7 +22,7 @@ package net.hasor.cobble.net;
  */
 public abstract class AbstractSoTask implements Runnable {
 
-    public static enum SoTaskStatus {
+    public enum SoTaskStatus {
         Finish,
         Exit,
         Continue

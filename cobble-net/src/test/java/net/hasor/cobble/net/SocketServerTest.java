@@ -28,7 +28,7 @@ public class SocketServerTest {
     public static void main(String[] args) throws Exception {
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
-        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "BB-Thread-%s", true);
+        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);
 
         // 监听处理线程
         SocketConfig config = new SocketConfig();

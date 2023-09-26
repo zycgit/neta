@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.hasor</groupId>
     <artifactId>cobble-parent</artifactId>
-    <version>4.6.0-SNAPSHOT</version>
+    <version>4.6.2-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <!-- 项目信息 -->
@@ -111,7 +111,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.8.1</version>
+                <version>3.11.0</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -165,15 +165,6 @@
                 <version>3.2.0</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
-                </configuration>
-            </plugin>
-            <!-- Test 失败继续 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-surefire-plugin</artifactId>
-                <version>2.7</version>
-                <configuration>
-                    <testFailureIgnore>true</testFailureIgnore>
                 </configuration>
             </plugin>
             <!-- 覆盖率 -->
@@ -248,6 +239,48 @@
                             <releaseProfiles>release</releaseProfiles>
                             <tagNameFormat>Release.Cobble-@{project.version}</tagNameFormat>
                             <goals>deploy</goals>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>jdk-1.8</id>
+            <activation>
+                <jdk>1.8</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.1.2</version>
+                        <configuration>
+                            <testFailureIgnore>true</testFailureIgnore>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+        <profile>
+            <id>jdk-default</id>
+            <activation>
+                <activeByDefault>true</activeByDefault>
+                <jdk>!1.8</jdk>
+            </activation>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.apache.maven.plugins</groupId>
+                        <artifactId>maven-surefire-plugin</artifactId>
+                        <version>3.1.2</version>
+                        <configuration>
+                            <testFailureIgnore>true</testFailureIgnore>
+                            <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED</argLine>
+                            <argLine>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argLine>
+                            <argLine>--add-opens=java.base/java.io=ALL-UNNAMED</argLine>
+                            <argLine>--add-opens=java.base/java.net=ALL-UNNAMED</argLine>
+                            <!-- <argLine>&#45;&#45;add-opens=jdk.unsupported=ALL-UNNAMED</argLine>-->
                         </configuration>
                     </plugin>
                 </plugins>

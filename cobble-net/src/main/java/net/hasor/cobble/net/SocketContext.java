@@ -41,9 +41,9 @@ class SocketContext {
     private final        ByteBufAllocator      bufAllocator;
     private final        Map<Long, NetChannel> channelMap;
 
-    public SocketContext(SocketConfig config, ExecutorService accept, ExecutorService worker) {
+    public SocketContext(SocketConfig config, ExecutorService ioExec, ExecutorService worker) {
         this.config = config;
-        this.ioExecutor = Objects.requireNonNull(accept);
+        this.ioExecutor = Objects.requireNonNull(ioExec);
         this.workerExecutor = Objects.requireNonNull(worker);
         this.bufAllocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : config.getBufAllocator();
         this.channelMap = new ConcurrentHashMap<>();
@@ -91,8 +91,10 @@ class SocketContext {
     }
 
     /** 关闭链接 */
-    public void closeChannel(long channelID, boolean isRemoteClose, String message) {
+    public void closeChannel(long channelID, boolean isRemote, String message) {
         System.out.println("closeChannel " + channelID + ", msg:" + message);
+        NetChannel channel = this.channelMap.get(channelID);
+        channel.close();
         this.channelMap.remove(channelID);
     }
 
@@ -136,26 +138,7 @@ class SocketContext {
 
     /** Socket 通道是否已经关闭 */
     public boolean isClose(long channelID) {
-        return false;
-    }
-
-    /** 侦听失败 */
-    public void listenFailed(Throwable e) {
-        System.out.println();
-    }
-
-    /** 接受请求失败 */
-    public void acceptFailed(Throwable e) {
-        System.out.println();
-    }
-
-    /** 数据读报错 */
-    public void readFailed(long channelID, Throwable e) {
-        System.out.println();
-    }
-
-    /** 数据写报错 */
-    public void writeFailed(long channelID, Throwable e) {
-        System.out.println();
+        NetChannel channel = channelMap.get(channelID);
+        return channel == null || channel.isClose();
     }
 }

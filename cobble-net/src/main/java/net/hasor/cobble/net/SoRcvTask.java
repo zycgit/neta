@@ -61,17 +61,17 @@ public class SoRcvTask extends AbstractSoTask {
 
             if (this.dstBuffer.writableBytes() <= 0) {
                 logger.debug("channel " + this.channelID + ", rcvBuffer is full wait next truns.");
+
+                this.context.notifyChannelRcv(this.channelID);
                 this.delayTask();
-                return;
+            } else {
+                // swapBuffer -> rcvBuffer
+                this.dstBuffer.write(this.srcBuffer);
+                this.dstBuffer.markWriter();
+
+                this.context.notifyChannelRcv(this.channelID);
+                this.continueTask();
             }
-
-            // swapBuffer -> rcvBuffer
-            this.dstBuffer.write(this.srcBuffer);
-            this.dstBuffer.markWriter();
-
-            this.context.notifyChannelRcv(this.channelID);
-
-            this.continueTask();
         } else {
             this.finishTask();
         }

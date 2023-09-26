@@ -35,6 +35,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   sndBuffer;
     //
+    private              int                       sndSize;
     private              boolean                   sndWorking;
     private              List<SoSndData>           afterWorking;
 
@@ -44,10 +45,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
         this.context = context;
         this.swapBuffer = context.newSwapBuf();
         this.sndBuffer = context.newSndBuf();
-    }
-
-    public long getChannelID() {
-        return this.channelID;
     }
 
     public ByteBuffer getSwapBuffer() {
@@ -63,6 +60,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     }
 
     public void prepareWrite(List<SoSndData> afterWorking) {
+        this.sndSize = 0;
         this.sndWorking = true;
         this.sndBuffer.read(this.swapBuffer);
         this.swapBuffer.flip();
@@ -73,10 +71,12 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     public void completed(Integer result, SocketContext context) {
         logger.debug("sndChannel(" + this.channelID + ") size:" + result);
 
+        this.sndSize += result;
+
         if (this.swapBuffer.hasRemaining()) {
 
             // continue send data.
-            this.channel.write(this.swapBuffer, context, this);
+            this.writeData();
 
         } else if (this.sndBuffer.hasReadable()) {
 
@@ -89,7 +89,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
             this.swapBuffer.flip();
 
             // continue send data.
-            this.channel.write(this.swapBuffer, context, this);
+            this.writeData();
 
         } else {
             this.context.submitSoTask(new SoSndCleanTask(this.afterWorking), this);
@@ -97,11 +97,23 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
         }
     }
 
+    private void writeData() {
+        try {
+            this.channel.write(this.swapBuffer, context, this);
+        } catch (Throwable e) {
+            this.writeFailed(e);
+        }
+    }
+
     @Override
     public void failed(Throwable e, SocketContext context) {
         logger.error("snd(" + this.channelID + ") failed, msg:" + e.getMessage(), e);
+        this.writeFailed(e);
+    }
+
+    private void writeFailed(Throwable e) {
 
         // snd close
-        context.writeFailed(this.channelID, e);
+        //        context.writeFailed(this.channelID, e);
     }
 }

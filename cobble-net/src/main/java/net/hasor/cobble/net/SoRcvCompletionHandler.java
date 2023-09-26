@@ -40,10 +40,6 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
         this.rcvBuffer = context.newRcvBuf();
     }
 
-    public long getChannelID() {
-        return this.channelID;
-    }
-
     public ByteBuffer getSwapBuffer() {
         return this.swapBuffer;
     }
@@ -86,6 +82,6 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
         logger.error("rcv(" + this.channelID + ") failed, msg:" + e.getMessage(), e);
 
         // rcv close
-        context.readFailed(this.channelID, e);
+        context.closeChannel(this.channelID, true, "readError: " + e.getMessage());
     }
 }

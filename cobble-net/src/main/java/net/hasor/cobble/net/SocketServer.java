@@ -69,7 +69,7 @@ public class SocketServer implements AutoCloseable {
         this.context = new SocketContext(config, ioExec, worker);
     }
 
-    public AutoCloseable listen(InetSocketAddress listen) throws IOException {
+    public SocketServer listen(InetSocketAddress listen) throws IOException {
         this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
         this.acceptChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
 
