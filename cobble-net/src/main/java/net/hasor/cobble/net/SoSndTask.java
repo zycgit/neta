@@ -17,9 +17,11 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.logging.Logger;
 
+import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.util.ArrayList;
+import java.nio.channels.NotYetConnectedException;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 负责 data Queue 到数据发送的分发
@@ -29,85 +31,59 @@ import java.util.List;
 public class SoSndTask extends AbstractSoTask {
     private static final Logger                    logger = Logger.getLogger(SoSndTask.class);
     private final        long                      channelID;
+    private final        long                      beginTime;
     private final        AsynchronousSocketChannel channel;
     private final        SoSndCompletionHandler    wHandler;
-    private final        SoSndContext              wContext;
+    private final        SocketContext             context;
+    //
+    private final        List<SoSndData>           afterFinish;
+    private final        Runnable                  onWriteFinish;
 
-    public SoSndTask(long channelID, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler, SoSndContext wContext) {
+    public SoSndTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler,//
+            SocketContext context, List<SoSndData> afterFinish, Runnable onWriteFinish) {
         this.channelID = channelID;
+        this.beginTime = beginTime;
         this.channel = channel;
         this.wHandler = wHandler;
-        this.wContext = wContext;
+        this.context = context;
+        this.afterFinish = afterFinish;
+        this.onWriteFinish = onWriteFinish;
     }
 
     @Override
     public void run() {
-        List<SoSndData> afterFinish = new ArrayList<>();
-        SocketContext context = this.wContext.getContext();
+        try {
+            int wTimeoutSec = this.context.getWriteTimeoutSec();
+            ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
+            ByteBuf sndBuf = this.wHandler.getSndBuffer();
+            sndBuf.read(swapBuf);
+            swapBuf.flip();
 
-        SoSndData data = this.wContext.peekData();
-        while (data != null && !data.hasReadable()) {
-            if (logger.isDebugEnabled()) {
-                logger.debug("channel " + this.channelID + ", taskData skip -> " + data);
+            this.wHandler.prepareWrite(this.afterFinish, this.onWriteFinish);
+            if (wTimeoutSec <= 0) {
+                this.channel.write(swapBuf, this.context, this.wHandler);
+            } else {
+                this.channel.write(swapBuf, wTimeoutSec, TimeUnit.SECONDS, this.context, this.wHandler);
             }
 
-            afterFinish.add(this.wContext.popData());
-            data = this.wContext.peekData();
-        }
-
-        if (data != null) {
-            if (this.wHandler.isSndWorking()) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("channel " + this.channelID + ", snd is working, wait next truns.");
-                }
-
-                delayTask();
-                context.submitSoTask(new SoSndCleanTask(afterFinish), afterFinish);
-                return;
-            }
-
-            ByteBuf sndBuffer = this.wHandler.getSndBuffer();
-            if (!sndBuffer.hasWritable()) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("channel " + this.channelID + ", snd is full, wait next truns.");
-                }
-
-                delayTask();
-                context.submitSoTask(new SoSndCleanTask(afterFinish), afterFinish);
-                return;
-            }
-
-            // try merge multiple data to sndBuffer
-            do {
-                int len = data.transferTo(sndBuffer);
-                if (logger.isDebugEnabled()) {
-                    logger.debug("channel " + this.channelID + ", taskData transferTo sndBuffer " + len);
-                }
-
-                if (!data.hasReadable()) {
+            this.finishTask();
+        } catch (Exception e) {
+            if (e instanceof NotYetConnectedException) {
+                long costTimeMs = System.currentTimeMillis() - this.beginTime;
+                if (costTimeMs < this.context.getConnectTimeoutMs()) {
                     if (logger.isDebugEnabled()) {
-                        logger.debug("channel " + this.channelID + ", taskData be merged." + data);
+                        logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
                     }
-
-                    afterFinish.add(this.wContext.popData());
-                    data = this.wContext.peekData();
-                    if (data == null) {
-                        break;
-                    } else {
-                        continue;
-                    }
+                    this.delayTask();
+                } else {
+                    logger.warn("snd(" + this.channelID + ") Connection timeout. ");
+                    this.exitTask(e);
                 }
-
-                break;
-            } while (true);
-
-            //sndBuffer to socket
-            this.wHandler.prepareWrite(afterFinish);
-            this.channel.write(this.wHandler.getSwapBuffer(), context, this.wHandler);
-
-            continueTask();
-        } else {
-            finishTask();
+            } else {
+                logger.error("rcv(" + this.channelID + ") " + e.getMessage(), e);
+                this.context.closeChannel(this.channelID, false, e.getMessage());
+                this.exitTask(e);
+            }
         }
     }
 }

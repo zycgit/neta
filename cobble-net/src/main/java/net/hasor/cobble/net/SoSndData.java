@@ -51,8 +51,12 @@ class SoSndData {
         return len;
     }
 
-    public void finish() {
+    public void completed() {
         this.future.completed(this.result);
+    }
+
+    public void failed(Throwable e) {
+        this.future.failed(e);
     }
 
     @Override

@@ -53,12 +53,18 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
 
         // openChannel
         long channelID = SocketContext.nextID();
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, result, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, result, context);
-        context.openChannel(new NetChannel(channelID, result, rChannel, wChannel, context));
+        long beginTime = System.currentTimeMillis();
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, result, context);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, result, context);
+        NetChannel channel = new NetChannel(channelID, beginTime, result, rChannel, wChannel, context);
+        context.openChannel(channel);
+
+        SoRcvTask task = new SoRcvTask(channelID, beginTime, result, rChannel, context, true);
 
         // read data
-        result.read(rChannel.getSwapBuffer(), context, rChannel);
+        context.submitSoTask(task, channel);
+
+        // continue accept
         this.acceptChannel.accept(context, this);
     }
 

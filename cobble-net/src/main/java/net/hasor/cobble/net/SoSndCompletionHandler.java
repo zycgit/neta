@@ -18,9 +18,9 @@ import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.CompletionHandler;
+import java.nio.channels.*;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * swapBuffer -> socket
@@ -30,6 +30,7 @@ import java.util.List;
 class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext> {
     private static final Logger                    logger = Logger.getLogger(SoSndCompletionHandler.class);
     private final        long                      channelID;
+    private final        long                      beginTime;
     private final        AsynchronousSocketChannel channel;
     private final        SocketContext             context;
     private final        ByteBuffer                swapBuffer;
@@ -37,10 +38,12 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     //
     private              int                       sndSize;
     private              boolean                   sndWorking;
-    private              List<SoSndData>           afterWorking;
+    private              List<SoSndData>           afterWorking1;
+    private              Runnable                  afterWorking2;
 
-    public SoSndCompletionHandler(long channelID, AsynchronousSocketChannel channel, SocketContext context) {
+    public SoSndCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SocketContext context) {
         this.channelID = channelID;
+        this.beginTime = beginTime;
         this.channel = channel;
         this.context = context;
         this.swapBuffer = context.newSwapBuf();
@@ -59,12 +62,11 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
         return this.sndWorking;
     }
 
-    public void prepareWrite(List<SoSndData> afterWorking) {
+    public void prepareWrite(List<SoSndData> afterWorking1, Runnable afterWorking2) {
         this.sndSize = 0;
         this.sndWorking = true;
-        this.sndBuffer.read(this.swapBuffer);
-        this.swapBuffer.flip();
-        this.afterWorking = afterWorking;
+        this.afterWorking1 = afterWorking1;
+        this.afterWorking2 = afterWorking2;
     }
 
     @Override
@@ -92,28 +94,62 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
             this.writeData();
 
         } else {
-            this.context.submitSoTask(new SoSndCleanTask(this.afterWorking), this);
+            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.afterWorking2, this.sndSize), this);
             this.sndWorking = false;
         }
     }
 
     private void writeData() {
         try {
-            this.channel.write(this.swapBuffer, context, this);
+            int wTimeoutSec = this.context.getWriteTimeoutSec();
+            if (wTimeoutSec <= 0) {
+                this.channel.write(this.swapBuffer, this.context, this);
+            } else {
+                this.channel.write(this.swapBuffer, wTimeoutSec, TimeUnit.SECONDS, this.context, this);
+            }
         } catch (Throwable e) {
-            this.writeFailed(e);
+            if (e instanceof NotYetConnectedException) {
+                long costTimeMs = System.currentTimeMillis() - this.beginTime;
+                if (costTimeMs < this.context.getConnectTimeoutMs()) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("snd(" + this.channelID + ") NotYetConnected, read try again later.");
+                    }
+                    this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
+                        writeData();
+                    });
+                    return;
+                } else {
+                    logger.warn("snd(" + this.channelID + ") Connection timeout. ");
+                    this.context.closeChannel(this.channelID, false, e.getMessage());
+                }
+            } else {
+                logger.error("snd(" + this.channelID + ") " + e.getMessage(), e);
+                this.context.closeChannel(this.channelID, false, e.getMessage());
+            }
+
+            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.afterWorking2, this.sndSize, e), this);
         }
     }
 
     @Override
     public void failed(Throwable e, SocketContext context) {
-        logger.error("snd(" + this.channelID + ") failed, msg:" + e.getMessage(), e);
-        this.writeFailed(e);
-    }
+        if (e instanceof ShutdownChannelGroupException) {
 
-    private void writeFailed(Throwable e) {
+            // rcv Close
+            logger.error("snd(" + this.channelID + ") shutdown, msg:" + e.getMessage());
+            context.closeChannel(this.channelID, false, e.getMessage());
+        } else if (e instanceof AsynchronousCloseException) {
 
-        // snd close
-        //        context.writeFailed(this.channelID, e);
+            // rcv Close
+            logger.error("snd(" + this.channelID + ") close, msg:" + e.getMessage());
+            context.closeChannel(this.channelID, true, e.getMessage());
+        } else {
+
+            // rcv Exception
+            logger.error("snd(" + this.channelID + ") error, msg:" + e.getMessage(), e);
+            context.closeChannel(this.channelID, false, e.getMessage());
+        }
+
+        this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.afterWorking2, this.sndSize, e), this);
     }
 }

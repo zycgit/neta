@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
+import net.hasor.cobble.logging.Logger;
+
 import java.util.List;
 
 /**
@@ -22,16 +24,59 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SoSndCleanTask extends AbstractSoTask {
-    private final List<SoSndData> taskLists;
+    private static final Logger          logger = Logger.getLogger(SoSndCleanTask.class);
+    private final        long            channelID;
+    private final        List<SoSndData> cleanTask1;
+    private final        Runnable        cleanTask2;
+    private final        long            finishSize;
+    private final        Throwable       finallyError;
 
-    public SoSndCleanTask(List<SoSndData> taskLists) {
-        this.taskLists = taskLists;
+    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1) {
+        this.channelID = channelID;
+        this.cleanTask1 = cleanTask1;
+        this.cleanTask2 = null;
+        this.finishSize = Long.MAX_VALUE;
+        this.finallyError = null;
+    }
+
+    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1, Runnable cleanTask2, int sndSize) {
+        this.channelID = channelID;
+        this.cleanTask1 = cleanTask1;
+        this.cleanTask2 = cleanTask2;
+        this.finishSize = sndSize;
+        this.finallyError = null; // finish
+    }
+
+    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1, Runnable cleanTask2, int sndSize, Throwable e) {
+        this.channelID = channelID;
+        this.cleanTask1 = cleanTask1;
+        this.cleanTask2 = cleanTask2;
+        this.finishSize = sndSize;
+        this.finallyError = e; // error
     }
 
     @Override
     public void run() {
-        for (SoSndData sndData : this.taskLists) {
-            sndData.finish();
+        long size = 0;
+        for (SoSndData sndData : this.cleanTask1) {
+            try {
+                size += sndData.getDataSize();
+                if (this.finishSize >= size) {
+                    sndData.completed();
+                } else if (this.finallyError != null) {
+                    sndData.failed(this.finallyError);
+                }
+            } catch (Exception e) {
+                logger.error("ERROR: CleanTask (" + this.channelID + ") " + e.getMessage(), e);
+            }
+        }
+
+        if (this.cleanTask2 != null) {
+            try {
+                this.cleanTask2.run();
+            } catch (Exception e) {
+                logger.error("ERROR: CleanTask (" + this.channelID + ") " + e.getMessage(), e);
+            }
         }
     }
 }

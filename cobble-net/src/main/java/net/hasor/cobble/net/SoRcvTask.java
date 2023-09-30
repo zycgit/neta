@@ -14,66 +14,66 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-import net.hasor.cobble.bytebuf.ByteBuf;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
 
-import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
+import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.NotYetConnectedException;
+import java.util.concurrent.TimeUnit;
 
 /**
- * swapBuffer -> rcvBuffer
+ * start/retry rcv data
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SoRcvTask extends AbstractSoTask {
-    private static final Logger                 logger = Logger.getLogger(SoRcvTask.class);
-    private static final ClosedChannelException CLOSE  = new ClosedChannelException();
+    private static final Logger                    logger = Logger.getLogger(SoRcvTask.class);
+    private final        long                      channelID;
+    private final        long                      beginTime;
+    //
+    private final        AsynchronousSocketChannel channel;
+    private final        SoRcvCompletionHandler    rHandler;
+    private final        SocketContext             context;
+    private final        boolean                   isNew;
 
-    private final SocketContext context;
-    private final long          channelID;
-    private final ByteBuffer    srcBuffer;
-    private final ByteBuf       dstBuffer;
-
-    public SoRcvTask(long channelID, SocketContext context, ByteBuffer srcBuffer, ByteBuf dstBuffer) {
+    public SoRcvTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler,//
+            SocketContext context, boolean isNew) {
         this.channelID = channelID;
+        this.beginTime = beginTime;
+
+        this.channel = channel;
+        this.rHandler = rHandler;
         this.context = context;
-        this.srcBuffer = srcBuffer;
-        this.dstBuffer = dstBuffer;
+        this.isNew = isNew;
     }
 
     @Override
     public void run() {
-        if (this.context.isClose(this.channelID)) {
-            this.exitTask(CLOSE);
-            return;
-        }
-
-        if (this.srcBuffer.hasRemaining()) {
-            if (this.isDelay()) {
-                ThreadUtils.sleep(10);
-                if (Thread.currentThread().isInterrupted()) {
-                    logger.debug("channel " + this.channelID + ", thread is Interrupted.");
-                    this.exitTask(new IllegalStateException("thread is Interrupted"));
-                    return;
-                }
-            }
-
-            if (this.dstBuffer.writableBytes() <= 0) {
-                logger.debug("channel " + this.channelID + ", rcvBuffer is full wait next truns.");
-
-                this.context.notifyChannelRcv(this.channelID);
-                this.delayTask();
+        try {
+            this.rHandler.reset();
+            if (this.context.getReadTimeoutSec() <= 0) {
+                this.channel.read(this.rHandler.getSwapBuffer(), this.context, this.rHandler);
             } else {
-                // swapBuffer -> rcvBuffer
-                this.dstBuffer.write(this.srcBuffer);
-                this.dstBuffer.markWriter();
-
-                this.context.notifyChannelRcv(this.channelID);
-                this.continueTask();
+                this.channel.read(this.rHandler.getSwapBuffer(), this.context.getReadTimeoutSec(), TimeUnit.SECONDS, this.context, this.rHandler);
             }
-        } else {
+
             this.finishTask();
+        } catch (Exception e) {
+            if (e instanceof NotYetConnectedException) {
+                long costTimeMs = System.currentTimeMillis() - this.beginTime;
+                if (costTimeMs < this.context.getConnectTimeoutMs()) {
+                    if (logger.isDebugEnabled()) {
+                        logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
+                    }
+                    this.delayTask();
+                } else {
+                    logger.warn("rcv(" + this.channelID + ") Connection timeout. ");
+                    this.exitTask(e);
+                }
+            } else {
+                logger.error("rcv(" + this.channelID + ") " + e.getMessage(), e);
+                this.context.closeChannel(this.channelID, false, e.getMessage());
+                this.exitTask(e);
+            }
         }
     }
 }

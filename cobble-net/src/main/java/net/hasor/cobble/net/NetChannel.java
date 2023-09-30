@@ -39,6 +39,7 @@ public class NetChannel implements Closeable {
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;
     private final        SocketContext             context;
+    private final        long                      beginTime;
     //
     private final        SoRcvCompletionHandler    rHandler;
     private final        Object                    rSyncLock;
@@ -46,10 +47,10 @@ public class NetChannel implements Closeable {
     private final        Queue<SoSndData>          wQueue;
     private final        AtomicBoolean             wStatus;
     private final        SoSndCompletionHandler    wHandler;
-    private final        Object                    wSyncLock;
 
-    NetChannel(long channelID, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SocketContext context) {
+    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SocketContext context) {
         this.channelID = channelID;
+        this.beginTime = beginTime;
         this.channel = channel;
         this.context = context;
 
@@ -59,7 +60,6 @@ public class NetChannel implements Closeable {
         this.wQueue = new ConcurrentLinkedQueue<>();
         this.wStatus = new AtomicBoolean(false);
         this.wHandler = wHandler;
-        this.wSyncLock = new Object();
     }
 
     /** Socket 连接通道 ID */
@@ -67,9 +67,14 @@ public class NetChannel implements Closeable {
         return this.channelID;
     }
 
+    /** 连接建立时间 */
+    public long getBeginTime() {
+        return this.beginTime;
+    }
+
     /** Socket 连接通道是否关闭 */
     public boolean isClose() {
-        return this.channel.isOpen();
+        return !this.channel.isOpen();
     }
 
     /** 关闭 Socket 通道 */
@@ -111,11 +116,7 @@ public class NetChannel implements Closeable {
         }
 
         Future<NetChannel> future = new BasicFuture<>();
-
-        synchronized (this.wSyncLock) {
-            appendSoSndTask(new SoSndData(byteBuf, future, this));
-        }
-
+        appendSoSndTask(new SoSndData(byteBuf, future, this));
         return future;
     }
 
@@ -123,19 +124,21 @@ public class NetChannel implements Closeable {
         this.wQueue.offer(wTask);
 
         if (this.wStatus.compareAndSet(false, true)) {
-            SoSndContext wContext = new SoSndContext(this.context, this.wQueue);
+            SoSndContext wContext = new SoSndContext(this.beginTime, this.context, this.wQueue);
 
-            // queue order sending.
-            SoSndTask task = new SoSndTask(this.channelID, this.channel, this.wHandler, wContext);
+            // queue -> sndBuffer and sending
+            SoSndCopyTask task = new SoSndCopyTask(this.channelID, this.channel, this.wHandler, wContext);
 
-            // start dispatch, then finish dispatch wStatus set false.
-            this.context.submitSoTask(task, this).onCompleted(net -> {
-                if (wContext.isEmpty()) {
+            // when sending finish then wStatus set false or repeated SoSndCopyTask
+            task.onWriteFinish(() -> {
+                if (this.wQueue.isEmpty()) {
                     this.wStatus.compareAndSet(true, false);
                 } else {
-                    this.context.submitSoTask(task, net);
+                    this.context.submitSoTask(task, this);
                 }
             });
+
+            this.context.submitSoTask(task, this);
         }
     }
 

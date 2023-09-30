@@ -22,16 +22,18 @@ import java.util.Queue;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoSndContext {
+    private final long             beginTime;
     private final SocketContext    context;
     private final Queue<SoSndData> wQueue;
 
-    public SoSndContext(SocketContext context, Queue<SoSndData> wQueue) {
+    public SoSndContext(long beginTime, SocketContext context, Queue<SoSndData> wQueue) {
+        this.beginTime = beginTime;
         this.context = context;
         this.wQueue = wQueue;
     }
 
-    public boolean isEmpty() {
-        return this.wQueue.isEmpty();
+    public long getBeginTime() {
+        return this.beginTime;
     }
 
     public SoSndData popData() {

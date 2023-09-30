@@ -24,9 +24,14 @@ import java.util.concurrent.ExecutorService;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SocketConfig {
-    private int              swapBufSize = 4 * 1024;
-    private int              rcvBufSize  = 16 * 1024;
-    private int              sndBufSize  = 16 * 1024;
+    private int              swapBufSize      = 4 * 1024;   // socket 缓冲区大小
+    private int              rcvBufSize       = 16 * 1024;  // 读取缓冲区
+    private int              sndBufSize       = 16 * 1024;  // 发送缓冲区
+    private int              retryIntervalMs  = 50;         // cobble.net 内部任务延迟调度的延迟间隔
+    private int              connectTimeoutMs = 10 * 1000;  // 建立连接超时时间
+    private int              readTimeoutSec   = -1;         // socket read timeout
+    private int              writeTimeoutSec  = -1;         // socket write timeout
+    private int              soTimeoutSec     = -1;         // so timeout
     private ByteBufAllocator bufAllocator;
     // 缓冲区关系： socket <---> swap <---> rcv/snd
     //               IO Thread    WorkerThread
@@ -57,8 +62,48 @@ public class SocketConfig {
         this.sndBufSize = sndBufSize;
     }
 
+    public int getRetryIntervalMs() {
+        return this.retryIntervalMs;
+    }
+
+    public void setRetryIntervalMs(int retryIntervalMs) {
+        this.retryIntervalMs = retryIntervalMs;
+    }
+
     public void setBufAllocator(ByteBufAllocator bufAllocator) {
         this.bufAllocator = bufAllocator;
+    }
+
+    public int getConnectTimeoutMs() {
+        return this.connectTimeoutMs;
+    }
+
+    public void setConnectTimeoutMs(int connectTimeoutMs) {
+        this.connectTimeoutMs = connectTimeoutMs;
+    }
+
+    public int getReadTimeoutSec() {
+        return this.readTimeoutSec;
+    }
+
+    public void setReadTimeoutSec(int readTimeoutSec) {
+        this.readTimeoutSec = readTimeoutSec;
+    }
+
+    public int getWriteTimeoutSec() {
+        return this.writeTimeoutSec;
+    }
+
+    public void setWriteTimeoutSec(int writeTimeoutSec) {
+        this.writeTimeoutSec = writeTimeoutSec;
+    }
+
+    public int getSoTimeoutSec() {
+        return this.soTimeoutSec;
+    }
+
+    public void setSoTimeoutSec(int soTimeoutSec) {
+        this.soTimeoutSec = soTimeoutSec;
     }
 
     public ByteBufAllocator getBufAllocator() {

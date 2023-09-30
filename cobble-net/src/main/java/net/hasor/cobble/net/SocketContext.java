@@ -71,6 +71,26 @@ class SocketContext {
         return this.bufAllocator.buffer(bufSize);
     }
 
+    public int getRetryIntervalMs() {
+        return Math.max(10, this.config.getRetryIntervalMs());
+    }
+
+    public int getConnectTimeoutMs() {
+        return Math.max(10, this.config.getConnectTimeoutMs());
+    }
+
+    public int getSoTimeoutSec() {
+        return this.config.getSoTimeoutSec();
+    }
+
+    public int getReadTimeoutSec() {
+        return this.config.getReadTimeoutSec();
+    }
+
+    public int getWriteTimeoutSec() {
+        return this.config.getWriteTimeoutSec();
+    }
+
     public ExecutorService getIoExecutor() {
         return this.ioExecutor;
     }
@@ -138,7 +158,7 @@ class SocketContext {
 
     /** Socket 通道是否已经关闭 */
     public boolean isClose(long channelID) {
-        NetChannel channel = channelMap.get(channelID);
+        NetChannel channel = this.channelMap.get(channelID);
         return channel == null || channel.isClose();
     }
 }
