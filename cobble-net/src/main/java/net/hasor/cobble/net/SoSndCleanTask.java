@@ -78,5 +78,7 @@ public class SoSndCleanTask extends AbstractSoTask {
                 logger.error("ERROR: CleanTask (" + this.channelID + ") " + e.getMessage(), e);
             }
         }
+
+        finishTask();
     }
 }

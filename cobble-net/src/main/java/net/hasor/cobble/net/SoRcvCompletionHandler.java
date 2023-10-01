@@ -18,10 +18,7 @@ import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousCloseException;
-import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.CompletionHandler;
-import java.nio.channels.ShutdownChannelGroupException;
+import java.nio.channels.*;
 
 /**
  * socket -> swapBuffer
@@ -41,8 +38,8 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
         this.beginTime = beginTime;
 
         this.channel = channel;
-        this.swapBuffer = context.newSwapBuf();
-        this.rcvBuffer = context.newRcvBuf();
+        this.swapBuffer = context.newSwapRcvBuf();
+        this.rcvBuffer = context.newLocalRcvBuf();
     }
 
     public ByteBuffer getSwapBuffer() {
@@ -54,8 +51,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
     }
 
     public void reset() {
-        this.swapBuffer.position(0);
-        this.swapBuffer.limit(this.swapBuffer.capacity());
+        this.swapBuffer.clear();
     }
 
     @Override
@@ -94,7 +90,12 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
 
     @Override
     public void failed(Throwable e, SocketContext context) {
-        if (e instanceof ShutdownChannelGroupException) {
+        if (e instanceof InterruptedByTimeoutException) {
+            // rcv Close
+            logger.error("rcv(" + this.channelID + ") readTimeout, msg:" + e.getMessage());
+            context.closeChannel(this.channelID, false, e.getMessage());
+
+        } else if (e instanceof ShutdownChannelGroupException) {
 
             // rcv Close
             logger.error("rcv(" + this.channelID + ") shutdown, msg:" + e.getMessage());

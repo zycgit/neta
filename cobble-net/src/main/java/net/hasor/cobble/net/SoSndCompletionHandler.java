@@ -46,8 +46,8 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
         this.beginTime = beginTime;
         this.channel = channel;
         this.context = context;
-        this.swapBuffer = context.newSwapBuf();
-        this.sndBuffer = context.newSndBuf();
+        this.swapBuffer = context.newSwapSndBuf();
+        this.sndBuffer = context.newLocalSndBuf();
     }
 
     public ByteBuffer getSwapBuffer() {
@@ -82,11 +82,8 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
 
         } else if (this.sndBuffer.hasReadable()) {
 
-            // reset swap
-            this.swapBuffer.position(0);
-            this.swapBuffer.limit(this.swapBuffer.capacity());
-
-            // copy data snd to swap
+            // reset swap, and copy sndData to swap
+            this.swapBuffer.clear();
             this.sndBuffer.read(this.swapBuffer);
             this.swapBuffer.flip();
 
@@ -101,11 +98,11 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
 
     private void writeData() {
         try {
-            int wTimeoutSec = this.context.getWriteTimeoutSec();
-            if (wTimeoutSec <= 0) {
-                this.channel.write(this.swapBuffer, this.context, this);
+            Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
+            if (wTimeoutMs != null && wTimeoutMs > 0) {
+                this.channel.write(this.swapBuffer, wTimeoutMs, TimeUnit.MILLISECONDS, this.context, this);
             } else {
-                this.channel.write(this.swapBuffer, wTimeoutSec, TimeUnit.SECONDS, this.context, this);
+                this.channel.write(this.swapBuffer, this.context, this);
             }
         } catch (Throwable e) {
             if (e instanceof NotYetConnectedException) {
@@ -119,7 +116,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
                     });
                     return;
                 } else {
-                    logger.warn("snd(" + this.channelID + ") Connection timeout. ");
+                    logger.warn("snd(" + this.channelID + ") Connection timeout.");
                     this.context.closeChannel(this.channelID, false, e.getMessage());
                 }
             } else {
@@ -133,7 +130,12 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
 
     @Override
     public void failed(Throwable e, SocketContext context) {
-        if (e instanceof ShutdownChannelGroupException) {
+        if (e instanceof InterruptedByTimeoutException) {
+            // rcv Close
+            logger.error("snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage());
+            context.closeChannel(this.channelID, false, e.getMessage());
+
+        } else if (e instanceof ShutdownChannelGroupException) {
 
             // rcv Close
             logger.error("snd(" + this.channelID + ") shutdown, msg:" + e.getMessage());

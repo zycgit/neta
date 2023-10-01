@@ -35,7 +35,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class NetChannel implements Closeable {
-    private static final Logger                    logger = Logger.getLogger(NetChannel.class);
+    private static final Logger                    logger          = Logger.getLogger(NetChannel.class);
+    private static final ByteBuf                   KEEP_ALIVE_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;
     private final        SocketContext             context;
@@ -117,6 +118,13 @@ public class NetChannel implements Closeable {
 
         Future<NetChannel> future = new BasicFuture<>();
         appendSoSndTask(new SoSndData(byteBuf, future, this));
+        return future;
+    }
+
+    /** 发送一个空的数据包 */
+    public Future<NetChannel> sendEmpty() {
+        Future<NetChannel> future = new BasicFuture<>();
+        appendSoSndTask(new SoSndData(KEEP_ALIVE_DATA, future, this));
         return future;
     }
 

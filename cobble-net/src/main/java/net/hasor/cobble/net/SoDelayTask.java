@@ -25,7 +25,7 @@ public class SoDelayTask extends AbstractSoTask {
     private final int intervalMillis;
 
     public SoDelayTask(SocketContext context) {
-        this.intervalMillis = context.getRetryIntervalMs();
+        this.intervalMillis = Math.max(10, context.getConfig().getRetryIntervalMs());
     }
 
     @Override

@@ -109,9 +109,16 @@ public class SoSndCopyTask extends AbstractSoTask {
             SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish, this.onWriteFinish);
             context.submitSoTask(task, this);
         } else {
-            if (this.onWriteFinish != null) {
-                this.onWriteFinish.run();
-            }
+
+            // need send empty
+            //            long beginTime = this.wContext.getBeginTime();
+            //            SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish, this.onWriteFinish);
+
+            context.submitSoTask(new SoSndCleanTask(this.channelID, afterFinish), afterFinish).onCompleted(f -> {
+                if (this.onWriteFinish != null) {
+                    this.onWriteFinish.run();
+                }
+            });
             finishTask();
         }
     }

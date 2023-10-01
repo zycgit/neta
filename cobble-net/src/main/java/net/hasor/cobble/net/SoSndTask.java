@@ -53,17 +53,17 @@ public class SoSndTask extends AbstractSoTask {
     @Override
     public void run() {
         try {
-            int wTimeoutSec = this.context.getWriteTimeoutSec();
+            Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
             ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
             ByteBuf sndBuf = this.wHandler.getSndBuffer();
             sndBuf.read(swapBuf);
             swapBuf.flip();
 
             this.wHandler.prepareWrite(this.afterFinish, this.onWriteFinish);
-            if (wTimeoutSec <= 0) {
-                this.channel.write(swapBuf, this.context, this.wHandler);
+            if (wTimeoutMs != null && wTimeoutMs > 0) {
+                this.channel.write(swapBuf, wTimeoutMs, TimeUnit.MILLISECONDS, this.context, this.wHandler);
             } else {
-                this.channel.write(swapBuf, wTimeoutSec, TimeUnit.SECONDS, this.context, this.wHandler);
+                this.channel.write(swapBuf, this.context, this.wHandler);
             }
 
             this.finishTask();

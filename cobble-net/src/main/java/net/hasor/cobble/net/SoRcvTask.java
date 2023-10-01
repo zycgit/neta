@@ -50,10 +50,11 @@ public class SoRcvTask extends AbstractSoTask {
     public void run() {
         try {
             this.rHandler.reset();
-            if (this.context.getReadTimeoutSec() <= 0) {
-                this.channel.read(this.rHandler.getSwapBuffer(), this.context, this.rHandler);
+            Integer rTimeoutMs = this.context.getConfig().getSoReadTimeoutMs();
+            if (rTimeoutMs != null && rTimeoutMs > 0) {
+                this.channel.read(this.rHandler.getSwapBuffer(), rTimeoutMs, TimeUnit.MILLISECONDS, this.context, this.rHandler);
             } else {
-                this.channel.read(this.rHandler.getSwapBuffer(), this.context.getReadTimeoutSec(), TimeUnit.SECONDS, this.context, this.rHandler);
+                this.channel.read(this.rHandler.getSwapBuffer(), this.context, this.rHandler);
             }
 
             this.finishTask();
@@ -66,7 +67,7 @@ public class SoRcvTask extends AbstractSoTask {
                     }
                     this.delayTask();
                 } else {
-                    logger.warn("rcv(" + this.channelID + ") Connection timeout. ");
+                    logger.warn("rcv(" + this.channelID + ") Connection timeout.");
                     this.exitTask(e);
                 }
             } else {

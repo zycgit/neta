@@ -24,43 +24,121 @@ import java.util.concurrent.ExecutorService;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SocketConfig {
-    private int              swapBufSize      = 4 * 1024;   // socket 缓冲区大小
-    private int              rcvBufSize       = 16 * 1024;  // 读取缓冲区
-    private int              sndBufSize       = 16 * 1024;  // 发送缓冲区
-    private int              retryIntervalMs  = 50;         // cobble.net 内部任务延迟调度的延迟间隔
-    private int              connectTimeoutMs = 10 * 1000;  // 建立连接超时时间
-    private int              readTimeoutSec   = -1;         // socket read timeout
-    private int              writeTimeoutSec  = -1;         // socket write timeout
-    private int              soTimeoutSec     = -1;         // so timeout
+    // buffers
+    private int              rcvSwapBuf            = 16 * 1024;  // socket 接收缓冲区大小,对应 SO_RCVBUF 参数
+    private int              sndSwapBuf            = 16 * 1024;  // socket 发送缓冲区大小,对应 SO_SNDBUF 参数
+    private int              rcvLocalBuf           = 16 * 1024;  // 本地读取缓冲区，从网络上收到的数据会先进入 swap 缓冲区，然后将其移动到 rcvLocal 在交给层序处理。
+    private int              sndLocalBuf           = 16 * 1024;  // 本地发送缓冲区，程序发送的数据需要先放入 rcvLocal 然后将其移动到 swap 缓冲区进行发送。
+    // so configs
+    private Integer          soRcvBuf              = null;       // 设置 socket rcv buffer
+    private Integer          soSndBuf              = null;       // 设置 socket snd buffer
+    private Boolean          soKeepAlive           = null;       // 设置 socket KeepAlive
+    private Integer          soKeepAliveIntervalMs = null;       // KeepAlive 报文发送间隔，默认 8000 毫秒
+    private Integer          soReadTimeoutMs       = -1;         // socket read timeout
+    private Integer          soWriteTimeoutMs      = -1;         // socket write timeout
+    //    SO_LINGER
+    //            SO_LINGER
+    // timeout
+    private int              retryIntervalMs       = 50;         // cobble.net 内部任务延迟调度的延迟间隔
+    private int              connectTimeoutMs      = 10 * 1000;  // 建立连接超时时间
+    //
     private ByteBufAllocator bufAllocator;
-    // 缓冲区关系： socket <---> swap <---> rcv/snd
-    //               IO Thread    WorkerThread
-    private ExecutorService  ioExecutor; // IO 线程，负责处理创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private ExecutorService  workerExecutor; // Worker 线程，负责处理 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换，以及各类 IOTask 任务
+    private ExecutorService  ioExecutor;                    // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
+    private ExecutorService  workerExecutor;                // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
 
-    public void setSwapBufSize(int swapBufSize) {
-        this.swapBufSize = swapBufSize;
+    public void setSwapBuf(int rcvSwapBuf, int sndSwapBuf) {
+        this.rcvSwapBuf = rcvSwapBuf;
+        this.sndSwapBuf = sndSwapBuf;
     }
 
-    public int getSwapBufSize() {
-        return this.swapBufSize;
+    public void setLocalBuf(int rcvLocalBuf, int sndLocalBuf) {
+        this.rcvLocalBuf = rcvLocalBuf;
+        this.sndLocalBuf = sndLocalBuf;
     }
 
-    public void setRcvBufSize(int rcvBufSize) {
-        this.rcvBufSize = rcvBufSize;
+    public int getRcvSwapBuf() {
+        return this.rcvSwapBuf;
     }
 
-    public int getRcvBufSize() {
-        return this.rcvBufSize;
+    public void setRcvSwapBuf(int rcvSwapBuf) {
+        this.rcvSwapBuf = rcvSwapBuf;
     }
 
-    public int getSndBufSize() {
-        return this.sndBufSize;
+    public int getSndSwapBuf() {
+        return this.sndSwapBuf;
     }
 
-    public void setSndBufSize(int sndBufSize) {
-        this.sndBufSize = sndBufSize;
+    public void setSndSwapBuf(int sndSwapBuf) {
+        this.sndSwapBuf = sndSwapBuf;
     }
+
+    public int getRcvLocalBuf() {
+        return this.rcvLocalBuf;
+    }
+
+    public void setRcvLocalBuf(int rcvLocalBuf) {
+        this.rcvLocalBuf = rcvLocalBuf;
+    }
+
+    public int getSndLocalBuf() {
+        return this.sndLocalBuf;
+    }
+
+    public void setSndLocalBuf(int sndLocalBuf) {
+        this.sndLocalBuf = sndLocalBuf;
+    }
+
+    //
+
+    public Integer getSoRcvBuf() {
+        return this.soRcvBuf;
+    }
+
+    public void setSoRcvBuf(Integer soRcvBuf) {
+        this.soRcvBuf = soRcvBuf;
+    }
+
+    public Integer getSoSndBuf() {
+        return this.soSndBuf;
+    }
+
+    public void setSoSndBuf(Integer soSndBuf) {
+        this.soSndBuf = soSndBuf;
+    }
+
+    public Boolean getSoKeepAlive() {
+        return this.soKeepAlive;
+    }
+
+    public void setSoKeepAlive(Boolean soKeepAlive) {
+        this.soKeepAlive = soKeepAlive;
+    }
+
+    public Integer getSoKeepAliveIntervalMs() {
+        return this.soKeepAliveIntervalMs;
+    }
+
+    public void setSoKeepAliveIntervalMs(Integer soKeepAliveIntervalMs) {
+        this.soKeepAliveIntervalMs = soKeepAliveIntervalMs;
+    }
+
+    public Integer getSoReadTimeoutMs() {
+        return this.soReadTimeoutMs;
+    }
+
+    public void setSoReadTimeoutMs(Integer soReadTimeoutMs) {
+        this.soReadTimeoutMs = soReadTimeoutMs;
+    }
+
+    public Integer getSoWriteTimeoutMs() {
+        return this.soWriteTimeoutMs;
+    }
+
+    public void setSoWriteTimeoutMs(Integer soWriteTimeoutMs) {
+        this.soWriteTimeoutMs = soWriteTimeoutMs;
+    }
+
+    //
 
     public int getRetryIntervalMs() {
         return this.retryIntervalMs;
@@ -80,30 +158,6 @@ public class SocketConfig {
 
     public void setConnectTimeoutMs(int connectTimeoutMs) {
         this.connectTimeoutMs = connectTimeoutMs;
-    }
-
-    public int getReadTimeoutSec() {
-        return this.readTimeoutSec;
-    }
-
-    public void setReadTimeoutSec(int readTimeoutSec) {
-        this.readTimeoutSec = readTimeoutSec;
-    }
-
-    public int getWriteTimeoutSec() {
-        return this.writeTimeoutSec;
-    }
-
-    public void setWriteTimeoutSec(int writeTimeoutSec) {
-        this.writeTimeoutSec = writeTimeoutSec;
-    }
-
-    public int getSoTimeoutSec() {
-        return this.soTimeoutSec;
-    }
-
-    public void setSoTimeoutSec(int soTimeoutSec) {
-        this.soTimeoutSec = soTimeoutSec;
     }
 
     public ByteBufAllocator getBufAllocator() {

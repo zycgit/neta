@@ -53,42 +53,40 @@ class SocketContext {
         return nextID.incrementAndGet();
     }
 
-    public ByteBuffer newSwapBuf() {
+    public SocketConfig getConfig() {
+        return this.config;
+    }
+
+    public ByteBuffer newSwapRcvBuf() {
         if (this.bufAllocator.isDirect()) {
-            return ByteBuffer.allocateDirect(this.config.getSwapBufSize());
+            return ByteBuffer.allocateDirect(this.config.getRcvSwapBuf());
         } else {
-            return ByteBuffer.allocate(this.config.getSwapBufSize());
+            return ByteBuffer.allocate(this.config.getRcvSwapBuf());
         }
     }
 
-    public ByteBuf newRcvBuf() {
-        int bufSize = this.config.getRcvBufSize();
+    public ByteBuffer newSwapSndBuf() {
+        if (this.bufAllocator.isDirect()) {
+            return ByteBuffer.allocateDirect(this.config.getSndSwapBuf());
+        } else {
+            return ByteBuffer.allocate(this.config.getSndSwapBuf());
+        }
+    }
+
+    public ByteBuf newLocalRcvBuf() {
+        int bufSize = this.config.getRcvLocalBuf();
         return this.bufAllocator.buffer(bufSize);
     }
 
-    public ByteBuf newSndBuf() {
-        int bufSize = this.config.getSndBufSize();
+    public ByteBuf newLocalSndBuf() {
+        int bufSize = this.config.getSndLocalBuf();
         return this.bufAllocator.buffer(bufSize);
     }
 
-    public int getRetryIntervalMs() {
-        return Math.max(10, this.config.getRetryIntervalMs());
-    }
+    //
 
     public int getConnectTimeoutMs() {
         return Math.max(10, this.config.getConnectTimeoutMs());
-    }
-
-    public int getSoTimeoutSec() {
-        return this.config.getSoTimeoutSec();
-    }
-
-    public int getReadTimeoutSec() {
-        return this.config.getReadTimeoutSec();
-    }
-
-    public int getWriteTimeoutSec() {
-        return this.config.getWriteTimeoutSec();
     }
 
     public ExecutorService getIoExecutor() {

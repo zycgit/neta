@@ -17,6 +17,8 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
+import java.io.IOException;
+import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -51,6 +53,23 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
             return;
         }
 
+        // config new socket
+        try {
+            Integer soRcvBuf = context.getConfig().getSoRcvBuf();
+            Integer soSndBuf = context.getConfig().getSoSndBuf();
+            if (soRcvBuf != null) {
+                result.setOption(StandardSocketOptions.SO_RCVBUF, soRcvBuf);
+            }
+            if (soSndBuf != null) {
+                result.setOption(StandardSocketOptions.SO_SNDBUF, soSndBuf);
+            }
+
+        } catch (IOException e) {
+            IOUtils.closeQuietly(result);
+            logger.error("ERROR: Accept Failed " + e.getMessage(), e);
+            return;
+        }
+
         // openChannel
         long channelID = SocketContext.nextID();
         long beginTime = System.currentTimeMillis();
@@ -63,6 +82,11 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
 
         // read data
         context.submitSoTask(task, channel);
+
+        // mock KeepAlive
+        if (Boolean.TRUE.equals(context.getConfig().getSoKeepAlive())) {
+            context.submitSoTask(new KeepAliveTask(channelID, beginTime, channel, context), channel);
+        }
 
         // continue accept
         this.acceptChannel.accept(context, this);

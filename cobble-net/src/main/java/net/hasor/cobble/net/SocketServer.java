@@ -73,8 +73,15 @@ public class SocketServer implements AutoCloseable {
         this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
         this.acceptChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
 
+        Integer soRcvBuf = context.getConfig().getSoRcvBuf();
+        Integer soSndBuf = context.getConfig().getSoSndBuf();
+        if (soRcvBuf != null) {
+            this.acceptChannel.setOption(StandardSocketOptions.SO_RCVBUF, soRcvBuf);
+        }
+        if (soSndBuf != null) {
+            this.acceptChannel.setOption(StandardSocketOptions.SO_SNDBUF, soSndBuf);
+        }
         this.acceptChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
-        this.acceptChannel.setOption(StandardSocketOptions.SO_RCVBUF, this.config.getRcvBufSize());
         this.acceptChannel.bind(listen, 0);
         logger.info("listen at " + listen);
 
