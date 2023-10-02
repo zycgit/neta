@@ -39,7 +39,7 @@ public class SoSndCleanTask extends AbstractSoTask {
         this.finallyError = null;
     }
 
-    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1, Runnable cleanTask2, int sndSize) {
+    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1, Runnable cleanTask2, long sndSize) {
         this.channelID = channelID;
         this.cleanTask1 = cleanTask1;
         this.cleanTask2 = cleanTask2;
@@ -47,7 +47,7 @@ public class SoSndCleanTask extends AbstractSoTask {
         this.finallyError = null; // finish
     }
 
-    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1, Runnable cleanTask2, int sndSize, Throwable e) {
+    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1, Runnable cleanTask2, long sndSize, Throwable e) {
         this.channelID = channelID;
         this.cleanTask1 = cleanTask1;
         this.cleanTask2 = cleanTask2;

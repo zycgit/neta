@@ -78,7 +78,7 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
         NetChannel channel = new NetChannel(channelID, beginTime, result, rChannel, wChannel, context);
         context.openChannel(channel);
 
-        SoRcvTask task = new SoRcvTask(channelID, beginTime, result, rChannel, context, true);
+        SoRcvTask task = new SoRcvTask(channelID, beginTime, result, rChannel, context);
 
         // read data
         context.submitSoTask(task, channel);

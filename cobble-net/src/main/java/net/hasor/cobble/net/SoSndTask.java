@@ -56,6 +56,8 @@ public class SoSndTask extends AbstractSoTask {
             Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
             ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
             ByteBuf sndBuf = this.wHandler.getSndBuffer();
+
+            swapBuf.clear();
             sndBuf.read(swapBuf);
             swapBuf.flip();
 

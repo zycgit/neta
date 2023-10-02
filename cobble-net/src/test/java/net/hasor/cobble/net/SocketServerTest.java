@@ -32,13 +32,17 @@ public class SocketServerTest {
 
         // 监听处理线程
         SocketConfig config = new SocketConfig();
-        config.setSwapBufSize(2);
-        config.setRcvBufSize(128);
+        config.setSwapBuf(2, 2);
+        config.setLocalBuf(256, 256);
+        //        config.setSoReadTimeoutMs(6000);
+        config.setSoKeepAlive(true);
+        config.setSoKeepAliveIntervalMs(4000);
+        //
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setWorkerExecutor(Executors.newFixedThreadPool(1, tf2));
 
         SocketServer server = new SocketServer(config);
-        try (AutoCloseable close = server.listen(new InetSocketAddress(5567))) {
+        try (SocketServer close = server.listen(new InetSocketAddress(5567))) {
             System.in.read();
         }
     }

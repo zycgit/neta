@@ -65,7 +65,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
 
             context.submitSoTask(copyTask, this).onCompleted(f -> {
                 // rcv continue
-                SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context, false);
+                SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context);
                 context.submitSoTask(rcvTask, this);
             }).onFailed(f -> {
                 this.failed(f.getCause(), context);
@@ -75,7 +75,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
             logger.debug("rcv(" + this.channelID + ") empty");
 
             // rcv continue
-            SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context, false);
+            SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context);
 
             context.submitSoTask(rcvTask, this).onFailed(f -> {
                 this.failed(f.getCause(), context);

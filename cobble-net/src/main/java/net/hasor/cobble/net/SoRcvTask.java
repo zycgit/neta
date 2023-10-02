@@ -33,17 +33,15 @@ public class SoRcvTask extends AbstractSoTask {
     private final        AsynchronousSocketChannel channel;
     private final        SoRcvCompletionHandler    rHandler;
     private final        SocketContext             context;
-    private final        boolean                   isNew;
 
     public SoRcvTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler,//
-            SocketContext context, boolean isNew) {
+            SocketContext context) {
         this.channelID = channelID;
         this.beginTime = beginTime;
 
         this.channel = channel;
         this.rHandler = rHandler;
         this.context = context;
-        this.isNew = isNew;
     }
 
     @Override
