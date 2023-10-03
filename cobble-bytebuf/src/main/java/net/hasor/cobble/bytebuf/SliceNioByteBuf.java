@@ -57,30 +57,32 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = (markedReaderIndex + offset) % this.data.capacity();
-        this.data.put(baseOffset, b);
+        int capacity = this.data.capacity();
+        if (offset < capacity) {
+            this.data.put(offset, b);
+        } else {
+            int off = offset - capacity;
+            this.data.put(off, b);
+        }
     }
 
     @Override
     protected void _putBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = markedReaderIndex % this.data.capacity();
-
-        if ((baseOffset + offset + len) > this.data.capacity()) {
-            int partA = this.data.capacity() - (baseOffset + offset);
+        int capacity = this.data.capacity();
+        if ((offset + len) < capacity) {
+            this.data.clearPosition(offset);
+            this.data.put(b, off, len);
+        } else {
+            int partA = capacity - offset;
             int partB = len - partA;
 
-            this.data.clearPosition(baseOffset);
+            this.data.clearPosition(offset);
             this.data.put(b, off, partA);
 
-            this.data.clearPosition(offset);
-            this.data.put(b, partA, partB);
-        } else {
-            this.data.clearPosition(baseOffset + offset);
-            this.data.put(b, off, len);
+            this.data.clearPosition(0);
+            this.data.put(b, off + partA, partB);
         }
     }
 
@@ -88,34 +90,37 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = (markedReaderIndex + offset) % this.data.capacity();
-        return this.data.get(baseOffset);
+        int capacity = this.data.capacity();
+        if (offset < capacity) {
+            return this.data.get(offset);
+        } else {
+            int off = offset - capacity;
+            return this.data.get(off);
+        }
     }
 
     @Override
     protected int _getBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = markedReaderIndex % this.data.capacity();
-
-        if ((baseOffset + offset + len) > this.data.capacity()) {
-            int partA = this.data.capacity() - (baseOffset + offset);
-            int partB = len - partA;
-
-            this.data.clearMaxLimit();
-            this.data.position(baseOffset);
-            this.data.get(b, off, partA);
-
-            this.data.position(offset);
-            this.data.get(b, partA, partB);
-            return partA + partB;
-        } else {
+        int capacity = this.data.capacity();
+        if ((offset + len) < capacity) {
             this.data.clearMaxLimit();
             this.data.position(offset);
             this.data.get(b, off, len);
             return len;
+        } else {
+            int partA = capacity - offset;
+            int partB = len - partA;
+
+            this.data.clearMaxLimit();
+            this.data.position(offset);
+            this.data.get(b, off, partA);
+
+            this.data.clearMaxLimit();
+            this.data.position(0);
+            this.data.get(b, off + partA, partB);
+            return partA + partB;
         }
     }
 
@@ -134,9 +139,28 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
+    protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) {
+        this.updateIndex();
+    }
+
+    @Override
+    protected void recycleByteBuf() {
+        this.updateIndex();
+    }
+
+    private void updateIndex() {
+        int capacity = this.data.capacity();
+        if (this.markedReaderIndex >= capacity) {
+            this.markedReaderIndex = this.markedReaderIndex - capacity;
+            this.markedWriterIndex = this.markedWriterIndex - capacity;
+            this.readerIndex = this.readerIndex - capacity;
+            this.writerIndex = this.writerIndex - capacity;
+        }
+    }
+
+    @Override
     public int capacity() {
         checkFree();
-
         return this.data.capacity();
     }
 

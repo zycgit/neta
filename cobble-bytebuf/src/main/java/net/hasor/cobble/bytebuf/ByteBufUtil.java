@@ -96,7 +96,6 @@ public class ByteBufUtil {
             }
         }
 
-
         if (SystemUtils.getJavaVersion() >= 9) {
             CLEANER = CleanerJava9.isSupported() ? new CleanerJava9() : null;
         } else {

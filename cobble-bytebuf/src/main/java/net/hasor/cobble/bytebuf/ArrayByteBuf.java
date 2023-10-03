@@ -44,24 +44,27 @@ public class ArrayByteBuf extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = (markedReaderIndex + offset) % this.data.length;
-        this.data[baseOffset] = b;
+        int capacity = this.data.length;
+        if (offset < capacity) {
+            this.data[offset] = b;
+        } else {
+            int off = offset - capacity;
+            this.data[off] = b;
+        }
     }
 
     @Override
     protected void _putBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = markedReaderIndex % this.data.length;
-        if ((baseOffset + offset + len) > this.data.length) {
-            int partA = this.data.length - (baseOffset + offset);
-            int partB = len - partA;
-            System.arraycopy(b, off, this.data, baseOffset, partA);
-            System.arraycopy(b, partA, this.data, offset, partB);
+        int capacity = this.data.length;
+        if ((offset + len) < capacity) {
+            System.arraycopy(b, off, this.data, offset, len);
         } else {
-            System.arraycopy(b, off, this.data, baseOffset + offset, len);
+            int partA = capacity - offset;
+            int partB = len - partA;
+            System.arraycopy(b, off, this.data, offset, partA);
+            System.arraycopy(b, partA, this.data, 0, partB);
         }
     }
 
@@ -69,26 +72,29 @@ public class ArrayByteBuf extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = (markedReaderIndex + offset) % this.data.length;
-        return this.data[baseOffset];
+        int capacity = this.data.length;
+        if (offset < capacity) {
+            return this.data[offset];
+        } else {
+            int off = offset - capacity;
+            return this.data[off];
+        }
     }
 
     @Override
     protected int _getBytes(int offset, byte[] b, int off, int len) {
         checkFree();
 
-        int markedReaderIndex = this.getMarkedReaderIndex();
-        int baseOffset = markedReaderIndex % this.data.length;
-        if ((baseOffset + offset + len) > this.data.length) {
-            int partA = this.data.length - (baseOffset + offset);
-            int partB = len - partA;
-            System.arraycopy(this.data, baseOffset, b, off, partA);
-            System.arraycopy(this.data, offset, b, partA, partB);
-            return partA + partB;
-        } else {
-            System.arraycopy(this.data, baseOffset + offset, b, off, len);
+        int capacity = this.data.length;
+        if ((offset + len) < capacity) {
+            System.arraycopy(this.data, offset, b, off, len);
             return len;
+        } else {
+            int partA = capacity - offset;
+            int partB = len - partA;
+            System.arraycopy(this.data, offset, b, off, partA);
+            System.arraycopy(this.data, 0, b, off + partA, partB);
+            return partA + partB;
         }
     }
 
@@ -108,11 +114,32 @@ public class ArrayByteBuf extends AbstractByteBuf {
     }
 
     @Override
+    protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) {
+        this.updateIndex();
+    }
+
+    @Override
+    protected void recycleByteBuf() {
+        this.updateIndex();
+    }
+
+    private void updateIndex() {
+        int capacity = this.data.length;
+        if (this.markedReaderIndex >= capacity) {
+            this.markedReaderIndex = this.markedReaderIndex - capacity;
+            this.markedWriterIndex = this.markedWriterIndex - capacity;
+            this.readerIndex = this.readerIndex - capacity;
+            this.writerIndex = this.writerIndex - capacity;
+        }
+    }
+
+    @Override
     public int capacity() {
         checkFree();
         return this.data.length;
     }
 
+    @Override
     public byte[] array() {
         return this.data;
     }

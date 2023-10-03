@@ -183,4 +183,19 @@ public class ObjectByteBufTest {
         byteBuf.resetReader();
         assert byteBuf.readExpectLast('\n', StandardCharsets.UTF_8).equals("hello\nword");
     }
+
+    @Test
+    public void stringTest02() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(128, 3);
+
+        byteBuf.writeString("hello\n", StandardCharsets.UTF_8);
+        byteBuf.writeString("word\n", StandardCharsets.UTF_8);
+        byteBuf.markWriter();
+
+        assert byteBuf.readExpect('\n', StandardCharsets.UTF_8).equals("hello");
+        assert byteBuf.readExpect('\n', StandardCharsets.UTF_8).equals("word");
+
+        byteBuf.resetReader();
+        assert byteBuf.readExpectLast('\n', StandardCharsets.UTF_8).equals("hello\nword");
+    }
 }

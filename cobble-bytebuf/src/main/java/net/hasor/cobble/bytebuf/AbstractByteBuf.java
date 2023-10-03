@@ -97,7 +97,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
         int oriWriterIndex = this.writerIndex;
         this.writerIndex += writableBytes;
-        return oriWriterIndex - this.markedReaderIndex;
+        return oriWriterIndex;
     }
 
     // 先检查在移指针
@@ -108,7 +108,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
         int oriReadIndex = this.readerIndex;
         if ((oriReadIndex + readableBytes) <= this.markedWriterIndex) {
             this.readerIndex += readableBytes;
-            return oriReadIndex - this.markedReaderIndex;
+            return oriReadIndex;
         }
 
         throw new IndexOutOfBoundsException(String.format("read out of range. (readerIndex(%d) + readableBytes(%d)) <= writerMark(%d)", this.readerIndex, readableBytes, this.markedWriterIndex));
@@ -237,10 +237,6 @@ public abstract class AbstractByteBuf implements ByteBuf {
     //    public ByteBuf asReadOnly() {
     //        return new ReadOnlyByteBuf(this);
     //    }
-
-    protected int getMarkedWriterIndex() {
-        return this.markedWriterIndex;
-    }
 
     @Override
     public void writeByte(byte n) {
