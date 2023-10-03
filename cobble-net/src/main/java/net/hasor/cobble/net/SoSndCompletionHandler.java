@@ -39,7 +39,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     private              int                       sndSize;
     private              boolean                   sndWorking;
     private              List<SoSndData>           afterWorking1;
-    private              Runnable                  afterWorking2;
 
     public SoSndCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SocketContext context) {
         this.channelID = channelID;
@@ -62,11 +61,10 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
         return this.sndWorking;
     }
 
-    public void prepareWrite(List<SoSndData> afterWorking1, Runnable afterWorking2) {
+    public void prepareWrite(List<SoSndData> afterWorking1) {
         this.sndSize = 0;
         this.sndWorking = true;
         this.afterWorking1 = afterWorking1;
-        this.afterWorking2 = afterWorking2;
     }
 
     @Override
@@ -85,13 +83,14 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
             // reset swap, and copy sndData to swap
             this.swapBuffer.clear();
             this.sndBuffer.read(this.swapBuffer);
+            this.sndBuffer.markReader();
             this.swapBuffer.flip();
 
             // continue send data.
             this.writeData();
 
         } else {
-            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.afterWorking2, this.sndSize), this);
+            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize), this);
             this.sndWorking = false;
         }
     }
@@ -124,7 +123,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
                 this.context.closeChannel(this.channelID, false, e.getMessage());
             }
 
-            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.afterWorking2, this.sndSize, e), this);
+            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e), this);
         }
     }
 
@@ -152,6 +151,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
             context.closeChannel(this.channelID, false, e.getMessage());
         }
 
-        this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.afterWorking2, this.sndSize, e), this);
+        this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e), this);
     }
 }

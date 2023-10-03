@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
+import net.hasor.cobble.bytebuf.HeapByteBufAllocator;
 import net.hasor.cobble.concurrent.ThreadUtils;
 
 import java.net.InetSocketAddress;
@@ -33,10 +34,11 @@ public class SocketServerTest {
         // 监听处理线程
         SocketConfig config = new SocketConfig();
         config.setSwapBuf(2, 2);
-        config.setLocalBuf(256, 256);
+        config.setLocalBuf(10, 10);
         //        config.setSoReadTimeoutMs(6000);
         config.setSoKeepAlive(true);
         config.setSoKeepAliveIntervalMs(4000);
+        config.setBufAllocator(HeapByteBufAllocator.DEFAULT);
         //
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setWorkerExecutor(Executors.newFixedThreadPool(1, tf2));

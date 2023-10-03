@@ -137,16 +137,13 @@ public class NetChannel implements Closeable {
             // queue -> sndBuffer and sending
             SoSndCopyTask task = new SoSndCopyTask(this.channelID, this.channel, this.wHandler, wContext);
 
-            // when sending finish then wStatus set false or repeated SoSndCopyTask
-            task.onWriteFinish(() -> {
+            this.context.submitSoTask(task, this).onCompleted(f -> {
                 if (this.wQueue.isEmpty()) {
                     this.wStatus.compareAndSet(true, false);
                 } else {
                     this.context.submitSoTask(task, this);
                 }
             });
-
-            this.context.submitSoTask(task, this);
         }
     }
 
@@ -173,8 +170,8 @@ public class NetChannel implements Closeable {
 
         if (sb.length() > 0) {
             System.out.println("rcvChannel " + channelID + ", data=" + sb.toString());
-            this.sendData("Hello ".getBytes());
-            this.sendData("Word\n".getBytes());
+            this.sendData("echo ".getBytes());
+            this.sendData((sb.toString() + "\n").getBytes());
         }
     }
 

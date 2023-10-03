@@ -37,17 +37,15 @@ public class SoSndTask extends AbstractSoTask {
     private final        SocketContext             context;
     //
     private final        List<SoSndData>           afterFinish;
-    private final        Runnable                  onWriteFinish;
 
     public SoSndTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler,//
-            SocketContext context, List<SoSndData> afterFinish, Runnable onWriteFinish) {
+            SocketContext context, List<SoSndData> afterFinish) {
         this.channelID = channelID;
         this.beginTime = beginTime;
         this.channel = channel;
         this.wHandler = wHandler;
         this.context = context;
         this.afterFinish = afterFinish;
-        this.onWriteFinish = onWriteFinish;
     }
 
     @Override
@@ -61,7 +59,7 @@ public class SoSndTask extends AbstractSoTask {
             sndBuf.read(swapBuf);
             swapBuf.flip();
 
-            this.wHandler.prepareWrite(this.afterFinish, this.onWriteFinish);
+            this.wHandler.prepareWrite(this.afterFinish);
             if (wTimeoutMs != null && wTimeoutMs > 0) {
                 this.channel.write(swapBuf, wTimeoutMs, TimeUnit.MILLISECONDS, this.context, this.wHandler);
             } else {

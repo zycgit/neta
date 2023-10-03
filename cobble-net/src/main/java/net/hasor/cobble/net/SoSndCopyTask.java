@@ -18,6 +18,7 @@ import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.ClosedChannelException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -32,7 +33,6 @@ public class SoSndCopyTask extends AbstractSoTask {
     private final        AsynchronousSocketChannel channel;
     private final        SoSndCompletionHandler    wHandler;
     private final        SoSndContext              wContext;
-    private              Runnable                  onWriteFinish;
 
     public SoSndCopyTask(long channelID, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
@@ -41,14 +41,36 @@ public class SoSndCopyTask extends AbstractSoTask {
         this.wContext = wContext;
     }
 
-    public void onWriteFinish(Runnable onWriteFinish) {
-        this.onWriteFinish = onWriteFinish;
+    private void channelClose() {
+        if (logger.isDebugEnabled()) {
+            logger.debug("channel " + this.channelID + ", channel is close, clean queue.");
+        }
+
+        List<SoSndData> afterFinish = new ArrayList<>();
+        SocketContext context = this.wContext.getContext();
+
+        SoSndData data = this.wContext.peekData();
+        long dataSize = 0;
+        while (data != null) {
+            dataSize += data.getDataSize();
+            afterFinish.add(this.wContext.popData());
+            data = this.wContext.peekData();
+        }
+        SoSndCleanTask task = new SoSndCleanTask(this.channelID, afterFinish, dataSize, new ClosedChannelException());
+        context.submitSoTask(task, this);
     }
 
     @Override
     public void run() {
         List<SoSndData> afterFinish = new ArrayList<>();
         SocketContext context = this.wContext.getContext();
+
+        // channel is close
+        if (this.wContext.getContext().isClose(this.channelID)) {
+            channelClose();
+            this.exitTask(new ClosedChannelException());
+            return;
+        }
 
         SoSndData data = this.wContext.peekData();
         while (data != null && !data.hasReadable()) {
@@ -66,8 +88,10 @@ public class SoSndCopyTask extends AbstractSoTask {
                     logger.debug("channel " + this.channelID + ", snd is working, wait next truns.");
                 }
 
+                SoSndCleanTask task = new SoSndCleanTask(this.channelID, afterFinish);
+                context.submitSoTask(task, this);
+
                 delayTask();
-                context.submitSoTask(new SoSndCleanTask(this.channelID, afterFinish), afterFinish);
                 return;
             }
 
@@ -106,19 +130,12 @@ public class SoSndCopyTask extends AbstractSoTask {
 
             //sndBuffer to socket
             long beginTime = this.wContext.getBeginTime();
-            SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish, this.onWriteFinish);
+            SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish);
             context.submitSoTask(task, this);
+
+            delayTask();
         } else {
-
-            // need send empty
-            //            long beginTime = this.wContext.getBeginTime();
-            //            SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish, this.onWriteFinish);
-
-            context.submitSoTask(new SoSndCleanTask(this.channelID, afterFinish), afterFinish).onCompleted(f -> {
-                if (this.onWriteFinish != null) {
-                    this.onWriteFinish.run();
-                }
-            });
+            context.submitSoTask(new SoSndCleanTask(this.channelID, afterFinish), afterFinish);
             finishTask();
         }
     }
