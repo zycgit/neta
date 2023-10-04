@@ -18,6 +18,7 @@ import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 
@@ -65,8 +66,15 @@ public class SoRcvCopyTask extends AbstractSoTask {
                 this.delayTask();
             } else {
                 // swapBuffer -> rcvBuffer
-                this.dstBuffer.write(this.srcBuffer);
-                this.dstBuffer.markWriter();
+                try {
+                    this.dstBuffer.waitWriteable(buf -> {
+                        buf.write(this.srcBuffer);
+                        buf.markWriter();
+                    });
+                } catch (InterruptedException | IOException e) {
+                    this.exitTask(e);
+                    return;
+                }
 
                 this.context.notifyChannelRcv(this.channelID);
                 this.continueTask();

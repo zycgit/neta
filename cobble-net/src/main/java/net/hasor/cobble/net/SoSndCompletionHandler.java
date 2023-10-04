@@ -17,6 +17,7 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.logging.Logger;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.List;
@@ -81,14 +82,20 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
         } else if (this.sndBuffer.hasReadable()) {
 
             // reset swap, and copy sndData to swap
-            this.swapBuffer.clear();
-            this.sndBuffer.read(this.swapBuffer);
-            this.sndBuffer.markReader();
-            this.swapBuffer.flip();
+            try {
+                this.swapBuffer.clear();
+                this.sndBuffer.waitReadable(buf -> {
+                    buf.read(this.swapBuffer);
+                    buf.markReader();
+                });
+                this.swapBuffer.flip();
+            } catch (InterruptedException | IOException e) {
+                this.failed(e, context);
+                return;
+            }
 
             // continue send data.
             this.writeData();
-
         } else {
             this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize), this);
             this.sndWorking = false;

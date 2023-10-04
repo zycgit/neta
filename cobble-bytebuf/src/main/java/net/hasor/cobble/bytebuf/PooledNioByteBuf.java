@@ -184,8 +184,14 @@ public class PooledNioByteBuf extends AbstractByteBuf {
 
     @Override
     public byte[] array() {
-        byte[] array = new byte[this.capacity()];
-        this.getBytes(0, array);
+        byte[] array = new byte[this.buffers.size() * this.sliceSize];
+        int off = 0;
+        for (NioChunk chunk : this.buffers) {
+            chunk.clearLimit(this.sliceSize);
+            chunk.position(0);
+            chunk.get(array, off, this.sliceSize);
+            off += this.sliceSize;
+        }
         return array;
     }
 

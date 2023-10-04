@@ -58,6 +58,14 @@ public class ArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         int capacity = this.data.length;
+        if (offset > capacity) {
+            int cutOffset = offset - capacity;
+            if (cutOffset > capacity) {
+                throw new IndexOutOfBoundsException();
+            }
+            offset = cutOffset;
+        }
+
         if ((offset + len) < capacity) {
             System.arraycopy(b, off, this.data, offset, len);
         } else {

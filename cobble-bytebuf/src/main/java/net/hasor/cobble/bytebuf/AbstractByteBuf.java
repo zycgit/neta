@@ -122,7 +122,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
             if (targetCapacity > this.capacity()) {
                 throw new BufferOverflowException();
             }
-            return offset;
+            return this.markedWriterIndex + offset;
         }
         throw new IndexOutOfBoundsException(String.format("write data(%d) out of range. writerMark(%d) <= offset(%d) <= writerIndex(%d)", len, this.markedWriterIndex, offset, this.writerIndex));
     }
@@ -130,9 +130,8 @@ public abstract class AbstractByteBuf implements ByteBuf {
     // readMark <= readIndex <= writerMark <= writerIndex <= capacity
     // readMark <= offset    <= writerMark
     protected int checkReadable(int offset, int len) {
-        int oriReadIndex = this.markedReaderIndex;
-        if ((oriReadIndex + offset + len) <= this.markedWriterIndex) {
-            return offset;
+        if ((this.markedReaderIndex + offset + len) <= this.markedWriterIndex) {
+            return this.readerIndex + offset;
         }
         throw new IndexOutOfBoundsException(String.format("read data(%d) out of range. readMark(%d) <= offset(%d) <= writerMark(%d)", len, this.markedReaderIndex, offset, this.markedWriterIndex));
     }
@@ -187,10 +186,6 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public int readerIndex() {
         return this.readerIndex;
-    }
-
-    protected int getMarkedReaderIndex() {
-        return this.markedReaderIndex;
     }
 
     @Override
@@ -411,6 +406,8 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public int getBytes(int offset, byte[] b, int off, int len) {
+        offset = checkReadable(offset, len);
+
         if ((offset + len) <= this.writerIndex()) {
             return this._getBytes(offset, b, off, len);
         } else {

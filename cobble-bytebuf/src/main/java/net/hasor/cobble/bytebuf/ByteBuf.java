@@ -525,12 +525,11 @@ public interface ByteBuf extends ByteChannel {
     default int expect(String expect, Charset charset) {
         int len = expect.getBytes(charset).length;
         int readableBytes = this.readableBytes();
-        int readerIndex = this.readerIndex();
 
         if (readableBytes >= len) {
             int loopCount = readableBytes - len;
             for (int i = 0; i <= loopCount; i++) {
-                String dat = this.getString(readerIndex + i, len, charset);
+                String dat = this.getString(i, len, charset);
                 if (dat.equals(expect)) {
                     return i;
                 }
@@ -567,12 +566,11 @@ public interface ByteBuf extends ByteChannel {
     default int expectLast(String expect, Charset charset) {
         int len = expect.getBytes(charset).length;
         int readableBytes = this.readableBytes();
-        int readerIndex = this.readerIndex();
 
         if (readableBytes >= len) {
             int loopCount = readableBytes - len;
             for (int i = loopCount; i >= 0; i--) {
-                String dat = this.getString(readerIndex + i, len, charset);
+                String dat = this.getString(i, len, charset);
                 if (dat.equals(expect)) {
                     return i;
                 }

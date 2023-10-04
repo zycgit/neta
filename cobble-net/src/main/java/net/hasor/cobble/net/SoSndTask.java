@@ -56,7 +56,10 @@ public class SoSndTask extends AbstractSoTask {
             ByteBuf sndBuf = this.wHandler.getSndBuffer();
 
             swapBuf.clear();
-            sndBuf.read(swapBuf);
+            sndBuf.waitReadable(buf -> {
+                buf.read(swapBuf);
+                buf.markReader();
+            });
             swapBuf.flip();
 
             this.wHandler.prepareWrite(this.afterFinish);

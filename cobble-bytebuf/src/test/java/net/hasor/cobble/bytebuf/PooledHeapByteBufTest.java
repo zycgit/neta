@@ -553,7 +553,7 @@ public class PooledHeapByteBufTest {
     public void writeBytesTest07() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(10, 10);
 
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
         byteBuf.markWriter();
 
         assert byteBuf.readByte() == 1;
@@ -561,17 +561,30 @@ public class PooledHeapByteBufTest {
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
         assert byteBuf.readByte() == 5;
-        byteBuf.markReader();
-
-        byteBuf.writeBytes(new byte[] { 11, 12, 13, 14, 15 });
         assert byteBuf.readByte() == 6;
         assert byteBuf.readByte() == 7;
         assert byteBuf.readByte() == 8;
         assert byteBuf.readByte() == 9;
-        assert byteBuf.readByte() == 10;
         byteBuf.markReader();
 
+        byteBuf.writeByte((byte) 10);
+        byteBuf.writeByte((byte) 11);
+        byteBuf.writeByte((byte) 12);
         byteBuf.markWriter();
+
+        byteBuf.writeByte((byte) 13);
+        byteBuf.writeByte((byte) 14);
+        byteBuf.writeByte((byte) 15);
+        byteBuf.markWriter();
+
+        assert byteBuf.getByte(0) == 10;
+        assert byteBuf.getByte(1) == 11;
+        assert byteBuf.getByte(2) == 12;
+        assert byteBuf.getByte(3) == 13;
+        assert byteBuf.getByte(4) == 14;
+        assert byteBuf.getByte(5) == 15;
+
+        assert byteBuf.readByte() == 10;
         assert byteBuf.readByte() == 11;
         assert byteBuf.readByte() == 12;
         assert byteBuf.readByte() == 13;
@@ -584,7 +597,7 @@ public class PooledHeapByteBufTest {
     public void writeBytesTest07_1() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(10, 2);
 
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
         byteBuf.markWriter();
 
         assert byteBuf.readByte() == 1;
@@ -592,17 +605,118 @@ public class PooledHeapByteBufTest {
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
         assert byteBuf.readByte() == 5;
-        byteBuf.markReader();
-
-        byteBuf.writeBytes(new byte[] { 11, 12, 13, 14, 15 });
         assert byteBuf.readByte() == 6;
         assert byteBuf.readByte() == 7;
         assert byteBuf.readByte() == 8;
         assert byteBuf.readByte() == 9;
-        assert byteBuf.readByte() == 10;
         byteBuf.markReader();
 
+        byteBuf.writeByte((byte) 10);
+        byteBuf.writeByte((byte) 11);
+        byteBuf.writeByte((byte) 12);
         byteBuf.markWriter();
+
+        byteBuf.writeByte((byte) 13);
+        byteBuf.writeByte((byte) 14);
+        byteBuf.writeByte((byte) 15);
+        byteBuf.markWriter();
+
+        assert byteBuf.getByte(0) == 10;
+        assert byteBuf.getByte(1) == 11;
+        assert byteBuf.getByte(2) == 12;
+        assert byteBuf.getByte(3) == 13;
+        assert byteBuf.getByte(4) == 14;
+        assert byteBuf.getByte(5) == 15;
+
+        assert byteBuf.readByte() == 10;
+        assert byteBuf.readByte() == 11;
+        assert byteBuf.readByte() == 12;
+        assert byteBuf.readByte() == 13;
+        assert byteBuf.readByte() == 14;
+        assert byteBuf.readByte() == 15;
+        byteBuf.markReader();
+    }
+
+    @Test
+    public void writeBytesTest08() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(10, 10);
+
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
+        assert byteBuf.readByte() == 9;
+        byteBuf.markReader();
+
+        byteBuf.writeByte((byte) 10);
+        byteBuf.writeByte((byte) 11);
+        byteBuf.writeByte((byte) 12);
+        byteBuf.markWriter();
+
+        byteBuf.writeByte((byte) 13);
+        byteBuf.writeByte((byte) 14);
+        byteBuf.writeByte((byte) 15);
+        byteBuf.markWriter();
+
+        assert byteBuf.getByte(0) == 10;
+        assert byteBuf.getByte(1) == 11;
+        assert byteBuf.getByte(2) == 12;
+        assert byteBuf.getByte(3) == 13;
+        assert byteBuf.getByte(4) == 14;
+        assert byteBuf.getByte(5) == 15;
+
+        assert byteBuf.readByte() == 10;
+        assert byteBuf.readByte() == 11;
+        assert byteBuf.readByte() == 12;
+        assert byteBuf.readByte() == 13;
+        assert byteBuf.readByte() == 14;
+        assert byteBuf.readByte() == 15;
+        byteBuf.markReader();
+    }
+
+    @Test
+    public void writeBytesTest08_1() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(10, 2);
+
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
+        assert byteBuf.readByte() == 9;
+        byteBuf.markReader();
+
+        byteBuf.writeByte((byte) 10);
+        byteBuf.writeByte((byte) 11);
+        byteBuf.writeByte((byte) 12);
+        byteBuf.markWriter();
+
+        byteBuf.writeByte((byte) 13);
+        byteBuf.writeByte((byte) 14);
+        byteBuf.writeByte((byte) 15);
+        byteBuf.markWriter();
+
+        assert byteBuf.getByte(0) == 10;
+        assert byteBuf.getByte(1) == 11;
+        assert byteBuf.getByte(2) == 12;
+        assert byteBuf.getByte(3) == 13;
+        assert byteBuf.getByte(4) == 14;
+        assert byteBuf.getByte(5) == 15;
+
+        assert byteBuf.readByte() == 10;
         assert byteBuf.readByte() == 11;
         assert byteBuf.readByte() == 12;
         assert byteBuf.readByte() == 13;
@@ -618,8 +732,6 @@ public class PooledHeapByteBufTest {
 
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
         array1 = byteBuf.array();
-        assert array1 != byteBuf.array();
-        byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
         assert array1 != byteBuf.array();
 
         byte[] data = byteBuf.array();

@@ -132,19 +132,19 @@ public class ObjectByteBufTest {
         byteBuf.writeInt64(-1);
         byteBuf.markWriter();
 
-        assert byteBuf.readUInt8() == 255;
-        assert byteBuf.readUInt16() == 65535;
-        assert byteBuf.readUInt24() == 16777215;
-        assert byteBuf.readUInt32() == 4294967295L;
-        assert byteBuf.readUInt32() == 4294967295L;
-        assert byteBuf.readInt64() == -1L;
-
         assert byteBuf.getUInt8(0) == 255;
         assert byteBuf.getUInt16(1) == 65535;
         assert byteBuf.getUInt24(3) == 16777215;
         assert byteBuf.getUInt32(5) == 4294967295L;
         assert byteBuf.getInt32(9) == -1;
         assert byteBuf.getUInt32(9) == 4294967295L;
+
+        assert byteBuf.readUInt8() == 255;
+        assert byteBuf.readUInt16() == 65535;
+        assert byteBuf.readUInt24() == 16777215;
+        assert byteBuf.readUInt32() == 4294967295L;
+        assert byteBuf.readUInt32() == 4294967295L;
+        assert byteBuf.readInt64() == -1L;
     }
 
     @Test
@@ -157,16 +157,16 @@ public class ObjectByteBufTest {
         byteBuf.writeUInt32LE(4294967295L);
         byteBuf.markWriter();
 
-        assert byteBuf.readUInt16LE() == 36848;
-        assert byteBuf.readUInt24LE() == 9433258;
-        assert byteBuf.readUInt32LE() == 2156916906L;
-        assert byteBuf.readUInt32LE() == 4294967295L;
-
         assert byteBuf.getUInt16LE(0) == 36848;
         assert byteBuf.getUInt24LE(2) == 9433258;
         assert byteBuf.getUInt32LE(5) == 2156916906L;
         assert byteBuf.getUInt32LE(9) == 4294967295L;
         assert byteBuf.getInt32(9) == -1;
+
+        assert byteBuf.readUInt16LE() == 36848;
+        assert byteBuf.readUInt24LE() == 9433258;
+        assert byteBuf.readUInt32LE() == 2156916906L;
+        assert byteBuf.readUInt32LE() == 4294967295L;
     }
 
     @Test
