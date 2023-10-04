@@ -850,4 +850,33 @@ public class PooledHeapByteBufTest {
         assert line2.equals("abc2");
         assert line3.equals("abc3");
     }
+
+    @Test
+    public void writeStringTest03() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(10, 10);
+
+        byteBuf.writeBytes("1234\r\n".getBytes());
+        byteBuf.markWriter();
+        readTest(byteBuf);
+
+        byteBuf.writeBytes("1234\r\n".getBytes());
+        byteBuf.markWriter();
+        readTest(byteBuf);
+
+        byteBuf.writeBytes("1234\r\n".getBytes());
+        byteBuf.markWriter();
+        readTest(byteBuf);
+
+        byteBuf.writeBytes("1234\r\n".getBytes());
+        byteBuf.markWriter();
+        readTest(byteBuf);
+    }
+
+    private void readTest(ByteBuf byteBuf) {
+        if (byteBuf.expect("\r\n", StandardCharsets.US_ASCII) >= 0) {
+            String str = byteBuf.readExpect("\r\n", StandardCharsets.US_ASCII);
+            byteBuf.markReader();
+            assert str.equals("1234");
+        }
+    }
 }

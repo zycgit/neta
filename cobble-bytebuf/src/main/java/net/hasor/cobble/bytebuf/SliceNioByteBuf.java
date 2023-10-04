@@ -112,6 +112,10 @@ public class SliceNioByteBuf extends AbstractByteBuf {
         checkFree();
 
         int capacity = this.data.capacity();
+        if (offset > capacity) {
+            offset = offset - capacity;
+        }
+
         if ((offset + len) < capacity) {
             this.data.clearMaxLimit();
             this.data.position(offset);
