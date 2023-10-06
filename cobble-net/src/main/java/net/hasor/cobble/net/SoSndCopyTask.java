@@ -61,7 +61,7 @@ public class SoSndCopyTask extends AbstractSoTask {
     }
 
     @Override
-    public void run() {
+    protected void doWork(boolean retry) {
         List<SoSndData> afterFinish = new ArrayList<>();
         SocketContext context = this.wContext.getContext();
 
@@ -91,7 +91,7 @@ public class SoSndCopyTask extends AbstractSoTask {
                 SoSndCleanTask task = new SoSndCleanTask(this.channelID, afterFinish);
                 context.submitSoTask(task, this);
 
-                delayTask();
+                this.delayTask();
                 return;
             }
 
@@ -135,6 +135,20 @@ public class SoSndCopyTask extends AbstractSoTask {
 
             delayTask();
         } else {
+
+            //            long beginTime = this.wContext.getBeginTime();
+            //            this.channel.write(ZERO, context, new CompletionHandler<Integer, Object>() {
+            //                @Override
+            //                public void completed(Integer result, Object attachment) {
+            //
+            //                }
+            //
+            //                @Override
+            //                public void failed(Throwable exc, Object attachment) {
+            //
+            //                }
+            //            });
+
             context.submitSoTask(new SoSndCleanTask(this.channelID, afterFinish), afterFinish);
             finishTask();
         }

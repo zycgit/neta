@@ -23,28 +23,28 @@ import java.util.concurrent.ExecutorService;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SocketConfig {
+public class SoConfig {
     // buffers
-    private int              rcvSwapBuf            = 16 * 1024;  // socket 接收缓冲区大小,对应 SO_RCVBUF 参数
-    private int              sndSwapBuf            = 16 * 1024;  // socket 发送缓冲区大小,对应 SO_SNDBUF 参数
-    private int              rcvLocalBuf           = 16 * 1024;  // 本地读取缓冲区，从网络上收到的数据会先进入 swap 缓冲区，然后将其移动到 rcvLocal 在交给层序处理。
-    private int              sndLocalBuf           = 16 * 1024;  // 本地发送缓冲区，程序发送的数据需要先放入 rcvLocal 然后将其移动到 swap 缓冲区进行发送。
+    private int              rcvSwapBuf        = 16 * 1024; // socket 接收缓冲区大小,对应 SO_RCVBUF 参数
+    private int              sndSwapBuf        = 16 * 1024; // socket 发送缓冲区大小,对应 SO_SNDBUF 参数
+    private int              rcvLocalBuf       = 16 * 1024; // 本地读取缓冲区，从网络上收到的数据会先进入 swap 缓冲区，然后将其移动到 rcvLocal 在交给层序处理。
+    private int              sndLocalBuf       = 16 * 1024; // 本地发送缓冲区，程序发送的数据需要先放入 rcvLocal 然后将其移动到 swap 缓冲区进行发送。
     // so configs
-    private Integer          soRcvBuf              = null;       // 设置 socket rcv buffer
-    private Integer          soSndBuf              = null;       // 设置 socket snd buffer
-    private Boolean          soKeepAlive           = null;       // 设置 socket KeepAlive
-    private Integer          soKeepAliveIntervalMs = null;       // KeepAlive 报文发送间隔，默认 8000 毫秒
-    private Integer          soReadTimeoutMs       = -1;         // socket read timeout
-    private Integer          soWriteTimeoutMs      = -1;         // socket write timeout
+    private Integer          soRcvBuf          = null;      // The size of the socket send buffer
+    private Integer          soSndBuf          = null;      // The size of the socket receive buffer
+    private Boolean          soKeepAlive       = null;      // 设置 socket KeepAlive
+    private Integer          soKeepIntervalSec = null;      // 设置 socket KeepAlive
+    private Integer          soReadTimeoutMs   = -1;        // socket read timeout
+    private Integer          soWriteTimeoutMs  = -1;        // socket write timeout
     //    SO_LINGER
     //            SO_LINGER
     // timeout
-    private int              retryIntervalMs       = 50;         // cobble.net 内部任务延迟调度的延迟间隔
-    private int              connectTimeoutMs      = 10 * 1000;  // 建立连接超时时间
+    private int              retryIntervalMs   = 50;        // cobble.net 内部任务延迟调度的延迟间隔
+    private int              connectTimeoutMs  = 10 * 1000; // 建立连接超时时间
     //
     private ByteBufAllocator bufAllocator;
-    private ExecutorService  ioExecutor;                    // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private ExecutorService  workerExecutor;                // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
+    private ExecutorService  ioExecutor;                        // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
+    private ExecutorService  workerExecutor;                    // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
 
     public void setSwapBuf(int rcvSwapBuf, int sndSwapBuf) {
         this.rcvSwapBuf = rcvSwapBuf;
@@ -88,8 +88,6 @@ public class SocketConfig {
         this.sndLocalBuf = sndLocalBuf;
     }
 
-    //
-
     public Integer getSoRcvBuf() {
         return this.soRcvBuf;
     }
@@ -114,12 +112,12 @@ public class SocketConfig {
         this.soKeepAlive = soKeepAlive;
     }
 
-    public Integer getSoKeepAliveIntervalMs() {
-        return this.soKeepAliveIntervalMs;
+    public Integer getSoKeepIntervalSec() {
+        return this.soKeepIntervalSec;
     }
 
-    public void setSoKeepAliveIntervalMs(Integer soKeepAliveIntervalMs) {
-        this.soKeepAliveIntervalMs = soKeepAliveIntervalMs;
+    public void setSoKeepIntervalSec(Integer soKeepIntervalSec) {
+        this.soKeepIntervalSec = soKeepIntervalSec;
     }
 
     public Integer getSoReadTimeoutMs() {

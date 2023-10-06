@@ -21,44 +21,33 @@ import net.hasor.cobble.logging.Logger;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class KeepAliveTask extends AbstractSoTask {
-    private static final Logger        logger = Logger.getLogger(KeepAliveTask.class);
+public class SoKeepAliveTask extends AbstractSoTask {
+    private static final Logger        logger = Logger.getLogger(SoKeepAliveTask.class);
     private final        long          channelID;
     private final        NetChannel    channel;
     private final        SocketContext context;
     private final        long          intervalMs;
-    private              long          nextSend;
 
-    public KeepAliveTask(long channelID, long beginTime, NetChannel channel, SocketContext context) {
+    public SoKeepAliveTask(long channelID, NetChannel channel, SocketContext context) {
         this.channelID = channelID;
         this.channel = channel;
         this.context = context;
-
-        Integer intervalMs = context.getConfig().getSoKeepAliveIntervalMs();
-        if (intervalMs == null || intervalMs == 0) {
-            this.intervalMs = 8000;
-        } else {
-            this.intervalMs = intervalMs;
-        }
-
-        this.nextSend = beginTime + this.intervalMs;
+        this.intervalMs = context.getSoKeepIntervalSec() * 1000L;
     }
 
     @Override
-    public void run() {
+    protected void doWork(boolean retry) {
         if (this.context.isClose(this.channelID)) {
             finishTask();
             return;
         }
 
-        if (System.currentTimeMillis() < this.nextSend) {
-            delayTask();
-            return;
+        long lastSndTime = this.channel.getLastSndTime();
+        if ((lastSndTime + this.intervalMs) < System.currentTimeMillis()) {
+            logger.debug("snd(" + this.channelID + ") send KeepAlive.");
+            this.channel.sendEmpty();
         }
 
-        this.channel.sendEmpty();
-        logger.debug("snd(" + this.channelID + ") send KeepAlive.");
-        this.nextSend = System.currentTimeMillis() + this.intervalMs;
-        delayTask();
+        delayTask(1000);
     }
 }

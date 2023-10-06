@@ -45,7 +45,7 @@ public class SoRcvTask extends AbstractSoTask {
     }
 
     @Override
-    public void run() {
+    protected void doWork(boolean retry) {
         try {
             this.rHandler.reset();
             Integer rTimeoutMs = this.context.getConfig().getSoReadTimeoutMs();
@@ -63,7 +63,7 @@ public class SoRcvTask extends AbstractSoTask {
                     if (logger.isDebugEnabled()) {
                         logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
                     }
-                    this.delayTask();
+                    this.delayTask(this.context.getConfig().getRetryIntervalMs());
                 } else {
                     logger.warn("rcv(" + this.channelID + ") Connection timeout.");
                     this.exitTask(e);

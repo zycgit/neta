@@ -84,12 +84,12 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
             // reset swap, and copy sndData to swap
             try {
                 this.swapBuffer.clear();
-                this.sndBuffer.waitReadable(buf -> {
+                this.sndBuffer.waitLock(buf -> {
                     buf.read(this.swapBuffer);
                     buf.markReader();
                 });
                 this.swapBuffer.flip();
-            } catch (InterruptedException | IOException e) {
+            } catch (IOException e) {
                 this.failed(e, context);
                 return;
             }

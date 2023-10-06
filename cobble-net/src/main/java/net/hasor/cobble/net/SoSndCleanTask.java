@@ -52,7 +52,7 @@ public class SoSndCleanTask extends AbstractSoTask {
     }
 
     @Override
-    public void run() {
+    protected void doWork(boolean retry) {
         long size = 0;
         for (SoSndData sndData : this.cleanTask1) {
             try {

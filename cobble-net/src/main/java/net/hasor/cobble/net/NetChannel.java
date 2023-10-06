@@ -19,7 +19,6 @@ import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
-import net.hasor.cobble.logging.Logger;
 
 import java.io.Closeable;
 import java.nio.ByteBuffer;
@@ -35,12 +34,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class NetChannel implements Closeable {
-    private static final Logger                    logger          = Logger.getLogger(NetChannel.class);
-    private static final ByteBuf                   KEEP_ALIVE_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
+    private static final ByteBuf                   EMPTY_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;
     private final        SocketContext             context;
     private final        long                      beginTime;
+    private              long                      lastSndTime;
+    private              long                      lastRcvTime;
     //
     private final        SoRcvCompletionHandler    rHandler;
     private final        Object                    rSyncLock;
@@ -52,6 +52,8 @@ public class NetChannel implements Closeable {
     NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SocketContext context) {
         this.channelID = channelID;
         this.beginTime = beginTime;
+        this.lastSndTime = beginTime;
+        this.lastRcvTime = beginTime;
         this.channel = channel;
         this.context = context;
 
@@ -71,6 +73,16 @@ public class NetChannel implements Closeable {
     /** 连接建立时间 */
     public long getBeginTime() {
         return this.beginTime;
+    }
+
+    /** 最后一次发送数据的时间 */
+    public long getLastSndTime() {
+        return this.lastSndTime;
+    }
+
+    /** 最后一次接收数据的时间 */
+    public long getLastRcvTime() {
+        return this.lastRcvTime;
     }
 
     /** Socket 连接通道是否关闭 */
@@ -121,10 +133,10 @@ public class NetChannel implements Closeable {
         return future;
     }
 
-    /** 发送一个空的数据包 */
+    /** 写数据 */
     public Future<NetChannel> sendEmpty() {
         Future<NetChannel> future = new BasicFuture<>();
-        appendSoSndTask(new SoSndData(KEEP_ALIVE_DATA, future, this));
+        appendSoSndTask(new SoSndData(EMPTY_DATA, future, this));
         return future;
     }
 
@@ -138,6 +150,7 @@ public class NetChannel implements Closeable {
             SoSndCopyTask task = new SoSndCopyTask(this.channelID, this.channel, this.wHandler, wContext);
 
             this.context.submitSoTask(task, this).onCompleted(f -> {
+                this.lastSndTime = System.currentTimeMillis();
                 if (this.wQueue.isEmpty()) {
                     this.wStatus.compareAndSet(true, false);
                 } else {
@@ -152,12 +165,10 @@ public class NetChannel implements Closeable {
     //
     //
     final void notifyRcv() {
+        this.lastRcvTime = System.currentTimeMillis();
+
         synchronized (this.rSyncLock) {
             this.rSyncLock.notifyAll();
-        }
-
-        if (this.channelID % 2 == 0) {
-            return;
         }
 
         ByteBuf buffer = this.getRecByteBuf();

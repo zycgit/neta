@@ -18,7 +18,6 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
-import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -31,10 +30,10 @@ import java.nio.channels.CompletionHandler;
  */
 class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SocketContext> {
     private static final Logger                          logger = Logger.getLogger(AcceptCompletionHandler.class);
-    private final        SocketServer                    socketServer;
+    private final        TcpServer                       socketServer;
     private final        AsynchronousServerSocketChannel acceptChannel;
 
-    public AcceptCompletionHandler(SocketServer socketServer, AsynchronousServerSocketChannel acceptChannel) {
+    public AcceptCompletionHandler(TcpServer socketServer, AsynchronousServerSocketChannel acceptChannel) {
         this.socketServer = socketServer;
         this.acceptChannel = acceptChannel;
     }
@@ -55,15 +54,7 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
 
         // config new socket
         try {
-            Integer soRcvBuf = context.getConfig().getSoRcvBuf();
-            Integer soSndBuf = context.getConfig().getSoSndBuf();
-            if (soRcvBuf != null) {
-                result.setOption(StandardSocketOptions.SO_RCVBUF, soRcvBuf);
-            }
-            if (soSndBuf != null) {
-                result.setOption(StandardSocketOptions.SO_SNDBUF, soSndBuf);
-            }
-
+            SoConfigUtils.configSocket(context.getConfig(), result);
         } catch (IOException e) {
             IOUtils.closeQuietly(result);
             logger.error("ERROR: Accept Failed " + e.getMessage(), e);
@@ -83,12 +74,17 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
         // read data
         context.submitSoTask(task, channel);
 
-        // mock KeepAlive
+        // keepAlive
         if (Boolean.TRUE.equals(context.getConfig().getSoKeepAlive())) {
-            context.submitSoTask(new KeepAliveTask(channelID, beginTime, channel, context), channel);
+            context.submitSoTask(new SoKeepAliveTask(channelID, channel, context), channel);
         }
 
         // continue accept
+        try {
+            logger.info("acceptChannel " + channelID + " from " + result.getRemoteAddress() + " to " + result.getLocalAddress());
+        } catch (Exception e) {
+            logger.info("acceptChannel " + channelID);
+        }
         this.acceptChannel.accept(context, this);
     }
 

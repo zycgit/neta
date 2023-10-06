@@ -35,13 +35,13 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 class SocketContext {
     private static final AtomicLong            nextID = new AtomicLong();
-    private final        SocketConfig          config;
+    private final        SoConfig              config;
     private final        ExecutorService       ioExecutor;
     private final        ExecutorService       workerExecutor;
     private final        ByteBufAllocator      bufAllocator;
     private final        Map<Long, NetChannel> channelMap;
 
-    public SocketContext(SocketConfig config, ExecutorService ioExec, ExecutorService worker) {
+    public SocketContext(SoConfig config, ExecutorService ioExec, ExecutorService worker) {
         this.config = config;
         this.ioExecutor = Objects.requireNonNull(ioExec);
         this.workerExecutor = Objects.requireNonNull(worker);
@@ -53,7 +53,7 @@ class SocketContext {
         return nextID.incrementAndGet();
     }
 
-    public SocketConfig getConfig() {
+    public SoConfig getConfig() {
         return this.config;
     }
 
@@ -87,6 +87,15 @@ class SocketContext {
 
     public int getConnectTimeoutMs() {
         return Math.max(10, this.config.getConnectTimeoutMs());
+    }
+
+    public int getSoKeepIntervalSec() {
+        Integer interval = this.config.getSoKeepIntervalSec();
+        if (interval == null) {
+            return 8;
+        } else {
+            return Math.max(1, interval);
+        }
     }
 
     public ExecutorService getIoExecutor() {

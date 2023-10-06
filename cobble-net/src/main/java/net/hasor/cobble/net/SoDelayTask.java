@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-import net.hasor.cobble.concurrent.ThreadUtils;
-
 /**
  * 处理 NotYetConnectedException 异常的延迟器
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SoDelayTask extends AbstractSoTask {
+
     private final int intervalMillis;
 
     public SoDelayTask(SocketContext context) {
@@ -29,8 +28,12 @@ public class SoDelayTask extends AbstractSoTask {
     }
 
     @Override
-    public void run() {
-        ThreadUtils.sleep(this.intervalMillis);
+    protected void doWork(boolean retry) {
+        if (!retry) {
+            this.delayTask(this.intervalMillis);
+            return;
+        }
+
         finishTask();
     }
 }

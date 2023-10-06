@@ -19,7 +19,6 @@ import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.concurrent.ExecutorService;
@@ -31,23 +30,23 @@ import java.util.concurrent.ThreadFactory;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SocketServer implements AutoCloseable {
-    private static final Logger                          logger = Logger.getLogger(SocketServer.class);
-    private final        SocketConfig                    config;
+public class TcpServer implements AutoCloseable {
+    private static final Logger                          logger = Logger.getLogger(TcpServer.class);
+    private final        SoConfig                        config;
     private final        SocketContext                   context;
     private              AsynchronousChannelGroup        channelGroup;
     private              AsynchronousServerSocketChannel acceptChannel;
     private final        ExecutorService                 ioExec;
     private final        ExecutorService                 worker;
 
-    public SocketServer() {
-        this(new SocketConfig());
+    public TcpServer() {
+        this(new SoConfig());
     }
 
-    public SocketServer(SocketConfig config) {
+    public TcpServer(SoConfig config) {
         ExecutorService ioExec = config.getIoExecutor();
         if (ioExec == null) {
-            ThreadFactory threadFactory = ThreadUtils.threadFactory(SocketServer.class.getClassLoader(), "Cobble-AIO-Thread-%s", true);
+            ThreadFactory threadFactory = ThreadUtils.threadFactory(TcpServer.class.getClassLoader(), "Cobble-AIO-Thread-%s", true);
             int process = Runtime.getRuntime().availableProcessors();
             ioExec = Executors.newFixedThreadPool(Math.min(process / 2, 2), threadFactory);
             this.ioExec = ioExec;
@@ -58,7 +57,7 @@ public class SocketServer implements AutoCloseable {
         ExecutorService worker = config.getWorkerExecutor();
         if (worker == null) {
             int process = Runtime.getRuntime().availableProcessors();
-            ThreadFactory threadFactory = ThreadUtils.threadFactory(SocketServer.class.getClassLoader(), "Cobble-AIO-Workers-%s", true);
+            ThreadFactory threadFactory = ThreadUtils.threadFactory(TcpServer.class.getClassLoader(), "Cobble-AIO-Workers-%s", true);
             worker = Executors.newFixedThreadPool(process, threadFactory);
             this.worker = worker;
         } else {
@@ -69,19 +68,11 @@ public class SocketServer implements AutoCloseable {
         this.context = new SocketContext(config, ioExec, worker);
     }
 
-    public SocketServer listen(InetSocketAddress listen) throws IOException {
+    public TcpServer listen(InetSocketAddress listen) throws IOException {
         this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
         this.acceptChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
 
-        Integer soRcvBuf = context.getConfig().getSoRcvBuf();
-        Integer soSndBuf = context.getConfig().getSoSndBuf();
-        if (soRcvBuf != null) {
-            this.acceptChannel.setOption(StandardSocketOptions.SO_RCVBUF, soRcvBuf);
-        }
-        if (soSndBuf != null) {
-            this.acceptChannel.setOption(StandardSocketOptions.SO_SNDBUF, soSndBuf);
-        }
-        this.acceptChannel.setOption(StandardSocketOptions.SO_REUSEADDR, true);
+        SoConfigUtils.configListen(context.getConfig(), this.acceptChannel);
         this.acceptChannel.bind(listen, 0);
         logger.info("listen at " + listen);
 

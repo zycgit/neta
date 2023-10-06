@@ -49,14 +49,14 @@ public class SoSndTask extends AbstractSoTask {
     }
 
     @Override
-    public void run() {
+    protected void doWork(boolean retry) {
         try {
             Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
             ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
             ByteBuf sndBuf = this.wHandler.getSndBuffer();
 
             swapBuf.clear();
-            sndBuf.waitReadable(buf -> {
+            sndBuf.waitLock(buf -> {
                 buf.read(swapBuf);
                 buf.markReader();
             });
@@ -77,7 +77,7 @@ public class SoSndTask extends AbstractSoTask {
                     if (logger.isDebugEnabled()) {
                         logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
                     }
-                    this.delayTask();
+                    this.delayTask(this.context.getConfig().getRetryIntervalMs());
                 } else {
                     logger.warn("snd(" + this.channelID + ") Connection timeout. ");
                     this.exitTask(e);

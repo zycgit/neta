@@ -16,16 +16,18 @@
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBufUtil;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.concurrent.future.Future;
 
 import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SocketServerTest {
+public class SocketClientTest {
     public static void main(String[] args) throws Exception {
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
@@ -36,15 +38,39 @@ public class SocketServerTest {
         config.setSwapBuf(2, 2);
         config.setLocalBuf(128, 128);
         //        config.setSoReadTimeoutMs(6000);
-        config.setSoKeepAlive(true);
+        //        config.setSoKeepAlive(true);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setWorkerExecutor(Executors.newFixedThreadPool(1, tf2));
 
-        TcpServer server = new TcpServer(config);
-        try (TcpServer close = server.listen(new InetSocketAddress("192.168.10.186", 5567))) {
-            System.in.read();
+        AtomicBoolean exit = new AtomicBoolean(false);
+        TcpClient client = new TcpClient(config);
+        Future<NetChannel> connect = client.connect(new InetSocketAddress("192.168.10.186", 5567));
+        connect.onCompleted(f -> {
+            ThreadUtils.runFrontThread(() -> clientWorking(f.getResult(), exit));
+        }).onFailed(f -> {
+            System.out.println(f.getCause().getMessage());
+        }).onFinal(future -> {
+            System.out.println("after connect.");
+        });
+
+        while (!exit.get()) {
+            ThreadUtils.sleep(100);
+        }
+        System.out.println("exit");
+    }
+
+    private static void clientWorking(NetChannel client, AtomicBoolean exit) {
+        //        client.sendData(("say Hello 1\r\n").getBytes());
+        int i = 0;
+        while (true) {
+            ThreadUtils.sleep(1000);
+            //
+
+            if (i > 10) {
+                exit.set(true);
+            }
         }
     }
 }
