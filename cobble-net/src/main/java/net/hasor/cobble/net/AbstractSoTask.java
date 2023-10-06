@@ -15,16 +15,12 @@
  */
 package net.hasor.cobble.net;
 
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.logging.Logger;
-
 /**
  * Socket Task
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class AbstractSoTask implements Runnable {
-    private static final Logger logger = Logger.getLogger(AbstractSoTask.class);
 
     public enum SoTaskStatus {
         Finish,
@@ -44,13 +40,6 @@ public abstract class AbstractSoTask implements Runnable {
 
     public SoTaskStatus getStatus() {
         return this.status;
-    }
-
-    protected void delayTask() {
-        this.delay = true;
-        this.delayTime = 0;
-        this.cause = null;
-        this.status = SoTaskStatus.Continue;
     }
 
     protected void delayTask(int delayTime) {
@@ -81,13 +70,20 @@ public abstract class AbstractSoTask implements Runnable {
         this.status = SoTaskStatus.Exit;
     }
 
+    private long delayTimeEnter;
+
     @Override
     public final void run() {
         if (this.delay && this.delayTime > 0) {
-            ThreadUtils.sleep(this.delayTime);
-            if (Thread.currentThread().isInterrupted()) {
-                this.exitTask(new IllegalStateException("thread is Interrupted"));
+            if (this.delayTimeEnter == 0) {
+                this.delayTimeEnter = System.currentTimeMillis();
+                this.status = SoTaskStatus.Continue;
                 return;
+            }
+            if ((this.delayTimeEnter + this.delayTime) > System.currentTimeMillis()) {
+                this.delay = false;
+                this.delayTime = 0;
+                this.delayTimeEnter = 0;
             }
         }
 

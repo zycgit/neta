@@ -26,7 +26,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
 /**
- * Socket Server
+ * AIO TCP Server
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

@@ -21,7 +21,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 
 /**
- * Socket Accept Handler
+ * Client Connect Handler
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -46,16 +46,15 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SocketContext>
         NetChannel channel = new NetChannel(channelID, beginTime, this.channel, rChannel, wChannel, context);
         context.openChannel(channel);
 
-        SoRcvTask task = new SoRcvTask(channelID, beginTime, this.channel, rChannel, context);
-
-        // read data
-        context.submitSoTask(task, channel);
-
-        // keepAlive
-        if (Boolean.TRUE.equals(context.getConfig().getSoKeepAlive())) {
-            //context.submitSoTask(new KeepAliveTask(channelID, channel, context), channel);
+        // continue accept
+        try {
+            logger.info("connectChannel " + channelID + " L:" + this.channel.getLocalAddress() + " -> R:" + this.channel.getRemoteAddress());
+        } catch (Exception e) {
+            logger.info("connectChannel " + channelID);
         }
 
+        // read data
+        context.submitSoTask(new SoRcvTask(channelID, beginTime, this.channel, rChannel, context), channel);
         this.future.completed(channel);
     }
 

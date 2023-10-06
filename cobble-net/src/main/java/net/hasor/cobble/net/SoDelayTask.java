@@ -15,7 +15,7 @@
  */
 package net.hasor.cobble.net;
 /**
- * 处理 NotYetConnectedException 异常的延迟器
+ * 延迟任务
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

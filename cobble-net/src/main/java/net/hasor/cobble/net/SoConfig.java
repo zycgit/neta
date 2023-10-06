@@ -30,14 +30,15 @@ public class SoConfig {
     private int              rcvLocalBuf       = 16 * 1024; // 本地读取缓冲区，从网络上收到的数据会先进入 swap 缓冲区，然后将其移动到 rcvLocal 在交给层序处理。
     private int              sndLocalBuf       = 16 * 1024; // 本地发送缓冲区，程序发送的数据需要先放入 rcvLocal 然后将其移动到 swap 缓冲区进行发送。
     // so configs
-    private Integer          soRcvBuf          = null;      // The size of the socket send buffer
-    private Integer          soSndBuf          = null;      // The size of the socket receive buffer
-    private Boolean          soKeepAlive       = null;      // 设置 socket KeepAlive
-    private Integer          soKeepIntervalSec = null;      // 设置 socket KeepAlive
+    private Integer          soRcvBuf          = null;      // SO_RCVBUF: The size of the socket send buffer
+    private Integer          soSndBuf          = null;      // SO_SNDBUF: The size of the socket receive buffer
+    private Boolean          soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
+    private Integer          soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
+    private Integer          soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
+    private Integer          soKeepCount       = null;      // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
     private Integer          soReadTimeoutMs   = -1;        // socket read timeout
     private Integer          soWriteTimeoutMs  = -1;        // socket write timeout
     //    SO_LINGER
-    //            SO_LINGER
     // timeout
     private int              retryIntervalMs   = 50;        // cobble.net 内部任务延迟调度的延迟间隔
     private int              connectTimeoutMs  = 10 * 1000; // 建立连接超时时间
@@ -112,12 +113,28 @@ public class SoConfig {
         this.soKeepAlive = soKeepAlive;
     }
 
+    public Integer getSoKeepIdleSec() {
+        return this.soKeepIdleSec;
+    }
+
+    public void setSoKeepIdleSec(Integer soKeepIdleSec) {
+        this.soKeepIdleSec = soKeepIdleSec;
+    }
+
     public Integer getSoKeepIntervalSec() {
         return this.soKeepIntervalSec;
     }
 
     public void setSoKeepIntervalSec(Integer soKeepIntervalSec) {
         this.soKeepIntervalSec = soKeepIntervalSec;
+    }
+
+    public Integer getSoKeepCount() {
+        return this.soKeepCount;
+    }
+
+    public void setSoKeepCount(Integer soKeepCount) {
+        this.soKeepCount = soKeepCount;
     }
 
     public Integer getSoReadTimeoutMs() {
@@ -135,8 +152,6 @@ public class SoConfig {
     public void setSoWriteTimeoutMs(Integer soWriteTimeoutMs) {
         this.soWriteTimeoutMs = soWriteTimeoutMs;
     }
-
-    //
 
     public int getRetryIntervalMs() {
         return this.retryIntervalMs;

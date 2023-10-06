@@ -74,14 +74,9 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
         // read data
         context.submitSoTask(task, channel);
 
-        // keepAlive
-        if (Boolean.TRUE.equals(context.getConfig().getSoKeepAlive())) {
-            context.submitSoTask(new SoKeepAliveTask(channelID, channel, context), channel);
-        }
-
         // continue accept
         try {
-            logger.info("acceptChannel " + channelID + " from " + result.getRemoteAddress() + " to " + result.getLocalAddress());
+            logger.info("acceptChannel " + channelID + " R:" + result.getRemoteAddress() + " -> L:" + result.getLocalAddress());
         } catch (Exception e) {
             logger.info("acceptChannel " + channelID);
         }

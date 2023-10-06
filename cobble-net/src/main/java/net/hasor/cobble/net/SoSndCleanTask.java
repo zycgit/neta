@@ -19,7 +19,7 @@ import net.hasor.cobble.logging.Logger;
 import java.util.List;
 
 /**
- * 当网络发送完毕执行 SoSndData 的 finish 方法.
+ * 清理任务.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -29,13 +29,6 @@ public class SoSndCleanTask extends AbstractSoTask {
     private final        List<SoSndData> cleanTask1;
     private final        long            finishSize;
     private final        Throwable       finallyError;
-
-    public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1) {
-        this.channelID = channelID;
-        this.cleanTask1 = cleanTask1;
-        this.finishSize = Long.MAX_VALUE;
-        this.finallyError = null;
-    }
 
     public SoSndCleanTask(long channelID, List<SoSndData> cleanTask1, long sndSize) {
         this.channelID = channelID;

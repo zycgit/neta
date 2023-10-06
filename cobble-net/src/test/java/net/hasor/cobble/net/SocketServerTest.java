@@ -36,7 +36,9 @@ public class SocketServerTest {
         config.setSwapBuf(2, 2);
         config.setLocalBuf(128, 128);
         //        config.setSoReadTimeoutMs(6000);
-        config.setSoKeepAlive(true);
+        //        config.setSoKeepAlive(true);
+        //        config.setSoKeepIntervalSec(10);
+        //        config.setSoKeepIdleSec(10);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));

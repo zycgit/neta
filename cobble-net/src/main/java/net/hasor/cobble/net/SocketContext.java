@@ -29,7 +29,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * cobble 一个套接字 server 上的 channel 管理器
+ * 套接字管理器
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -87,15 +87,6 @@ class SocketContext {
 
     public int getConnectTimeoutMs() {
         return Math.max(10, this.config.getConnectTimeoutMs());
-    }
-
-    public int getSoKeepIntervalSec() {
-        Integer interval = this.config.getSoKeepIntervalSec();
-        if (interval == null) {
-            return 8;
-        } else {
-            return Math.max(1, interval);
-        }
     }
 
     public ExecutorService getIoExecutor() {

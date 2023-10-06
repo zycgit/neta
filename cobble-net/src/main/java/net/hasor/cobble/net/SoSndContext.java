@@ -17,7 +17,7 @@ package net.hasor.cobble.net;
 import java.util.Queue;
 
 /**
- * 发送上下文，涵盖了了 SocketContext 对象和需要被发送的数据队列
+ * 发送上下文，涵盖了 SocketContext 对象和需要被发送的数据队列
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

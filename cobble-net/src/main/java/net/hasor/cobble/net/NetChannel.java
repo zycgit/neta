@@ -133,8 +133,8 @@ public class NetChannel implements Closeable {
         return future;
     }
 
-    /** 写数据 */
-    public Future<NetChannel> sendEmpty() {
+    /** 刷出 */
+    public Future<NetChannel> flash() {
         Future<NetChannel> future = new BasicFuture<>();
         appendSoSndTask(new SoSndData(EMPTY_DATA, future, this));
         return future;

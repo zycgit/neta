@@ -63,4 +63,5 @@ class SoSndData {
     public String toString() {
         return "ChannelID " + this.result.getChannelID() + ", " + this.data.toString();
     }
+
 }

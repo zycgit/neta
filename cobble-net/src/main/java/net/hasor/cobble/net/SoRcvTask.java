@@ -21,7 +21,7 @@ import java.nio.channels.NotYetConnectedException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * start/retry rcv data
+ * send swapBuffer to socket
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

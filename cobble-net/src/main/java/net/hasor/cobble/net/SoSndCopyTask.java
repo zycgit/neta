@@ -23,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 负责 data Queue 到数据发送的分发
+ * 负责将 Queue 中的数据拷贝到 sndBuffer
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -33,12 +33,14 @@ public class SoSndCopyTask extends AbstractSoTask {
     private final        AsynchronousSocketChannel channel;
     private final        SoSndCompletionHandler    wHandler;
     private final        SoSndContext              wContext;
+    private final        int                       taskIntervalMs;
 
     public SoSndCopyTask(long channelID, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
         this.channel = channel;
         this.wHandler = wHandler;
         this.wContext = wContext;
+        this.taskIntervalMs = this.wContext.getContext().getConfig().getRetryIntervalMs();
     }
 
     private void channelClose() {
@@ -72,31 +74,20 @@ public class SoSndCopyTask extends AbstractSoTask {
             return;
         }
 
-        SoSndData data = this.wContext.peekData();
-        while (data != null && !data.hasReadable()) {
+        // require wHandler is ready
+        if (this.wHandler.isSndWorking()) {
             if (logger.isDebugEnabled()) {
-                logger.debug("channel " + this.channelID + ", taskData skip -> " + data);
+                logger.debug("channel " + this.channelID + ", snd is working, wait next truns.");
             }
 
-            afterFinish.add(this.wContext.popData());
-            data = this.wContext.peekData();
+            this.delayTask(this.taskIntervalMs);
+            return;
         }
 
+        // merge SoSndData`s to sndBuffer
+        SoSndData data = this.wContext.peekData();
         if (data != null) {
-            if (this.wHandler.isSndWorking()) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("channel " + this.channelID + ", snd is working, wait next truns.");
-                }
-
-                SoSndCleanTask task = new SoSndCleanTask(this.channelID, afterFinish);
-                context.submitSoTask(task, this);
-
-                this.delayTask();
-                return;
-            }
-
             ByteBuf sndBuffer = this.wHandler.getSndBuffer();
-            // try merge multiple data to sndBuffer
             do {
                 if (!sndBuffer.hasWritable()) {
                     if (logger.isDebugEnabled()) {
@@ -127,30 +118,17 @@ public class SoSndCopyTask extends AbstractSoTask {
 
                 break;
             } while (true);
+        }
 
-            //sndBuffer to socket
-            long beginTime = this.wContext.getBeginTime();
-            SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish);
-            context.submitSoTask(task, this);
+        // start SoSndTask, send sndBuffer to socket
+        long beginTime = this.wContext.getBeginTime();
+        SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish);
+        context.submitSoTask(task, this);
 
-            delayTask();
+        if (data == null) {
+            this.finishTask();
         } else {
-
-            //            long beginTime = this.wContext.getBeginTime();
-            //            this.channel.write(ZERO, context, new CompletionHandler<Integer, Object>() {
-            //                @Override
-            //                public void completed(Integer result, Object attachment) {
-            //
-            //                }
-            //
-            //                @Override
-            //                public void failed(Throwable exc, Object attachment) {
-            //
-            //                }
-            //            });
-
-            context.submitSoTask(new SoSndCleanTask(this.channelID, afterFinish), afterFinish);
-            finishTask();
+            this.delayTask(this.taskIntervalMs);
         }
     }
 }
