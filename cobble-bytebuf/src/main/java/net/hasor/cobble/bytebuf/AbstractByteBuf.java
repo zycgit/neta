@@ -617,4 +617,11 @@ public abstract class AbstractByteBuf implements ByteBuf {
     protected void finalize() {
         this.free();
     }
+
+    @Override
+    public void waitLock(EConsumer<ByteBuf, IOException> callBack) throws IOException {
+        synchronized (this.synchronizedLock) {
+            callBack.eAccept(this);
+        }
+    }
 }

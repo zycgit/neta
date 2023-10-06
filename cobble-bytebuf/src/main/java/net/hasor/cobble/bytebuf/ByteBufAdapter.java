@@ -634,4 +634,9 @@ public class ByteBufAdapter implements ByteBuf {
     public void waitWriteable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
         this.byteBuf.waitWriteable(expect, callBack);
     }
+
+    @Override
+    public void waitLock(EConsumer<ByteBuf, IOException> callBack) throws IOException {
+        this.byteBuf.waitLock(callBack);
+    }
 }

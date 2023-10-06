@@ -665,4 +665,7 @@ public interface ByteBuf extends ByteChannel {
      * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻调用 callBack否则会进入线程等待状态。
      * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续线程 */
     void waitWriteable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException;
+
+    /** 等待读写 IO 锁 */
+    void waitLock(EConsumer<ByteBuf, IOException> callBack) throws IOException;
 }
