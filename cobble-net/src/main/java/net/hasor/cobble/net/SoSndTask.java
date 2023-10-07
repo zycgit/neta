@@ -34,12 +34,12 @@ public class SoSndTask extends AbstractSoTask {
     private final        long                      beginTime;
     private final        AsynchronousSocketChannel channel;
     private final        SoSndCompletionHandler    wHandler;
-    private final        SocketContext             context;
+    private final        SoContextImpl             context;
     //
     private final        List<SoSndData>           afterFinish;
 
     public SoSndTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler,//
-            SocketContext context, List<SoSndData> afterFinish) {
+            SoContextImpl context, List<SoSndData> afterFinish) {
         this.channelID = channelID;
         this.beginTime = beginTime;
         this.channel = channel;

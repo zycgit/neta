@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SocketContext {
+class SoContextImpl implements SoContext {
     private static final AtomicLong            nextID = new AtomicLong();
     private final        SoConfig              config;
     private final        ExecutorService       ioExecutor;
@@ -41,7 +41,7 @@ class SocketContext {
     private final        ByteBufAllocator      bufAllocator;
     private final        Map<Long, NetChannel> channelMap;
 
-    public SocketContext(SoConfig config, ExecutorService ioExec, ExecutorService worker) {
+    public SoContextImpl(SoConfig config, ExecutorService ioExec, ExecutorService worker) {
         this.config = config;
         this.ioExecutor = Objects.requireNonNull(ioExec);
         this.workerExecutor = Objects.requireNonNull(worker);
@@ -53,6 +53,7 @@ class SocketContext {
         return nextID.incrementAndGet();
     }
 
+    @Override
     public SoConfig getConfig() {
         return this.config;
     }
@@ -125,6 +126,7 @@ class SocketContext {
     }
 
     /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
+    @Override
     public <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result) {
         Future<T> future = new BasicFuture<>();
 
@@ -155,6 +157,7 @@ class SocketContext {
     }
 
     /** Socket 通道是否已经关闭 */
+    @Override
     public boolean isClose(long channelID) {
         NetChannel channel = this.channelMap.get(channelID);
         return channel == null || channel.isClose();

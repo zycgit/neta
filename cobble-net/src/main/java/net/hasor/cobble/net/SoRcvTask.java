@@ -32,10 +32,10 @@ public class SoRcvTask extends AbstractSoTask {
     //
     private final        AsynchronousSocketChannel channel;
     private final        SoRcvCompletionHandler    rHandler;
-    private final        SocketContext             context;
+    private final        SoContextImpl             context;
 
     public SoRcvTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler,//
-            SocketContext context) {
+            SoContextImpl context) {
         this.channelID = channelID;
         this.beginTime = beginTime;
 

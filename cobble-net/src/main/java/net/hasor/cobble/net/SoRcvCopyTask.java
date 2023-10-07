@@ -26,13 +26,13 @@ import java.nio.channels.ClosedChannelException;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SoRcvCopyTask extends AbstractSoTask {
-    private final SocketContext context;
+    private final SoContextImpl context;
     private final long          channelID;
     private final ByteBuffer    srcBuffer;
     private final ByteBuf       dstBuffer;
     private final int           taskIntervalMs;
 
-    public SoRcvCopyTask(long channelID, SocketContext context, ByteBuffer srcBuffer, ByteBuf dstBuffer) {
+    public SoRcvCopyTask(long channelID, SoContextImpl context, ByteBuffer srcBuffer, ByteBuf dstBuffer) {
         this.channelID = channelID;
         this.context = context;
         this.srcBuffer = srcBuffer;

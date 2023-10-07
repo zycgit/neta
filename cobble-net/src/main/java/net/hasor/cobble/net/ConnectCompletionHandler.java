@@ -25,7 +25,7 @@ import java.nio.channels.CompletionHandler;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class ConnectCompletionHandler implements CompletionHandler<Void, SocketContext> {
+class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(ConnectCompletionHandler.class);
     private final        TcpClient                 client;
     private final        AsynchronousSocketChannel channel;
@@ -38,8 +38,8 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SocketContext>
     }
 
     @Override
-    public void completed(Void result, SocketContext context) {
-        long channelID = SocketContext.nextID();
+    public void completed(Void result, SoContextImpl context) {
+        long channelID = SoContextImpl.nextID();
         long beginTime = System.currentTimeMillis();
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, this.channel, context);
         SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, this.channel, context);
@@ -59,7 +59,7 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SocketContext>
     }
 
     @Override
-    public void failed(Throwable exc, SocketContext attachment) {
+    public void failed(Throwable exc, SoContextImpl attachment) {
         this.future.failed(exc);
     }
 }

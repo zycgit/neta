@@ -37,7 +37,7 @@ public class NetChannel implements Closeable {
     private static final ByteBuf                   EMPTY_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;
-    private final        SocketContext             context;
+    private final        SoContextImpl             context;
     private final        long                      beginTime;
     private              long                      lastSndTime;
     private              long                      lastRcvTime;
@@ -49,7 +49,7 @@ public class NetChannel implements Closeable {
     private final        AtomicBoolean             wStatus;
     private final        SoSndCompletionHandler    wHandler;
 
-    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SocketContext context) {
+    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context) {
         this.channelID = channelID;
         this.beginTime = beginTime;
         this.lastSndTime = beginTime;
@@ -171,7 +171,7 @@ public class NetChannel implements Closeable {
             this.rSyncLock.notifyAll();
         }
 
-        ByteBuf buffer = this.getRecByteBuf();
+        ByteBuf buffer = this.rHandler.getRcvBuffer();
         StringBuilder sb = new StringBuilder();
         while (buffer.expect("\r\n", StandardCharsets.US_ASCII) >= 0) {
             sb.append(buffer.readExpect("\r\n", StandardCharsets.US_ASCII));
@@ -184,10 +184,6 @@ public class NetChannel implements Closeable {
             this.sendData("echo ".getBytes());
             this.sendData((sb.toString() + "\n").getBytes());
         }
-    }
-
-    public ByteBuf getRecByteBuf() {
-        return this.rHandler.getRcvBuffer();
     }
 
     //    /** 读数据 */

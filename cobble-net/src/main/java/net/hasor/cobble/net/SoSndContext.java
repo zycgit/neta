@@ -23,10 +23,10 @@ import java.util.Queue;
  */
 class SoSndContext {
     private final long             beginTime;
-    private final SocketContext    context;
+    private final SoContextImpl    context;
     private final Queue<SoSndData> wQueue;
 
-    public SoSndContext(long beginTime, SocketContext context, Queue<SoSndData> wQueue) {
+    public SoSndContext(long beginTime, SoContextImpl context, Queue<SoSndData> wQueue) {
         this.beginTime = beginTime;
         this.context = context;
         this.wQueue = wQueue;
@@ -44,7 +44,7 @@ class SoSndContext {
         return this.wQueue.peek();
     }
 
-    public SocketContext getContext() {
+    public SoContextImpl getContext() {
         return this.context;
     }
 }

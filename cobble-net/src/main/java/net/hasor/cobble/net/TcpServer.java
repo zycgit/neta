@@ -33,7 +33,7 @@ import java.util.concurrent.ThreadFactory;
 public class TcpServer implements AutoCloseable {
     private static final Logger                          logger = Logger.getLogger(TcpServer.class);
     private final        SoConfig                        config;
-    private final        SocketContext                   context;
+    private final        SoContextImpl                   context;
     private              AsynchronousChannelGroup        channelGroup;
     private              AsynchronousServerSocketChannel acceptChannel;
     private final        ExecutorService                 ioExec;
@@ -65,7 +65,7 @@ public class TcpServer implements AutoCloseable {
         }
 
         this.config = config;
-        this.context = new SocketContext(config, ioExec, worker);
+        this.context = new SoContextImpl(config, ioExec, worker);
     }
 
     public TcpServer listen(InetSocketAddress listen) throws IOException {

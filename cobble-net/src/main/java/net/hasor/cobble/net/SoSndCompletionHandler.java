@@ -28,12 +28,12 @@ import java.util.concurrent.TimeUnit;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext> {
+class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(SoSndCompletionHandler.class);
     private final        long                      channelID;
     private final        long                      beginTime;
     private final        AsynchronousSocketChannel channel;
-    private final        SocketContext             context;
+    private final        SoContextImpl             context;
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   sndBuffer;
     //
@@ -41,7 +41,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     private              boolean                   sndWorking;
     private              List<SoSndData>           afterWorking1;
 
-    public SoSndCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SocketContext context) {
+    public SoSndCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SoContextImpl context) {
         this.channelID = channelID;
         this.beginTime = beginTime;
         this.channel = channel;
@@ -69,7 +69,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     }
 
     @Override
-    public void completed(Integer result, SocketContext context) {
+    public void completed(Integer result, SoContextImpl context) {
         logger.debug("sndChannel(" + this.channelID + ") size:" + result);
 
         this.sndSize += result;
@@ -135,7 +135,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SocketContext
     }
 
     @Override
-    public void failed(Throwable e, SocketContext context) {
+    public void failed(Throwable e, SoContextImpl context) {
         if (e instanceof InterruptedByTimeoutException) {
             // rcv Close
             logger.error("snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage());

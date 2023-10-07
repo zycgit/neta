@@ -35,7 +35,7 @@ import java.util.concurrent.ThreadFactory;
 public class TcpClient implements AutoCloseable {
     private static final Logger                    logger = Logger.getLogger(TcpClient.class);
     private final        SoConfig                  config;
-    private final        SocketContext             context;
+    private final        SoContextImpl             context;
     private              AsynchronousChannelGroup  channelGroup;
     private              AsynchronousSocketChannel channel;
     private final        ExecutorService           ioExec;
@@ -67,7 +67,7 @@ public class TcpClient implements AutoCloseable {
         }
 
         this.config = config;
-        this.context = new SocketContext(config, ioExec, worker);
+        this.context = new SoContextImpl(config, ioExec, worker);
     }
 
     public Future<NetChannel> connect(InetSocketAddress remoteAddr) throws IOException {

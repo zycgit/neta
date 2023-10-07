@@ -25,7 +25,7 @@ import java.nio.channels.*;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext> {
+class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(SoRcvCompletionHandler.class);
     private final        long                      channelID;
     private final        long                      beginTime;
@@ -33,7 +33,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   rcvBuffer;
 
-    public SoRcvCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SocketContext context) {
+    public SoRcvCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SoContextImpl context) {
         this.channelID = channelID;
         this.beginTime = beginTime;
 
@@ -55,7 +55,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
     }
 
     @Override
-    public void completed(Integer result, SocketContext context) {
+    public void completed(Integer result, SoContextImpl context) {
         if (result > 0) {
             logger.debug("rcvChannel(" + this.channelID + ") size:" + result);
             this.swapBuffer.flip();
@@ -89,7 +89,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SocketContext
     }
 
     @Override
-    public void failed(Throwable e, SocketContext context) {
+    public void failed(Throwable e, SoContextImpl context) {
         if (e instanceof InterruptedByTimeoutException) {
             // rcv Close
             logger.error("rcv(" + this.channelID + ") readTimeout, msg:" + e.getMessage());

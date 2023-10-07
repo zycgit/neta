@@ -49,7 +49,7 @@ public class SoSndCopyTask extends AbstractSoTask {
         }
 
         List<SoSndData> afterFinish = new ArrayList<>();
-        SocketContext context = this.wContext.getContext();
+        SoContextImpl context = this.wContext.getContext();
 
         SoSndData data = this.wContext.peekData();
         long dataSize = 0;
@@ -65,7 +65,7 @@ public class SoSndCopyTask extends AbstractSoTask {
     @Override
     protected void doWork(boolean retry) {
         List<SoSndData> afterFinish = new ArrayList<>();
-        SocketContext context = this.wContext.getContext();
+        SoContextImpl context = this.wContext.getContext();
 
         // channel is close
         if (this.wContext.getContext().isClose(this.channelID)) {

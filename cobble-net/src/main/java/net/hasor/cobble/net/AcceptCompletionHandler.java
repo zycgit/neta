@@ -28,7 +28,7 @@ import java.nio.channels.CompletionHandler;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SocketContext> {
+class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SoContextImpl> {
     private static final Logger                          logger = Logger.getLogger(AcceptCompletionHandler.class);
     private final        TcpServer                       socketServer;
     private final        AsynchronousServerSocketChannel acceptChannel;
@@ -39,7 +39,7 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
     }
 
     @Override
-    public void completed(AsynchronousSocketChannel result, SocketContext context) {
+    public void completed(AsynchronousSocketChannel result, SoContextImpl context) {
         // acceptChannel
         try {
             if (!context.acceptChannel(result.getRemoteAddress())) {
@@ -62,7 +62,7 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
         }
 
         // openChannel
-        long channelID = SocketContext.nextID();
+        long channelID = SoContextImpl.nextID();
         long beginTime = System.currentTimeMillis();
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, result, context);
         SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, result, context);
@@ -84,7 +84,7 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
     }
 
     @Override
-    public void failed(Throwable e, SocketContext context) {
+    public void failed(Throwable e, SoContextImpl context) {
         if (e instanceof AsynchronousCloseException) {
             try {
                 this.socketServer.close0();
