@@ -17,7 +17,6 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBufUtil;
 import net.hasor.cobble.concurrent.ThreadUtils;
 
-import java.net.InetSocketAddress;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
@@ -44,8 +43,7 @@ public class SocketServerTest {
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setWorkerExecutor(Executors.newFixedThreadPool(1, tf2));
 
-        TcpServer server = new TcpServer(config);
-        try (TcpServer close = server.listen(new InetSocketAddress("192.168.10.186", 5567))) {
+        try (TcpServer server = new TcpServer(config, "127.0.0.1", 5567)) {
             System.in.read();
         }
     }

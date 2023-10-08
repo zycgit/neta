@@ -84,7 +84,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             logger.debug("rcv(" + this.channelID + ") end");
 
             // rcv close
-            context.closeChannel(this.channelID, true, "remote close.");
+            context.closeChannel(this.channelID, "remote close.");
         }
     }
 
@@ -93,23 +93,23 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         if (e instanceof InterruptedByTimeoutException) {
             // rcv Close
             logger.error("rcv(" + this.channelID + ") readTimeout, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, false, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
 
         } else if (e instanceof ShutdownChannelGroupException) {
 
             // rcv Close
             logger.error("rcv(" + this.channelID + ") shutdown, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, false, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
         } else if (e instanceof AsynchronousCloseException) {
 
             // rcv Close
             logger.error("rcv(" + this.channelID + ") close, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, true, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
         } else {
 
             // rcv Exception
             logger.error("rcv(" + this.channelID + ") error, msg:" + e.getMessage(), e);
-            context.closeChannel(this.channelID, false, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
         }
     }
 }

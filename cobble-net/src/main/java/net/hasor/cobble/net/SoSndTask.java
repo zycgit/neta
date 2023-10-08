@@ -56,10 +56,8 @@ public class SoSndTask extends AbstractSoTask {
             ByteBuf sndBuf = this.wHandler.getSndBuffer();
 
             swapBuf.clear();
-            sndBuf.waitLock(buf -> {
-                buf.read(swapBuf);
-                buf.markReader();
-            });
+            sndBuf.read(swapBuf);
+            sndBuf.markReader();
             swapBuf.flip();
 
             this.wHandler.prepareWrite(this.afterFinish);
@@ -84,7 +82,7 @@ public class SoSndTask extends AbstractSoTask {
                 }
             } else {
                 logger.error("rcv(" + this.channelID + ") " + e.getMessage(), e);
-                this.context.closeChannel(this.channelID, false, e.getMessage());
+                this.context.closeChannel(this.channelID, e.getMessage());
                 this.exitTask(e);
             }
         }

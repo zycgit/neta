@@ -21,7 +21,6 @@ package net.hasor.cobble.net;
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class AbstractSoTask implements Runnable {
-
     public enum SoTaskStatus {
         Finish,
         Exit,

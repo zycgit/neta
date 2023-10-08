@@ -24,6 +24,7 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AIO TCP Server
@@ -32,18 +33,41 @@ import java.util.concurrent.ThreadFactory;
  */
 public class TcpServer implements AutoCloseable {
     private static final Logger                          logger = Logger.getLogger(TcpServer.class);
-    private final        SoConfig                        config;
-    private final        SoContextImpl                   context;
+    private              SoConfig                        config;
+    private              SoContextImpl                   context;
+    //
+    private              AtomicBoolean                   inited;
     private              AsynchronousChannelGroup        channelGroup;
     private              AsynchronousServerSocketChannel acceptChannel;
-    private final        ExecutorService                 ioExec;
-    private final        ExecutorService                 worker;
-
-    public TcpServer() {
-        this(new SoConfig());
-    }
+    private              ExecutorService                 ioExec;
+    private              ExecutorService                 worker;
 
     public TcpServer(SoConfig config) {
+        this.initTcpServer(config);
+    }
+
+    public TcpServer(SoConfig config, int listenPort) throws IOException {
+        this(config, new InetSocketAddress(listenPort));
+    }
+
+    public TcpServer(SoConfig config, String listenAddr, int listenPort) throws IOException {
+        this(config, new InetSocketAddress(listenAddr, listenPort));
+    }
+
+    public TcpServer(SoConfig config, InetSocketAddress inited) throws IOException {
+        this.initTcpServer(config);
+        this.listen(inited);
+    }
+
+    public SoConfig getConfig() {
+        return this.config;
+    }
+
+    public SoContext getContext() {
+        return this.context;
+    }
+
+    private void initTcpServer(SoConfig config) {
         ExecutorService ioExec = config.getIoExecutor();
         if (ioExec == null) {
             ThreadFactory threadFactory = ThreadUtils.threadFactory(TcpServer.class.getClassLoader(), "Cobble-AIO-Thread-%s", true);
@@ -66,22 +90,32 @@ public class TcpServer implements AutoCloseable {
 
         this.config = config;
         this.context = new SoContextImpl(config, ioExec, worker);
+        this.inited = new AtomicBoolean(false);
     }
 
     public TcpServer listen(InetSocketAddress listen) throws IOException {
-        this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
-        this.acceptChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
+        if (this.inited.compareAndSet(false, true)) {
+            this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
+            this.acceptChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
 
-        SoConfigUtils.configListen(context.getConfig(), this.acceptChannel);
-        this.acceptChannel.bind(listen, 0);
-        logger.info("listen at " + listen);
+            SoConfigUtils.configListen(context.getConfig(), this.acceptChannel);
+            this.acceptChannel.bind(listen, 0);
+            logger.info("listen at " + listen);
 
-        this.acceptChannel.accept(this.context, new AcceptCompletionHandler(this, this.acceptChannel));
-        return this;
+            this.acceptChannel.accept(this.context, new AcceptCompletionHandler(this, this.acceptChannel));
+            return this;
+        } else {
+            throw new IllegalStateException("already listen.");
+        }
     }
 
     @Override
     public void close() throws IOException {
+        if (!this.inited.get()) {
+            return;
+        }
+
+        // do close
         this.close0();
 
         // waiting close

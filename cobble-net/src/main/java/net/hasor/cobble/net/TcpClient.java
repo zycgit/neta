@@ -26,6 +26,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AIO TCP Client
@@ -34,18 +35,20 @@ import java.util.concurrent.ThreadFactory;
  */
 public class TcpClient implements AutoCloseable {
     private static final Logger                    logger = Logger.getLogger(TcpClient.class);
-    private final        SoConfig                  config;
-    private final        SoContextImpl             context;
+    private              SoConfig                  config;
+    private              SoContextImpl             context;
+    //
+    private              AtomicBoolean             inited;
     private              AsynchronousChannelGroup  channelGroup;
     private              AsynchronousSocketChannel channel;
-    private final        ExecutorService           ioExec;
-    private final        ExecutorService           worker;
-
-    public TcpClient() {
-        this(new SoConfig());
-    }
+    private              ExecutorService           ioExec;
+    private              ExecutorService           worker;
 
     public TcpClient(SoConfig config) {
+        this.initTcpClient(config);
+    }
+
+    private void initTcpClient(SoConfig config) {
         ExecutorService ioExec = config.getIoExecutor();
         if (ioExec == null) {
             ThreadFactory threadFactory = ThreadUtils.threadFactory(TcpClient.class.getClassLoader(), "Cobble-AIO-Thread-%s", true);
@@ -68,11 +71,22 @@ public class TcpClient implements AutoCloseable {
 
         this.config = config;
         this.context = new SoContextImpl(config, ioExec, worker);
+        this.inited = new AtomicBoolean(false);
+    }
+
+    public SoConfig getConfig() {
+        return this.config;
+    }
+
+    public SoContext getContext() {
+        return this.context;
     }
 
     public Future<NetChannel> connect(InetSocketAddress remoteAddr) throws IOException {
-        this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
-        this.channel = AsynchronousSocketChannel.open(this.channelGroup);
+        if (this.inited.compareAndSet(false, true)) {
+            this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
+            this.channel = AsynchronousSocketChannel.open(this.channelGroup);
+        }
 
         // config new socket
         SoConfigUtils.configSocket(context.getConfig(), this.channel);
@@ -85,6 +99,11 @@ public class TcpClient implements AutoCloseable {
 
     @Override
     public void close() throws IOException {
+        if (!this.inited.get()) {
+            return;
+        }
+
+        // do close
         this.close0();
 
         // waiting close

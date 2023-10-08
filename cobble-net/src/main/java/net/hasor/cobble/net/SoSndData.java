@@ -23,7 +23,6 @@ import net.hasor.cobble.concurrent.future.Future;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoSndData {
-
     private final long               dataSize;
     private final ByteBuf            data;
     private final Future<NetChannel> future;

@@ -34,8 +34,7 @@ public class SoRcvTask extends AbstractSoTask {
     private final        SoRcvCompletionHandler    rHandler;
     private final        SoContextImpl             context;
 
-    public SoRcvTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler,//
-            SoContextImpl context) {
+    public SoRcvTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoContextImpl context) {
         this.channelID = channelID;
         this.beginTime = beginTime;
 
@@ -70,7 +69,7 @@ public class SoRcvTask extends AbstractSoTask {
                 }
             } else {
                 logger.error("rcv(" + this.channelID + ") " + e.getMessage(), e);
-                this.context.closeChannel(this.channelID, false, e.getMessage());
+                this.context.closeChannel(this.channelID, e.getMessage());
                 this.exitTask(e);
             }
         }

@@ -47,24 +47,25 @@ public class SocketClientTest {
         config.setWorkerExecutor(Executors.newFixedThreadPool(1, tf2));
 
         AtomicBoolean exit = new AtomicBoolean(false);
-        TcpClient client = new TcpClient(config);
-        Future<NetChannel> connect = client.connect(new InetSocketAddress("192.168.10.186", 5567));
-        connect.onCompleted(f -> {
-            ThreadUtils.runFrontThread(() -> clientWorking(f.getResult(), exit));
-        }).onFailed(f -> {
-            System.out.println(f.getCause().getMessage());
-        }).onFinal(future -> {
-            System.out.println("after connect.");
-        });
+        try (TcpClient client = new TcpClient(config)) {
+            Future<NetChannel> connect = client.connect(new InetSocketAddress("127.0.0.1", 5567));
+            connect.onCompleted(f -> {
+                ThreadUtils.runFrontThread(() -> clientWorking(f.getResult(), exit));
+            }).onFailed(f -> {
+                System.out.println(f.getCause().getMessage());
+            }).onFinal(future -> {
+                System.out.println("after connect.");
+            });
 
-        while (!exit.get()) {
-            ThreadUtils.sleep(100);
+            while (!exit.get()) {
+                ThreadUtils.sleep(100);
+            }
+            System.out.println("exit");
         }
-        System.out.println("exit");
     }
 
     private static void clientWorking(NetChannel client, AtomicBoolean exit) {
-        //        client.sendData(("say Hello 1\r\n").getBytes());
+        client.sendData(("say Hello 1\r\n").getBytes());
         int i = 0;
         while (true) {
             ThreadUtils.sleep(1000);

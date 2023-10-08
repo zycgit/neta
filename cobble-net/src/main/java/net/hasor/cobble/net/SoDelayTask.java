@@ -20,10 +20,9 @@ package net.hasor.cobble.net;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SoDelayTask extends AbstractSoTask {
-
     private final int intervalMillis;
 
-    public SoDelayTask(SoContextImpl context) {
+    public SoDelayTask(SoContext context) {
         this.intervalMillis = Math.max(10, context.getConfig().getRetryIntervalMs());
     }
 

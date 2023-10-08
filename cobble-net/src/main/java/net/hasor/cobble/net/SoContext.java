@@ -29,4 +29,6 @@ public interface SoContext {
 
     /** Socket 通道是否已经关闭 */
     boolean isClose(long channelID);
+
+    void closeChannel(long channelID, String message);
 }

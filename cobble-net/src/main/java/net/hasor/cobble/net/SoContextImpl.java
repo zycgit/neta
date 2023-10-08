@@ -110,7 +110,8 @@ class SoContextImpl implements SoContext {
     }
 
     /** 关闭链接 */
-    public void closeChannel(long channelID, boolean isRemote, String message) {
+    @Override
+    public void closeChannel(long channelID, String message) {
         System.out.println("closeChannel " + channelID + ", msg:" + message);
         NetChannel channel = this.channelMap.get(channelID);
         channel.close();

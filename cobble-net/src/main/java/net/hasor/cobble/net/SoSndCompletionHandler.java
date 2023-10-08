@@ -17,7 +17,6 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.logging.Logger;
 
-import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.List;
@@ -82,17 +81,10 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         } else if (this.sndBuffer.hasReadable()) {
 
             // reset swap, and copy sndData to swap
-            try {
-                this.swapBuffer.clear();
-                this.sndBuffer.waitLock(buf -> {
-                    buf.read(this.swapBuffer);
-                    buf.markReader();
-                });
-                this.swapBuffer.flip();
-            } catch (IOException e) {
-                this.failed(e, context);
-                return;
-            }
+            this.swapBuffer.clear();
+            this.sndBuffer.read(this.swapBuffer);
+            this.sndBuffer.markReader();
+            this.swapBuffer.flip();
 
             // continue send data.
             this.writeData();
@@ -123,11 +115,11 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                     return;
                 } else {
                     logger.warn("snd(" + this.channelID + ") Connection timeout.");
-                    this.context.closeChannel(this.channelID, false, e.getMessage());
+                    this.context.closeChannel(this.channelID, e.getMessage());
                 }
             } else {
                 logger.error("snd(" + this.channelID + ") " + e.getMessage(), e);
-                this.context.closeChannel(this.channelID, false, e.getMessage());
+                this.context.closeChannel(this.channelID, e.getMessage());
             }
 
             this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e), this);
@@ -139,23 +131,23 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         if (e instanceof InterruptedByTimeoutException) {
             // rcv Close
             logger.error("snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, false, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
 
         } else if (e instanceof ShutdownChannelGroupException) {
 
             // rcv Close
             logger.error("snd(" + this.channelID + ") shutdown, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, false, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
         } else if (e instanceof AsynchronousCloseException) {
 
             // rcv Close
             logger.error("snd(" + this.channelID + ") close, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, true, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
         } else {
 
             // rcv Exception
             logger.error("snd(" + this.channelID + ") error, msg:" + e.getMessage(), e);
-            context.closeChannel(this.channelID, false, e.getMessage());
+            context.closeChannel(this.channelID, e.getMessage());
         }
 
         this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e), this);

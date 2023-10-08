@@ -15,6 +15,7 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBufAllocator;
+import net.hasor.cobble.net.ssl.SslConfig;
 
 import java.util.concurrent.ExecutorService;
 
@@ -43,9 +44,10 @@ public class SoConfig {
     private int              retryIntervalMs   = 50;        // cobble.net 内部任务延迟调度的延迟间隔
     private int              connectTimeoutMs  = 10 * 1000; // 建立连接超时时间
     //
+    private SslConfig        sslConfig;
     private ByteBufAllocator bufAllocator;
-    private ExecutorService  ioExecutor;                        // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private ExecutorService  workerExecutor;                    // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
+    private ExecutorService  ioExecutor;                    // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
+    private ExecutorService  workerExecutor;                // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
 
     public void setSwapBuf(int rcvSwapBuf, int sndSwapBuf) {
         this.rcvSwapBuf = rcvSwapBuf;
@@ -161,10 +163,6 @@ public class SoConfig {
         this.retryIntervalMs = retryIntervalMs;
     }
 
-    public void setBufAllocator(ByteBufAllocator bufAllocator) {
-        this.bufAllocator = bufAllocator;
-    }
-
     public int getConnectTimeoutMs() {
         return this.connectTimeoutMs;
     }
@@ -173,23 +171,35 @@ public class SoConfig {
         this.connectTimeoutMs = connectTimeoutMs;
     }
 
+    public SslConfig getSslConfig() {
+        return this.sslConfig;
+    }
+
+    public void setSslConfig(SslConfig sslConfig) {
+        this.sslConfig = sslConfig;
+    }
+
     public ByteBufAllocator getBufAllocator() {
         return this.bufAllocator;
     }
 
-    public void setIoExecutor(ExecutorService ioExecutor) {
-        this.ioExecutor = ioExecutor;
+    public void setBufAllocator(ByteBufAllocator bufAllocator) {
+        this.bufAllocator = bufAllocator;
     }
 
     public ExecutorService getIoExecutor() {
         return this.ioExecutor;
     }
 
-    public void setWorkerExecutor(ExecutorService workerExecutor) {
-        this.workerExecutor = workerExecutor;
+    public void setIoExecutor(ExecutorService ioExecutor) {
+        this.ioExecutor = ioExecutor;
     }
 
     public ExecutorService getWorkerExecutor() {
         return this.workerExecutor;
+    }
+
+    public void setWorkerExecutor(ExecutorService workerExecutor) {
+        this.workerExecutor = workerExecutor;
     }
 }
