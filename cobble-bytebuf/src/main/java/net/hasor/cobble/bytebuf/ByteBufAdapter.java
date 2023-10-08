@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
-import net.hasor.cobble.function.EConsumer;
+import net.hasor.cobble.function.EFunction;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -601,8 +601,8 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void waitReadable(EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
-        this.byteBuf.waitReadable(callBack);
+    public <T> T waitReadable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        return this.byteBuf.waitReadable(callBack);
     }
 
     @Override
@@ -611,8 +611,8 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void waitReadable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
-        this.byteBuf.waitReadable(expect, callBack);
+    public <T> T waitReadable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        return this.byteBuf.waitReadable(expect, callBack);
     }
 
     @Override
@@ -621,8 +621,8 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void waitWriteable(EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
-        this.byteBuf.waitWriteable(callBack);
+    public <T> T waitWriteable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        return this.byteBuf.waitWriteable(callBack);
     }
 
     @Override
@@ -631,12 +631,12 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void waitWriteable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
-        this.byteBuf.waitWriteable(expect, callBack);
+    public <T> T waitWriteable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        return this.byteBuf.waitWriteable(expect, callBack);
     }
 
     @Override
-    public void waitLock(EConsumer<ByteBuf, IOException> callBack) throws IOException {
-        this.byteBuf.waitLock(callBack);
+    public <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException {
+        return this.byteBuf.waitLock(callBack);
     }
 }

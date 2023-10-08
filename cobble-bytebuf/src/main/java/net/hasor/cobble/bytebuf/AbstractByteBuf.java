@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.cobble.bytebuf;
-import net.hasor.cobble.function.EConsumer;
+import net.hasor.cobble.function.EFunction;
 
 import java.io.IOException;
 import java.nio.BufferOverflowException;
@@ -163,7 +163,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public void waitReadable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+    public <T> T waitReadable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
         synchronized (this.synchronizedLock) {
             checkFree();
 
@@ -172,9 +172,8 @@ public abstract class AbstractByteBuf implements ByteBuf {
                 checkFree();
             }
 
-            callBack.eAccept(this);
+            return callBack.eApply(this);
         }
-
     }
 
     @Override
@@ -204,7 +203,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public void waitWriteable(int expect, EConsumer<ByteBuf, IOException> callBack) throws InterruptedException, IOException {
+    public <T> T waitWriteable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
         synchronized (this.synchronizedLock) {
             checkFree();
 
@@ -213,7 +212,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
                 checkFree();
             }
 
-            callBack.eAccept(this);
+            return callBack.eApply(this);
         }
     }
 
@@ -619,9 +618,9 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public void waitLock(EConsumer<ByteBuf, IOException> callBack) throws IOException {
+    public <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException {
         synchronized (this.synchronizedLock) {
-            callBack.eAccept(this);
+            return callBack.eApply(this);
         }
     }
 }

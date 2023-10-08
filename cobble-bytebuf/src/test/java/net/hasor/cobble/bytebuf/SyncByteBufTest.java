@@ -15,6 +15,7 @@ public class SyncByteBufTest {
             byteBuf.waitWriteable(buf -> {
                 buf.writeByte((byte) i.incrementAndGet());
                 buf.markWriter();
+                return this;
             });
 
             if (i.get() >= 100) {
@@ -33,6 +34,7 @@ public class SyncByteBufTest {
                 buf.markReader();
 
                 dstByteBuf.writeByte(aByte);
+                return buf;
             });
 
             ThreadUtils.sleep(interval);
