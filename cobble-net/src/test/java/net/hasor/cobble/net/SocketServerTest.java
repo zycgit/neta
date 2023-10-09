@@ -43,7 +43,7 @@ public class SocketServerTest {
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
-        try (TcpServer server = new TcpServer(config, "127.0.0.1", 5567)) {
+        try (CobbleSocket server = new CobbleSocket(config).listen("127.0.0.1", 5567)) {
             System.in.read();
         }
     }

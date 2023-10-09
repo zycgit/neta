@@ -17,8 +17,12 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
+import net.hasor.cobble.logging.Logger;
 
 import java.net.SocketAddress;
+import java.nio.channels.ClosedChannelException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -32,12 +36,14 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoContextImpl implements SoContext {
+    private static final Logger                  logger = Logger.getLogger(SoContextImpl.class);
     private static final AtomicLong              nextID = new AtomicLong();
     private final        SoConfig                config;
     private final        ExecutorService         ioExecutor;
     private final        SoExecutorFactory       executorFactory;
     private final        SoResManager            defaultRm;
     private final        Map<Long, NetChannel>   channelMap;
+    private final        List<NetChannel>        channelList;
     private final        Map<Long, SoResManager> specialRmMap;
 
     public SoContextImpl(SoConfig config, ExecutorService ioExec, SoExecutorFactory executorFactory) {
@@ -45,6 +51,7 @@ class SoContextImpl implements SoContext {
         this.ioExecutor = Objects.requireNonNull(ioExec);
         this.executorFactory = Objects.requireNonNull(executorFactory);
         this.channelMap = new ConcurrentHashMap<>();
+        this.channelList = new ArrayList<>();
         this.specialRmMap = new ConcurrentHashMap<>();
 
         ExecutorService executor = Objects.requireNonNull(executorFactory.newExecutor(this.config, null));
@@ -75,7 +82,8 @@ class SoContextImpl implements SoContext {
 
     public SoResManager newSoResManager(long channelID, SocketAddress remoteAddress) {
         if (this.specialResManager(remoteAddress)) {
-            ExecutorService executor = Objects.requireNonNull(executorFactory.newExecutor(this.config, String.valueOf(channelID)));
+            logger.info("channel(" + channelID + ") new special SoResManager.");
+            ExecutorService executor = Objects.requireNonNull(this.executorFactory.newExecutor(this.config, String.valueOf(channelID)));
             SoResManager rm = new SoResManagerImpl(this.config, executor);
             this.specialRmMap.put(channelID, rm);
             return rm;
@@ -96,26 +104,46 @@ class SoContextImpl implements SoContext {
 
     /** 新链接 */
     public void openChannel(NetChannel channel) {
-        System.out.println("openChannel " + channel.getChannelID());
+        logger.info("channel(" + channel.getChannelID() + ") created.");
         this.channelMap.put(channel.getChannelID(), channel);
+        this.channelList.add(channel);
     }
 
-    /** 关闭链接 */
+    /** 关闭所有 socket */
+    public void closeAll(boolean now) {
+        if (now) {
+            this.channelList.forEach(NetChannel::closeNow);
+        } else {
+            this.channelList.forEach(NetChannel::close);
+        }
+    }
+
+    /** 关闭链接，清理资源，处理回调 */
     @Override
     public void closeChannel(long channelID, String message) {
-        System.out.println("closeChannel " + channelID + ", msg:" + message);
+        logger.info("channel(" + channelID + ") close in progress, " + message);
         NetChannel channel = this.channelMap.get(channelID);
         SoResManager specialRm = this.specialRmMap.get(channelID);
 
-        IOUtils.closeQuietly(channel);
-        IOUtils.closeQuietly(specialRm);
-
         this.channelMap.remove(channelID);
         this.specialRmMap.remove(channelID);
-    }
 
-    public void closeAll(String message) {
+        SoSndData data;
+        do {
+            data = channel.wQueue.poll();
+            if (data != null) {
+                try {
+                    data.failed(new ClosedChannelException());
+                } catch (Exception ignored) {
 
+                }
+            }
+        } while (data != null);
+
+        IOUtils.closeQuietly(channel.channel);
+        IOUtils.closeQuietly(specialRm);
+
+        logger.info("channel(" + channelID + ") closed.");
     }
 
     /** 有新数据到达 */

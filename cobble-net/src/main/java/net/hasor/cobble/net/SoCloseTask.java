@@ -14,30 +14,23 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-import net.hasor.cobble.bytebuf.ByteBuf;
-
-import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
-
 /**
- * 资源管理器
- * @version : 2023-09-24
+ * 负责异步关闭 channel
+ * @version : 2023-10-09
  * @author 赵永春 (zyc@hasor.net)
  */
-public interface SoResManager extends AutoCloseable {
-    ByteBuf newByteBuf(int capacity);
+class SoCloseTask extends AbstractSoTask {
+    private final long          channelID;
+    private final SoContextImpl context;
 
-    ByteBuffer newByteBuffer(int capacity);
+    public SoCloseTask(NetChannel channel) {
+        this.channelID = channel.getChannelID();
+        this.context = channel.context;
+    }
 
-    ByteBuffer newSwapRcvBuf();
-
-    ByteBuffer newSwapSndBuf();
-
-    ByteBuf newLocalRcvBuf();
-
-    ByteBuf newLocalSndBuf();
-
-    void freeObject(Object refObj);
-
-    ExecutorService getExecutor();
+    @Override
+    protected void doWork(boolean retry) {
+        this.context.closeChannel(this.channelID, "close");
+        this.finishTask();
+    }
 }

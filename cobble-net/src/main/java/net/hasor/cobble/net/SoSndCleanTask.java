@@ -56,7 +56,7 @@ class SoSndCleanTask extends AbstractSoTask {
                     sndData.failed(this.finallyError);
                 }
             } catch (Exception e) {
-                logger.error("ERROR: CleanTask (" + this.channelID + ") " + e.getMessage(), e);
+                logger.error("snd(" + this.channelID + ") CleanTask failed. " + e.getMessage(), e);
             }
         }
 

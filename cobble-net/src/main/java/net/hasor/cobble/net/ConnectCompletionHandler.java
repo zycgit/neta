@@ -29,13 +29,11 @@ import java.nio.channels.CompletionHandler;
  */
 class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(ConnectCompletionHandler.class);
-    private final        TcpClient                 client;
     private final        SocketAddress             remoteAddress;
     private final        AsynchronousSocketChannel channel;
     private final        Future<NetChannel>        future;
 
-    public ConnectCompletionHandler(TcpClient client, AsynchronousSocketChannel channel, Future<NetChannel> future) throws IOException {
-        this.client = client;
+    public ConnectCompletionHandler(AsynchronousSocketChannel channel, Future<NetChannel> future) throws IOException {
         this.remoteAddress = channel.getRemoteAddress();
         this.channel = channel;
         this.future = future;
@@ -53,9 +51,9 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl>
 
         // continue accept
         try {
-            logger.info("connectChannel " + channelID + " L:" + this.channel.getLocalAddress() + " -> R:" + this.channel.getRemoteAddress());
+            logger.info("connect(" + channelID + ") L:" + this.channel.getLocalAddress() + " -> R:" + this.channel.getRemoteAddress());
         } catch (Exception e) {
-            logger.info("connectChannel " + channelID);
+            logger.info("connect(" + channelID + ")");
         }
 
         // read data

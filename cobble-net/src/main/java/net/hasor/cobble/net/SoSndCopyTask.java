@@ -50,7 +50,7 @@ class SoSndCopyTask extends AbstractSoTask {
 
     private void channelClose() {
         if (logger.isDebugEnabled()) {
-            logger.debug("channel " + this.channelID + ", channel is close, clean queue.");
+            logger.debug("snd(" + this.channelID + ") channel is close, clean queue.");
         }
 
         List<SoSndData> afterFinish = new ArrayList<>();
@@ -67,11 +67,10 @@ class SoSndCopyTask extends AbstractSoTask {
 
     @Override
     protected void doWork(boolean retry) {
-        List<SoSndData> afterFinish = new ArrayList<>();
         SoContextImpl context = this.wContext.getContext();
 
         // channel is close
-        if (this.wContext.getContext().isClose(this.channelID)) {
+        if (context.isClose(this.channelID)) {
             channelClose();
             this.exitTask(new ClosedChannelException());
             return;
@@ -80,7 +79,7 @@ class SoSndCopyTask extends AbstractSoTask {
         // require wHandler is ready
         if (this.wHandler.isSndWorking()) {
             if (logger.isDebugEnabled()) {
-                logger.debug("channel " + this.channelID + ", snd is working, wait next truns.");
+                logger.debug("snd(" + this.channelID + ") snd is working, wait next truns.");
             }
 
             this.delayTask(this.taskIntervalMs);
@@ -88,25 +87,26 @@ class SoSndCopyTask extends AbstractSoTask {
         }
 
         // merge SoSndData`s to sndBuffer
+        List<SoSndData> afterFinish = new ArrayList<>();
         SoSndData data = this.wContext.peekData();
         if (data != null) {
             ByteBuf sndBuffer = this.wHandler.getSndBuffer();
             do {
                 if (!sndBuffer.hasWritable()) {
                     if (logger.isDebugEnabled()) {
-                        logger.debug("channel " + this.channelID + ", snd is full, wait next truns.");
+                        logger.debug("snd(" + this.channelID + ") snd is full, wait next truns.");
                     }
                     break;
                 }
 
                 int len = data.transferTo(sndBuffer);
                 if (logger.isDebugEnabled()) {
-                    logger.debug("channel " + this.channelID + ", taskData transferTo sndBuffer " + len);
+                    logger.debug("snd(" + this.channelID + ") taskData transferTo sndBuffer " + len);
                 }
 
                 if (!data.hasReadable()) {
                     if (logger.isDebugEnabled()) {
-                        logger.debug("channel " + this.channelID + ", taskData be merged." + data);
+                        logger.debug("snd(" + this.channelID + ") taskData be merged. " + data);
                     }
 
                     afterFinish.add(this.wContext.popData());

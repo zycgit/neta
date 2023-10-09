@@ -31,10 +31,10 @@ import java.nio.channels.CompletionHandler;
  */
 class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SoContextImpl> {
     private static final Logger                          logger = Logger.getLogger(AcceptCompletionHandler.class);
-    private final        TcpServer                       socketServer;
+    private final        CobbleSocket                    socketServer;
     private final        AsynchronousServerSocketChannel acceptChannel;
 
-    public AcceptCompletionHandler(TcpServer socketServer, AsynchronousServerSocketChannel acceptChannel) {
+    public AcceptCompletionHandler(CobbleSocket socketServer, AsynchronousServerSocketChannel acceptChannel) {
         this.socketServer = socketServer;
         this.acceptChannel = acceptChannel;
     }
@@ -79,9 +79,9 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
 
         // continue accept
         try {
-            logger.info("acceptChannel " + channelID + " R:" + result.getRemoteAddress() + " -> L:" + result.getLocalAddress());
+            logger.info("accept(" + channelID + ") R:" + result.getRemoteAddress() + " -> L:" + result.getLocalAddress());
         } catch (Exception e) {
-            logger.info("acceptChannel " + channelID);
+            logger.info("accept(" + channelID + ")");
         }
         this.acceptChannel.accept(context, this);
     }
@@ -95,7 +95,7 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
                 logger.debug("close SocketServer in AIO-AcceptThread failed, message: " + ee.getMessage());
             }
         } else {
-            logger.error("ERROR: LISTEN Failed " + e.getMessage(), e);
+            logger.error("ERROR: Listen Failed " + e.getMessage(), e);
         }
     }
 }

@@ -76,7 +76,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     @Override
     public void completed(Integer result, SoContextImpl context) {
-        logger.debug("sndChannel(" + this.channelID + ") size:" + result);
+        logger.debug("snd(" + this.channelID + ") size:" + result);
 
         this.sndSize += result;
 
@@ -102,6 +102,11 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     private void writeData() {
+        if (this.context.isClose(this.channelID)) {
+            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, new ClosedChannelException()));
+            return;
+        }
+
         try {
             Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
             if (wTimeoutMs != null && wTimeoutMs > 0) {

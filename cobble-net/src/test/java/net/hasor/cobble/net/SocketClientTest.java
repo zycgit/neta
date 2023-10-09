@@ -47,7 +47,7 @@ public class SocketClientTest {
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         AtomicBoolean exit = new AtomicBoolean(false);
-        try (TcpClient client = new TcpClient(config)) {
+        try (CobbleSocket client = new CobbleSocket(config)) {
             Future<NetChannel> connect = client.connect(new InetSocketAddress("127.0.0.1", 5567));
             connect.onCompleted(f -> {
                 ThreadUtils.runFrontThread(() -> clientWorking(f.getResult(), exit));

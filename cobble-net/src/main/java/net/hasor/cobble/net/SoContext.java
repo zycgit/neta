@@ -22,8 +22,10 @@ import net.hasor.cobble.concurrent.future.Future;
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface SoContext {
+    /** 配置 */
     SoConfig getConfig();
 
+    /** 全局资源管理器 */
     SoResManager getResourceManager();
 
     /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
@@ -35,5 +37,6 @@ public interface SoContext {
     /** Socket 通道是否已经关闭 */
     boolean isClose(long channelID);
 
+    /** 立即触发 channel 的关闭，相当于 {@link NetChannel#closeNow()} */
     void closeChannel(long channelID, String message);
 }

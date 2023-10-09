@@ -18,11 +18,10 @@ import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.io.IOUtils;
 
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.ClosedChannelException;
 import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -33,12 +32,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetChannel implements Closeable {
+public class NetChannel {
     private static final ByteBuf                   EMPTY_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
     private final        long                      channelID;
-    private final        AsynchronousSocketChannel channel;
-    private final        SoContextImpl             context;
-    private final        SoResManager              rm;
+    protected final      AsynchronousSocketChannel channel;
+    protected final      SoContextImpl             context;
+    protected final      SoResManager              rm;
     private final        long                      beginTime;
     private              long                      lastSndTime;
     private              long                      lastRcvTime;
@@ -46,18 +45,25 @@ public class NetChannel implements Closeable {
     private final        SoRcvCompletionHandler    rHandler;
     private final        Object                    rSyncLock;
     //
-    private final        Queue<SoSndData>          wQueue;
+    protected final      Queue<SoSndData>          wQueue;
     private final        AtomicBoolean             wStatus;
     private final        SoSndCompletionHandler    wHandler;
+    //
+    protected final      AtomicBoolean             closeStatus;
+    protected final      Future<NetChannel>        closeFuture;
 
-    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
+    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, //
+            SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
         this.beginTime = beginTime;
         this.lastSndTime = beginTime;
         this.lastRcvTime = beginTime;
+
         this.channel = channel;
         this.context = context;
         this.rm = rm;
+        this.closeStatus = new AtomicBoolean(false);
+        this.closeFuture = new BasicFuture<>();
 
         this.rHandler = rHandler;
         this.rSyncLock = new Object();
@@ -65,6 +71,7 @@ public class NetChannel implements Closeable {
         this.wQueue = new ConcurrentLinkedQueue<>();
         this.wStatus = new AtomicBoolean(false);
         this.wHandler = wHandler;
+
     }
 
     /** Socket 连接通道 ID */
@@ -89,15 +96,34 @@ public class NetChannel implements Closeable {
 
     /** Socket 连接通道是否关闭 */
     public boolean isClose() {
-        return !this.channel.isOpen();
+        return !this.channel.isOpen() || this.closeStatus.get();
     }
 
-    /** 关闭 Socket 通道 */
-    @Override
-    public void close() {
-        if (!isClose()) {
-            IOUtils.closeQuietly(this.channel);
-            IOUtils.closeQuietly(this.rm);
+    /**
+     * 触发 Socket 关闭，待所有数据写入完成后在关闭。
+     * 方法 {@link #closeNow()} 和 {@link #close()} 只有一个被调用反复调用会抛 {@link ClosedChannelException} 异常
+     */
+    public Future<NetChannel> close() {
+        if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
+            SoCloseTask task = new SoCloseTask(this);
+            this.context.submitSoTask(this.rm, task, this).onCompleted(f -> {
+                closeFuture.completed(this);
+            }).onFailed(f -> {
+                closeFuture.failed(f.getCause());
+            }).onCancel(f -> {
+                closeFuture.cancel();
+            });
+        }
+        return this.closeFuture;
+    }
+
+    /**
+     * 立刻关闭 socket 通道，并且清空发送队列（socket 的 SO_LINGER 参数，只能保证已经位于 socket 缓冲区的数据优雅关闭）
+     * 方法 {@link #closeNow()} 和 {@link #close()} 只有一个被调用反复调用会抛 {@link ClosedChannelException} 异常
+     */
+    public void closeNow() {
+        if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
+            new SoCloseTask(this).run();
         }
     }
 
@@ -144,6 +170,10 @@ public class NetChannel implements Closeable {
     }
 
     private void appendSoSndTask(SoSndData wTask) {
+        if (this.closeStatus.get()) {
+            wTask.failed(new ClosedChannelException());
+        }
+
         this.wQueue.offer(wTask);
 
         if (this.wStatus.compareAndSet(false, true)) {

@@ -17,6 +17,7 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NotYetConnectedException;
 import java.util.concurrent.TimeUnit;
 
@@ -45,6 +46,11 @@ class SoRcvTask extends AbstractSoTask {
 
     @Override
     protected void doWork(boolean retry) {
+        if (this.context.isClose(this.channelID)) {
+            this.exitTask(new ClosedChannelException());
+            return;
+        }
+
         try {
             this.rHandler.reset();
             Integer rTimeoutMs = this.context.getConfig().getSoReadTimeoutMs();

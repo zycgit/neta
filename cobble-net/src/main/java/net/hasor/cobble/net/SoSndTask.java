@@ -19,6 +19,7 @@ import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NotYetConnectedException;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -50,6 +51,11 @@ class SoSndTask extends AbstractSoTask {
 
     @Override
     protected void doWork(boolean retry) {
+        if (this.context.isClose(this.channelID)) {
+            this.exitTask(new ClosedChannelException());
+            return;
+        }
+
         try {
             Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
             ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
@@ -81,7 +87,7 @@ class SoSndTask extends AbstractSoTask {
                     this.exitTask(e);
                 }
             } else {
-                logger.error("rcv(" + this.channelID + ") " + e.getMessage(), e);
+                logger.error("snd(" + this.channelID + ") " + e.getMessage(), e);
                 this.context.closeChannel(this.channelID, e.getMessage());
                 this.exitTask(e);
             }

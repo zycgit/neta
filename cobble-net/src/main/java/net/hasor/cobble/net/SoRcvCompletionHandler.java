@@ -66,7 +66,9 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     @Override
     public void completed(Integer result, SoContextImpl context) {
         if (result > 0) {
-            logger.debug("rcvChannel(" + this.channelID + ") size:" + result);
+            if (logger.isDebugEnabled()) {
+                logger.debug("rcv(" + this.channelID + ") size:" + result);
+            }
             this.swapBuffer.flip();
 
             // copy buffer form swap to rcv
@@ -80,7 +82,9 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             });
 
         } else if (result == 0) {
-            logger.debug("rcv(" + this.channelID + ") empty");
+            if (logger.isDebugEnabled()) {
+                logger.debug("rcv(" + this.channelID + ") empty");
+            }
 
             // rcv continue
             SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context);
@@ -89,7 +93,9 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 this.failed(f.getCause(), context);
             });
         } else {
-            logger.debug("rcv(" + this.channelID + ") end");
+            if (logger.isDebugEnabled()) {
+                logger.debug("rcv(" + this.channelID + ") end");
+            }
 
             // rcv close
             context.closeChannel(this.channelID, "remote close.");
