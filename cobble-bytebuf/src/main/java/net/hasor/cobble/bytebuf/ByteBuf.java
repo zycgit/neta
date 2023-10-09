@@ -47,6 +47,9 @@ public interface ByteBuf extends ByteChannel {
     //    /** 返回只读模式的 ByteBuf。只读模式的 如果底层 */
     //    ByteBuf asReadOnly();
 
+    /** 返回 ByteBuffer 形态，PooledNioByteBuf 不支持该方法 */
+    ByteBuffer asByteBuffer();
+
     /** 释放 Buffer 占用的内存 */
     void free();
 
@@ -655,7 +658,7 @@ public interface ByteBuf extends ByteChannel {
             throw new IllegalArgumentException("need expect to be gt 0");
         }
         this.waitWriteable(expect, buf -> buf);
-    };
+    }
 
     /**
      * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻调用 callBack否则会进入线程等待状态。

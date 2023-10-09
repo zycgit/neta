@@ -15,6 +15,7 @@
  */
 package net.hasor.cobble.bytebuf;
 import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 /**
@@ -216,6 +217,11 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             form.deepCopy(to);
         }
         return copy;
+    }
+
+    @Override
+    public ByteBuffer asByteBuffer() {
+        throw new UnsupportedOperationException();
     }
 
     @Override

@@ -22,7 +22,7 @@ import java.nio.channels.NotYetConnectedException;
 import java.util.concurrent.TimeUnit;
 
 /**
- * send swapBuffer to socket
+ * 负责将 swapBuffer 的数据发送到 socket
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

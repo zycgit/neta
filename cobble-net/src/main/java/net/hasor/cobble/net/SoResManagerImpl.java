@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 /**
- * socket -> swapBuffer
+ * SoResManager 接口实现
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

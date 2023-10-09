@@ -17,7 +17,7 @@ package net.hasor.cobble.net;
 import java.util.concurrent.ExecutorService;
 
 /**
- * 资源管理器
+ * 创建 ExecutorService
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

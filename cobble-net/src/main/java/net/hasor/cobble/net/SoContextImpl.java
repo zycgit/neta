@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * 套接字管理器
+ * SoContext 接口实现
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

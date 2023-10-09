@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.*;
 
 /**
- * socket -> swapBuffer
+ * 负责接收的数据 swapBuffer
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

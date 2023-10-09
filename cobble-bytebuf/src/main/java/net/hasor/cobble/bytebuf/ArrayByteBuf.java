@@ -15,6 +15,7 @@
  */
 package net.hasor.cobble.bytebuf;
 import java.nio.BufferOverflowException;
+import java.nio.ByteBuffer;
 
 /**
  * 基于 字节数组的 ByteBuf 接口实现。
@@ -165,6 +166,11 @@ public class ArrayByteBuf extends AbstractByteBuf {
         copy.data = this.data.clone();
 
         return copy;
+    }
+
+    @Override
+    public ByteBuffer asByteBuffer() {
+        return ByteBuffer.wrap(this.data);
     }
 
     @Override

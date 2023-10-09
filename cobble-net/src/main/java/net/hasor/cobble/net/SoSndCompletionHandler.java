@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * swapBuffer -> socket
+ * 负责发送数据
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

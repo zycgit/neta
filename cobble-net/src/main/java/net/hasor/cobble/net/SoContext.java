@@ -17,7 +17,7 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.concurrent.future.Future;
 
 /**
- * 套接字管理器
+ * 管理所有网络链接和状态
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

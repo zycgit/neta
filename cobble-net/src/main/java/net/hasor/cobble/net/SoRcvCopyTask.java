@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 
 /**
- * swapBuffer -> rcvBuffer
+ * 负责将接收的数据从 swapBuffer 拷贝到 rcvBuffer
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

@@ -209,6 +209,11 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
+    public ByteBuffer asByteBuffer() {
+        return this.data.byteBuffer();
+    }
+
+    @Override
     public void free() {
         if (this.isFree()) {
             return;
