@@ -23,7 +23,7 @@ import java.util.List;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoSndCleanTask extends AbstractSoTask {
+class SoSndCleanTask extends AbstractSoTask {
     private static final Logger          logger = Logger.getLogger(SoSndCleanTask.class);
     private final        long            channelID;
     private final        List<SoSndData> cleanTask1;

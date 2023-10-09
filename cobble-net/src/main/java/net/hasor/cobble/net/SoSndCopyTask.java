@@ -15,6 +15,7 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
+import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.channels.AsynchronousSocketChannel;
@@ -27,7 +28,7 @@ import java.util.List;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoSndCopyTask extends AbstractSoTask {
+class SoSndCopyTask extends AbstractSoTask {
     private static final Logger                    logger = Logger.getLogger(SoSndCopyTask.class);
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;
@@ -43,13 +44,16 @@ public class SoSndCopyTask extends AbstractSoTask {
         this.taskIntervalMs = this.wContext.getContext().getConfig().getRetryIntervalMs();
     }
 
+    private Future<?> submitTask(AbstractSoTask task) {
+        return this.wContext.submitTask(task, this);
+    }
+
     private void channelClose() {
         if (logger.isDebugEnabled()) {
             logger.debug("channel " + this.channelID + ", channel is close, clean queue.");
         }
 
         List<SoSndData> afterFinish = new ArrayList<>();
-        SoContextImpl context = this.wContext.getContext();
 
         SoSndData data = this.wContext.peekData();
         long dataSize = 0;
@@ -58,8 +62,7 @@ public class SoSndCopyTask extends AbstractSoTask {
             afterFinish.add(this.wContext.popData());
             data = this.wContext.peekData();
         }
-        SoSndCleanTask task = new SoSndCleanTask(this.channelID, afterFinish, dataSize, new ClosedChannelException());
-        context.submitSoTask(task, this);
+        submitTask(new SoSndCleanTask(this.channelID, afterFinish, dataSize, new ClosedChannelException()));
     }
 
     @Override
@@ -122,8 +125,7 @@ public class SoSndCopyTask extends AbstractSoTask {
 
         // start SoSndTask, send sndBuffer to socket
         long beginTime = this.wContext.getBeginTime();
-        SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish);
-        context.submitSoTask(task, this);
+        submitTask(new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish));
 
         if (data == null) {
             this.finishTask();

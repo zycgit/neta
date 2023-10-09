@@ -33,7 +33,7 @@ public class SocketServerTest {
         // 监听处理线程
         SoConfig config = new SoConfig();
         config.setSwapBuf(2, 2);
-        config.setLocalBuf(128, 128);
+        config.setLocalBuf(1024, 1024);
         //        config.setSoReadTimeoutMs(6000);
         //        config.setSoKeepAlive(true);
         //        config.setSoKeepIntervalSec(10);
@@ -41,7 +41,7 @@ public class SocketServerTest {
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
-        config.setWorkerExecutor(Executors.newFixedThreadPool(1, tf2));
+        config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         try (TcpServer server = new TcpServer(config, "127.0.0.1", 5567)) {
             System.in.read();

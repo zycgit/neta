@@ -32,5 +32,19 @@
             <groupId>net.hasor</groupId>
             <artifactId>cobble-logging</artifactId>
         </dependency>
+
+        <!-- ssh密钥解析(非强制依赖) -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk15on</artifactId>
+            <version>1.70</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bctls-jdk15on</artifactId>
+            <version>1.70</version>
+            <optional>true</optional>
+        </dependency>
     </dependencies>
 </project>

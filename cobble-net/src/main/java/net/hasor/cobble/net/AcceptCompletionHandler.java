@@ -18,6 +18,7 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -41,8 +42,10 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
     @Override
     public void completed(AsynchronousSocketChannel result, SoContextImpl context) {
         // acceptChannel
+        SocketAddress remoteAddress;
         try {
-            if (!context.acceptChannel(result.getRemoteAddress())) {
+            remoteAddress = result.getRemoteAddress();
+            if (!context.acceptChannel(remoteAddress)) {
                 IOUtils.closeQuietly(result);
                 return;
             }
@@ -64,9 +67,10 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
         // openChannel
         long channelID = SoContextImpl.nextID();
         long beginTime = System.currentTimeMillis();
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, result, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, result, context);
-        NetChannel channel = new NetChannel(channelID, beginTime, result, rChannel, wChannel, context);
+        SoResManager resManager = context.newSoResManager(channelID, remoteAddress);
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, result, context, resManager);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, result, context, resManager);
+        NetChannel channel = new NetChannel(channelID, beginTime, result, rChannel, wChannel, context, resManager);
         context.openChannel(channel);
 
         // async read data

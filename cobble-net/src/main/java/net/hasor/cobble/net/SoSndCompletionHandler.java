@@ -15,6 +15,7 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
+import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
@@ -33,6 +34,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        long                      beginTime;
     private final        AsynchronousSocketChannel channel;
     private final        SoContextImpl             context;
+    private final        SoResManager              rm;
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   sndBuffer;
     //
@@ -40,13 +42,14 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private              boolean                   sndWorking;
     private              List<SoSndData>           afterWorking1;
 
-    public SoSndCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SoContextImpl context) {
+    public SoSndCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
         this.beginTime = beginTime;
         this.channel = channel;
         this.context = context;
-        this.swapBuffer = context.newSwapSndBuf();
-        this.sndBuffer = context.newLocalSndBuf();
+        this.rm = rm;
+        this.swapBuffer = rm.newSwapSndBuf();
+        this.sndBuffer = rm.newLocalSndBuf();
     }
 
     public ByteBuffer getSwapBuffer() {
@@ -65,6 +68,10 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.sndSize = 0;
         this.sndWorking = true;
         this.afterWorking1 = afterWorking1;
+    }
+
+    private Future<?> submitTask(AbstractSoTask task) {
+        return this.context.submitSoTask(this.rm, task, this);
     }
 
     @Override
@@ -89,7 +96,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             // continue send data.
             this.writeData();
         } else {
-            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize), this);
+            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize));
             this.sndWorking = false;
         }
     }
@@ -109,7 +116,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                     if (logger.isDebugEnabled()) {
                         logger.debug("snd(" + this.channelID + ") NotYetConnected, read try again later.");
                     }
-                    this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
+                    submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
                         writeData();
                     });
                     return;
@@ -122,7 +129,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 this.context.closeChannel(this.channelID, e.getMessage());
             }
 
-            this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e), this);
+            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));
         }
     }
 
@@ -150,6 +157,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             context.closeChannel(this.channelID, e.getMessage());
         }
 
-        this.context.submitSoTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e), this);
+        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));
     }
 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
+import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
 
@@ -35,12 +36,11 @@ public class TcpServer implements AutoCloseable {
     private static final Logger                          logger = Logger.getLogger(TcpServer.class);
     private              SoConfig                        config;
     private              SoContextImpl                   context;
-    //
     private              AtomicBoolean                   inited;
-    private              AsynchronousChannelGroup        channelGroup;
-    private              AsynchronousServerSocketChannel acceptChannel;
     private              ExecutorService                 ioExec;
-    private              ExecutorService                 worker;
+    private              AsynchronousChannelGroup        channelGroup;
+    //
+    private              AsynchronousServerSocketChannel acceptChannel;
 
     public TcpServer(SoConfig config) {
         this.initTcpServer(config);
@@ -78,18 +78,18 @@ public class TcpServer implements AutoCloseable {
             this.ioExec = null;
         }
 
-        ExecutorService worker = config.getWorkerExecutor();
-        if (worker == null) {
-            int process = Runtime.getRuntime().availableProcessors();
-            ThreadFactory threadFactory = ThreadUtils.threadFactory(TcpServer.class.getClassLoader(), "Cobble-AIO-Workers-%s", true);
-            worker = Executors.newFixedThreadPool(process, threadFactory);
-            this.worker = worker;
-        } else {
-            this.worker = null;
+        SoExecutorFactory executorFactory = config.getTaskExecutorFactory();
+        if (executorFactory == null) {
+            executorFactory = (cfg, ctxName) -> {
+                String tempName = "Cobble[" + StringUtils.getOrDefault("default", ctxName) + "]-AIO-Workers-%s";
+                int process = Runtime.getRuntime().availableProcessors();
+                ThreadFactory threadFactory = ThreadUtils.threadFactory(TcpServer.class.getClassLoader(), tempName, true);
+                return Executors.newFixedThreadPool(process, threadFactory);
+            };
         }
 
         this.config = config;
-        this.context = new SoContextImpl(config, ioExec, worker);
+        this.context = new SoContextImpl(config, ioExec, executorFactory);
         this.inited = new AtomicBoolean(false);
     }
 
@@ -142,19 +142,6 @@ public class TcpServer implements AutoCloseable {
             }
             logger.info("acceptThread closed.");
         }
-
-        // waiting close worker
-        if (this.worker != null) {
-            while (!this.worker.isTerminated()) {
-                long cost = System.currentTimeMillis() - t;
-                if (cost > 3000) {
-                    t = System.currentTimeMillis();
-                    logger.info("wait workerThread close...");
-                }
-                ThreadUtils.sleep(50);
-            }
-            logger.info("workerThread closed.");
-        }
     }
 
     final void close0() throws IOException {
@@ -164,8 +151,7 @@ public class TcpServer implements AutoCloseable {
         if (this.ioExec != null) {
             this.ioExec.shutdown();
         }
-        if (this.worker != null) {
-            this.worker.shutdown();
-        }
+
+        this.context.closeAll("shutdown.");
     }
 }

@@ -17,6 +17,8 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
+import java.io.IOException;
+import java.net.SocketAddress;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 
@@ -28,11 +30,13 @@ import java.nio.channels.CompletionHandler;
 class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(ConnectCompletionHandler.class);
     private final        TcpClient                 client;
+    private final        SocketAddress             remoteAddress;
     private final        AsynchronousSocketChannel channel;
     private final        Future<NetChannel>        future;
 
-    public ConnectCompletionHandler(TcpClient client, AsynchronousSocketChannel channel, Future<NetChannel> future) {
+    public ConnectCompletionHandler(TcpClient client, AsynchronousSocketChannel channel, Future<NetChannel> future) throws IOException {
         this.client = client;
+        this.remoteAddress = channel.getRemoteAddress();
         this.channel = channel;
         this.future = future;
     }
@@ -41,9 +45,10 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl>
     public void completed(Void result, SoContextImpl context) {
         long channelID = SoContextImpl.nextID();
         long beginTime = System.currentTimeMillis();
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, this.channel, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, this.channel, context);
-        NetChannel channel = new NetChannel(channelID, beginTime, this.channel, rChannel, wChannel, context);
+        SoResManager resManager = context.newSoResManager(channelID, this.remoteAddress);
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, this.channel, context, resManager);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, this.channel, context, resManager);
+        NetChannel channel = new NetChannel(channelID, beginTime, this.channel, rChannel, wChannel, context, resManager);
         context.openChannel(channel);
 
         // continue accept

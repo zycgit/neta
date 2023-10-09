@@ -14,26 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-import net.hasor.cobble.concurrent.future.Future;
+import java.util.concurrent.ExecutorService;
 
 /**
- * 套接字管理器
+ * 资源管理器
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public interface SoContext {
-    SoConfig getConfig();
+@FunctionalInterface
+public interface SoExecutorFactory {
 
-    SoResManager getResourceManager();
-
-    /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
-    <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result);
-
-    /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
-    <T> Future<T> submitSoTask(SoResManager rm, AbstractSoTask mainTask, T result);
-
-    /** Socket 通道是否已经关闭 */
-    boolean isClose(long channelID);
-
-    void closeChannel(long channelID, String message);
+    ExecutorService newExecutor(SoConfig config, String ctxName);
 }

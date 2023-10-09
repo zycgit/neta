@@ -15,6 +15,7 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
+import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
@@ -30,16 +31,20 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        long                      channelID;
     private final        long                      beginTime;
     private final        AsynchronousSocketChannel channel;
+    private final        SoContextImpl             context;
+    private final        SoResManager              rm;
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   rcvBuffer;
 
-    public SoRcvCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SoContextImpl context) {
+    public SoRcvCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
         this.beginTime = beginTime;
 
         this.channel = channel;
-        this.swapBuffer = context.newSwapRcvBuf();
-        this.rcvBuffer = context.newLocalRcvBuf();
+        this.context = context;
+        this.rm = rm;
+        this.swapBuffer = rm.newSwapRcvBuf();
+        this.rcvBuffer = rm.newLocalRcvBuf();
     }
 
     public ByteBuffer getSwapBuffer() {
@@ -54,6 +59,10 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.swapBuffer.clear();
     }
 
+    private Future<?> submitTask(AbstractSoTask task) {
+        return this.context.submitSoTask(this.rm, task, this);
+    }
+
     @Override
     public void completed(Integer result, SoContextImpl context) {
         if (result > 0) {
@@ -63,10 +72,9 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             // copy buffer form swap to rcv
             SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, context, getSwapBuffer(), getRcvBuffer());
 
-            context.submitSoTask(copyTask, this).onCompleted(f -> {
+            submitTask(copyTask).onCompleted(f -> {
                 // rcv continue
-                SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context);
-                context.submitSoTask(rcvTask, this);
+                submitTask(new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context));
             }).onFailed(f -> {
                 this.failed(f.getCause(), context);
             });
@@ -77,7 +85,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             // rcv continue
             SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.beginTime, this.channel, this, context);
 
-            context.submitSoTask(rcvTask, this).onFailed(f -> {
+            submitTask(rcvTask).onFailed(f -> {
                 this.failed(f.getCause(), context);
             });
         } else {

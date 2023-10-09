@@ -14,26 +14,31 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.bytebuf.ByteBuf;
+
+import java.nio.ByteBuffer;
+import java.util.concurrent.ExecutorService;
 
 /**
- * 套接字管理器
+ * 资源管理器
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public interface SoContext {
-    SoConfig getConfig();
+public interface SoResManager extends AutoCloseable {
+    ByteBuf newByteBuf(int capacity);
 
-    SoResManager getResourceManager();
+    ByteBuffer newByteBuffer(int capacity);
 
-    /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
-    <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result);
+    ByteBuffer newSwapRcvBuf();
 
-    /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
-    <T> Future<T> submitSoTask(SoResManager rm, AbstractSoTask mainTask, T result);
+    ByteBuffer newSwapSndBuf();
 
-    /** Socket 通道是否已经关闭 */
-    boolean isClose(long channelID);
+    ByteBuf newLocalRcvBuf();
 
-    void closeChannel(long channelID, String message);
+    ByteBuf newLocalSndBuf();
+
+    void freeObject(Object refObj);
+
+    ExecutorService getExecutor();
+
 }

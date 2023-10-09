@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
+import net.hasor.cobble.concurrent.future.Future;
+
 import java.util.Queue;
 
 /**
@@ -24,11 +26,13 @@ import java.util.Queue;
 class SoSndContext {
     private final long             beginTime;
     private final SoContextImpl    context;
+    private final SoResManager     rm;
     private final Queue<SoSndData> wQueue;
 
-    public SoSndContext(long beginTime, SoContextImpl context, Queue<SoSndData> wQueue) {
+    public SoSndContext(long beginTime, SoContextImpl context, SoResManager rm, Queue<SoSndData> wQueue) {
         this.beginTime = beginTime;
         this.context = context;
+        this.rm = rm;
         this.wQueue = wQueue;
     }
 
@@ -46,5 +50,9 @@ class SoSndContext {
 
     public SoContextImpl getContext() {
         return this.context;
+    }
+
+    public Future<?> submitTask(AbstractSoTask task, Object context) {
+        return this.context.submitSoTask(this.rm, task, context);
     }
 }

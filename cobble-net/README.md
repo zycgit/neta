@@ -23,6 +23,9 @@ TODO
 - TcpClient/TcpServer
     - Close 的时候需要 close 里面的 canal
 
+- 支持 SSL 引擎支持：JDK、OpenSSL
+- 支持 SSL 协议：SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
+- 支持 客户端验证：NONE、OPTIONAL、REQUIRE
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#ex6
 https://blog.yeskery.com/archives/SSL_engine_combined_with_NIO_to_realize_asynchronous_socket.html#menu_index_3

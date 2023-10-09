@@ -14,13 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-import net.hasor.cobble.bytebuf.ByteBuf;
-import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.io.IOUtils;
 
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -34,19 +32,23 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoContextImpl implements SoContext {
-    private static final AtomicLong            nextID = new AtomicLong();
-    private final        SoConfig              config;
-    private final        ExecutorService       ioExecutor;
-    private final        ExecutorService       workerExecutor;
-    private final        ByteBufAllocator      bufAllocator;
-    private final        Map<Long, NetChannel> channelMap;
+    private static final AtomicLong              nextID = new AtomicLong();
+    private final        SoConfig                config;
+    private final        ExecutorService         ioExecutor;
+    private final        SoExecutorFactory       executorFactory;
+    private final        SoResManager            defaultRm;
+    private final        Map<Long, NetChannel>   channelMap;
+    private final        Map<Long, SoResManager> specialRmMap;
 
-    public SoContextImpl(SoConfig config, ExecutorService ioExec, ExecutorService worker) {
+    public SoContextImpl(SoConfig config, ExecutorService ioExec, SoExecutorFactory executorFactory) {
         this.config = config;
         this.ioExecutor = Objects.requireNonNull(ioExec);
-        this.workerExecutor = Objects.requireNonNull(worker);
-        this.bufAllocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : config.getBufAllocator();
+        this.executorFactory = Objects.requireNonNull(executorFactory);
         this.channelMap = new ConcurrentHashMap<>();
+        this.specialRmMap = new ConcurrentHashMap<>();
+
+        ExecutorService executor = Objects.requireNonNull(executorFactory.newExecutor(this.config, null));
+        this.defaultRm = new SoResManagerImpl(this.config, executor);
     }
 
     public static long nextID() {
@@ -58,33 +60,10 @@ class SoContextImpl implements SoContext {
         return this.config;
     }
 
-    public ByteBuffer newSwapRcvBuf() {
-        if (this.bufAllocator.isDirect()) {
-            return ByteBuffer.allocateDirect(this.config.getRcvSwapBuf());
-        } else {
-            return ByteBuffer.allocate(this.config.getRcvSwapBuf());
-        }
+    @Override
+    public SoResManager getResourceManager() {
+        return this.defaultRm;
     }
-
-    public ByteBuffer newSwapSndBuf() {
-        if (this.bufAllocator.isDirect()) {
-            return ByteBuffer.allocateDirect(this.config.getSndSwapBuf());
-        } else {
-            return ByteBuffer.allocate(this.config.getSndSwapBuf());
-        }
-    }
-
-    public ByteBuf newLocalRcvBuf() {
-        int bufSize = this.config.getRcvLocalBuf();
-        return this.bufAllocator.buffer(bufSize);
-    }
-
-    public ByteBuf newLocalSndBuf() {
-        int bufSize = this.config.getSndLocalBuf();
-        return this.bufAllocator.buffer(bufSize);
-    }
-
-    //
 
     public int getConnectTimeoutMs() {
         return Math.max(10, this.config.getConnectTimeoutMs());
@@ -94,8 +73,20 @@ class SoContextImpl implements SoContext {
         return this.ioExecutor;
     }
 
-    public ExecutorService getWorkerExecutor() {
-        return this.workerExecutor;
+    public SoResManager newSoResManager(long channelID, SocketAddress remoteAddress) {
+        if (this.specialResManager(remoteAddress)) {
+            ExecutorService executor = Objects.requireNonNull(executorFactory.newExecutor(this.config, String.valueOf(channelID)));
+            SoResManager rm = new SoResManagerImpl(this.config, executor);
+            this.specialRmMap.put(channelID, rm);
+            return rm;
+        } else {
+            return this.defaultRm;
+        }
+    }
+
+    /** 链接是否使用单独的 SoResManager */
+    public boolean specialResManager(SocketAddress remoteAddress) {
+        return false;
     }
 
     /** 是否接受链接请求 */
@@ -114,8 +105,17 @@ class SoContextImpl implements SoContext {
     public void closeChannel(long channelID, String message) {
         System.out.println("closeChannel " + channelID + ", msg:" + message);
         NetChannel channel = this.channelMap.get(channelID);
-        channel.close();
+        SoResManager specialRm = this.specialRmMap.get(channelID);
+
+        IOUtils.closeQuietly(channel);
+        IOUtils.closeQuietly(specialRm);
+
         this.channelMap.remove(channelID);
+        this.specialRmMap.remove(channelID);
+    }
+
+    public void closeAll(String message) {
+
     }
 
     /** 有新数据到达 */
@@ -126,25 +126,30 @@ class SoContextImpl implements SoContext {
         }
     }
 
+    @Override
+    public <T> Future<T> submitSoTask(AbstractSoTask task, T result) {
+        return this.submitSoTask(this.defaultRm, task, result);
+    }
+
     /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
     @Override
-    public <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result) {
+    public <T> Future<T> submitSoTask(SoResManager rm, AbstractSoTask task, T result) {
         Future<T> future = new BasicFuture<>();
 
         AtomicReference<Runnable> refTemp = new AtomicReference<>();
         Runnable runnable = () -> {
             try {
-                mainTask.run();
+                task.run();
 
-                switch (mainTask.getStatus()) {
+                switch (task.getStatus()) {
                     case Continue:
-                        this.getWorkerExecutor().submit(refTemp.get());
+                        rm.getExecutor().submit(refTemp.get());
                         break;
                     case Finish:
                         future.completed(result);
                         break;
                     case Exit:
-                        future.failed(mainTask.getCause());
+                        future.failed(task.getCause());
                         break;
                 }
             } catch (Throwable e) {
@@ -153,7 +158,7 @@ class SoContextImpl implements SoContext {
         };
         refTemp.set(runnable);
 
-        this.getWorkerExecutor().submit(refTemp.get());
+        rm.getExecutor().submit(refTemp.get());
         return future;
     }
 

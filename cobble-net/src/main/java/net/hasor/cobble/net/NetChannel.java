@@ -38,6 +38,7 @@ public class NetChannel implements Closeable {
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;
     private final        SoContextImpl             context;
+    private final        SoResManager              rm;
     private final        long                      beginTime;
     private              long                      lastSndTime;
     private              long                      lastRcvTime;
@@ -49,13 +50,14 @@ public class NetChannel implements Closeable {
     private final        AtomicBoolean             wStatus;
     private final        SoSndCompletionHandler    wHandler;
 
-    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context) {
+    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
         this.beginTime = beginTime;
         this.lastSndTime = beginTime;
         this.lastRcvTime = beginTime;
         this.channel = channel;
         this.context = context;
+        this.rm = rm;
 
         this.rHandler = rHandler;
         this.rSyncLock = new Object();
@@ -95,6 +97,7 @@ public class NetChannel implements Closeable {
     public void close() {
         if (!isClose()) {
             IOUtils.closeQuietly(this.channel);
+            IOUtils.closeQuietly(this.rm);
         }
     }
 
@@ -144,17 +147,17 @@ public class NetChannel implements Closeable {
         this.wQueue.offer(wTask);
 
         if (this.wStatus.compareAndSet(false, true)) {
-            SoSndContext wContext = new SoSndContext(this.beginTime, this.context, this.wQueue);
+            SoSndContext wContext = new SoSndContext(this.beginTime, this.context, this.rm, this.wQueue);
 
             // queue -> sndBuffer and sending
             SoSndCopyTask task = new SoSndCopyTask(this.channelID, this.channel, this.wHandler, wContext);
 
-            this.context.submitSoTask(task, this).onCompleted(f -> {
+            wContext.submitTask(task, this).onCompleted(f -> {
                 this.lastSndTime = System.currentTimeMillis();
                 if (this.wQueue.isEmpty()) {
                     this.wStatus.compareAndSet(true, false);
                 } else {
-                    this.context.submitSoTask(task, this);
+                    wContext.submitTask(task, this);
                 }
             });
         }
@@ -184,6 +187,15 @@ public class NetChannel implements Closeable {
             this.sendData("echo ".getBytes());
             this.sendData((sb.toString() + "\n").getBytes());
         }
+        //        ByteBuf buffer = this.rHandler.getRcvBuffer();
+        //        String line = buffer.readLine();
+        //        buffer.markReader();
+        //
+        //        if (line != null) {
+        //            System.out.println("rcvChannel " + channelID + ", data=" + line);
+        //            this.sendData("echo ".getBytes());
+        //            this.sendData((line + "\n").getBytes());
+        //        }
     }
 
     //    /** 读数据 */

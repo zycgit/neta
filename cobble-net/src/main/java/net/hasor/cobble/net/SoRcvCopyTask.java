@@ -24,7 +24,7 @@ import java.nio.channels.ClosedChannelException;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoRcvCopyTask extends AbstractSoTask {
+class SoRcvCopyTask extends AbstractSoTask {
     private final SoContextImpl context;
     private final long          channelID;
     private final ByteBuffer    srcBuffer;

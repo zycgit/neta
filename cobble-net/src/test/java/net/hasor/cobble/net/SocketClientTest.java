@@ -44,7 +44,7 @@ public class SocketClientTest {
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
-        config.setWorkerExecutor(Executors.newFixedThreadPool(1, tf2));
+        config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         AtomicBoolean exit = new AtomicBoolean(false);
         try (TcpClient client = new TcpClient(config)) {
