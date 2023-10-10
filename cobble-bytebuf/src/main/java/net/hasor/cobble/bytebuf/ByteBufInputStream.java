@@ -1,5 +1,6 @@
 package net.hasor.cobble.bytebuf;
 import java.io.*;
+import java.nio.charset.Charset;
 import java.util.Objects;
 
 /**
@@ -161,6 +162,10 @@ public class ByteBufInputStream extends InputStream implements DataInput {
     @Override
     public String readLine() {
         return this.buffer.readLine();
+    }
+
+    public String readLine(Charset charset) {
+        return this.buffer.readLine(charset);
     }
 
     @Override

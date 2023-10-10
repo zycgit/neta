@@ -22,7 +22,6 @@ import net.hasor.cobble.concurrent.future.Future;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.ClosedChannelException;
-import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -205,27 +204,14 @@ public class NetChannel {
         }
 
         ByteBuf buffer = this.rHandler.getRcvBuffer();
-        StringBuilder sb = new StringBuilder();
-        while (buffer.expect("\r\n", StandardCharsets.US_ASCII) >= 0) {
-            sb.append(buffer.readExpect("\r\n", StandardCharsets.US_ASCII));
-            sb.append("\n");
-            buffer.markReader();
-        }
+        String line = buffer.readLine();
+        buffer.markReader();
 
-        if (sb.length() > 0) {
-            System.out.println("rcvChannel " + channelID + ", data=" + sb.toString());
+        if (line != null) {
+            System.out.println("rcvChannel " + channelID + ", data=" + line);
             this.sendData("echo ".getBytes());
-            this.sendData((sb.toString() + "\n").getBytes());
+            this.sendData((line + "\n").getBytes());
         }
-        //        ByteBuf buffer = this.rHandler.getRcvBuffer();
-        //        String line = buffer.readLine();
-        //        buffer.markReader();
-        //
-        //        if (line != null) {
-        //            System.out.println("rcvChannel " + channelID + ", data=" + line);
-        //            this.sendData("echo ".getBytes());
-        //            this.sendData((line + "\n").getBytes());
-        //        }
     }
 
     //    /** 读数据 */
