@@ -541,6 +541,42 @@ public interface ByteBuf extends ByteChannel {
         return -1;
     }
 
+    /** 读一整行 */
+    default String readLine() {
+        return this.readLine(StandardCharsets.US_ASCII);
+    }
+
+    /** 读一整行 */
+    default String readLine(Charset charset) {
+        int available = this.readableBytes();
+        if (available == 0) {
+            return null;
+        }
+
+        int findIndex = -1;
+        int skipLength = -1;
+        for (int i = 0; i < available; i++) {
+            if (this.getUInt8(i) == '\n') {
+                if (i > 0 && this.getUInt8(i - 1) == '\r') {
+                    findIndex = i - 1;
+                    skipLength = 2;
+                } else {
+                    findIndex = i;
+                    skipLength = 1;
+                }
+                break;
+            }
+        }
+
+        if (findIndex > 0) {
+            String str = this.readString(findIndex, charset);
+            this.skipReadableBytes(skipLength);
+            return str;
+        } else {
+            return null;
+        }
+    }
+
     /** 查找下一个 expect 字符的出现的位置（使用指定的编码），该方法不会更新 readerIndex 值。如果不存在期待的字符，那么返回 -1。 */
     default int expect(char expect, Charset charset) {
         return expect(String.valueOf(expect), charset);
@@ -549,7 +585,7 @@ public interface ByteBuf extends ByteChannel {
     /** 从当前位置开始读取，直到遇到第一个 expect 字符串读完。如果没有期待的 expect 字符串那么返回 null。
      * 比如：readLine 可以写作 readExpectString("\n", StandardCharsets.US_ASCII) */
     default String readExpect(String expect, Charset charset) {
-        int readLen = -1;
+        int readLen;
         if ((readLen = this.expect(expect, charset)) >= 0) {
             String str = readString(readLen, charset);
             this.skipReadableBytes(expect.getBytes(charset).length);
