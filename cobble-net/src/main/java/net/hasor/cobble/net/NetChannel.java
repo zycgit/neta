@@ -196,12 +196,19 @@ public class NetChannel {
     //
     //
     //
-    final void notifyRcv() {
-        this.lastRcvTime = System.currentTimeMillis();
+
+    final void notifyRcv(boolean rcvFull) {
+        if (!rcvFull) {
+            this.lastRcvTime = System.currentTimeMillis();
+        }
 
         synchronized (this.rSyncLock) {
             this.rSyncLock.notifyAll();
         }
+
+        //        if (rcvFull) {
+        //            System.out.println("rcv Full " + this);
+        //        }
 
         ByteBuf buffer = this.rHandler.getRcvBuffer();
         String line = buffer.readLine();

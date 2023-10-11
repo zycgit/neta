@@ -147,10 +147,10 @@ class SoContextImpl implements SoContext {
     }
 
     /** 有新数据到达 */
-    public void notifyChannelRcv(long channelID) {
+    public void notifyChannelRcv(long channelID, boolean rcvFull) {
         NetChannel channel = this.channelMap.get(channelID);
         if (channel != null) {
-            channel.notifyRcv();
+            channel.notifyRcv(rcvFull);
         }
     }
 

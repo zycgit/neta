@@ -33,7 +33,7 @@ public class SocketServerTest {
         // 监听处理线程
         SoConfig config = new SoConfig();
         config.setSwapBuf(2, 2);
-        config.setLocalBuf(1024, 1024);
+        config.setLocalBuf(32, 32);
         //        config.setSoReadTimeoutMs(6000);
         //        config.setSoKeepAlive(true);
         //        config.setSoKeepIntervalSec(10);

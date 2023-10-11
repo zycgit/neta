@@ -28,7 +28,7 @@ public class SoConfig {
     // buffers
     private int               rcvSwapBuf        = 16 * 1024;// socket 接收缓冲区大小,对应 SO_RCVBUF 参数
     private int               sndSwapBuf        = 16 * 1024;// socket 发送缓冲区大小,对应 SO_SNDBUF 参数
-    private int               rcvLocalBuf       = 16 * 1024;// 本地读取缓冲区，从网络上收到的数据会先进入 swap 缓冲区，然后将其移动到 rcvLocal 在交给层序处理。
+    private int               rcvLocalBuf       = 16 * 1024;// 本地读取缓冲区，从网络上收到的数据会先进入 swap 缓冲区，然后将其移动到 rcvLocal 在交给应用程序处理。
     private int               sndLocalBuf       = 16 * 1024;// 本地发送缓冲区，程序发送的数据需要先放入 rcvLocal 然后将其移动到 swap 缓冲区进行发送。
     // so configs
     private Integer           soRcvBuf          = null;     // SO_RCVBUF: The size of the socket send buffer

@@ -48,14 +48,14 @@ class SoRcvCopyTask extends AbstractSoTask {
 
         if (this.srcBuffer.hasRemaining()) {
             if (this.dstBuffer.writableBytes() <= 0) {
-                this.context.notifyChannelRcv(this.channelID);
+                this.context.notifyChannelRcv(this.channelID, true);
                 this.delayTask(this.taskIntervalMs);
             } else {
                 // swapBuffer -> rcvBuffer
                 this.dstBuffer.write(this.srcBuffer);
                 this.dstBuffer.markWriter();
 
-                this.context.notifyChannelRcv(this.channelID);
+                this.context.notifyChannelRcv(this.channelID, false);
                 this.continueTask();
             }
         } else {
