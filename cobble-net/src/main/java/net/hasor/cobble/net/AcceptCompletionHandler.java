@@ -19,7 +19,6 @@ import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
@@ -31,21 +30,26 @@ import java.nio.channels.CompletionHandler;
  */
 class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SoContextImpl> {
     private static final Logger                          logger = Logger.getLogger(AcceptCompletionHandler.class);
-    private final        CobbleSocket                    socketServer;
+    private final        NetListen                       forListen;
     private final        AsynchronousServerSocketChannel acceptChannel;
 
-    public AcceptCompletionHandler(CobbleSocket socketServer, AsynchronousServerSocketChannel acceptChannel) {
-        this.socketServer = socketServer;
+    public AcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel acceptChannel) {
+        this.forListen = forListen;
         this.acceptChannel = acceptChannel;
     }
 
     @Override
     public void completed(AsynchronousSocketChannel result, SoContextImpl context) {
+        // accept the next connection
+        this.acceptChannel.accept(context, this);
+
         // acceptChannel
-        SocketAddress remoteAddress;
+        SocketAddress localAddr;
+        SocketAddress remoteAddr;
         try {
-            remoteAddress = result.getRemoteAddress();
-            if (!context.acceptChannel(remoteAddress)) {
+            localAddr = result.getLocalAddress();
+            remoteAddr = result.getRemoteAddress();
+            if (!context.acceptChannel(remoteAddr)) {
                 IOUtils.closeQuietly(result);
                 return;
             }
@@ -66,15 +70,16 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
 
         // openChannel
         long channelID = SoContextImpl.nextID();
-        long beginTime = System.currentTimeMillis();
-        SoResManager resManager = context.newSoResManager(channelID, remoteAddress);
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, result, context, resManager);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, result, context, resManager);
-        NetChannel channel = new NetChannel(channelID, beginTime, result, rChannel, wChannel, context, resManager);
+        long createdTime = System.currentTimeMillis();
+        SoResManager resManager = context.newSoResManager(channelID, remoteAddr);
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context, resManager);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, context, resManager);
+        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, context, resManager);
         context.openChannel(channel);
+        this.forListen.notifyAccept(channelID);
 
         // async read data
-        SoRcvTask task = new SoRcvTask(channelID, beginTime, result, rChannel, context);
+        SoRcvTask task = new SoRcvTask(channelID, createdTime, result, rChannel, context);
         context.submitSoTask(task, channel);
 
         // continue accept
@@ -83,19 +88,11 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
         } catch (Exception e) {
             logger.info("accept(" + channelID + ")");
         }
-        this.acceptChannel.accept(context, this);
     }
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
-        if (e instanceof AsynchronousCloseException) {
-            try {
-                this.socketServer.close0();
-            } catch (Exception ee) {
-                logger.debug("close SocketServer in AIO-AcceptThread failed, message: " + ee.getMessage());
-            }
-        } else {
-            logger.error("ERROR: Listen Failed " + e.getMessage(), e);
-        }
+        logger.error("ERROR: Listen Failed " + e.getMessage(), e);
+        context.closeChannel(this.forListen.getChannelID(), e.getMessage());
     }
 }

@@ -24,20 +24,20 @@ import java.util.Queue;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoSndContext {
-    private final long             beginTime;
+    private final long             createdTime;
     private final SoContextImpl    context;
     private final SoResManager     rm;
     private final Queue<SoSndData> wQueue;
 
-    public SoSndContext(long beginTime, SoContextImpl context, SoResManager rm, Queue<SoSndData> wQueue) {
-        this.beginTime = beginTime;
+    public SoSndContext(long createdTime, SoContextImpl context, SoResManager rm, Queue<SoSndData> wQueue) {
+        this.createdTime = createdTime;
         this.context = context;
         this.rm = rm;
         this.wQueue = wQueue;
     }
 
-    public long getBeginTime() {
-        return this.beginTime;
+    public long getCreatedTime() {
+        return this.createdTime;
     }
 
     public SoSndData popData() {

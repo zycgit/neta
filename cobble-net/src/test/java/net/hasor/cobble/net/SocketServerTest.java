@@ -17,6 +17,7 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBufUtil;
 import net.hasor.cobble.concurrent.ThreadUtils;
 
+import java.io.IOException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
@@ -43,8 +44,16 @@ public class SocketServerTest {
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
-        try (CobbleSocket server = new CobbleSocket(config).listen("127.0.0.1", 5567)) {
+        try (CobbleSocket socket = new CobbleSocket(config)) {
+            socket.listen("127.0.0.1", 5567).onCompleted(f -> read());
+        }
+    }
+
+    private static void read() {
+        try {
             System.in.read();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
         }
     }
 }

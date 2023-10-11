@@ -29,14 +29,12 @@ class SoRcvCopyTask extends AbstractSoTask {
     private final long          channelID;
     private final ByteBuffer    srcBuffer;
     private final ByteBuf       dstBuffer;
-    private final int           taskIntervalMs;
 
     public SoRcvCopyTask(long channelID, SoContextImpl context, ByteBuffer srcBuffer, ByteBuf dstBuffer) {
         this.channelID = channelID;
         this.context = context;
         this.srcBuffer = srcBuffer;
         this.dstBuffer = dstBuffer;
-        this.taskIntervalMs = context.getConfig().getRetryIntervalMs();
     }
 
     @Override
@@ -48,8 +46,8 @@ class SoRcvCopyTask extends AbstractSoTask {
 
         if (this.srcBuffer.hasRemaining()) {
             if (this.dstBuffer.writableBytes() <= 0) {
-                this.context.notifyChannelRcv(this.channelID, true);
-                this.delayTask(this.taskIntervalMs);
+                int interval = this.context.notifyChannelRcv(this.channelID, true);
+                this.delayTask(interval);
             } else {
                 // swapBuffer -> rcvBuffer
                 this.dstBuffer.write(this.srcBuffer);

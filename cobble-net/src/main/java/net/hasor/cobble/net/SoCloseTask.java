@@ -23,9 +23,9 @@ class SoCloseTask extends AbstractSoTask {
     private final long          channelID;
     private final SoContextImpl context;
 
-    public SoCloseTask(NetChannel channel) {
-        this.channelID = channel.getChannelID();
-        this.context = channel.context;
+    public SoCloseTask(long channelID, SoContextImpl context) {
+        this.channelID = channelID;
+        this.context = context;
     }
 
     @Override

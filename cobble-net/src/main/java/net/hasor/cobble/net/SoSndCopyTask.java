@@ -124,7 +124,7 @@ class SoSndCopyTask extends AbstractSoTask {
         }
 
         // start SoSndTask, send sndBuffer to socket
-        long beginTime = this.wContext.getBeginTime();
+        long beginTime = this.wContext.getCreatedTime();
         submitTask(new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish));
 
         if (data == null) {

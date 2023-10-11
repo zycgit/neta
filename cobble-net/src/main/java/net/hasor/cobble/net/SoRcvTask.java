@@ -29,15 +29,15 @@ import java.util.concurrent.TimeUnit;
 class SoRcvTask extends AbstractSoTask {
     private static final Logger                    logger = Logger.getLogger(SoRcvTask.class);
     private final        long                      channelID;
-    private final        long                      beginTime;
+    private final        long                      createdTime;
     //
     private final        AsynchronousSocketChannel channel;
     private final        SoRcvCompletionHandler    rHandler;
     private final        SoContextImpl             context;
 
-    public SoRcvTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoContextImpl context) {
+    public SoRcvTask(long channelID, long createdTime, AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoContextImpl context) {
         this.channelID = channelID;
-        this.beginTime = beginTime;
+        this.createdTime = createdTime;
 
         this.channel = channel;
         this.rHandler = rHandler;
@@ -63,7 +63,7 @@ class SoRcvTask extends AbstractSoTask {
             this.finishTask();
         } catch (Exception e) {
             if (e instanceof NotYetConnectedException) {
-                long costTimeMs = System.currentTimeMillis() - this.beginTime;
+                long costTimeMs = System.currentTimeMillis() - this.createdTime;
                 if (costTimeMs < this.context.getConnectTimeoutMs()) {
                     if (logger.isDebugEnabled()) {
                         logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");

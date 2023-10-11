@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
 class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(SoSndCompletionHandler.class);
     private final        long                      channelID;
-    private final        long                      beginTime;
+    private final        long                      createdTime;
     private final        AsynchronousSocketChannel channel;
     private final        SoContextImpl             context;
     private final        SoResManager              rm;
@@ -42,9 +42,9 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private              boolean                   sndWorking;
     private              List<SoSndData>           afterWorking1;
 
-    public SoSndCompletionHandler(long channelID, long beginTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
+    public SoSndCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
-        this.beginTime = beginTime;
+        this.createdTime = createdTime;
         this.channel = channel;
         this.context = context;
         this.rm = rm;
@@ -116,7 +116,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             }
         } catch (Throwable e) {
             if (e instanceof NotYetConnectedException) {
-                long costTimeMs = System.currentTimeMillis() - this.beginTime;
+                long costTimeMs = System.currentTimeMillis() - this.createdTime;
                 if (costTimeMs < this.context.getConnectTimeoutMs()) {
                     if (logger.isDebugEnabled()) {
                         logger.debug("snd(" + this.channelID + ") NotYetConnected, read try again later.");

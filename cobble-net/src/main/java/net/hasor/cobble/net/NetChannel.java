@@ -19,6 +19,7 @@ import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 
+import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.ClosedChannelException;
@@ -31,13 +32,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetChannel {
+public class NetChannel implements Channel<NetChannel> {
     private static final ByteBuf                   EMPTY_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
     private final        long                      channelID;
+    private final        NetListen                 forListen;
     protected final      AsynchronousSocketChannel channel;
     protected final      SoContextImpl             context;
     protected final      SoResManager              rm;
-    private final        long                      beginTime;
+    private final        SocketAddress             localAddr;
+    private final        SocketAddress             remoteAddr;
+    private final        long                      createdTime;
     private              long                      lastSndTime;
     private              long                      lastRcvTime;
     //
@@ -51,16 +55,19 @@ public class NetChannel {
     protected final      AtomicBoolean             closeStatus;
     protected final      Future<NetChannel>        closeFuture;
 
-    NetChannel(long channelID, long beginTime, AsynchronousSocketChannel channel, //
+    NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr, AsynchronousSocketChannel channel, //
             SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
-        this.beginTime = beginTime;
-        this.lastSndTime = beginTime;
-        this.lastRcvTime = beginTime;
+        this.forListen = forListen;
+        this.createdTime = createdTime;
+        this.lastSndTime = createdTime;
+        this.lastRcvTime = createdTime;
 
         this.channel = channel;
         this.context = context;
         this.rm = rm;
+        this.localAddr = localAddr;
+        this.remoteAddr = remoteAddr;
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
 
@@ -73,14 +80,24 @@ public class NetChannel {
 
     }
 
-    /** Socket 连接通道 ID */
+    @Override
     public long getChannelID() {
         return this.channelID;
     }
 
+    @Override
+    public boolean isListen() {
+        return false;
+    }
+
     /** 连接建立时间 */
-    public long getBeginTime() {
-        return this.beginTime;
+    public long getCreatedTime() {
+        return this.createdTime;
+    }
+
+    @Override
+    public long getLastActiveTime() {
+        return Math.max(this.lastRcvTime, this.lastSndTime);
     }
 
     /** 最后一次发送数据的时间 */
@@ -93,18 +110,35 @@ public class NetChannel {
         return this.lastRcvTime;
     }
 
-    /** Socket 连接通道是否关闭 */
+    @Override
+    public boolean isServer() {
+        return this.forListen != null;
+    }
+
+    @Override
+    public boolean isClient() {
+        return this.forListen == null;
+    }
+
+    /** 本地 Socket 地址 */
+    public SocketAddress getLocalAddr() {
+        return this.localAddr;
+    }
+
+    /** 远程 Socket 地址 */
+    public SocketAddress getRemoteAddr() {
+        return this.remoteAddr;
+    }
+
+    @Override
     public boolean isClose() {
         return !this.channel.isOpen() || this.closeStatus.get();
     }
 
-    /**
-     * 触发 Socket 关闭，待所有数据写入完成后在关闭。
-     * 方法 {@link #closeNow()} 和 {@link #close()} 只有一个被调用反复调用会抛 {@link ClosedChannelException} 异常
-     */
+    @Override
     public Future<NetChannel> close() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
-            SoCloseTask task = new SoCloseTask(this);
+            SoCloseTask task = new SoCloseTask(this.channelID, this.context);
             this.context.submitSoTask(this.rm, task, this).onCompleted(f -> {
                 closeFuture.completed(this);
             }).onFailed(f -> {
@@ -116,14 +150,12 @@ public class NetChannel {
         return this.closeFuture;
     }
 
-    /**
-     * 立刻关闭 socket 通道，并且清空发送队列（socket 的 SO_LINGER 参数，只能保证已经位于 socket 缓冲区的数据优雅关闭）
-     * 方法 {@link #closeNow()} 和 {@link #close()} 只有一个被调用反复调用会抛 {@link ClosedChannelException} 异常
-     */
-    public void closeNow() {
+    public Future<NetChannel> closeNow() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
-            new SoCloseTask(this).run();
+            new SoCloseTask(this.channelID, this.context).run();
         }
+        this.closeFuture.completed(this);
+        return this.closeFuture;
     }
 
     /** 写数据 */
@@ -176,7 +208,7 @@ public class NetChannel {
         this.wQueue.offer(wTask);
 
         if (this.wStatus.compareAndSet(false, true)) {
-            SoSndContext wContext = new SoSndContext(this.beginTime, this.context, this.rm, this.wQueue);
+            SoSndContext wContext = new SoSndContext(this.createdTime, this.context, this.rm, this.wQueue);
 
             // queue -> sndBuffer and sending
             SoSndCopyTask task = new SoSndCopyTask(this.channelID, this.channel, this.wHandler, wContext);
@@ -197,7 +229,7 @@ public class NetChannel {
     //
     //
 
-    final void notifyRcv(boolean rcvFull) {
+    final int notifyRcv(boolean rcvFull) {
         if (!rcvFull) {
             this.lastRcvTime = System.currentTimeMillis();
         }
@@ -218,7 +250,11 @@ public class NetChannel {
             System.out.println("rcvChannel " + channelID + ", data=" + line);
             this.sendData("echo ".getBytes());
             this.sendData((line + "\n").getBytes());
+            return 0;
         }
+
+        // 返回任务希望在延迟多久后在处理接收事件
+        return 0;//this.context.getConfig().getRetryIntervalMs();
     }
 
     //    /** 读数据 */

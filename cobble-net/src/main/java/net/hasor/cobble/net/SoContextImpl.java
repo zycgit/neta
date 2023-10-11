@@ -42,8 +42,8 @@ class SoContextImpl implements SoContext {
     private final        ExecutorService         ioExecutor;
     private final        SoExecutorFactory       executorFactory;
     private final        SoResManager            defaultRm;
-    private final        Map<Long, NetChannel>   channelMap;
-    private final        List<NetChannel>        channelList;
+    private final        Map<Long, Channel<?>>   channelMap;
+    private final        List<Channel<?>>        channelList;
     private final        Map<Long, SoResManager> specialRmMap;
 
     public SoContextImpl(SoConfig config, ExecutorService ioExec, SoExecutorFactory executorFactory) {
@@ -103,7 +103,7 @@ class SoContextImpl implements SoContext {
     }
 
     /** 新链接 */
-    public void openChannel(NetChannel channel) {
+    public void openChannel(Channel<?> channel) {
         logger.info("channel(" + channel.getChannelID() + ") created.");
         this.channelMap.put(channel.getChannelID(), channel);
         this.channelList.add(channel);
@@ -112,9 +112,9 @@ class SoContextImpl implements SoContext {
     /** 关闭所有 socket */
     public void closeAll(boolean now) {
         if (now) {
-            this.channelList.forEach(NetChannel::closeNow);
+            this.channelList.forEach(Channel::closeNow);
         } else {
-            this.channelList.forEach(NetChannel::close);
+            this.channelList.forEach(Channel::close);
         }
     }
 
@@ -122,35 +122,49 @@ class SoContextImpl implements SoContext {
     @Override
     public void closeChannel(long channelID, String message) {
         logger.info("channel(" + channelID + ") close in progress, " + message);
-        NetChannel channel = this.channelMap.get(channelID);
+        Channel<?> channel = this.channelMap.get(channelID);
         SoResManager specialRm = this.specialRmMap.get(channelID);
-
         this.channelMap.remove(channelID);
         this.specialRmMap.remove(channelID);
 
-        SoSndData data;
-        do {
-            data = channel.wQueue.poll();
-            if (data != null) {
-                try {
-                    data.failed(new ClosedChannelException());
-                } catch (Exception ignored) {
+        if (channel.isClient() || channel.isServer()) {
+            NetChannel netChannel = (NetChannel) channel;
+            SoSndData data;
+            do {
+                data = netChannel.wQueue.poll();
+                if (data != null) {
+                    try {
+                        data.failed(new ClosedChannelException());
+                    } catch (Exception ignored) {
 
+                    }
                 }
-            }
-        } while (data != null);
+            } while (data != null);
 
-        IOUtils.closeQuietly(channel.channel);
-        IOUtils.closeQuietly(specialRm);
+            IOUtils.closeQuietly(netChannel.channel);
+            IOUtils.closeQuietly(specialRm);
+            logger.info("channel(" + channelID + ") closed.");
+        } else {
 
-        logger.info("channel(" + channelID + ") closed.");
+            NetListen netListen = (NetListen) channel;
+            IOUtils.closeQuietly(netListen.channel);
+            IOUtils.closeQuietly(specialRm);
+            logger.info("listen(" + channelID + ") closed, port :" + netListen.getListenPort());
+        }
     }
 
-    /** 有新数据到达 */
-    public void notifyChannelRcv(long channelID, boolean rcvFull) {
-        NetChannel channel = this.channelMap.get(channelID);
+    /** 有新数据到达，返回值为如果需要 */
+    public int notifyChannelRcv(long channelID, boolean rcvFull) {
+        Channel<?> channel = this.channelMap.get(channelID);
         if (channel != null) {
-            channel.notifyRcv(rcvFull);
+            if (channel.isClient() || channel.isServer()) {
+                NetChannel netChannel = (NetChannel) channel;
+                return netChannel.notifyRcv(rcvFull);
+            } else {
+                throw new UnsupportedOperationException(); // 不可能发生
+            }
+        } else {
+            return 0;
         }
     }
 
@@ -193,7 +207,7 @@ class SoContextImpl implements SoContext {
     /** Socket 通道是否已经关闭 */
     @Override
     public boolean isClose(long channelID) {
-        NetChannel channel = this.channelMap.get(channelID);
+        Channel<?> channel = this.channelMap.get(channelID);
         return channel == null || channel.isClose();
     }
 }

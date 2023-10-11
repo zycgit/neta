@@ -24,7 +24,7 @@ import java.net.StandardSocketOptions;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoOptions {
+class SoOptions {
     public static final SocketOption<Integer> SO_SNDBUF        = StandardSocketOptions.SO_SNDBUF;
     public static final SocketOption<Integer> SO_RCVBUF        = StandardSocketOptions.SO_RCVBUF;
     public static final SocketOption<Boolean> SO_REUSEADDR     = StandardSocketOptions.SO_REUSEADDR;

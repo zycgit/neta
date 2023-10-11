@@ -28,15 +28,15 @@ public interface SoContext {
     /** 全局资源管理器 */
     SoResManager getResourceManager();
 
-    /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
+    /** 递交异步任务 */
     <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result);
 
-    /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
+    /** 递交异步任务 */
     <T> Future<T> submitSoTask(SoResManager rm, AbstractSoTask mainTask, T result);
 
-    /** Socket 通道是否已经关闭 */
+    /** 判断一个通道是否已经关闭 */
     boolean isClose(long channelID);
 
-    /** 立即触发 channel 的关闭，相当于 {@link NetChannel#closeNow()} */
+    /** 立即触发 channel 的关闭，相当于强制执行 {@link Channel#closeNow()} */
     void closeChannel(long channelID, String message);
 }

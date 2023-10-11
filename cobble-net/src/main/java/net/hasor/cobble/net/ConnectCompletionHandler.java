@@ -15,6 +15,7 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
@@ -41,12 +42,24 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl>
 
     @Override
     public void completed(Void result, SoContextImpl context) {
+        SocketAddress localAddr;
+        SocketAddress remoteAddr;
+        try {
+            localAddr = this.channel.getLocalAddress();
+            remoteAddr = this.channel.getRemoteAddress();
+        } catch (Exception e) {
+            IOUtils.closeQuietly(this.channel);
+            logger.error("ERROR: Accept Failed " + e.getMessage(), e);
+            this.failed(e, context);
+            return;
+        }
+
         long channelID = SoContextImpl.nextID();
-        long beginTime = System.currentTimeMillis();
+        long createdTime = System.currentTimeMillis();
         SoResManager resManager = context.newSoResManager(channelID, this.remoteAddress);
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, beginTime, this.channel, context, resManager);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, beginTime, this.channel, context, resManager);
-        NetChannel channel = new NetChannel(channelID, beginTime, this.channel, rChannel, wChannel, context, resManager);
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, this.channel, context, resManager);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, this.channel, context, resManager);
+        NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, context, resManager);
         context.openChannel(channel);
 
         // continue accept
@@ -57,7 +70,7 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl>
         }
 
         // read data
-        context.submitSoTask(new SoRcvTask(channelID, beginTime, this.channel, rChannel, context), channel);
+        context.submitSoTask(new SoRcvTask(channelID, createdTime, this.channel, rChannel, context), channel);
         this.future.completed(channel);
     }
 

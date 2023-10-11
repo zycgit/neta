@@ -32,17 +32,17 @@ import java.util.concurrent.TimeUnit;
 class SoSndTask extends AbstractSoTask {
     private static final Logger                    logger = Logger.getLogger(SoSndTask.class);
     private final        long                      channelID;
-    private final        long                      beginTime;
+    private final        long                      createdTime;
     private final        AsynchronousSocketChannel channel;
     private final        SoSndCompletionHandler    wHandler;
     private final        SoContextImpl             context;
     //
     private final        List<SoSndData>           afterFinish;
 
-    public SoSndTask(long channelID, long beginTime, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler,//
+    public SoSndTask(long channelID, long createdTime, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler,//
             SoContextImpl context, List<SoSndData> afterFinish) {
         this.channelID = channelID;
-        this.beginTime = beginTime;
+        this.createdTime = createdTime;
         this.channel = channel;
         this.wHandler = wHandler;
         this.context = context;
@@ -76,7 +76,7 @@ class SoSndTask extends AbstractSoTask {
             this.finishTask();
         } catch (Exception e) {
             if (e instanceof NotYetConnectedException) {
-                long costTimeMs = System.currentTimeMillis() - this.beginTime;
+                long costTimeMs = System.currentTimeMillis() - this.createdTime;
                 if (costTimeMs < this.context.getConnectTimeoutMs()) {
                     if (logger.isDebugEnabled()) {
                         logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
