@@ -16,8 +16,8 @@
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBufUtil;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.concurrent.future.Future;
 
-import java.io.IOException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
@@ -45,14 +45,24 @@ public class SocketServerTest {
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         try (CobbleSocket socket = new CobbleSocket(config)) {
-            socket.listen("127.0.0.1", 5567).onCompleted(f -> read());
+            socket.listen("127.0.0.1", 5567).onCompleted(SocketServerTest::read);
         }
     }
 
-    private static void read() {
+    private static void read(Future<NetListen> f) {
         try {
+            System.out.println("10s after suspend.");
+            NetListen netListen = f.get();
+            ThreadUtils.sleep(10000);
+            netListen.suspend();
+
+            System.out.println("5s after resume.");
+            ThreadUtils.sleep(5000);
+            netListen.resume();
+
+            System.out.println("resume.");
             System.in.read();
-        } catch (IOException e) {
+        } catch (Exception e) {
             throw new RuntimeException(e);
         }
     }

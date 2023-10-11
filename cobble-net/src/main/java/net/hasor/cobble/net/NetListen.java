@@ -33,6 +33,7 @@ public class NetListen implements Channel<NetListen> {
     private final   InetSocketAddress               listen;
     protected final AsynchronousServerSocketChannel channel;
     private final   SoContextImpl                   context;
+    private         boolean                         suspend;
     //
     protected final AtomicBoolean                   closeStatus;
     protected final Future<NetListen>               closeFuture;
@@ -77,6 +78,21 @@ public class NetListen implements Channel<NetListen> {
     @Override
     public boolean isClient() {
         return false;
+    }
+
+    /** 侦听器是否被挂起，监听器被挂起后侦听端口仍然打开，但是所有传入的链接都会被 close。 */
+    public boolean isSuspend() {
+        return this.suspend;
+    }
+
+    /** 监听器挂起，监听器被挂起后侦听端口仍然打开，但是所有传入的链接都会被 close */
+    public void suspend() {
+        this.suspend = true;
+    }
+
+    /** 监听器恢复，恢复后可以继续处理传入的链接 */
+    public void resume() {
+        this.suspend = false;
     }
 
     /** 获取侦听的端口号 */

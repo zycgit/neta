@@ -43,6 +43,12 @@ class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketCha
         // accept the next connection
         this.acceptChannel.accept(context, this);
 
+        // listen is suspend
+        if (this.forListen.isSuspend()) {
+            IOUtils.closeQuietly(result);
+            return;
+        }
+
         // acceptChannel
         SocketAddress localAddr;
         SocketAddress remoteAddr;
