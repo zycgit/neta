@@ -88,8 +88,18 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
+    public int readBytes() {
+        return this.readerIndex - this.markedReaderIndex;
+    }
+
+    @Override
     public int writableBytes() {
         return this.capacity() - (this.writerIndex() - this.markedReaderIndex);
+    }
+
+    @Override
+    public int writedBytes() {
+        return this.writerIndex - this.markedWriterIndex;
     }
 
     // 先扩容在移指针

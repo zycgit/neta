@@ -108,7 +108,10 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         if (available == 0) {
             return -1;
         }
-        return this.buffer.readByte() & 0xff;
+
+        int len = this.buffer.readByte() & 0xff;
+        this.buffer.markReader();
+        return len;
     }
 
     @Override
@@ -120,21 +123,27 @@ public class ByteBufInputStream extends InputStream implements DataInput {
 
         len = Math.min(available, len);
         this.buffer.readBytes(b, off, len);
+        this.buffer.markReader();
         return len;
     }
 
     @Override
     public long skip(long n) {
+        long len;
         if (n > Integer.MAX_VALUE) {
-            return this.skipBytes(Integer.MAX_VALUE);
+            len = this.skipBytes(Integer.MAX_VALUE);
         } else {
-            return this.skipBytes((int) n);
+            len = this.skipBytes((int) n);
         }
+        this.buffer.markReader();
+        return len;
     }
 
     @Override
     public boolean readBoolean() throws IOException {
-        return this.read() != 0;
+        int res = this.read();
+        this.buffer.markReader();
+        return res != 0;
     }
 
     @Override
@@ -143,22 +152,30 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         if (available == 0) {
             throw new EOFException();
         }
-        return this.buffer.readByte();
+        byte res = this.buffer.readByte();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public char readChar() {
-        return (char) this.readShort();
+        char res = (char) this.readShort();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public double readDouble() {
-        return this.buffer.readFloat64();
+        double res = this.buffer.readFloat64();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public float readFloat() {
-        return this.buffer.readFloat32();
+        float res = this.buffer.readFloat32();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
@@ -169,51 +186,75 @@ public class ByteBufInputStream extends InputStream implements DataInput {
     @Override
     public void readFully(byte[] b, int off, int len) {
         this.buffer.readBytes(b, off, len);
+        this.buffer.markReader();
     }
 
     @Override
     public int readInt() {
-        return this.buffer.readInt32();
+        int res = this.buffer.readInt32();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public String readLine() {
-        return this.buffer.readLine();
+        String line = this.buffer.readLine();
+        this.buffer.markReader();
+        return line;
     }
 
     public String readLine(Charset charset) {
-        return this.buffer.readLine(charset);
+        String line = this.buffer.readLine(charset);
+        this.buffer.markReader();
+        return line;
     }
 
     @Override
     public long readLong() {
-        return this.buffer.readInt64();
+        long res = this.buffer.readInt64();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public short readShort() {
-        return this.buffer.readInt16();
+        short res = this.buffer.readInt16();
+        this.buffer.markReader();
+        return res;
+    }
+
+    public int readMiddle() {
+        int res = this.buffer.readInt24();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public String readUTF() throws IOException {
-        return DataInputStream.readUTF(this);
+        String utf = DataInputStream.readUTF(this);
+        this.buffer.markReader();
+        return utf;
     }
 
     @Override
     public int readUnsignedByte() {
-        return this.buffer.readUInt8();
+        int res = this.buffer.readUInt8();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public int readUnsignedShort() {
-        return this.buffer.readUInt16();
+        int res = this.buffer.readUInt16();
+        this.buffer.markReader();
+        return res;
     }
 
     @Override
     public int skipBytes(int n) {
         int nBytes = Math.min(available(), n);
         this.buffer.skipReadableBytes(nBytes);
+        this.buffer.markReader();
         return nBytes;
     }
 }

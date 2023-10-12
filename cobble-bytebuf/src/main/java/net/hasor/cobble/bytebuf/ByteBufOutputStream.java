@@ -35,12 +35,22 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
     private final ByteBuf          buffer;
     private       DataOutputStream utf8out; // lazily-instantiated
     private       boolean          closed;
+    private final int              cacheSize;
+
+    /**
+     * Creates a new stream which writes data to the specified {@code buffer}. (no cache)
+     */
+    public ByteBufOutputStream(ByteBuf buffer) {
+        this(buffer, -1);
+    }
 
     /**
      * Creates a new stream which writes data to the specified {@code buffer}.
+     * @param cacheSize -1 is no cache
      */
-    public ByteBufOutputStream(ByteBuf buffer) {
+    public ByteBufOutputStream(ByteBuf buffer, int cacheSize) {
         this.buffer = Objects.requireNonNull(buffer, "buffer");
+        this.cacheSize = cacheSize;
     }
 
     /**
@@ -57,69 +67,87 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         }
 
         this.buffer.writeBytes(b, off, len);
+        autoFlash();
     }
 
     @Override
     public void write(byte[] b) throws IOException {
         this.buffer.writeBytes(b);
+        autoFlash();
     }
 
     @Override
     public void write(int b) throws IOException {
         this.buffer.writeByte((byte) b);
+        autoFlash();
     }
 
     @Override
-    public void writeBoolean(boolean v) {
+    public void writeBoolean(boolean v) throws IOException {
         this.buffer.writeByte((byte) (v ? 1 : 0));
+        autoFlash();
     }
 
     @Override
     public void writeByte(int v) throws IOException {
         this.buffer.writeByte((byte) v);
+        autoFlash();
     }
 
     @Override
     public void writeBytes(String s) throws IOException {
         this.buffer.writeString(s, StandardCharsets.US_ASCII);
+        autoFlash();
     }
 
     @Override
-    public void writeChar(int v) {
+    public void writeChar(int v) throws IOException {
         this.buffer.writeInt16((short) v);
+        autoFlash();
     }
 
     @Override
-    public void writeChars(String s) {
+    public void writeChars(String s) throws IOException {
         int len = s.length();
         for (int i = 0; i < len; i++) {
             this.buffer.writeInt16((short) s.charAt(i));
+            autoFlash();
         }
     }
 
     @Override
-    public void writeDouble(double v) {
+    public void writeDouble(double v) throws IOException {
         this.buffer.writeFloat64(v);
+        autoFlash();
     }
 
     @Override
-    public void writeFloat(float v) {
+    public void writeFloat(float v) throws IOException {
         this.buffer.writeFloat32(v);
+        autoFlash();
     }
 
     @Override
-    public void writeInt(int v) {
+    public void writeInt(int v) throws IOException {
         this.buffer.writeInt32(v);
+        autoFlash();
     }
 
     @Override
-    public void writeLong(long v) {
+    public void writeLong(long v) throws IOException {
         this.buffer.writeInt64(v);
+        autoFlash();
     }
 
     @Override
-    public void writeShort(int v) {
+    public void writeShort(int v) throws IOException {
         this.buffer.writeInt16((short) v);
+        autoFlash();
+    }
+
+    public void writeMiddle(int v) throws IOException {
+        this.buffer.writeInt24(v);
+        autoFlash();
     }
 
     @Override
@@ -133,6 +161,15 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
             this.utf8out = out = new DataOutputStream(this);
         }
         out.writeUTF(s);
+        autoFlash();
+    }
+
+    private void autoFlash() throws IOException {
+        if (this.cacheSize < 0) {
+            return;
+        } else if (this.buffer.writedBytes() >= this.cacheSize) {
+            this.flush();
+        }
     }
 
     /**
@@ -140,6 +177,11 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
      */
     public ByteBuf buffer() {
         return buffer;
+    }
+
+    @Override
+    public void flush() throws IOException {
+        this.buffer.flush();
     }
 
     @Override

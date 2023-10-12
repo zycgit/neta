@@ -91,6 +91,11 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public int readBytes() {
+        return this.byteBuf.readBytes();
+    }
+
+    @Override
     public boolean hasReadable() {
         return this.byteBuf.hasReadable();
     }
@@ -98,6 +103,11 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public int writableBytes() {
         return this.byteBuf.writableBytes();
+    }
+
+    @Override
+    public int writedBytes() {
+        return this.byteBuf.writedBytes();
     }
 
     @Override

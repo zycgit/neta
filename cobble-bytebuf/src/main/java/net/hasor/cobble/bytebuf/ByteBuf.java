@@ -71,6 +71,12 @@ public interface ByteBuf extends ByteChannel {
      */
     int readableBytes();
 
+    /**
+     * Returns the number of read bytes which is equal to
+     * {@code (readIndex - readMark)}.
+     */
+    int readBytes();
+
     /** 可以进行读 */
     default boolean hasReadable() {
         return readableBytes() > 0;
@@ -81,6 +87,12 @@ public interface ByteBuf extends ByteChannel {
      * {@code (capacity - (writerIndex - readMark))}.
      */
     int writableBytes();
+
+    /**
+     * Returns the number of writed bytes which is equal to
+     * {@code (writerIndex - writerMark)}.
+     */
+    int writedBytes();
 
     /** 可以进行写入 */
     default boolean hasWritable() {

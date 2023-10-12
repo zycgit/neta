@@ -30,8 +30,56 @@ public class StreamByteBufTest {
     }
 
     @Test
-    public void writeByteTest02() throws IOException {
-        //        ByteBufInputStream
-        //                ByteBufOutputStream
+    public void inputStreamByteTest02() throws IOException {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(17);
+
+        byteBuf.writeInt16((short) 30047);
+        byteBuf.writeInt24(15793921);
+        byteBuf.writeInt32(1894780842);
+        byteBuf.writeInt64(8071575397336023920L);
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == 0;
+
+        byteBuf.flush();
+        assert byteBuf.readableBytes() == byteBuf.capacity();
+        assert byteBuf.writableBytes() == 0;
+
+        ByteBufInputStream bufIn = new ByteBufInputStream(byteBuf);
+        assert bufIn.readShort() == 30047;
+        assert bufIn.readMiddle() == 15793921;
+        assert bufIn.readInt() == 1894780842;
+        assert bufIn.readLong() == 8071575397336023920L;
+
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == byteBuf.capacity();
+    }
+
+    @Test
+    public void outputStreamByteTest01() throws IOException {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(17);
+
+        ByteBufOutputStream bufOutput = new ByteBufOutputStream(byteBuf);
+        bufOutput.writeShort((short) 30047);
+        bufOutput.writeMiddle(15793921);
+        bufOutput.writeInt(1894780842);
+        bufOutput.writeLong(8071575397336023920L);
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == 0;
+
+        bufOutput.flush();
+        assert byteBuf.readableBytes() == byteBuf.capacity();
+        assert byteBuf.writableBytes() == 0;
+
+        assert byteBuf.readableBytes() == byteBuf.capacity();
+        assert byteBuf.writableBytes() == 0;
+
+        ByteBufInputStream bufIn = new ByteBufInputStream(byteBuf);
+        assert bufIn.readShort() == 30047;
+        assert bufIn.readMiddle() == 15793921;
+        assert bufIn.readInt() == 1894780842;
+        assert bufIn.readLong() == 8071575397336023920L;
+
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == byteBuf.capacity();
     }
 }

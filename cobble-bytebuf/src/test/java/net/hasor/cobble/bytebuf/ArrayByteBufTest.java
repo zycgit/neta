@@ -13,6 +13,7 @@ public class ArrayByteBufTest {
     public void writeByteTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
+        byteBuf.resetWriter();
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -57,6 +58,7 @@ public class ArrayByteBufTest {
     public void writeByteTest02() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
+        byteBuf.resetWriter();
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -93,6 +95,7 @@ public class ArrayByteBufTest {
     public void writeBytesTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
+        byteBuf.resetWriter();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
 
@@ -136,6 +139,7 @@ public class ArrayByteBufTest {
         byte[] array = new byte[4];
         byte[] arrayRead = new byte[6];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
+        byteBuf.resetWriter();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         byteBuf.markWriter();
@@ -505,5 +509,17 @@ public class ArrayByteBufTest {
             byteBuf.markReader();
             assert str.equals("1234");
         }
+    }
+
+    @Test
+    public void readByteTest01() {
+        byte[] array = new byte[] { 1, 2, 3, 4 };
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
     }
 }
