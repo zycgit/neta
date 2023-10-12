@@ -49,7 +49,7 @@ class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl>
             remoteAddr = this.channel.getRemoteAddress();
         } catch (Exception e) {
             IOUtils.closeQuietly(this.channel);
-            logger.error("ERROR: Accept Failed " + e.getMessage(), e);
+            logger.error("ERROR: Connect Failed " + e.getMessage(), e);
             this.failed(e, context);
             return;
         }

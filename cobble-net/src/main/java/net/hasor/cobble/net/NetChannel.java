@@ -137,15 +137,19 @@ public class NetChannel implements Channel<NetChannel> {
 
     @Override
     public Future<NetChannel> close() {
-        if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
-            SoCloseTask task = new SoCloseTask(this.channelID, this.context);
-            this.context.submitSoTask(this.rm, task, this).onCompleted(f -> {
-                closeFuture.completed(this);
-            }).onFailed(f -> {
-                closeFuture.failed(f.getCause());
-            }).onCancel(f -> {
-                closeFuture.cancel();
-            });
+        if (this.closeStatus.compareAndSet(false, true)) {
+            if (this.channel.isOpen()) {
+                SoCloseTask task = new SoCloseTask(this.channelID, this.context);
+                this.context.submitSoTask(this.rm, task, this).onCompleted(f -> {
+                    closeFuture.completed(this);
+                }).onFailed(f -> {
+                    closeFuture.failed(f.getCause());
+                }).onCancel(f -> {
+                    closeFuture.cancel();
+                });
+            } else {
+                this.closeFuture.completed(this);
+            }
         }
         return this.closeFuture;
     }

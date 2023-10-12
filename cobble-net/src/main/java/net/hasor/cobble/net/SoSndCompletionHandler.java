@@ -39,7 +39,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        ByteBuf                   sndBuffer;
     //
     private              int                       sndSize;
-    private              boolean                   sndWorking;
+    private volatile     boolean                   sndWorking;
     private              List<SoSndData>           afterWorking1;
 
     public SoSndCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
@@ -119,7 +119,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 long costTimeMs = System.currentTimeMillis() - this.createdTime;
                 if (costTimeMs < this.context.getConnectTimeoutMs()) {
                     if (logger.isDebugEnabled()) {
-                        logger.debug("snd(" + this.channelID + ") NotYetConnected, read try again later.");
+                        logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
                     }
                     submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
                         writeData();

@@ -223,7 +223,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
-    public int readMiddle() {
+    public int readMedium() {
         int res = this.buffer.readInt24();
         this.buffer.markReader();
         return res;

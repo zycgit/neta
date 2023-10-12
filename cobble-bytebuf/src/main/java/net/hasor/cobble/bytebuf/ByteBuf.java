@@ -18,6 +18,7 @@ import net.hasor.cobble.function.EFunction;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.channels.ByteChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
@@ -54,6 +55,12 @@ public interface ByteBuf extends ByteChannel {
 
     /** 返回 ByteBuffer 形态，PooledNioByteBuf 不支持该方法 */
     ByteBuffer asByteBuffer();
+
+    /** 字节序 */
+    ByteOrder order();
+
+    /** 设置字节序 */
+    ByteBuf order(ByteOrder newOrder);
 
     /** 释放 Buffer 占用的内存 */
     void free();
@@ -218,6 +225,9 @@ public interface ByteBuf extends ByteChannel {
 
     /** use copy form src ByteBuffer */
     int write(ByteBuffer src);
+
+    //    /** use copy form src ByteBuffer */
+    //    int write(ByteBuf src);
 
     /** 字符串会以 str.getBytes(charset) 方式转换为字节数组并写入缓存。返回值是写入的字节数。
      * 如果 writerIndex + [string 字节数组长度] > capacity 则会引发 {@link IndexOutOfBoundsException} 异常 */
@@ -384,6 +394,9 @@ public interface ByteBuf extends ByteChannel {
 
     /** use copy to dst */
     int read(ByteBuf dst);
+
+    //    /** 读取 len 数量的字节，并将它们存储到 off 位置开始的缓冲区数组 b 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1。 */
+    //    int read(ByteBuf dst, int off, int len);
 
     /** 读取 len 字节并将其构造成 String，读取后 readerIndex 会增加 len。
      * 如果 readableBytes() < len 则会引发 {@link IndexOutOfBoundsException} 异常 */

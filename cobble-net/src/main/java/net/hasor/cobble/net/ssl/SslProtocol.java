@@ -19,49 +19,43 @@ package net.hasor.cobble.net.ssl;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public enum SslProtocol {
+public interface SslProtocol {
     /**
      * SSL v2 Hello
      * @deprecated SSLv2Hello is no longer secure. Consider using {@link #TLS_v1_2} or {@link #TLS_v1_3}
      */
-    @Deprecated SSL_v2Hello("SSLv2Hello"),
+    @Deprecated
+    String SSL_v2Hello = "SSLv2Hello";
     /**
-     * SSL v2
+     * SSLv2，Supports SSL version 2 or later; may support other versions
      * @deprecated SSLv2 is no longer secure. Consider using {@link #TLS_v1_2} or {@link #TLS_v1_3}
      */
-    @Deprecated SSL_v2("SSLv2"),
+    @Deprecated
+    String SSL_v2      = "SSLv2";
     /**
-     * SSLv3
+     * SSLv3，Supports SSL version 3; may support other versions
      * @deprecated SSLv3 is no longer secure. Consider using {@link #TLS_v1_2} or {@link #TLS_v1_3}
      */
-    @Deprecated SSL_v3("SSLv3"),
+    @Deprecated
+    String SSL_v3      = "SSLv3";
     /**
-     * TLS v1
+     * TLS v1，Supports RFC 2246: TLS version 1.0 ; may support other versions
      * @deprecated TLSv1 is no longer secure. Consider using {@link #TLS_v1_2} or {@link #TLS_v1_3}
      */
-    @Deprecated TLS_v1("TLSv1"),
+    @Deprecated
+    String TLS_v1      = "TLSv1";
     /**
-     * TLS v1.1
+     * TLS v1.1，Supports RFC 4346: TLS version 1.1 ; may support other versions
      * @deprecated TLSv1.1 is no longer secure. Consider using {@link #TLS_v1_2} or {@link #TLS_v1_3}
      */
-    @Deprecated TLS_v1_1("TLSv1.1"),
+    @Deprecated
+    String TLS_v1_1    = "TLSv1.1";
     /**
-     * TLS v1.2
+     * TLS v1.2，Supports RFC 5246: TLS version 1.2 ; may support other versions
      */
-    TLS_v1_2("TLSv1.2"),
+    String TLS_v1_2 = "TLSv1.2";
     /**
      * TLS v1.3
      */
-    TLS_v1_3("TLSv1.3"),
-    ;
-
-    private final String protocol;
-
-    SslProtocol(String protocol) {
-        this.protocol = protocol;
-    }
-
-    public String getProtocol() {
-        return this.protocol;
-    }
+    String TLS_v1_3 = "TLSv1.3";
 }

@@ -19,6 +19,7 @@ import net.hasor.cobble.function.EFunction;
 import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 
 import static net.hasor.cobble.bytebuf.Bits.*;
 
@@ -35,6 +36,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     protected       int              writerIndex;
     private final   int              maxCapacity;
     private         boolean          isFree;
+    protected       ByteOrder        byteOrder        = ByteOrder.BIG_ENDIAN;
     protected final Object           synchronizedLock = new Object();
 
     protected AbstractByteBuf(ByteBufAllocator alloc, int maxCapacity) {
@@ -61,6 +63,21 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public boolean isFree() {
         return this.isFree;
+    }
+
+    @Override
+    public ByteOrder order() {
+        return this.byteOrder;
+    }
+
+    @Override
+    public ByteBuf order(ByteOrder newOrder) {
+        this.byteOrder = newOrder;
+        return this;
+    }
+
+    private boolean isBig() {
+        return this.byteOrder == ByteOrder.BIG_ENDIAN;
     }
 
     protected abstract void _putByte(int offset, byte b);
@@ -261,27 +278,27 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public void writeInt16(short n) {
-        encodeInt16(this, nextWritable(2), n, true);
+        encodeInt16(this, nextWritable(2), n, isBig());
     }
 
     @Override
     public void writeInt24(int n) {
-        encodeInt24(this, nextWritable(3), n, true);
+        encodeInt24(this, nextWritable(3), n, isBig());
     }
 
     @Override
     public void writeInt32(int n) {
-        encodeInt32(this, nextWritable(4), n, true);
+        encodeInt32(this, nextWritable(4), n, isBig());
     }
 
     @Override
     public void writeUInt32(long n) {
-        encodeInt32(this, nextWritable(4), n, true);
+        encodeInt32(this, nextWritable(4), n, isBig());
     }
 
     @Override
     public void writeInt64(long n) {
-        encodeInt64(this, nextWritable(8), n, true);
+        encodeInt64(this, nextWritable(8), n, isBig());
     }
 
     @Override
@@ -326,22 +343,22 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public void setInt16(int offset, short n) {
-        encodeInt16(this, offsetWritable(offset, 2), n, true);
+        encodeInt16(this, offsetWritable(offset, 2), n, isBig());
     }
 
     @Override
     public void setInt24(int offset, int n) {
-        encodeInt24(this, offsetWritable(offset, 3), n, true);
+        encodeInt24(this, offsetWritable(offset, 3), n, isBig());
     }
 
     @Override
     public void setInt32(int offset, int n) {
-        encodeInt32(this, offsetWritable(offset, 4), n, true);
+        encodeInt32(this, offsetWritable(offset, 4), n, isBig());
     }
 
     @Override
     public void setInt64(int offset, long n) {
-        encodeInt64(this, offsetWritable(offset, 8), n, true);
+        encodeInt64(this, offsetWritable(offset, 8), n, isBig());
     }
 
     @Override
@@ -377,22 +394,22 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public short readInt16() {
-        return dencodeInt16(this, nextReadable(2), true);
+        return dencodeInt16(this, nextReadable(2), isBig());
     }
 
     @Override
     public int readInt24() {
-        return dencodeInt24(this, nextReadable(3), true);
+        return dencodeInt24(this, nextReadable(3), isBig());
     }
 
     @Override
     public int readInt32() {
-        return dencodeInt32(this, nextReadable(4), true);
+        return dencodeInt32(this, nextReadable(4), isBig());
     }
 
     @Override
     public long readInt64() {
-        return dencodeInt64(this, nextReadable(8), true);
+        return dencodeInt64(this, nextReadable(8), isBig());
     }
 
     @Override
@@ -438,22 +455,22 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public short getInt16(int offset) {
-        return dencodeInt16(this, checkReadable(offset, 2), true);
+        return dencodeInt16(this, checkReadable(offset, 2), isBig());
     }
 
     @Override
     public int getInt24(int offset) {
-        return dencodeInt24(this, checkReadable(offset, 3), true);
+        return dencodeInt24(this, checkReadable(offset, 3), isBig());
     }
 
     @Override
     public int getInt32(int offset) {
-        return dencodeInt32(this, checkReadable(offset, 4), true);
+        return dencodeInt32(this, checkReadable(offset, 4), isBig());
     }
 
     @Override
     public long getInt64(int offset) {
-        return dencodeInt64(this, checkReadable(offset, 8), true);
+        return dencodeInt64(this, checkReadable(offset, 8), isBig());
     }
 
     @Override
@@ -483,17 +500,17 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public int readUInt16() {
-        return dencodeUInt16(this, nextReadable(2), true);
+        return dencodeUInt16(this, nextReadable(2), isBig());
     }
 
     @Override
     public int readUInt24() {
-        return dencodeUInt24(this, nextReadable(3), true);
+        return dencodeUInt24(this, nextReadable(3), isBig());
     }
 
     @Override
     public long readUInt32() {
-        return dencodeUInt32(this, nextReadable(4), true);
+        return dencodeUInt32(this, nextReadable(4), isBig());
     }
 
     @Override
@@ -518,17 +535,17 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public int getUInt16(int offset) {
-        return dencodeUInt16(this, checkReadable(offset, 2), true);
+        return dencodeUInt16(this, checkReadable(offset, 2), isBig());
     }
 
     @Override
     public int getUInt24(int offset) {
-        return dencodeUInt24(this, checkReadable(offset, 3), true);
+        return dencodeUInt24(this, checkReadable(offset, 3), isBig());
     }
 
     @Override
     public long getUInt32(int offset) {
-        return dencodeUInt32(this, checkReadable(offset, 4), true);
+        return dencodeUInt32(this, checkReadable(offset, 4), isBig());
     }
 
     @Override
@@ -591,6 +608,29 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
         return copied;
     }
+
+    //    @Override
+    //    public int read(ByteBuf dst, int off, int len) {
+    //        int copied = 0;
+    //        int srcReadableBytes;
+    //        byte[] buf = new byte[len];
+    //
+    //        while (true) {
+    //            if ((srcReadableBytes = this.readableBytes()) == 0 || !dst.hasWritable()) {
+    //                break;
+    //            }
+    //
+    //            int useLen = Math.min(Math.min(len, dst.writableBytes()), Math.min(buf.length, srcReadableBytes));
+    //            int readBytes = this.readBytes(buf, off, useLen);
+    //            if (readBytes <= 0) {
+    //                break;
+    //            }
+    //            dst.writeBytes(buf, copied, readBytes);
+    //            copied += readBytes;
+    //        }
+    //
+    //        return copied;
+    //    }
 
     @Override
     public int write(ByteBuffer src) {

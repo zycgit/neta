@@ -14,19 +14,33 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.ssl;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManagerFactory;
+import java.security.KeyStore;
+import java.util.List;
+
 /**
  * SSL 配置
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SslConfig {
-    private boolean       enable       = false;
-    private SslProtocol   protocol     = SslProtocol.TLS_v1_2;  // default is TLS_v1_2
-    private SslProvider   provider     = SslProvider.JDK;       // default is JDK
-    private SslClientAuth clientAuth   = SslClientAuth.NONE;    //
-    private String        pemCertChain = null;                  // X.509 certificate chain in PEM format.
-    private String        pemPrivate   = null;                  // PKCS#8 private key in PEM format.
-    private String        keyPassword  = null;
+    private boolean             enable              = false;
+    private SslProvider         provider            = SslProvider.JDK;      // default is JDK
+    private SslClientAuth       clientAuth          = SslClientAuth.NONE;   //
+    private List<String>        appProtocol         = null;                 // NPN/ALPN SSL 扩展协议，SSL 握手后使用的应用协议
+    private String[]            ciphers             = null;                 // JSSE Cipher Suite Names 使用的密钥套件
+    private String[]            protocols           = null;                 // The TLS protocol versions to enable.
+    //
+    private SslAuthKeyType      authType            = null;
+    private String              jksResource         = null;                 // JKS File
+    private String              pemCertChain        = null;                 // X.509 certificate chain in PEM format.
+    private String              pemPrivate          = null;                 // PKCS#8 private key in PEM format.
+    private String              keyPassword         = null;
+    //
+    private KeyStore            keyStore            = null;
+    private KeyManagerFactory   keyManagerFactory   = null;
+    private TrustManagerFactory trustManagerFactory = null;
 
     public boolean isEnable() {
         return this.enable;
@@ -34,14 +48,6 @@ public class SslConfig {
 
     public void setEnable(boolean enable) {
         this.enable = enable;
-    }
-
-    public SslProtocol getProtocol() {
-        return this.protocol;
-    }
-
-    public void setProtocol(SslProtocol protocol) {
-        this.protocol = protocol;
     }
 
     public SslProvider getProvider() {
@@ -58,6 +64,46 @@ public class SslConfig {
 
     public void setClientAuth(SslClientAuth clientAuth) {
         this.clientAuth = clientAuth;
+    }
+
+    public List<String> getAppProtocol() {
+        return this.appProtocol;
+    }
+
+    public void setAppProtocol(List<String> appProtocol) {
+        this.appProtocol = appProtocol;
+    }
+
+    public String[] getCiphers() {
+        return this.ciphers;
+    }
+
+    public void setCiphers(String[] ciphers) {
+        this.ciphers = ciphers;
+    }
+
+    public String[] getProtocols() {
+        return this.protocols;
+    }
+
+    public void setProtocols(String[] protocols) {
+        this.protocols = protocols;
+    }
+
+    public SslAuthKeyType getAuthType() {
+        return this.authType;
+    }
+
+    public void setAuthType(SslAuthKeyType authType) {
+        this.authType = authType;
+    }
+
+    public String getJksResource() {
+        return this.jksResource;
+    }
+
+    public void setJksResource(String jksResource) {
+        this.jksResource = jksResource;
     }
 
     public String getPemCertChain() {
@@ -82,5 +128,29 @@ public class SslConfig {
 
     public void setKeyPassword(String keyPassword) {
         this.keyPassword = keyPassword;
+    }
+
+    public KeyStore getKeyStore() {
+        return this.keyStore;
+    }
+
+    public void setKeyStore(KeyStore keyStore) {
+        this.keyStore = keyStore;
+    }
+
+    public KeyManagerFactory getKeyManagerFactory() {
+        return this.keyManagerFactory;
+    }
+
+    public void setKeyManagerFactory(KeyManagerFactory keyManagerFactory) {
+        this.keyManagerFactory = keyManagerFactory;
+    }
+
+    public TrustManagerFactory getTrustManagerFactory() {
+        return this.trustManagerFactory;
+    }
+
+    public void setTrustManagerFactory(TrustManagerFactory trustManagerFactory) {
+        this.trustManagerFactory = trustManagerFactory;
     }
 }

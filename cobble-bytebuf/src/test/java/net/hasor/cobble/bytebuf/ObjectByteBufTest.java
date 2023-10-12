@@ -1,6 +1,7 @@
 package net.hasor.cobble.bytebuf;
 import org.junit.Test;
 
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 
 public class ObjectByteBufTest {
@@ -71,6 +72,42 @@ public class ObjectByteBufTest {
     }
 
     @Test
+    public void intLEObjectTest03() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(40);
+        byteBuf.skipWritableBytes(40);
+
+        byteBuf.order(ByteOrder.LITTLE_ENDIAN);
+        byteBuf.setInt16(0, (short) 30047);
+        byteBuf.setInt24(10, 15793921);
+        byteBuf.setInt32(20, 1894780842);
+        byteBuf.setInt64(30, 8071575397336023920L);
+
+        byteBuf.markWriter();
+        assert byteBuf.getInt16LE(0) == 30047;
+        assert byteBuf.getInt24LE(10) == 15793921;
+        assert byteBuf.getInt32LE(20) == 1894780842;
+        assert byteBuf.getInt64LE(30) == 8071575397336023920L;
+    }
+
+    @Test
+    public void intLEObjectTest04() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(40);
+        byteBuf.skipWritableBytes(40);
+
+        byteBuf.order(ByteOrder.LITTLE_ENDIAN);
+        byteBuf.setInt16LE(0, (short) 30047);
+        byteBuf.setInt24LE(10, 15793921);
+        byteBuf.setInt32LE(20, 1894780842);
+        byteBuf.setInt64(30, 8071575397336023920L);
+
+        byteBuf.markWriter();
+        assert byteBuf.getInt16LE(0) == 30047;
+        assert byteBuf.getInt24LE(10) == 15793921;
+        assert byteBuf.getInt32LE(20) == 1894780842;
+        assert byteBuf.getInt64LE(30) == 8071575397336023920L;
+    }
+
+    @Test
     public void floatObjectTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
 
@@ -112,6 +149,33 @@ public class ObjectByteBufTest {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
         byteBuf.skipWritableBytes(40);
 
+        byteBuf.setFloat32LE(0, 999999.999999f);
+        byteBuf.setFloat64LE(10, 123456789123456789.123456789123456789123456789123456789d);
+        byteBuf.markWriter();
+
+        assert byteBuf.getFloat32LE(0) == 999999.999999f;
+        assert byteBuf.getFloat64LE(10) == 123456789123456789.123456789123456789123456789123456789d;
+    }
+
+    @Test
+    public void floatLEObjectTest03() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+
+        byteBuf.order(ByteOrder.LITTLE_ENDIAN);
+        byteBuf.writeFloat32(999999.999999f);
+        byteBuf.writeFloat64(123456789123456789.123456789123456789123456789123456789d);
+        byteBuf.markWriter();
+
+        assert byteBuf.readFloat32LE() == 999999.999999f;
+        assert byteBuf.readFloat64LE() == 123456789123456789.123456789123456789123456789123456789d;
+    }
+
+    @Test
+    public void floatLEObjectTest04() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        byteBuf.skipWritableBytes(40);
+
+        byteBuf.order(ByteOrder.LITTLE_ENDIAN);
         byteBuf.setFloat32LE(0, 999999.999999f);
         byteBuf.setFloat64LE(10, 123456789123456789.123456789123456789123456789123456789d);
         byteBuf.markWriter();

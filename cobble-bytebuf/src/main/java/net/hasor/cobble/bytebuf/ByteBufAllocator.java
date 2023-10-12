@@ -19,11 +19,11 @@ import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
- * Implementations are responsible to allocate buffers.
- * Implementations of this interface are expected to be thread-safe.
+ * <p>Implementations are responsible to allocate buffers.</p>
  *
- * interface reference netty io.netty.buffer.ByteBufAllocator,
- * The ByteBuf implementation is replaced with cobble.bytebuf
+ * <p>Interface design reference netty io.netty.buffer.ByteBufAllocator,
+ * The ByteBuf implementation is replaced with cobble.bytebuf</p>
+ *
  * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
  */

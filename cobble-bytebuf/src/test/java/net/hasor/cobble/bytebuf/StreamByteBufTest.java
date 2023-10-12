@@ -46,7 +46,7 @@ public class StreamByteBufTest {
 
         ByteBufInputStream bufIn = new ByteBufInputStream(byteBuf);
         assert bufIn.readShort() == 30047;
-        assert bufIn.readMiddle() == 15793921;
+        assert bufIn.readMedium() == 15793921;
         assert bufIn.readInt() == 1894780842;
         assert bufIn.readLong() == 8071575397336023920L;
 
@@ -60,7 +60,7 @@ public class StreamByteBufTest {
 
         ByteBufOutputStream bufOutput = new ByteBufOutputStream(byteBuf);
         bufOutput.writeShort((short) 30047);
-        bufOutput.writeMiddle(15793921);
+        bufOutput.writeMedium(15793921);
         bufOutput.writeInt(1894780842);
         bufOutput.writeLong(8071575397336023920L);
         assert byteBuf.readableBytes() == 0;
@@ -75,7 +75,7 @@ public class StreamByteBufTest {
 
         ByteBufInputStream bufIn = new ByteBufInputStream(byteBuf);
         assert bufIn.readShort() == 30047;
-        assert bufIn.readMiddle() == 15793921;
+        assert bufIn.readMedium() == 15793921;
         assert bufIn.readInt() == 1894780842;
         assert bufIn.readLong() == 8071575397336023920L;
 

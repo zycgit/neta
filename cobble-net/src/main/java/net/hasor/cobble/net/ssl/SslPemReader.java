@@ -1,17 +1,17 @@
 /*
- * Copyright 2008-2009 the original author or authors.
+ * Copyright 2014 The Netty Project
  *
- * Licensed under the Apache License, Version 2.0 (the "License");
- * you may not use this file except in compliance with the License.
- * You may obtain a copy of the License at
+ * The Netty Project licenses this file to you under the Apache License,
+ * version 2.0 (the "License"); you may not use this file except in compliance
+ * with the License. You may obtain a copy of the License at:
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *   https://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
+ * distributed under the License is distributed on an "AS IS" BASIS, WITHOUT
+ * WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
+ * License for the specific language governing permissions and limitations
+ * under the License.
  */
 package net.hasor.cobble.net.ssl;
 import net.hasor.cobble.bytebuf.ByteBuf;
@@ -24,6 +24,7 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyException;
+import java.security.KeyStore;
 import java.security.cert.CertificateException;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,9 +32,12 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * pem 文件读取
+ * Reads a PEM file and converts it into a list of DERs so that they are imported into a {@link KeyStore} easily.
+ *
+ * Netty 的 ByteBuf 更换为 cobble.bytebuf
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @author netty
  */
 class SslPemReader {
     private static final Pattern CERT_HEADER = Pattern.compile("-+BEGIN\\s[^-\\r\\n]*CERTIFICATE[^-\\r\\n]*-+(?:\\s|\\r|\\n)+");
@@ -63,6 +67,7 @@ class SslPemReader {
             }
 
             String base64 = m.group(0);
+            base64 = base64.replace("\r", "").replace("\n", "").trim();
 
             m.usePattern(CERT_FOOTER);
             if (!m.find()) {
@@ -70,8 +75,9 @@ class SslPemReader {
                 break;
             }
 
-            byte[] decode = Base64.base64DecodeToArray(base64.replace("\r", "").trim());
-            certs.add(ByteBufAllocator.DEFAULT.wrap(decode));
+            ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64));
+            wrap.markWriter();
+            certs.add(wrap);
 
             start = m.end();
             m.usePattern(CERT_HEADER);
@@ -102,14 +108,16 @@ class SslPemReader {
         }
 
         String base64 = m.group(0);
+        base64 = base64.replace("\r", "").replace("\n", "").trim();
 
         m.usePattern(KEY_FOOTER);
         if (!m.find()) {
             throw keyNotFoundException();// Key is incomplete.
         }
 
-        byte[] decode = Base64.base64DecodeToArray(base64.replace("\r", "").trim());
-        return ByteBufAllocator.DEFAULT.wrap(decode);
+        ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64));
+        wrap.markWriter();
+        return wrap;
     }
 
     private static KeyException keyNotFoundException() {

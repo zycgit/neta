@@ -111,6 +111,10 @@ class SoContextImpl implements SoContext {
 
     /** 关闭所有 socket */
     public void closeAll(boolean now) {
+        // 先关闭监听器
+
+        // 在关闭管道
+
         if (now) {
             this.channelList.forEach(Channel::closeNow);
         } else {

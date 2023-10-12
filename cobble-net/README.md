@@ -8,7 +8,7 @@
 - 支持 ReadSocketTimeout/WriteSocketTimeout
 - 支持 KeepAlive
 - 支持 TCP
-- 接收部分需要考虑 连接建立后立刻关闭的情况
+- 支持 监听器挂起，监听器被挂起后侦听端口仍然打开，但是所有传入的新链接都会被关闭
 
 资料
 
@@ -16,16 +16,28 @@
 
 TODO
 
+- ReadSocketTimeout 的感觉和实际预期还是有一些偏差，即便没有传入数据 ReadSocketTimeout 仍然会触发超时
 - NetChannel 和外围 API
 - 低延迟 ExecutorService
 - SSL
     - SSL 缓冲区溢出,需要额外考虑，有些SSL 实现并没有使用固定大小
-- TcpClient/TcpServer
-    - Close 的时候需要 close 里面的 canal
 
-- 支持 SSL 引擎支持：JDK、OpenSSL
-- 支持 SSL 协议：SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
-- 支持 客户端验证：NONE、OPTIONAL、REQUIRE
+
+- 证书格式
+    - JKS 格式
+    - PEM/CER 格式
+- SSL 引擎
+    - JDK
+    - OpenSSL（--）
+- SSL 协议
+    - SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
+- 客户端验证 模式
+    - NONE
+    - OPTIONAL
+    - REQUIRE
+- SSL 扩展协议
+    - NPN 和 ALPN
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#ex6
 https://blog.yeskery.com/archives/SSL_engine_combined_with_NIO_to_realize_asynchronous_socket.html#menu_index_3
+https://www.cnblogs.com/flydean/p/15419443.html#npn%E5%92%8Calpn

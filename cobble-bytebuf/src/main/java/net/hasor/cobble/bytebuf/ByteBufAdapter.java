@@ -18,6 +18,7 @@ import net.hasor.cobble.function.EFunction;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 
 /**
@@ -73,6 +74,16 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public ByteBuffer asByteBuffer() {
         return this.byteBuf.asByteBuffer();
+    }
+
+    @Override
+    public ByteOrder order() {
+        return this.byteBuf.order();
+    }
+
+    @Override
+    public ByteBuf order(ByteOrder newOrder) {
+        return this.byteBuf.order(newOrder);
     }
 
     @Override
@@ -239,6 +250,11 @@ public class ByteBufAdapter implements ByteBuf {
     public int write(ByteBuffer src) {
         return this.byteBuf.write(src);
     }
+
+    //    @Override
+    //    public int write(ByteBuf src) {
+    //        return this.byteBuf.write(src);
+    //    }
 
     @Override
     public int writeString(String string, Charset charset) {
@@ -409,6 +425,11 @@ public class ByteBufAdapter implements ByteBuf {
     public int read(ByteBuf dst) {
         return this.byteBuf.read(dst);
     }
+
+    //    @Override
+    //    public int read(ByteBuf dest, int off, int len) {
+    //        return this.byteBuf.read(dest, off, len);
+    //    }
 
     @Override
     public String readString(int len, Charset charset) {

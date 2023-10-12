@@ -145,7 +145,7 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         autoFlash();
     }
 
-    public void writeMiddle(int v) throws IOException {
+    public void writeMedium(int v) throws IOException {
         this.buffer.writeInt24(v);
         autoFlash();
     }
