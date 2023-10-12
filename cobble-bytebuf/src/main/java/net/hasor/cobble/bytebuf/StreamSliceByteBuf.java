@@ -33,8 +33,8 @@ public class StreamSliceByteBuf extends SliceNioByteBuf implements StreamByteBuf
     private final InputStream  inStream;
     private final OutputStream outStream;
 
-    protected StreamSliceByteBuf(int window, InputStream inStream, OutputStream outStream, NioChunkAllocator chunkAllocator) {
-        super(window, window, chunkAllocator);
+    StreamSliceByteBuf(ByteBufAllocator alloc, int window, InputStream inStream, OutputStream outStream, NioChunkAllocator chunkAllocator) {
+        super(alloc, window, window, chunkAllocator);
         this.inStream = inStream;
         this.outStream = outStream;
     }

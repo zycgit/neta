@@ -28,4 +28,10 @@ public class StreamByteBufTest {
         assert array[3] == 14;
         assert array[4] == 15;
     }
+
+    @Test
+    public void writeByteTest02() throws IOException {
+        //        ByteBufInputStream
+        //                ByteBufOutputStream
+    }
 }

@@ -83,12 +83,12 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf wrap(byte[] bytes) {
-        return new ArrayByteBuf(bytes, bytes.length);
+        return new ArrayByteBuf(this, bytes, bytes.length);
     }
 
     @Override
     public ByteBuf wrap(ByteBuffer javaBuffer) {
-        return new SliceNioByteBuf(javaBuffer);
+        return new SliceNioByteBuf(this, javaBuffer);
     }
 
     @Override
@@ -98,7 +98,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf arrayBuffer(int initialCapacity, int maxCapacity) {
-        return new ArrayByteBuf(initialCapacity, maxCapacity);
+        return new ArrayByteBuf(this, initialCapacity, maxCapacity);
     }
 
     @Override
@@ -113,7 +113,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf heapBuffer(int initialCapacity, int maxCapacity) {
-        return new SliceNioByteBuf(initialCapacity, maxCapacity, this.heapNioChunkAllocator);
+        return new SliceNioByteBuf(this, initialCapacity, maxCapacity, this.heapNioChunkAllocator);
     }
 
     @Override
@@ -128,7 +128,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public StreamByteBuf heapStreamBuffer(int capacity, InputStream inStream, OutputStream outStream) {
-        return new StreamSliceByteBuf(capacity, inStream, outStream, this.heapNioChunkAllocator);
+        return new StreamSliceByteBuf(this, capacity, inStream, outStream, this.heapNioChunkAllocator);
     }
 
     @Override
@@ -143,7 +143,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf directBuffer(int initialCapacity, int maxCapacity) {
-        return new SliceNioByteBuf(initialCapacity, maxCapacity, this.directNioChunkAllocator);
+        return new SliceNioByteBuf(this, initialCapacity, maxCapacity, this.directNioChunkAllocator);
     }
 
     @Override
@@ -158,7 +158,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public StreamByteBuf directStreamBuffer(int capacity, InputStream inStream, OutputStream outStream) {
-        return new StreamSliceByteBuf(capacity, inStream, outStream, this.directNioChunkAllocator);
+        return new StreamSliceByteBuf(this, capacity, inStream, outStream, this.directNioChunkAllocator);
     }
 
     @Override
@@ -184,9 +184,9 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     @Override
     public ByteBuf pooledHeapBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
         if (maxCapacity < 0) {
-            return new PooledNioByteBuf(initialCapacity, maxCapacity, sliceSize, this.heapNioChunkAllocator);
+            return new PooledNioByteBuf(this, initialCapacity, maxCapacity, sliceSize, this.heapNioChunkAllocator);
         } else {
-            return new PooledNioByteBuf(Math.min(initialCapacity, maxCapacity), maxCapacity, sliceSize, this.heapNioChunkAllocator);
+            return new PooledNioByteBuf(this, Math.min(initialCapacity, maxCapacity), maxCapacity, sliceSize, this.heapNioChunkAllocator);
         }
     }
 
@@ -202,6 +202,6 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf pooledDirectBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
-        return new PooledNioByteBuf(initialCapacity, maxCapacity, sliceSize, this.directNioChunkAllocator);
+        return new PooledNioByteBuf(this, initialCapacity, maxCapacity, sliceSize, this.directNioChunkAllocator);
     }
 }

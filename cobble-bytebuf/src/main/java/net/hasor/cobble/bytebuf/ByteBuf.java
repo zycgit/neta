@@ -26,6 +26,11 @@ import java.nio.charset.StandardCharsets;
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
  */
 public interface ByteBuf extends ByteChannel {
+    /**
+     * Returns the {@link ByteBufAllocator} which created this buffer.
+     */
+    ByteBufAllocator alloc();
+
     /** Returns the {@code readerIndex} of this buffer. */
     int readerIndex();
 

@@ -19,9 +19,11 @@ import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 
 /**
- * Allows to free direct {@link ByteBuffer}s. by using Cleaner.
- * @version : 2022-11-01
+ * Allows to free direct {@link ByteBuffer} by using Cleaner.
+ * For more details see <a href="https://github.com/netty/netty/issues/2604">#2604</a>.
+ * @author netty ,reference io.netty.util.internal.CleanerJava6
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 final class CleanerJava6 extends Cleaner {
     private static final long   CLEANER_FIELD_OFFSET;

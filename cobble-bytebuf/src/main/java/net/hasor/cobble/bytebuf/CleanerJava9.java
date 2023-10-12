@@ -20,8 +20,10 @@ import java.nio.ByteBuffer;
 
 /**
  * Provide a way to clean a ByteBuffer on Java9+.
- * @version : 2022-11-01
+ * For more details see <a href="https://github.com/netty/netty/issues/2604">#2604</a>.
+ * @author netty ,reference io.netty.util.internal.CleanerJava9
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 final class CleanerJava9 extends Cleaner {
     private static final Method INVOKE_CLEANER;

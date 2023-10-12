@@ -25,13 +25,13 @@ import java.nio.ByteBuffer;
 public class ArrayByteBuf extends AbstractByteBuf {
     private byte[] data;
 
-    public ArrayByteBuf(byte[] initData, int maxCapacity) {
-        super(maxCapacity == -1 ? -1 : Math.max(initData.length, maxCapacity));
+    ArrayByteBuf(ByteBufAllocator alloc, byte[] initData, int maxCapacity) {
+        super(alloc, maxCapacity == -1 ? -1 : Math.max(initData.length, maxCapacity));
         this.data = initData;
     }
 
-    public ArrayByteBuf(int capacity, int maxCapacity) {
-        super(maxCapacity);
+    ArrayByteBuf(ByteBufAllocator alloc, int capacity, int maxCapacity) {
+        super(alloc, maxCapacity);
         if (capacity < 0 || maxCapacity > 0) {
             if (!(0 < capacity && capacity <= maxCapacity)) {
                 throw new IllegalArgumentException("0 > capacity > maxCapacity ( gt 0 or eq -1)");
@@ -162,7 +162,7 @@ public class ArrayByteBuf extends AbstractByteBuf {
     public ArrayByteBuf copy() {
         checkFree();
 
-        ArrayByteBuf copy = new ArrayByteBuf(this.capacity(), this.getMaxCapacity());
+        ArrayByteBuf copy = new ArrayByteBuf(this.alloc, this.capacity(), this.getMaxCapacity());
         copy.data = this.data.clone();
 
         return copy;

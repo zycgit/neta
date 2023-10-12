@@ -18,6 +18,7 @@ import java.io.IOException;
 
 /**
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * @author 赵永春 (zyc@hasor.net)
  */
 public interface StreamByteBuf extends ByteBuf {
     boolean fetch() throws IOException;

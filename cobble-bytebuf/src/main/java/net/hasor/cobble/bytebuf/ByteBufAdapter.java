@@ -31,6 +31,11 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public ByteBufAllocator alloc() {
+        return this.byteBuf.alloc();
+    }
+
+    @Override
     public int readerIndex() {
         return this.byteBuf.readerIndex();
     }
@@ -553,6 +558,16 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public int expect(String expect, Charset charset) {
         return this.byteBuf.expect(expect, charset);
+    }
+
+    @Override
+    public String readLine() {
+        return this.byteBuf.readLine();
+    }
+
+    @Override
+    public String readLine(Charset charset) {
+        return this.byteBuf.readLine(charset);
     }
 
     @Override

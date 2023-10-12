@@ -29,8 +29,8 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     private final   int                  sliceSize;
     private final   NioChunkAllocator    chunkAllocator;
 
-    protected PooledNioByteBuf(int capacity, int maxCapacity, int sliceSize, NioChunkAllocator chunkAllocator) {
-        super(maxCapacity);
+    protected PooledNioByteBuf(ByteBufAllocator alloc, int capacity, int maxCapacity, int sliceSize, NioChunkAllocator chunkAllocator) {
+        super(alloc, maxCapacity);
         if (capacity < 0 || maxCapacity > 0) {
             if (!(0 < capacity && capacity <= maxCapacity)) {
                 throw new IllegalArgumentException("0 > capacity > maxCapacity ( gt 0 or eq -1)");
@@ -205,7 +205,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     public PooledNioByteBuf copy() {
         checkFree();
 
-        PooledNioByteBuf copy = new PooledNioByteBuf(this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
+        PooledNioByteBuf copy = new PooledNioByteBuf(this.alloc, this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
         copy.markedReaderIndex = this.markedReaderIndex;
         copy.markedWriterIndex = this.markedWriterIndex;
         copy.readerIndex = this.readerIndex;

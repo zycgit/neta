@@ -28,17 +28,24 @@ import static net.hasor.cobble.bytebuf.Bits.*;
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class AbstractByteBuf implements ByteBuf {
-    protected       int     markedReaderIndex;
-    protected       int     markedWriterIndex;
-    protected       int     readerIndex;
-    protected       int     writerIndex;
-    private final   int     maxCapacity;
-    private         boolean isFree;
-    protected final Object  synchronizedLock = new Object();
+    protected final ByteBufAllocator alloc;
+    protected       int              markedReaderIndex;
+    protected       int              markedWriterIndex;
+    protected       int              readerIndex;
+    protected       int              writerIndex;
+    private final   int              maxCapacity;
+    private         boolean          isFree;
+    protected final Object           synchronizedLock = new Object();
 
-    protected AbstractByteBuf(int maxCapacity) {
+    protected AbstractByteBuf(ByteBufAllocator alloc, int maxCapacity) {
+        this.alloc = alloc;
         this.maxCapacity = maxCapacity;
         this.isFree = false;
+    }
+
+    @Override
+    public ByteBufAllocator alloc() {
+        return this.alloc;
     }
 
     public int getMaxCapacity() {

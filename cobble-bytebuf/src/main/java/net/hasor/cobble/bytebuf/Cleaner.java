@@ -22,8 +22,9 @@ import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 /**
- * 负责 ByteBuf 清理和释放，参考 Netty 实现
+ * Allows to free direct {@link ByteBuffer}s.
  * @version : 2022-11-01
+ * @author netty, reference io.netty.util.internal.Cleaner、io.netty.util.internal.PlatformDependent0
  * @author 赵永春 (zyc@hasor.net)
  */
 abstract class Cleaner {

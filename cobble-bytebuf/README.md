@@ -4,5 +4,12 @@
 
 ## 功能和特性
 
+- 读写模式一体化
 - 无需切换读/写模式
 - 缓存扩容零拷贝
+- 字节顺：大端/小端
+
+
+- 有问题的地方
+    - ByteBufInputStream
+    - ByteBufOutputStream

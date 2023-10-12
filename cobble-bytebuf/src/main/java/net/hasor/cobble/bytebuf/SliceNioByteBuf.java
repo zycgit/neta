@@ -26,8 +26,8 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     protected     NioChunk          data;
     private final NioChunkAllocator chunkAllocator;
 
-    protected SliceNioByteBuf(int capacity, int maxCapacity, NioChunkAllocator chunkAllocator) {
-        super(maxCapacity);
+    protected SliceNioByteBuf(ByteBufAllocator alloc, int capacity, int maxCapacity, NioChunkAllocator chunkAllocator) {
+        super(alloc, maxCapacity);
         if (capacity < 0 || maxCapacity > 0) {
             if (!(0 < capacity && capacity <= maxCapacity)) {
                 throw new IllegalArgumentException("0 > capacity > maxCapacity ( gt 0 or eq -1)");
@@ -38,8 +38,8 @@ public class SliceNioByteBuf extends AbstractByteBuf {
         this.chunkAllocator = chunkAllocator;
     }
 
-    protected SliceNioByteBuf(ByteBuffer byteBuffer) {
-        super(byteBuffer.capacity());
+    protected SliceNioByteBuf(ByteBufAllocator alloc, ByteBuffer byteBuffer) {
+        super(alloc, byteBuffer.capacity());
 
         this.data = new NioChunk(byteBuffer);
         this.chunkAllocator = new NioChunkAllocator() {
@@ -197,7 +197,7 @@ public class SliceNioByteBuf extends AbstractByteBuf {
     public SliceNioByteBuf copy() {
         checkFree();
 
-        SliceNioByteBuf copy = new SliceNioByteBuf(this.capacity(), this.getMaxCapacity(), this.chunkAllocator);
+        SliceNioByteBuf copy = new SliceNioByteBuf(this.alloc, this.capacity(), this.getMaxCapacity(), this.chunkAllocator);
         copy.markedReaderIndex = this.markedReaderIndex;
         copy.markedWriterIndex = this.markedWriterIndex;
         copy.readerIndex = this.readerIndex;
