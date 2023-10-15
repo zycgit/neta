@@ -183,4 +183,9 @@ public class ArrayByteBuf extends AbstractByteBuf {
         this.data = null;
         super.free();
     }
+
+    @Override
+    protected String getSimpleName() {
+        return "ArrayByteBuf";
+    }
 }

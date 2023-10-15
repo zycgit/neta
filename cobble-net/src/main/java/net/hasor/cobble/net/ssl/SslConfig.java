@@ -25,22 +25,24 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SslConfig {
-    private boolean             enable              = false;
-    private SslProvider         provider            = SslProvider.JDK;      // default is JDK
-    private SslClientAuth       clientAuth          = SslClientAuth.NONE;   //
-    private List<String>        appProtocol         = null;                 // NPN/ALPN SSL 扩展协议，SSL 握手后使用的应用协议
-    private String[]            ciphers             = null;                 // JSSE Cipher Suite Names 使用的密钥套件
-    private String[]            protocols           = null;                 // The TLS protocol versions to enable.
+    private boolean             enable                = false;
+    private SslProvider         provider              = SslProvider.JDK;      // default is JDK
+    private SslClientAuth       clientAuth            = SslClientAuth.NONE;   //
+    private List<String>        appProtocol           = null;                 // NPN/ALPN SSL 扩展协议，SSL 握手后使用的应用协议
+    private String[]            ciphers               = null;                 // JSSE Cipher Suite Names 使用的密钥套件
+    private String[]            protocols             = null;                 // The TLS protocol versions to enable.
+    private int                 maxResizingNetBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
+    private int                 maxResizingAppBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
     //
-    private SslAuthKeyType      authType            = null;
-    private String              jksResource         = null;                 // JKS File
-    private String              pemCertChain        = null;                 // X.509 certificate chain in PEM format.
-    private String              pemPrivate          = null;                 // PKCS#8 private key in PEM format.
-    private String              keyPassword         = null;
+    private SslAuthKeyType      authType              = null;
+    private String              jksResource           = null;                 // JKS File
+    private String              pemCertChain          = null;                 // X.509 certificate chain in PEM format.
+    private String              pemPrivate            = null;                 // PKCS#8 private key in PEM format.
+    private String              keyPassword           = null;
     //
-    private KeyStore            keyStore            = null;
-    private KeyManagerFactory   keyManagerFactory   = null;
-    private TrustManagerFactory trustManagerFactory = null;
+    private KeyStore            keyStore              = null;
+    private KeyManagerFactory   keyManagerFactory     = null;
+    private TrustManagerFactory trustManagerFactory   = null;
 
     public boolean isEnable() {
         return this.enable;
@@ -88,6 +90,22 @@ public class SslConfig {
 
     public void setProtocols(String[] protocols) {
         this.protocols = protocols;
+    }
+
+    public int getMaxResizingNetBufSize() {
+        return this.maxResizingNetBufSize;
+    }
+
+    public void setMaxResizingNetBufSize(int maxResizingNetBufSize) {
+        this.maxResizingNetBufSize = maxResizingNetBufSize;
+    }
+
+    public int getMaxResizingAppBufSize() {
+        return this.maxResizingAppBufSize;
+    }
+
+    public void setMaxResizingAppBufSize(int maxResizingAppBufSize) {
+        this.maxResizingAppBufSize = maxResizingAppBufSize;
     }
 
     public SslAuthKeyType getAuthType() {

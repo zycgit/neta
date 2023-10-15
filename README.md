@@ -13,6 +13,11 @@
 - cobble-net，一个基于 AIO 的 Socket Server/Client 工具。
 
 
+- MyBatis、Netty、Spring、SpringBoot、JDK8、Apache Commons(Lang3\BeanUtils\Collections\IO\Codec)
+
+https://glassfish.dev.java.net/public/CDDL+GPL.html
+http://www.apache.org/licenses/LICENSE-2.0
+
 ## release versions and prepare next SNAPSHOT version
     mvn release:clean release:prepare -Dmaven.test.skip -Prelease
 

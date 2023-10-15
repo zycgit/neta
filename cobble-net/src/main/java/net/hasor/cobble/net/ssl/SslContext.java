@@ -28,8 +28,7 @@ public abstract class SslContext {
     protected final      SslConfig    sslConfig;
     private final        SSLContext   sslContext;
     private final        SSLEngine    sslEngine;
-    private volatile     SslHandshake sslHandshake;
-    private volatile     SslHandler   sslHandler;
+    private volatile     SslHandle    sslHandler;
     private              boolean      enable;
 
     public SslContext(long channelID, SoContext soContext, SslConfig config, SoResManager rm, boolean clientMode) throws Exception {
@@ -129,24 +128,23 @@ public abstract class SslContext {
     /** 创建 SSLEngine */
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws GeneralSecurityException;
 
-    private synchronized boolean tryHandshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndDownstream) throws IOException {
-        if (this.sslHandler != null) {
+    private synchronized boolean tryHandshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
+        if (this.sslHandler != null && this.sslHandler.isHandshake()) {
             return true; // 已经握手成功，处理后续 SSL 数据解密/加密
         }
 
         // 启动握手
-        if (this.sslHandshake == null) {
-            this.sslHandshake = new SslHandshake(this.channelID, this.soContext, this.sslEngine, this.rm);
-            this.sslHandshake.beginHandshake();
+        if (this.sslHandler == null) {
+            this.sslHandler = new SslHandle(this.channelID, this.soContext, this.sslEngine, this.rm);
+            this.sslHandler.beginHandshake();
         }
 
         // 处理握手请求
-        this.sslHandshake.handshake(rcvUpstream, rcvDownstream, sndDownstream);
+        this.sslHandler.handshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
 
         // 握手成功
-        if (this.sslHandshake.isHandshake()) {
+        if (this.sslHandler.isHandshake()) {
             logger.info("sslHandshake(" + this.channelID + ") finish.");
-            this.sslHandler = this.sslHandshake.toSslHandler();
             return true; // 刚刚握手成功，处理后续 SSL 数据解密/加密
         } else {
             return false;
@@ -156,7 +154,7 @@ public abstract class SslContext {
     /** 接收SSL数据 */
     public void handRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.enable) {
-            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndDownstream)) {
+            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
                 this.sslHandler.handlerRcv(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             }
         } else {
@@ -170,7 +168,7 @@ public abstract class SslContext {
     /** 发送SSL数据 */
     public void handSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.enable) {
-            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndDownstream)) {
+            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
                 this.sslHandler.handlerSnd(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             }
         } else {

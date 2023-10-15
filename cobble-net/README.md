@@ -39,5 +39,8 @@ TODO
     - NPN 和 ALPN
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#ex6
+https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html
 https://blog.yeskery.com/archives/SSL_engine_combined_with_NIO_to_realize_asynchronous_socket.html#menu_index_3
 https://www.cnblogs.com/flydean/p/15419443.html#npn%E5%92%8Calpn
+
+https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#RunningSSLEngineSimpleDemo

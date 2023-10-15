@@ -236,4 +236,9 @@ public class PooledNioByteBuf extends AbstractByteBuf {
         this.buffers.clear();
         super.free();
     }
+
+    @Override
+    protected String getSimpleName() {
+        return "PooledNioByteBuf";
+    }
 }

@@ -223,4 +223,9 @@ public class SliceNioByteBuf extends AbstractByteBuf {
         this.data = null;
         super.free();
     }
+
+    @Override
+    protected String getSimpleName() {
+        return "SliceNioByteBuf";
+    }
 }

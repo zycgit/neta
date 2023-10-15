@@ -680,4 +680,15 @@ public abstract class AbstractByteBuf implements ByteBuf {
             return callBack.eApply(this);
         }
     }
+
+    @Override
+    public String toString() {
+        return getSimpleName() + "[rMark=" + this.markedReaderIndex //
+                + " -> rIndex=" + this.readerIndex //
+                + " -> wMark=" + this.markedWriterIndex //
+                + " -> wIndex=" + this.writerIndex //
+                + ", capacity=" + this.capacity() + "]";
+    }
+
+    protected abstract String getSimpleName();
 }
