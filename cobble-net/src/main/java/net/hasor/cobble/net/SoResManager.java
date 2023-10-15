@@ -37,7 +37,8 @@ public interface SoResManager extends AutoCloseable {
 
     ByteBuf newLocalSndBuf();
 
-    void freeObject(Object refObj);
+    /** 永远返回 null */
+    <T> T freeObject(Object refObj);
 
     ExecutorService getExecutor();
 }

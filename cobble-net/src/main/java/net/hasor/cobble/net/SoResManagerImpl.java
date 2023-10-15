@@ -79,7 +79,7 @@ class SoResManagerImpl implements SoResManager, AutoCloseable {
     }
 
     @Override
-    public synchronized void freeObject(Object refObj) {
+    public synchronized <T> T freeObject(Object refObj) {
         int index = this.resources.indexOf(refObj);
         if (index > 0) {
             this.resources.remove(index);
@@ -89,6 +89,7 @@ class SoResManagerImpl implements SoResManager, AutoCloseable {
                 IOUtils.closeQuietly((AutoCloseable) refObj);
             }
         }
+        return null;
     }
 
     @Override

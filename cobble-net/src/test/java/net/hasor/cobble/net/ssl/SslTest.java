@@ -22,6 +22,7 @@ import net.hasor.cobble.net.CobbleSocket;
 import net.hasor.cobble.net.SoConfig;
 import net.hasor.cobble.net.SoContext;
 import net.hasor.cobble.net.SoResManager;
+import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
@@ -34,7 +35,8 @@ import java.util.concurrent.ThreadFactory;
  * @version : 2022-11-01
  */
 public class SslTest {
-    public static void main(String[] args) throws Exception {
+    @Test
+    public void main() throws Exception {
         ClassLoader loader = Thread.currentThread().getContextClassLoader();
         ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
         ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);

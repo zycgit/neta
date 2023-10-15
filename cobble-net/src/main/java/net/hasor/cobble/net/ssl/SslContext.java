@@ -70,7 +70,9 @@ public abstract class SslContext {
     protected KeyStore createKeyStore() throws GeneralSecurityException, IOException {
         KeyStore ks = this.sslConfig.getKeyStore();
         if (ks == null) {
-            ks = KeyStore.getInstance(KeyStore.getDefaultType());
+            String defaultType = KeyStore.getDefaultType();
+            logger.info("ssl (" + this.channelID + ") create KeyStore using '" + defaultType + "'");
+            ks = KeyStore.getInstance(defaultType);
         }
         return ks;
     }
@@ -82,7 +84,7 @@ public abstract class SslContext {
 
         if (this.sslConfig.getAuthType() == SslAuthKeyType.JKS) {
             String jskResource = Objects.requireNonNull(this.sslConfig.getJksResource());
-            logger.info("loadKeyStore by JKS, " + jskResource);
+            logger.info("ssl (" + this.channelID + ") loadKeyStore by JKS, " + jskResource);
 
             try (InputStream in = ResourcesUtils.getResourceAsStream(jskResource)) {
                 SslUtils.loadKeyStore(keyStore, in, passwordChars);
@@ -90,7 +92,7 @@ public abstract class SslContext {
         } else if (this.sslConfig.getAuthType() == SslAuthKeyType.PEM) {
             String pemPrivate = Objects.requireNonNull(this.sslConfig.getPemPrivate(), "key required for servers");
             String pemCertChain = Objects.requireNonNull(this.sslConfig.getPemCertChain(), "keyCertChain");
-            logger.info("loadKeyStore by PEM pemPrivate = " + pemPrivate + ", pemCertChain = " + pemCertChain);
+            logger.info("ssl (" + this.channelID + ") loadKeyStore by PEM pemPrivate = " + pemPrivate + ", pemCertChain = " + pemCertChain);
 
             X509Certificate[] certChain;
             PrivateKey privateKey;
@@ -103,7 +105,7 @@ public abstract class SslContext {
 
             SslUtils.loadKeyStore(keyStore, certChain, privateKey, passwordChars);
         } else {
-            logger.info("loadKeyStore ignore.");
+            logger.info("ssl (" + this.channelID + ") loadKeyStore ignore.");
         }
 
         KeyManagerFactory kmf = this.sslConfig.getKeyManagerFactory();
@@ -127,22 +129,23 @@ public abstract class SslContext {
     /** 创建 SSLEngine */
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws GeneralSecurityException;
 
-    private synchronized boolean tryHandshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
+    private synchronized boolean tryHandshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndDownstream) throws IOException {
         if (this.sslHandler != null) {
             return true; // 已经握手成功，处理后续 SSL 数据解密/加密
         }
 
         // 启动握手
         if (this.sslHandshake == null) {
-            this.sslHandshake = new SslHandshake(this.channelID, this.soContext, this.sslEngine, new SslBuffers(this.rm));
+            this.sslHandshake = new SslHandshake(this.channelID, this.soContext, this.sslEngine, this.rm);
             this.sslHandshake.beginHandshake();
         }
 
         // 处理握手请求
-        this.sslHandshake.handshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+        this.sslHandshake.handshake(rcvUpstream, rcvDownstream, sndDownstream);
 
         // 握手成功
         if (this.sslHandshake.isHandshake()) {
+            logger.info("sslHandshake(" + this.channelID + ") finish.");
             this.sslHandler = this.sslHandshake.toSslHandler();
             return true; // 刚刚握手成功，处理后续 SSL 数据解密/加密
         } else {
@@ -153,7 +156,7 @@ public abstract class SslContext {
     /** 接收SSL数据 */
     public void handRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.enable) {
-            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
+            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndDownstream)) {
                 this.sslHandler.handlerRcv(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             }
         } else {
@@ -167,7 +170,7 @@ public abstract class SslContext {
     /** 发送SSL数据 */
     public void handSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.enable) {
-            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
+            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndDownstream)) {
                 this.sslHandler.handlerSnd(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             }
         } else {
