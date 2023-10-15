@@ -85,12 +85,12 @@ public class JdkSslContext extends SslContext {
         //        sslParameters.setAlgorithmConstraints();
         sslEngine.setUseClientMode(this.isClient());
 
-        // protocols
+        // SSL Protocols
         String[] protocols = this.sslConfig.getProtocols();
         protocols = (protocols == null) ? DEFAULT_PROTOCOLS : protocols;
         sslEngine.setEnabledProtocols(protocols);
 
-        // ciphers
+        // Ciphers
         String[] ciphers = this.sslConfig.getCiphers();
         if (isTlsV13Supported(protocols)) {
             ciphers = (ciphers == null) ? DEFAULT_CIPHERS : ciphers;
@@ -102,7 +102,7 @@ public class JdkSslContext extends SslContext {
         logger.info("ssl (" + this.channelID + ") enabled CipherSuites [" + StringUtils.join(ciphers, ", ") + "]");
         sslEngine.setEnabledCipherSuites(ciphers);
 
-        //  clientAuth
+        // ClientAuth
         SslClientAuth clientAuth = this.sslConfig.getClientAuth();
         if (this.isServer() && clientAuth != null) {
             logger.info("ssl (" + this.channelID + ") clientAuth = " + clientAuth);
@@ -118,6 +118,15 @@ public class JdkSslContext extends SslContext {
                     throw new Error("Unknown auth " + clientAuth);
             }
         }
+
+        // NPN/ALPN
+        String[] appProtocol = this.sslConfig.getAppProtocol();
+        appProtocol = (appProtocol == null) ? ArrayUtils.EMPTY_STRING_ARRAY : appProtocol;
+        JdkAlpnSslUtils.setApplicationProtocols(sslEngine, appProtocol);
+        if (this.sslConfig.getAppProtocolSelector() != null) {
+            JdkAlpnSslUtils.setHandshakeApplicationProtocolSelector(sslEngine, this.sslConfig.getAppProtocolSelector());
+        }
+
         return sslEngine;
     }
 

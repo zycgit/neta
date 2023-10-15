@@ -17,7 +17,6 @@ package net.hasor.cobble.net.ssl;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import java.security.KeyStore;
-import java.util.List;
 
 /**
  * SSL 配置
@@ -25,24 +24,25 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SslConfig {
-    private boolean             enable                = false;
-    private SslProvider         provider              = SslProvider.JDK;      // default is JDK
-    private SslClientAuth       clientAuth            = SslClientAuth.NONE;   //
-    private List<String>        appProtocol           = null;                 // NPN/ALPN SSL 扩展协议，SSL 握手后使用的应用协议
-    private String[]            ciphers               = null;                 // JSSE Cipher Suite Names 使用的密钥套件
-    private String[]            protocols             = null;                 // The TLS protocol versions to enable.
-    private int                 maxResizingNetBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
-    private int                 maxResizingAppBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
+    private boolean                enable                = false;
+    private SslProvider            provider              = SslProvider.JDK;      // default is JDK
+    private SslClientAuth          clientAuth            = SslClientAuth.NONE;   //
+    private String[]               appProtocol           = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
+    private String[]               ciphers               = null;                 // JSSE Cipher Suite Names 使用的密钥套件
+    private String[]               protocols             = null;                 // The TLS protocol versions to enable.
+    private int                    maxResizingNetBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
+    private int                    maxResizingAppBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
     //
-    private SslAuthKeyType      authType              = null;
-    private String              jksResource           = null;                 // JKS File
-    private String              pemCertChain          = null;                 // X.509 certificate chain in PEM format.
-    private String              pemPrivate            = null;                 // PKCS#8 private key in PEM format.
-    private String              keyPassword           = null;
+    private SslAuthKeyType         authType              = null;
+    private String                 jksResource           = null;                 // JKS File
+    private String                 pemCertChain          = null;                 // X.509 certificate chain in PEM format.
+    private String                 pemPrivate            = null;                 // PKCS#8 private key in PEM format.
+    private String                 keyPassword           = null;
     //
-    private KeyStore            keyStore              = null;
-    private KeyManagerFactory   keyManagerFactory     = null;
-    private TrustManagerFactory trustManagerFactory   = null;
+    private KeyStore               keyStore              = null;
+    private KeyManagerFactory      keyManagerFactory     = null;
+    private TrustManagerFactory    trustManagerFactory   = null;
+    private SslAppProtocolSelector appProtocolSelector   = null;
 
     public boolean isEnable() {
         return this.enable;
@@ -68,11 +68,11 @@ public class SslConfig {
         this.clientAuth = clientAuth;
     }
 
-    public List<String> getAppProtocol() {
+    public String[] getAppProtocol() {
         return this.appProtocol;
     }
 
-    public void setAppProtocol(List<String> appProtocol) {
+    public void setAppProtocol(String[] appProtocol) {
         this.appProtocol = appProtocol;
     }
 
@@ -170,5 +170,13 @@ public class SslConfig {
 
     public void setTrustManagerFactory(TrustManagerFactory trustManagerFactory) {
         this.trustManagerFactory = trustManagerFactory;
+    }
+
+    public SslAppProtocolSelector getAppProtocolSelector() {
+        return this.appProtocolSelector;
+    }
+
+    public void setAppProtocolSelector(SslAppProtocolSelector appProtocolSelector) {
+        this.appProtocolSelector = appProtocolSelector;
     }
 }

@@ -102,10 +102,9 @@ class JdkAlpnSslUtils {
         }
     }
 
-    public static void setApplicationProtocols(SSLEngine engine, List<String> supportedProtocols) {
+    public static void setApplicationProtocols(SSLEngine engine, String[] protocolArray) {
         SSLParameters parameters = engine.getSSLParameters();
 
-        String[] protocolArray = supportedProtocols.toArray(ArrayUtils.EMPTY_STRING_ARRAY);
         try {
             SET_APPLICATION_PROTOCOLS.invoke(parameters, new Object[] { protocolArray });
         } catch (UnsupportedOperationException ex) {

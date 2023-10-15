@@ -21,6 +21,10 @@ package net.hasor.cobble.net.ssl;
  */
 public interface SslProtocol {
     /**
+     * NONE
+     */
+    String NONE = "NONE";
+    /**
      * SSL v2 Hello
      * @deprecated SSLv2Hello is no longer secure. Consider using {@link #TLS_v1_2} or {@link #TLS_v1_3}
      */

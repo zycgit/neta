@@ -26,10 +26,10 @@ public class SslHandle {
     private final        SSLEngine     engine;
     private final        SoResManager  rm;
     //
-    private final        AtomicBoolean status;      // 最近一个请求是否还在处理中（由于 doHandshake 方法会分解为多个异步任务，因此 doHandshake 方法返回并不能表示已经处理完毕）
-    private volatile     boolean       appendData;  // 在 status = true 期间如果收到数据会被设置为 true
+    private final        AtomicBoolean status;      // 最近一个请求是否还在处理中
+    private volatile     boolean       appendData;  // 在 handshake/rcv/snd 期间如果收到数据会被设置为 true
     private volatile     boolean       handshake;
-    // 握手期间使用的 Buffer，每次使用都会 clear 清空，握手完毕后会进行释放以节省内存
+    //
     public               ByteBuffer    inNetData;
     public               ByteBuffer    inAppData;
     public               ByteBuffer    outNetData;
@@ -329,6 +329,24 @@ public class SslHandle {
             sslEngine.closeOutbound();
         }
 
+        //        // Indicate that application is done with engine
+        //        engine.closeOutbound();
+        //        while (!engine.isOutboundDone()) {
+        //            // Get close message
+        //            SSLEngineResult res = engine.wrap(empty, myNetData);
+        //            // Check res statuses
+        //            // Send close message to peer
+        //            while(myNetData.hasRemaining()) {
+        //                int num = socketChannel.write(myNetData);
+        //                if (num == 0) {
+        //                    // no bytes written; try again later
+        //                }
+        //                myNetData().compact();
+        //            }
+        //        }
+        //        // Close transport
+        //        socketChannel.close();
+
         this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
             this.doHandshake(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
         }).onFailed(f -> this.handleFailed(sslEngine, f.getCause()));
@@ -342,6 +360,19 @@ public class SslHandle {
             return;
         }
         System.out.println();
+
+        // Process incoming data
+        //        peerNetData.flip();
+        //        res = this.engine.unwrap(peerNetData, peerAppData);
+        //        if (res.getStatus() == SSLEngineResult.Status.OK) {
+        //            peerNetData.compact();
+        //
+        //            if (peerAppData.hasRemaining()) {
+        //                // Use peerAppData
+        //            }
+        //        }
+        // Handle other status:  BUFFER_OVERFLOW, BUFFER_UNDERFLOW, CLOSED
+        //
     }
 
     /** 握手之后，处理发送的数据 */
@@ -349,7 +380,51 @@ public class SslHandle {
         if (!sndUpstream.hasReadable()) {
             return;
         }
-
         System.out.println();
+
+        //        // Create a nonblocking socket channel
+        //        SocketChannel socketChannel = SocketChannel.open();
+        //        socketChannel.configureBlocking(false);
+        //        socketChannel.connect(new InetSocketAddress(hostname, port));
+        //
+        //        // Complete connection
+        //        while (!socketChannel.finishedConnect()) {
+        //            // do something until connect completed
+        //        }
+        //
+        //        // Create byte buffers to use for holding application and encoded data
+        //        SSLSession session = engine.getSession();
+        //        ByteBuffer myAppData = ByteBuffer.allocate(session.getApplicationBufferSize());
+        //        ByteBuffer myNetData = ByteBuffer.allocate(session.getPacketBufferSize());
+        //        ByteBuffer peerAppData = ByteBuffer.allocate(session.getApplicationBufferSize());
+        //        ByteBuffer peerNetData = ByteBuffer.allocate(session.getPacketBufferSize());
+        //
+        //        // Do initial handshake
+        //        doHandshake(socketChannel, engine, myNetData, peerNetData);
+        //
+        //        myAppData.put("hello".getBytes());
+        //        myAppData.flip();
+        //
+        //        while (myAppData.hasRemaining()) {
+        //            // Generate SSL/TLS encoded data (handshake or application data)
+        //            SSLEngineResult res = engine.wrap(myAppData, myNetData);
+        //
+        //            // Process status of call
+        //            if (res.getStatus() == SSLEngineResult.Status.OK) {
+        //                myAppData.compact();
+        //
+        //                // Send SSL/TLS encoded data to peer
+        //                while(myNetData.hasRemaining()) {
+        //                    int num = socketChannel.write(myNetData);
+        //                    if (num == 0) {
+        //                        // no bytes written; try again later
+        //                    }
+        //                }
+        //            }
+        //
+        //            // Handle other status:  BUFFER_OVERFLOW, CLOSED
+        //...
+        //        }
+
     }
 }
