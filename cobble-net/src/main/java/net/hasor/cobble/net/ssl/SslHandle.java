@@ -26,9 +26,13 @@ public class SslHandle {
     private final        SSLEngine     engine;
     private final        SoResManager  rm;
     //
-    private final        AtomicBoolean status;      // 最近一个请求是否还在处理中
-    private volatile     boolean       appendData;  // 在 handshake/rcv/snd 期间如果收到数据会被设置为 true
+    private final        AtomicBoolean hsStatus;        // 握手处理中
+    private volatile     boolean       hsAppendData;    // 在 handshake 期间如果收到数据会被设置为 true
     private volatile     boolean       handshake;
+    private final        AtomicBoolean rcvStatus;       // 接收数据处理中
+    private volatile     boolean       rcvAppendData;   // 在 rcv 期间如果收到数据会被设置为 true
+    private final        AtomicBoolean sndStatus;       // 发送数据处理中
+    private volatile     boolean       sndAppendData;   // 在 snd 期间如果收到数据会被设置为 true
     //
     public               ByteBuffer    inNetData;
     public               ByteBuffer    inAppData;
@@ -40,7 +44,9 @@ public class SslHandle {
         this.context = context;
         this.engine = engine;
         this.rm = rm;
-        this.status = new AtomicBoolean(false);
+        this.hsStatus = new AtomicBoolean(false);
+        this.rcvStatus = new AtomicBoolean(false);
+        this.sndStatus = new AtomicBoolean(false);
         this.handshake = false;
     }
 
@@ -48,6 +54,48 @@ public class SslHandle {
     public long getChannelID() {
         return this.channelID;
     }
+
+    /** 关闭 SSL 会话 */
+    private void handleClose(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
+        if (!sslEngine.isOutboundDone()) {
+            sslEngine.closeOutbound();
+        }
+
+        //        // Indicate that application is done with engine
+        //        engine.closeOutbound();
+        //        while (!engine.isOutboundDone()) {
+        //            // Get close message
+        //            SSLEngineResult res = engine.wrap(empty, myNetData);
+        //            // Check res statuses
+        //            // Send close message to peer
+        //            while(myNetData.hasRemaining()) {
+        //                int num = socketChannel.write(myNetData);
+        //                if (num == 0) {
+        //                    // no bytes written; try again later
+        //                }
+        //                myNetData().compact();
+        //            }
+        //        }
+        //        // Close transport
+        //        socketChannel.close();
+        this.hsStatus.set(false);
+        this.rcvStatus.set(false);
+        this.sndStatus.set(false);
+    }
+
+    /** 无法恢复的失败，会关闭 Socket */
+    private void handleFailed(SSLEngine sslEngine, Throwable e) {
+        this.context.closeChannel(this.channelID, e.getMessage());
+        this.hsStatus.set(false);
+        this.rcvStatus.set(false);
+        this.sndStatus.set(false);
+    }
+
+    // --------------------------------------------------------------------------------------------
+    //
+    // 握手相关
+    //
+    // --------------------------------------------------------------------------------------------
 
     /** 是否完成握手 */
     public boolean isHandshake() {
@@ -68,10 +116,10 @@ public class SslHandle {
 
     /** 握手阶段 rcv/snd 统一处理 */
     public void handshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
-        if (this.status.compareAndSet(false, true)) {
+        if (this.hsStatus.compareAndSet(false, true)) {
             this.doHandshake(this.engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
         } else {
-            this.appendData = true;
+            this.hsAppendData = true;
         }
     }
 
@@ -110,7 +158,6 @@ public class SslHandle {
     /** Unwrap 操作，负责处理接收的网络数据 */
     private void handleUnwrap(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         // no more data to read.
-
         if (!rcvUpstream.hasReadable()) {
             logger.info("sslHandshake(" + this.channelID + ") Unwrap, rcv is empty.");
             this.handleFinish(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
@@ -141,7 +188,7 @@ public class SslHandle {
 
         // 需要处理 BUFFER_OVERFLOW 的情况，有些 SSL 实现并非完全遵循照标准的固定 Buffer 大小进行封包拆分
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            this.resizingBufOverflowForUnwrap(this.engine);
+            this.resizingBufOverflowForUnwrap("sslHandshake", this.engine);
             rcvUpstream.resetReader();
             this.handleUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             return;
@@ -162,17 +209,17 @@ public class SslHandle {
             if (this.inAppData.hasRemaining()) {
                 SSLEngineResult copyResult = result;
                 this.context.submitSoTask(new SslCopyTask(this.channelID, this.context, this.inAppData, rcvDownstream), this).onCompleted(f -> {
-                    this.afterUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, copyResult);
+                    this.afterWrapUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, copyResult);
                 }).onFailed(f -> this.handleFailed(sslEngine, f.getCause()));
             } else {
-                this.afterUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
+                this.afterWrapUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
             }
         } else {
-            this.afterUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
+            this.afterWrapUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
         }
     }
 
-    private void resizingBufOverflowForUnwrap(SSLEngine engine) {
+    private void resizingBufOverflowForUnwrap(String type, SSLEngine engine) {
         SSLSession session = engine.getSession();
         int oldNetSize = this.inNetData.capacity();
         int oldAppSize = this.inAppData.capacity();
@@ -185,13 +232,13 @@ public class SslHandle {
             String part2 = sslConfig.getMaxResizingNetBufSize() + "/" + sslConfig.getMaxResizingAppBufSize();
             String errorMsg = "Unwrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (decodeBuf/dataBuf)";
 
-            logger.error("sslHandshake(" + this.channelID + ") " + errorMsg);
+            logger.error(type + "(" + this.channelID + ") " + errorMsg);
             throw new SoOverflowException(errorMsg);
         }
 
         String part1 = oldNetSize + "/" + oldAppSize;
         String part2 = newNetSize + "/" + newAppSize;
-        logger.warn("sslHandshake(" + this.channelID + ") Unwrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (decodeBuf/dataBuf)");
+        logger.warn(type + " (" + this.channelID + ") Unwrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (decodeBuf/dataBuf)");
 
         this.inNetData = this.rm.freeObject(this.inNetData);
         this.inNetData = this.rm.newByteBuffer(newNetSize);
@@ -221,7 +268,7 @@ public class SslHandle {
         SSLEngineResult result = sslEngine.wrap(this.outAppData, this.outNetData);
         // 需要处理 BUFFER_OVERFLOW 的情况，有些 SSL 实现并非完全遵循照标准的固定 Buffer 大小进行封包拆分
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            this.resizingBufOverflowForWrap(this.engine);
+            this.resizingBufOverflowForWrap("sslHandshake", this.engine);
             rcvUpstream.resetReader();
             this.handleWrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             return;
@@ -245,14 +292,14 @@ public class SslHandle {
         // 一次写不完，需要异步任务继续写
         if (this.outNetData.hasRemaining()) {
             this.context.submitSoTask(new SslCopyTask(this.channelID, this.context, this.outNetData, sndDownstream), this).onCompleted(f -> {
-                this.afterUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
+                this.afterWrapUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
             }).onFailed(f -> this.handleFailed(sslEngine, f.getCause()));
         } else {
-            this.afterUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
+            this.afterWrapUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
         }
     }
 
-    private void resizingBufOverflowForWrap(SSLEngine engine) {
+    private void resizingBufOverflowForWrap(String type, SSLEngine engine) {
         SSLSession session = engine.getSession();
         int oldNetSize = this.outNetData.capacity();
         int oldAppSize = this.outAppData.capacity();
@@ -265,13 +312,13 @@ public class SslHandle {
             String part2 = sslConfig.getMaxResizingAppBufSize() + "/" + sslConfig.getMaxResizingNetBufSize();
             String errorMsg = "Wrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (dataBuf/encodeBuf)";
 
-            logger.error("sslHandshake(" + this.channelID + ") " + errorMsg);
+            logger.error(type + "(" + this.channelID + ") " + errorMsg);
             throw new SoOverflowException(errorMsg);
         }
 
         String part1 = oldAppSize + "/" + oldNetSize;
         String part2 = newAppSize + "/" + newNetSize;
-        logger.warn("sslHandshake(" + this.channelID + ") Wrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (dataBuf/encodeBuf)");
+        logger.warn(type + "(" + this.channelID + ") Wrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (dataBuf/encodeBuf)");
 
         this.outNetData = this.rm.freeObject(this.outNetData);
         this.outNetData = this.rm.newByteBuffer(newNetSize);
@@ -280,7 +327,12 @@ public class SslHandle {
     }
 
     /** 握手中，Unwrap/Wrap 的后续处理 */
-    private void afterUnwrap(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream, SSLEngineResult result) {
+    private void afterWrapUnwrap(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream, SSLEngineResult result) {
+        this.inNetData.compact();
+        this.inAppData.compact();
+        this.outNetData.compact();
+        this.outAppData.compact();
+
         switch (result.getStatus()) {
             case BUFFER_UNDERFLOW:
                 this.handleFinish(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);//need more data
@@ -304,127 +356,206 @@ public class SslHandle {
 
     /** 结束本轮 handshake 调用  */
     private void handleFinish(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
-        if (this.appendData) {
-            this.appendData = false;
+        if (this.hsAppendData) {
+            this.hsAppendData = false;
             this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
                 this.doHandshake(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             }).onFailed(f -> this.handleFailed(sslEngine, f.getCause()));
         } else {
-            this.status.set(false);
+            this.hsStatus.set(false);
         }
-    }
-
-    /** 关闭 SSL 会话 */
-    private void handleFailed(SSLEngine sslEngine, Throwable e) {
-        if (!sslEngine.isOutboundDone()) {
-            sslEngine.closeOutbound();
-        }
-        this.context.closeChannel(this.channelID, e.getMessage());
-        this.status.set(false);
-    }
-
-    /** 关闭 SSL 会话 */
-    private void handleClose(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
-        if (!sslEngine.isOutboundDone()) {
-            sslEngine.closeOutbound();
-        }
-
-        //        // Indicate that application is done with engine
-        //        engine.closeOutbound();
-        //        while (!engine.isOutboundDone()) {
-        //            // Get close message
-        //            SSLEngineResult res = engine.wrap(empty, myNetData);
-        //            // Check res statuses
-        //            // Send close message to peer
-        //            while(myNetData.hasRemaining()) {
-        //                int num = socketChannel.write(myNetData);
-        //                if (num == 0) {
-        //                    // no bytes written; try again later
-        //                }
-        //                myNetData().compact();
-        //            }
-        //        }
-        //        // Close transport
-        //        socketChannel.close();
-
-        this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
-            this.doHandshake(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
-        }).onFailed(f -> this.handleFailed(sslEngine, f.getCause()));
     }
 
     // --------------------------------------------------------------------------------------------
+    //
+    // 握手后的数据接收
+    //
+    // --------------------------------------------------------------------------------------------
 
     /** 握手之后，处理接收的 SSL 数据 */
-    public void handlerRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
+    public void handlerRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
+        if (this.rcvStatus.compareAndSet(false, true)) {
+            this.doHandlerRcv(this.engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+        } else {
+            this.rcvAppendData = true;
+        }
+    }
+
+    public void doHandlerRcv(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (!rcvUpstream.hasReadable()) {
+            this.afterHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             return;
         }
-        System.out.println();
 
         // Process incoming data
-        //        peerNetData.flip();
-        //        res = this.engine.unwrap(peerNetData, peerAppData);
-        //        if (res.getStatus() == SSLEngineResult.Status.OK) {
-        //            peerNetData.compact();
-        //
-        //            if (peerAppData.hasRemaining()) {
-        //                // Use peerAppData
-        //            }
-        //        }
-        // Handle other status:  BUFFER_OVERFLOW, BUFFER_UNDERFLOW, CLOSED
-        //
+        this.inNetData.clear();
+        this.inAppData.clear();
+        int rcvTotal = rcvUpstream.readableBytes();
+        rcvUpstream.read(this.inNetData);
+        this.inNetData.flip();
+        SSLEngineResult res = engine.unwrap(this.inNetData, this.inAppData);
+        int consumedBytes = res.bytesConsumed();
+        int producedBytes = res.bytesProduced();
+
+        switch (res.getStatus()) {
+            case BUFFER_OVERFLOW: {
+                // try resizing Buf size.
+                this.resizingBufOverflowForUnwrap("sslRcv", engine);
+                rcvUpstream.resetReader();
+                this.doHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                return;
+            }
+            case BUFFER_UNDERFLOW: {
+                // need more data
+                rcvUpstream.resetReader();
+                this.afterHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                return;
+            }
+            case OK: {
+                // copy data to rcvDownstream
+                rcvUpstream.resetReader();
+                rcvUpstream.skipReadableBytes(consumedBytes);
+                rcvUpstream.markReader();
+                logger.info("sslRcv(" + this.channelID + ") " + rcvTotal + "/" + consumedBytes + "/" + producedBytes + " (rcv > decode > data)");
+
+                // has AppData,  AppData -> rcvDownstream
+                if (producedBytes > 0) {
+                    this.inAppData.flip();// and the app buffer to be read.
+                    int write = rcvDownstream.write(this.inAppData);
+                    rcvDownstream.markWriter();
+
+                    if (this.inAppData.hasRemaining()) {
+                        this.context.submitSoTask(new SslCopyTask(this.channelID, this.context, this.inAppData, rcvDownstream), this).onCompleted(f -> {
+                            this.afterHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                        }).onFailed(f -> this.handleFailed(engine, f.getCause()));
+                    } else {
+                        this.afterHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                    }
+                } else {
+                    this.afterHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                }
+                return;
+            }
+            case CLOSED:
+            default: {
+                this.handleClose(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                break;
+            }
+        }
+    }
+
+    private void afterHandlerRcv(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
+        this.inNetData.compact();
+        this.inAppData.compact();
+
+        if (this.rcvAppendData) {
+            this.rcvAppendData = false;
+            this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
+                try {
+                    this.doHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                } catch (IOException e) {
+                    this.handleFailed(engine, e);
+                }
+            }).onFailed(f -> this.handleFailed(engine, f.getCause()));
+        } else {
+            this.rcvStatus.set(false);
+        }
+    }
+
+    // --------------------------------------------------------------------------------------------
+    //
+    // 握手后的数据发送
+    //
+    // --------------------------------------------------------------------------------------------
+
+    /** 握手之后，处理发送的数据 */
+    public void handlerSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
+        if (this.sndStatus.compareAndSet(false, true)) {
+            this.doHandlerSnd(this.engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+        } else {
+            this.sndAppendData = true;
+        }
     }
 
     /** 握手之后，处理发送的数据 */
-    public void handlerSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
+    public void doHandlerSnd(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (!sndUpstream.hasReadable()) {
+            this.afterHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             return;
         }
-        System.out.println();
 
-        //        // Create a nonblocking socket channel
-        //        SocketChannel socketChannel = SocketChannel.open();
-        //        socketChannel.configureBlocking(false);
-        //        socketChannel.connect(new InetSocketAddress(hostname, port));
-        //
-        //        // Complete connection
-        //        while (!socketChannel.finishedConnect()) {
-        //            // do something until connect completed
-        //        }
-        //
-        //        // Create byte buffers to use for holding application and encoded data
-        //        SSLSession session = engine.getSession();
-        //        ByteBuffer myAppData = ByteBuffer.allocate(session.getApplicationBufferSize());
-        //        ByteBuffer myNetData = ByteBuffer.allocate(session.getPacketBufferSize());
-        //        ByteBuffer peerAppData = ByteBuffer.allocate(session.getApplicationBufferSize());
-        //        ByteBuffer peerNetData = ByteBuffer.allocate(session.getPacketBufferSize());
-        //
-        //        // Do initial handshake
-        //        doHandshake(socketChannel, engine, myNetData, peerNetData);
-        //
-        //        myAppData.put("hello".getBytes());
-        //        myAppData.flip();
-        //
-        //        while (myAppData.hasRemaining()) {
-        //            // Generate SSL/TLS encoded data (handshake or application data)
-        //            SSLEngineResult res = engine.wrap(myAppData, myNetData);
-        //
-        //            // Process status of call
-        //            if (res.getStatus() == SSLEngineResult.Status.OK) {
-        //                myAppData.compact();
-        //
-        //                // Send SSL/TLS encoded data to peer
-        //                while(myNetData.hasRemaining()) {
-        //                    int num = socketChannel.write(myNetData);
-        //                    if (num == 0) {
-        //                        // no bytes written; try again later
-        //                    }
-        //                }
-        //            }
-        //
-        //            // Handle other status:  BUFFER_OVERFLOW, CLOSED
-        //...
-        //        }
+        // Process out data
+        this.outAppData.clear();
+        this.outNetData.clear();
+        int sndTotal = sndUpstream.readableBytes();
+        sndUpstream.read(this.outAppData);
+        this.outAppData.flip();
+        SSLEngineResult res = engine.wrap(this.outAppData, this.outNetData);
+        int consumedBytes = res.bytesConsumed();
+        int producedBytes = res.bytesProduced();
 
+        switch (res.getStatus()) {
+            case BUFFER_OVERFLOW: {
+                // try resizing Buf size.
+                this.resizingBufOverflowForWrap("sslSnd", engine);
+                sndUpstream.resetReader();
+                this.doHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                return;
+            }
+            case BUFFER_UNDERFLOW: {
+                // need more data
+                sndUpstream.resetReader();
+                this.afterHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                return;
+            }
+            case OK: {
+                // copy data to rcvDownstream
+                sndUpstream.resetReader();
+                sndUpstream.skipReadableBytes(consumedBytes);
+                sndUpstream.markReader();
+                logger.info("sslSnd(" + this.channelID + ") " + sndTotal + "/" + consumedBytes + "/" + producedBytes + " (data > decode > snd)");
+
+                // has AppData,  AppData -> rcvDownstream
+                if (producedBytes > 0) {
+                    this.outNetData.flip();
+                    int write = sndDownstream.write(this.outNetData);
+                    sndDownstream.markWriter();
+
+                    if (this.outNetData.hasRemaining()) {
+                        this.context.submitSoTask(new SslCopyTask(this.channelID, this.context, this.outNetData, sndDownstream), this).onCompleted(f -> {
+                            this.afterHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                        }).onFailed(f -> this.handleFailed(engine, f.getCause()));
+                    } else {
+                        this.afterHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                    }
+                } else {
+                    this.afterHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                }
+                return;
+            }
+            case CLOSED:
+            default: {
+                this.handleClose(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                break;
+            }
+        }
+    }
+
+    private void afterHandlerSnd(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
+        this.outNetData.compact();
+        this.outAppData.compact();
+
+        if (this.sndAppendData) {
+            this.sndAppendData = false;
+            this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
+                try {
+                    this.doHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+                } catch (IOException e) {
+                    this.handleFailed(engine, e);
+                }
+            }).onFailed(f -> this.handleFailed(engine, f.getCause()));
+        } else {
+            this.sndStatus.set(false);
+        }
     }
 }

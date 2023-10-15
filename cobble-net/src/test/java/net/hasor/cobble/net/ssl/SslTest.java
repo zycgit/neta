@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.ssl;
+import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.bytebuf.ByteBufUtil;
@@ -26,7 +27,6 @@ import org.junit.Test;
 
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
 
@@ -56,9 +56,16 @@ public class SslTest {
         SslConfig sslConfig = new SslConfig();
         sslConfig.setEnable(true);
         sslConfig.setAuthType(SslAuthKeyType.PEM);
-        sslConfig.setPemCertChain("ssl/server.crt");
-        sslConfig.setPemPrivate("ssl/server.pem");
-        sslConfig.setAppProtocol(Arrays.asList("RSF1.1", "HTTP1.1", "HTTP2"));
+        sslConfig.setPemCertChain("ssl/ca/server.crt");
+        sslConfig.setPemPrivate("ssl/ca/server.pem");
+        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
+        sslConfig.setAppProtocol(new String[] { "RSF1.1", "HTTP1.1", "HTTP2" });
+        //        sslConfig.setAppProtocolSelector(new SslAppProtocolSelector() {
+        //            @Override
+        //            public String apply(SSLEngine sslEngine, List<String> strings) {
+        //                return null;
+        //            }
+        //        });
         config.setSslConfig(sslConfig);
 
         try (CobbleSocket server = new CobbleSocket(config)) {
@@ -68,7 +75,7 @@ public class SslTest {
     }
 
     private static void testSsl(SoContext context, SslConfig config) throws Exception {
-        ByteBuffer swap = ByteBuffer.allocate(2);   // 2Byte
+        ByteBuffer swap = ByteBuffer.allocate(1024);   // 2Byte
         SoResManager rm = context.getResourceManager();     // default rm
 
         // client
@@ -86,13 +93,14 @@ public class SslTest {
         SslContext serverContext = new JdkSslContext(2, context, config, rm, false);
 
         //
-        clientSndUpstream.writeString("Hello Server.", StandardCharsets.US_ASCII);
-        serverSndUpstream.writeString("Hello Client.", StandardCharsets.US_ASCII);
+        String serverMsg = "Hello Client, this message form server.";
+        String clientMsg = "Hello Server, this message form client.";
+        clientSndUpstream.writeString(clientMsg + "\n", StandardCharsets.US_ASCII);
+        serverSndUpstream.writeString(serverMsg + "\n", StandardCharsets.US_ASCII);
         clientSndUpstream.markWriter();
         serverSndUpstream.markWriter();
 
-        int i = 0;
-        while (true) {
+        for (int i = 0; i < 10; i++) {
             System.out.println("trun " + (i++));
             // client -> server
             clientContext.handRcv(clientRcvUpstream, clientRcvDownstream, clientSndUpstream, clientSndDownstream);
@@ -120,5 +128,9 @@ public class SslTest {
                 clientRcvUpstream.markWriter();
             }
         }
+
+        String clientRcv = clientRcvDownstream.readLine();
+        String serverRcv = serverRcvDownstream.readLine();
+        assert StringUtils.equals(clientRcv, serverMsg) && StringUtils.equals(serverRcv, clientMsg);
     }
 }
