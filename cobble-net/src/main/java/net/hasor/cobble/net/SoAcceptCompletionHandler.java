@@ -77,23 +77,18 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         // openChannel
         long channelID = SoContextImpl.nextID();
         long createdTime = System.currentTimeMillis();
+        logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
+
         SoResManager resManager = context.newSoResManager(channelID, remoteAddr);
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context, resManager);
         SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, context, resManager);
-        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, context, resManager);
+        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, this.forListen.getPipeline(), localAddr, remoteAddr, result, rChannel, wChannel, context, resManager);
         context.openChannel(channel);
         this.forListen.notifyAccept(channelID);
 
         // async read data
-        SoRcvTask task = new SoRcvTask(channelID, createdTime, result, rChannel, context);
-        context.submitSoTask(task, channel);
-
-        // continue accept
-        try {
-            logger.info("accept(" + channelID + ") R:" + result.getRemoteAddress() + " -> L:" + result.getLocalAddress());
-        } catch (Exception e) {
-            logger.info("accept(" + channelID + ")");
-        }
+        rChannel.resetSwapBuffer();
+        result.read(rChannel.getSwapBuffer(), context, rChannel);
     }
 
     @Override

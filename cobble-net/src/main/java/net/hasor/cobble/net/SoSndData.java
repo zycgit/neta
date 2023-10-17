@@ -15,18 +15,20 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
+import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.concurrent.future.Future;
 
 /**
- * 一个需要被发送的数据包。
+ * data packet
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoSndData {
-    private final long               dataSize;
-    private final ByteBuf            data;
-    private final Future<NetChannel> future;
-    private final NetChannel         result;
+    public static final ByteBuf            EMPTY_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
+    private final       long               dataSize;
+    private final       ByteBuf            data;
+    private final       Future<NetChannel> future;
+    private final       NetChannel         result;
 
     public SoSndData(ByteBuf data, Future<NetChannel> future, NetChannel result) {
         this.dataSize = data.readableBytes();
@@ -35,14 +37,23 @@ class SoSndData {
         this.result = result;
     }
 
+    /**
+     * packet size.
+     */
     public long getDataSize() {
         return this.dataSize;
     }
 
+    /**
+     * packet has any data.
+     */
     public boolean hasReadable() {
         return this.data.hasReadable();
     }
 
+    /**
+     * copy packet data to {@link ByteBuf}
+     */
     public int transferTo(ByteBuf dst) {
         int len = this.data.read(dst);
         this.data.markReader();
@@ -50,11 +61,23 @@ class SoSndData {
         return len;
     }
 
+    /**
+     * completed callback.
+     */
     public void completed() {
+        if (this.data != EMPTY_DATA) {
+            this.data.free();
+        }
         this.future.completed(this.result);
     }
 
+    /**
+     * failed callback.
+     */
     public void failed(Throwable e) {
+        if (this.data != EMPTY_DATA) {
+            this.data.free();
+        }
         this.future.failed(e);
     }
 
@@ -62,5 +85,4 @@ class SoSndData {
     public String toString() {
         return "ChannelID " + this.result.getChannelID() + ", " + this.data.toString();
     }
-
 }

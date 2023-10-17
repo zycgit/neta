@@ -15,14 +15,13 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
-import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 
 /**
- * 负责接收的数据 swapBuffer
+ * received Handler
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -39,7 +38,6 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     public SoRcvCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
         this.createdTime = createdTime;
-
         this.channel = channel;
         this.context = context;
         this.rm = rm;
@@ -47,20 +45,25 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.rcvBuffer = rm.newLocalRcvBuf();
     }
 
+    /**
+     * Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data.
+     */
     public ByteBuffer getSwapBuffer() {
         return this.swapBuffer;
     }
 
+    /**
+     * Enhanced {@link ByteBuffer}.
+     */
     public ByteBuf getRcvBuffer() {
         return this.rcvBuffer;
     }
 
-    public void reset() {
+    /**
+     * reset swap {@link ByteBuffer} for next receive.
+     */
+    public void resetSwapBuffer() {
         this.swapBuffer.clear();
-    }
-
-    private Future<?> submitTask(AbstractSoTask task) {
-        return this.context.submitSoTask(this.rm, task, this);
     }
 
     @Override
@@ -69,14 +72,13 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             if (logger.isDebugEnabled()) {
                 logger.debug("rcv(" + this.channelID + ") size:" + result);
             }
-            this.swapBuffer.flip();
 
             // copy buffer form swap to rcv
+            this.swapBuffer.flip();
             SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, context, getSwapBuffer(), getRcvBuffer());
 
-            submitTask(copyTask).onCompleted(f -> {
-                // rcv continue
-                submitTask(new SoRcvTask(this.channelID, this.createdTime, this.channel, this, context));
+            this.context.submitSoTask(this.rm, copyTask, this).onCompleted(f -> {
+                this.continueRcv(0);
             }).onFailed(f -> {
                 this.failed(f.getCause(), context);
             });
@@ -87,11 +89,8 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             }
 
             // rcv continue
-            SoRcvTask rcvTask = new SoRcvTask(this.channelID, this.createdTime, this.channel, this, context);
+            this.continueRcv(0);
 
-            submitTask(rcvTask).onFailed(f -> {
-                this.failed(f.getCause(), context);
-            });
         } else {
             if (logger.isDebugEnabled()) {
                 logger.debug("rcv(" + this.channelID + ") end");
@@ -102,16 +101,37 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         }
     }
 
+    private void continueRcv(int delayInterval) {
+        // It is async to avoid recursion.
+        this.context.submitSoTask(this.rm, new SoDelayTask(delayInterval), this).onCompleted(f -> {
+            try {
+                this.resetSwapBuffer();
+                this.channel.read(this.getSwapBuffer(), this.context, this);
+            } catch (Exception e) {
+                this.failed(e, this.context);
+            }
+        });
+    }
+
     @Override
     public void failed(Throwable e, SoContextImpl context) {
-        if (e instanceof InterruptedByTimeoutException) {
-            // rcv Close
-            logger.error("rcv(" + this.channelID + ") readTimeout, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, e.getMessage());
+        if (e instanceof NotYetConnectedException) {
+            long costTimeMs = System.currentTimeMillis() - this.createdTime;
+            if (costTimeMs < context.getConnectTimeoutMs()) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
+                }
+                continueRcv(context.getConfig().getRetryIntervalMs());
+            } else {
+                logger.error("rcv(" + this.channelID + ") Connection timeout.");
+                context.closeChannel(this.channelID, "Connection timeout.");
+            }
+            return;
+        }
 
-        } else if (e instanceof ShutdownChannelGroupException) {
+        if (e instanceof ShutdownChannelGroupException) {
 
-            // rcv Close
+            // rcv shutdown
             logger.error("rcv(" + this.channelID + ") shutdown, msg:" + e.getMessage());
             context.closeChannel(this.channelID, e.getMessage());
         } else if (e instanceof AsynchronousCloseException) {

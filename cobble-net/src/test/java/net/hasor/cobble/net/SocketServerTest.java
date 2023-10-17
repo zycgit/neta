@@ -16,7 +16,6 @@
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBufUtil;
 import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.concurrent.future.Future;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -27,11 +26,6 @@ import java.util.concurrent.ThreadFactory;
  */
 public class SocketServerTest {
     public static void main(String[] args) throws Exception {
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
-        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);
-
-        // 监听处理线程
         SoConfig config = new SoConfig();
         config.setSwapBuf(2, 2);
         config.setLocalBuf(32, 32);
@@ -41,18 +35,21 @@ public class SocketServerTest {
         //        config.setSoKeepIdleSec(10);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
+        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         try (CobbleSocket socket = new CobbleSocket(config)) {
-            socket.listen("127.0.0.1", 5567).onCompleted(SocketServerTest::read);
+            NetListen listen = socket.listen("127.0.0.1", 5567, null);
+            read(listen);
         }
     }
 
-    private static void read(Future<NetListen> f) {
+    private static void read(NetListen netListen) {
         try {
             System.out.println("10s after suspend.");
-            NetListen netListen = f.get();
             ThreadUtils.sleep(10000);
             netListen.suspend();
 

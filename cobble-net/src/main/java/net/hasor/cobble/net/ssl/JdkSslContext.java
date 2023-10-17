@@ -57,7 +57,7 @@ public class JdkSslContext extends SslContextBasic {
 
     @Override
     public String getApplicationProtocol() {
-        if (this.isEnable() && JdkAlpnSslUtils.supportsAlpn()) {
+        if (JdkAlpnSslUtils.supportsAlpn()) {
             String appProtocol = JdkAlpnSslUtils.getApplicationProtocol(this.getEngine());
             if (appProtocol != null) {
                 return appProtocol.isEmpty() ? null : appProtocol;

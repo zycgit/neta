@@ -24,7 +24,6 @@ import java.security.KeyStore;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SslConfig {
-    private boolean                enable                = false;
     private SslProvider            provider              = SslProvider.JDK;      // default is JDK
     private SslClientAuth          clientAuth            = SslClientAuth.NONE;   //
     private String[]               appProtocol           = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
@@ -43,14 +42,6 @@ public class SslConfig {
     private KeyManagerFactory      keyManagerFactory     = null;
     private TrustManagerFactory    trustManagerFactory   = null;
     private SslAppProtocolSelector appProtocolSelector   = null;
-
-    public boolean isEnable() {
-        return this.enable;
-    }
-
-    public void setEnable(boolean enable) {
-        this.enable = enable;
-    }
 
     public SslProvider getProvider() {
         return this.provider;

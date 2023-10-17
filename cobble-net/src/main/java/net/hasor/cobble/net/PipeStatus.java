@@ -14,29 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-import net.hasor.cobble.concurrent.future.Future;
-
-/**
- * 管道上下文
- * @version : 2023-09-24
- * @author 赵永春 (zyc@hasor.net)
- */
-public interface PipeContext {
-
-    /** 配置 */
-    SoConfig getConfig();
-
-    /** 通道 */
-    NetChannel channel();
-
-    /** 递交异步任务 */
-    <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result);
-
-    <T> T context(Class<T> attachment);
-
-    <T> T context(Class<T> attachmentType, T attachment);
-
-    void clearFlash();
-
-    SoResManager getSoResManager();
+public enum PipeStatus {
+    Success,
+    Again;
 }

@@ -15,7 +15,6 @@
  */
 package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
-import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.channels.AsynchronousSocketChannel;
@@ -24,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 负责将 Queue 中的数据拷贝到 sndBuffer
+ * Copy the Queue data to the sndBuffer
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -44,35 +43,27 @@ class SoSndCopyTask extends AbstractSoTask {
         this.taskIntervalMs = this.wContext.getContext().getConfig().getRetryIntervalMs();
     }
 
-    private Future<?> submitTask(AbstractSoTask task) {
-        return this.wContext.submitTask(task, this);
-    }
-
-    private void channelClose() {
+    private void channelClose(Throwable e) {
         if (logger.isDebugEnabled()) {
             logger.debug("snd(" + this.channelID + ") channel is close, clean queue.");
         }
 
-        List<SoSndData> afterFinish = new ArrayList<>();
-
         SoSndData data = this.wContext.peekData();
-        long dataSize = 0;
         while (data != null) {
-            dataSize += data.getDataSize();
-            afterFinish.add(this.wContext.popData());
-            data = this.wContext.peekData();
+            data.failed(e);
+            data = this.wContext.popData();
         }
-        submitTask(new SoSndCleanTask(this.channelID, afterFinish, dataSize, new ClosedChannelException()));
     }
 
     @Override
-    protected void doWork(boolean retry) {
+    protected void doWork(int retryCnt) {
         SoContextImpl context = this.wContext.getContext();
 
         // channel is close
         if (context.isClose(this.channelID)) {
-            channelClose();
-            this.exitTask(new ClosedChannelException());
+            ClosedChannelException e = new ClosedChannelException();
+            channelClose(e);
+            this.exitTask(e);
             return;
         }
 
@@ -125,7 +116,8 @@ class SoSndCopyTask extends AbstractSoTask {
 
         // start SoSndTask, send sndBuffer to socket
         long beginTime = this.wContext.getCreatedTime();
-        submitTask(new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish));
+        SoSndTask task = new SoSndTask(this.channelID, beginTime, this.channel, this.wHandler, context, afterFinish);
+        this.wContext.submitTask(task, this);
 
         if (data == null) {
             this.finishTask();

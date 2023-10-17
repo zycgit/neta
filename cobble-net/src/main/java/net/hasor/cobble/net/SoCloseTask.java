@@ -15,7 +15,7 @@
  */
 package net.hasor.cobble.net;
 /**
- * 负责异步关闭 channel
+ * closing the channel.
  * @version : 2023-10-09
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -29,7 +29,7 @@ class SoCloseTask extends AbstractSoTask {
     }
 
     @Override
-    protected void doWork(boolean retry) {
+    protected void doWork(int retryCnt) {
         this.context.closeChannel(this.channelID, "close");
         this.finishTask();
     }

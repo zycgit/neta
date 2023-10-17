@@ -29,11 +29,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class SocketClientTest {
     public static void main(String[] args) throws Exception {
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
-        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);
-
-        // 监听处理线程
         SoConfig config = new SoConfig();
         config.setSwapBuf(2, 2);
         config.setLocalBuf(128, 128);
@@ -43,12 +38,17 @@ public class SocketClientTest {
         config.setSoKeepIdleSec(2);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
+        ClassLoader loader = Thread.currentThread().getContextClassLoader();
+        ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
+        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
+        //
         AtomicBoolean exit = new AtomicBoolean(false);
         try (CobbleSocket client = new CobbleSocket(config)) {
-            Future<NetChannel> connect = client.connect(new InetSocketAddress("127.0.0.1", 5567));
+            Future<NetChannel> connect = client.connect(new InetSocketAddress("127.0.0.1", 5567), null);
+
             connect.onCompleted(f -> {
                 ThreadUtils.runFrontThread(() -> clientWorking(f.getResult(), exit));
             }).onFailed(f -> {

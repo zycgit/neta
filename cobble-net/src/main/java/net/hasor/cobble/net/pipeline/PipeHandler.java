@@ -13,13 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net;
+package net.hasor.cobble.net.pipeline;
+import net.hasor.cobble.net.PipeContext;
+import net.hasor.cobble.net.PipeLayer;
+
 import java.io.IOException;
 
 /**
- * 管道
- * @version : 2023-09-24
+ * 网络协议层用于表示单向的数据处理器，两个方向相反的数据处理器会组成一个全双工协议层 {@link PipeLayer}
+ * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
+ * @see net.hasor.cobble.net.PipeLayer
  */
 public interface PipeHandler<IN, OUT> {
     void doHandler(PipeContext context, IN src, OUT dst) throws IOException;

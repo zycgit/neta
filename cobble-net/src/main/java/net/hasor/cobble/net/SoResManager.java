@@ -17,10 +17,9 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.bytebuf.ByteBuf;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.ExecutorService;
 
 /**
- * 资源管理器
+ * Resource manager
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -37,8 +36,10 @@ public interface SoResManager extends AutoCloseable {
 
     ByteBuf newLocalSndBuf();
 
-    /** 永远返回 null */
+    ByteBuf newSndDownBuffer();
+
+    /** always return null */
     <T> T freeObject(Object refObj);
 
-    ExecutorService getExecutor();
+    void submitTask(Runnable runnable);
 }

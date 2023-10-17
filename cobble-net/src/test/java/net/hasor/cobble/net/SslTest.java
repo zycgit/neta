@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.ssl;
+package net.hasor.cobble.net;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.bytebuf.ByteBuf;
 import net.hasor.cobble.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.bytebuf.ByteBufUtil;
 import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.net.CobbleSocket;
-import net.hasor.cobble.net.SoConfig;
-import net.hasor.cobble.net.SoContext;
-import net.hasor.cobble.net.SoResManager;
+import net.hasor.cobble.net.ssl.*;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
@@ -54,7 +51,6 @@ public class SslTest {
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
         //
         SslConfig sslConfig = new SslConfig();
-        sslConfig.setEnable(true);
         sslConfig.setAuthType(SslAuthKeyType.PEM);
         sslConfig.setPemCertChain("ssl/ca/server.crt");
         sslConfig.setPemPrivate("ssl/ca/server.pem");

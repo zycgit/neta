@@ -19,7 +19,7 @@ import net.hasor.cobble.logging.Logger;
 import java.util.List;
 
 /**
- * 清理任务.
+ * clean task for snd.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -45,7 +45,7 @@ class SoSndCleanTask extends AbstractSoTask {
     }
 
     @Override
-    protected void doWork(boolean retry) {
+    protected void doWork(int retryCnt) {
         long size = 0;
         for (SoSndData sndData : this.cleanTask1) {
             try {

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
-
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
@@ -26,7 +25,7 @@ import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * TcpClient\TcpServer 的基类
+ * AIO Socket basic
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -37,11 +36,13 @@ public abstract class AbstractSocket implements AutoCloseable {
     protected            SoContextImpl   context;
     protected            AtomicBoolean   inited;
 
+    /** return {@link SoConfig} */
     public SoConfig getConfig() {
         return this.config;
     }
 
-    public SoContext getContext() {
+    /** return {@link SoContext} */
+    protected SoContext getContext() {
         return this.context;
     }
 

@@ -17,8 +17,8 @@ package net.hasor.cobble.net;
 import java.util.List;
 
 /**
- * 输入队列
- * @version : 2023-09-24
+ * 网络协议层输入端点的数据队列
+ * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface PipeRcvQueue<T> {

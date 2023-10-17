@@ -50,7 +50,7 @@ class SoSndTask extends AbstractSoTask {
     }
 
     @Override
-    protected void doWork(boolean retry) {
+    protected void doWork(int retryCnt) {
         if (this.context.isClose(this.channelID)) {
             this.exitTask(new ClosedChannelException());
             return;

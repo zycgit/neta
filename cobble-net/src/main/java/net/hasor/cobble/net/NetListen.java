@@ -22,7 +22,7 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 监听
+ * A listener channel for accept incoming sockets and binding them to the protocol stack
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -32,18 +32,20 @@ public class NetListen implements SoChannel<NetListen> {
     private         long                            lastActiveTime;
     private final   InetSocketAddress               listen;
     protected final AsynchronousServerSocketChannel channel;
+    private final   PipeChainRoot                   pipeline;
     private final   SoContextImpl                   context;
     private         boolean                         suspend;
     //
     protected final AtomicBoolean                   closeStatus;
     protected final Future<NetListen>               closeFuture;
 
-    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel, SoContextImpl context) {
+    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel, PipeChainRoot pipeline, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
         this.listen = listen;
         this.channel = channel;
+        this.pipeline = pipeline;
         this.context = context;
 
         this.closeStatus = new AtomicBoolean(false);
@@ -80,24 +82,45 @@ public class NetListen implements SoChannel<NetListen> {
         return false;
     }
 
-    /** 侦听器是否被挂起，监听器被挂起后侦听端口仍然打开，但是所有传入的链接都会被 close。 */
+    /**
+     * Returns the listener current suspend status.
+     *
+     * <p>all new accept socket will be closed when suspend = true.</p>
+     */
     public boolean isSuspend() {
         return this.suspend;
     }
 
-    /** 监听器挂起，监听器被挂起后侦听端口仍然打开，但是所有传入的链接都会被 close */
+    /**
+     * set suspend is true
+     *
+     * <p>all new accept socket will be closed when suspend = true.</p>
+     */
     public void suspend() {
         this.suspend = true;
     }
 
-    /** 监听器恢复，恢复后可以继续处理传入的链接 */
+    /**
+     * set suspend is false
+     *
+     * <p>all new accept socket will be closed when suspend = true.</p>
+     */
     public void resume() {
         this.suspend = false;
     }
 
-    /** 获取侦听的端口号 */
+    /**
+     * return this listener bind socket port.
+     */
     public int getListenPort() {
         return this.listen.getPort();
+    }
+
+    /**
+     * return Application layer network protocol stack to use
+     */
+    PipeChainRoot getPipeline() {
+        return this.pipeline;
     }
 
     @Override
@@ -124,6 +147,7 @@ public class NetListen implements SoChannel<NetListen> {
         return this.closeFuture;
     }
 
+    @Override
     public Future<NetListen> closeNow() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
             new SoCloseTask(this.channelID, this.context).run();
@@ -132,8 +156,10 @@ public class NetListen implements SoChannel<NetListen> {
         return this.closeFuture;
     }
 
+    /**
+     * a new accept socket
+     */
     final void notifyAccept(long channelID) {
         this.lastActiveTime = System.currentTimeMillis();
     }
-
 }

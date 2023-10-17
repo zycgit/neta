@@ -19,7 +19,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import java.util.Queue;
 
 /**
- * 发送上下文，涵盖了 SocketContext 对象和需要被发送的数据队列
+ * Wrapper bean to reduce the number of {@link SoSndCopyTask} arguments
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -36,22 +36,37 @@ class SoSndContext {
         this.wQueue = wQueue;
     }
 
+    /**
+     * channel accept time or connect time
+     */
     public long getCreatedTime() {
         return this.createdTime;
     }
 
+    /**
+     * poll data form wQueue
+     */
     public SoSndData popData() {
         return this.wQueue.poll();
     }
 
+    /**
+     * peek data form wQueue
+     */
     public SoSndData peekData() {
         return this.wQueue.peek();
     }
 
+    /**
+     * return {@link SoContextImpl}
+     */
     public SoContextImpl getContext() {
         return this.context;
     }
 
+    /**
+     * submit async task to run.
+     */
     public Future<?> submitTask(AbstractSoTask task, Object context) {
         return this.context.submitSoTask(this.rm, task, context);
     }

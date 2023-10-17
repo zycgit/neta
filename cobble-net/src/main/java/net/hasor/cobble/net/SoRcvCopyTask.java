@@ -20,7 +20,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 
 /**
- * 负责将接收的数据从 swapBuffer 拷贝到 rcvBuffer
+ * asynchronous non-blocking copy receive data form swapBuffer {@link ByteBuffer} to rcvBuffer {@link ByteBuf}
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -38,7 +38,7 @@ class SoRcvCopyTask extends AbstractSoTask {
     }
 
     @Override
-    protected void doWork(boolean retry) {
+    protected void doWork(int retryCnt) {
         if (this.context.isClose(this.channelID)) {
             this.exitTask(new ClosedChannelException());
             return;
@@ -46,14 +46,18 @@ class SoRcvCopyTask extends AbstractSoTask {
 
         if (this.srcBuffer.hasRemaining()) {
             if (this.dstBuffer.writableBytes() <= 0) {
-                int interval = this.context.notifyChannelRcv(this.channelID, true);
-                this.delayTask(interval);
+                this.context.notifyChannelRcv(this.channelID, retryCnt);
+                if (retryCnt > 5) {
+                    this.delayTask(this.context.getConfig().getRetryIntervalMs());
+                } else {
+                    this.delayTask(0);
+                }
             } else {
                 // swapBuffer -> rcvBuffer
                 this.dstBuffer.write(this.srcBuffer);
                 this.dstBuffer.markWriter();
 
-                this.context.notifyChannelRcv(this.channelID, false);
+                this.context.notifyChannelRcv(this.channelID, retryCnt);
                 this.continueTask();
             }
         } else {

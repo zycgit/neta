@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
+import net.hasor.cobble.net.pipeline.PipeHandler;
+
 import java.io.IOException;
 
 /**
- * PipeLayer is like a dual carriageway, The data flow direction is identified by the isRcv parameter
+ * PipeLayer is like a dual carriageway, The data flow direction is identified by the isRcv parameter.
  *
+ * There are two pipeline handlers that combine in opposite directions
  * <pre>
  *                    /-------------\
  *  RCV  ...(UP)   -> |             | -> ...(DOWN) -> RCV
@@ -27,11 +30,17 @@ import java.io.IOException;
  *                    \-------------/
  * </pre>
  *
- * @version : 2023-09-24
+ * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
+ * @see PipeHandler
  */
 public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    void doLayer(PipeContext context, boolean isRcv,//
+
+    void initLayer(PipeContext pipeContext) throws Exception;
+
+    PipeStatus doLayer(PipeContext context, boolean isRcv,//
             RCV_UP rcvUpstream, RCV_DOWN rcvDownstream, //
             SND_UP sndUpstream, SND_DOWN sndDownstream) throws IOException;
+
+    void releaseLayer(PipeContext pipeContext);
 }

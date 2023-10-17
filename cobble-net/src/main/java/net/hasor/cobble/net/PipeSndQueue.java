@@ -18,8 +18,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * 输出队列
- * @version : 2023-09-24
+ * 网络协议层输出端点的数据队列
+ * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface PipeSndQueue<T> {

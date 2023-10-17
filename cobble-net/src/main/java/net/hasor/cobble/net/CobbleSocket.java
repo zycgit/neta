@@ -38,61 +38,86 @@ public class CobbleSocket extends AbstractSocket {
         this.initTcp(config);
     }
 
-    /** 作为 server 监听本地端口，并接受链接 */
-    public synchronized Future<NetListen> listen(int listenPort) {
-        return this.listen(new InetSocketAddress(listenPort));
+    /**
+     * Listen on the port and bind Application layer network protocol to the accepted channels.
+     *
+     * @param listenPort local port for listen
+     * @param pipeline Application layer network protocol
+     * @return A listener channel for accept incoming sockets
+     */
+    public synchronized NetListen listen(int listenPort, PipeChainRoot pipeline) throws IOException {
+        return this.listen(new InetSocketAddress(listenPort), pipeline);
     }
 
-    /** 作为 server 监听本地端口，并接受链接 */
-    public synchronized Future<NetListen> listen(String listenAddr, int listenPort) {
-        return this.listen(new InetSocketAddress(listenAddr, listenPort));
+    /**
+     * Listen on the port and bind Application layer network protocol to the accepted channels.
+     *
+     * @param listenAddr local address for listen
+     * @param listenPort local port for listen
+     * @param pipeline Application layer network protocol
+     * @return A listener channel for accept incoming sockets
+     */
+    public synchronized NetListen listen(String listenAddr, int listenPort, PipeChainRoot pipeline) throws IOException {
+        return this.listen(new InetSocketAddress(listenAddr, listenPort), pipeline);
     }
 
-    /** 作为 server 监听本地端口，并接受链接 */
-    public synchronized Future<NetListen> listen(InetSocketAddress listen) {
-        Future<NetListen> future = new BasicFuture<>();
-        try {
-            this.initChannelGroup();
+    /**
+     * Listen on the port and bind Application layer network protocol to the accepted channels.
+     *
+     * @param listen local address:port for listen
+     * @param pipeline Application layer network protocol
+     * @return A listener channel for accept incoming sockets
+     */
+    public synchronized NetListen listen(InetSocketAddress listen, PipeChainRoot pipeline) throws IOException {
+        this.initChannelGroup();
 
-            AsynchronousServerSocketChannel listenChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
-            SoConfigUtils.configListen(this.context.getConfig(), listenChannel);
-            listenChannel.bind(listen, 0);
+        AsynchronousServerSocketChannel listenChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
+        SoConfigUtils.configListen(this.context.getConfig(), listenChannel);
+        listenChannel.bind(listen, 0);
 
-            long channelID = SoContextImpl.nextID();
-            long createdTime = System.currentTimeMillis();
-            NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, this.context);
-            listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
+        long channelID = SoContextImpl.nextID();
+        long createdTime = System.currentTimeMillis();
+        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeline, this.context);
+        listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
 
-            this.context.openChannel(netListen);
+        this.context.openChannel(netListen);
 
-            future.completed(netListen);
-            logger.info("listen at " + listen);
-            return future;
-        } catch (Exception e) {
-            future.failed(e);
-            return future;
-        }
+        logger.info("listen at " + listen);
+        return netListen;
     }
 
-    /** 作为 client 向本机的特定端口发起链接请求 */
-    public Future<NetChannel> connect(int localPort) {
-        return this.connect(new InetSocketAddress(localPort));
+    /**
+     * connect to local port, and bind Application layer network protocol on this channel.
+     * @param localPort local port
+     * @param pipeline Application layer network protocol
+     */
+    public Future<NetChannel> connect(int localPort, PipeChainRoot pipeline) {
+        return this.connect(new InetSocketAddress(localPort), pipeline);
     }
 
-    /** 作为 client 发起链接请求 */
-    public Future<NetChannel> connect(String remoteAddr, int localPort) {
-        return this.connect(new InetSocketAddress(remoteAddr, localPort));
+    /**
+     * connect to local port, and bind Application layer network protocol on this channel.
+     * @param remoteAddr local address
+     * @param localPort local port
+     * @param pipeline Application layer network protocol
+     */
+    public Future<NetChannel> connect(String remoteAddr, int localPort, PipeChainRoot pipeline) {
+        return this.connect(new InetSocketAddress(remoteAddr, localPort), pipeline);
     }
 
-    /** 作为 client 发起链接请求 */
-    public Future<NetChannel> connect(InetSocketAddress remoteAddr) {
+    /**
+     * connect to remote, and bind Application layer network protocol on this channel.
+     * @param remoteAddr remoteAddr
+     * @param pipeline Application layer network protocol
+     */
+    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeChainRoot pipeline) {
         Future<NetChannel> future = new BasicFuture<>();
         try {
             this.initChannelGroup();
 
             AsynchronousSocketChannel clientChannel = AsynchronousSocketChannel.open(this.channelGroup);
             SoConfigUtils.configSocket(this.context.getConfig(), clientChannel);
-            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, future));
+            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, pipeline, future));
             logger.info("connect to " + remoteAddr);
             return future;
         } catch (Exception e) {

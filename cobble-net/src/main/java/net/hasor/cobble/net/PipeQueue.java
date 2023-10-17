@@ -14,28 +14,51 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net;
+import java.util.List;
+
 /**
- * delay task
+ * PipeRcvQueue/PipeSndQueue 的实现类
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoDelayTask extends AbstractSoTask {
-    private final int intervalMillis;
-
-    public SoDelayTask(int intervalMillis) {
-        this.intervalMillis = intervalMillis;
-    }
-
-    public SoDelayTask(SoContext context) {
-        this.intervalMillis = Math.max(10, context.getConfig().getRetryIntervalMs());
+class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
+    @Override
+    public int queueSize() {
+        return 0;
     }
 
     @Override
-    protected void doWork(int retryCnt) {
-        if (retryCnt == 0 && this.intervalMillis > 0) {
-            this.delayTask(this.intervalMillis);
-        } else {
-            this.finishTask();
-        }
+    public int slotSize() {
+        return 0;
+    }
+
+    @Override
+    public PipeRcvQueue<T> rcvMark() {
+        return null;
+    }
+
+    @Override
+    public PipeRcvQueue<T> rcvReset() {
+        return null;
+    }
+
+    @Override
+    public PipeSndQueue<T> sndMark() {
+        return null;
+    }
+
+    @Override
+    public PipeSndQueue<T> sndReset() {
+        return null;
+    }
+
+    @Override
+    public int offerMessage(List<T> cnt) {
+        return 0;
+    }
+
+    @Override
+    public List<T> takeMessage(int cnt) {
+        return null;
     }
 }

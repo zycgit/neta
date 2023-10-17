@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * SoContext 接口实现
+ * SoContext implements
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -157,18 +157,16 @@ class SoContextImpl implements SoContext {
         }
     }
 
-    /** 有新数据到达，返回值为如果需要 */
-    public int notifyChannelRcv(long channelID, boolean rcvFull) {
+    /** 有新数据到达 */
+    public void notifyChannelRcv(long channelID, int retryCnt) {
         SoChannel<?> channel = this.channelMap.get(channelID);
         if (channel != null) {
             if (channel.isClient() || channel.isServer()) {
                 NetChannel netChannel = (NetChannel) channel;
-                return netChannel.notifyRcv(rcvFull);
+                netChannel.notifyRcv(retryCnt);
             } else {
                 throw new UnsupportedOperationException(); // 不可能发生
             }
-        } else {
-            return 0;
         }
     }
 
@@ -189,7 +187,7 @@ class SoContextImpl implements SoContext {
 
                 switch (task.getStatus()) {
                     case Continue:
-                        rm.getExecutor().submit(refTemp.get());
+                        rm.submitTask(refTemp.get());
                         break;
                     case Finish:
                         future.completed(result);
@@ -204,7 +202,7 @@ class SoContextImpl implements SoContext {
         };
         refTemp.set(runnable);
 
-        rm.getExecutor().submit(refTemp.get());
+        rm.submitTask(refTemp.get());
         return future;
     }
 

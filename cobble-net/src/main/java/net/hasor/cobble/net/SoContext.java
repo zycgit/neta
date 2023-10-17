@@ -17,26 +17,26 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.concurrent.future.Future;
 
 /**
- * 管理所有网络链接和状态
+ * manage all network NetChannel and NetListen
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface SoContext {
-    /** 配置 */
+    /** return global config. */
     SoConfig getConfig();
 
-    /** 全局资源管理器 */
+    /** default {@link SoResManager}  */
     SoResManager getResourceManager();
 
-    /** 递交异步任务 */
+    /** submit async tasks */
     <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result);
 
-    /** 递交异步任务 */
+    /** submit async tasks, use special {@link SoResManager} run it. */
     <T> Future<T> submitSoTask(SoResManager rm, AbstractSoTask mainTask, T result);
 
-    /** 判断一个通道是否已经关闭 */
+    /** test channel is not exist or closed */
     boolean isClose(long channelID);
 
-    /** 立即触发 channel 的关闭，相当于强制执行 {@link SoChannel#closeNow()} */
+    /** force close network channel, like {@link SoChannel#closeNow()} */
     void closeChannel(long channelID, String message);
 }

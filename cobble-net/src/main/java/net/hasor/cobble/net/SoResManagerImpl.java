@@ -27,7 +27,7 @@ import java.util.List;
 import java.util.concurrent.ExecutorService;
 
 /**
- * SoResManager 接口实现
+ * SoResManager implements
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -45,6 +45,7 @@ class SoResManagerImpl implements SoResManager, AutoCloseable {
         this.resources = new ArrayList<>();
     }
 
+    @Override
     public ByteBuf newByteBuf(int capacity) {
         ByteBuf byteBuf;
         if (this.bufAllocator.isDirect()) {
@@ -62,20 +63,31 @@ class SoResManagerImpl implements SoResManager, AutoCloseable {
         return this.newByteBuf(capacity).asByteBuffer();
     }
 
+    @Override
     public ByteBuffer newSwapRcvBuf() {
         return this.newByteBuf(this.config.getRcvSwapBuf()).asByteBuffer();
     }
 
+    @Override
     public ByteBuffer newSwapSndBuf() {
         return this.newByteBuf(this.config.getSndSwapBuf()).asByteBuffer();
     }
 
+    @Override
     public ByteBuf newLocalRcvBuf() {
         return this.newByteBuf(this.config.getRcvLocalBuf());
     }
 
+    @Override
     public ByteBuf newLocalSndBuf() {
         return this.newByteBuf(this.config.getSndLocalBuf());
+    }
+
+    @Override
+    public ByteBuf newSndDownBuffer() {
+        ByteBuf byteBuf = this.bufAllocator.heapBuffer();
+        this.resources.add(byteBuf);
+        return byteBuf;
     }
 
     @Override
@@ -93,8 +105,8 @@ class SoResManagerImpl implements SoResManager, AutoCloseable {
     }
 
     @Override
-    public ExecutorService getExecutor() {
-        return this.executor;
+    public void submitTask(Runnable runnable) {
+        this.executor.submit(runnable);
     }
 
     @Override

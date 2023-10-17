@@ -31,12 +31,14 @@ import java.nio.channels.CompletionHandler;
 class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(SoConnectCompletionHandler.class);
     private final        SocketAddress             remoteAddress;
+    private final        PipeChainRoot             pipeline;
     private final        AsynchronousSocketChannel channel;
     private final        Future<NetChannel>        future;
 
-    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, Future<NetChannel> future) throws IOException {
+    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, PipeChainRoot pipeline, Future<NetChannel> future) throws IOException {
         this.remoteAddress = channel.getRemoteAddress();
         this.channel = channel;
+        this.pipeline = pipeline;
         this.future = future;
     }
 
@@ -59,7 +61,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         SoResManager resManager = context.newSoResManager(channelID, this.remoteAddress);
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, this.channel, context, resManager);
         SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, this.channel, context, resManager);
-        NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, context, resManager);
+        NetChannel channel = new NetChannel(channelID, createdTime, null, this.pipeline, localAddr, remoteAddr, this.channel, rChannel, wChannel, context, resManager);
         context.openChannel(channel);
 
         // continue accept
@@ -69,8 +71,9 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
             logger.info("connect(" + channelID + ")");
         }
 
-        // read data
-        context.submitSoTask(new SoRcvTask(channelID, createdTime, this.channel, rChannel, context), channel);
+        // async read data
+        rChannel.resetSwapBuffer();
+        this.channel.read(rChannel.getSwapBuffer(), context, rChannel);
         this.future.completed(channel);
     }
 

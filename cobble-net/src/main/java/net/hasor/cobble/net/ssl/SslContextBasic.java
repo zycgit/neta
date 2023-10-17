@@ -29,7 +29,6 @@ public abstract class SslContextBasic implements SslContext {
     private final        SSLContext   sslContext;
     private final        SSLEngine    sslEngine;
     private volatile     SslHandle    sslHandler;
-    private              boolean      enable;
 
     public SslContextBasic(long channelID, SoContext soContext, SslConfig config, SoResManager rm, boolean clientMode) throws Exception {
         this.channelID = channelID;
@@ -40,7 +39,6 @@ public abstract class SslContextBasic implements SslContext {
         this.sslConfig = config;
         this.sslContext = this.createSSLContext();
         this.sslEngine = this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine());
-        this.enable = config.isEnable();
     }
 
     protected SSLEngine getEngine() {
@@ -55,10 +53,6 @@ public abstract class SslContextBasic implements SslContext {
     @Override
     public boolean isClient() {
         return this.clientMode;
-    }
-
-    public boolean isEnable() {
-        return this.enable;
     }
 
     @Override
@@ -164,29 +158,15 @@ public abstract class SslContextBasic implements SslContext {
 
     /** 接收SSL数据 */
     public void handRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
-        if (this.enable) {
-            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
-                this.sslHandler.handlerRcv(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
-            }
-        } else {
-            // not use ssl
-            rcvUpstream.read(rcvDownstream);
-            rcvUpstream.markReader();
-            rcvDownstream.markWriter();
+        if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
+            this.sslHandler.handlerRcv(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
         }
     }
 
     /** 发送SSL数据 */
     public void handSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
-        if (this.enable) {
-            if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
-                this.sslHandler.handlerSnd(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
-            }
-        } else {
-            // not use ssl
-            sndUpstream.read(sndDownstream);
-            sndUpstream.markReader();
-            sndDownstream.markWriter();
+        if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
+            this.sslHandler.handlerSnd(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
         }
     }
 }

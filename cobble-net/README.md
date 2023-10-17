@@ -1,10 +1,11 @@
 # Cobble Net
 
-&emsp;&emsp; 基于 AIO 的网络通信框架
+&emsp;&emsp; 基于 AIO 异步无阻塞网络通信框架
 
 ## 能力
 
 - AIO 模型
+- 异步模型
 - 支持 ReadSocketTimeout、WriteSocketTimeout
 - 支持 KeepAlive
 - 支持 TCP
@@ -22,7 +23,9 @@
     - OPTIONAL
     - REQUIRE
 - TLS 扩展
-  - TLS NPN/ALPN，应用层协议协商
+    - TLS NPN/ALPN，应用层协议协商
+- Pipeline
+    - 反压机制
 
 资料
 
@@ -30,11 +33,9 @@
 
 TODO
 
-- ReadSocketTimeout 的感觉和实际预期还是有一些偏差，即便没有传入数据 ReadSocketTimeout 仍然会触发超时
-- NetChannel 和外围 API
-- 低延迟 ExecutorService
-- SSL
-    - SSL 缓冲区溢出,需要额外考虑，有些SSL 实现并没有使用固定大小
+1. soReadTimeoutMs 的作用和平时认知有一些偏差，需要进一步拟合这种偏差
+2. NetChannel 和外围 API
+3. 低延迟 ExecutorService
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#ex6
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html

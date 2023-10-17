@@ -31,7 +31,7 @@ public abstract class AbstractSoTask implements Runnable {
     private boolean      delay;
     private int          delayTime;
     private Exception    cause;
-    private boolean      retry;
+    private int          retryCnt;
 
     public Throwable getCause() {
         return this.cause;
@@ -86,10 +86,9 @@ public abstract class AbstractSoTask implements Runnable {
             }
         }
 
-        this.doWork(this.retry);
-        this.retry = true;
+        this.doWork(this.retryCnt);
+        this.retryCnt++;
     }
 
-    protected abstract void doWork(boolean retry);
-
+    protected abstract void doWork(int retryCnt);
 }

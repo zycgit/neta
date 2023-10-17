@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 负责发送数据
+ * send Handler
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -52,14 +52,23 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.sndBuffer = rm.newLocalSndBuf();
     }
 
+    /**
+     * Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data.
+     */
     public ByteBuffer getSwapBuffer() {
         return this.swapBuffer;
     }
 
+    /**
+     * Enhanced {@link ByteBuffer}.
+     */
     public ByteBuf getSndBuffer() {
         return this.sndBuffer;
     }
 
+    /**
+     * The data in ByteBuf is sent in batches, before it is completed {@link #isSndWorking()} Always true.
+     */
     public boolean isSndWorking() {
         return this.sndWorking;
     }

@@ -18,42 +18,42 @@ package net.hasor.cobble.net;
 import net.hasor.cobble.concurrent.future.Future;
 
 /**
- * 通道
+ * Channel
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface SoChannel<T> {
-    /** Socket 连接通道 ID */
+    /** channel id */
     long getChannelID();
 
-    /** 连接建立时间 */
+    /** channel accept time */
     long getCreatedTime();
 
-    /** 最后一次活跃时间 */
+    /** The last time data was received or sent */
     long getLastActiveTime();
 
-    /** 侦听类型 Channel */
+    /** a {@link NetListen} */
     boolean isListen();
 
-    /** 由远程发起的 Channel */
+    /** an accept {@link NetChannel} */
     boolean isServer();
 
-    /** 由本地发起的 Channel */
+    /** a connect {@link NetChannel} */
     boolean isClient();
 
     /**
-     * 关闭这个通道的新事件，在所有事件处理完毕之后关闭这个通道
+     * close this channel.
      *
-     * <li>对于 Listen 通道，会关闭监听。</li>
-     * <li>对于 Socket 通道，触发 Socket 关闭，待所有数据写入完成后在关闭。</li>
+     * <li>For the Listen channel, listening is turned off.</li>
+     * <li>For the Socket channel, will be closed after all data are written.</li>
      *
-     * <p>方法 {@link #closeNow()} 和 {@link #close()} 第一个被调用的有效</p>
+     * <p>The {@link #closeNow()} and {@link #close()} methods are valid if they are called first</p>
      */
     Future<T> close();
 
-    /** 立即关闭这个通道 */
+    /** close this channel now. */
     Future<T> closeNow();
 
-    /** 是否位于关闭状态 */
+    /** return close status. */
     boolean isClose();
 }
