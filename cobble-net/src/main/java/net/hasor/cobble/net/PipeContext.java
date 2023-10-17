@@ -13,26 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.ssl;
+package net.hasor.cobble.net;
+
 /**
- * Indicates the state of the {@link javax.net.ssl.SSLEngine} with respect to client authentication.
- * This configuration item really only applies when building the server-side {@link SslContextBasic}.
+ * 管道
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public enum SslClientAuth {
-    /**
-     * Indicates that the {@link javax.net.ssl.SSLEngine} will not request client authentication.
-     */
-    NONE,
+public interface PipeContext {
 
-    /**
-     * Indicates that the {@link javax.net.ssl.SSLEngine} will request client authentication.
-     */
-    OPTIONAL,
+    NetChannel channel();
 
-    /**
-     * Indicates that the {@link javax.net.ssl.SSLEngine} will *require* client authentication.
-     */
-    REQUIRE
+    <T> T context();
 }

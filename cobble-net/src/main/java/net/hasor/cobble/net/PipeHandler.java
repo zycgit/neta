@@ -13,26 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.ssl;
+package net.hasor.cobble.net;
+import java.io.IOException;
+
 /**
- * Indicates the state of the {@link javax.net.ssl.SSLEngine} with respect to client authentication.
- * This configuration item really only applies when building the server-side {@link SslContextBasic}.
+ * 管道
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public enum SslClientAuth {
-    /**
-     * Indicates that the {@link javax.net.ssl.SSLEngine} will not request client authentication.
-     */
-    NONE,
-
-    /**
-     * Indicates that the {@link javax.net.ssl.SSLEngine} will request client authentication.
-     */
-    OPTIONAL,
-
-    /**
-     * Indicates that the {@link javax.net.ssl.SSLEngine} will *require* client authentication.
-     */
-    REQUIRE
+public interface PipeHandler<IN, OUT> {
+    void doHandler(PipeContext context, IN src, OUT dst) throws IOException;
 }

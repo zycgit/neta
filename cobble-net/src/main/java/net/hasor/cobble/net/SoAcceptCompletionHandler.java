@@ -28,12 +28,12 @@ import java.nio.channels.CompletionHandler;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class AcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SoContextImpl> {
-    private static final Logger                          logger = Logger.getLogger(AcceptCompletionHandler.class);
+class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SoContextImpl> {
+    private static final Logger                          logger = Logger.getLogger(SoAcceptCompletionHandler.class);
     private final        NetListen                       forListen;
     private final        AsynchronousServerSocketChannel acceptChannel;
 
-    public AcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel acceptChannel) {
+    public SoAcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel acceptChannel) {
         this.forListen = forListen;
         this.acceptChannel = acceptChannel;
     }

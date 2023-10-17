@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetListen implements Channel<NetListen> {
+public class NetListen implements SoChannel<NetListen> {
     private final   long                            channelID;
     private final   long                            createdTime;
     private         long                            lastActiveTime;

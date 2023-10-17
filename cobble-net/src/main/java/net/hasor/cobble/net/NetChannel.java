@@ -32,7 +32,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetChannel implements Channel<NetChannel> {
+public class NetChannel implements SoChannel<NetChannel> {
     private static final ByteBuf                   EMPTY_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
     private final        long                      channelID;
     private final        NetListen                 forListen;

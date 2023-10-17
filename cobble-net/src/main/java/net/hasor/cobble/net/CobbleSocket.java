@@ -61,7 +61,7 @@ public class CobbleSocket extends AbstractSocket {
             long channelID = SoContextImpl.nextID();
             long createdTime = System.currentTimeMillis();
             NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, this.context);
-            listenChannel.accept(this.context, new AcceptCompletionHandler(netListen, listenChannel));
+            listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
 
             this.context.openChannel(netListen);
 
@@ -92,7 +92,7 @@ public class CobbleSocket extends AbstractSocket {
 
             AsynchronousSocketChannel clientChannel = AsynchronousSocketChannel.open(this.channelGroup);
             SoConfigUtils.configSocket(this.context.getConfig(), clientChannel);
-            clientChannel.connect(remoteAddr, this.context, new ConnectCompletionHandler(clientChannel, future));
+            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, future));
             logger.info("connect to " + remoteAddr);
             return future;
         } catch (Exception e) {

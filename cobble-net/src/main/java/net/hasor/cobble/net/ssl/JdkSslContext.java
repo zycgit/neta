@@ -14,7 +14,7 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.*;
 
-public class JdkSslContext extends SslContext {
+public class JdkSslContext extends SslContextBasic {
     private static final   Logger      logger   = Logger.getLogger(JdkSslContext.class);
     protected static final String      PROTOCOL = "TLS";
     private static final   String[]    DEFAULT_PROTOCOLS;

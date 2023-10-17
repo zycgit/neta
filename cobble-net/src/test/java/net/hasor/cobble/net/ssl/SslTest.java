@@ -83,14 +83,14 @@ public class SslTest {
         ByteBuf clientRcvDownstream = ByteBufAllocator.DEFAULT.arrayBuffer();
         ByteBuf clientSndUpstream = ByteBufAllocator.DEFAULT.arrayBuffer();
         ByteBuf clientSndDownstream = ByteBufAllocator.DEFAULT.arrayBuffer();
-        SslContext clientContext = new JdkSslContext(1, context, config, rm, true);
+        SslContextBasic clientContext = new JdkSslContext(1, context, config, rm, true);
 
         // server
         ByteBuf serverRcvUpstream = ByteBufAllocator.DEFAULT.arrayBuffer();
         ByteBuf serverRcvDownstream = ByteBufAllocator.DEFAULT.arrayBuffer();
         ByteBuf serverSndUpstream = ByteBufAllocator.DEFAULT.arrayBuffer();
         ByteBuf serverSndDownstream = ByteBufAllocator.DEFAULT.arrayBuffer();
-        SslContext serverContext = new JdkSslContext(2, context, config, rm, false);
+        SslContextBasic serverContext = new JdkSslContext(2, context, config, rm, false);
 
         //
         String serverMsg = "Hello Client, this message form server.";

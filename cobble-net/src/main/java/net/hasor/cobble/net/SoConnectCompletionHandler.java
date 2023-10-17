@@ -28,13 +28,13 @@ import java.nio.channels.CompletionHandler;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class ConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
-    private static final Logger                    logger = Logger.getLogger(ConnectCompletionHandler.class);
+class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
+    private static final Logger                    logger = Logger.getLogger(SoConnectCompletionHandler.class);
     private final        SocketAddress             remoteAddress;
     private final        AsynchronousSocketChannel channel;
     private final        Future<NetChannel>        future;
 
-    public ConnectCompletionHandler(AsynchronousSocketChannel channel, Future<NetChannel> future) throws IOException {
+    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, Future<NetChannel> future) throws IOException {
         this.remoteAddress = channel.getRemoteAddress();
         this.channel = channel;
         this.future = future;

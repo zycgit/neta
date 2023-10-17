@@ -37,6 +37,6 @@ public interface SoContext {
     /** 判断一个通道是否已经关闭 */
     boolean isClose(long channelID);
 
-    /** 立即触发 channel 的关闭，相当于强制执行 {@link Channel#closeNow()} */
+    /** 立即触发 channel 的关闭，相当于强制执行 {@link SoChannel#closeNow()} */
     void closeChannel(long channelID, String message);
 }

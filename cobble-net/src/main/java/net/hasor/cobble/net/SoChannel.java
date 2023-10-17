@@ -22,7 +22,7 @@ import net.hasor.cobble.concurrent.future.Future;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public interface Channel<T> {
+public interface SoChannel<T> {
     /** Socket 连接通道 ID */
     long getChannelID();
 
