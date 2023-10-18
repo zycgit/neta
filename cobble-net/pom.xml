@@ -26,14 +26,10 @@
     <dependencies>
         <dependency>
             <groupId>net.hasor</groupId>
-            <artifactId>cobble-bytebuf</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>net.hasor</groupId>
-            <artifactId>cobble-logging</artifactId>
+            <artifactId>cobble-lang</artifactId>
         </dependency>
 
-        <!-- ssh密钥解析(非强制依赖) -->
+        <!-- ssh options-->
         <dependency>
             <groupId>org.bouncycastle</groupId>
             <artifactId>bcpkix-jdk15on</artifactId>
