@@ -42,7 +42,7 @@ public class SocketServerTest {
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         try (CobbleSocket socket = new CobbleSocket(config)) {
-            NetListen listen = socket.listen("127.0.0.1", 5567, null);
+            NetListen listen = socket.listen("127.0.0.1", 5567, new PipeInitializer());
             read(listen);
         }
     }

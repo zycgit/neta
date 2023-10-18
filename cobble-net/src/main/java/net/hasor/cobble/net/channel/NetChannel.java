@@ -50,7 +50,7 @@ public class NetChannel implements SoChannel<NetChannel> {
     private final   AtomicBoolean             wStatus;
     private final   SoSndCompletionHandler    wHandler;
     //
-    private final   PipeContext               pipeContext;
+    private final   PipeContextImpl           pipeContext;
     private final   PipeChainRoot             pipeline;
     //
     protected final AtomicBoolean             closeStatus;
@@ -78,7 +78,7 @@ public class NetChannel implements SoChannel<NetChannel> {
         this.wStatus = new AtomicBoolean(false);
         this.wHandler = wHandler;
 
-        this.pipeContext = null;
+        this.pipeContext = new PipeContextImpl(this, context, rm);
         this.pipeline = pipeline;
     }
 
@@ -176,11 +176,15 @@ public class NetChannel implements SoChannel<NetChannel> {
             this.lastRcvTime = System.currentTimeMillis();
         }
 
-        ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-        ByteBuf[] sndByteBuf = this.pipeline.rcvLayer(this.pipeContext, rcvByteBuf);
+        try {
+            ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
+            ByteBuf[] sndByteBuf = this.pipeline.rcvLayer(this.pipeContext, rcvByteBuf);
 
-        for (ByteBuf buf : sndByteBuf) {
-            appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
+            for (ByteBuf buf : sndByteBuf) {
+                appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
+            }
+        } finally {
+            this.pipeContext.clearFlash();
         }
     }
 
@@ -194,25 +198,29 @@ public class NetChannel implements SoChannel<NetChannel> {
             return new BasicFuture<>(this);
         }
 
-        ByteBuf[] sndByteBuf = this.pipeline.sndLayer(this.pipeContext, writeData);
-        Future<NetChannel> future = new BasicFuture<>();
-        AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
+        try {
+            ByteBuf[] sndByteBuf = this.pipeline.sndLayer(this.pipeContext, writeData);
+            Future<NetChannel> future = new BasicFuture<>();
+            AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
 
-        for (ByteBuf buf : sndByteBuf) {
-            Future<NetChannel> itemFuture = new BasicFuture<>();
-            new BasicFuture<>().onFailed(f -> {
-                future.failed(f.getCause());
-            }).onCompleted(f -> {
-                cnt.decrementAndGet();
-                if (cnt.get() == 0) {
-                    future.completed(this);
-                }
-            });
+            for (ByteBuf buf : sndByteBuf) {
+                Future<NetChannel> itemFuture = new BasicFuture<>();
+                new BasicFuture<>().onFailed(f -> {
+                    future.failed(f.getCause());
+                }).onCompleted(f -> {
+                    cnt.decrementAndGet();
+                    if (cnt.get() == 0) {
+                        future.completed(this);
+                    }
+                });
 
-            appendSoSndTask(new SoSndData(buf, itemFuture, this));
+                appendSoSndTask(new SoSndData(buf, itemFuture, this));
+            }
+
+            return future;
+        } finally {
+            this.pipeContext.clearFlash();
         }
-
-        return future;
     }
 
     /** flash */

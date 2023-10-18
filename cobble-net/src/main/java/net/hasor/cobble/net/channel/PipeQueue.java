@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.channel;
-import java.util.LinkedList;
+import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * PipeRcvQueue/PipeSndQueue implements
@@ -23,60 +24,69 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
-    protected     int           takeIndex;
-    protected     int           offerIndex;
-    private final int           capacity;
-    private final LinkedList<T> linkedList;
+    private final      int     capacity;
+    protected volatile int     takeCount;
+    private final      List<T> linkedList;
+    private final      List<T> offerTemp;
 
     public PipeQueue(int capacity) {
         this.capacity = capacity;
-        this.linkedList = new LinkedList<>();
+        this.linkedList = new CopyOnWriteArrayList<>();
+        this.offerTemp = new CopyOnWriteArrayList<>();
     }
 
     @Override
     public int queueSize() {
-        return 0;
+        return this.linkedList.size() - this.takeCount;
     }
 
     @Override
     public int slotSize() {
-        return this.capacity - this.linkedList.size();
+        return this.capacity - this.linkedList.size() - this.offerTemp.size();
     }
 
     @Override
-    public PipeRcvQueue<T> rcvMark() {
-        this.offerIndex = 0;
+    public synchronized PipeRcvQueue<T> rcvMark() {
+        this.linkedList.subList(0, this.takeCount).clear();
+        this.takeCount = 0;
         return this;
     }
 
     @Override
-    public PipeRcvQueue<T> rcvReset() {
-        synchronized (this.linkedList) {
-            for (int i = 0; i < this.offerIndex; i++) {
-                this.linkedList.removeLast();
-            }
-            this.offerIndex = 0;
-        }
+    public synchronized PipeRcvQueue<T> rcvReset() {
+        this.takeCount = 0;
         return this;
     }
 
     @Override
-    public PipeSndQueue<T> sndMark() {
+    public synchronized PipeSndQueue<T> sndMark() {
+        this.linkedList.addAll(this.offerTemp);
+        this.offerTemp.clear();
         return this;
     }
 
     @Override
-    public PipeSndQueue<T> sndReset() {
+    public synchronized PipeSndQueue<T> sndReset() {
+        this.offerTemp.clear();
         return this;
     }
 
     @Override
     public int offerMessage(List<T> cnt) {
-        return 0;
+        int size = Math.min(this.slotSize(), cnt.size());
+        this.offerTemp.addAll(cnt.subList(0, size));
+        return size;
     }
 
     @Override
     public List<T> takeMessage(int cnt) {
-        return null;
+        if (cnt < 0) {
+            cnt = this.queueSize();
+        }
+
+        int fixCnt = Math.min(cnt, this.queueSize());
+        List<T> result = Collections.unmodifiableList(this.linkedList.subList(this.takeCount, fixCnt));
+        this.takeCount = fixCnt;
+        return result;
     }
 }

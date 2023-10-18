@@ -598,7 +598,7 @@ public interface ByteBuf extends ByteChannel {
             }
         }
 
-        if (findIndex > 0) {
+        if (findIndex >= 0) {
             String str = this.readString(findIndex, charset);
             this.skipReadableBytes(skipLength);
             return str;

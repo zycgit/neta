@@ -14,29 +14,36 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.channel;
-import net.hasor.cobble.concurrent.future.Future;
-
 /**
- * 管道上下文
+ * Each {@link NetChannel} has a {@link PipeContext}.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface PipeContext {
 
-    /** 配置 */
+    /** global config */
     SoConfig getConfig();
 
-    /** 通道 */
+    /** the channel */
     NetChannel channel();
 
-    /** 递交异步任务 */
-    <T> Future<T> submitSoTask(AbstractSoTask mainTask, T result);
+    SoResManager getSoResManager();
 
+    /** Get the attachment for {@link PipeContext} */
     <T> T context(Class<T> attachment);
 
+    /** bind attachment to {@link PipeContext} */
     <T> T context(Class<T> attachmentType, T attachment);
 
-    void clearFlash();
+    /** Get flash for current Pipe event. */
+    <T> T flash(String key);
 
-    SoResManager getSoResManager();
+    /**
+     * set flash to current {@link PipeContext}, the flash event.
+     *
+     * <p>flash has a very short lifetime and will be automatically cleaned up after a full PipeLayer protocol stack is processed</p>
+     *
+     *  if you need long-term storage Use {@link #context(Class, Object)}
+     */
+    <T> T flash(String key, T flash);
 }

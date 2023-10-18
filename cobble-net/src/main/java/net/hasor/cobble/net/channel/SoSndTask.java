@@ -29,7 +29,7 @@ import java.util.concurrent.TimeUnit;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SoSndTask extends AbstractSoTask {
+class SoSndTask extends DefaultSoTask {
     private static final Logger                    logger = Logger.getLogger(SoSndTask.class);
     private final        long                      channelID;
     private final        long                      createdTime;

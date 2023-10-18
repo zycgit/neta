@@ -27,7 +27,7 @@ import java.util.List;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SoSndCopyTask extends AbstractSoTask {
+class SoSndCopyTask extends DefaultSoTask {
     private static final Logger                    logger = Logger.getLogger(SoSndCopyTask.class);
     private final        long                      channelID;
     private final        AsynchronousSocketChannel channel;

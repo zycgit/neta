@@ -45,7 +45,7 @@ public class CobbleSocket extends AbstractSocket {
      * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(int listenPort, PipeChainRoot pipeline) throws IOException {
+    public synchronized NetListen listen(int listenPort, PipeInitializer pipeline) throws IOException {
         return this.listen(new InetSocketAddress(listenPort), pipeline);
     }
 
@@ -57,7 +57,7 @@ public class CobbleSocket extends AbstractSocket {
      * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(String listenAddr, int listenPort, PipeChainRoot pipeline) throws IOException {
+    public synchronized NetListen listen(String listenAddr, int listenPort, PipeInitializer pipeline) throws IOException {
         return this.listen(new InetSocketAddress(listenAddr, listenPort), pipeline);
     }
 
@@ -68,7 +68,7 @@ public class CobbleSocket extends AbstractSocket {
      * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(InetSocketAddress listen, PipeChainRoot pipeline) throws IOException {
+    public synchronized NetListen listen(InetSocketAddress listen, PipeInitializer pipeline) throws IOException {
         this.initChannelGroup();
 
         AsynchronousServerSocketChannel listenChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
@@ -77,7 +77,7 @@ public class CobbleSocket extends AbstractSocket {
 
         long channelID = SoContextImpl.nextID();
         long createdTime = System.currentTimeMillis();
-        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeline, this.context);
+        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeline.create(), this.context);
         listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
 
         this.context.openChannel(netListen);
@@ -91,7 +91,7 @@ public class CobbleSocket extends AbstractSocket {
      * @param localPort local port
      * @param pipeline Application layer network protocol
      */
-    public Future<NetChannel> connect(int localPort, PipeChainRoot pipeline) {
+    public Future<NetChannel> connect(int localPort, PipeInitializer pipeline) {
         return this.connect(new InetSocketAddress(localPort), pipeline);
     }
 
@@ -101,7 +101,7 @@ public class CobbleSocket extends AbstractSocket {
      * @param localPort local port
      * @param pipeline Application layer network protocol
      */
-    public Future<NetChannel> connect(String remoteAddr, int localPort, PipeChainRoot pipeline) {
+    public Future<NetChannel> connect(String remoteAddr, int localPort, PipeInitializer pipeline) {
         return this.connect(new InetSocketAddress(remoteAddr, localPort), pipeline);
     }
 
@@ -110,14 +110,14 @@ public class CobbleSocket extends AbstractSocket {
      * @param remoteAddr remoteAddr
      * @param pipeline Application layer network protocol
      */
-    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeChainRoot pipeline) {
+    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeInitializer pipeline) {
         Future<NetChannel> future = new BasicFuture<>();
         try {
             this.initChannelGroup();
 
             AsynchronousSocketChannel clientChannel = AsynchronousSocketChannel.open(this.channelGroup);
             SoConfigUtils.configSocket(this.context.getConfig(), clientChannel);
-            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, pipeline, future));
+            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, pipeline.create(), future));
             logger.info("connect to " + remoteAddr);
             return future;
         } catch (Exception e) {

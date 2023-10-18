@@ -79,7 +79,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.afterWorking1 = afterWorking1;
     }
 
-    private Future<?> submitTask(AbstractSoTask task) {
+    private Future<?> submitTask(DefaultSoTask task) {
         return this.context.submitSoTask(this.rm, task, this);
     }
 

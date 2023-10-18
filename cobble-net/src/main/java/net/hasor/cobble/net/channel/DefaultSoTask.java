@@ -20,7 +20,7 @@ package net.hasor.cobble.net.channel;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public abstract class AbstractSoTask implements Runnable {
+public abstract class DefaultSoTask implements Runnable {
     public enum SoTaskStatus {
         Finish,
         Exit,

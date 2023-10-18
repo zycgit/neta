@@ -67,7 +67,7 @@ class SoSndContext {
     /**
      * submit async task to run.
      */
-    public Future<?> submitTask(AbstractSoTask task, Object context) {
+    public Future<?> submitTask(DefaultSoTask task, Object context) {
         return this.context.submitSoTask(this.rm, task, context);
     }
 }

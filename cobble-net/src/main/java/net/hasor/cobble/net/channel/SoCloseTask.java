@@ -19,7 +19,7 @@ package net.hasor.cobble.net.channel;
  * @version : 2023-10-09
  * @author 赵永春 (zyc@hasor.net)
  */
-class SoCloseTask extends AbstractSoTask {
+class SoCloseTask extends DefaultSoTask {
     private final long          channelID;
     private final SoContextImpl context;
 

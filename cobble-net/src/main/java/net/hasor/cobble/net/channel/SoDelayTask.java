@@ -19,7 +19,7 @@ package net.hasor.cobble.net.channel;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoDelayTask extends AbstractSoTask {
+public class SoDelayTask extends DefaultSoTask {
     private final int intervalMillis;
 
     public SoDelayTask(int intervalMillis) {

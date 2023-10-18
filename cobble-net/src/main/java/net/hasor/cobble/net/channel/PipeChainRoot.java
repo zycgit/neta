@@ -16,33 +16,45 @@
 package net.hasor.cobble.net.channel;
 
 import net.hasor.cobble.net.bytebuf.ByteBuf;
+import net.hasor.cobble.net.bytebuf.ByteBufAllocator;
 
 /**
  * 管道
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class PipeChainRoot {
+class PipeChainRoot {
 
     private ByteBuf    sndByteBuf;//= this.rm.newSndDownBuffer();
     private NetChannel channel;
     //        new PipeQueue<>(), new PipeQueue<>();
 
-    public ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf) {
-        pipeContext.clearFlash();
-        //        do {
-        //            status = this.pipeline.rcvLayer(this.pipeContext, rcvByteBuf);
-        //        } while (status == PipeStatus.Again);
+    public ByteBuf[] rcvLayer(PipeContextImpl pipeContext, ByteBuf rcvByteBuf) {
+        String line = rcvByteBuf.readLine();
+        rcvByteBuf.markReader();
+
+        if (line != null) {
+            ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + line + "\n").getBytes());
+            buf.markWriter();
+            System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
+
+            pipeContext.channel().sendData("hello");
+
+            return new ByteBuf[] { buf };
+        }
         return new ByteBuf[0];
     }
 
-    public ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
+    public ByteBuf[] sndLayer(PipeContextImpl pipeContext, Object writeData) {
         pipeContext.clearFlash();
+
+        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + writeData + "\n").getBytes());
+        buf.markWriter();
+        return new ByteBuf[] { buf };
         //
         //        PipeStatus status;
         //        do {
         //            status =
         //        } while (status == PipeStatus.Again);
-        return new ByteBuf[0];
     }
 }

@@ -171,13 +171,13 @@ class SoContextImpl implements SoContext {
     }
 
     @Override
-    public <T> Future<T> submitSoTask(AbstractSoTask task, T result) {
+    public <T> Future<T> submitSoTask(DefaultSoTask task, T result) {
         return this.submitSoTask(this.defaultRm, task, result);
     }
 
     /** 异步方式处理 swap 区到 rcv/snd 区的 IO 操作任务 */
     @Override
-    public <T> Future<T> submitSoTask(SoResManager rm, AbstractSoTask task, T result) {
+    public <T> Future<T> submitSoTask(SoResManager rm, DefaultSoTask task, T result) {
         Future<T> future = new BasicFuture<>();
 
         AtomicReference<Runnable> refTemp = new AtomicReference<>();

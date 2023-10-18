@@ -3,11 +3,18 @@ import net.hasor.cobble.net.bytebuf.ByteBuf;
 import net.hasor.cobble.net.channel.*;
 
 import java.io.IOException;
+import java.util.Objects;
 
 /**
  * SSL 网络协议层
  */
 public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
+    private final SslConfig config;
+
+    public SslPipeLayer(SslConfig config) {
+        this.config = Objects.requireNonNull(config);
+    }
+
     @Override
     public void initLayer(PipeContext pipeContext) throws Exception {
         NetChannel channel = pipeContext.channel();
@@ -17,8 +24,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
         boolean clientMode = channel.isClient();
 
         SoContext context = pipeContext.context(SoContext.class);
-        SslConfig sslConfig = context.getConfig().getSslConfig();
-        pipeContext.context(SslContext.class, new JdkSslContext(channelID, context, sslConfig, rm, clientMode));
+        pipeContext.context(SslContext.class, new JdkSslContext(channelID, context, this.config, rm, clientMode));
     }
 
     @Override
@@ -28,7 +34,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
         } else {
             ((SslContextBasic) context.context(SslContext.class)).handSnd(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
         }
-        return PipeStatus.Success;
+        return PipeStatus.Finish;
     }
 
     @Override

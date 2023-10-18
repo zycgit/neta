@@ -13,15 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.handler;
-
-import net.hasor.cobble.net.channel.PipeContext;
-import net.hasor.cobble.net.channel.PipeLayer;
+package net.hasor.cobble.net.channel;
 
 import java.io.IOException;
 
 /**
- * 网络协议层用于表示单向的数据处理器，两个方向相反的数据处理器会组成一个全双工协议层 {@link PipeLayer}
+ * The network protocol layer is used to represent unidirectional data processors,
+ * and two {@link PipeHandler} in opposite directions form a duplex protocol layer {@link PipeLayer}
  * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
  * @see net.hasor.cobble.net.channel.PipeLayer

@@ -15,7 +15,7 @@
  */
 package net.hasor.cobble.net.handler.ssl;
 import net.hasor.cobble.net.bytebuf.ByteBuf;
-import net.hasor.cobble.net.channel.AbstractSoTask;
+import net.hasor.cobble.net.channel.DefaultSoTask;
 import net.hasor.cobble.net.channel.SoContext;
 
 import java.nio.ByteBuffer;
@@ -26,7 +26,7 @@ import java.nio.channels.ClosedChannelException;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SslCopyTask extends AbstractSoTask {
+public class SslCopyTask extends DefaultSoTask {
     private final long       channelID;
     private final int        intervalMillis;
     private final SoContext  context;

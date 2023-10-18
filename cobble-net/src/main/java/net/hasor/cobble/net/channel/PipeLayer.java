@@ -31,7 +31,8 @@ import java.io.IOException;
  *
  * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
- * @see net.hasor.cobble.net.handler.PipeHandler
+ * @see PipeHandler
+ * @see net.hasor.cobble.net.channel.PipeConfig
  */
 public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
