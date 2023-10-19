@@ -14,18 +14,28 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.channel;
-import java.util.concurrent.ExecutorService;
+
+import net.hasor.cobble.net.bytebuf.ByteBuf;
 
 /**
- * create ExecutorService
+ * Application protocol stack
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-@FunctionalInterface
-public interface SoExecutorFactory {
+public abstract class PipeLayerStack {
     /**
-     * @param config the socket global config.
-     * @param ctxName context name (global default context name is null.)
+     * Processing received data
+     * @param pipeContext pipeContext
+     * @param rcvByteBuf received data
+     * @return The return {@link ByteBuf}`s, well be send to remote.
      */
-    ExecutorService newExecutor(SoConfig config, String ctxName);
+    protected abstract ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf);
+
+    /**
+     * Trigger sending data
+     * @param pipeContext pipeContext
+     * @param writeData send data
+     * @return The return {@link ByteBuf}`s, well be send to remote.
+     */
+    protected abstract ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData);
 }

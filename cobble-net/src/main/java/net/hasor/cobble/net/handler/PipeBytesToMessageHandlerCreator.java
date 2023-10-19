@@ -13,17 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.channel;
-
-import java.io.IOException;
+package net.hasor.cobble.net.handler;
+import net.hasor.cobble.net.bytebuf.ByteBuf;
 
 /**
- * The network protocol layer is used to represent unidirectional data processors,
- * and two {@link PipeHandler} in opposite directions form a duplex protocol layer {@link PipeLayer}
- * @version : 2023-10-17
+ * Handle a one-way stream of {@link ByteBuf} to Message.
+ *
+ * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
- * @see net.hasor.cobble.net.channel.PipeLayer
+ * @see net.hasor.cobble.net.handler.PipeBytesToBytesHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeBytesToMessageHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeMessageToBytesHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeMessageToMessageHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeHandler
  */
-public interface PipeHandler<IN, OUT> {
-    void doHandler(PipeContext context, IN src, OUT dst) throws IOException;
+public interface PipeBytesToMessageHandlerCreator<OUT> extends PipeHandlerCreator<ByteBuf, PipeSndQueue<OUT>> {
+
 }

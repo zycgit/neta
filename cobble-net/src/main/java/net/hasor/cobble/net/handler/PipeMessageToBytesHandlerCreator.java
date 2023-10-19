@@ -13,19 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.channel;
-import java.util.concurrent.ExecutorService;
+package net.hasor.cobble.net.handler;
+import net.hasor.cobble.net.bytebuf.ByteBuf;
 
 /**
- * create ExecutorService
- * @version : 2023-09-24
+ * Handle a one-way stream of Message to {@link ByteBuf}.
+ *
+ * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @see net.hasor.cobble.net.handler.PipeBytesToBytesHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeBytesToMessageHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeMessageToBytesHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeMessageToMessageHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeHandler
  */
-@FunctionalInterface
-public interface SoExecutorFactory {
-    /**
-     * @param config the socket global config.
-     * @param ctxName context name (global default context name is null.)
-     */
-    ExecutorService newExecutor(SoConfig config, String ctxName);
+public interface PipeMessageToBytesHandlerCreator<IN> extends PipeHandlerCreator<PipeRcvQueue<IN>, ByteBuf> {
+
 }

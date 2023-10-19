@@ -13,12 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.channel;
+package net.hasor.cobble.net.handler;
 import net.hasor.cobble.net.bytebuf.ByteBuf;
 
 /**
- * A protocol stack has four endpoints: RCV_UP, RCV_DOWN, SND_UP, and SND_DOWN, these endpoints can store some data
- *
  * {@link PipeConfig} represents the amount of data stored on these endpoints
  *
  * <li>A {@link ByteBuf} endpoint indicating the number of bytes to store</li>
@@ -32,43 +30,25 @@ import net.hasor.cobble.net.bytebuf.ByteBuf;
  *
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
- * @see net.hasor.cobble.net.channel.PipeLayer
+ * @see PipeLayer
  */
 public class PipeConfig {
-    private int rcvUpStackSize   = -1;
-    private int rcvDownStackSize = -1;
-    private int sndUpStackSize   = -1;
-    private int sndDownStackSize = -1;
+    private int pipeRcvDownStackSize = -1;
+    private int pipeSndUpStackSize   = -1;
 
-    public int getRcvUpStackSize() {
-        return rcvUpStackSize;
+    public int getPipeRcvDownStackSize() {
+        return this.pipeRcvDownStackSize;
     }
 
-    public void setRcvUpStackSize(int rcvUpStackSize) {
-        this.rcvUpStackSize = rcvUpStackSize;
+    public void setPipeRcvDownStackSize(int pipeRcvDownStackSize) {
+        this.pipeRcvDownStackSize = pipeRcvDownStackSize;
     }
 
-    public int getRcvDownStackSize() {
-        return this.rcvDownStackSize;
+    public int getPipeSndUpStackSize() {
+        return this.pipeSndUpStackSize;
     }
 
-    public void setRcvDownStackSize(int rcvDownStackSize) {
-        this.rcvDownStackSize = rcvDownStackSize;
-    }
-
-    public int getSndUpStackSize() {
-        return this.sndUpStackSize;
-    }
-
-    public void setSndUpStackSize(int sndUpStackSize) {
-        this.sndUpStackSize = sndUpStackSize;
-    }
-
-    public int getSndDownStackSize() {
-        return this.sndDownStackSize;
-    }
-
-    public void setSndDownStackSize(int sndDownStackSize) {
-        this.sndDownStackSize = sndDownStackSize;
+    public void setPipeSndUpStackSize(int pipeSndUpStackSize) {
+        this.pipeSndUpStackSize = pipeSndUpStackSize;
     }
 }

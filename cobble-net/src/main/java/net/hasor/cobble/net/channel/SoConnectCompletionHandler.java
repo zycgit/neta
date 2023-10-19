@@ -31,11 +31,11 @@ import java.nio.channels.CompletionHandler;
 class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(SoConnectCompletionHandler.class);
     private final        SocketAddress             remoteAddress;
-    private final        PipeChainRoot             pipeline;
+    private final        PipeLayerStack            pipeline;
     private final        AsynchronousSocketChannel channel;
     private final        Future<NetChannel>        future;
 
-    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, PipeChainRoot pipeline, Future<NetChannel> future) throws IOException {
+    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, PipeLayerStack pipeline, Future<NetChannel> future) throws IOException {
         this.remoteAddress = channel.getRemoteAddress();
         this.channel = channel;
         this.pipeline = pipeline;

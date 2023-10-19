@@ -49,9 +49,17 @@ class SoResManagerImpl implements SoResManager, AutoCloseable {
     public ByteBuf newByteBuf(int capacity) {
         ByteBuf byteBuf;
         if (this.bufAllocator.isDirect()) {
-            byteBuf = this.bufAllocator.directBuffer(capacity);
+            if (capacity < 0) {
+                byteBuf = this.bufAllocator.directBuffer();
+            } else {
+                byteBuf = this.bufAllocator.directBuffer(capacity);
+            }
         } else {
-            byteBuf = this.bufAllocator.heapBuffer(capacity);
+            if (capacity < 0) {
+                byteBuf = this.bufAllocator.heapBuffer();
+            } else {
+                byteBuf = this.bufAllocator.heapBuffer(capacity);
+            }
         }
 
         this.resources.add(byteBuf);
@@ -81,13 +89,6 @@ class SoResManagerImpl implements SoResManager, AutoCloseable {
     @Override
     public ByteBuf newLocalSndBuf() {
         return this.newByteBuf(this.config.getSndLocalBuf());
-    }
-
-    @Override
-    public ByteBuf newSndDownBuffer() {
-        ByteBuf byteBuf = this.bufAllocator.heapBuffer();
-        this.resources.add(byteBuf);
-        return byteBuf;
     }
 
     @Override

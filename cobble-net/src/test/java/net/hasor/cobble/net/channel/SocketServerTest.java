@@ -15,6 +15,8 @@
  */
 package net.hasor.cobble.net.channel;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.net.bytebuf.ByteBuf;
+import net.hasor.cobble.net.bytebuf.ByteBufAllocator;
 import net.hasor.cobble.net.bytebuf.ByteBufUtil;
 
 import java.util.concurrent.Executors;
@@ -42,7 +44,32 @@ public class SocketServerTest {
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         try (CobbleSocket socket = new CobbleSocket(config)) {
-            NetListen listen = socket.listen("127.0.0.1", 5567, new PipeInitializer());
+            NetListen listen = socket.listen("127.0.0.1", 5567, new PipeLayerStack() {
+                @Override
+                protected ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf) {
+                    String line = rcvByteBuf.readLine();
+                    rcvByteBuf.markReader();
+
+                    if (line != null) {
+                        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + line + "\n").getBytes());
+                        buf.markWriter();
+                        System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
+
+                        pipeContext.channel().sendData("hello");
+
+                        return new ByteBuf[] { buf };
+                    }
+                    return new ByteBuf[0];
+                }
+
+                @Override
+                protected ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
+
+                    ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + writeData + "\n").getBytes());
+                    buf.markWriter();
+                    return new ByteBuf[] { buf };
+                }
+            });
             read(listen);
         }
     }
@@ -63,5 +90,6 @@ public class SocketServerTest {
             throw new RuntimeException(e);
         }
     }
+
 }
 

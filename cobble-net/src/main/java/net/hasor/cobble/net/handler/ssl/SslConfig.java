@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.handler.ssl;
+import net.hasor.cobble.net.handler.PipeConfig;
+
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManagerFactory;
 import java.security.KeyStore;
@@ -23,7 +25,7 @@ import java.security.KeyStore;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SslConfig {
+public class SslConfig extends PipeConfig {
     private SslProvider            provider              = SslProvider.JDK;      // default is JDK
     private SslClientAuth          clientAuth            = SslClientAuth.NONE;   //
     private String[]               appProtocol           = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）

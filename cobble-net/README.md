@@ -26,6 +26,7 @@
     - TLS NPN/ALPN，应用层协议协商
 - Pipeline
     - 反压机制
+    - 双工模式
 
 资料
 

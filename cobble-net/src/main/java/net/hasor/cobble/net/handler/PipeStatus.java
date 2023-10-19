@@ -13,19 +13,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.channel;
-import java.util.concurrent.ExecutorService;
-
+package net.hasor.cobble.net.handler;
 /**
- * create ExecutorService
- * @version : 2023-09-24
+ * A status for {@link PipeLayer}
+ * @version : 2023-10-18
  * @author 赵永春 (zyc@hasor.net)
  */
-@FunctionalInterface
-public interface SoExecutorFactory {
-    /**
-     * @param config the socket global config.
-     * @param ctxName context name (global default context name is null.)
-     */
-    ExecutorService newExecutor(SoConfig config, String ctxName);
+public enum PipeStatus {
+    Finish,
+    Again,
+    StartOver,
+    Route
 }

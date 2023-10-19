@@ -13,15 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.cobble.net.channel;
+package net.hasor.cobble.net.handler;
+
+import net.hasor.cobble.net.channel.PipeContext;
+
+import java.io.IOException;
+
 /**
- * A status for {@link PipeLayer}
- * @version : 2023-10-18
+ * Used to represent a unidirectional data processor, two {@link PipeHandler}`s in opposite directions can to {@link PipeLayer}
+ *
+ * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
+ * @see PipeLayer
  */
-public enum PipeStatus {
-    Finish,
-    Again,
-    StartOver,
-    Route
+public interface PipeHandler<IN, OUT> {
+    /**
+     * Initialize the protocol stack
+     */
+    void initHandler(PipeContext pipeContext) throws Exception;
+
+    /**
+     * release protocol stack
+     */
+    void doHandler(PipeContext context, IN src, OUT dst) throws IOException;
+
+    void releaseHandler(PipeContext pipeContext);
 }

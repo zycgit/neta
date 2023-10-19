@@ -51,12 +51,12 @@ public class NetChannel implements SoChannel<NetChannel> {
     private final   SoSndCompletionHandler    wHandler;
     //
     private final   PipeContextImpl           pipeContext;
-    private final   PipeChainRoot             pipeline;
+    private final   PipeLayerStack            pipeline;
     //
     protected final AtomicBoolean             closeStatus;
     protected final Future<NetChannel>        closeFuture;
 
-    NetChannel(long channelID, long createdTime, NetListen forListen, PipeChainRoot pipeline,     //
+    NetChannel(long channelID, long createdTime, NetListen forListen, PipeLayerStack pipeline,     //
             SocketAddress localAddr, SocketAddress remoteAddr, AsynchronousSocketChannel channel, //
             SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
