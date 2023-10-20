@@ -48,12 +48,14 @@ import java.io.IOException;
  * @see net.hasor.cobble.net.handler.PipeHandler
  * @see net.hasor.cobble.net.handler.PipeConfig
  */
+@FunctionalInterface
 public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     /**
      * Initialize the protocol stack
      */
-    void initLayer(PipeContext pipeContext) throws Exception;
+    default void initLayer(PipeContext pipeContext) throws Exception {
+    }
 
     /**
      * process data the protocol stack, param isRcv = true is RCV_UP to RCV_DOWN
@@ -65,5 +67,6 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     /**
      * release protocol stack
      */
-    void releaseLayer(PipeContext pipeContext);
+    default void releaseLayer(PipeContext pipeContext) {
+    }
 }

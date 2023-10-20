@@ -28,14 +28,13 @@ import net.hasor.cobble.net.bytebuf.ByteBuf;
  *
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
- * @see net.hasor.cobble.net.handler.PipeBytesToBytesLayerCreator
- * @see net.hasor.cobble.net.handler.PipeBytesToMessageLayerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToBytesLayerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToMessageLayerCreator
- * @see net.hasor.cobble.net.handler.PipeLayerCreator
+ * @see net.hasor.cobble.net.handler.PipeBytesToBytesLayer
+ * @see net.hasor.cobble.net.handler.PipeBytesToMessageLayer
+ * @see net.hasor.cobble.net.handler.PipeMessageToBytesLayer
+ * @see net.hasor.cobble.net.handler.PipeMessageToMessageLayer
  * @see net.hasor.cobble.net.handler.PipeLayer
  */
 @FunctionalInterface
-public interface PipeBytesToMessageLayerCreator<RCV_DOWN, SND_UP> extends PipeLayerCreator<ByteBuf, PipeSndQueue<RCV_DOWN>, PipeRcvQueue<SND_UP>, ByteBuf> {
+public interface PipeBytesToMessageLayer<RCV_DOWN, SND_UP> extends PipeLayer<ByteBuf, PipeSndQueue<RCV_DOWN>, PipeRcvQueue<SND_UP>, ByteBuf> {
 
 }

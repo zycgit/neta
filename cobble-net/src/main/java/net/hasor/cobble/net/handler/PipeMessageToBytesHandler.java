@@ -17,18 +17,17 @@ package net.hasor.cobble.net.handler;
 import net.hasor.cobble.net.bytebuf.ByteBuf;
 
 /**
- * Handle a one-way stream of {@link ByteBuf} to {@link ByteBuf}.
+ * Handle a one-way stream of Message to {@link ByteBuf}.
  *
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
- * @see net.hasor.cobble.net.handler.PipeBytesToBytesHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeBytesToMessageHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToBytesHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToMessageHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeBytesToBytesHandler
+ * @see net.hasor.cobble.net.handler.PipeBytesToMessageHandler
+ * @see net.hasor.cobble.net.handler.PipeMessageToBytesHandler
+ * @see net.hasor.cobble.net.handler.PipeMessageToMessageHandler
  * @see net.hasor.cobble.net.handler.PipeHandler
  */
 @FunctionalInterface
-public interface PipeBytesToBytesHandlerCreator extends PipeHandlerCreator<ByteBuf, ByteBuf> {
+public interface PipeMessageToBytesHandler<IN> extends PipeHandler<PipeRcvQueue<IN>, ByteBuf> {
 
 }

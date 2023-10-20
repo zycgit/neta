@@ -26,16 +26,19 @@ import java.io.IOException;
  * @author 赵永春 (zyc@hasor.net)
  * @see PipeLayer
  */
+@FunctionalInterface
 public interface PipeHandler<IN, OUT> {
     /**
      * Initialize the protocol stack
      */
-    void initHandler(PipeContext pipeContext) throws Exception;
+    default void initHandler(PipeContext pipeContext) throws Exception {
+    }
 
     /**
      * release protocol stack
      */
     PipeStatus doHandler(PipeContext context, IN src, OUT dst) throws IOException;
 
-    void releaseHandler(PipeContext pipeContext);
+    default void releaseHandler(PipeContext pipeContext) {
+    }
 }

@@ -14,25 +14,32 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.channel;
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * PipeContext implements
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeContextImpl implements PipeContext {
-    private final NetChannel    channel;
-    private final SoContextImpl context;
-    private final SoResManager  rm;
+    private final NetChannel            channel;
+    private final SoContextImpl         soContext;
+    private final SoResManager          rm;
+    private final Map<Class<?>, Object> pipeContext;
+    private final Map<String, Object>   flash;
 
-    public PipeContextImpl(NetChannel channel, SoContextImpl context, SoResManager rm) {
+    public PipeContextImpl(NetChannel channel, SoContextImpl soContext, SoResManager rm) {
         this.channel = channel;
-        this.context = context;
+        this.soContext = soContext;
         this.rm = rm;
+        this.pipeContext = new HashMap<>();
+        this.flash = new HashMap<>();
     }
 
     @Override
     public SoConfig getConfig() {
-        return null;
+        return this.soContext.getConfig();
     }
 
     @Override
@@ -47,25 +54,27 @@ class PipeContextImpl implements PipeContext {
 
     @Override
     public <T> T context(Class<T> attachment) {
-        return null;
+        return (T) this.pipeContext.get(attachment);
     }
 
     @Override
     public <T> T context(Class<T> attachmentType, T attachment) {
-        return null;
+        this.pipeContext.put(attachmentType, attachmentType);
+        return attachment;
     }
 
     public void clearFlash() {
-
+        this.flash.clear();
     }
 
     @Override
     public <T> T flash(String key) {
-        return null;
+        return (T) this.flash.get(key);
     }
 
     @Override
     public <T> T flash(String key, T flash) {
-        return null;
+        this.flash.put(key, flash);
+        return flash;
     }
 }

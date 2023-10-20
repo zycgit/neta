@@ -14,28 +14,26 @@
  * limitations under the License.
  */
 package net.hasor.cobble.net.handler;
-import net.hasor.cobble.net.bytebuf.ByteBuf;
-
 /**
  * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
  *
  * <ul>
- *  <li>RCV_UP is {@link ByteBuf}</li>
- *  <li>RCV_DOWN is {@link ByteBuf}</li>
- *  <li>SND_UP is {@link ByteBuf}</li>
- *  <li>SND_DOWN is {@link ByteBuf}</li>
+ *  <li>RCV_UP is Message</li>
+ *  <li>RCV_DOWN is Message</li>
+ *  <li>SND_UP is Message</li>
+ *  <li>SND_DOWN is Message</li>
  * </ul>
  *
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
- * @see net.hasor.cobble.net.handler.PipeBytesToBytesLayerCreator
- * @see net.hasor.cobble.net.handler.PipeBytesToMessageLayerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToBytesLayerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToMessageLayerCreator
- * @see net.hasor.cobble.net.handler.PipeLayerCreator
+ * @see net.hasor.cobble.net.handler.PipeBytesToBytesLayer
+ * @see net.hasor.cobble.net.handler.PipeBytesToMessageLayer
+ * @see net.hasor.cobble.net.handler.PipeMessageToBytesLayer
+ * @see net.hasor.cobble.net.handler.PipeMessageToMessageLayer
  * @see net.hasor.cobble.net.handler.PipeLayer
  */
 @FunctionalInterface
-public interface PipeBytesToBytesLayerCreator extends PipeLayerCreator<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
+public interface PipeMessageToMessageLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> extends //
+        PipeLayer<PipeRcvQueue<RCV_UP>, PipeSndQueue<RCV_DOWN>, PipeRcvQueue<SND_UP>, PipeSndQueue<SND_DOWN>> {
 
 }

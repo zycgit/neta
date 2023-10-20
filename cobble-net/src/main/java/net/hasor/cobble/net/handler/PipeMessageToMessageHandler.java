@@ -19,14 +19,13 @@ package net.hasor.cobble.net.handler;
  *
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
- * @see net.hasor.cobble.net.handler.PipeBytesToBytesHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeBytesToMessageHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToBytesHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeMessageToMessageHandlerCreator
- * @see net.hasor.cobble.net.handler.PipeHandlerCreator
+ * @see net.hasor.cobble.net.handler.PipeBytesToBytesHandler
+ * @see net.hasor.cobble.net.handler.PipeBytesToMessageHandler
+ * @see net.hasor.cobble.net.handler.PipeMessageToBytesHandler
+ * @see net.hasor.cobble.net.handler.PipeMessageToMessageHandler
  * @see net.hasor.cobble.net.handler.PipeHandler
  */
 @FunctionalInterface
-public interface PipeMessageToMessageHandlerCreator<IN, OUT> extends //
-        PipeHandlerCreator<PipeRcvQueue<IN>, PipeSndQueue<OUT>> {
+public interface PipeMessageToMessageHandler<IN, OUT> extends PipeHandler<PipeRcvQueue<IN>, PipeSndQueue<OUT>> {
+
 }
