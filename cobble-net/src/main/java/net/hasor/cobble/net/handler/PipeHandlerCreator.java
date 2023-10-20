@@ -28,6 +28,7 @@ import net.hasor.cobble.net.bytebuf.ByteBuf;
  * @see net.hasor.cobble.net.handler.PipeHandlerCreator
  * @see net.hasor.cobble.net.handler.PipeHandler
  */
+@FunctionalInterface
 public interface PipeHandlerCreator<IN, OUT> {
     PipeHandler<IN, OUT> creator(PipeConfig config);
 }

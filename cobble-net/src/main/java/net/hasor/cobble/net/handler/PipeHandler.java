@@ -35,7 +35,7 @@ public interface PipeHandler<IN, OUT> {
     /**
      * release protocol stack
      */
-    void doHandler(PipeContext context, IN src, OUT dst) throws IOException;
+    PipeStatus doHandler(PipeContext context, IN src, OUT dst) throws IOException;
 
     void releaseHandler(PipeContext pipeContext);
 }

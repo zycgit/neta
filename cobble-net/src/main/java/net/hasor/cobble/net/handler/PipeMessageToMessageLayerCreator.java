@@ -33,6 +33,7 @@ package net.hasor.cobble.net.handler;
  * @see net.hasor.cobble.net.handler.PipeLayerCreator
  * @see net.hasor.cobble.net.handler.PipeLayer
  */
+@FunctionalInterface
 public interface PipeMessageToMessageLayerCreator<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> extends //
         PipeLayerCreator<PipeRcvQueue<RCV_UP>, PipeSndQueue<RCV_DOWN>, PipeRcvQueue<SND_UP>, PipeSndQueue<SND_DOWN>> {
 }

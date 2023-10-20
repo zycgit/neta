@@ -35,6 +35,7 @@ import net.hasor.cobble.net.bytebuf.ByteBuf;
  * @see net.hasor.cobble.net.handler.PipeLayerCreator
  * @see net.hasor.cobble.net.handler.PipeLayer
  */
+@FunctionalInterface
 public interface PipeBytesToBytesLayerCreator extends PipeLayerCreator<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
 
 }

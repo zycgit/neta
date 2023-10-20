@@ -26,6 +26,7 @@ package net.hasor.cobble.net.handler;
  * @see net.hasor.cobble.net.handler.PipeHandlerCreator
  * @see net.hasor.cobble.net.handler.PipeHandler
  */
+@FunctionalInterface
 public interface PipeMessageToMessageHandlerCreator<IN, OUT> extends //
         PipeHandlerCreator<PipeRcvQueue<IN>, PipeSndQueue<OUT>> {
 }

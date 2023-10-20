@@ -35,6 +35,7 @@ import net.hasor.cobble.net.bytebuf.ByteBuf;
  * @see net.hasor.cobble.net.handler.PipeLayerCreator
  * @see net.hasor.cobble.net.handler.PipeLayer
  */
+@FunctionalInterface
 public interface PipeMessageToBytesLayerCreator<RCV_UP, SND_DOWN> extends PipeLayerCreator<PipeRcvQueue<RCV_UP>, ByteBuf, ByteBuf, PipeSndQueue<SND_DOWN>> {
 
 }
