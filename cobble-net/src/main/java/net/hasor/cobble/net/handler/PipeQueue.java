@@ -24,13 +24,13 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
-    private final      int     capacity;
-    protected volatile int     takeCount;
-    private final      List<T> linkedList;
-    private final      List<T> offerTemp;
+    private final int     capacity;
+    protected     int     takeCount;
+    private final List<T> linkedList;
+    private final List<T> offerTemp;
 
     public PipeQueue(int capacity) {
-        this.capacity = capacity;
+        this.capacity = capacity == -1 ? Integer.MAX_VALUE : capacity;
         this.linkedList = new CopyOnWriteArrayList<>();
         this.offerTemp = new CopyOnWriteArrayList<>();
     }
@@ -86,7 +86,23 @@ class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
 
         int fixCnt = Math.min(cnt, this.queueSize());
         List<T> result = Collections.unmodifiableList(this.linkedList.subList(this.takeCount, fixCnt));
-        this.takeCount = fixCnt;
+        this.takeCount += fixCnt;
         return result;
+    }
+
+    @Override
+    public List<T> peekMessage(int cnt) {
+        if (cnt < 0) {
+            cnt = this.queueSize();
+        }
+
+        int fixCnt = Math.min(cnt, this.queueSize());
+        return Collections.unmodifiableList(this.linkedList.subList(this.takeCount, fixCnt));
+    }
+
+    @Override
+    public void skipMessage(int cnt) {
+        int fixCnt = Math.min(cnt, this.queueSize());
+        this.takeCount += fixCnt;
     }
 }

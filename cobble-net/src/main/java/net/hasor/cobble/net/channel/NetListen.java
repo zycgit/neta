@@ -32,20 +32,20 @@ public class NetListen implements SoChannel<NetListen> {
     private         long                            lastActiveTime;
     private final   InetSocketAddress               listen;
     protected final AsynchronousServerSocketChannel channel;
-    private final   PipeLayerStack                  pipeline;
+    private final   PipeStackFactory                stackFactory;
     private final   SoContextImpl                   context;
     private         boolean                         suspend;
     //
     protected final AtomicBoolean                   closeStatus;
     protected final Future<NetListen>               closeFuture;
 
-    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel, PipeLayerStack pipeline, SoContextImpl context) {
+    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel, PipeStackFactory stackFactory, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
         this.listen = listen;
         this.channel = channel;
-        this.pipeline = pipeline;
+        this.stackFactory = stackFactory;
         this.context = context;
 
         this.closeStatus = new AtomicBoolean(false);
@@ -119,8 +119,8 @@ public class NetListen implements SoChannel<NetListen> {
     /**
      * return Application layer network protocol stack to use
      */
-    PipeLayerStack getPipeline() {
-        return this.pipeline;
+    PipeStackFactory getStackFactory() {
+        return this.stackFactory;
     }
 
     @Override

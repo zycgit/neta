@@ -51,14 +51,13 @@ public class NetChannel implements SoChannel<NetChannel> {
     private final   SoSndCompletionHandler    wHandler;
     //
     private final   PipeContextImpl           pipeContext;
-    private final   PipeLayerStack            pipeline;
+    private         PipeStack                 pipeStack;
     //
     protected final AtomicBoolean             closeStatus;
     protected final Future<NetChannel>        closeFuture;
 
-    NetChannel(long channelID, long createdTime, NetListen forListen, PipeLayerStack pipeline,     //
-            SocketAddress localAddr, SocketAddress remoteAddr, AsynchronousSocketChannel channel, //
-            SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
+    NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
+            AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
         this.channelID = channelID;
         this.forListen = forListen;
         this.createdTime = createdTime;
@@ -79,7 +78,11 @@ public class NetChannel implements SoChannel<NetChannel> {
         this.wHandler = wHandler;
 
         this.pipeContext = new PipeContextImpl(this, context, rm);
-        this.pipeline = pipeline;
+
+    }
+
+    void setPipeStack(PipeStack pipeStack) {
+        this.pipeStack = pipeStack;
     }
 
     @Override
@@ -178,7 +181,7 @@ public class NetChannel implements SoChannel<NetChannel> {
 
         try {
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            ByteBuf[] sndByteBuf = this.pipeline.rcvLayer(this.pipeContext, rcvByteBuf);
+            ByteBuf[] sndByteBuf = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
 
             for (ByteBuf buf : sndByteBuf) {
                 appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
@@ -199,7 +202,7 @@ public class NetChannel implements SoChannel<NetChannel> {
         }
 
         try {
-            ByteBuf[] sndByteBuf = this.pipeline.sndLayer(this.pipeContext, writeData);
+            ByteBuf[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
             Future<NetChannel> future = new BasicFuture<>();
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
 

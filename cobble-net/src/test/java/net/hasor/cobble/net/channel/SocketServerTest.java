@@ -44,7 +44,7 @@ public class SocketServerTest {
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         try (CobbleSocket socket = new CobbleSocket(config)) {
-            NetListen listen = socket.listen("127.0.0.1", 5567, new PipeLayerStack() {
+            NetListen listen = socket.listen("127.0.0.1", 5567, new PipeStack() {
                 @Override
                 protected ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf) {
                     String line = rcvByteBuf.readLine();
@@ -64,7 +64,6 @@ public class SocketServerTest {
 
                 @Override
                 protected ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
-
                     ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + writeData + "\n").getBytes());
                     buf.markWriter();
                     return new ByteBuf[] { buf };

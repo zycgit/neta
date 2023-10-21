@@ -42,11 +42,11 @@ public class PipeDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pi
     }
 
     @Override
-    public PipeStatus doLayer(PipeContext context, boolean isRcv, RCV_UP rcvUpstream, RCV_DOWN rcvDownstream, SND_UP sndUpstream, SND_DOWN sndDownstream) throws IOException {
+    public PipeStatus doLayer(PipeContext context, boolean isRcv, RCV_UP rcvUp, RCV_DOWN rcvDown, SND_UP sndUp, SND_DOWN sndDown) throws IOException {
         if (isRcv) {
-            return this.decoder.doHandler(context, rcvUpstream, rcvDownstream);
+            return this.decoder.doHandler(context, rcvUp, rcvDown);
         } else {
-            return this.encoder.doHandler(context, sndUpstream, sndDownstream);
+            return this.encoder.doHandler(context, sndUp, sndDown);
         }
     }
 

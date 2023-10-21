@@ -61,8 +61,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
      * process data the protocol stack, param isRcv = true is RCV_UP to RCV_DOWN
      */
     PipeStatus doLayer(PipeContext context, boolean isRcv,//
-            RCV_UP rcvUpstream, RCV_DOWN rcvDownstream, //
-            SND_UP sndUpstream, SND_DOWN sndDownstream) throws IOException;
+            RCV_UP rcvUp, RCV_DOWN rcvDown, SND_UP sndUp, SND_DOWN sndDown) throws IOException;
 
     /**
      * release protocol stack

@@ -22,20 +22,13 @@ import net.hasor.cobble.net.bytebuf.ByteBuf;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public abstract class PipeLayerStack {
+@FunctionalInterface
+public interface PipeStackFactory {
     /**
      * Processing received data
      * @param pipeContext pipeContext
      * @param rcvByteBuf received data
      * @return The return {@link ByteBuf}`s, well be send to remote.
      */
-    protected abstract ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf);
-
-    /**
-     * Trigger sending data
-     * @param pipeContext pipeContext
-     * @param writeData send data
-     * @return The return {@link ByteBuf}`s, well be send to remote.
-     */
-    protected abstract ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData);
+    PipeStack create(NetChannel pipeContext);
 }

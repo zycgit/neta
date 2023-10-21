@@ -47,6 +47,14 @@ public interface PipeRcvQueue<T> {
 
     /**
      * take message form queue
+     */
+    default T takeMessage() {
+        List<T> msg = this.takeMessage(1);
+        return msg == null || msg.isEmpty() ? null : msg.get(0);
+    }
+
+    /**
+     * take message form queue
      * @param cnt The expected number of tack
      */
     List<T> takeMessage(int cnt);
@@ -54,8 +62,20 @@ public interface PipeRcvQueue<T> {
     /**
      * take message form queue
      */
-    default T takeMessage() {
+    default T peekMessage() {
         List<T> msg = this.takeMessage(1);
         return msg == null || msg.isEmpty() ? null : msg.get(0);
     }
+
+    /**
+     * peek message form queue
+     * @param cnt The expected number of tack
+     */
+    List<T> peekMessage(int cnt);
+
+    /**
+     * skip message form queue
+     * @param cnt The expected number of tack
+     */
+    void skipMessage(int cnt);
 }

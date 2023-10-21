@@ -31,14 +31,14 @@ import java.nio.channels.CompletionHandler;
 class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(SoConnectCompletionHandler.class);
     private final        SocketAddress             remoteAddress;
-    private final        PipeLayerStack            pipeline;
+    private final        PipeStackFactory          stackFactory;
     private final        AsynchronousSocketChannel channel;
     private final        Future<NetChannel>        future;
 
-    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, PipeLayerStack pipeline, Future<NetChannel> future) throws IOException {
+    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, PipeStackFactory stackFactory, Future<NetChannel> future) throws IOException {
         this.remoteAddress = channel.getRemoteAddress();
         this.channel = channel;
-        this.pipeline = pipeline;
+        this.stackFactory = stackFactory;
         this.future = future;
     }
 
@@ -61,7 +61,8 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         SoResManager resManager = context.newSoResManager(channelID, this.remoteAddress);
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, this.channel, context, resManager);
         SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, this.channel, context, resManager);
-        NetChannel channel = new NetChannel(channelID, createdTime, null, this.pipeline, localAddr, remoteAddr, this.channel, rChannel, wChannel, context, resManager);
+        NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, context, resManager);
+        channel.setPipeStack(this.stackFactory.create(channel));
         context.openChannel(channel);
 
         // continue accept

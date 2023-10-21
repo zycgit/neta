@@ -15,7 +15,8 @@
  */
 package net.hasor.cobble.net.handler;
 import net.hasor.cobble.net.bytebuf.ByteBuf;
-import net.hasor.cobble.net.channel.PipeLayerStack;
+import net.hasor.cobble.net.channel.PipeStack;
+import net.hasor.cobble.net.channel.PipeStackFactory;
 
 /**
  * Application stack builder
@@ -35,7 +36,7 @@ public interface PipeBuilder {
      *
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeBytesToBytesLayer pipeLayer);
+    PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesLayer pipeLayer);
 
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
@@ -49,7 +50,7 @@ public interface PipeBuilder {
      *
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeBytesToMessageLayer<RCV_DOWN, SND_UP> pipeLayer);
+    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageLayer<RCV_DOWN, SND_UP> pipeLayer);
 
     /**
      * using decoder and encoder to combined for duplex.
@@ -65,7 +66,7 @@ public interface PipeBuilder {
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder);
+    PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder);
 
     /**
      * using decoder and encoder to combined for duplex.
@@ -81,7 +82,7 @@ public interface PipeBuilder {
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeBytesToMessageHandler<RCV_DOWN> decoder, PipeMessageToBytesHandler<SND_UP> encoder);
+    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageHandler<RCV_DOWN> decoder, PipeMessageToBytesHandler<SND_UP> encoder);
 
     interface PipeStackBuilder<RCV_UP, SND_DOWN> {
 
@@ -97,7 +98,7 @@ public interface PipeBuilder {
          *
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeBytesToBytesLayer pipeLayer);
+        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesLayer pipeLayer);
 
         /**
          * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
@@ -111,7 +112,7 @@ public interface PipeBuilder {
          *
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeBytesToMessageLayer<RCV_DOWN, SND_UP> pipeLayer);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageLayer<RCV_DOWN, SND_UP> pipeLayer);
 
         /**
          * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
@@ -125,7 +126,7 @@ public interface PipeBuilder {
          *
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeMessageToMessageLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeMessageToMessageLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer);
 
         /**
          * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
@@ -139,7 +140,7 @@ public interface PipeBuilder {
          *
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeMessageToBytesLayer<RCV_UP, SND_DOWN> pipeLayer);
+        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeMessageToBytesLayer<RCV_UP, SND_DOWN> pipeLayer);
 
         /**
          * using decoder and encoder to combined for duplex.
@@ -155,7 +156,7 @@ public interface PipeBuilder {
          * @param encoder SND_UP to SND_DOWN
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder);
+        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder);
 
         /**
          * using decoder and encoder to combined for duplex.
@@ -171,7 +172,7 @@ public interface PipeBuilder {
          * @param encoder SND_UP to SND_DOWN
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeBytesToMessageHandler<RCV_DOWN> decoder, PipeMessageToBytesHandler<SND_UP> encoder);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageHandler<RCV_DOWN> decoder, PipeMessageToBytesHandler<SND_UP> encoder);
 
         /**
          * using decoder and encoder to combined for duplex.
@@ -187,7 +188,7 @@ public interface PipeBuilder {
          * @param encoder SND_UP to SND_DOWN
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeMessageToMessageHandler<RCV_UP, RCV_DOWN> decoder, PipeMessageToMessageHandler<SND_UP, SND_DOWN> encoder);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeMessageToMessageHandler<RCV_UP, RCV_DOWN> decoder, PipeMessageToMessageHandler<SND_UP, SND_DOWN> encoder);
 
         /**
          * using decoder and encoder to combined for duplex.
@@ -203,9 +204,9 @@ public interface PipeBuilder {
          * @param encoder SND_UP to SND_DOWN
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeMessageToBytesHandler<RCV_UP> decoder, PipeMessageToBytesHandler<SND_DOWN> encoder);
+        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeMessageToBytesHandler<RCV_UP> decoder, PipeBytesToMessageHandler<SND_DOWN> encoder);
 
-        /** build {@link PipeLayerStack} */
-        PipeLayerStack build();
+        /** build {@link PipeStack} */
+        PipeStackFactory buildFactory();
     }
 }
