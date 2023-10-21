@@ -46,7 +46,7 @@ public class SocketServerTest {
         try (CobbleSocket socket = new CobbleSocket(config)) {
             NetListen listen = socket.listen("127.0.0.1", 5567, pipeContext -> new PipeStack() {
                 @Override
-                protected ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf) {
+                protected ByteBuf rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf) {
                     String line = rcvByteBuf.readLine();
                     rcvByteBuf.markReader();
 
@@ -57,16 +57,16 @@ public class SocketServerTest {
 
                         pipeContext.channel().sendData("hello");
 
-                        return new ByteBuf[] { buf };
+                        return buf;
                     }
-                    return new ByteBuf[0];
+                    return null;
                 }
 
                 @Override
-                protected ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
+                protected ByteBuf sndLayer(PipeContext pipeContext, Object writeData) {
                     ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + writeData + "\n").getBytes());
                     buf.markWriter();
-                    return new ByteBuf[] { buf };
+                    return buf;
                 }
             });
             read(listen);

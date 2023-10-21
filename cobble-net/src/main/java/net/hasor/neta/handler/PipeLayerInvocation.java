@@ -23,8 +23,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * RCV_UP and RCV_DOWN,SND_UP and SND_DOWN. Is the name of RCV and SND under different endpoints.
+ * When the pipeline forms a chain, the rcv event upward propagates,the snd event downward propagates.
  *
- * When the pipeline forms a chain, only the downstream needs to be considered since the upstream data is determined.
+ * <p>
+ *     When two PipeLayer are connected, the endpoint object is shared in the same direction. e.g., RCV_DOWN and RCV_UP.
+ *
+ *     For convenience, use the DOWN name
+ * </p>
  *
  * <pre>
  *                PipeLayer(0)                    PipeLayer (1)
@@ -45,24 +50,24 @@ import java.util.concurrent.atomic.AtomicBoolean;
 class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     private final PipeConfig                                    config;
     private final PipEndpointCreator<?>                         rcvDownEndCreator;
-    private final PipEndpointCreator<?>                         sndUpEndCreator;
+    private final PipEndpointCreator<?>                         sndDownEndCreator;
     private final AtomicBoolean                                 inited;
     //
     private       RCV_DOWN                                      rcvDownEnd;
-    private       SND_UP                                        sndUpEnd;
+    private       SND_DOWN                                      sndDownEnd;
     private final PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer;
 
     interface PipEndpointCreator<T> {
         T createEndpoint(SoResManager resManager, int stackSize);
     }
 
-    public PipeLayerInvocation(PipeConfig config, boolean rcvDownIsBytes, boolean sndUpIsBytes, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
+    public PipeLayerInvocation(PipeConfig config, boolean rcvDownIsBytes, boolean sndDownIsBytes, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
         Objects.requireNonNull(config, "pipeConfig is null.");
         Objects.requireNonNull(pipeLayer, "pipeLayer is null.");
 
         this.config = config;
         this.rcvDownEndCreator = rcvDownIsBytes ? SoResManager::newByteBuf : (resManager, stackSize) -> new PipeQueue<>(stackSize);
-        this.sndUpEndCreator = sndUpIsBytes ? SoResManager::newByteBuf : (resManager, stackSize) -> new PipeQueue<>(stackSize);
+        this.sndDownEndCreator = sndDownIsBytes ? SoResManager::newByteBuf : (resManager, stackSize) -> new PipeQueue<>(stackSize);
         this.inited = new AtomicBoolean();
         this.pipeLayer = pipeLayer;
     }
@@ -73,19 +78,18 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     }
 
     /** the {@link PipeLayer} SND_DOWN to connect the next {@link PipeLayer} SND_UP. */
-    public SND_UP getSndUp() {
-        return this.sndUpEnd;
+    public SND_DOWN getSndDown() {
+        return this.sndDownEnd;
     }
 
-    private void init(SoResManager rm) {
-        this.rcvDownEnd = (RCV_DOWN) this.rcvDownEndCreator.createEndpoint(rm, this.config.getPipeRcvDownStackSize());
-        this.sndUpEnd = (SND_UP) this.sndUpEndCreator.createEndpoint(rm, this.config.getPipeSndUpStackSize());
-    }
-
-    public PipeStatus doLayer(PipeContext context, boolean isRcv, RCV_UP rcvUp, SND_DOWN sndDown) throws IOException {
+    public void initLayer(SoResManager rm) {
         if (this.inited.compareAndSet(false, true)) {
-            this.init(context.getSoResManager());
+            this.rcvDownEnd = (RCV_DOWN) this.rcvDownEndCreator.createEndpoint(rm, this.config.getPipeRcvDownStackSize());
+            this.sndDownEnd = (SND_DOWN) this.sndDownEndCreator.createEndpoint(rm, this.config.getPipeSndUpStackSize());
         }
-        return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, this.sndUpEnd, sndDown);
+    }
+
+    public PipeStatus doLayer(PipeContext context, boolean isRcv, RCV_UP rcvUp, SND_UP sndUp) throws IOException {
+        return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
     }
 }

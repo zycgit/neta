@@ -83,9 +83,13 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context, resManager);
         SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, context, resManager);
         NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, context, resManager);
-        logger.info("accept(" + channelID + ") create PipeStack.");
-        channel.setPipeStack(this.forListen.getStackFactory().create(channel));
+
+        // init and pipe
+        PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
+        PipeStack pipeStack = this.forListen.getStackFactory().create(pipeCtx);
+        channel.initPipe(pipeCtx, pipeStack);
         context.openChannel(channel);
+
         this.forListen.notifyAccept(channelID);
 
         // async read data

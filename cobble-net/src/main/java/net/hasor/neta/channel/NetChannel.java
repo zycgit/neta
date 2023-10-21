@@ -24,7 +24,6 @@ import java.nio.channels.ClosedChannelException;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A tcp network channel
@@ -50,7 +49,7 @@ public class NetChannel implements SoChannel<NetChannel> {
     private final   AtomicBoolean             wStatus;
     private final   SoSndCompletionHandler    wHandler;
     //
-    private final   PipeContextImpl           pipeContext;
+    private         PipeContextImpl           pipeContext;
     private         PipeStack                 pipeStack;
     //
     protected final AtomicBoolean             closeStatus;
@@ -76,12 +75,10 @@ public class NetChannel implements SoChannel<NetChannel> {
         this.wQueue = new ConcurrentLinkedQueue<>();
         this.wStatus = new AtomicBoolean(false);
         this.wHandler = wHandler;
-
-        this.pipeContext = new PipeContextImpl(this, context, rm);
-
     }
 
-    void setPipeStack(PipeStack pipeStack) {
+    public void initPipe(PipeContextImpl pipeContext, PipeStack pipeStack) {
+        this.pipeContext = pipeContext;
         this.pipeStack = pipeStack;
     }
 
@@ -181,11 +178,9 @@ public class NetChannel implements SoChannel<NetChannel> {
 
         try {
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            ByteBuf[] sndByteBuf = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
+            ByteBuf sndByteBuf = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
 
-            for (ByteBuf buf : sndByteBuf) {
-                appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
-            }
+            appendSoSndTask(new SoSndData(sndByteBuf, new BasicFuture<>(), this));
         } finally {
             this.pipeContext.clearFlash();
         }
@@ -201,29 +196,16 @@ public class NetChannel implements SoChannel<NetChannel> {
             return new BasicFuture<>(this);
         }
 
+        Future<NetChannel> future = new BasicFuture<>();
         try {
-            ByteBuf[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
-            Future<NetChannel> future = new BasicFuture<>();
-            AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
-
-            for (ByteBuf buf : sndByteBuf) {
-                Future<NetChannel> itemFuture = new BasicFuture<>();
-                new BasicFuture<>().onFailed(f -> {
-                    future.failed(f.getCause());
-                }).onCompleted(f -> {
-                    cnt.decrementAndGet();
-                    if (cnt.get() == 0) {
-                        future.completed(this);
-                    }
-                });
-
-                appendSoSndTask(new SoSndData(buf, itemFuture, this));
-            }
-
-            return future;
+            ByteBuf sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
+            appendSoSndTask(new SoSndData(sndByteBuf, future, this));
+        } catch (Exception e) {
+            future.failed(e);
         } finally {
             this.pipeContext.clearFlash();
         }
+        return future;
     }
 
     /** flash */

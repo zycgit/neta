@@ -62,7 +62,11 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, this.channel, context, resManager);
         SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, this.channel, context, resManager);
         NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, context, resManager);
-        channel.setPipeStack(this.stackFactory.create(channel));
+
+        // init and pipe
+        PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
+        PipeStack pipeStack = this.stackFactory.create(pipeCtx);
+        channel.initPipe(pipeCtx, pipeStack);
         context.openChannel(channel);
 
         // continue accept

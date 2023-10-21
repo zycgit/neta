@@ -44,11 +44,16 @@ public class PipeLayerServerTest {
         config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
+        //  Net      SSL        Frame        Req/Res
+        // Bytes -> Bytes -> TypeFrame -> TypeRequest
+        // Bytes <- Bytes <- TypeFrame <- TypeResponse
         PipeConfig pipeConfig = new PipeConfig();
         PipeStackFactory stackFactory = new PipeInitializer()
-                // decoder encoder
-                .nextTo(pipeConfig, PipeLayerServerTest::doDecoder, PipeLayerServerTest::doEncoder)
-                // message
+                // Bytes <-> TypeFrame
+                .nextTo(pipeConfig, PipeLayerServerTest::doDecoder1, PipeLayerServerTest::doEncoder1)
+                // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
+                .nextTo(pipeConfig, PipeLayerServerTest::doDecoder2, PipeLayerServerTest::doEncoder2)
+                // process
                 .bindReceive(PipeLayerServerTest::onData)
                 // create Stack
                 .buildFactory();
@@ -77,13 +82,13 @@ public class PipeLayerServerTest {
         }
     }
 
-    /** 消息：解码 */
-    public static PipeStatus doDecoder(PipeContext context, ByteBuf src, PipeSndQueue<String> dst) {
+    /** 消息：解码L1 bytes -> TypeFrame */
+    public static PipeStatus doDecoder1(PipeContext context, ByteBuf src, PipeSndQueue<TypeFrame> dst) {
         String line;
         do {
             line = src.readLine();
             if (line != null) {
-                dst.offerMessage(line);
+                dst.offerMessage(new TypeFrame(line));
             }
         } while (line != null && dst.hasSlot());
 
@@ -92,11 +97,11 @@ public class PipeLayerServerTest {
         return PipeStatus.Success;
     }
 
-    /** 消息：编码 */
-    public static PipeStatus doEncoder(PipeContext context, PipeRcvQueue<String> src, ByteBuf dst) {
+    /** 消息：编码L1 TypeFrame -> bytes */
+    public static PipeStatus doEncoder1(PipeContext context, PipeRcvQueue<TypeFrame> src, ByteBuf dst) {
         while (src.hasMore() && dst.hasWritable()) {
-            String message = src.peekMessage();
-            byte[] bytes = message.getBytes();
+            TypeFrame message = src.peekMessage();
+            byte[] bytes = message.getMessage().getBytes();
             if (dst.writableBytes() < bytes.length) {
                 break;
             }
@@ -107,6 +112,36 @@ public class PipeLayerServerTest {
             dst.markWriter();
         }
 
+        return PipeStatus.Success;
+    }
+
+    /** 消息：解码L2 TypeFrame -> TypeRequest */
+    public static PipeStatus doDecoder2(PipeContext context, PipeRcvQueue<TypeFrame> src, PipeSndQueue<TypeRequest> dst) {
+        TypeFrame frame;
+        do {
+            frame = src.takeMessage();
+            if (frame != null) {
+                dst.offerMessage(new TypeRequest(frame.getMessage()));
+            }
+        } while (frame != null && dst.hasSlot());
+
+        src.rcvSubmit();
+        dst.sndSubmit();
+        return PipeStatus.Success;
+    }
+
+    /** 消息：编码L2 TypeResponse -> TypeFrame */
+    public static PipeStatus doEncoder2(PipeContext context, PipeRcvQueue<TypeResponse> src, PipeSndQueue<TypeFrame> dst) {
+        TypeResponse response;
+        do {
+            response = src.takeMessage();
+            if (response != null) {
+                dst.offerMessage(new TypeFrame(response.getMessage()));
+            }
+        } while (response != null && dst.hasSlot());
+
+        src.rcvSubmit();
+        dst.sndSubmit();
         return PipeStatus.Success;
     }
 
@@ -127,22 +162,8 @@ public class PipeLayerServerTest {
         }
     }
 
-    //    class TypeRequest {
-    //
-    //    }
-    //
-    //    class TypeResponse {
-    //
-    //    }
-    //
-    //    class TypeFrame {
-    //
-    //    }
-
     //    public void abc() {
-    //        //  Net      SSL        Frame        Req/Res
-    //        // Bytes -> Bytes -> TypeFrame -> TypeRequest
-    //        // Bytes <- Bytes <- TypeFrame <- TypeResponse
+
     //
     //        PipeBuilder builder = new PipeInitializer();
     //        PipeConfig config = null;

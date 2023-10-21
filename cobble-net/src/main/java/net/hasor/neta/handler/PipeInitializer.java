@@ -166,6 +166,7 @@ public final class PipeInitializer implements PipeBuilder {
                 for (Consumer<PipeChainRoot> consumer : this.taskAppend) {
                     consumer.accept(root);
                 }
+                root.initLayer(pipeCtx.getSoResManager());
                 return root;
             };
         }
