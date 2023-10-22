@@ -24,6 +24,7 @@ import java.nio.channels.ClosedChannelException;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A tcp network channel
@@ -178,9 +179,13 @@ public class NetChannel implements SoChannel<NetChannel> {
 
         try {
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            ByteBuf sndByteBuf = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
+            ByteBuf[] sndByteBuf = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
 
-            appendSoSndTask(new SoSndData(sndByteBuf, new BasicFuture<>(), this));
+            for (ByteBuf buf : sndByteBuf) {
+                if (buf.hasReadable()) {
+                    appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
+                }
+            }
         } finally {
             this.pipeContext.clearFlash();
         }
@@ -198,8 +203,21 @@ public class NetChannel implements SoChannel<NetChannel> {
 
         Future<NetChannel> future = new BasicFuture<>();
         try {
-            ByteBuf sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
-            appendSoSndTask(new SoSndData(sndByteBuf, future, this));
+            ByteBuf[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
+            AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
+            for (ByteBuf buf : sndByteBuf) {
+                Future<NetChannel> itemFuture = new BasicFuture<>();
+                new BasicFuture<>().onFailed(f -> {
+                    future.failed(f.getCause());
+                }).onCompleted(f -> {
+                    cnt.decrementAndGet();
+                    if (cnt.get() == 0) {
+                        future.completed(this);
+                    }
+                });
+
+                appendSoSndTask(new SoSndData(buf, itemFuture, this));
+            }
         } catch (Exception e) {
             future.failed(e);
         } finally {

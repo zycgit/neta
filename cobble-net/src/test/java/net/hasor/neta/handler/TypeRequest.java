@@ -32,4 +32,9 @@ public class TypeRequest {
     public void setMessage(String message) {
         this.message = message;
     }
+
+    @Override
+    public String toString() {
+        return "TypeRequest{'" + message + "'}";
+    }
 }

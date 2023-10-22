@@ -72,10 +72,21 @@ class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
-    public int offerMessage(List<T> cnt) {
-        int size = Math.min(this.slotSize(), cnt.size());
-        this.offerTemp.addAll(cnt.subList(0, size));
-        return size;
+    public int offerMessage(List<T> offerList) {
+        int size = Math.min(this.slotSize(), offerList.size());
+
+        int added = 0;
+        for (T item : offerList) {
+            if (!this.offerTemp.contains(item) && !this.linkedList.contains(item)) {
+                this.offerTemp.add(item);
+                added++;
+            }
+            if (added >= size) {
+                break;
+            }
+        }
+
+        return added;
     }
 
     @Override
@@ -85,7 +96,9 @@ class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
         }
 
         int fixCnt = Math.min(cnt, this.queueSize());
-        List<T> result = Collections.unmodifiableList(this.linkedList.subList(this.takeCount, fixCnt));
+        int to = this.takeCount + fixCnt;
+
+        List<T> result = Collections.unmodifiableList(this.linkedList.subList(this.takeCount, to));
         this.takeCount += fixCnt;
         return result;
     }

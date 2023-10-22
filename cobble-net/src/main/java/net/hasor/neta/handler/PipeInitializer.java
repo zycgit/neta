@@ -28,24 +28,17 @@ import java.util.function.Consumer;
  * @author 赵永春 (zyc@hasor.net)
  */
 public final class PipeInitializer implements PipeBuilder {
+
     @Override
-    public PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesLayer pipeLayer) {
-        return new PipeStackBuilderImpl<>(new ArrayList<>()).nextTo(pipeConfig, pipeLayer);
+    public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer) {
+        PipeStackBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
+        return builder.nextTo(name, pipeConfig, pipeLayer);
     }
 
     @Override
-    public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageLayer<RCV_DOWN, SND_UP> pipeLayer) {
-        return new PipeStackBuilderImpl<>(new ArrayList<>()).nextTo(pipeConfig, pipeLayer);
-    }
-
-    @Override
-    public PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder) {
-        return new PipeStackBuilderImpl<>(new ArrayList<>()).nextTo(pipeConfig, decoder, encoder);
-    }
-
-    @Override
-    public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageHandler<RCV_DOWN> decoder, PipeMessageToBytesHandler<SND_UP> encoder) {
-        return new PipeStackBuilderImpl<>(new ArrayList<>()).nextTo(pipeConfig, decoder, encoder);
+    public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
+        PipeStackBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
+        return builder.nextTo(name, pipeConfig, new PipeDuplexHandler<>(decoder, encoder));
     }
 
     static class PipeStackBuilderImpl<RCV_DOWN, SND_UP> implements PipeStackBuilder<RCV_DOWN, SND_UP> {
@@ -56,97 +49,25 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesLayer pipeLayer) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer) {
             Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
             Objects.requireNonNull(pipeLayer, "pipeLayer is null.");
 
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, true, true, pipeLayer));
+                chainRoot.addLayer(new PipeLayerInvocation<>(name, pipeConfig, pipeLayer));
             });
             return new PipeStackBuilderImpl<>(this.taskAppend);
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageLayer<NEXT_RCV_DOWN, NEXT_SND_UP> pipeLayer) {
-            Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
-            Objects.requireNonNull(pipeLayer, "pipeLayer is null.");
-
-            this.taskAppend.add(chainRoot -> {
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, false, false, pipeLayer));
-            });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
-        }
-
-        @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(PipeConfig pipeConfig, PipeMessageToMessageLayer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer) {
-            Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
-            Objects.requireNonNull(pipeLayer, "pipeLayer is null.");
-
-            this.taskAppend.add(chainRoot -> {
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, false, false, pipeLayer));
-            });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
-        }
-
-        @Override
-        public PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeMessageToBytesLayer<RCV_DOWN, SND_UP> pipeLayer) {
-            Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
-            Objects.requireNonNull(pipeLayer, "pipeLayer is null.");
-
-            this.taskAppend.add(chainRoot -> {
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, true, true, pipeLayer));
-            });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
-        }
-
-        @Override
-        public PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, PipeHandler<NEXT_SND_UP, SND_UP> encoder) {
             Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
             Objects.requireNonNull(decoder, "decoder is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
 
+            PipeDuplexHandler<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer = new PipeDuplexHandler<>(decoder, encoder);
             this.taskAppend.add(chainRoot -> {
-                PipeDuplexHandler<ByteBuf, ByteBuf, ByteBuf, ByteBuf> duplexHandler = new PipeDuplexHandler<>(decoder, encoder);
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, true, true, duplexHandler));
-            });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
-        }
-
-        @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageHandler<NEXT_RCV_DOWN> decoder, PipeMessageToBytesHandler<NEXT_SND_UP> encoder) {
-            Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
-            Objects.requireNonNull(decoder, "decoder is null.");
-            Objects.requireNonNull(encoder, "encoder is null.");
-
-            this.taskAppend.add(chainRoot -> {
-                PipeDuplexHandler<ByteBuf, PipeSndQueue<NEXT_RCV_DOWN>, PipeRcvQueue<NEXT_SND_UP>, ByteBuf> duplexHandler = new PipeDuplexHandler<>(decoder, encoder);
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, false, false, duplexHandler));
-            });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
-        }
-
-        @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(PipeConfig pipeConfig, PipeMessageToMessageHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, PipeMessageToMessageHandler<NEXT_SND_UP, SND_UP> encoder) {
-            Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
-            Objects.requireNonNull(decoder, "decoder is null.");
-            Objects.requireNonNull(encoder, "encoder is null.");
-
-            this.taskAppend.add(chainRoot -> {
-                PipeDuplexHandler<PipeRcvQueue<RCV_DOWN>, PipeSndQueue<NEXT_RCV_DOWN>, PipeRcvQueue<NEXT_SND_UP>, PipeSndQueue<SND_UP>> duplexHandler = new PipeDuplexHandler<>(decoder, encoder);
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, false, false, duplexHandler));
-            });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
-        }
-
-        @Override
-        public PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeMessageToBytesHandler<RCV_DOWN> decoder, PipeBytesToMessageHandler<SND_UP> encoder) {
-            Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
-            Objects.requireNonNull(decoder, "decoder is null.");
-            Objects.requireNonNull(encoder, "encoder is null.");
-
-            this.taskAppend.add(chainRoot -> {
-                PipeDuplexHandler<PipeRcvQueue<RCV_DOWN>, ByteBuf, ByteBuf, PipeSndQueue<SND_UP>> duplexHandler = new PipeDuplexHandler<>(decoder, encoder);
-                chainRoot.addLayer(new PipeLayerInvocation<>(pipeConfig, true, true, duplexHandler));
+                chainRoot.addLayer(new PipeLayerInvocation<>(name, pipeConfig, pipeLayer));
             });
             return new PipeStackBuilderImpl<>(this.taskAppend);
         }
@@ -166,7 +87,7 @@ public final class PipeInitializer implements PipeBuilder {
                 for (Consumer<PipeChainRoot> consumer : this.taskAppend) {
                     consumer.accept(root);
                 }
-                root.initLayer(pipeCtx.getSoResManager());
+                root.initLayer(pipeCtx);
                 return root;
             };
         }

@@ -33,36 +33,41 @@ public interface PipeBuilder {
      *
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf}</li>
-     *  <li>RCV_DOWN is {@link ByteBuf}</li>
-     *  <li>SND_UP is {@link ByteBuf}</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf}</li>
      * </ul>
      *
+     * @param pipeLayer target pipeLayer
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesLayer pipeLayer);
+    default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer) {
+        return this.nextTo(pipeLayer.getClass().getSimpleName(), new PipeConfig(), pipeLayer);
+    }
 
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
      *
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf}</li>
-     *  <li>RCV_DOWN is Message</li>
-     *  <li>SND_UP is Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf}</li>
      * </ul>
      *
+     * @param name pipeLayer name
+     * @param pipeConfig pipeLayer config
+     * @param pipeLayer target pipeLayer
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageLayer<RCV_DOWN, SND_UP> pipeLayer);
+    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer);
 
     /**
      * using decoder and encoder to combined for duplex.
-     *
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf}</li>
-     *  <li>RCV_DOWN is {@link ByteBuf}</li>
-     *  <li>SND_UP is {@link ByteBuf}</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf}</li>
      * </ul>
      *
@@ -70,145 +75,97 @@ public interface PipeBuilder {
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder);
+    default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
+        String name = String.format("%s/%s", decoder.getClass().getSimpleName(), encoder.getClass().getSimpleName());
+        return this.nextTo(name, new PipeConfig(), decoder, encoder);
+    }
 
     /**
      * using decoder and encoder to combined for duplex.
-     *
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf}</li>
-     *  <li>RCV_DOWN is Message</li>
-     *  <li>SND_UP is Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf}</li>
      * </ul>
      *
+     * @param name pipeLayer name
+     * @param pipeConfig pipeLayer config
      * @param decoder RCV_UP to RCV_DOWN
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageHandler<RCV_DOWN> decoder, PipeMessageToBytesHandler<SND_UP> encoder);
+    <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder);
 
     interface PipeStackBuilder<RCV_UP, SND_DOWN> {
+        /**
+         * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
+         *
+         * <ul>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+         * </ul>
+         *
+         * @param pipeLayer target pipeLayer
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
+            return this.nextTo(pipeLayer.getClass().getSimpleName(), new PipeConfig(), pipeLayer);
+        }
 
         /**
          * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
          *
          * <ul>
-         *  <li>RCV_UP is {@link ByteBuf}</li>
-         *  <li>RCV_DOWN is {@link ByteBuf}</li>
-         *  <li>SND_UP is {@link ByteBuf}</li>
-         *  <li>SND_DOWN is {@link ByteBuf}</li>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
          * </ul>
          *
+         * @param name pipeLayer name
+         * @param pipeConfig pipeLayer config
+         * @param pipeLayer target pipeLayer
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesLayer pipeLayer);
-
-        /**
-         * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
-         *
-         * <ul>
-         *  <li>RCV_UP is {@link ByteBuf}</li>
-         *  <li>RCV_DOWN is Message</li>
-         *  <li>SND_UP is Message</li>
-         *  <li>SND_DOWN is {@link ByteBuf}</li>
-         * </ul>
-         *
-         * @throws NullPointerException if the specified handler is {@code null}
-         */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageLayer<RCV_DOWN, SND_UP> pipeLayer);
-
-        /**
-         * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
-         *
-         * <ul>
-         *  <li>RCV_UP is Message</li>
-         *  <li>RCV_DOWN is Message</li>
-         *  <li>SND_UP is Message</li>
-         *  <li>SND_DOWN is Message</li>
-         * </ul>
-         *
-         * @throws NullPointerException if the specified handler is {@code null}
-         */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeMessageToMessageLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer);
-
-        /**
-         * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
-         *
-         * <ul>
-         *  <li>RCV_UP is Message</li>
-         *  <li>RCV_DOWN is {@link ByteBuf}</li>
-         *  <li>SND_UP is {@link ByteBuf}</li>
-         *  <li>SND_DOWN is Message</li>
-         * </ul>
-         *
-         * @throws NullPointerException if the specified handler is {@code null}
-         */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeMessageToBytesLayer<RCV_UP, SND_DOWN> pipeLayer);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer);
 
         /**
          * using decoder and encoder to combined for duplex.
-         *
          * <ul>
-         *  <li>RCV_UP is {@link ByteBuf}</li>
-         *  <li>RCV_DOWN is {@link ByteBuf}</li>
-         *  <li>SND_UP is {@link ByteBuf}</li>
-         *  <li>SND_DOWN is {@link ByteBuf}</li>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
          * </ul>
          *
          * @param decoder RCV_UP to RCV_DOWN
          * @param encoder SND_UP to SND_DOWN
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeBytesToBytesHandler decoder, PipeBytesToBytesHandler encoder);
+        default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder) {
+            String name = String.format("%s/%s", decoder.getClass().getSimpleName(), encoder.getClass().getSimpleName());
+            return this.nextTo(name, new PipeConfig(), decoder, encoder);
+        }
 
         /**
          * using decoder and encoder to combined for duplex.
-         *
          * <ul>
-         *  <li>RCV_UP is {@link ByteBuf}</li>
-         *  <li>RCV_DOWN is Message</li>
-         *  <li>SND_UP is Message</li>
-         *  <li>SND_DOWN is {@link ByteBuf}</li>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
          * </ul>
          *
+         * @param name pipeLayer name
+         * @param pipeConfig pipeLayer config
          * @param decoder RCV_UP to RCV_DOWN
          * @param encoder SND_UP to SND_DOWN
          * @throws NullPointerException if the specified handler is {@code null}
          */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeBytesToMessageHandler<RCV_DOWN> decoder, PipeMessageToBytesHandler<SND_UP> encoder);
-
-        /**
-         * using decoder and encoder to combined for duplex.
-         *
-         * <ul>
-         *  <li>RCV_UP is Message</li>
-         *  <li>RCV_DOWN is Message</li>
-         *  <li>SND_UP is Message</li>
-         *  <li>SND_DOWN is Message</li>
-         * </ul>
-         *
-         * @param decoder RCV_UP to RCV_DOWN
-         * @param encoder SND_UP to SND_DOWN
-         * @throws NullPointerException if the specified handler is {@code null}
-         */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeConfig pipeConfig, PipeMessageToMessageHandler<RCV_UP, RCV_DOWN> decoder, PipeMessageToMessageHandler<SND_UP, SND_DOWN> encoder);
-
-        /**
-         * using decoder and encoder to combined for duplex.
-         *
-         * <ul>
-         *  <li>RCV_UP is Message</li>
-         *  <li>RCV_DOWN is {@link ByteBuf}</li>
-         *  <li>SND_UP is {@link ByteBuf}</li>
-         *  <li>SND_DOWN is Message</li>
-         * </ul>
-         *
-         * @param decoder RCV_UP to RCV_DOWN
-         * @param encoder SND_UP to SND_DOWN
-         * @throws NullPointerException if the specified handler is {@code null}
-         */
-        PipeStackBuilder<ByteBuf, ByteBuf> nextTo(PipeConfig pipeConfig, PipeMessageToBytesHandler<RCV_UP> decoder, PipeBytesToMessageHandler<SND_DOWN> encoder);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder);
 
         /**
          * It is used to receive network data after being processed by the protocol stack.
@@ -224,5 +181,6 @@ public interface PipeBuilder {
 
         /** build {@link PipeStack} */
         PipeStackFactory buildFactory();
+
     }
 }

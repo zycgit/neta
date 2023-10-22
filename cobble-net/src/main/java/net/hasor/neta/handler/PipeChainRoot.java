@@ -14,12 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.cobble.ArrayUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.PipeStack;
-import net.hasor.neta.channel.SoResManager;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -31,9 +28,10 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeChainRoot extends PipeStack {
-    //    private NetChannel                      channel;
-    private static final ByteBuf                               EMPTY = ByteBufAllocator.DEFAULT.wrap(ArrayUtils.EMPTY_BYTE_ARRAY);
+    private static final ByteBuf[]                             EMPTY     = new ByteBuf[0];
     private final        List<PipeLayerInvocation<?, ?, ?, ?>> layers;
+    private final        PipeQueue<Object>                     rootRcvUp = new PipeQueue<>(-1);
+    private final        PipeQueue<Object>                     rootSndUp = new PipeQueue<>(-1);
     private              List<PipeReceiveListener<?>>          listeners;
 
     public PipeChainRoot() {
@@ -48,22 +46,24 @@ class PipeChainRoot extends PipeStack {
         this.listeners = new ArrayList<>(listeners);
     }
 
-    public void initLayer(SoResManager rm) {
+    public void initLayer(PipeContext pipeContext) throws Exception {
         for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
-            layer.initLayer(rm);
+            layer.initLayer(pipeContext);
         }
     }
 
     @Override
-    protected ByteBuf rcvLayer(PipeContext pipeContext, ByteBuf rcvData) {
+    protected ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvData) {
         //pipeContext.clearFlash();
-        ByteBuf rootSndDown = pipeContext.getSoResManager().newByteBuf(-1);
-        PipeStatus status = null;
+        this.rootRcvUp.offerMessage(rcvData);
+        this.rootRcvUp.sndSubmit();
 
+        // doPipeline
+        PipeStatus status = null;
         do {
             for (int i = 0; i < this.layers.size(); i++) {
                 try {
-                    status = this.doRcvLayer(pipeContext, rcvData, i);
+                    status = this.doLayer(true, pipeContext, i);
                     switch (status) {
                         case Success:
                         case Again:
@@ -74,58 +74,42 @@ class PipeChainRoot extends PipeStack {
                     }
                 } catch (Exception e) {
                     // TODO xxx
+                    e.printStackTrace();
                 }
             }
         } while (status == PipeStatus.StartOver);
 
-        // last endpoint
-        if (!this.layers.isEmpty()) {
-            Object rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
+        // triggerListener
+        PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
+        if (rcvDown.hasMore()) {
             for (PipeReceiveListener listener : this.listeners) {
                 listener.onReceive(pipeContext, rcvDown);
             }
         }
 
-        return rootSndDown;
-    }
-
-    //                 PipeLayer(0)                    PipeLayer (1)
-    //          /------------------------\      /------------------------\
-    //          |                        |      |                        |
-    //          |             /----------+------+----------\             |
-    //  DATA -> | RCV_UP      | RCV_DOWN    ->    RCV_UP   |    RCV_DOWN |  -> ...
-    //          |             |                            |             |
-    //  ...  <- | SND_DOWN    | SND_UP      <-    SND_DOWN |      SND_UP |  <- DATA
-    //          |             \----------+------+----------/             |
-    //          |                        |      |                        |
-    //          \------------------------/      \------------------------/
-    private PipeStatus doRcvLayer(PipeContext pipeContext, ByteBuf rcvUp, int i) throws IOException {
-        Object useRcvUp = i == 0 ? rcvUp : this.layers.get(i - 1).getRcvDown();
-        Object useSndUp = i < (this.layers.size() - 1) ? this.layers.get(i + 1).getSndDown() : EMPTY;
-
-        PipeStatus status;
-        do {
-            PipeLayerInvocation layer = this.layers.get(i);
-            status = layer.doLayer(pipeContext, true, useRcvUp, useSndUp);
-            if (status == null) {
-                throw new IllegalStateException("Missing return status");
-            }
-        } while (status == PipeStatus.Again);
-
-        return status;
+        // result
+        PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
+        if (sndDown.hasMore()) {
+            List<ByteBuf> allBytes = (List<ByteBuf>) sndDown.takeMessage(sndDown.queueSize());
+            sndDown.rcvSubmit();
+            return allBytes.toArray(new ByteBuf[0]);
+        } else {
+            return EMPTY;
+        }
     }
 
     @Override
-    protected ByteBuf sndLayer(PipeContext pipeContext, Object writeData) {
+    protected ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
         //pipeContext.clearFlash();
-        ByteBuf rootSndDown = pipeContext.getSoResManager().newByteBuf(-1);
-        PipeStatus status = null;
+        this.rootSndUp.offerMessage(writeData);
+        this.rootSndUp.sndSubmit();
 
+        // doPipeline
+        PipeStatus status = null;
         do {
             for (int i = this.layers.size() - 1; i >= 0; i--) {
                 try {
-                    status = PipeStatus.Success;
-                    //                    status = this.doSndLayer(pipeContext, rootSndDown, i);
+                    status = this.doLayer(false, pipeContext, i);
                     switch (status) {
                         case Success:
                         case Again:
@@ -136,14 +120,24 @@ class PipeChainRoot extends PipeStack {
                     }
                 } catch (Exception e) {
                     // TODO xxx
+                    e.printStackTrace();
                 }
             }
         } while (status == PipeStatus.StartOver);
 
-        return rootSndDown;
+        // result
+        PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
+        if (sndDown.hasMore()) {
+            List<ByteBuf> allBytes = (List<ByteBuf>) sndDown.takeMessage(sndDown.queueSize());
+            ByteBuf[] res = allBytes.toArray(new ByteBuf[0]);//new ByteBuf[allBytes.size()];
+            sndDown.rcvSubmit();
+            return res;
+        } else {
+            return EMPTY;
+        }
     }
 
-    private PipeStatus doSndLayer(PipeContext pipeContext, ByteBuf rootSndDown, int i) throws IOException {
+    private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws IOException {
         //                 PipeLayer(0)                    PipeLayer (1)
         //          /------------------------\      /------------------------\
         //          |                        |      |                        |
@@ -154,25 +148,15 @@ class PipeChainRoot extends PipeStack {
         //          |             \----------+------+----------/             |
         //          |                        |      |                        |
         //          \------------------------/      \------------------------/
-        //
-        Object useRcvUp = i == 0 ? EMPTY : this.layers.get(i).getRcvDown();
-
-        // SND_UP and SND_DOWN are themselves the same thing,
-        // It distinguished as UP and DOWN Only in two PipeLayer
-        // So need to keep using the target side.
-        //
-        //                PipeLayer (0)               PipeLayer (1)
-        //           /--------------------\      /--------------------\
-        // rcvBuf <- | xxx         SND_UP |  <-  | xxx         SND_UP |  <- APP
-        //           \--------------------/      \--------------------/
-        Object useSndDown = i == 0 ? rootSndDown : this.layers.get(i).getSndDown();
+        PipeQueue<?> useRcvUp = i == 0 ? this.rootRcvUp : this.layers.get(i - 1).getRcvDown();
+        PipeQueue<?> useSndUp = i == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(i + 1).getSndDown();
 
         PipeStatus status;
         do {
             PipeLayerInvocation layer = this.layers.get(i);
-            status = layer.doLayer(pipeContext, false, useRcvUp, useSndDown);
+            status = layer.doLayer(pipeContext, isRcv, useRcvUp, useSndUp);
             if (status == null) {
-                throw new IllegalStateException("Missing return status");
+                throw new IllegalStateException("return status missing.");
             }
         } while (status == PipeStatus.Again);
 

@@ -28,7 +28,7 @@ public abstract class PipeStack {
      * @param rcvByteBuf received data
      * @return The return {@link ByteBuf}`s, well be send to remote.
      */
-    protected abstract ByteBuf rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf);
+    protected abstract ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf);
 
     /**
      * Trigger sending data
@@ -36,5 +36,5 @@ public abstract class PipeStack {
      * @param writeData send data
      * @return The return {@link ByteBuf}`s, well be send to remote.
      */
-    protected abstract ByteBuf sndLayer(PipeContext pipeContext, Object writeData);
+    protected abstract ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData);
 }

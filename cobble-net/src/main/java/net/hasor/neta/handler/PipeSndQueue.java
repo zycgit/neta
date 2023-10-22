@@ -46,12 +46,12 @@ public interface PipeSndQueue<T> {
     /**
      * offer message to queue, return accept count.
      */
-    int offerMessage(List<T> cnt);
+    int offerMessage(List<T> offerList);
 
     /**
      * offer message to queue, return accept status.
      */
-    default boolean offerMessage(T message) {
-        return this.offerMessage(Collections.singletonList(message)) != 0;
+    default boolean offerMessage(T offerMessage) {
+        return this.offerMessage(Collections.singletonList(offerMessage)) != 0;
     }
 }

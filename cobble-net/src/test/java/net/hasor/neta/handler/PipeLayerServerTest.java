@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
 import net.hasor.neta.channel.*;
 
@@ -50,9 +50,9 @@ public class PipeLayerServerTest {
         PipeConfig pipeConfig = new PipeConfig();
         PipeStackFactory stackFactory = new PipeInitializer()
                 // Bytes <-> TypeFrame
-                .nextTo(pipeConfig, PipeLayerServerTest::doDecoder1, PipeLayerServerTest::doEncoder1)
+                .nextTo("TypeFrame", pipeConfig, PipeLayerServerTest::doDecoder1, PipeLayerServerTest::doEncoder1)
                 // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
-                .nextTo(pipeConfig, PipeLayerServerTest::doDecoder2, PipeLayerServerTest::doEncoder2)
+                .nextTo("TypeRequest/Response", pipeConfig, PipeLayerServerTest::doDecoder2, PipeLayerServerTest::doEncoder2)
                 // process
                 .bindReceive(PipeLayerServerTest::onData)
                 // create Stack
@@ -83,33 +83,35 @@ public class PipeLayerServerTest {
     }
 
     /** 消息：解码L1 bytes -> TypeFrame */
-    public static PipeStatus doDecoder1(PipeContext context, ByteBuf src, PipeSndQueue<TypeFrame> dst) {
+    public static PipeStatus doDecoder1(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<TypeFrame> dst) {
+        ByteBuf byteBuf = src.takeMessage();
         String line;
         do {
-            line = src.readLine();
+            line = byteBuf.readLine();
             if (line != null) {
                 dst.offerMessage(new TypeFrame(line));
             }
         } while (line != null && dst.hasSlot());
 
-        src.markReader();
+        byteBuf.markReader();
+
+        src.rcvSubmit();
         dst.sndSubmit();
         return PipeStatus.Success;
     }
 
     /** 消息：编码L1 TypeFrame -> bytes */
-    public static PipeStatus doEncoder1(PipeContext context, PipeRcvQueue<TypeFrame> src, ByteBuf dst) {
-        while (src.hasMore() && dst.hasWritable()) {
+    public static PipeStatus doEncoder1(PipeContext context, PipeRcvQueue<TypeFrame> src, PipeSndQueue<ByteBuf> dst) {
+        while (src.hasMore()) {
             TypeFrame message = src.peekMessage();
             byte[] bytes = message.getMessage().getBytes();
-            if (dst.writableBytes() < bytes.length) {
-                break;
-            }
 
-            dst.writeBytes(bytes);
-            src.skipMessage(1);
+            ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(bytes);
+            wrap.markWriter();
+            dst.offerMessage(wrap);
+
             src.rcvSubmit();
-            dst.markWriter();
+            dst.sndSubmit();
         }
 
         return PipeStatus.Success;
@@ -146,15 +148,15 @@ public class PipeLayerServerTest {
     }
 
     /** 消息：处理 */
-    private static void onData(PipeContext context, PipeRcvQueue<String> data) {
+    private static void onData(PipeContext context, PipeRcvQueue<TypeRequest> data) {
         NetChannel channel = context.channel();
 
         while (true) {
-            String line = data.takeMessage();
-            if (StringUtils.isNotBlank(line)) {
+            TypeRequest line = data.takeMessage();
+            if (line != null) {
                 System.out.println("rcvChannel " + channel.getChannelID() + ", data=" + line);
-                String echoMessage = "echo " + line + "\n";
-                channel.sendData(echoMessage);
+                String echoMessage = "echo " + line.getMessage() + "\n";
+                channel.sendData(new TypeResponse(echoMessage));
                 data.rcvSubmit();
             } else {
                 break;

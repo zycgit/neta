@@ -85,10 +85,16 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, context, resManager);
 
         // init and pipe
-        PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
-        PipeStack pipeStack = this.forListen.getStackFactory().create(pipeCtx);
-        channel.initPipe(pipeCtx, pipeStack);
-        context.openChannel(channel);
+        try {
+            PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
+            PipeStack pipeStack = this.forListen.getStackFactory().create(pipeCtx);
+            channel.initPipe(pipeCtx, pipeStack);
+            context.openChannel(channel);
+        } catch (Exception e) {
+            IOUtils.closeQuietly(result);
+            logger.error("ERROR: Accept Failed " + e.getMessage(), e);
+            return;
+        }
 
         this.forListen.notifyAccept(channelID);
 

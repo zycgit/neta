@@ -64,10 +64,16 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, context, resManager);
 
         // init and pipe
-        PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
-        PipeStack pipeStack = this.stackFactory.create(pipeCtx);
-        channel.initPipe(pipeCtx, pipeStack);
-        context.openChannel(channel);
+        try {
+            PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
+            PipeStack pipeStack = this.stackFactory.create(pipeCtx);
+            channel.initPipe(pipeCtx, pipeStack);
+            context.openChannel(channel);
+        } catch (Exception e) {
+            IOUtils.closeQuietly(this.channel);
+            logger.error("connect failed " + e.getMessage(), e);
+            return;
+        }
 
         // continue accept
         try {

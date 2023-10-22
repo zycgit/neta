@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.SoResManager;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -48,48 +47,48 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+    private final String                                        name;
     private final PipeConfig                                    config;
-    private final PipEndpointCreator<?>                         rcvDownEndCreator;
-    private final PipEndpointCreator<?>                         sndDownEndCreator;
     private final AtomicBoolean                                 inited;
     //
-    private       RCV_DOWN                                      rcvDownEnd;
-    private       SND_DOWN                                      sndDownEnd;
+    private       PipeQueue<RCV_DOWN>                           rcvDownEnd;
+    private       PipeQueue<SND_DOWN>                           sndDownEnd;
     private final PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer;
 
-    interface PipEndpointCreator<T> {
-        T createEndpoint(SoResManager resManager, int stackSize);
-    }
-
-    public PipeLayerInvocation(PipeConfig config, boolean rcvDownIsBytes, boolean sndDownIsBytes, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
+    public PipeLayerInvocation(String name, PipeConfig config, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
         Objects.requireNonNull(config, "pipeConfig is null.");
         Objects.requireNonNull(pipeLayer, "pipeLayer is null.");
 
+        this.name = name;
         this.config = config;
-        this.rcvDownEndCreator = rcvDownIsBytes ? SoResManager::newByteBuf : (resManager, stackSize) -> new PipeQueue<>(stackSize);
-        this.sndDownEndCreator = sndDownIsBytes ? SoResManager::newByteBuf : (resManager, stackSize) -> new PipeQueue<>(stackSize);
         this.inited = new AtomicBoolean();
         this.pipeLayer = pipeLayer;
     }
 
     /** the {@link PipeLayer} RCV_DOWN to connect the next {@link PipeLayer} RCV_UP. */
-    public RCV_DOWN getRcvDown() {
+    public PipeQueue<RCV_DOWN> getRcvDown() {
         return this.rcvDownEnd;
     }
 
     /** the {@link PipeLayer} SND_DOWN to connect the next {@link PipeLayer} SND_UP. */
-    public SND_DOWN getSndDown() {
+    public PipeQueue<SND_DOWN> getSndDown() {
         return this.sndDownEnd;
     }
 
-    public void initLayer(SoResManager rm) {
+    @Override
+    public String toString() {
+        return "PipeLayer [name=" + this.name + ", queue=" + this.rcvDownEnd.queueSize() + ", slot=" + this.sndDownEnd.slotSize() + "]";
+    }
+
+    public void initLayer(PipeContext pipeContext) throws Exception {
         if (this.inited.compareAndSet(false, true)) {
-            this.rcvDownEnd = (RCV_DOWN) this.rcvDownEndCreator.createEndpoint(rm, this.config.getPipeRcvDownStackSize());
-            this.sndDownEnd = (SND_DOWN) this.sndDownEndCreator.createEndpoint(rm, this.config.getPipeSndUpStackSize());
+            this.rcvDownEnd = new PipeQueue<>(this.config.getPipeRcvDownStackSize());
+            this.sndDownEnd = new PipeQueue<>(this.config.getPipeSndUpStackSize());
+            this.pipeLayer.initLayer(pipeContext);
         }
     }
 
-    public PipeStatus doLayer(PipeContext context, boolean isRcv, RCV_UP rcvUp, SND_UP sndUp) throws IOException {
+    public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) throws IOException {
         return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
     }
 }
