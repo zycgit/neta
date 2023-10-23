@@ -53,7 +53,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     /**
      * Initialize the protocol stack, when the Connected.
      */
-    default void initLayer(PipeContext pipeContext) throws Exception {
+    default void init(PipeContext pipeContext) throws Exception {
     }
 
     /**
@@ -91,6 +91,6 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     /**
      * release protocol stack, connection close.
      */
-    default void releaseLayer(PipeContext pipeContext) {
+    default void release(PipeContext pipeContext) {
     }
 }

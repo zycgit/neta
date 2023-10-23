@@ -86,7 +86,13 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         if (this.inited.compareAndSet(false, true)) {
             this.rcvDownEnd = new PipeQueue<>(this.config.getPipeRcvDownStackSize());
             this.sndDownEnd = new PipeQueue<>(this.config.getPipeSndUpStackSize());
-            this.pipeLayer.initLayer(pipeContext);
+            this.pipeLayer.init(pipeContext);
+        }
+    }
+
+    public void releaseLayer(PipeContext pipeContext) {
+        if (this.inited.compareAndSet(true, false)) {
+            this.pipeLayer.release(pipeContext);
         }
     }
 

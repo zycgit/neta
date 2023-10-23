@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.SoChannel;
 
 /**
  * The message receiving listener at the tail of the pipe.
@@ -23,5 +23,5 @@ import net.hasor.neta.channel.PipeContext;
  */
 @FunctionalInterface
 public interface PipeReceiveListener<T> {
-    void onReceive(PipeContext pipeContext, T data);
+    void onReceive(SoChannel<?> channel, T data);
 }

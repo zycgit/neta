@@ -50,8 +50,8 @@ public class NetChannel implements SoChannel<NetChannel> {
     private final   AtomicBoolean             wStatus;
     private final   SoSndCompletionHandler    wHandler;
     //
-    private         PipeContextImpl           pipeContext;
-    private         PipeStack                 pipeStack;
+    protected       PipeContextImpl           pipeContext;
+    protected       PipeStack                 pipeStack;
     //
     protected final AtomicBoolean             closeStatus;
     protected final Future<NetChannel>        closeFuture;
@@ -173,7 +173,7 @@ public class NetChannel implements SoChannel<NetChannel> {
 
     /* Receive data without concurrency */
     final void notifyRcv(int retryCnt) {
-        if (retryCnt > 0) {
+        if (retryCnt == 0) {
             this.lastRcvTime = System.currentTimeMillis();
         }
 

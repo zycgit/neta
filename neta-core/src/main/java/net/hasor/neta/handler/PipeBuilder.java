@@ -18,10 +18,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeStack;
 import net.hasor.neta.channel.PipeStackFactory;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-
 /**
  * Application stack builder
  * @version : 2023-10-20
@@ -170,17 +166,9 @@ public interface PipeBuilder {
         /**
          * It is used to receive network data after being processed by the protocol stack.
          */
-        default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> bindReceive(PipeReceiveListener<RCV_DOWN> listener) {
-            return this.bindReceive(Collections.singletonList(Objects.requireNonNull(listener)));
-        }
-
-        /**
-         * It is used to receive network data after being processed by the protocol stack.
-         */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> bindReceive(List<PipeReceiveListener<RCV_DOWN>> listener);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> bindReceive(PipeReceiveListener<RCV_DOWN> listener);
 
         /** build {@link PipeStack} */
         PipeStackFactory buildFactory();
-
     }
 }

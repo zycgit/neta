@@ -136,8 +136,8 @@ public class PipeLayerServerTest {
     }
 
     /** 消息：处理 */
-    private static void onData(PipeContext context, PipeRcvQueue<TypeRequest> data) {
-        NetChannel channel = context.channel();
+    private static void onData(SoChannel<?> soChannel, PipeRcvQueue<TypeRequest> data) {
+        NetChannel channel = (NetChannel) soChannel;
 
         while (true) {
             TypeRequest line = data.takeMessage();

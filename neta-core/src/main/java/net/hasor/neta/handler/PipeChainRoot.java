@@ -36,7 +36,7 @@ class PipeChainRoot extends PipeStack {
     private final        List<PipeLayerInvocation<?, ?, ?, ?>> layers;
     private final        PipeQueue<Object>                     rootRcvUp     = new PipeQueue<>(-1);
     private final        PipeQueue<Object>                     rootSndUp     = new PipeQueue<>(-1);
-    private final        List<PipeReceiveListener<?>>          listeners     = new ArrayList<>();
+    private              PipeReceiveListener                   listener;
 
     public PipeChainRoot() {
         this.layers = new ArrayList<>();
@@ -46,17 +46,21 @@ class PipeChainRoot extends PipeStack {
         this.layers.add(pipeLayer);
     }
 
-    public <NEXT_RCV_DOWN> void addListener(List<PipeReceiveListener<NEXT_RCV_DOWN>> listeners) {
-        for (PipeReceiveListener<NEXT_RCV_DOWN> listener : listeners) {
-            if (!listeners.contains(listener)) {
-                this.listeners.add(listener);
-            }
+    public <NEXT_RCV_DOWN> void bindListener(PipeReceiveListener<NEXT_RCV_DOWN> listener) {
+        this.listener = listener;
+    }
+
+    @Override
+    public void init(PipeContext pipeContext) throws Exception {
+        for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
+            layer.initLayer(pipeContext);
         }
     }
 
-    public void initLayer(PipeContext pipeContext) throws Exception {
+    @Override
+    protected void release(PipeContext pipeContext) {
         for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
-            layer.initLayer(pipeContext);
+            layer.releaseLayer(pipeContext);
         }
     }
 
@@ -68,15 +72,18 @@ class PipeChainRoot extends PipeStack {
 
         // doPipeline
         PipeStatus status = null;
+        boolean triggerListener = false;
         do {
             for (int i = 0; i < this.layers.size(); i++) {
                 status = this.doLayer(true, pipeContext, i);
                 switch (status) {
                     case Next:
                     case Again:
+                        triggerListener = (i == this.layers.size() - 1); // only the complete pipeline will fire listeners
                         continue;
                     case Exit:
                     case StartOver:
+                        triggerListener = false;
                         break;
                 }
             }
@@ -84,10 +91,18 @@ class PipeChainRoot extends PipeStack {
 
         // triggerListener
         PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
-        if (rcvDown.hasMore()) {
-            for (PipeReceiveListener listener : this.listeners) {
-                listener.onReceive(pipeContext, rcvDown);
+        if (triggerListener && rcvDown.hasMore()) {
+            if (this.listener == null) {
+                // trigger tail. print event data to sto
+                while (rcvDown.hasMore()) {
+                    Object msg = rcvDown.takeMessage();
+                    logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event : " + msg);
+                }
+            } else {
+                // trigger the listener event.
+                this.listener.onReceive(pipeContext.channel(), rcvDown);
             }
+            rcvDown.rcvSubmit();
         }
 
         // result

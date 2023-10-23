@@ -23,6 +23,13 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 public abstract class PipeStack {
     /**
+     * when connected.
+     * @param pipeContext pipeContext
+     */
+    protected void init(PipeContext pipeContext) throws Exception {
+    }
+
+    /**
      * Processing received data
      * @param pipeContext pipeContext
      * @param rcvByteBuf received data
@@ -37,4 +44,11 @@ public abstract class PipeStack {
      * @return The return {@link ByteBuf}`s, well be send to remote.
      */
     protected abstract ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData);
+
+    /**
+     * before close.
+     * @param pipeContext pipeContext
+     */
+    protected void release(PipeContext pipeContext) {
+    }
 }

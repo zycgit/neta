@@ -55,8 +55,6 @@ public class SocketServerTest {
                         buf.markWriter();
                         System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
 
-                        pipeContext.channel().sendData("hello");
-
                         return new ByteBuf[] { buf };
                     }
                     return new ByteBuf[0];

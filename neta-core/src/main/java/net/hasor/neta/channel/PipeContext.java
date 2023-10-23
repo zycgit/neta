@@ -25,7 +25,7 @@ public interface PipeContext {
     SoConfig getConfig();
 
     /** the channel */
-    NetChannel channel();
+    SoChannel<?> channel();
 
     SoResManager getSoResManager();
 

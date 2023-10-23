@@ -35,7 +35,7 @@ public class PipeDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pi
     }
 
     @Override
-    public void initLayer(PipeContext pipeContext) throws Exception {
+    public void init(PipeContext pipeContext) throws Exception {
         this.decoder.initHandler(pipeContext);
         this.encoder.initHandler(pipeContext);
     }
@@ -59,7 +59,7 @@ public class PipeDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pi
     }
 
     @Override
-    public void releaseLayer(PipeContext pipeContext) {
+    public void release(PipeContext pipeContext) {
         this.decoder.releaseHandler(pipeContext);
         this.encoder.releaseHandler(pipeContext);
     }

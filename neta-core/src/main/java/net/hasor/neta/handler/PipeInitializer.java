@@ -73,9 +73,9 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> bindReceive(List<PipeReceiveListener<NEXT_RCV_DOWN>> listeners) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> bindReceive(PipeReceiveListener<NEXT_RCV_DOWN> listener) {
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addListener(listeners);
+                chainRoot.bindListener(listener);
             });
             return new PipeStackBuilderImpl<>(this.taskAppend);
         }
@@ -87,7 +87,7 @@ public final class PipeInitializer implements PipeBuilder {
                 for (Consumer<PipeChainRoot> consumer : this.taskAppend) {
                     consumer.accept(root);
                 }
-                root.initLayer(pipeCtx);
+                root.init(pipeCtx);
                 return root;
             };
         }

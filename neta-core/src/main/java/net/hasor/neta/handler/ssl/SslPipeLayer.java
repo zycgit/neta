@@ -15,8 +15,8 @@
  */
 package net.hasor.neta.handler.ssl;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.SoResManager;
 import net.hasor.neta.handler.*;
@@ -35,8 +35,8 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
     }
 
     @Override
-    public void initLayer(PipeContext pipeContext) throws Exception {
-        NetChannel channel = pipeContext.channel();
+    public void init(PipeContext pipeContext) throws Exception {
+        SoChannel<?> channel = pipeContext.channel();
 
         long channelID = channel.getChannelID();
         SoResManager rm = pipeContext.getSoResManager();
@@ -62,7 +62,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
     }
 
     @Override
-    public void releaseLayer(PipeContext pipeContext) {
+    public void release(PipeContext pipeContext) {
 
     }
 }
