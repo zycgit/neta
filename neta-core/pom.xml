@@ -3,17 +3,20 @@
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>net.hasor</groupId>
-        <artifactId>cobble-parent</artifactId>
-        <version>4.6.2-SNAPSHOT</version>
+        <artifactId>neta-parent</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
     </parent>
 
     <!-- Maven Info -->
-    <artifactId>cobble-net</artifactId>
+    <artifactId>neta-core</artifactId>
     <packaging>jar</packaging>
 
     <!-- Project Info -->
-    <name>Cobble Net</name>
-    <description>a aio Socket util.</description>
+    <name>Neta Core</name>
+    <description>
+        Hasor Neta is a network application framework that helps users to develop high performance and high scalability network applications easily.
+        It provides an abstract asynchronous duplex API model over various transports such as TCP/IP and UDP/IP via Java AIO.
+    </description>
 
     <developers>
         <developer>
@@ -22,11 +25,10 @@
         </developer>
     </developers>
 
-    <!-- 引用依赖 -->
     <dependencies>
         <dependency>
             <groupId>net.hasor</groupId>
-            <artifactId>cobble-lang</artifactId>
+            <artifactId>cobble-all</artifactId>
         </dependency>
 
         <!-- ssh options-->
