@@ -43,6 +43,11 @@ import java.util.LinkedHashSet;
 import java.util.Objects;
 import java.util.Set;
 
+/**
+ * inner utils.
+ * @version : 2023-09-24
+ * @author 赵永春 (zyc@hasor.net)
+ */
 class SslUtils {
     private static final Logger   logger               = Logger.getLogger(SslUtils.class);
     public static final  String[] DEFAULT_CIPHER_SUITES;
@@ -168,7 +173,7 @@ class SslUtils {
         keyStore.load(jksInputStream, passwordChars);
     }
 
-    /** 读取 CER 格式文件中的证书链 */
+    /** Read the certificate chain in a CER file */
     public static X509Certificate[] toX509Certificates(InputStream cerInputStream) throws CertificateException {
         if (cerInputStream == null) {
             return null;
@@ -195,13 +200,13 @@ class SslUtils {
         return x509Certs;
     }
 
-    /** 将 PEM 文件中定义的私钥转换为 PrivateKey 对象 */
+    /** Convert the private key defined in PEM file to {@link PrivateKey} */
     public static PrivateKey toPrivateKey(InputStream pemInputStream, String keyPassword) throws GeneralSecurityException, IOException {
         if (pemInputStream == null) {
             return null;
         }
 
-        // 优先使用 bouncycastle 作为 key 解析，因为它是最丰富的，如果失败则退回原始方式解析
+        // bouncycastle is preferred for key parsing because it is the richest, and falls back to the original way parsing if it fails
         if (SslPemReaderByBouncyCastle.isAvailable()) {
             if (!pemInputStream.markSupported()) {
                 // We need an input stream that supports resetting, in case BouncyCastle fails to read.

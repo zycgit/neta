@@ -36,8 +36,10 @@ It provides an abstract asynchronous duplex API model over various transports su
 TODO
 
 1. soReadTimeoutMs 的作用和平时认知有一些偏差，需要进一步拟合这种偏差
-2. NetChannel 和外围 API
-3. 低延迟 ExecutorService
+2. 低延迟 ExecutorService
+3. 协议路由，用来支持 NPN/ALPN
+4. EmbeddedChannel 用来提供协议层的开发
+5. 通过 SSL 参数支持 peerHost 能力
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#ex6
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html
@@ -56,42 +58,22 @@ https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuid
 - 支持 `动态容量` 和 `固定容量` 两种模式
 - 支持 读/写模式一体化
 - 支持 `ByteBuf` 零拷贝扩缩容
-- 支持 `多线程` 场景下 `ByteBuf` 并发操作
 - 支持 `Direct 内存`
 - 支持 `大端/小端` 字节序
 - 支持 `InputStream` 和 `OutputStream` 串联
 
 ## 同类对比
 
-| 特性                                 | Cobble | Netty | JDK |
-|------------------------------------|--------|-------|-----|
-| 动态扩容                               | ✅      | ✅     | ✅   |
-| 支持 Direct 内存                       | ✅      | ✅     | ✅   |
-| 大、小端 字节序                           | ✅      | ✅     | ✅   |
-| copy 方法                            | ✅      | ✅     | ✅   |
-| duplicate 方法                       | ❌      | ✅     | ✅   |
-| slice 方法                           | ❌      | ✅     | ✅   |
-| readOnly 方法                        | ❌      | ✅     | ✅   |
-| 零拷贝                                | 扩容时    | ✅     | ❌   |
-| 读/写模式一体化                           | ✅      | ✅     | ❌   |
-| ByteBuf 转为 输出流                     | ✅      | ✅     | ❌   |
-| ByteBuf 转为 输入流                     | ✅      | ✅     | ❌   |
-| 管道模式（`Input -> ByteBuf -> Output`） | ✅      | ❌     | ❌   |
-| 并发互斥锁                              | ✅      | ❌     | ❌   |
-| 多线程并发 读/写                          | ✅      | ❌     | ❌   |
-
-## 引入依赖
-
-```xml
-
-<dependency>
-    <groupId>net.hasor</groupId>
-    <artifactId>cobble-bytebuf</artifactId>
-    <version>4.6.1</version>
-</dependency>
-```
-
-## 软件质量
-
-- 行测试覆盖率：70%
-- 有效代码行：1264
+| 特性                                 | Netty | Cobble | JDK |
+|------------------------------------|-------|--------|-----|
+| 动态扩容                               | ✅     | ✅      | ✅   |
+| 支持 Direct 内存                       | ✅     | ✅      | ✅   |
+| 大、小端 字节序                           | ✅     | ✅      | ✅   |
+| copy 方法                            | ✅     | ✅      | ✅   |
+| duplicate 方法                       | ✅     | ❌      | ✅   |
+| slice 方法                           | ✅     | ❌      | ✅   |
+| readOnly 方法                        | ✅     | ❌      | ✅   |
+| 零拷贝                                | ✅     | 扩容时    | ❌   |
+| 读/写模式一体化                           | ✅     | ✅      | ❌   |
+| ByteBuf 转为 输出流                     | ✅     | ✅      | ❌   |
+| ByteBuf 转为 输入流                     | ✅     | ✅      | ❌   |

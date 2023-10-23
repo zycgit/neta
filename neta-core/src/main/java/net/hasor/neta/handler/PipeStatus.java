@@ -20,12 +20,48 @@ package net.hasor.neta.handler;
  * @author 赵永春 (zyc@hasor.net)
  */
 public enum PipeStatus {
-
+    /**
+     * Continuing the execution pipeline
+     * <pre>
+     *  /---------------\     /---------------\     /---------------\
+     *  | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) | > ...
+     *  \---------------/     \---------------/     \---------------/
+     * </pre>
+     */
     Next,
 
+    /**
+     * Retry this method call, using again to avoid recursion
+     * <pre>
+     *                     ┏━━━━━━┓
+     *  /---------------\  ┃  /---┸-----------\     /---------------\
+     *  | PipeLayer (0) |  ┸> | PipeLayer (1) |  >  | PipeLayer (2) | > ...
+     *  \---------------/     \---------------/     \---------------/
+     *                             Current
+     * </pre>
+     */
     Again,
 
+    /**
+     * Interrupt pipeline event propagation, until next time.
+     * <pre>
+     *     /---------------\     /---------------\     /---------------\
+     * ... | PipeLayer (0) |  ×  | PipeLayer (1) |  ×  | PipeLayer (2) |
+     *     \---------------/     \---------------/     \---------------/
+     *          Current                Skip                  Skip
+     * </pre>
+     */
     Exit,
 
+    /**
+     * Interrupt the pipeline event propagation and go back to the head of the pipeline.
+     * <pre>
+     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     * ┃  /---------------\     /---------------\     /-┸-------------\
+     * ┗> | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) | ...
+     *    \---------------/     \---------------/     \---------------/
+     *        go head                                      Current
+     * </pre>
+     */
     StartOver,
 }

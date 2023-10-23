@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 
 /**
- * 异步数据写
+ * Asynchronous data writes
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

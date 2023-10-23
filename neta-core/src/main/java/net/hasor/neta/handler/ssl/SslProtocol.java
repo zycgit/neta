@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.handler.ssl;
 /**
- * 支持的 SSL 协议
+ * Supported SSL protocols
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

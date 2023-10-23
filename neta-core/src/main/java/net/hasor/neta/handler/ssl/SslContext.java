@@ -14,12 +14,22 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
+import net.hasor.neta.handler.PipeLayer;
+
+/**
+ * A status for {@link PipeLayer}
+ * @version : 2023-10-18
+ * @author 赵永春 (zyc@hasor.net)
+ */
 public interface SslContext {
 
+    /** return ssl config. */
     SslConfig getConfig();
 
+    /** SSL server side */
     boolean isServer();
 
+    /** SSL Client side */
     boolean isClient();
 
     /**
@@ -28,7 +38,9 @@ public interface SslContext {
      */
     String getApplicationProtocol();
 
+    /** Returns the host name of the peer of this session. The host name is not authenticated. */
     String getPeerHost();
 
+    /** Returns the host name of the peer of this session. The host port is not authenticated. */
     int getPeerPort();
 }

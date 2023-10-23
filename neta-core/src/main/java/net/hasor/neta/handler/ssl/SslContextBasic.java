@@ -33,6 +33,11 @@ import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
 
+/**
+ * An implementation of the {@link SslContext} interface that provides SSL handshake support
+ * @version : 2023-10-20
+ * @author 赵永春 (zyc@hasor.net)
+ */
 public abstract class SslContextBasic implements SslContext {
     private static final Logger       logger = Logger.getLogger(SslContextBasic.class);
     protected final      long         channelID;
@@ -85,7 +90,7 @@ public abstract class SslContextBasic implements SslContext {
         return this.sslConfig;
     }
 
-    /** 创建 KeyStore */
+    /** create KeyStore */
     protected KeyStore createKeyStore() throws GeneralSecurityException, IOException {
         KeyStore ks = this.sslConfig.getKeyStore();
         if (ks == null) {
@@ -96,7 +101,7 @@ public abstract class SslContextBasic implements SslContext {
         return ks;
     }
 
-    /** 创建 KeyManagerFactory */
+    /** create KeyManagerFactory */
     protected KeyManagerFactory createKeyManagerFactory(KeyStore keyStore) throws GeneralSecurityException, IOException {
         String password = this.sslConfig.getKeyPassword();
         char[] passwordChars = (password == null) ? ArrayUtils.EMPTY_CHAR_ARRAY : password.toCharArray();
@@ -131,7 +136,7 @@ public abstract class SslContextBasic implements SslContext {
         return SslUtils.buildKeyManagerFactory(keyStore, passwordChars, kmf);
     }
 
-    /** 创建 TrustManagerFactory */
+    /** create TrustManagerFactory */
     protected TrustManagerFactory getTrustManagers(KeyStore keyStore) throws GeneralSecurityException, IOException {
         TrustManagerFactory tmf = this.sslConfig.getTrustManagerFactory();
         if (tmf == null) {
@@ -142,43 +147,43 @@ public abstract class SslContextBasic implements SslContext {
         return tmf;
     }
 
-    /** 创建 SSLContext */
+    /** create SSLContext */
     protected abstract SSLContext createSSLContext() throws GeneralSecurityException, IOException;
 
-    /** 创建 SSLEngine */
+    /** create SSLEngine */
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws GeneralSecurityException;
 
     private synchronized boolean tryHandshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.sslHandler != null && this.sslHandler.isHandshake()) {
-            return true; // 已经握手成功，处理后续 SSL 数据解密/加密
+            return true; // The handshake has been successful, and the SSL data decryption/encryption is processed
         }
 
-        // 启动握手
+        // start handshake
         if (this.sslHandler == null) {
             this.sslHandler = new SslHandle(this.channelID, this.soContext, this.sslEngine, this.rm);
             this.sslHandler.beginHandshake();
         }
 
-        // 处理握手请求
+        // handshake requests
         this.sslHandler.handshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
 
-        // 握手成功
+        // Handshake successful
         if (this.sslHandler.isHandshake()) {
             logger.info("sslHandshake(" + this.channelID + ") finish.");
-            return true; // 刚刚握手成功，处理后续 SSL 数据解密/加密
+            return true; // We've just completed the handshake, and we'll handle the SSL decryption/encryption
         } else {
             return false;
         }
     }
 
-    /** 接收SSL数据 */
+    /** Receiving SSL data */
     public void handRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
             this.sslHandler.handlerRcv(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
         }
     }
 
-    /** 发送SSL数据 */
+    /** Sending SSL data */
     public void handSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
             this.sslHandler.handlerSnd(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);

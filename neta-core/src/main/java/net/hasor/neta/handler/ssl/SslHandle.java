@@ -32,7 +32,9 @@ import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 处理 SSL
+ * Handling the SSL handshake
+ * @version : 2023-10-18
+ * @author 赵永春 (zyc@hasor.net)
  */
 public class SslHandle {
     private static final Logger        logger = Logger.getLogger(SslHandle.class);
@@ -41,13 +43,13 @@ public class SslHandle {
     private final        SSLEngine     engine;
     private final        SoResManager  rm;
     //
-    private final        AtomicBoolean hsStatus;        // 握手处理中
-    private volatile     boolean       hsAppendData;    // 在 handshake 期间如果收到数据会被设置为 true
+    private final        AtomicBoolean hsStatus;        // Handshake in progress
+    private volatile     boolean       hsAppendData;    // Set to true if data is received during the handshake
     private volatile     boolean       handshake;
-    private final        AtomicBoolean rcvStatus;       // 接收数据处理中
-    private volatile     boolean       rcvAppendData;   // 在 rcv 期间如果收到数据会被设置为 true
-    private final        AtomicBoolean sndStatus;       // 发送数据处理中
-    private volatile     boolean       sndAppendData;   // 在 snd 期间如果收到数据会被设置为 true
+    private final        AtomicBoolean rcvStatus;       // Receiving data processing
+    private volatile     boolean       rcvAppendData;   // Set to true if data is received during rcv
+    private final        AtomicBoolean sndStatus;       // Sending data processing
+    private volatile     boolean       sndAppendData;   // Set to true if data is received during snd
     //
     public               ByteBuffer    inNetData;
     public               ByteBuffer    inAppData;
@@ -65,12 +67,12 @@ public class SslHandle {
         this.handshake = false;
     }
 
-    /** 管道ID */
+    /** channelID */
     public long getChannelID() {
         return this.channelID;
     }
 
-    /** 关闭 SSL 会话 */
+    /** Closing SSL sessions */
     private void handleClose(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
         if (!sslEngine.isOutboundDone()) {
             sslEngine.closeOutbound();
@@ -98,7 +100,7 @@ public class SslHandle {
         this.sndStatus.set(false);
     }
 
-    /** 无法恢复的失败，会关闭 Socket */
+    /** Failure from which there is no recovery will close the Socket */
     private void handleFailed(SSLEngine sslEngine, Throwable e) {
         this.context.closeChannel(this.channelID, e.getMessage());
         this.hsStatus.set(false);
@@ -108,16 +110,16 @@ public class SslHandle {
 
     // --------------------------------------------------------------------------------------------
     //
-    // 握手相关
+    // handshake
     //
     // --------------------------------------------------------------------------------------------
 
-    /** 是否完成握手 */
+    /** test handshake */
     public boolean isHandshake() {
         return this.handshake;
     }
 
-    /** 开始握手 */
+    /** begin handshake */
     public void beginHandshake() throws SSLException {
         logger.info("sslHandshake(" + this.channelID + ") begin.");
         this.engine.beginHandshake();
@@ -129,7 +131,7 @@ public class SslHandle {
         this.outNetData = this.rm.newByteBuffer(session.getPacketBufferSize());
     }
 
-    /** 握手阶段 rcv/snd 统一处理 */
+    /** The handshake phase is handled by rcv/snd in a unified manner */
     public void handshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
         if (this.hsStatus.compareAndSet(false, true)) {
             this.doHandshake(this.engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
@@ -139,13 +141,13 @@ public class SslHandle {
     }
 
     private void doHandshake(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
-        // 已经握手，无需处理
+        // Handshake already done, no need to process
         if (this.handshake) {
             this.handleFinish(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             return;
         }
 
-        // 处理 SSL 握手
+        // Handling the SSL handshake
         try {
             switch (sslEngine.getHandshakeStatus()) {
                 case NEED_TASK: {
@@ -170,7 +172,7 @@ public class SslHandle {
         }
     }
 
-    /** Unwrap 操作，负责处理接收的网络数据 */
+    /** The Unwrap operation is responsible for processing the received network data */
     private void handleUnwrap(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         // no more data to read.
         if (!rcvUpstream.hasReadable()) {
@@ -201,7 +203,7 @@ public class SslHandle {
                 && hsStatus == HandshakeStatus.NEED_UNWRAP  // need more UNWRAP
                 && producedBytes == 0);                     // no produced any data, continue SslHandshake.
 
-        // 需要处理 BUFFER_OVERFLOW 的情况，有些 SSL 实现并非完全遵循照标准的固定 Buffer 大小进行封包拆分
+        // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             this.resizingBufOverflowForUnwrap("sslHandshake", this.engine);
             rcvUpstream.resetReader();
@@ -261,9 +263,9 @@ public class SslHandle {
         this.inAppData = this.rm.newByteBuffer(newAppSize);
     }
 
-    /** 握手中，Wrap 操作，负责处理发送网络数据 */
+    /** n the handshake, the Wrap operation is responsible for sending network data */
     private void handleWrap(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
-        // 当没下游有足够空间写数据时，异步重试
+        // Retry asynchronously when no downstream has enough space to write data
         if (!sndDownstream.hasWritable()) {
             logger.info("sslHandshake(" + this.channelID + ") Wrap, sndBuf is full.");
             this.context.submitSoTask(new SoDelayTask(this.context), this).onCompleted(f -> {
@@ -281,7 +283,7 @@ public class SslHandle {
         // wrap Data to SSL Data.
         this.outAppData.flip();
         SSLEngineResult result = sslEngine.wrap(this.outAppData, this.outNetData);
-        // 需要处理 BUFFER_OVERFLOW 的情况，有些 SSL 实现并非完全遵循照标准的固定 Buffer 大小进行封包拆分
+        // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             this.resizingBufOverflowForWrap("sslHandshake", this.engine);
             rcvUpstream.resetReader();
@@ -304,7 +306,7 @@ public class SslHandle {
         sndDownstream.markWriter();
         logger.info("sslHandshake(" + this.channelID + ") WRAP, " + dataTotal + "/" + bytesConsumed + "/" + bytesProduced + " (data > encode > snd)");
 
-        // 一次写不完，需要异步任务继续写
+        // Asynchronous tasks are required to continue writing
         if (this.outNetData.hasRemaining()) {
             this.context.submitSoTask(new SslCopyTask(this.channelID, this.context, this.outNetData, sndDownstream), this).onCompleted(f -> {
                 this.afterWrapUnwrap(sslEngine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream, result);
@@ -341,7 +343,7 @@ public class SslHandle {
         this.outAppData = this.rm.newByteBuffer(newAppSize);
     }
 
-    /** 握手中，Unwrap/Wrap 的后续处理 */
+    /** in the handshake, after Unwrap/Wrap */
     private void afterWrapUnwrap(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream, SSLEngineResult result) {
         this.inNetData.compact();
         this.inAppData.compact();
@@ -369,7 +371,7 @@ public class SslHandle {
         }
     }
 
-    /** 结束本轮 handshake 调用  */
+    /** Ends the handshake call  */
     private void handleFinish(SSLEngine sslEngine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) {
         if (this.hsAppendData) {
             this.hsAppendData = false;
@@ -383,11 +385,11 @@ public class SslHandle {
 
     // --------------------------------------------------------------------------------------------
     //
-    // 握手后的数据接收
+    // After the handshake, receive data
     //
     // --------------------------------------------------------------------------------------------
 
-    /** 握手之后，处理接收的 SSL 数据 */
+    /** After the handshake, receive data */
     public void handlerRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.rcvStatus.compareAndSet(false, true)) {
             this.doHandlerRcv(this.engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
@@ -396,7 +398,7 @@ public class SslHandle {
         }
     }
 
-    public void doHandlerRcv(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
+    private void doHandlerRcv(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (!rcvUpstream.hasReadable()) {
             this.afterHandlerRcv(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             return;
@@ -479,11 +481,11 @@ public class SslHandle {
 
     // --------------------------------------------------------------------------------------------
     //
-    // 握手后的数据发送
+    // After the handshake, send data
     //
     // --------------------------------------------------------------------------------------------
 
-    /** 握手之后，处理发送的数据 */
+    /** After the handshake, the data sent is processed */
     public void handlerSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (this.sndStatus.compareAndSet(false, true)) {
             this.doHandlerSnd(this.engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
@@ -492,8 +494,7 @@ public class SslHandle {
         }
     }
 
-    /** 握手之后，处理发送的数据 */
-    public void doHandlerSnd(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
+    private void doHandlerSnd(SSLEngine engine, ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
         if (!sndUpstream.hasReadable()) {
             this.afterHandlerSnd(engine, rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
             return;

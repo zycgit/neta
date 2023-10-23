@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.handler.ssl;
 /**
- * 证书文件类型
+ * Certificate File Type
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

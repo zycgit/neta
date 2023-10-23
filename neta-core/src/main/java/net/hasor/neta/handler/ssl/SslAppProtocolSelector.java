@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.function.BiFunction;
 
 /**
- * 支持的 SSL 协议
+ * Select a protocol that is supported in the TLS NPN/ALPN extension.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */

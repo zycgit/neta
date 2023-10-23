@@ -58,6 +58,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
 
     @Override
     public PipeStatus doError(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown, PipeExceptionHandler eh) {
+        context.channel().close();
         return PipeStatus.Exit;
     }
 
