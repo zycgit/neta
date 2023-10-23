@@ -24,6 +24,10 @@ import java.util.List;
  * @see PipeRcvQueue
  */
 public interface PipeSndQueue<T> {
+    /**
+     * Returns the number of capacity.
+     */
+    int getCapacity();
 
     /** The number of writable slots, default is Integer.MAX. */
     int slotSize();

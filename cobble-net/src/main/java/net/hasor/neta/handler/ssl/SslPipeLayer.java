@@ -19,10 +19,7 @@ import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.SoResManager;
-import net.hasor.neta.handler.PipeLayer;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.handler.*;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -56,7 +53,12 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
         //        } else {
         //            ((SslContextBasic) context.context(SslContext.class)).handSnd(rcvUp, rcvDown, sndUp, sndDown);
         //        }
-        return PipeStatus.Success;
+        return PipeStatus.Next;
+    }
+
+    @Override
+    public PipeStatus doError(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown, PipeExceptionHandler eh) {
+        return PipeStatus.Exit;
     }
 
     @Override

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import java.io.InputStream;
-import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
 /**
@@ -41,15 +39,6 @@ public interface ByteBufAllocator {
     /** Allocate a {@link ByteBuf} with the given initial capacity and the given maximal capacity.
      * If it is a direct or heap buffer depends on the actual implementation. */
     ByteBuf buffer(int initialCapacity, int maxCapacity);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect InputStream. */
-    StreamByteBuf streamBuffer(int capacity, InputStream inStream);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect OutputStream. */
-    StreamByteBuf streamBuffer(int capacity, OutputStream outStream);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect InputStream and OutputStream. */
-    StreamByteBuf streamBuffer(int capacity, InputStream inStream, OutputStream outStream);
 
     /** Returns {@code true} if direct {@link ByteBuf}'s */
     boolean isPooled();
@@ -81,15 +70,6 @@ public interface ByteBufAllocator {
     /** Allocate a heap {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
     ByteBuf heapBuffer(int initialCapacity, int maxCapacity);
 
-    /** Allocate a heap {@link StreamByteBuf} and connect InputStream. */
-    StreamByteBuf heapStreamBuffer(int capacity, InputStream inStream);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect OutputStream. */
-    StreamByteBuf heapStreamBuffer(int capacity, OutputStream outStream);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect InputStream and OutputStream. */
-    StreamByteBuf heapStreamBuffer(int capacity, InputStream inStream, OutputStream outStream);
-
     /** Allocate a direct {@link ByteBuf}. */
     ByteBuf directBuffer();
 
@@ -98,15 +78,6 @@ public interface ByteBufAllocator {
 
     /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
     ByteBuf directBuffer(int initialCapacity, int maxCapacity);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect InputStream. */
-    StreamByteBuf directStreamBuffer(int capacity, InputStream inStream);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect OutputStream. */
-    StreamByteBuf directStreamBuffer(int capacity, OutputStream outStream);
-
-    /** Allocate a heap {@link StreamByteBuf} and connect InputStream and OutputStream. */
-    StreamByteBuf directStreamBuffer(int capacity, InputStream inStream, OutputStream outStream);
 
     /*** Allocate pooled {@link ByteBuf}.
      * If it is a direct or heap buffer depends on the actual implementation. */

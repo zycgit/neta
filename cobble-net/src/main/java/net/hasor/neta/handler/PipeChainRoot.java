@@ -14,11 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.PipeContextImpl;
 import net.hasor.neta.channel.PipeStack;
 
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -28,11 +29,14 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeChainRoot extends PipeStack {
-    private static final ByteBuf[]                             EMPTY     = new ByteBuf[0];
+    private static final Logger                                logger        = Logger.getLogger(PipeChainRoot.class);
+    private static final String                                RCV_ERROR_TAG = PipeChainRoot.class.getName() + "-rcv-error-tag";
+    private static final String                                SND_ERROR_TAG = PipeChainRoot.class.getName() + "-snd-error-tag";
+    private static final ByteBuf[]                             EMPTY         = new ByteBuf[0];
     private final        List<PipeLayerInvocation<?, ?, ?, ?>> layers;
-    private final        PipeQueue<Object>                     rootRcvUp = new PipeQueue<>(-1);
-    private final        PipeQueue<Object>                     rootSndUp = new PipeQueue<>(-1);
-    private              List<PipeReceiveListener<?>>          listeners;
+    private final        PipeQueue<Object>                     rootRcvUp     = new PipeQueue<>(-1);
+    private final        PipeQueue<Object>                     rootSndUp     = new PipeQueue<>(-1);
+    private final        List<PipeReceiveListener<?>>          listeners     = new ArrayList<>();
 
     public PipeChainRoot() {
         this.layers = new ArrayList<>();
@@ -43,7 +47,11 @@ class PipeChainRoot extends PipeStack {
     }
 
     public <NEXT_RCV_DOWN> void addListener(List<PipeReceiveListener<NEXT_RCV_DOWN>> listeners) {
-        this.listeners = new ArrayList<>(listeners);
+        for (PipeReceiveListener<NEXT_RCV_DOWN> listener : listeners) {
+            if (!listeners.contains(listener)) {
+                this.listeners.add(listener);
+            }
+        }
     }
 
     public void initLayer(PipeContext pipeContext) throws Exception {
@@ -54,7 +62,7 @@ class PipeChainRoot extends PipeStack {
 
     @Override
     protected ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvData) {
-        //pipeContext.clearFlash();
+        ((PipeContextImpl) pipeContext).clearFlash();
         this.rootRcvUp.offerMessage(rcvData);
         this.rootRcvUp.sndSubmit();
 
@@ -62,19 +70,14 @@ class PipeChainRoot extends PipeStack {
         PipeStatus status = null;
         do {
             for (int i = 0; i < this.layers.size(); i++) {
-                try {
-                    status = this.doLayer(true, pipeContext, i);
-                    switch (status) {
-                        case Success:
-                        case Again:
-                            continue;
-                        case Finish:
-                        case StartOver:
-                            break;
-                    }
-                } catch (Exception e) {
-                    // TODO xxx
-                    e.printStackTrace();
+                status = this.doLayer(true, pipeContext, i);
+                switch (status) {
+                    case Next:
+                    case Again:
+                        continue;
+                    case Exit:
+                    case StartOver:
+                        break;
                 }
             }
         } while (status == PipeStatus.StartOver);
@@ -100,27 +103,28 @@ class PipeChainRoot extends PipeStack {
 
     @Override
     protected ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
-        //pipeContext.clearFlash();
-        this.rootSndUp.offerMessage(writeData);
+        ((PipeContextImpl) pipeContext).clearFlash();
+        if (!this.rootSndUp.offerMessage(writeData)) {
+            long channelID = pipeContext.channel().getChannelID();
+            String message = "snd(" + channelID + ") sndQueue[" + this.rootSndUp.slotSize() + "/" + this.rootSndUp.getCapacity() + "] is full.";
+            IllegalStateException e = new IllegalStateException(message);
+            logger.error(message, e);
+            throw e;
+        }
         this.rootSndUp.sndSubmit();
 
         // doPipeline
         PipeStatus status = null;
         do {
             for (int i = this.layers.size() - 1; i >= 0; i--) {
-                try {
-                    status = this.doLayer(false, pipeContext, i);
-                    switch (status) {
-                        case Success:
-                        case Again:
-                            continue;
-                        case Finish:
-                        case StartOver:
-                            break;
-                    }
-                } catch (Exception e) {
-                    // TODO xxx
-                    e.printStackTrace();
+                status = this.doLayer(false, pipeContext, i);
+                switch (status) {
+                    case Next:
+                    case Again:
+                        continue;
+                    case Exit:
+                    case StartOver:
+                        break;
                 }
             }
         } while (status == PipeStatus.StartOver);
@@ -129,7 +133,7 @@ class PipeChainRoot extends PipeStack {
         PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
         if (sndDown.hasMore()) {
             List<ByteBuf> allBytes = (List<ByteBuf>) sndDown.takeMessage(sndDown.queueSize());
-            ByteBuf[] res = allBytes.toArray(new ByteBuf[0]);//new ByteBuf[allBytes.size()];
+            ByteBuf[] res = allBytes.toArray(new ByteBuf[0]);
             sndDown.rcvSubmit();
             return res;
         } else {
@@ -137,7 +141,7 @@ class PipeChainRoot extends PipeStack {
         }
     }
 
-    private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws IOException {
+    private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) {
         //                 PipeLayer(0)                    PipeLayer (1)
         //          /------------------------\      /------------------------\
         //          |                        |      |                        |
@@ -150,16 +154,55 @@ class PipeChainRoot extends PipeStack {
         //          \------------------------/      \------------------------/
         PipeQueue<?> useRcvUp = i == 0 ? this.rootRcvUp : this.layers.get(i - 1).getRcvDown();
         PipeQueue<?> useSndUp = i == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(i + 1).getSndDown();
+        String errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
 
         PipeStatus status;
         do {
             PipeLayerInvocation layer = this.layers.get(i);
-            status = layer.doLayer(pipeContext, isRcv, useRcvUp, useSndUp);
+            Throwable ctxError = pipeContext.flash(errorTag);
+
+            try {
+                if (ctxError == null) {
+                    status = layer.doLayer(pipeContext, isRcv, useRcvUp, useSndUp);
+                } else {
+                    status = layer.doError(pipeContext, isRcv, useRcvUp, useSndUp, new PipeExceptionHandlerImpl(errorTag, pipeContext, ctxError));
+                }
+            } catch (Throwable e) {
+                String msg = isRcv ? "rcv" : "snd";
+                msg += "(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " an error has occurred " + e.getMessage();
+                logger.error(msg, e);
+
+                ctxError = pipeContext.flash(errorTag, e);
+                status = layer.doError(pipeContext, isRcv, useRcvUp, useSndUp, new PipeExceptionHandlerImpl(errorTag, pipeContext, ctxError));
+            }
+
             if (status == null) {
                 throw new IllegalStateException("return status missing.");
             }
         } while (status == PipeStatus.Again);
 
         return status;
+    }
+
+    private static class PipeExceptionHandlerImpl implements PipeExceptionHandler {
+        private final String      errorTag;
+        private final PipeContext context;
+        private final Throwable   ctxError;
+
+        public PipeExceptionHandlerImpl(String errorTag, PipeContext context, Throwable ctxError) {
+            this.errorTag = errorTag;
+            this.context = context;
+            this.ctxError = ctxError;
+        }
+
+        @Override
+        public void clear() {
+            this.context.flash(this.errorTag, null);
+        }
+
+        @Override
+        public Throwable getException() {
+            return this.ctxError;
+        }
     }
 }

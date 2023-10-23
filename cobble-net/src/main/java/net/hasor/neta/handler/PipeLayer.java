@@ -50,20 +50,46 @@ import java.io.IOException;
  */
 @FunctionalInterface
 public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-
     /**
-     * Initialize the protocol stack
+     * Initialize the protocol stack, when the Connected.
      */
     default void initLayer(PipeContext pipeContext) throws Exception {
     }
 
     /**
-     * process data the protocol stack, param isRcv = true is RCV_UP to RCV_DOWN
+     * process data the protocol stack.
+     *
+     * After the doLayer method returns, The {@link PipeRcvQueue#rcvSubmit()}/{@link PipeSndQueue#sndSubmit()} method of (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) will be called.
+     *
+     * <ul>
+     *  <li>When the method throws, (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) keep state, and call {@link #doError(PipeContext, boolean, PipeRcvQueue, PipeSndQueue, PipeRcvQueue, PipeSndQueue, PipeExceptionHandler)}.</li>
+     * </ul>
      */
     PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown) throws IOException;
 
     /**
-     * release protocol stack
+     * Gets called if a Throwable was thrown. If an exception occurs, piple executes in the following way.
+     *
+     * After the doError method returns, The {@link PipeRcvQueue#rcvReset()}/{@link PipeSndQueue#sndReset()} method of (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) will be called
+     *
+     * <pre>
+     *  ... -> doLayer -> doLayer -> Exception
+     *                                   |
+     *                                doError -> doError -> doError...
+     * </pre>
+     *
+     * <p>You can clear the exception flag with the {@link PipeExceptionHandler#clear()} method, and piple execution will continue normally</p>
+     *
+     * <pre>
+     *  ... -> doLayer -> doError -> doError(invoker clear) -> doLayer -> ...
+     * </pre>
+     */
+    default PipeStatus doError(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown, PipeExceptionHandler eh) {
+        return PipeStatus.Next;
+    }
+
+    /**
+     * release protocol stack, connection close.
      */
     default void releaseLayer(PipeContext pipeContext) {
     }

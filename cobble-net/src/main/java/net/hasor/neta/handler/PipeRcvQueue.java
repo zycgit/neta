@@ -24,6 +24,11 @@ import java.util.List;
  */
 public interface PipeRcvQueue<T> {
     /**
+     * Returns the number of capacity.
+     */
+    int getCapacity();
+
+    /**
      * Returns the number of readable message.
      */
     int queueSize();

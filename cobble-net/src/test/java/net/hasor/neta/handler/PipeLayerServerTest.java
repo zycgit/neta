@@ -94,10 +94,7 @@ public class PipeLayerServerTest {
         } while (line != null && dst.hasSlot());
 
         byteBuf.markReader();
-
-        src.rcvSubmit();
-        dst.sndSubmit();
-        return PipeStatus.Success;
+        return PipeStatus.Next;
     }
 
     /** 消息：编码L1 TypeFrame -> bytes */
@@ -109,12 +106,9 @@ public class PipeLayerServerTest {
             ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(bytes);
             wrap.markWriter();
             dst.offerMessage(wrap);
-
-            src.rcvSubmit();
-            dst.sndSubmit();
         }
 
-        return PipeStatus.Success;
+        return PipeStatus.Next;
     }
 
     /** 消息：解码L2 TypeFrame -> TypeRequest */
@@ -126,10 +120,7 @@ public class PipeLayerServerTest {
                 dst.offerMessage(new TypeRequest(frame.getMessage()));
             }
         } while (frame != null && dst.hasSlot());
-
-        src.rcvSubmit();
-        dst.sndSubmit();
-        return PipeStatus.Success;
+        return PipeStatus.Next;
     }
 
     /** 消息：编码L2 TypeResponse -> TypeFrame */
@@ -141,10 +132,7 @@ public class PipeLayerServerTest {
                 dst.offerMessage(new TypeFrame(response.getMessage()));
             }
         } while (response != null && dst.hasSlot());
-
-        src.rcvSubmit();
-        dst.sndSubmit();
-        return PipeStatus.Success;
+        return PipeStatus.Next;
     }
 
     /** 消息：处理 */
@@ -157,7 +145,6 @@ public class PipeLayerServerTest {
                 System.out.println("rcvChannel " + channel.getChannelID() + ", data=" + line);
                 String echoMessage = "echo " + line.getMessage() + "\n";
                 channel.sendData(new TypeResponse(echoMessage));
-                data.rcvSubmit();
             } else {
                 break;
             }

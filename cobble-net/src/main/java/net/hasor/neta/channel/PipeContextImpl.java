@@ -22,7 +22,7 @@ import java.util.Map;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class PipeContextImpl implements PipeContext {
+public class PipeContextImpl implements PipeContext {
     private final NetChannel            channel;
     private final SoContextImpl         soContext;
     private final SoResManager          rm;
@@ -74,7 +74,11 @@ class PipeContextImpl implements PipeContext {
 
     @Override
     public <T> T flash(String key, T flash) {
-        this.flash.put(key, flash);
+        if (flash == null) {
+            this.flash.remove(key);
+        } else {
+            this.flash.put(key, flash);
+        }
         return flash;
     }
 }

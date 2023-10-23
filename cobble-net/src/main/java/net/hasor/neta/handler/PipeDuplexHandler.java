@@ -50,6 +50,15 @@ public class PipeDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pi
     }
 
     @Override
+    public PipeStatus doError(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown, PipeExceptionHandler eh) {
+        if (isRcv) {
+            return this.decoder.doError(context, rcvUp, rcvDown, eh);
+        } else {
+            return this.encoder.doError(context, sndUp, sndDown, eh);
+        }
+    }
+
+    @Override
     public void releaseLayer(PipeContext pipeContext) {
         this.decoder.releaseHandler(pipeContext);
         this.encoder.releaseHandler(pipeContext);

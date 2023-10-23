@@ -21,11 +21,11 @@ package net.hasor.neta.handler;
  */
 public enum PipeStatus {
 
-    Success,
+    Next,
 
     Again,
 
-    Finish,
+    Exit,
 
     StartOver,
 }

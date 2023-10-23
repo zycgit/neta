@@ -92,24 +92,24 @@ class SoContextImpl implements SoContext {
         }
     }
 
-    /** 链接是否使用单独的 SoResManager */
+    /** Whether to use special SoResManager. */
     public boolean specialResManager(SocketAddress remoteAddress) {
         return false;
     }
 
-    /** 是否接受链接请求 */
+    /** Whether to accept link socket. */
     public boolean acceptChannel(SocketAddress remoteAddress) {
         return true;
     }
 
-    /** 新链接 */
+    /** new channel. */
     public void openChannel(SoChannel<?> channel) {
         logger.info("channel(" + channel.getChannelID() + ") created.");
         this.channelMap.put(channel.getChannelID(), channel);
         this.channelList.add(channel);
     }
 
-    /** 关闭所有 socket */
+    /** close all socket. */
     public void closeAll(boolean now) {
         // 先关闭监听器
 

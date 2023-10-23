@@ -36,6 +36,11 @@ class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
+    public int getCapacity() {
+        return this.capacity;
+    }
+
+    @Override
     public int queueSize() {
         return this.linkedList.size() - this.takeCount;
     }
