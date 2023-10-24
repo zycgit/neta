@@ -23,13 +23,13 @@ import java.util.Map;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class PipeContextImpl implements PipeContext {
-    private final NetChannel            channel;
-    private final SoContextImpl         soContext;
+    private final SoChannel<?>          channel;
+    private final SoContext             soContext;
     private final SoResManager          rm;
     private final Map<Class<?>, Object> pipeContext;
     private final Map<String, Object>   flash;
 
-    public PipeContextImpl(NetChannel channel, SoContextImpl soContext, SoResManager rm) {
+    protected PipeContextImpl(SoChannel<?> channel, SoContext soContext, SoResManager rm) {
         this.channel = channel;
         this.soContext = soContext;
         this.rm = rm;
@@ -43,7 +43,7 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
-    public NetChannel channel() {
+    public SoChannel<?> channel() {
         return this.channel;
     }
 

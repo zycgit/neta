@@ -16,8 +16,6 @@
 package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
 
-import java.io.IOException;
-
 /**
  * PipeLayer is a Duplexer, The data flow direction is identified by the isRcv parameter.
  *
@@ -30,13 +28,13 @@ import java.io.IOException;
  *  When there are multiple PipeLayer layers, the endpoints are linked, e.g, first {@link PipeLayer} RCV_DOWN -> next {@link PipeLayer} RCV_UP
  *
  * <pre>
- *        /-------------------------\      /-------------------------\
- *     -> | RCV_UP         RCV_DOWN |  ->  | RCV_UP         RCV_DOWN |  ->
- *        |                         |      |                         |
- * Net    |      PipeLayer (1)      |      |      PipeLayer (2)      |     APP
- *        |                         |      |                         |
- *     <- | SND_DOWN         SND_UP |  <-  | SND_DOWN         SND_UP |  <-
- *        \-------------------------/      \-------------------------/
+ *         /-------------------------\      /-------------------------\
+ * DATA -> | RCV_UP         RCV_DOWN |  ->  | RCV_UP         RCV_DOWN |  -> ...
+ *         |                         |      |                         |
+ *         |      PipeLayer (1)      |      |      PipeLayer (2)      |
+ *         |                         |      |                         |
+ *  ... <- | SND_DOWN         SND_UP |  <-  | SND_DOWN         SND_UP |  <- DATA
+ *         \-------------------------/      \-------------------------/
  * </pre>
  *
  *  <p>
@@ -65,7 +63,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
      *  <li>When the method throws, (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) keep state, and call {@link #doError(PipeContext, boolean, PipeRcvQueue, PipeSndQueue, PipeRcvQueue, PipeSndQueue, PipeExceptionHandler)}.</li>
      * </ul>
      */
-    PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown) throws IOException;
+    PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown) throws Exception;
 
     /**
      * Gets called if a Throwable was thrown. If an exception occurs, piple executes in the following way.
@@ -85,7 +83,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
      * </pre>
      */
     default PipeStatus doError(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown, PipeExceptionHandler eh) {
-        return PipeStatus.Next;
+        return PipeStatus.Interrupt;
     }
 
     /**

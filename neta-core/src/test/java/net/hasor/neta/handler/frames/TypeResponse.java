@@ -13,18 +13,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler.ssl;
-import net.hasor.cobble.ResourcesUtils;
-
-import java.security.cert.X509Certificate;
-
+package net.hasor.neta.handler.frames;
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslPemTest {
-    public static void main(String[] args) throws Exception {
-        X509Certificate[] cer = SslUtils.toX509Certificates(ResourcesUtils.getResourceAsStream("ssl/server.crt"));
-        System.out.println(cer);
+public class TypeResponse {
+    private String header;
+    private String message;
+
+    public TypeResponse(String header, String message) {
+        this.header = header;
+        this.message = message;
+    }
+
+    public String getHeader() {
+        return this.header;
+    }
+
+    public void setHeader(String header) {
+        this.header = header;
+    }
+
+    public String getMessage() {
+        return this.message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    @Override
+    public String toString() {
+        return "TypeResponse{'" + message + "'}";
     }
 }

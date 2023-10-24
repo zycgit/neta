@@ -87,7 +87,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         // init and pipe
         try {
             PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
-            PipeStack pipeStack = this.forListen.getStackFactory().create(pipeCtx);
+            PipeStack<?, ?> pipeStack = this.forListen.getStackFactory().create(pipeCtx);
             channel.initPipe(pipeCtx, pipeStack);
             context.openChannel(channel);
         } catch (Exception e) {

@@ -17,7 +17,6 @@ package net.hasor.neta.handler;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.PipeContext;
 
-import java.io.IOException;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -96,7 +95,7 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) throws IOException {
+    public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) throws Exception {
         PipeStatus status = this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
 
         rcvUp.rcvSubmit();

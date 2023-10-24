@@ -26,7 +26,7 @@ import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 
 /**
- * AIO TCP Server/Client
+ * AIO TCP/IP,UDP/IP
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -39,10 +39,10 @@ public class CobbleSocket extends AbstractSocket {
     }
 
     /**
-     * Listen on the port and bind Application layer network protocol to the accepted channels.
+     * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      *
      * @param listenPort local port for listen
-     * @param pipeline Application layer network protocol
+     * @param stackFactory Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
     public synchronized NetListen listen(int listenPort, PipeStackFactory stackFactory) throws IOException {
@@ -50,11 +50,11 @@ public class CobbleSocket extends AbstractSocket {
     }
 
     /**
-     * Listen on the port and bind Application layer network protocol to the accepted channels.
+     * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      *
      * @param listenAddr local address for listen
      * @param listenPort local port for listen
-     * @param pipeline Application layer network protocol
+     * @param stackFactory Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
     public synchronized NetListen listen(String listenAddr, int listenPort, PipeStackFactory stackFactory) throws IOException {
@@ -62,10 +62,10 @@ public class CobbleSocket extends AbstractSocket {
     }
 
     /**
-     * Listen on the port and bind Application layer network protocol to the accepted channels.
+     * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      *
      * @param listen local address:port for listen
-     * @param pipeline Application layer network protocol
+     * @param stackFactory Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
     public synchronized NetListen listen(InetSocketAddress listen, PipeStackFactory stackFactory) throws IOException {
@@ -87,28 +87,28 @@ public class CobbleSocket extends AbstractSocket {
     }
 
     /**
-     * connect to local port, and bind Application layer network protocol on this channel.
+     * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param localPort local port
-     * @param pipeline Application layer network protocol
+     * @param stackFactory Application layer network protocol
      */
     public Future<NetChannel> connect(int localPort, PipeStackFactory stackFactory) {
         return this.connect(new InetSocketAddress(localPort), stackFactory);
     }
 
     /**
-     * connect to local port, and bind Application layer network protocol on this channel.
+     * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param remoteAddr local address
      * @param localPort local port
-     * @param pipeline Application layer network protocol
+     * @param stackFactory Application layer network protocol
      */
     public Future<NetChannel> connect(String remoteAddr, int localPort, PipeStackFactory stackFactory) {
         return this.connect(new InetSocketAddress(remoteAddr, localPort), stackFactory);
     }
 
     /**
-     * connect to remote, and bind Application layer network protocol on this channel.
+     * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
      * @param remoteAddr remoteAddr
-     * @param pipeline Application layer network protocol
+     * @param stackFactory Application layer network protocol
      */
     public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeStackFactory stackFactory) {
         Future<NetChannel> future = new BasicFuture<>();
@@ -125,6 +125,29 @@ public class CobbleSocket extends AbstractSocket {
             return future;
         }
     }
+
+    //    /**
+    //     * using UDP/IP on the port and bind Application layer network protocol to the channels.
+    //     *
+    //     * @param bindPort local port for bind
+    //     * @param stackFactory Application layer network protocol
+    //     * @return A channel for bind sockets
+    //     */
+    //    public synchronized NetChannel bind(int bindPort, PipeStackFactory stackFactory) throws IOException {
+    //        return this.bind(new InetSocketAddress(bindPort), stackFactory);
+    //    }
+    //
+    //    /**
+    //     * using UDP/IP on the port and bind Application layer network protocol to the channels.
+    //     *
+    //     * @param bindAddr local address for listen
+    //     * @param bindPort local port for bind
+    //     * @param stackFactory Application layer network protocol
+    //     * @return A channel for bind sockets
+    //     */
+    //    public synchronized NetChannel bind(String bindAddr, int bindPort, PipeStackFactory stackFactory) throws IOException {
+    //        return this.bind(new InetSocketAddress(bindAddr, bindPort), stackFactory);
+    //    }
 
     protected void initChannelGroup() throws IOException {
         if (this.channelGroup == null) {

@@ -43,7 +43,7 @@ public enum PipeStatus {
     Again,
 
     /**
-     * Interrupt pipeline event propagation, until next time.
+     * Interrupt pipeline event propagation, and Skip all the following {@link PipeLayer}
      * <pre>
      *     /---------------\     /---------------\     /---------------\
      * ... | PipeLayer (0) |  ×  | PipeLayer (1) |  ×  | PipeLayer (2) |
@@ -52,6 +52,17 @@ public enum PipeStatus {
      * </pre>
      */
     Exit,
+
+    /**
+     * Interrupt pipeline event propagation, and throw Error
+     * <pre>
+     *     /---------------\
+     * ... | PipeLayer (0) |  ×  Throw Error
+     *     \---------------/
+     *          Current
+     * </pre>
+     */
+    Interrupt,
 
     /**
      * Interrupt the pipeline event propagation and go back to the head of the pipeline.

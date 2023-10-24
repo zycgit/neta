@@ -28,7 +28,8 @@ import java.util.List;
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
  */
-class PipeChainRoot extends PipeStack {
+@SuppressWarnings({ "unchecked" })
+class PipeChainRoot implements PipeStack<Object, Object> {
     private static final Logger                                logger        = Logger.getLogger(PipeChainRoot.class);
     private static final String                                RCV_ERROR_TAG = PipeChainRoot.class.getName() + "-rcv-error-tag";
     private static final String                                SND_ERROR_TAG = PipeChainRoot.class.getName() + "-snd-error-tag";
@@ -36,7 +37,7 @@ class PipeChainRoot extends PipeStack {
     private final        List<PipeLayerInvocation<?, ?, ?, ?>> layers;
     private final        PipeQueue<Object>                     rootRcvUp     = new PipeQueue<>(-1);
     private final        PipeQueue<Object>                     rootSndUp     = new PipeQueue<>(-1);
-    private              PipeReceiveListener                   listener;
+    private              PipeReceiveListener<Object>           listener;
 
     public PipeChainRoot() {
         this.layers = new ArrayList<>();
@@ -47,7 +48,11 @@ class PipeChainRoot extends PipeStack {
     }
 
     public <NEXT_RCV_DOWN> void bindListener(PipeReceiveListener<NEXT_RCV_DOWN> listener) {
-        this.listener = listener;
+        this.listener = (PipeReceiveListener<Object>) listener;
+    }
+
+    public PipeReceiveListener<Object> getListener() {
+        return this.listener;
     }
 
     @Override
@@ -58,14 +63,14 @@ class PipeChainRoot extends PipeStack {
     }
 
     @Override
-    protected void release(PipeContext pipeContext) {
+    public void release(PipeContext pipeContext) {
         for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
             layer.releaseLayer(pipeContext);
         }
     }
 
     @Override
-    protected ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvData) {
+    public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) throws Exception {
         ((PipeContextImpl) pipeContext).clearFlash();
         this.rootRcvUp.offerMessage(rcvData);
         this.rootRcvUp.sndSubmit();
@@ -100,7 +105,10 @@ class PipeChainRoot extends PipeStack {
                 }
             } else {
                 // trigger the listener event.
-                this.listener.onReceive(pipeContext.channel(), rcvDown);
+                while (rcvDown.hasMore()) {
+                    Object msg = rcvDown.takeMessage();
+                    this.listener.onReceive(pipeContext.channel(), msg);
+                }
             }
             rcvDown.rcvSubmit();
         }
@@ -108,18 +116,18 @@ class PipeChainRoot extends PipeStack {
         // result
         PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
         if (sndDown.hasMore()) {
-            List<ByteBuf> allBytes = (List<ByteBuf>) sndDown.takeMessage(sndDown.queueSize());
+            List<?> allBytes = sndDown.takeMessage(sndDown.queueSize());
             sndDown.rcvSubmit();
-            return allBytes.toArray(new ByteBuf[0]);
+            return allBytes.toArray();
         } else {
             return EMPTY;
         }
     }
 
     @Override
-    protected ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
+    public Object[] sndLayer(PipeContext pipeContext, Object sndData) throws Exception {
         ((PipeContextImpl) pipeContext).clearFlash();
-        if (!this.rootSndUp.offerMessage(writeData)) {
+        if (!this.rootSndUp.offerMessage(sndData)) {
             long channelID = pipeContext.channel().getChannelID();
             String message = "snd(" + channelID + ") sndQueue[" + this.rootSndUp.slotSize() + "/" + this.rootSndUp.getCapacity() + "] is full.";
             IllegalStateException e = new IllegalStateException(message);
@@ -147,8 +155,8 @@ class PipeChainRoot extends PipeStack {
         // result
         PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
         if (sndDown.hasMore()) {
-            List<ByteBuf> allBytes = (List<ByteBuf>) sndDown.takeMessage(sndDown.queueSize());
-            ByteBuf[] res = allBytes.toArray(new ByteBuf[0]);
+            List<?> allBytes = sndDown.takeMessage(sndDown.queueSize());
+            Object[] res = allBytes.toArray();
             sndDown.rcvSubmit();
             return res;
         } else {
@@ -156,7 +164,7 @@ class PipeChainRoot extends PipeStack {
         }
     }
 
-    private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) {
+    private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws Exception {
         //                 PipeLayer(0)                    PipeLayer (1)
         //          /------------------------\      /------------------------\
         //          |                        |      |                        |
@@ -174,7 +182,7 @@ class PipeChainRoot extends PipeStack {
         PipeStatus status;
         do {
             PipeLayerInvocation layer = this.layers.get(i);
-            Throwable ctxError = pipeContext.flash(errorTag);
+            Exception ctxError = pipeContext.flash(errorTag);
 
             try {
                 if (ctxError == null) {
@@ -182,7 +190,7 @@ class PipeChainRoot extends PipeStack {
                 } else {
                     status = layer.doError(pipeContext, isRcv, useRcvUp, useSndUp, new PipeExceptionHandlerImpl(errorTag, pipeContext, ctxError));
                 }
-            } catch (Throwable e) {
+            } catch (Exception e) {
                 String msg = isRcv ? "rcv" : "snd";
                 msg += "(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " an error has occurred " + e.getMessage();
                 logger.error(msg, e);
@@ -193,6 +201,9 @@ class PipeChainRoot extends PipeStack {
 
             if (status == null) {
                 throw new IllegalStateException("return status missing.");
+            }
+            if (status == PipeStatus.Interrupt) {
+                throw ctxError != null ? ctxError : new InterruptedException();
             }
         } while (status == PipeStatus.Again);
 

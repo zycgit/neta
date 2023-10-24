@@ -28,6 +28,10 @@ import java.util.function.Consumer;
  * @author 赵永春 (zyc@hasor.net)
  */
 public final class PipeInitializer implements PipeBuilder {
+    @Override
+    public <RCV_UP, SND_DOWN> PipeStackBuilder<RCV_UP, SND_DOWN> empty() {
+        return new PipeStackBuilderImpl<>(new ArrayList<>());
+    }
 
     @Override
     public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer) {
@@ -84,9 +88,10 @@ public final class PipeInitializer implements PipeBuilder {
         public PipeStackFactory buildFactory() {
             return pipeCtx -> {
                 PipeChainRoot root = new PipeChainRoot();
-                for (Consumer<PipeChainRoot> consumer : this.taskAppend) {
+                for (Consumer<PipeChainRoot> consumer : taskAppend) {
                     consumer.accept(root);
                 }
+
                 root.init(pipeCtx);
                 return root;
             };

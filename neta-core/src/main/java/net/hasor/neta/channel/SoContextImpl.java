@@ -55,7 +55,7 @@ class SoContextImpl implements SoContext {
         this.specialRmMap = new ConcurrentHashMap<>();
 
         ExecutorService executor = Objects.requireNonNull(executorFactory.newExecutor(this.config, null));
-        this.defaultRm = new SoResManagerImpl(this.config, executor);
+        this.defaultRm = new DefaultSoResManager(this.config, executor);
     }
 
     public static long nextID() {
@@ -84,7 +84,7 @@ class SoContextImpl implements SoContext {
         if (this.specialResManager(remoteAddress)) {
             logger.info("channel(" + channelID + ") new special SoResManager.");
             ExecutorService executor = Objects.requireNonNull(this.executorFactory.newExecutor(this.config, String.valueOf(channelID)));
-            SoResManager rm = new SoResManagerImpl(this.config, executor);
+            SoResManager rm = new DefaultSoResManager(this.config, executor);
             this.specialRmMap.put(channelID, rm);
             return rm;
         } else {
@@ -170,6 +170,13 @@ class SoContextImpl implements SoContext {
         }
     }
 
+    /** test the channel has been closed */
+    @Override
+    public boolean isClose(long channelID) {
+        SoChannel<?> channel = this.channelMap.get(channelID);
+        return channel == null || channel.isClose();
+    }
+
     /** receiving new data */
     public void notifyChannelRcv(long channelID, int retryCnt) {
         SoChannel<?> channel = this.channelMap.get(channelID);
@@ -217,12 +224,5 @@ class SoContextImpl implements SoContext {
 
         rm.submitTask(refTemp.get());
         return future;
-    }
-
-    /** test the channel has been closed */
-    @Override
-    public boolean isClose(long channelID) {
-        SoChannel<?> channel = this.channelMap.get(channelID);
-        return channel == null || channel.isClose();
     }
 }

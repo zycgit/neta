@@ -13,13 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
-import net.hasor.neta.handler.ssl.*;
+import net.hasor.neta.channel.CobbleSocket;
+import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.SoContext;
+import net.hasor.neta.channel.SoResManager;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;

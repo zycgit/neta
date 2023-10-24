@@ -16,6 +16,7 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.net.SocketAddress;
@@ -34,27 +35,28 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class NetChannel implements SoChannel<NetChannel> {
-    private final   long                      channelID;
-    private final   NetListen                 forListen;
-    protected final AsynchronousSocketChannel channel;
-    protected final SoContextImpl             context;
-    protected final SoResManager              rm;
-    private final   SocketAddress             localAddr;
-    private final   SocketAddress             remoteAddr;
-    private final   long                      createdTime;
-    private         long                      lastSndTime;
-    private         long                      lastRcvTime;
+    private static final Logger                    logger = Logger.getLogger(NetChannel.class);
+    private final        long                      channelID;
+    private final        NetListen                 forListen;
+    protected final      AsynchronousSocketChannel channel;
+    protected final      SoContextImpl             context;
+    protected final      SoResManager              rm;
+    private final        SocketAddress             localAddr;
+    private final        SocketAddress             remoteAddr;
+    private final        long                      createdTime;
+    private              long                      lastSndTime;
+    private              long                      lastRcvTime;
     //
-    private final   SoRcvCompletionHandler    rHandler;
-    protected final Queue<SoSndData>          wQueue;
-    private final   AtomicBoolean             wStatus;
-    private final   SoSndCompletionHandler    wHandler;
+    private final        SoRcvCompletionHandler    rHandler;
+    protected final      Queue<SoSndData>          wQueue;
+    private final        AtomicBoolean             wStatus;
+    private final        SoSndCompletionHandler    wHandler;
     //
-    protected       PipeContextImpl           pipeContext;
-    protected       PipeStack                 pipeStack;
+    protected            PipeContextImpl           pipeContext;
+    protected            SoPipeStack               pipeStack;
     //
-    protected final AtomicBoolean             closeStatus;
-    protected final Future<NetChannel>        closeFuture;
+    protected final      AtomicBoolean             closeStatus;
+    protected final      Future<NetChannel>        closeFuture;
 
     NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
             AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
@@ -78,9 +80,9 @@ public class NetChannel implements SoChannel<NetChannel> {
         this.wHandler = wHandler;
     }
 
-    public void initPipe(PipeContextImpl pipeContext, PipeStack pipeStack) {
+    public void initPipe(PipeContextImpl pipeContext, PipeStack<?, ?> pipeStack) {
         this.pipeContext = pipeContext;
-        this.pipeStack = pipeStack;
+        this.pipeStack = (SoPipeStack) pipeStack;
     }
 
     @Override
@@ -186,6 +188,9 @@ public class NetChannel implements SoChannel<NetChannel> {
                     appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
                 }
             }
+        } catch (Throwable e) {
+            logger.error("rcv(" + this.channelID + ") invoker pipeline failed: " + e.getMessage(), e);
+            closeNow();
         } finally {
             this.pipeContext.clearFlash();
         }
@@ -218,7 +223,7 @@ public class NetChannel implements SoChannel<NetChannel> {
 
                 appendSoSndTask(new SoSndData(buf, itemFuture, this));
             }
-        } catch (Exception e) {
+        } catch (Throwable e) {
             future.failed(e);
         } finally {
             this.pipeContext.clearFlash();

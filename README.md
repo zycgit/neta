@@ -1,7 +1,19 @@
 # Neta
 
 &emsp;&emsp; Hasor Neta is a network application framework that helps users to develop high performance and high scalability network applications easily.
-It provides an abstract asynchronous duplex API model over various transports such as TCP/IP and UDP/IP via Java AIO.
+It provides an abstract asynchronous duplex programming model and works on top of Java AIO.
+
+## Pipeline Model
+
+```text
+         /-------------------------\      /-------------------------\
+ DATA -> | RCV_UP         RCV_DOWN |  ->  | RCV_UP         RCV_DOWN |  -> ...
+         |                         |      |                         |
+         |      PipeLayer (1)      |      |      PipeLayer (2)      |
+         |                         |      |                         |
+  ... <- | SND_DOWN         SND_UP |  <-  | SND_DOWN         SND_UP |  <- DATA
+         \-------------------------/      \-------------------------/
+```
 
 ## 能力
 
@@ -11,6 +23,7 @@ It provides an abstract asynchronous duplex API model over various transports su
 - 支持 KeepAlive
 - 支持 TCP
 - 支持 监听器挂起（监听器暂时失效）
+- 支持 EmbeddedChannel 方便开发协议栈
 - SSL 证书格式
     - JKS 格式
     - PEM/CER 格式
@@ -29,6 +42,10 @@ It provides an abstract asynchronous duplex API model over various transports su
     - 反压机制
     - 双工模式
 
+## 质量
+
+- 代码覆盖率：50%
+
 资料
 
 - https://openjdk.org/projects/nio/resources/AsynchronousIo.html
@@ -40,6 +57,7 @@ TODO
 3. 协议路由，用来支持 NPN/ALPN
 4. EmbeddedChannel 用来提供协议层的开发
 5. 通过 SSL 参数支持 peerHost 能力
+6. bytebuf 大文件传输
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#ex6
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html

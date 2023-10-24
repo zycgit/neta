@@ -13,16 +13,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.handler.frames;
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 public class TypeRequest {
+    private String header;
     private String message;
 
-    public TypeRequest(String message) {
+    public TypeRequest(String header, String message) {
+        this.header = header;
         this.message = message;
+    }
+
+    public String getHeader() {
+        return this.header;
+    }
+
+    public void setHeader(String header) {
+        this.header = header;
     }
 
     public String getMessage() {

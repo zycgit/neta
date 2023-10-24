@@ -25,6 +25,20 @@ import net.hasor.neta.channel.PipeStackFactory;
  */
 public interface PipeBuilder {
     /**
+     * empty PipeStackBuilder is mostly used to develop the protocol stack via Embedded.
+     *
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is Undefined</li>
+     *  <li>SND_UP is Undefined</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     *
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    <RCV_UP, SND_DOWN> PipeStackBuilder<RCV_UP, SND_DOWN> empty();
+
+    /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
      *
      * <ul>

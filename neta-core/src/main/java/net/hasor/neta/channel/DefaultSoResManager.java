@@ -31,14 +31,14 @@ import java.util.concurrent.ExecutorService;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SoResManagerImpl implements SoResManager, AutoCloseable {
-    private static final Logger           logger = Logger.getLogger(SoResManagerImpl.class);
+public class DefaultSoResManager implements SoResManager, AutoCloseable {
+    private static final Logger           logger = Logger.getLogger(DefaultSoResManager.class);
     private final        SoConfig         config;
     private final        ByteBufAllocator bufAllocator;
     private final        ExecutorService  executor;
     private final        List<Object>     resources;
 
-    public SoResManagerImpl(SoConfig config, ExecutorService executor) {
+    public DefaultSoResManager(SoConfig config, ExecutorService executor) {
         this.config = config;
         this.bufAllocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : this.config.getBufAllocator();
         this.executor = executor;

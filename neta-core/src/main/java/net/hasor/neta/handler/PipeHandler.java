@@ -40,7 +40,7 @@ public interface PipeHandler<IN, OUT> {
 
     /** Gets called if a Throwable was thrown. */
     default PipeStatus doError(PipeContext context, PipeRcvQueue<IN> src, PipeSndQueue<OUT> dst, PipeExceptionHandler e) {
-        return PipeStatus.Next;
+        return PipeStatus.Interrupt;
     }
 
     default void releaseHandler(PipeContext pipeContext) {

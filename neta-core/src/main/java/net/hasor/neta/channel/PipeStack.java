@@ -21,34 +21,34 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public abstract class PipeStack {
+public interface PipeStack<RIN, ROUT> {
     /**
      * when connected.
      * @param pipeContext pipeContext
      */
-    protected void init(PipeContext pipeContext) throws Exception {
+    default void init(PipeContext pipeContext) throws Exception {
     }
 
     /**
      * Processing received data
      * @param pipeContext pipeContext
-     * @param rcvByteBuf received data
-     * @return The return {@link ByteBuf}`s, well be send to remote.
+     * @param rcvData received data
+     * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    protected abstract ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf);
+    ROUT[] rcvLayer(PipeContext pipeContext, RIN rcvData) throws Exception;
 
     /**
      * Trigger sending data
      * @param pipeContext pipeContext
-     * @param writeData send data
-     * @return The return {@link ByteBuf}`s, well be send to remote.
+     * @param sndData send data
+     * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    protected abstract ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData);
+    ROUT[] sndLayer(PipeContext pipeContext, Object sndData) throws Exception;
 
     /**
      * before close.
      * @param pipeContext pipeContext
      */
-    protected void release(PipeContext pipeContext) {
+    default void release(PipeContext pipeContext) {
     }
 }

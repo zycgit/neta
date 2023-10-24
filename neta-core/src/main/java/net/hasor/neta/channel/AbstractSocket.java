@@ -42,7 +42,7 @@ public abstract class AbstractSocket implements AutoCloseable {
     }
 
     /** return {@link SoContext} */
-    protected SoContext getContext() {
+    public SoContext getContext() {
         return this.context;
     }
 

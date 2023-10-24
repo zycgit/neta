@@ -13,28 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel;
+import net.hasor.neta.bytebuf.ByteBuf;
+
 /**
+ * Application protocol stack
+ * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2022-11-01
  */
-public class TypeResponse {
-    private String message;
-
-    public TypeResponse(String message) {
-        this.message = message;
-    }
-
-    public String getMessage() {
-        return this.message;
-    }
-
-    public void setMessage(String message) {
-        this.message = message;
-    }
-
-    @Override
-    public String toString() {
-        return "TypeResponse{'" + message + "'}";
-    }
+public abstract class SoPipeStack implements PipeStack<ByteBuf, ByteBuf> {
 }

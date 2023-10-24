@@ -44,28 +44,31 @@ public class SocketServerTest {
         config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
 
         try (CobbleSocket socket = new CobbleSocket(config)) {
-            NetListen listen = socket.listen("127.0.0.1", 5567, pipeContext -> new PipeStack() {
-                @Override
-                protected ByteBuf[] rcvLayer(PipeContext pipeContext, ByteBuf rcvByteBuf) {
-                    String line = rcvByteBuf.readLine();
-                    rcvByteBuf.markReader();
+            NetListen listen = socket.listen("127.0.0.1", 5567, pipeCtx -> {
+                return new PipeStack<Object, Object>() {
+                    @Override
+                    public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) {
+                        ByteBuf rcvByteBuf = (ByteBuf) rcvData;
+                        String line = rcvByteBuf.readLine();
+                        rcvByteBuf.markReader();
 
-                    if (line != null) {
-                        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + line + "\n").getBytes());
+                        if (line != null) {
+                            ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + line + "\n").getBytes());
+                            buf.markWriter();
+                            System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
+
+                            return new ByteBuf[] { buf };
+                        }
+                        return new ByteBuf[0];
+                    }
+
+                    @Override
+                    public Object[] sndLayer(PipeContext pipeContext, Object sndData) {
+                        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + sndData + "\n").getBytes());
                         buf.markWriter();
-                        System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
-
                         return new ByteBuf[] { buf };
                     }
-                    return new ByteBuf[0];
-                }
-
-                @Override
-                protected ByteBuf[] sndLayer(PipeContext pipeContext, Object writeData) {
-                    ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + writeData + "\n").getBytes());
-                    buf.markWriter();
-                    return new ByteBuf[] { buf };
-                }
+                };
             });
             read(listen);
         }
@@ -87,6 +90,4 @@ public class SocketServerTest {
             throw new RuntimeException(e);
         }
     }
-
 }
-
