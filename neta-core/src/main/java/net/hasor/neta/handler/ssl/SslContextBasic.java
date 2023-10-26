@@ -20,6 +20,8 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.SoResManager;
+import net.hasor.neta.handler.PipeRcvQueue;
+import net.hasor.neta.handler.PipeSndQueue;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -50,7 +52,7 @@ public abstract class SslContextBasic implements SslContext {
     private final        SSLEngine    sslEngine;
     private volatile     SslHandle    sslHandler;
 
-    public SslContextBasic(long channelID, SoContext soContext, SslConfig config, SoResManager rm, boolean clientMode) throws Exception {
+    public SslContextBasic(long channelID, SslConfig config, SoContext soContext, SoResManager rm, boolean clientMode) throws Exception {
         this.channelID = channelID;
         this.soContext = soContext;
         this.rm = rm;
@@ -153,19 +155,19 @@ public abstract class SslContextBasic implements SslContext {
     /** create SSLEngine */
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws GeneralSecurityException;
 
-    private synchronized boolean tryHandshake(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
+    private synchronized boolean tryHandshake(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslHandler != null && this.sslHandler.isHandshake()) {
             return true; // The handshake has been successful, and the SSL data decryption/encryption is processed
         }
 
         // start handshake
         if (this.sslHandler == null) {
-            this.sslHandler = new SslHandle(this.channelID, this.soContext, this.sslEngine, this.rm);
+            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.soContext, this.sslEngine, this.rm);
             this.sslHandler.beginHandshake();
         }
 
         // handshake requests
-        this.sslHandler.handshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+        this.sslHandler.handshake(rcvUp, rcvDown, sndUp, sndDown);
 
         // Handshake successful
         if (this.sslHandler.isHandshake()) {
@@ -177,16 +179,26 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     /** Receiving SSL data */
-    public void handRcv(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
-        if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
-            this.sslHandler.handlerRcv(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+    public void handRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+        if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
+            logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
+            return;
+        }
+
+        if (this.tryHandshake(rcvUp, rcvDown, sndUp, sndDown)) {
+            this.sslHandler.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
         }
     }
 
     /** Sending SSL data */
-    public void handSnd(ByteBuf rcvUpstream, ByteBuf rcvDownstream, ByteBuf sndUpstream, ByteBuf sndDownstream) throws IOException {
-        if (this.tryHandshake(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream)) {
-            this.sslHandler.handlerSnd(rcvUpstream, rcvDownstream, sndUpstream, sndDownstream);
+    public void handSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+        if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
+            logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
+            return;
+        }
+
+        if (this.tryHandshake(rcvUp, rcvDown, sndUp, sndDown)) {
+            this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
         }
     }
 }

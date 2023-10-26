@@ -74,7 +74,7 @@ public class JdkSslContext extends SslContextBasic {
     }
 
     public JdkSslContext(long channelID, SoContext context, SslConfig config, SoResManager rm, boolean clientMode) throws Exception {
-        super(channelID, context, config, rm, clientMode);
+        super(channelID, config, context, rm, clientMode);
     }
 
     @Override

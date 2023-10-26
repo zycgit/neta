@@ -35,24 +35,24 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
     }
 
     @Override
-    public void init(PipeContext pipeContext) throws Exception {
-        SoChannel<?> channel = pipeContext.channel();
+    public void init(PipeContext context) throws Exception {
+        SoChannel<?> channel = context.channel();
 
         long channelID = channel.getChannelID();
-        SoResManager rm = pipeContext.getSoResManager();
+        SoResManager rm = context.getSoResManager();
         boolean clientMode = channel.isClient();
 
-        SoContext context = pipeContext.context(SoContext.class);
-        pipeContext.context(SslContext.class, new JdkSslContext(channelID, context, this.config, rm, clientMode));
+        SoContext soContext = context.getSoContext();
+        context.context(SslContext.class, new JdkSslContext(channelID, soContext, this.config, rm, clientMode));
     }
 
     @Override
     public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
-        //        if (isRcv) {
-        //            ((SslContextBasic) context.context(SslContext.class)).handRcv(rcvUp, rcvDown, sndUp, sndDown);
-        //        } else {
-        //            ((SslContextBasic) context.context(SslContext.class)).handSnd(rcvUp, rcvDown, sndUp, sndDown);
-        //        }
+        if (isRcv) {
+            ((SslContextBasic) context.context(SslContext.class)).handRcv(rcvUp, rcvDown, sndUp, sndDown);
+        } else {
+            ((SslContextBasic) context.context(SslContext.class)).handSnd(rcvUp, rcvDown, sndUp, sndDown);
+        }
         return PipeStatus.Next;
     }
 
@@ -63,7 +63,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
     }
 
     @Override
-    public void release(PipeContext pipeContext) {
+    public void release(PipeContext context) {
 
     }
 }

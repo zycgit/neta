@@ -75,9 +75,7 @@ class SslPemReader {
                 break;
             }
 
-            ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64));
-            wrap.markWriter();
-            certs.add(wrap);
+            certs.add(ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64)));
 
             start = m.end();
             m.usePattern(CERT_HEADER);
@@ -115,9 +113,7 @@ class SslPemReader {
             throw keyNotFoundException();// Key is incomplete.
         }
 
-        ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64));
-        wrap.markWriter();
-        return wrap;
+        return ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64));
     }
 
     private static KeyException keyNotFoundException() {
