@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.handler.ssl.SslConfig;
 
 import java.util.concurrent.ExecutorService;
 
@@ -44,7 +43,6 @@ public class SoConfig {
     private int               retryIntervalMs   = 50;       // cobble.net 内部任务延迟调度的延迟间隔
     private int               connectTimeoutMs  = 10 * 1000;// 建立连接超时时间
     //
-    private SslConfig         sslConfig         = new SslConfig();
     private ByteBufAllocator  bufAllocator;
     private ExecutorService   ioExecutor;                   // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
     private SoExecutorFactory taskExecutorFactory;          // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
@@ -169,14 +167,6 @@ public class SoConfig {
 
     public void setConnectTimeoutMs(int connectTimeoutMs) {
         this.connectTimeoutMs = connectTimeoutMs;
-    }
-
-    public SslConfig getSslConfig() {
-        return this.sslConfig;
-    }
-
-    public void setSslConfig(SslConfig sslConfig) {
-        this.sslConfig = sslConfig;
     }
 
     public ByteBufAllocator getBufAllocator() {

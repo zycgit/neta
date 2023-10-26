@@ -48,6 +48,11 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
+    public SoContext getSoContext() {
+        return this.soContext;
+    }
+
+    @Override
     public SoResManager getSoResManager() {
         return this.rm;
     }
@@ -59,7 +64,7 @@ public class PipeContextImpl implements PipeContext {
 
     @Override
     public <T> T context(Class<T> attachmentType, T attachment) {
-        this.pipeContext.put(attachmentType, attachmentType);
+        this.pipeContext.put(attachmentType, attachment);
         return attachment;
     }
 

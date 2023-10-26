@@ -27,6 +27,9 @@ public interface PipeContext {
     /** the channel */
     SoChannel<?> channel();
 
+    /** the SoContext */
+    SoContext getSoContext();
+
     SoResManager getSoResManager();
 
     /** Get the attachment for {@link PipeContext} */

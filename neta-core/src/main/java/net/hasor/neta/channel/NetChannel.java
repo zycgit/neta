@@ -192,7 +192,7 @@ public class NetChannel implements SoChannel<NetChannel> {
             logger.error("rcv(" + this.channelID + ") invoker pipeline failed: " + e.getMessage(), e);
             closeNow();
         } finally {
-            this.pipeContext.clearFlash();
+            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
     }
 
@@ -226,7 +226,7 @@ public class NetChannel implements SoChannel<NetChannel> {
         } catch (Throwable e) {
             future.failed(e);
         } finally {
-            this.pipeContext.clearFlash();
+            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
         return future;
     }
