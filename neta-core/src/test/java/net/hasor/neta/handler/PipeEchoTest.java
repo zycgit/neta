@@ -14,10 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.neta.bytebuf.ByteBufUtil;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.PipeStackFactory;
-import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.handler.PipeBuilder.PipeStackBuilder;
 import net.hasor.neta.handler.frames.TypeFrame;
 import net.hasor.neta.handler.frames.TypeRequest;
@@ -28,12 +26,9 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class EmbeddedTest {
-
+public class PipeEchoTest {
     private EmbeddedChannel createChannel(PipeStackFactory pipeStack) {
-        SoConfig config = new SoConfig();
-        config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
-        EmbeddedSoContext context = new EmbeddedSoContext(config);
+        EmbeddedSoContext context = new EmbeddedSoContext();
         return new EmbeddedChannel(true, pipeStack, context);
     }
 
@@ -46,9 +41,9 @@ public class EmbeddedTest {
         PipeStackBuilder<String, String> empty = new PipeInitializer().empty();
         PipeStackFactory pipeStack = empty
                 // String <-> TypeFrame
-                .nextTo("TypeFrame", pipeConfig, EmbeddedTest::doDecoder1, EmbeddedTest::doEncoder1)
+                .nextTo("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)
                 // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
-                .nextTo("TypeRequest/Response", pipeConfig, EmbeddedTest::doDecoder2, EmbeddedTest::doEncoder2)
+                .nextTo("TypeRequest/Response", pipeConfig, PipeEchoTest::doDecoder2, PipeEchoTest::doEncoder2)
                 // create Stack
                 .buildFactory();
         EmbeddedChannel channel = createChannel(pipeStack);
@@ -79,11 +74,13 @@ public class EmbeddedTest {
 
     /** encoded message: TypeFrame -> String */
     public static PipeStatus doEncoder1(PipeContext context, PipeRcvQueue<TypeFrame> src, PipeSndQueue<String> dst) {
-        while (src.hasMore()) {
-            TypeFrame message = src.peekMessage();
-            String header = message.getHeader() + ">TypeFrame ";
-            dst.offerMessage(header + message.getMessage());
-        }
+        do {
+            TypeFrame message = src.takeMessage();
+            if (message != null) {
+                String header = message.getHeader() + ">TypeFrame ";
+                dst.offerMessage(header + message.getMessage());
+            }
+        } while (src.hasMore());
 
         return PipeStatus.Next;
     }

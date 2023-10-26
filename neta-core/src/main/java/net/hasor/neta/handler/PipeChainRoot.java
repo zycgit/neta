@@ -71,96 +71,101 @@ class PipeChainRoot implements PipeStack<Object, Object> {
 
     @Override
     public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) throws Exception {
-        ((PipeContextImpl) pipeContext).clearFlash();
-        this.rootRcvUp.offerMessage(rcvData);
-        this.rootRcvUp.sndSubmit();
+        try {
+            this.rootRcvUp.offerMessage(rcvData);
+            this.rootRcvUp.sndSubmit();
 
-        // doPipeline
-        PipeStatus status = null;
-        boolean triggerListener = false;
-        do {
-            for (int i = 0; i < this.layers.size(); i++) {
-                status = this.doLayer(true, pipeContext, i);
-                switch (status) {
-                    case Next:
-                    case Again:
-                        triggerListener = (i == this.layers.size() - 1); // only the complete pipeline will fire listeners
-                        continue;
-                    case Exit:
-                    case StartOver:
-                        triggerListener = false;
-                        break;
+            // doPipeline
+            PipeStatus status = null;
+            boolean triggerListener = false;
+            do {
+                for (int i = 0; i < this.layers.size(); i++) {
+                    status = this.doLayer(true, pipeContext, i);
+                    switch (status) {
+                        case Next:
+                        case Again:
+                            triggerListener = (i == this.layers.size() - 1); // only the complete pipeline will fire listeners
+                            continue;
+                        case Exit:
+                        case StartOver:
+                            triggerListener = false;
+                            break;
+                    }
                 }
+            } while (status == PipeStatus.StartOver);
+
+            // triggerListener
+            PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
+            if (triggerListener && rcvDown.hasMore()) {
+                if (this.listener == null) {
+                    // trigger tail. print event data to sto
+                    while (rcvDown.hasMore()) {
+                        Object msg = rcvDown.takeMessage();
+                        logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event : " + msg);
+                    }
+                } else {
+                    // trigger the listener event.
+                    while (rcvDown.hasMore()) {
+                        Object msg = rcvDown.takeMessage();
+                        this.listener.onReceive(pipeContext.channel(), msg);
+                    }
+                }
+                rcvDown.rcvSubmit();
             }
-        } while (status == PipeStatus.StartOver);
 
-        // triggerListener
-        PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
-        if (triggerListener && rcvDown.hasMore()) {
-            if (this.listener == null) {
-                // trigger tail. print event data to sto
-                while (rcvDown.hasMore()) {
-                    Object msg = rcvDown.takeMessage();
-                    logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event : " + msg);
-                }
+            // result
+            PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
+            if (sndDown.hasMore()) {
+                Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
+                sndDown.rcvSubmit();
+                return sndList;
             } else {
-                // trigger the listener event.
-                while (rcvDown.hasMore()) {
-                    Object msg = rcvDown.takeMessage();
-                    this.listener.onReceive(pipeContext.channel(), msg);
-                }
+                return EMPTY;
             }
-            rcvDown.rcvSubmit();
-        }
-
-        // result
-        PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
-        if (sndDown.hasMore()) {
-            List<?> allBytes = sndDown.takeMessage(sndDown.queueSize());
-            sndDown.rcvSubmit();
-            return allBytes.toArray();
-        } else {
-            return EMPTY;
+        } finally {
+            ((PipeContextImpl) pipeContext).clearFlash();
         }
     }
 
     @Override
     public Object[] sndLayer(PipeContext pipeContext, Object sndData) throws Exception {
-        ((PipeContextImpl) pipeContext).clearFlash();
-        if (!this.rootSndUp.offerMessage(sndData)) {
-            long channelID = pipeContext.channel().getChannelID();
-            String message = "snd(" + channelID + ") sndQueue[" + this.rootSndUp.slotSize() + "/" + this.rootSndUp.getCapacity() + "] is full.";
-            IllegalStateException e = new IllegalStateException(message);
-            logger.error(message, e);
-            throw e;
-        }
-        this.rootSndUp.sndSubmit();
-
-        // doPipeline
-        PipeStatus status = null;
-        do {
-            for (int i = this.layers.size() - 1; i >= 0; i--) {
-                status = this.doLayer(false, pipeContext, i);
-                switch (status) {
-                    case Next:
-                    case Again:
-                        continue;
-                    case Exit:
-                    case StartOver:
-                        break;
-                }
+        try {
+            if (!this.rootSndUp.offerMessage(sndData)) {
+                long channelID = pipeContext.channel().getChannelID();
+                String message = "snd(" + channelID + ") sndQueue[" + this.rootSndUp.slotSize() + "/" + this.rootSndUp.getCapacity() + "] is full.";
+                IllegalStateException e = new IllegalStateException(message);
+                logger.error(message, e);
+                throw e;
             }
-        } while (status == PipeStatus.StartOver);
+            this.rootSndUp.sndSubmit();
 
-        // result
-        PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
-        if (sndDown.hasMore()) {
-            List<?> allBytes = sndDown.takeMessage(sndDown.queueSize());
-            Object[] res = allBytes.toArray();
-            sndDown.rcvSubmit();
-            return res;
-        } else {
-            return EMPTY;
+            // doPipeline
+            PipeStatus status = null;
+            do {
+                for (int i = this.layers.size() - 1; i >= 0; i--) {
+                    status = this.doLayer(false, pipeContext, i);
+                    switch (status) {
+                        case Next:
+                        case Again:
+                            continue;
+                        case Exit:
+                        case StartOver:
+                            break;
+                    }
+                }
+            } while (status == PipeStatus.StartOver);
+
+            // result
+            PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
+            if (sndDown.hasMore()) {
+                Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
+                sndDown.rcvSubmit();
+                return sndList;
+            } else {
+                return EMPTY;
+            }
+        } finally {
+            ((PipeContextImpl) pipeContext).clearFlash();
         }
     }
 

@@ -146,7 +146,7 @@ public class EmbeddedChannel implements SoChannel<EmbeddedChannel> {
             Object[] sndDownObj = this.pipeStack.rcvLayer(this.pipeCtx, object);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(Arrays.asList(sndDownObj));
-                this.sndDown.rcvSubmit();
+                this.sndDown.sndSubmit();
             }
         } catch (Throwable e) {
             closeNow();

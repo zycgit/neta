@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import java.lang.reflect.Array;
 import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -23,16 +24,18 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
-    private final int     capacity;
-    protected     int     takeCount;
-    private final List<T> linkedList;
-    private final List<T> offerTemp;
+public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
+    private final int      capacity;
+    protected     int      takeCount;
+    private final List<T>  linkedList;
+    private final List<T>  offerTemp;
+    private final Class<?> elementArrayType;
 
     public PipeQueue(int capacity) {
         this.capacity = capacity == -1 ? Integer.MAX_VALUE : capacity;
         this.linkedList = new CopyOnWriteArrayList<>();
         this.offerTemp = new CopyOnWriteArrayList<>();
+        this.elementArrayType = this.linkedList.toArray().getClass().getComponentType();
     }
 
     @Override
@@ -95,7 +98,7 @@ class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
-    public List<T> takeMessage(int cnt) {
+    public T[] takeMessage(int cnt) {
         if (cnt < 0) {
             cnt = this.queueSize();
         }
@@ -103,9 +106,12 @@ class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
         int fixCnt = Math.min(cnt, this.queueSize());
         int to = this.takeCount + fixCnt;
 
-        List<T> result = Collections.unmodifiableList(this.linkedList.subList(this.takeCount, to));
+        T[] joinedArray = (T[]) Array.newInstance(this.elementArrayType, fixCnt);
+        for (int i = this.takeCount; i < to; i++) {
+            joinedArray[i - this.takeCount] = this.linkedList.get(i);
+        }
         this.takeCount += fixCnt;
-        return result;
+        return joinedArray;
     }
 
     @Override

@@ -35,9 +35,9 @@ public class PipeDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pi
     }
 
     @Override
-    public void init(PipeContext pipeContext) throws Exception {
-        this.decoder.initHandler(pipeContext);
-        this.encoder.initHandler(pipeContext);
+    public void init(PipeContext context) throws Exception {
+        this.decoder.initHandler(context);
+        this.encoder.initHandler(context);
     }
 
     @Override
@@ -59,8 +59,8 @@ public class PipeDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pi
     }
 
     @Override
-    public void release(PipeContext pipeContext) {
-        this.decoder.releaseHandler(pipeContext);
-        this.encoder.releaseHandler(pipeContext);
+    public void release(PipeContext context) {
+        this.decoder.releaseHandler(context);
+        this.encoder.releaseHandler(context);
     }
 }

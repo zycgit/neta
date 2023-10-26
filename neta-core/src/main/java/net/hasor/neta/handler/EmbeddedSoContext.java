@@ -34,17 +34,23 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class EmbeddedSoContext implements SoContext {
-    private static final Logger                  logger = Logger.getLogger(EmbeddedSoContext.class);
-    private static final AtomicLong              nextID = new AtomicLong();
-    private final        SoConfig                config;
-    private final        SoResManager            defaultRm;
-    private final        Map<Long, SoChannel<?>> channelMap;
-    private final        Queue<SoChannel<?>>     channelList;
+    private static final Logger                      logger = Logger.getLogger(EmbeddedSoContext.class);
+    private static final AtomicLong                  nextID = new AtomicLong();
+    private final        SoConfig                    config;
+    private final        SoResManager                defaultRm;
+    private final        Map<Long, SoChannel<?>>     channelMap;
+    private final        Queue<SoChannel<?>>         channelList;
+    private final        Map<Long, EmbeddedTransfer> networkMap;
+
+    public EmbeddedSoContext() {
+        this(new SoConfig());
+    }
 
     public EmbeddedSoContext(SoConfig config) {
         this.config = config;
         this.channelMap = new ConcurrentHashMap<>();
         this.channelList = new ConcurrentLinkedQueue<>();
+        this.networkMap = new ConcurrentHashMap<>();
 
         SoExecutorFactory executorFactory = config.getTaskExecutorFactory();
         if (executorFactory == null) {
@@ -59,7 +65,7 @@ public class EmbeddedSoContext implements SoContext {
         this.defaultRm = new DefaultSoResManager(this.config, executor);
     }
 
-    public static long nextID() {
+    protected static long nextID() {
         return nextID.incrementAndGet();
     }
 
@@ -134,5 +140,14 @@ public class EmbeddedSoContext implements SoContext {
 
         logger.info("channel(" + channelID + ") closed.");
         this.channelList.remove(channel);
+    }
+
+    /**
+     * that are used in an embedded fashion, connected two {@link EmbeddedTransfer} makes it a server/client.
+     * @param client client side {@link EmbeddedTransfer}
+     * @param server server side {@link EmbeddedTransfer}
+     */
+    public EmbeddedTransfer joinChannel(EmbeddedChannel client, EmbeddedChannel server) {
+        return new EmbeddedTransfer(this.defaultRm, client, server);
     }
 }
