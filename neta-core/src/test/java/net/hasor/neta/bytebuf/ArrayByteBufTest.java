@@ -13,7 +13,7 @@ public class ArrayByteBufTest {
     public void writeByteTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -58,7 +58,7 @@ public class ArrayByteBufTest {
     public void writeByteTest02() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -95,7 +95,7 @@ public class ArrayByteBufTest {
     public void writeBytesTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
 
@@ -139,7 +139,7 @@ public class ArrayByteBufTest {
         byte[] array = new byte[4];
         byte[] arrayRead = new byte[6];
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.wrap(array);
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         byteBuf.markWriter();

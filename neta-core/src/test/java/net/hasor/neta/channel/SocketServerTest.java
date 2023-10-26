@@ -54,7 +54,6 @@ public class SocketServerTest {
 
                         if (line != null) {
                             ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + line + "\n").getBytes());
-                            buf.markWriter();
                             System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
 
                             return new ByteBuf[] { buf };
@@ -65,7 +64,6 @@ public class SocketServerTest {
                     @Override
                     public Object[] sndLayer(PipeContext pipeContext, Object sndData) {
                         ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + sndData + "\n").getBytes());
-                        buf.markWriter();
                         return new ByteBuf[] { buf };
                     }
                 };

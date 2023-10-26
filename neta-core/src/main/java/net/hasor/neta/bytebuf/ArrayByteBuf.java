@@ -29,6 +29,7 @@ public class ArrayByteBuf extends AbstractByteBuf {
         super(alloc, maxCapacity == -1 ? -1 : Math.max(initData.length, maxCapacity));
         this.data = initData;
         this.writerIndex = initData.length;
+        this.markedWriterIndex = initData.length;
     }
 
     ArrayByteBuf(ByteBufAllocator alloc, int capacity, int maxCapacity) {

@@ -123,6 +123,13 @@ public interface ByteBuf extends ByteChannel {
         return markWriter();
     }
 
+    /** reset the markWriter, and skip all readable data */
+    default void clear() {
+        this.resetWriter();
+        this.skipReadableBytes(this.readableBytes());
+        this.markReader();
+    }
+
     /**
      * Repositions the current {@code readerIndex} to the marked
      * {@code readerIndex} in this buffer.

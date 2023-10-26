@@ -12,7 +12,7 @@ public class AdapterByteBufTest {
     public void writeByteTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.wrap(array));
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -60,7 +60,7 @@ public class AdapterByteBufTest {
     public void writeByteTest02() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.wrap(array));
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -96,7 +96,7 @@ public class AdapterByteBufTest {
     public void writeBytesTest01() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.wrap(array));
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         assert array[0] == 1;
@@ -146,7 +146,7 @@ public class AdapterByteBufTest {
     public void writeBytesTest02() {
         byte[] array = new byte[4];
         ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.wrap(array));
-        byteBuf.resetWriter();
+        byteBuf.clear();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         assert array[0] == 1;
