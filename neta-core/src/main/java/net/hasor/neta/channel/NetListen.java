@@ -20,6 +20,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import java.net.InetSocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A listener channel for accept incoming sockets and binding them to the protocol stack
@@ -30,6 +31,10 @@ public class NetListen implements SoChannel<NetListen> {
     private final   long                            channelID;
     private final   long                            createdTime;
     private         long                            lastActiveTime;
+    private         long                            lastAcceptTime;
+    private final   AtomicLong                      acceptCount;
+    private final   Object                          acceptLock;
+    //
     private final   InetSocketAddress               listen;
     protected final AsynchronousServerSocketChannel channel;
     private final   PipeStackFactory                stackFactory;
@@ -43,6 +48,8 @@ public class NetListen implements SoChannel<NetListen> {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
+        this.acceptCount = new AtomicLong();
+        this.acceptLock = new Object();
         this.listen = listen;
         this.channel = channel;
         this.stackFactory = stackFactory;
@@ -65,6 +72,16 @@ public class NetListen implements SoChannel<NetListen> {
     @Override
     public long getLastActiveTime() {
         return this.lastActiveTime;
+    }
+
+    /** The last time for accepted channel.*/
+    public long getLastAcceptTime() {
+        return this.lastAcceptTime;
+    }
+
+    /** get channel Count */
+    public long getChannelCount() {
+        return this.acceptCount.get();
     }
 
     @Override
@@ -159,7 +176,33 @@ public class NetListen implements SoChannel<NetListen> {
     /**
      * a new accept socket
      */
-    final void notifyAccept(long channelID) {
+    final void notifyAccept(NetChannel channel) {
         this.lastActiveTime = System.currentTimeMillis();
+        this.lastAcceptTime = System.currentTimeMillis();
+        this.acceptCount.incrementAndGet();
+
+        synchronized (this.acceptLock) {
+            this.acceptLock.notifyAll();
+        }
+    }
+
+    /**
+     * socket closed
+     */
+    final void notifyClose(NetChannel channel) {
+        this.lastActiveTime = System.currentTimeMillis();
+        this.acceptCount.decrementAndGet();
+    }
+
+    /** Wait for an incoming. */
+    public boolean waitAnyAccept() {
+        synchronized (this.acceptLock) {
+            try {
+                this.acceptLock.wait();
+                return true;
+            } catch (InterruptedException e) {
+                return false;
+            }
+        }
     }
 }
