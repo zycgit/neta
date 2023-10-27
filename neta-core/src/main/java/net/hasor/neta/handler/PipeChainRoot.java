@@ -207,7 +207,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
                 if (ctxError == null) {
                     status = layer.doLayer(pipeContext, isRcv, useRcvUp, useSndUp);
                 } else {
-                    status = layer.doError(pipeContext, isRcv, useRcvUp, useSndUp, new PipeExceptionHandlerImpl(errorTag, pipeContext, ctxError));
+                    status = layer.doError(pipeContext, isRcv, ctxError, new PipeExceptionHandlerImpl(errorTag, pipeContext));
                 }
             } catch (Exception e) {
                 String msg = isRcv ? "rcv" : "snd";
@@ -215,7 +215,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
                 logger.error(msg, e);
 
                 ctxError = pipeContext.flash(errorTag, e);
-                status = layer.doError(pipeContext, isRcv, useRcvUp, useSndUp, new PipeExceptionHandlerImpl(errorTag, pipeContext, ctxError));
+                status = layer.doError(pipeContext, isRcv, ctxError, new PipeExceptionHandlerImpl(errorTag, pipeContext));
             }
 
             if (status == null) {
@@ -231,22 +231,15 @@ class PipeChainRoot implements PipeStack<Object, Object> {
     private static class PipeExceptionHandlerImpl implements PipeExceptionHandler {
         private final String      errorTag;
         private final PipeContext context;
-        private final Throwable   ctxError;
 
-        public PipeExceptionHandlerImpl(String errorTag, PipeContext context, Throwable ctxError) {
+        public PipeExceptionHandlerImpl(String errorTag, PipeContext context) {
             this.errorTag = errorTag;
             this.context = context;
-            this.ctxError = ctxError;
         }
 
         @Override
         public void clear() {
             this.context.flash(this.errorTag, null);
-        }
-
-        @Override
-        public Throwable getException() {
-            return this.ctxError;
         }
     }
 }

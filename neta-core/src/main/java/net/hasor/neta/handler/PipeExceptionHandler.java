@@ -32,9 +32,4 @@ public interface PipeExceptionHandler {
      * </pre>
      */
     void clear();
-
-    /**
-     * get exceptions
-     */
-    Throwable getException();
 }

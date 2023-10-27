@@ -22,7 +22,7 @@ import java.util.Arrays;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class PipeRcvQueueTest {
+public class PipeQueueTest {
     @Test
     public void offerTest01() {
         PipeQueue<Object> queue = new PipeQueue<>(10);

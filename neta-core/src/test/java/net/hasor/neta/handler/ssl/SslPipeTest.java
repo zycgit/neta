@@ -13,21 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.handler.ssl;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.PipeStackFactory;
-import net.hasor.neta.handler.codec.StringDecoderPipeHandler;
-import net.hasor.neta.handler.codec.StringEncoderPipeHandler;
-import net.hasor.neta.handler.ssl.SslAuthKeyType;
-import net.hasor.neta.handler.ssl.SslConfig;
-import net.hasor.neta.handler.ssl.SslPipeLayer;
-import net.hasor.neta.handler.ssl.SslProtocol;
+import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class PipeSslTest {
+public class SslPipeTest {
     @Test
     public void sslHandshakeTest_1() {
         SslConfig sslConfig = new SslConfig();
@@ -44,8 +42,8 @@ public class PipeSslTest {
         PipeStackFactory pipeStack = new PipeInitializer()
                 // SSL
                 .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
-                // bytes <-> TypeFrame
-                .nextTo("String", pipeConfig, new StringDecoderPipeHandler(), new StringEncoderPipeHandler())
+                // bytes <-> String
+                .nextTo("String", pipeConfig, SslPipeTest::doDecoder1, SslPipeTest::doEncoder1)
                 // create Stack
                 .buildFactory();
 
@@ -69,5 +67,38 @@ public class PipeSslTest {
         String serverRcv = server.readRcvDown();
         assert clientRcv.equals("Hello Client, this message form server.");
         assert serverRcv.equals("Hello Server, this message form client.");
+    }
+
+    /** Decoding the message: ByteBuf -> String */
+    public static PipeStatus doDecoder1(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
+        ByteBuf byteBuf = src.takeMessage();
+        if (byteBuf == null) {
+            return PipeStatus.Next;
+        }
+        String line;
+        do {
+            line = byteBuf.readLine();
+            if (line != null) {
+                dst.offerMessage(line);
+            }
+        } while (line != null && dst.hasSlot());
+
+        byteBuf.markReader();
+        return PipeStatus.Next;
+    }
+
+    /** encoded message: String -> ByteBuf */
+    public static PipeStatus doEncoder1(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<ByteBuf> dst) {
+        String message;
+        do {
+            message = src.takeMessage();
+            if (message != null) {
+                byte[] bytes = message.getBytes();
+                if (bytes.length > 0) {
+                    dst.offerMessage(ByteBufAllocator.DEFAULT.wrap(bytes));
+                }
+            }
+        } while (message != null);
+        return PipeStatus.Next;
     }
 }

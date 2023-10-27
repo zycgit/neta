@@ -105,13 +105,7 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         return status;
     }
 
-    public PipeStatus doError(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp, PipeExceptionHandler eh) {
-        PipeStatus status = this.pipeLayer.doError(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd, eh);
-
-        rcvUp.rcvReset();
-        this.rcvDownEnd.sndReset();
-        sndUp.rcvReset();
-        this.sndDownEnd.sndReset();
-        return status;
+    public PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) {
+        return this.pipeLayer.doError(context, isRcv, e, eh);
     }
 }

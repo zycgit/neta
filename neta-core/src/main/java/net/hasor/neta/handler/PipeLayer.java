@@ -60,7 +60,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
      * After the doLayer method returns, The {@link PipeRcvQueue#rcvSubmit()}/{@link PipeSndQueue#sndSubmit()} method of (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) will be called.
      *
      * <ul>
-     *  <li>When the method throws, (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) keep state, and call {@link #doError(PipeContext, boolean, PipeRcvQueue, PipeSndQueue, PipeRcvQueue, PipeSndQueue, PipeExceptionHandler)}.</li>
+     *  <li>When the method throws, (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) keep state, and call {@link #doError(PipeContext, boolean, Throwable, PipeExceptionHandler)}.</li>
      * </ul>
      */
     PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown) throws Exception;
@@ -82,7 +82,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
      *  ... -> doLayer -> doError -> doError(invoker clear) -> doLayer -> ...
      * </pre>
      */
-    default PipeStatus doError(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown, PipeExceptionHandler eh) {
+    default PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) {
         return PipeStatus.Next;
     }
 
