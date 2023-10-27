@@ -13,18 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler.ssl;
+package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeStackFactory;
-import net.hasor.neta.handler.*;
 import net.hasor.neta.handler.codec.StringDecoderPipeHandler;
 import net.hasor.neta.handler.codec.StringEncoderPipeHandler;
+import net.hasor.neta.handler.ssl.SslAuthKeyType;
+import net.hasor.neta.handler.ssl.SslConfig;
+import net.hasor.neta.handler.ssl.SslPipeLayer;
+import net.hasor.neta.handler.ssl.SslProtocol;
 import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslTest {
+public class PipeSslTest {
     @Test
     public void sslHandshakeTest_1() {
         SslConfig sslConfig = new SslConfig();

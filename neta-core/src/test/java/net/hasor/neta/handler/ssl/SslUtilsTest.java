@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.ResourcesUtils;
+import net.hasor.cobble.codec.MD5;
+import org.junit.Test;
 
 import java.security.cert.X509Certificate;
 
@@ -22,9 +24,10 @@ import java.security.cert.X509Certificate;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslPemTest {
-    public static void main(String[] args) throws Exception {
-        X509Certificate[] cer = SslUtils.toX509Certificates(ResourcesUtils.getResourceAsStream("ssl/server.crt"));
-        System.out.println(cer);
+public class SslUtilsTest {
+    @Test
+    public void cerTest() throws Exception {
+        X509Certificate[] cer = SslUtils.toX509Certificates(ResourcesUtils.getResourceAsStream("ssl/ca/server.crt"));
+        assert MD5.encodeMD5(cer[0].getPublicKey().getEncoded()).equals("87b5c786273d5a4faf15c41122934faf");
     }
 }

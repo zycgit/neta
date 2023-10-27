@@ -80,6 +80,24 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
+    public int offerMessage(T[] offerList) {
+        int size = Math.min(this.slotSize(), offerList.length);
+
+        int added = 0;
+        for (T item : offerList) {
+            if (!this.offerTemp.contains(item) && !this.linkedList.contains(item)) {
+                this.offerTemp.add(item);
+                added++;
+            }
+            if (added >= size) {
+                break;
+            }
+        }
+
+        return added;
+    }
+
+    @Override
     public int offerMessage(List<T> offerList) {
         int size = Math.min(this.slotSize(), offerList.size());
 

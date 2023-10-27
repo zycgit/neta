@@ -76,23 +76,30 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             this.rootRcvUp.sndSubmit();
 
             // doPipeline
-            PipeStatus status = null;
+            PipeStatus status;
+            boolean needRestart = false;
             boolean triggerListener = false;
             do {
                 for (int i = 0; i < this.layers.size(); i++) {
                     status = this.doLayer(true, pipeContext, i);
                     switch (status) {
                         case Next:
-                        case Again:
+                        case Retry:
                             triggerListener = (i == this.layers.size() - 1); // only the complete pipeline will fire listeners
                             continue;
+                        case Again:
+                            needRestart = true;// restart when finished
+                            continue;
                         case Exit:
-                        case StartOver:
+                            needRestart = false;
                             triggerListener = false;
+                            break;
+                        case Restart:
+                            needRestart = true;
                             break;
                     }
                 }
-            } while (status == PipeStatus.StartOver);
+            } while (needRestart);
 
             // triggerListener
             PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
@@ -140,20 +147,27 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             this.rootSndUp.sndSubmit();
 
             // doPipeline
-            PipeStatus status = null;
+            PipeStatus status;
+            boolean needRestart = false;
             do {
                 for (int i = this.layers.size() - 1; i >= 0; i--) {
                     status = this.doLayer(false, pipeContext, i);
                     switch (status) {
                         case Next:
+                        case Retry:
+                            continue;
                         case Again:
+                            needRestart = true;// restart when finished
                             continue;
                         case Exit:
-                        case StartOver:
+                            needRestart = false;
+                            break;
+                        case Restart:
+                            needRestart = true;
                             break;
                     }
                 }
-            } while (status == PipeStatus.StartOver);
+            } while (needRestart);
 
             // result
             PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
@@ -210,8 +224,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             if (status == PipeStatus.Interrupt) {
                 throw ctxError != null ? ctxError : new InterruptedException();
             }
-        } while (status == PipeStatus.Again);
-
+        } while (status == PipeStatus.Retry);
         return status;
     }
 

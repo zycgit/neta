@@ -93,7 +93,7 @@ public class SslHandle {
     /** Failure from which there is no recovery will close the Socket */
     private PipeStatus handleFailed(SSLEngine sslEngine, Throwable e) {
         this.context.closeChannel(this.channelID, e.getMessage());
-        return PipeStatus.Interrupt;
+        return PipeStatus.Next;
     }
 
     private int readData(PipeRcvQueue<ByteBuf> src, ByteBuffer dst) {

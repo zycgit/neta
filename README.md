@@ -52,12 +52,24 @@ It provides an abstract asynchronous duplex programming model and works on top o
 
 TODO
 
-1. soReadTimeoutMs 的作用和平时认知有一些偏差，需要进一步拟合这种偏差
-2. 低延迟 ExecutorService
-3. 协议路由，用来支持 NPN/ALPN
-4. EmbeddedChannel 用来提供协议层的开发
-5. 通过 SSL 参数支持 peerHost 能力
-6. bytebuf 大文件传输
+高优先
+
+1. 低延迟 ExecutorService
+2. ByteBuf 清理和释放机制
+3. soReadTimeoutMs 的作用和平时认知有一些偏差，需要进一步拟合这种偏差
+4. SSL Close 的处理，防止尾部攻击
+5. SSL Buffer 溢出问题
+6. 场景测试覆盖率不足
+7. IP 白名单机制
+
+次优先
+
+1. 协议路由，用来支持 NPN/ALPN
+2. 通过 SSL 参数支持 peerHost 能力
+3. ByteBuf 大文件 或输入输出流的 传输
+4. PipeRoute
+5. 流量控制
+6.
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#ex6
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html
@@ -66,10 +78,6 @@ https://www.cnblogs.com/flydean/p/15419443.html#npn%E5%92%8Calpn
 https://halfrost.com/https-extensions/#toc-0
 
 https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html#RunningSSLEngineSimpleDemo
-
-# Cobble ByteBuf
-
-&emsp;&emsp; Cobble ByteBuf 是一款增强的 ByteBuf 框架，用于替代 JDK ByteBuf，相比较于 Netty ByteBuf 多了并发特性且更小更轻量。
 
 ## 功能和特性
 

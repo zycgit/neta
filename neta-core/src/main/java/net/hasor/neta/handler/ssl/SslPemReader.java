@@ -34,7 +34,7 @@ import java.util.regex.Pattern;
 /**
  * Reads a PEM file and converts it into a list of DERs so that they are imported into a {@link KeyStore} easily.
  *
- * Netty 的 ByteBuf 更换为 cobble.bytebuf
+ * Netty's ByteBuf is replaced with cobble.bytebuf
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  * @author netty

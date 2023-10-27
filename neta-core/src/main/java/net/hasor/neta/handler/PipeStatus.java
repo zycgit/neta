@@ -40,13 +40,40 @@ public enum PipeStatus {
      *                             Current
      * </pre>
      */
+    Retry,
+
+    /**
+     * restart when pipeline finished.
+     *
+     * <p>If the pipeline is Interrupt, it will not be restarted</p>
+     *
+     * <pre>
+     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     * ┃  /---------------\     /---------------\             /-┸-------------\
+     * ┗> | PipeLayer (0) |  >  | PipeLayer (1) |  >  ...  >  | PipeLayer (2) |
+     *    \---------------/     \---------------/             \---------------/
+     *                                Again        continue          End
+     * </pre>
+     */
     Again,
+
+    /**
+     * Interrupt the pipeline event propagation and restarted of the pipeline.
+     * <pre>
+     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     * ┃  /---------------\     /---------------\     /-┸-------------\
+     * ┗> | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) | ...
+     *    \---------------/     \---------------/     \---------------/
+     *        go head                                      Current
+     * </pre>
+     */
+    Restart,
 
     /**
      * Interrupt pipeline event propagation, and Skip all the following {@link PipeLayer}
      * <pre>
      *     /---------------\     /---------------\     /---------------\
-     * ... | PipeLayer (0) |  ×  | PipeLayer (1) |  ×  | PipeLayer (2) |
+     * ... | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) |
      *     \---------------/     \---------------/     \---------------/
      *          Current                Skip                  Skip
      * </pre>
@@ -57,22 +84,10 @@ public enum PipeStatus {
      * Interrupt pipeline event propagation, and throw Error
      * <pre>
      *     /---------------\
-     * ... | PipeLayer (0) |  ×  Throw Error
+     * ... | PipeLayer (0) |  >  Throw Error
      *     \---------------/
      *          Current
      * </pre>
      */
     Interrupt,
-
-    /**
-     * Interrupt the pipeline event propagation and go back to the head of the pipeline.
-     * <pre>
-     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     * ┃  /---------------\     /---------------\     /-┸-------------\
-     * ┗> | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) | ...
-     *    \---------------/     \---------------/     \---------------/
-     *        go head                                      Current
-     * </pre>
-     */
-    StartOver,
 }
