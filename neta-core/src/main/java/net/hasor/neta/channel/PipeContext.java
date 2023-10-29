@@ -30,8 +30,6 @@ public interface PipeContext {
     /** the SoContext */
     SoContext getSoContext();
 
-    SoResManager getSoResManager();
-
     /** Get the attachment for {@link PipeContext} */
     <T> T context(Class<T> attachment);
 

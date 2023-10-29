@@ -25,14 +25,12 @@ import java.util.Map;
 public class PipeContextImpl implements PipeContext {
     private final SoChannel<?>          channel;
     private final SoContext             soContext;
-    private final SoResManager          rm;
     private final Map<Class<?>, Object> pipeContext;
     private final Map<String, Object>   flash;
 
-    protected PipeContextImpl(SoChannel<?> channel, SoContext soContext, SoResManager rm) {
+    protected PipeContextImpl(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
         this.soContext = soContext;
-        this.rm = rm;
         this.pipeContext = new HashMap<>();
         this.flash = new HashMap<>();
     }
@@ -50,11 +48,6 @@ public class PipeContextImpl implements PipeContext {
     @Override
     public SoContext getSoContext() {
         return this.soContext;
-    }
-
-    @Override
-    public SoResManager getSoResManager() {
-        return this.rm;
     }
 
     @Override

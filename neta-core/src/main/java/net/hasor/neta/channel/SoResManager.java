@@ -38,6 +38,4 @@ public interface SoResManager extends AutoCloseable {
 
     /** always return null */
     <T> T freeObject(Object refObj);
-
-    void submitTask(Runnable runnable);
 }

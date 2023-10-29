@@ -21,6 +21,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.ClosedChannelException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Copy the Queue data to the sndBuffer
@@ -63,7 +64,7 @@ class SoSndCopyTask extends DefaultSoTask {
         if (context.isClose(this.channelID)) {
             ClosedChannelException e = new ClosedChannelException();
             channelClose(e);
-            this.exitTask(e);
+            this.failedTask(e);
             return;
         }
 
@@ -73,7 +74,7 @@ class SoSndCopyTask extends DefaultSoTask {
                 logger.debug("snd(" + this.channelID + ") snd is working, wait next truns.");
             }
 
-            this.delayTask(this.taskIntervalMs);
+            this.delayTask(this.taskIntervalMs, TimeUnit.MILLISECONDS);
             return;
         }
 
@@ -122,7 +123,7 @@ class SoSndCopyTask extends DefaultSoTask {
         if (data == null) {
             this.finishTask();
         } else {
-            this.delayTask(this.taskIntervalMs);
+            this.delayTask(this.taskIntervalMs, TimeUnit.MILLISECONDS);
         }
     }
 }

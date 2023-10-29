@@ -150,7 +150,7 @@ public class NetListen implements SoChannel<NetListen> {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.channel.isOpen()) {
                 SoCloseTask task = new SoCloseTask(this.channelID, this.context);
-                this.context.submitSoTask(this.context.getResourceManager(), task, this).onCompleted(f -> {
+                this.context.submitSoTask(this.channelID, task, this).onCompleted(f -> {
                     closeFuture.completed(this);
                 }).onFailed(f -> {
                     closeFuture.failed(f.getCause());

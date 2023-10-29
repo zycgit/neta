@@ -18,7 +18,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.channel.SoContext;
-import net.hasor.neta.channel.SoResManager;
 import net.hasor.neta.handler.*;
 
 import java.io.IOException;
@@ -39,11 +38,14 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
         SoChannel<?> channel = context.channel();
 
         long channelID = channel.getChannelID();
-        SoResManager rm = context.getSoResManager();
         boolean clientMode = channel.isClient();
 
         SoContext soContext = context.getSoContext();
-        context.context(SslContext.class, new JdkSslContext(channelID, soContext, this.config, rm, clientMode));
+        if (this.config.getProvider() == SslProvider.JDK) {
+            context.context(SslContext.class, new JdkSslContext(channelID, soContext, this.config, clientMode));
+        } else {
+            throw new UnsupportedOperationException(this.config.getProvider() + " Unsupported.");
+        }
     }
 
     @Override

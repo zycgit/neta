@@ -31,16 +31,16 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        long                      createdTime;
     private final        AsynchronousSocketChannel channel;
     private final        SoContextImpl             context;
-    private final        SoResManager              rm;
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   rcvBuffer;
 
-    public SoRcvCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
+    public SoRcvCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.channel = channel;
         this.context = context;
-        this.rm = rm;
+
+        SoResManager rm = context.getResourceManager();
         this.swapBuffer = rm.newSwapRcvBuf();
         this.rcvBuffer = rm.newLocalRcvBuf();
     }
@@ -77,7 +77,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             this.swapBuffer.flip();
             SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, context, getSwapBuffer(), getRcvBuffer());
 
-            this.context.submitSoTask(this.rm, copyTask, this).onCompleted(f -> {
+            this.context.submitSoTask(this.channelID, copyTask, this).onCompleted(f -> {
                 this.continueRcv(0);
             }).onFailed(f -> {
                 this.failed(f.getCause(), context);
@@ -103,7 +103,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     private void continueRcv(int delayInterval) {
         // It is async to avoid recursion.
-        this.context.submitSoTask(this.rm, new SoDelayTask(delayInterval), this).onCompleted(f -> {
+        this.context.submitSoTask(this.channelID, new SoDelayTask(delayInterval), this).onCompleted(f -> {
             try {
                 this.resetSwapBuffer();
                 this.channel.read(this.getSwapBuffer(), this.context, this);

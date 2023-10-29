@@ -18,7 +18,6 @@ import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.SoContext;
-import net.hasor.neta.channel.SoResManager;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -73,8 +72,8 @@ public class JdkSslContext extends SslContextBasic {
         }
     }
 
-    public JdkSslContext(long channelID, SoContext context, SslConfig config, SoResManager rm, boolean clientMode) throws Exception {
-        super(channelID, config, context, rm, clientMode);
+    public JdkSslContext(long channelID, SoContext context, SslConfig config, boolean clientMode) throws Exception {
+        super(channelID, config, context, clientMode);
     }
 
     @Override

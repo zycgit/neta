@@ -18,6 +18,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
+import java.util.concurrent.TimeUnit;
 
 /**
  * asynchronous non-blocking copy receive data form swapBuffer {@link ByteBuffer} to rcvBuffer {@link ByteBuf}
@@ -40,7 +41,7 @@ class SoRcvCopyTask extends DefaultSoTask {
     @Override
     protected void doWork(int retryCnt) {
         if (this.context.isClose(this.channelID)) {
-            this.exitTask(new ClosedChannelException());
+            this.failedTask(new ClosedChannelException());
             return;
         }
 
@@ -48,9 +49,9 @@ class SoRcvCopyTask extends DefaultSoTask {
             if (this.dstBuffer.writableBytes() <= 0) {
                 this.context.notifyChannelRcv(this.channelID, retryCnt);
                 if (retryCnt > 5) {
-                    this.delayTask(this.context.getConfig().getRetryIntervalMs());
+                    this.delayTask(this.context.getConfig().getRetryIntervalMs(), TimeUnit.MILLISECONDS);
                 } else {
-                    this.delayTask(0);
+                    this.delayTask(0, TimeUnit.MILLISECONDS);
                 }
             } else {
                 // swapBuffer -> rcvBuffer

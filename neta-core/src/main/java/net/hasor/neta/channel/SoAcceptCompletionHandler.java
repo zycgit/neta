@@ -78,15 +78,15 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         long channelID = SoContextImpl.nextID();
         long createdTime = System.currentTimeMillis();
         logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
+        context.specialConfig(channelID, remoteAddr);
 
-        SoResManager resManager = context.newSoResManager(channelID, remoteAddr);
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context, resManager);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, context, resManager);
-        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, context, resManager);
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, context);
+        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, context);
 
         // init and pipe
         try {
-            PipeContextImpl pipeCtx = new PipeContextImpl(channel, context, resManager);
+            PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
             PipeStack<?, ?> pipeStack = this.forListen.getStackFactory().create(pipeCtx);
             channel.initPipe(pipeCtx, pipeStack);
             context.openChannel(channel);

@@ -19,7 +19,6 @@ import net.hasor.cobble.ResourcesUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.SoContext;
-import net.hasor.neta.channel.SoResManager;
 import net.hasor.neta.handler.PipeRcvQueue;
 import net.hasor.neta.handler.PipeSndQueue;
 
@@ -41,21 +40,19 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class SslContextBasic implements SslContext {
-    private static final Logger       logger = Logger.getLogger(SslContextBasic.class);
-    protected final      long         channelID;
-    protected final      SoContext    soContext;
-    protected final      SoResManager rm;
-    private final        boolean      clientMode;
+    private static final Logger     logger = Logger.getLogger(SslContextBasic.class);
+    protected final      long       channelID;
+    protected final      SoContext  soContext;
+    private final        boolean    clientMode;
     //
-    protected final      SslConfig    sslConfig;
-    private final        SSLContext   sslContext;
-    private final        SSLEngine    sslEngine;
-    private volatile     SslHandle    sslHandler;
+    protected final      SslConfig  sslConfig;
+    private final        SSLContext sslContext;
+    private final        SSLEngine  sslEngine;
+    private volatile     SslHandle  sslHandler;
 
-    public SslContextBasic(long channelID, SslConfig config, SoContext soContext, SoResManager rm, boolean clientMode) throws Exception {
+    public SslContextBasic(long channelID, SslConfig config, SoContext soContext, boolean clientMode) throws Exception {
         this.channelID = channelID;
         this.soContext = soContext;
-        this.rm = rm;
         this.clientMode = clientMode;
 
         this.sslConfig = config;
@@ -162,7 +159,7 @@ public abstract class SslContextBasic implements SslContext {
 
         // start handshake
         if (this.sslHandler == null) {
-            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.soContext, this.sslEngine, this.rm);
+            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.soContext, this.sslEngine);
             this.sslHandler.beginHandshake();
         }
 

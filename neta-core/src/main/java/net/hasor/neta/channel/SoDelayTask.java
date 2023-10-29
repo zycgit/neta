@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.concurrent.TimeUnit;
+
 /**
  * delay task
  * @version : 2023-09-24
@@ -33,7 +35,7 @@ public class SoDelayTask extends DefaultSoTask {
     @Override
     protected void doWork(int retryCnt) {
         if (retryCnt == 0 && this.intervalMillis > 0) {
-            this.delayTask(this.intervalMillis);
+            this.delayTask(this.intervalMillis, TimeUnit.MILLISECONDS);
         } else {
             this.finishTask();
         }

@@ -24,15 +24,15 @@ import java.util.Queue;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoSndContext {
+    private final long             channelID;
     private final long             createdTime;
     private final SoContextImpl    context;
-    private final SoResManager     rm;
     private final Queue<SoSndData> wQueue;
 
-    public SoSndContext(long createdTime, SoContextImpl context, SoResManager rm, Queue<SoSndData> wQueue) {
+    public SoSndContext(long channelID, long createdTime, SoContextImpl context, Queue<SoSndData> wQueue) {
+        this.channelID = channelID;
         this.createdTime = createdTime;
         this.context = context;
-        this.rm = rm;
         this.wQueue = wQueue;
     }
 
@@ -68,6 +68,6 @@ class SoSndContext {
      * submit async task to run.
      */
     public Future<?> submitTask(DefaultSoTask task, Object context) {
-        return this.context.submitSoTask(this.rm, task, context);
+        return this.context.submitSoTask(this.channelID, task, context);
     }
 }

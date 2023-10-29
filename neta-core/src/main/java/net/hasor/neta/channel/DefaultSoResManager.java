@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.io.IOUtils;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
@@ -24,7 +22,6 @@ import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutorService;
 
 /**
  * SoResManager implements
@@ -32,16 +29,13 @@ import java.util.concurrent.ExecutorService;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class DefaultSoResManager implements SoResManager, AutoCloseable {
-    private static final Logger           logger = Logger.getLogger(DefaultSoResManager.class);
-    private final        SoConfig         config;
-    private final        ByteBufAllocator bufAllocator;
-    private final        ExecutorService  executor;
-    private final        List<Object>     resources;
+    private final SoConfig         config;
+    private final ByteBufAllocator bufAllocator;
+    private final List<Object>     resources;
 
-    public DefaultSoResManager(SoConfig config, ExecutorService executor) {
+    public DefaultSoResManager(SoConfig config) {
         this.config = config;
         this.bufAllocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : this.config.getBufAllocator();
-        this.executor = executor;
         this.resources = new ArrayList<>();
     }
 
@@ -106,25 +100,7 @@ public class DefaultSoResManager implements SoResManager, AutoCloseable {
     }
 
     @Override
-    public void submitTask(Runnable runnable) {
-        this.executor.submit(runnable);
-    }
-
-    @Override
     public void close() throws Exception {
-        long t = System.currentTimeMillis();
-        if (this.executor != null) {
-            while (!this.executor.isTerminated()) {
-                long cost = System.currentTimeMillis() - t;
-                if (cost > 3000) {
-                    t = System.currentTimeMillis();
-                    logger.info("wait workerThread close...");
-                }
-                ThreadUtils.sleep(50);
-            }
-            logger.info("workerThread closed.");
-        }
-
         this.resources.forEach(refObj -> {
             if (refObj instanceof Closeable) {
                 IOUtils.closeQuietly((Closeable) refObj);

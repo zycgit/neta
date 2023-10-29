@@ -14,18 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ThreadFactory;
 
 /**
- * create ExecutorService
+ * Create a thread factory for io/worker threads.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
 @FunctionalInterface
-public interface SoExecutorFactory {
-    /**
-     * @param config the socket global config.
-     * @param ctxName context name (global default context name is null.)
-     */
-    ExecutorService newExecutor(SoConfig config, String ctxName);
+public interface SoThreadFactory {
+    ThreadFactory newFactory(ClassLoader loader, String nameTemplate);
 }

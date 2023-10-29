@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.concurrent.TimeUnit;
+
 /**
  * Socket Task
  * @version : 2023-09-24
@@ -22,13 +24,13 @@ package net.hasor.neta.channel;
 public abstract class DefaultSoTask implements Runnable {
     public enum SoTaskStatus {
         Finish,
-        Exit,
+        Failed,
         Continue
     }
 
     private SoTaskStatus status;
-    private boolean      delay;
     private int          delayTime;
+    private TimeUnit     delayUnit;
     private Exception    cause;
     private int          retryCnt;
 
@@ -40,51 +42,41 @@ public abstract class DefaultSoTask implements Runnable {
         return this.status;
     }
 
-    protected void delayTask(int delayTime) {
-        this.delay = true;
-        this.delayTime = delayTime;
+    public int getDelayTime() {
+        return this.delayTime;
+    }
+
+    public TimeUnit getDelayUnit() {
+        return this.delayUnit;
+    }
+
+    protected void delayTask(int delay, TimeUnit unit) {
+        this.delayTime = delay;
+        this.delayUnit = unit;
         this.cause = null;
         this.status = SoTaskStatus.Continue;
     }
 
     protected void continueTask() {
-        this.delay = false;
         this.delayTime = 0;
         this.cause = null;
         this.status = SoTaskStatus.Continue;
     }
 
     protected void finishTask() {
-        this.delay = false;
         this.delayTime = 0;
         this.cause = null;
         this.status = SoTaskStatus.Finish;
     }
 
-    protected void exitTask(Exception e) {
-        this.delay = false;
+    protected void failedTask(Exception e) {
         this.delayTime = 0;
         this.cause = e;
-        this.status = SoTaskStatus.Exit;
+        this.status = SoTaskStatus.Failed;
     }
-
-    private long delayTimeEnter;
 
     @Override
     public final void run() {
-        if (this.delay && this.delayTime > 0) {
-            if (this.delayTimeEnter == 0) {
-                this.delayTimeEnter = System.currentTimeMillis();
-                this.status = SoTaskStatus.Continue;
-                return;
-            }
-            if ((this.delayTimeEnter + this.delayTime) > System.currentTimeMillis()) {
-                this.delay = false;
-                this.delayTime = 0;
-                this.delayTimeEnter = 0;
-            }
-        }
-
         this.doWork(this.retryCnt);
         this.retryCnt++;
     }

@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.future.Future;
-
 /**
  * manage all network NetChannel and NetListen
  * @version : 2023-09-24
@@ -27,12 +25,6 @@ public interface SoContext {
 
     /** default {@link SoResManager}  */
     SoResManager getResourceManager();
-
-    /** submit async tasks */
-    <T> Future<T> submitSoTask(DefaultSoTask mainTask, T result);
-
-    /** submit async tasks, use special {@link SoResManager} run it. */
-    <T> Future<T> submitSoTask(SoResManager rm, DefaultSoTask mainTask, T result);
 
     /** test channel is not exist or closed */
     boolean isClose(long channelID);

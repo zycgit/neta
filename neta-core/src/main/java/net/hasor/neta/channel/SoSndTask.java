@@ -52,7 +52,7 @@ class SoSndTask extends DefaultSoTask {
     @Override
     protected void doWork(int retryCnt) {
         if (this.context.isClose(this.channelID)) {
-            this.exitTask(new ClosedChannelException());
+            this.failedTask(new ClosedChannelException());
             return;
         }
 
@@ -81,15 +81,15 @@ class SoSndTask extends DefaultSoTask {
                     if (logger.isDebugEnabled()) {
                         logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
                     }
-                    this.delayTask(this.context.getConfig().getRetryIntervalMs());
+                    this.delayTask(this.context.getConfig().getRetryIntervalMs(), TimeUnit.MILLISECONDS);
                 } else {
                     logger.warn("snd(" + this.channelID + ") Connection timeout. ");
-                    this.exitTask(e);
+                    this.failedTask(e);
                 }
             } else {
                 logger.error("snd(" + this.channelID + ") " + e.getMessage(), e);
                 this.context.closeChannel(this.channelID, e.getMessage());
-                this.exitTask(e);
+                this.failedTask(e);
             }
         }
     }

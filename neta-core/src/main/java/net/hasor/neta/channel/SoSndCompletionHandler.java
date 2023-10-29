@@ -34,7 +34,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        long                      createdTime;
     private final        AsynchronousSocketChannel channel;
     private final        SoContextImpl             context;
-    private final        SoResManager              rm;
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   sndBuffer;
     //
@@ -42,12 +41,13 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private volatile     boolean                   sndWorking;
     private              List<SoSndData>           afterWorking1;
 
-    public SoSndCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context, SoResManager rm) {
+    public SoSndCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.channel = channel;
         this.context = context;
-        this.rm = rm;
+
+        SoResManager rm = context.getResourceManager();
         this.swapBuffer = rm.newSwapSndBuf();
         this.sndBuffer = rm.newLocalSndBuf();
     }
@@ -80,7 +80,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     private Future<?> submitTask(DefaultSoTask task) {
-        return this.context.submitSoTask(this.rm, task, this);
+        return this.context.submitSoTask(this.channelID, task, this);
     }
 
     @Override

@@ -14,19 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.concurrent.future.BasicFuture;
-import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 import java.util.Map;
-import java.util.Objects;
-import java.util.Queue;
-import java.util.concurrent.*;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Base class for {@link SoContext} implementations that are used in an embedded fashion.
@@ -34,13 +27,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class EmbeddedSoContext implements SoContext {
-    private static final Logger                      logger = Logger.getLogger(EmbeddedSoContext.class);
-    private static final AtomicLong                  nextID = new AtomicLong();
-    private final        SoConfig                    config;
-    private final        SoResManager                defaultRm;
-    private final        Map<Long, SoChannel<?>>     channelMap;
-    private final        Queue<SoChannel<?>>         channelList;
-    private final        Map<Long, EmbeddedTransfer> networkMap;
+    private static final Logger                  logger = Logger.getLogger(EmbeddedSoContext.class);
+    private static final AtomicLong              nextID = new AtomicLong();
+    private final        SoConfig                config;
+    private final        SoResManager            defaultRm;
+    private final        Map<Long, SoChannel<?>> channelMap;
 
     public EmbeddedSoContext() {
         this(new SoConfig());
@@ -49,20 +40,7 @@ public class EmbeddedSoContext implements SoContext {
     public EmbeddedSoContext(SoConfig config) {
         this.config = config;
         this.channelMap = new ConcurrentHashMap<>();
-        this.channelList = new ConcurrentLinkedQueue<>();
-        this.networkMap = new ConcurrentHashMap<>();
-
-        SoExecutorFactory executorFactory = config.getTaskExecutorFactory();
-        if (executorFactory == null) {
-            executorFactory = (cfg, ctxName) -> {
-                String tempName = "Cobble[" + StringUtils.getOrDefault("default", ctxName) + "]-AIO-Workers-%s";
-                int process = Runtime.getRuntime().availableProcessors();
-                ThreadFactory threadFactory = ThreadUtils.threadFactory(CobbleSocket.class.getClassLoader(), tempName, true);
-                return Executors.newFixedThreadPool(process, threadFactory);
-            };
-        }
-        ExecutorService executor = Objects.requireNonNull(executorFactory.newExecutor(this.config, null));
-        this.defaultRm = new DefaultSoResManager(this.config, executor);
+        this.defaultRm = new DefaultSoResManager(this.config);
     }
 
     protected static long nextID() {
@@ -83,43 +61,6 @@ public class EmbeddedSoContext implements SoContext {
     public void openChannel(SoChannel<?> channel) {
         logger.info("channel(" + channel.getChannelID() + ") created.");
         this.channelMap.put(channel.getChannelID(), channel);
-        this.channelList.add(channel);
-    }
-
-    @Override
-    public <T> Future<T> submitSoTask(DefaultSoTask task, T result) {
-        return this.submitSoTask(this.defaultRm, task, result);
-    }
-
-    /** asynchronously copy data from swap to rcv/snd */
-    @Override
-    public <T> Future<T> submitSoTask(SoResManager rm, DefaultSoTask task, T result) {
-        Future<T> future = new BasicFuture<>();
-
-        AtomicReference<Runnable> refTemp = new AtomicReference<>();
-        Runnable runnable = () -> {
-            try {
-                task.run();
-
-                switch (task.getStatus()) {
-                    case Continue:
-                        rm.submitTask(refTemp.get());
-                        break;
-                    case Finish:
-                        future.completed(result);
-                        break;
-                    case Exit:
-                        future.failed(task.getCause());
-                        break;
-                }
-            } catch (Throwable e) {
-                future.failed(e);
-            }
-        };
-        refTemp.set(runnable);
-
-        rm.submitTask(refTemp.get());
-        return future;
     }
 
     /** test the channel has been closed */
@@ -139,7 +80,6 @@ public class EmbeddedSoContext implements SoContext {
         netChannel.pipeStack.release(netChannel.pipeCtx);
 
         logger.info("channel(" + channelID + ") closed.");
-        this.channelList.remove(channel);
     }
 
     /**

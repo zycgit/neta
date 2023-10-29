@@ -19,9 +19,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
 
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
-
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
@@ -37,36 +34,32 @@ public class SocketServerTest {
         //        config.setSoKeepIdleSec(10);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
-        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);
-        config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
-        config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
+        config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
+        config.setIoThreads(1);
+        config.setTaskThreads(1);
 
         try (CobbleSocket socket = new CobbleSocket(config)) {
-            NetListen listen = socket.listen("127.0.0.1", 5567, pipeCtx -> {
-                return new PipeStack<Object, Object>() {
-                    @Override
-                    public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) {
-                        ByteBuf rcvByteBuf = (ByteBuf) rcvData;
-                        String line = rcvByteBuf.readLine();
-                        rcvByteBuf.markReader();
+            NetListen listen = socket.listen("127.0.0.1", 5567, pipeCtx -> new PipeStack<Object, Object>() {
+                @Override
+                public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) {
+                    ByteBuf rcvByteBuf = (ByteBuf) rcvData;
+                    String line = rcvByteBuf.readLine();
+                    rcvByteBuf.markReader();
 
-                        if (line != null) {
-                            ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + line + "\n").getBytes());
-                            System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
+                    if (line != null) {
+                        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + line + "\n").getBytes());
+                        System.out.println("rcvChannel " + pipeContext.channel().getChannelID() + ", data=" + line);
 
-                            return new ByteBuf[] { buf };
-                        }
-                        return new ByteBuf[0];
-                    }
-
-                    @Override
-                    public Object[] sndLayer(PipeContext pipeContext, Object sndData) {
-                        ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + sndData + "\n").getBytes());
                         return new ByteBuf[] { buf };
                     }
-                };
+                    return new ByteBuf[0];
+                }
+
+                @Override
+                public Object[] sndLayer(PipeContext pipeContext, Object sndData) {
+                    ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + sndData + "\n").getBytes());
+                    return new ByteBuf[] { buf };
+                }
             });
             read(listen);
         }

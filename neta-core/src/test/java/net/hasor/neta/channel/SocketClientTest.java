@@ -19,8 +19,6 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBufUtil;
 
 import java.net.InetSocketAddress;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -38,11 +36,9 @@ public class SocketClientTest {
         config.setSoKeepIdleSec(2);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
-        ClassLoader loader = Thread.currentThread().getContextClassLoader();
-        ThreadFactory tf1 = ThreadUtils.threadFactory(loader, "IO-Thread-%s", true);
-        ThreadFactory tf2 = ThreadUtils.threadFactory(loader, "WORK-Thread-%s", true);
-        config.setIoExecutor(Executors.newFixedThreadPool(1, tf1));
-        config.setTaskExecutorFactory((cfg, ctxName) -> Executors.newFixedThreadPool(1, tf2));
+        config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
+        config.setIoThreads(1);
+        config.setTaskThreads(1);
 
         //
         AtomicBoolean exit = new AtomicBoolean(false);

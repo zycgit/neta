@@ -48,8 +48,8 @@ public class EmbeddedChannel implements SoChannel<EmbeddedChannel> {
     private final        Future<EmbeddedChannel>   closeFuture;
 
     private static class EmbeddedPipeContextImpl extends PipeContextImpl {
-        protected EmbeddedPipeContextImpl(EmbeddedChannel channel, SoContext soContext, SoResManager rm) {
-            super(channel, soContext, rm);
+        protected EmbeddedPipeContextImpl(EmbeddedChannel channel, SoContext soContext) {
+            super(channel, soContext);
         }
     }
 
@@ -64,7 +64,7 @@ public class EmbeddedChannel implements SoChannel<EmbeddedChannel> {
             context.openChannel(this);
             this.rcvDown = new PipeQueue<>(-1);
             this.sndDown = new PipeQueue<>(-1);
-            this.pipeCtx = new EmbeddedPipeContextImpl(this, context, context.getResourceManager());
+            this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
             this.pipeStack = stackFactory.create(this.pipeCtx);
         } catch (Exception e) {
             throw ExceptionUtils.toRuntime(e);

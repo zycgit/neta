@@ -51,12 +51,12 @@ public class SslHandle {
     public               ByteBuffer   outNetData;
     public               ByteBuffer   outAppData;
 
-    public SslHandle(long channelID, SslConfig config, SoContext context, SSLEngine engine, SoResManager rm) {
+    public SslHandle(long channelID, SslConfig config, SoContext context, SSLEngine engine) {
         this.channelID = channelID;
         this.config = config;
         this.context = context;
         this.engine = engine;
-        this.rm = rm;
+        this.rm = context.getResourceManager();
         this.handshake = false;
     }
 

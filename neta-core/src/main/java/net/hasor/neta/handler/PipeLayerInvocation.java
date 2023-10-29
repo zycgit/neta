@@ -108,4 +108,32 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     public PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) {
         return this.pipeLayer.doError(context, isRcv, e, eh);
     }
+
+    public PipeExceptionHandler createExceptionHandler(String errorTag, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
+        return new PipeExceptionHandlerImpl(errorTag, pipeContext, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
+    }
+
+    private static class PipeExceptionHandlerImpl implements PipeExceptionHandler {
+        private final String          errorTag;
+        private final PipeContext     context;
+        private final PipeRcvQueue<?> rcvUp;
+        private final PipeQueue<?>    rcvDown;
+        private final PipeRcvQueue<?> sndUp;
+        private final PipeQueue<?>    sndDown;
+
+        public PipeExceptionHandlerImpl(String errorTag, PipeContext context, //
+                PipeRcvQueue<?> rcvUp, PipeQueue<?> rcvDown, PipeRcvQueue<?> sndUp, PipeQueue<?> sndDown) {
+            this.errorTag = errorTag;
+            this.context = context;
+            this.rcvUp = rcvUp;
+            this.rcvDown = rcvDown;
+            this.sndUp = sndUp;
+            this.sndDown = sndDown;
+        }
+
+        @Override
+        public void clear() {
+            this.context.flash(this.errorTag, null);
+        }
+    }
 }

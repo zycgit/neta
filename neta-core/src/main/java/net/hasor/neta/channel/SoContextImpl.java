@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.future.BasicFuture;
+import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
@@ -22,11 +22,8 @@ import net.hasor.cobble.logging.Logger;
 import java.net.SocketAddress;
 import java.nio.channels.ClosedChannelException;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * SoContext implements
@@ -34,28 +31,51 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoContextImpl implements SoContext {
-    private static final Logger                  logger = Logger.getLogger(SoContextImpl.class);
-    private static final AtomicLong              nextID = new AtomicLong();
-    private final        SoConfig                config;
-    private final        ExecutorService         ioExecutor;
-    private final        SoExecutorFactory       executorFactory;
-    private final        SoResManager            defaultRm;
-    private final        Map<Long, SoChannel<?>> channelMap;
-    private final        Queue<NetChannel>       channelList;
-    private final        Queue<NetListen>        listenList;
-    private final        Map<Long, SoResManager> specialRmMap;
+    private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
+    private static final AtomicLong                 nextID = new AtomicLong(1);
+    private final        SoConfig                   config;
+    private final        ClassLoader                useClassLoader;
+    private final        SoThreadFactory            useSoThreadFactory;
+    //
+    private final        ExecutorService            ioExecutor;
+    private final        Map<Long, SoEventExecutor> taskExecutor;
+    private final        SoResManager               bufferManager;
+    //
+    private final        Map<Long, SoChannel<?>>    channelMap;
+    private final        Queue<NetChannel>          channelList;
+    private final        Queue<NetListen>           listenList;
 
-    public SoContextImpl(SoConfig config, ExecutorService ioExec, SoExecutorFactory executorFactory) {
-        this.config = config;
-        this.ioExecutor = Objects.requireNonNull(ioExec);
-        this.executorFactory = Objects.requireNonNull(executorFactory);
+    public SoContextImpl(SoConfig config) {
+        this.config = Objects.requireNonNull(config);
+        this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
+
+        if (config.getThreadFactory() == null) {
+            this.useSoThreadFactory = (loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true);
+        } else {
+            this.useSoThreadFactory = config.getThreadFactory();
+        }
+
+        // io exec
+        int defaultProcess = this.config.getIoThreads();
+        if (defaultProcess < 1) {
+            defaultProcess = Math.max(Runtime.getRuntime().availableProcessors() / 4, 1);
+        }
+        ThreadFactory ioThreadFactory = this.useSoThreadFactory.newFactory(this.useClassLoader, "Cobble-AIO-Thread-%s");
+        this.ioExecutor = Executors.newFixedThreadPool(defaultProcess, ioThreadFactory);
+
+        // task exec
+        int taskWorkSize = config.getTaskThreads();
+        if (taskWorkSize < 1) {
+            taskWorkSize = Runtime.getRuntime().availableProcessors();
+        }
+        this.taskExecutor = new ConcurrentHashMap<>();
+        this.taskExecutor.put(0L, new SoEventExecutor("default", this.useClassLoader, this.useSoThreadFactory, taskWorkSize));
+
+        //
+        this.bufferManager = new DefaultSoResManager(this.config);
         this.channelMap = new ConcurrentHashMap<>();
         this.channelList = new ConcurrentLinkedQueue<>();
         this.listenList = new ConcurrentLinkedQueue<>();
-        this.specialRmMap = new ConcurrentHashMap<>();
-
-        ExecutorService executor = Objects.requireNonNull(executorFactory.newExecutor(this.config, null));
-        this.defaultRm = new DefaultSoResManager(this.config, executor);
     }
 
     public static long nextID() {
@@ -69,7 +89,7 @@ class SoContextImpl implements SoContext {
 
     @Override
     public SoResManager getResourceManager() {
-        return this.defaultRm;
+        return this.bufferManager;
     }
 
     public int getConnectTimeoutMs() {
@@ -80,15 +100,11 @@ class SoContextImpl implements SoContext {
         return this.ioExecutor;
     }
 
-    public SoResManager newSoResManager(long channelID, SocketAddress remoteAddress) {
+    public void specialConfig(long channelID, SocketAddress remoteAddress) {
         if (this.specialResManager(remoteAddress)) {
-            logger.info("channel(" + channelID + ") new special SoResManager.");
-            ExecutorService executor = Objects.requireNonNull(this.executorFactory.newExecutor(this.config, String.valueOf(channelID)));
-            SoResManager rm = new DefaultSoResManager(this.config, executor);
-            this.specialRmMap.put(channelID, rm);
-            return rm;
-        } else {
-            return this.defaultRm;
+            int threads = this.config.getTaskThreads();
+            SoEventExecutor executor = new SoEventExecutor(String.valueOf(channelID), this.useClassLoader, this.useSoThreadFactory, threads);
+            this.taskExecutor.put(channelID, executor);
         }
     }
 
@@ -136,9 +152,9 @@ class SoContextImpl implements SoContext {
     public void closeChannel(long channelID, String message) {
         logger.info("channel(" + channelID + ") close in progress, " + message);
         SoChannel<?> channel = this.channelMap.get(channelID);
-        SoResManager specialRm = this.specialRmMap.get(channelID);
+        SoEventExecutor specialExecutor = this.taskExecutor.get(channelID);
         this.channelMap.remove(channelID);
-        this.specialRmMap.remove(channelID);
+        this.taskExecutor.remove(channelID);
 
         if (channel.isClient() || channel.isServer()) {
             NetChannel netChannel = (NetChannel) channel;
@@ -160,14 +176,14 @@ class SoContextImpl implements SoContext {
             listen.notifyClose(netChannel);
 
             IOUtils.closeQuietly(netChannel.channel);
-            IOUtils.closeQuietly(specialRm);
+            IOUtils.closeQuietly(specialExecutor);
             logger.info("channel(" + channelID + ") closed.");
             this.channelList.remove(channel);
         } else {
 
             NetListen netListen = (NetListen) channel;
             IOUtils.closeQuietly(netListen.channel);
-            IOUtils.closeQuietly(specialRm);
+            IOUtils.closeQuietly(specialExecutor);
             logger.info("listen(" + channelID + ") closed, port :" + netListen.getListenPort());
             this.listenList.remove(channel);
         }
@@ -193,39 +209,12 @@ class SoContextImpl implements SoContext {
         }
     }
 
-    @Override
-    public <T> Future<T> submitSoTask(DefaultSoTask task, T result) {
-        return this.submitSoTask(this.defaultRm, task, result);
-    }
-
     /** asynchronously copy data from swap to rcv/snd */
-    @Override
-    public <T> Future<T> submitSoTask(SoResManager rm, DefaultSoTask task, T result) {
-        Future<T> future = new BasicFuture<>();
-
-        AtomicReference<Runnable> refTemp = new AtomicReference<>();
-        Runnable runnable = () -> {
-            try {
-                task.run();
-
-                switch (task.getStatus()) {
-                    case Continue:
-                        rm.submitTask(refTemp.get());
-                        break;
-                    case Finish:
-                        future.completed(result);
-                        break;
-                    case Exit:
-                        future.failed(task.getCause());
-                        break;
-                }
-            } catch (Throwable e) {
-                future.failed(e);
-            }
-        };
-        refTemp.set(runnable);
-
-        rm.submitTask(refTemp.get());
-        return future;
+    public <T> Future<T> submitSoTask(long channelID, DefaultSoTask task, T result) {
+        SoEventExecutor executor = this.taskExecutor.get(channelID);
+        if (executor == null) {
+            executor = this.taskExecutor.get(0L);
+        }
+        return executor.submitSoTask(task, result);
     }
 }

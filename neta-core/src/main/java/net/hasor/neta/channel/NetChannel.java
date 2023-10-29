@@ -41,7 +41,6 @@ public class NetChannel implements SoChannel<NetChannel> {
     private final        NetListen                   forListen;
     protected final      AsynchronousSocketChannel   channel;
     protected final      SoContextImpl               context;
-    protected final      SoResManager                rm;
     private final        SocketAddress               localAddr;
     private final        SocketAddress               remoteAddr;
     private final        long                        createdTime;
@@ -60,7 +59,7 @@ public class NetChannel implements SoChannel<NetChannel> {
     protected final      Future<NetChannel>          closeFuture;
 
     NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
-            AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context, SoResManager rm) {
+            AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context) {
         this.channelID = channelID;
         this.forListen = forListen;
         this.createdTime = createdTime;
@@ -69,7 +68,6 @@ public class NetChannel implements SoChannel<NetChannel> {
 
         this.channel = channel;
         this.context = context;
-        this.rm = rm;
         this.localAddr = localAddr;
         this.remoteAddr = remoteAddr;
         this.closeStatus = new AtomicBoolean(false);
@@ -151,7 +149,7 @@ public class NetChannel implements SoChannel<NetChannel> {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.channel.isOpen()) {
                 SoCloseTask task = new SoCloseTask(this.channelID, this.context);
-                this.context.submitSoTask(this.rm, task, this).onCompleted(f -> {
+                this.context.submitSoTask(this.channelID, task, this).onCompleted(f -> {
                     closeFuture.completed(this);
                 }).onFailed(f -> {
                     closeFuture.failed(f.getCause());
@@ -258,7 +256,7 @@ public class NetChannel implements SoChannel<NetChannel> {
         this.wQueue.offer(wTask);
 
         if (this.wStatus.compareAndSet(false, true)) {
-            SoSndContext wContext = new SoSndContext(this.createdTime, this.context, this.rm, this.wQueue);
+            SoSndContext wContext = new SoSndContext(this.channelID, this.createdTime, this.context, this.wQueue);
 
             // queue -> sndBuffer and sending
             SoSndCopyTask task = new SoSndCopyTask(this.channelID, this.channel, this.wHandler, wContext);

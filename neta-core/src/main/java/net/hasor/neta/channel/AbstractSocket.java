@@ -14,14 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -47,28 +44,8 @@ public abstract class AbstractSocket implements AutoCloseable {
     }
 
     protected void initTcp(SoConfig config) {
-        ExecutorService ioExec = config.getIoExecutor();
-        if (ioExec == null) {
-            ThreadFactory threadFactory = ThreadUtils.threadFactory(CobbleSocket.class.getClassLoader(), "Cobble-AIO-Thread-%s", true);
-            int process = Runtime.getRuntime().availableProcessors();
-            ioExec = Executors.newFixedThreadPool(Math.min(process / 2, 2), threadFactory);
-            this.ioExec = ioExec;
-        } else {
-            this.ioExec = null;
-        }
-
-        SoExecutorFactory executorFactory = config.getTaskExecutorFactory();
-        if (executorFactory == null) {
-            executorFactory = (cfg, ctxName) -> {
-                String tempName = "Cobble[" + StringUtils.getOrDefault("default", ctxName) + "]-AIO-Workers-%s";
-                int process = Runtime.getRuntime().availableProcessors();
-                ThreadFactory threadFactory = ThreadUtils.threadFactory(CobbleSocket.class.getClassLoader(), tempName, true);
-                return Executors.newFixedThreadPool(process, threadFactory);
-            };
-        }
-
         this.config = config;
-        this.context = new SoContextImpl(config, ioExec, executorFactory);
+        this.context = new SoContextImpl(config);
         this.inited = new AtomicBoolean(false);
     }
 
