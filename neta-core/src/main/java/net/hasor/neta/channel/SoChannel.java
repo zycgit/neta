@@ -55,4 +55,10 @@ public interface SoChannel<T> {
 
     /** return close status. */
     boolean isClose();
+
+    /** set any object to SoChannel attributes */
+    void setAttribute(String key, Object value);
+
+    /** get SoChannel attributes */
+    Object getAttribute(String key);
 }

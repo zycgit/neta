@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetChannel implements SoChannel<NetChannel> {
+public class NetChannel extends AttributeChannel<NetChannel> {
     private static final Logger                      logger = Logger.getLogger(NetChannel.class);
     private final        long                        channelID;
     private final        NetListen                   forListen;
@@ -166,6 +166,7 @@ public class NetChannel implements SoChannel<NetChannel> {
     @Override
     public Future<NetChannel> closeNow() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
+            logger.info("channel(" + this.channelID + ") closeNow");
             new SoCloseTask(this.channelID, this.context).run();
         }
         this.closeFuture.completed(this);
@@ -190,9 +191,9 @@ public class NetChannel implements SoChannel<NetChannel> {
                 }
             };
 
-            ByteBuf[] sndByteBuf = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
-
-            for (ByteBuf buf : sndByteBuf) {
+            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
+            for (Object sndBuf : sndBufSet) {
+                ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
                     appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
                 }
@@ -217,9 +218,9 @@ public class NetChannel implements SoChannel<NetChannel> {
 
         Future<NetChannel> future = new BasicFuture<>();
         try {
-            ByteBuf[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
+            Object[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
-            for (ByteBuf buf : sndByteBuf) {
+            for (Object buf : sndByteBuf) {
                 Future<NetChannel> itemFuture = new BasicFuture<>();
                 new BasicFuture<>().onFailed(f -> {
                     future.failed(f.getCause());
@@ -230,9 +231,10 @@ public class NetChannel implements SoChannel<NetChannel> {
                     }
                 });
 
-                appendSoSndTask(new SoSndData(buf, itemFuture, this));
+                appendSoSndTask(new SoSndData((ByteBuf) buf, itemFuture, this));
             }
         } catch (Throwable e) {
+            logger.error("snd(" + channelID + ") failed, " + e.getMessage(), e);
             future.failed(e);
         } finally {
             this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used

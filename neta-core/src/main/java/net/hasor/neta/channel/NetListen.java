@@ -19,6 +19,8 @@ import net.hasor.cobble.concurrent.future.Future;
 
 import java.net.InetSocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -27,33 +29,39 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetListen implements SoChannel<NetListen> {
+public class NetListen extends AttributeChannel<NetListen> {
     private final   long                            channelID;
     private final   long                            createdTime;
     private         long                            lastActiveTime;
     private         long                            lastAcceptTime;
     private final   AtomicLong                      acceptCount;
     private final   Object                          acceptLock;
+    private final   Object                          closeLock;
     //
     private final   InetSocketAddress               listen;
     protected final AsynchronousServerSocketChannel channel;
     private final   PipeStackFactory                stackFactory;
     private final   SoContextImpl                   context;
     private         boolean                         suspend;
+    private final   List<NetListener>               listeners;
     //
     protected final AtomicBoolean                   closeStatus;
     protected final Future<NetListen>               closeFuture;
 
-    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel, PipeStackFactory stackFactory, SoContextImpl context) {
+    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel,//
+            PipeStackFactory stackFactory, SoContextImpl context, NetListenOptions options) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
         this.acceptCount = new AtomicLong();
         this.acceptLock = new Object();
+        this.closeLock = new Object();
         this.listen = listen;
         this.channel = channel;
         this.stackFactory = stackFactory;
         this.context = context;
+        this.suspend = options.isSuspend();
+        this.listeners = new ArrayList<>();
 
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
@@ -134,6 +142,22 @@ public class NetListen implements SoChannel<NetListen> {
     }
 
     /**
+     * add {@link NetListener}
+     */
+    public void addListener(NetListener listener) {
+        if (!this.listeners.contains(listener)) {
+            this.listeners.add(listener);
+        }
+    }
+
+    /**
+     * remove {@link NetListener}
+     */
+    public void removeListener(NetListener listener) {
+        this.listeners.remove(listener);
+    }
+
+    /**
      * return Application layer network protocol stack to use
      */
     PipeStackFactory getStackFactory() {
@@ -169,6 +193,7 @@ public class NetListen implements SoChannel<NetListen> {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
             new SoCloseTask(this.channelID, this.context).run();
         }
+
         this.closeFuture.completed(this);
         return this.closeFuture;
     }
@@ -184,6 +209,19 @@ public class NetListen implements SoChannel<NetListen> {
         synchronized (this.acceptLock) {
             this.acceptLock.notifyAll();
         }
+
+        this.context.submitSoTask(channel.getChannelID(), new DefaultSoTask() {
+            @Override
+            protected void doWork(int retryCnt) {
+                for (NetListener listener : listeners) {
+                    try {
+                        listener.accept(channel);
+                    } catch (Exception ignored) {
+
+                    }
+                }
+            }
+        }, this);
     }
 
     /**
@@ -192,6 +230,22 @@ public class NetListen implements SoChannel<NetListen> {
     final void notifyClose(NetChannel channel) {
         this.lastActiveTime = System.currentTimeMillis();
         this.acceptCount.decrementAndGet();
+
+        synchronized (this.closeLock) {
+            this.closeLock.notifyAll();
+        }
+
+        this.context.submitSoTask(channel.getChannelID(), new DefaultSoTask() {
+            @Override
+            protected void doWork(int retryCnt) {
+                for (NetListener listener : listeners) {
+                    try {
+                        listener.close(channel);
+                    } catch (Exception ignored) {
+                    }
+                }
+            }
+        }, this);
     }
 
     /** Wait for an incoming. */
@@ -202,6 +256,22 @@ public class NetListen implements SoChannel<NetListen> {
                 return true;
             } catch (InterruptedException e) {
                 return false;
+            }
+        }
+    }
+
+    /** Wait for all disconnection. */
+    public boolean waitIdle() {
+        while (true) {
+            if (this.acceptCount.get() == 0) {
+                return true;
+            }
+            synchronized (this.closeLock) {
+                try {
+                    this.closeLock.wait();
+                } catch (InterruptedException e) {
+                    return false;
+                }
             }
         }
     }

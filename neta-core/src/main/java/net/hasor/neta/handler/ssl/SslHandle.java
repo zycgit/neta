@@ -255,7 +255,6 @@ public class SslHandle {
         this.outAppData.flip();
         if (!this.outAppData.hasRemaining()) {
             this.outAppData.compact();
-            return;
         }
 
         // wrap Data to SSL Data.

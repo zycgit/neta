@@ -173,7 +173,9 @@ class SoContextImpl implements SoContext {
             } while (data != null);
 
             NetListen listen = netChannel.getSource();
-            listen.notifyClose(netChannel);
+            if (netChannel.isServer()) {
+                listen.notifyClose(netChannel);
+            }
 
             IOUtils.closeQuietly(netChannel.channel);
             IOUtils.closeQuietly(specialExecutor);

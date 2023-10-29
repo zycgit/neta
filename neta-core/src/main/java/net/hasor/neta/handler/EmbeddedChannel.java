@@ -17,7 +17,6 @@ package net.hasor.neta.handler;
 import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 import java.util.Arrays;
@@ -29,23 +28,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class EmbeddedChannel implements SoChannel<EmbeddedChannel> {
-    private static final Logger                    logger = Logger.getLogger(EmbeddedChannel.class);
-    private final        long                      channelID;
-    private final        long                      createdTime;
-    private              long                      lastActiveTime;
-    private final        boolean                   asServer;
-    private final        EmbeddedSoContext         context;
+public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
+    private final   long                      channelID;
+    private final   long                      createdTime;
+    private         long                      lastActiveTime;
+    private final   boolean                   asServer;
+    private final   EmbeddedSoContext         context;
     //    private static final SocketAddress LOCAL_ADDRESS = new EmbeddedSocketAddress();
     //    private static final SocketAddress REMOTE_ADDRESS = new EmbeddedSocketAddress();
     //
-    private final        PipeQueue<Object>         rcvDown;
-    private final        PipeQueue<Object>         sndDown;
-    protected final      PipeContextImpl           pipeCtx;
-    protected final      PipeStack<Object, Object> pipeStack;
+    private final   PipeQueue<Object>         rcvDown;
+    private final   PipeQueue<Object>         sndDown;
+    protected final PipeContextImpl           pipeCtx;
+    protected final PipeStack<Object, Object> pipeStack;
     //
-    private final        AtomicBoolean             closeStatus;
-    private final        Future<EmbeddedChannel>   closeFuture;
+    private final   AtomicBoolean             closeStatus;
+    private final   Future<EmbeddedChannel>   closeFuture;
 
     private static class EmbeddedPipeContextImpl extends PipeContextImpl {
         protected EmbeddedPipeContextImpl(EmbeddedChannel channel, SoContext soContext) {

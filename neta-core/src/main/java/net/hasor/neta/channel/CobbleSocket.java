@@ -42,11 +42,11 @@ public class CobbleSocket extends AbstractSocket {
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      *
      * @param listenPort local port for listen
-     * @param stackFactory Application layer network protocol
+     * @param pipeStack Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(int listenPort, PipeStackFactory stackFactory) throws IOException {
-        return this.listen(new InetSocketAddress(listenPort), stackFactory);
+    public synchronized NetListen listen(int listenPort, PipeStackFactory pipeStack) throws IOException {
+        return this.listen(new InetSocketAddress("0.0.0.0", listenPort), pipeStack, null);
     }
 
     /**
@@ -54,30 +54,31 @@ public class CobbleSocket extends AbstractSocket {
      *
      * @param listenAddr local address for listen
      * @param listenPort local port for listen
-     * @param stackFactory Application layer network protocol
+     * @param pipeStack Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(String listenAddr, int listenPort, PipeStackFactory stackFactory) throws IOException {
-        return this.listen(new InetSocketAddress(listenAddr, listenPort), stackFactory);
+    public synchronized NetListen listen(String listenAddr, int listenPort, PipeStackFactory pipeStack) throws IOException {
+        return this.listen(new InetSocketAddress(listenAddr, listenPort), pipeStack, null);
     }
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      *
      * @param listen local address:port for listen
-     * @param stackFactory Application layer network protocol
+     * @param pipeStack Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(InetSocketAddress listen, PipeStackFactory stackFactory) throws IOException {
+    public synchronized NetListen listen(InetSocketAddress listen, PipeStackFactory pipeStack, NetListenOptions options) throws IOException {
         this.initChannelGroup();
 
+        options = options == null ? NetListenOptions.DEFAULT : options;
         AsynchronousServerSocketChannel listenChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
         SoConfigUtils.configListen(this.context.getConfig(), listenChannel);
         listenChannel.bind(listen, 0);
 
         long channelID = SoContextImpl.nextID();
         long createdTime = System.currentTimeMillis();
-        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, stackFactory, this.context);
+        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeStack, this.context, options);
         listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
 
         this.context.openChannel(netListen);
@@ -89,35 +90,35 @@ public class CobbleSocket extends AbstractSocket {
     /**
      * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param localPort local port
-     * @param stackFactory Application layer network protocol
+     * @param pipeStack Application layer network protocol
      */
-    public Future<NetChannel> connect(int localPort, PipeStackFactory stackFactory) {
-        return this.connect(new InetSocketAddress(localPort), stackFactory);
+    public Future<NetChannel> connect(int localPort, PipeStackFactory pipeStack) {
+        return this.connect(new InetSocketAddress(localPort), pipeStack);
     }
 
     /**
      * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param remoteAddr local address
      * @param localPort local port
-     * @param stackFactory Application layer network protocol
+     * @param pipeStack Application layer network protocol
      */
-    public Future<NetChannel> connect(String remoteAddr, int localPort, PipeStackFactory stackFactory) {
-        return this.connect(new InetSocketAddress(remoteAddr, localPort), stackFactory);
+    public Future<NetChannel> connect(String remoteAddr, int localPort, PipeStackFactory pipeStack) {
+        return this.connect(new InetSocketAddress(remoteAddr, localPort), pipeStack);
     }
 
     /**
      * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
      * @param remoteAddr remoteAddr
-     * @param stackFactory Application layer network protocol
+     * @param pipeStack Application layer network protocol
      */
-    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeStackFactory stackFactory) {
+    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeStackFactory pipeStack) {
         Future<NetChannel> future = new BasicFuture<>();
         try {
             this.initChannelGroup();
 
             AsynchronousSocketChannel clientChannel = AsynchronousSocketChannel.open(this.channelGroup);
             SoConfigUtils.configSocket(this.context.getConfig(), clientChannel);
-            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, stackFactory, future));
+            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, pipeStack, future));
             logger.info("connect to " + remoteAddr);
             return future;
         } catch (Exception e) {
