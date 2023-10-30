@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class SslSocketTest {
     @Test
-    public void main() throws Exception {
+    public void realSSLSocketTest() throws Exception {
         LoggerFactory.useStdOutLogger();
         // socket config.
         SoConfig config = new SoConfig();
