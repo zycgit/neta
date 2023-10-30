@@ -121,11 +121,17 @@ class SoEventExecutor implements Closeable {
 
         int delayTime = task.getDelayTime();
         if (delayTime > 0) {
-            this.timer.newTimeout(t -> this.tasks.add(worker), delayTime, task.getDelayUnit());
+            this.timer.newTimeout(t -> {
+                this.tasks.add(worker);
+                wakeUp();
+            }, delayTime, task.getDelayUnit());
         } else {
             this.tasks.add(worker);
+            wakeUp();
         }
+    }
 
+    private void wakeUp() {
         for (Thread workerThread : this.workerThreads) {
             if (workerThread.getState() == Thread.State.WAITING) {
                 LockSupport.unpark(workerThread);

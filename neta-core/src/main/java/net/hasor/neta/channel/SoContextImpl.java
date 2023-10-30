@@ -120,7 +120,6 @@ class SoContextImpl implements SoContext {
 
     /** new channel. */
     public void openChannel(SoChannel<?> channel) {
-        logger.info("channel(" + channel.getChannelID() + ") created.");
         this.channelMap.put(channel.getChannelID(), channel);
         if (channel.isListen()) {
             this.listenList.add((NetListen) channel);

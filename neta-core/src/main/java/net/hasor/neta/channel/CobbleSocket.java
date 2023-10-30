@@ -82,7 +82,6 @@ public class CobbleSocket extends AbstractSocket {
         listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
 
         this.context.openChannel(netListen);
-
         logger.info("listen at " + listen);
         return netListen;
     }

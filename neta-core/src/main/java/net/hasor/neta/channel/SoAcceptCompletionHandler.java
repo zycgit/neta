@@ -77,7 +77,6 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         // openChannel
         long channelID = SoContextImpl.nextID();
         long createdTime = System.currentTimeMillis();
-        logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
         context.specialConfig(channelID, remoteAddr);
 
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context);
@@ -90,6 +89,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
             PipeStack<?, ?> pipeStack = this.forListen.getStackFactory().create(pipeCtx);
             channel.initPipe(pipeCtx, pipeStack);
             context.openChannel(channel);
+            logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
         } catch (Exception e) {
             IOUtils.closeQuietly(result);
             logger.error("ERROR: Accept Failed " + e.getMessage(), e);

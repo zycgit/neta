@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.logging.LoggerFactory;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
@@ -34,8 +35,10 @@ import java.util.concurrent.atomic.AtomicReference;
 public class SslSocketTest {
     @Test
     public void main() throws Exception {
+        LoggerFactory.useStdOutLogger();
         // socket config.
         SoConfig config = new SoConfig();
+        config.setNetlog(true);
         config.setSwapBuf(64, 64);
         config.setLocalBuf(128, 128);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
@@ -45,6 +48,7 @@ public class SslSocketTest {
 
         // ssl config.
         SslConfig sslConfig = new SslConfig();
+        sslConfig.setSsllog(true);
         sslConfig.setAuthType(SslAuthKeyType.PEM);
         sslConfig.setPemCertChain("ssl/ca/server.crt");
         sslConfig.setPemPrivate("ssl/ca/server.pem");

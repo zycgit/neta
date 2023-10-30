@@ -26,7 +26,7 @@ import net.hasor.neta.bytebuf.ByteBufUtil;
 public class SocketServerTest {
     public static void main(String[] args) throws Exception {
         SoConfig config = new SoConfig();
-        config.setSwapBuf(2, 2);
+        config.setSwapBuf(64, 64);
         config.setLocalBuf(32, 32);
         //        config.setSoReadTimeoutMs(6000);
         //        config.setSoKeepAlive(true);

@@ -46,6 +46,8 @@ public class SoConfig {
     private ClassLoader      classLoader;                  // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
     private int              ioThreads;                    // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
     private int              taskThreads;                  // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
+    // other
+    private boolean          netlog            = false;    // 打印网络日志
 
     public void setSwapBuf(int rcvSwapBuf, int sndSwapBuf) {
         this.rcvSwapBuf = rcvSwapBuf;
@@ -207,5 +209,13 @@ public class SoConfig {
 
     public void setTaskThreads(int taskThreads) {
         this.taskThreads = taskThreads;
+    }
+
+    public boolean isNetlog() {
+        return this.netlog;
+    }
+
+    public void setNetlog(boolean netlog) {
+        this.netlog = netlog;
     }
 }

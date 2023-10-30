@@ -93,7 +93,9 @@ public class JdkSslContext extends SslContextBasic {
         KeyManagerFactory kmf = this.createKeyManagerFactory(ks);
         TrustManagerFactory tmf = this.getTrustManagers(ks);
 
-        logger.info("ssl (" + this.channelID + ") create JdkSslContext.");
+        if (this.sslLog) {
+            logger.info("ssl(" + this.channelID + ") create JdkSslContext.");
+        }
         SSLContext context = SSLContext.getInstance(PROTOCOL);
         context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
         return context;
@@ -101,7 +103,9 @@ public class JdkSslContext extends SslContextBasic {
 
     @Override
     protected SSLEngine configSslEngine(SSLContext sslContext, SSLEngine sslEngine) {
-        logger.info("ssl (" + this.channelID + ") create SSLEngine on " + (isClient() ? "client" : "server"));
+        if (this.sslLog) {
+            logger.info("ssl(" + this.channelID + ") create SSLEngine on " + (isClient() ? "client" : "server"));
+        }
         //        SSLParameters sslParameters = SSLContext.getDefault().getSupportedSSLParameters();
         //        sslParameters.setAlgorithmConstraints();
         sslEngine.setUseClientMode(this.isClient());
@@ -120,13 +124,17 @@ public class JdkSslContext extends SslContextBasic {
             ciphers = (ciphers == null) ? DEFAULT_CIPHERS_NON_TLSV13 : ciphers;
             ciphers = filterCipherSuites(Arrays.asList(ciphers), DEFAULT_CIPHERS_NON_TLSV13, SUPPORTED_CIPHERS_NON_TLSV13);
         }
-        logger.info("ssl (" + this.channelID + ") enabled CipherSuites [" + StringUtils.join(ciphers, ", ") + "]");
+        if (this.sslLog) {
+            logger.info("ssl(" + this.channelID + ") enabled CipherSuites [" + StringUtils.join(ciphers, ", ") + "]");
+        }
         sslEngine.setEnabledCipherSuites(ciphers);
 
         // ClientAuth
         SslClientAuth clientAuth = this.sslConfig.getClientAuth();
         if (this.isServer() && clientAuth != null) {
-            logger.info("ssl (" + this.channelID + ") clientAuth = " + clientAuth);
+            if (this.sslLog) {
+                logger.info("ssl(" + this.channelID + ") clientAuth = " + clientAuth);
+            }
             switch (clientAuth) {
                 case OPTIONAL:
                     sslEngine.setWantClientAuth(true);
