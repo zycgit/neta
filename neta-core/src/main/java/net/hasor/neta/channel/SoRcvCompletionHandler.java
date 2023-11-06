@@ -97,7 +97,8 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             }
 
             // rcv close
-            context.closeChannel(this.channelID, "remote close.");
+            String msg = "rcv(" + channelID + ") close form remote.";
+            context.closeChannel(this.channelID, msg);
         }
     }
 

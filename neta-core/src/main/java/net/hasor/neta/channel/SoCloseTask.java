@@ -30,7 +30,8 @@ class SoCloseTask extends DefaultSoTask {
 
     @Override
     protected void doWork(int retryCnt) {
-        this.context.closeChannel(this.channelID, "close");
+        String msg = "channel(" + channelID + ") close form local.";
+        this.context.closeChannel(this.channelID, msg);
         this.finishTask();
     }
 }

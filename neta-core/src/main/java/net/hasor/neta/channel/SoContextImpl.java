@@ -160,12 +160,15 @@ class SoContextImpl implements SoContext {
             ids.add(channel.getChannelID());
         }
 
-        ids.forEach(channelID -> closeChannel(channelID, "closeAll "));
+        ids.forEach(channelID -> {
+            String msg = "channel(" + channelID + ") close form closeAll.";
+            closeChannel(channelID, msg);
+        });
     }
 
     /** force close network channel, like {@link SoChannel#closeNow()} */
     protected void closeChannel(long channelID, String message) {
-        logger.info("channel(" + channelID + ") close in progress, " + message);
+        logger.info(message);
         SoChannel<?> channel = this.channelMap.get(channelID);
         SoEventExecutor specialExecutor = this.taskExecutor.get(channelID);
         this.channelMap.remove(channelID);
@@ -208,8 +211,11 @@ class SoContextImpl implements SoContext {
 
     /** close network channel for error. */
     protected void closeChannel(long channelID, String message, Throwable e) {
+        if (this.config.isNetlog()) {
+            logger.error(message, e);
+        }
         this.notifyChannelError(channelID, e);
-        this.closeChannel(channelID, e.getMessage());
+        this.closeChannel(channelID, message);
     }
 
     /** test the channel has been closed */
