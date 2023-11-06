@@ -20,6 +20,7 @@ import net.hasor.cobble.concurrent.timer.Timeout;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAdapter;
 
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -183,17 +184,8 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
         try {
             //The root Buffer cannot be deallocated
-            ByteBuf rcvByteBuf = new ByteBufAdapter(this.rHandler.getRcvBuffer()) {
-                @Override
-                public void free() {
-                }
-
-                @Override
-                public void close() {
-                }
-            };
-
-            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeContext, rcvByteBuf);
+            ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
+            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeContext, new ByteBufSafe(rcvByteBuf));
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -205,6 +197,20 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             logger.error("rcv(" + this.channelID + ") invoker pipeline failed: " + e.getMessage(), e);
         } finally {
             this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+        }
+    }
+
+    private static class ByteBufSafe extends ByteBufAdapter {
+        public ByteBufSafe(ByteBuf byteBuf) {
+            super(byteBuf);
+        }
+
+        @Override
+        public void free() {
+        }
+
+        @Override
+        public void close() {
         }
     }
 
