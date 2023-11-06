@@ -79,9 +79,9 @@ public class CobbleSocket extends AbstractSocket {
         long channelID = SoContextImpl.nextID();
         long createdTime = System.currentTimeMillis();
         NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeStack, this.context, options);
-        listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
-
         this.context.openChannel(netListen);
+
+        listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
         logger.info("listen at " + listen);
         return netListen;
     }

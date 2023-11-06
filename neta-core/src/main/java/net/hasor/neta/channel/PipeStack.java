@@ -26,7 +26,7 @@ public interface PipeStack<RIN, ROUT> {
      * when connected.
      * @param pipeContext pipeContext
      */
-    default void init(PipeContext pipeContext) throws Exception {
+    default void init(PipeContext pipeContext) throws Throwable {
     }
 
     /**
@@ -35,7 +35,7 @@ public interface PipeStack<RIN, ROUT> {
      * @param rcvData received data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    ROUT[] rcvLayer(PipeContext pipeContext, RIN rcvData) throws Exception;
+    ROUT[] rcvLayer(PipeContext pipeContext, RIN rcvData) throws Throwable;
 
     /**
      * Trigger sending data
@@ -43,7 +43,14 @@ public interface PipeStack<RIN, ROUT> {
      * @param sndData send data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    ROUT[] sndLayer(PipeContext pipeContext, Object sndData) throws Exception;
+    ROUT[] sndLayer(PipeContext pipeContext, Object sndData) throws Throwable;
+
+    /**
+     * Errors from the network layer.
+     * @param pipeContext pipeContext
+     * @param soError network error.
+     */
+    void soError(PipeContext pipeContext, Throwable soError);
 
     /**
      * before close.

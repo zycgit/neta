@@ -70,7 +70,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
             PipeStack<?, ?> pipeStack = this.stackFactory.create(pipeCtx);
             channel.initPipe(pipeCtx, pipeStack);
             context.openChannel(channel);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             IOUtils.closeQuietly(this.channel);
             logger.error("connect failed " + e.getMessage(), e);
             return;

@@ -16,15 +16,17 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.concurrent.timer.Timeout;
+import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAdapter;
 
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.ClosedChannelException;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -124,12 +126,12 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return this.forListen == null;
     }
 
-    /** local {@link SocketAddress} */
+    @Override
     public SocketAddress getLocalAddr() {
         return this.localAddr;
     }
 
-    /** remote {@link SocketAddress} */
+    @Override
     public SocketAddress getRemoteAddr() {
         return this.remoteAddr;
     }
@@ -199,8 +201,21 @@ public class NetChannel extends AttributeChannel<NetChannel> {
                 }
             }
         } catch (Throwable e) {
+            // It is not executed unless the exception is thrown in PipeReceiveListener.onError(...)
             logger.error("rcv(" + this.channelID + ") invoker pipeline failed: " + e.getMessage(), e);
-            closeNow();
+        } finally {
+            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+        }
+    }
+
+    /* Receive error */
+    final void notifyError(Throwable e) {
+        this.lastRcvTime = System.currentTimeMillis();
+
+        try {
+            //The root Buffer cannot be deallocated
+            logger.error("rcv(" + this.channelID + ") " + e.getMessage(), e);
+            this.pipeStack.soError(this.pipeContext, e);
         } finally {
             this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
@@ -272,5 +287,35 @@ public class NetChannel extends AttributeChannel<NetChannel> {
                 }
             });
         }
+    }
+
+    /**
+     * Sets a timer that will fire readTimeout if no network data is received within a specified amount of time.
+     * @see SoConfig#getSoReadTimeoutMs()
+     */
+    public void setReadTimeoutTimer() {
+        SoConfig config = this.context.getConfig();
+        if (config.getSoReadTimeoutMs() > 0) {
+            this.setReadTimeoutTimer(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
+        }
+    }
+
+    /** Sets a timer that will fire readTimeout if no network data is received within a specified amount of time. */
+    public void setReadTimeoutTimer(int timeout, TimeUnit unit) {
+        final class CheckTimeout implements TimerTask {
+            private final long lastRcvTime;
+
+            public CheckTimeout(long lastRcvTime) {
+                this.lastRcvTime = lastRcvTime;
+            }
+
+            @Override
+            public void run(Timeout timeout) {
+                if (getLastRcvTime() <= this.lastRcvTime) {
+                    notifyError(new SoReadTimeoutException());
+                }
+            }
+        }
+        this.context.newTimeout(new CheckTimeout(this.lastRcvTime), timeout, unit);
     }
 }

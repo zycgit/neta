@@ -90,7 +90,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
             channel.initPipe(pipeCtx, pipeStack);
             context.openChannel(channel);
             logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             IOUtils.closeQuietly(result);
             logger.error("ERROR: Accept Failed " + e.getMessage(), e);
             return;
@@ -105,7 +105,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
-        logger.error("ERROR: Listen Failed " + e.getMessage(), e);
-        context.closeChannel(this.forListen.getChannelID(), e.getMessage());
+        String msg = "ERROR: Listen Failed " + e.getMessage();
+        context.closeChannel(this.forListen.getChannelID(), msg, e);
     }
 }

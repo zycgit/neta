@@ -18,6 +18,7 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 
 import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,6 +106,16 @@ public class NetListen extends AttributeChannel<NetListen> {
     @Override
     public boolean isClient() {
         return false;
+    }
+
+    @Override
+    public SocketAddress getLocalAddr() {
+        return this.listen;
+    }
+
+    @Override
+    public SocketAddress getRemoteAddr() {
+        return null;
     }
 
     /**
@@ -246,6 +257,9 @@ public class NetListen extends AttributeChannel<NetListen> {
                 }
             }
         }, this);
+    }
+
+    public void notifyError(Throwable e) {
     }
 
     /** Wait for an incoming. */

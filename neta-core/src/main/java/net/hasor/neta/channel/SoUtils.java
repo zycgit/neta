@@ -17,20 +17,17 @@ package net.hasor.neta.channel;
 import java.net.SocketAddress;
 
 /**
- * manage all network NetChannel and NetListen
+ * Socket Utils.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public interface SoContext {
-    /** return global config. */
-    SoConfig getConfig();
+class SoUtils {
 
-    /** default {@link SoResManager}  */
-    SoResManager getResourceManager();
-
-    /** get remote address of the channel */
-    SocketAddress getRemoteAddress(long channelID);
-
-    /** test channel is not exist or closed */
-    boolean isClose(long channelID);
+    public static SoConnectTimeoutException newTimeout(boolean isRcv, long channelID, SoContextImpl context, Throwable e) {
+        SocketAddress address = context.getRemoteAddress(channelID);
+        String errorMsg = (isRcv ? "rcv(" : "snd(") + channelID + ") Connection timed out: " + address;
+        SoConnectTimeoutException cause = new SoConnectTimeoutException(errorMsg);
+        cause.setStackTrace(e.getStackTrace());
+        return cause;
+    }
 }

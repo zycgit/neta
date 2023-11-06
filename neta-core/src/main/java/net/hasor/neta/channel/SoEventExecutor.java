@@ -24,7 +24,6 @@ import java.io.Closeable;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 
@@ -41,9 +40,8 @@ class SoEventExecutor implements Closeable {
     private final        AtomicBoolean        runTag;
     private final        Thread[]             workerThreads;
 
-    public SoEventExecutor(String ctxName, ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads) {
-        ThreadFactory threadFactory = soThreadFactory.newFactory(classLoader, "Cobble[" + ctxName + "]-AIO-Workers-%s");
-        this.timer = new HashedWheelTimer(threadFactory, 50, TimeUnit.MILLISECONDS);
+    public SoEventExecutor(String ctxName, ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads, HashedWheelTimer timer) {
+        this.timer = timer;
         this.tasks = new ConcurrentLinkedQueue<>();
         this.runTag = new AtomicBoolean(false);
         this.workerThreads = new Thread[taskThreads];

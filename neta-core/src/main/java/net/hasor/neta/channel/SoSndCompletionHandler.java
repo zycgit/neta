@@ -135,12 +135,12 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                     });
                     return;
                 } else {
-                    logger.warn("snd(" + this.channelID + ") Connection timeout.");
-                    this.context.closeChannel(this.channelID, e.getMessage());
+                    SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
+                    this.context.closeChannel(this.channelID, cause.getMessage(), cause);
                 }
             } else {
-                logger.error("snd(" + this.channelID + ") " + e.getMessage(), e);
-                this.context.closeChannel(this.channelID, e.getMessage());
+                String msg = "snd(" + this.channelID + ") " + e.getMessage();
+                this.context.closeChannel(this.channelID, msg, e);
             }
 
             submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));
@@ -150,25 +150,25 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     @Override
     public void failed(Throwable e, SoContextImpl context) {
         if (e instanceof InterruptedByTimeoutException) {
-            // rcv Close
-            logger.error("snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, e.getMessage());
+            // snd Close
+            String msg = "snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage();
+            context.closeChannel(this.channelID, msg, new SoWriteTimeoutException(msg));
 
         } else if (e instanceof ShutdownChannelGroupException) {
 
-            // rcv Close
-            logger.error("snd(" + this.channelID + ") shutdown, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, e.getMessage());
+            // snd Close
+            String msg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
+            context.closeChannel(this.channelID, msg);
         } else if (e instanceof AsynchronousCloseException) {
 
-            // rcv Close
-            logger.error("snd(" + this.channelID + ") close, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, e.getMessage());
+            // snd Close
+            String msg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
+            context.closeChannel(this.channelID, msg);
         } else {
 
-            // rcv Exception
-            logger.error("snd(" + this.channelID + ") error, msg:" + e.getMessage(), e);
-            context.closeChannel(this.channelID, e.getMessage());
+            // snd Exception
+            String msg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
+            context.closeChannel(this.channelID, msg, e);
         }
 
         submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));

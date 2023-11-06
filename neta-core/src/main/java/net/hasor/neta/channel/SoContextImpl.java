@@ -16,6 +16,8 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
+import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
@@ -37,6 +39,7 @@ class SoContextImpl implements SoContext {
     private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
     //
+    private final        HashedWheelTimer           globalTimer;
     private final        ExecutorService            ioExecutor;
     private final        Map<Long, SoEventExecutor> taskExecutor;
     private final        SoResManager               bufferManager;
@@ -55,6 +58,10 @@ class SoContextImpl implements SoContext {
             this.useSoThreadFactory = config.getThreadFactory();
         }
 
+        // timer
+        ThreadFactory timerThread = ThreadUtils.daemonThreadFactory(this.useClassLoader, "Cobble-AIO-Timer");
+        this.globalTimer = new HashedWheelTimer(timerThread, 50, TimeUnit.MILLISECONDS);
+
         // io exec
         int defaultProcess = this.config.getIoThreads();
         if (defaultProcess < 1) {
@@ -69,7 +76,7 @@ class SoContextImpl implements SoContext {
             taskWorkSize = Runtime.getRuntime().availableProcessors();
         }
         this.taskExecutor = new ConcurrentHashMap<>();
-        this.taskExecutor.put(0L, new SoEventExecutor("default", this.useClassLoader, this.useSoThreadFactory, taskWorkSize));
+        this.taskExecutor.put(0L, new SoEventExecutor("default", this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer));
 
         //
         this.bufferManager = new DefaultSoResManager(this.config);
@@ -96,6 +103,16 @@ class SoContextImpl implements SoContext {
         return Math.max(10, this.config.getConnectTimeoutMs());
     }
 
+    @Override
+    public SocketAddress getRemoteAddress(long channelID) {
+        SoChannel<?> channel = this.channelMap.get(channelID);
+        if (channel == null) {
+            return null;
+        } else {
+            return channel.getRemoteAddr();
+        }
+    }
+
     public ExecutorService getIoExecutor() {
         return this.ioExecutor;
     }
@@ -103,7 +120,7 @@ class SoContextImpl implements SoContext {
     public void specialConfig(long channelID, SocketAddress remoteAddress) {
         if (this.specialResManager(remoteAddress)) {
             int threads = this.config.getTaskThreads();
-            SoEventExecutor executor = new SoEventExecutor(String.valueOf(channelID), this.useClassLoader, this.useSoThreadFactory, threads);
+            SoEventExecutor executor = new SoEventExecutor(String.valueOf(channelID), this.useClassLoader, this.useSoThreadFactory, threads, this.globalTimer);
             this.taskExecutor.put(channelID, executor);
         }
     }
@@ -146,9 +163,8 @@ class SoContextImpl implements SoContext {
         ids.forEach(channelID -> closeChannel(channelID, "closeAll "));
     }
 
-    /** Close channel, clean up resources, and process callbacks */
-    @Override
-    public void closeChannel(long channelID, String message) {
+    /** force close network channel, like {@link SoChannel#closeNow()} */
+    protected void closeChannel(long channelID, String message) {
         logger.info("channel(" + channelID + ") close in progress, " + message);
         SoChannel<?> channel = this.channelMap.get(channelID);
         SoEventExecutor specialExecutor = this.taskExecutor.get(channelID);
@@ -190,6 +206,12 @@ class SoContextImpl implements SoContext {
         }
     }
 
+    /** close network channel for error. */
+    protected void closeChannel(long channelID, String message, Throwable e) {
+        this.notifyChannelError(channelID, e);
+        this.closeChannel(channelID, e.getMessage());
+    }
+
     /** test the channel has been closed */
     @Override
     public boolean isClose(long channelID) {
@@ -210,6 +232,20 @@ class SoContextImpl implements SoContext {
         }
     }
 
+    /** receiving new data */
+    public void notifyChannelError(long channelID, Throwable e) {
+        SoChannel<?> channel = this.channelMap.get(channelID);
+        if (channel != null) {
+            if (channel.isClient() || channel.isServer()) {
+                NetChannel netChannel = (NetChannel) channel;
+                netChannel.notifyError(e);
+            } else {
+                NetListen netListen = (NetListen) channel;
+                netListen.notifyError(e);
+            }
+        }
+    }
+
     /** asynchronously copy data from swap to rcv/snd */
     public <T> Future<T> submitSoTask(long channelID, DefaultSoTask task, T result) {
         SoEventExecutor executor = this.taskExecutor.get(channelID);
@@ -217,5 +253,10 @@ class SoContextImpl implements SoContext {
             executor = this.taskExecutor.get(0L);
         }
         return executor.submitSoTask(task, result);
+    }
+
+    /** Set up a timer */
+    protected void newTimeout(TimerTask task, long delay, TimeUnit unit) {
+        this.globalTimer.newTimeout(task, delay, unit);
     }
 }

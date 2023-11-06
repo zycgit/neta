@@ -123,27 +123,22 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 }
                 continueRcv(context.getConfig().getRetryIntervalMs());
             } else {
-                logger.error("rcv(" + this.channelID + ") Connection timeout.");
-                context.closeChannel(this.channelID, "Connection timeout.");
+                SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
+                this.context.closeChannel(this.channelID, cause.getMessage(), cause);
             }
             return;
         }
 
-        if (e instanceof ShutdownChannelGroupException) {
-
-            // rcv shutdown
-            logger.error("rcv(" + this.channelID + ") shutdown, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, e.getMessage());
-        } else if (e instanceof AsynchronousCloseException) {
+        if (e instanceof ShutdownChannelGroupException || e instanceof AsynchronousCloseException) {
 
             // rcv Close
-            logger.error("rcv(" + this.channelID + ") close, msg:" + e.getMessage());
-            context.closeChannel(this.channelID, e.getMessage());
+            String msg = "rcv(" + this.channelID + ") channel is closed " + e.getMessage();
+            context.closeChannel(this.channelID, msg, e);
         } else {
 
             // rcv Exception
-            logger.error("rcv(" + this.channelID + ") error, msg:" + e.getMessage(), e);
-            context.closeChannel(this.channelID, e.getMessage());
+            String msg = "rcv(" + this.channelID + ") " + e.getMessage();
+            context.closeChannel(this.channelID, msg, e);
         }
     }
 }

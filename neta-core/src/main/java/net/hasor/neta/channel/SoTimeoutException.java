@@ -14,23 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.net.SocketAddress;
+import java.net.ConnectException;
 
 /**
- * manage all network NetChannel and NetListen
+ * {@link ConnectException} which will be thrown if a connection could not be established because of a connection timeout.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public interface SoContext {
-    /** return global config. */
-    SoConfig getConfig();
+public class SoTimeoutException extends ConnectException {
 
-    /** default {@link SoResManager}  */
-    SoResManager getResourceManager();
+    public SoTimeoutException() {
+    }
 
-    /** get remote address of the channel */
-    SocketAddress getRemoteAddress(long channelID);
-
-    /** test channel is not exist or closed */
-    boolean isClose(long channelID);
+    public SoTimeoutException(String msg) {
+        super(msg);
+    }
 }

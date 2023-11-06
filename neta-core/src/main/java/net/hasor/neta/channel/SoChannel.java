@@ -16,6 +16,8 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 
+import java.net.SocketAddress;
+
 /**
  * Channel
  * @version : 2023-09-24
@@ -39,6 +41,12 @@ public interface SoChannel<T> {
 
     /** a connect {@link NetChannel} */
     boolean isClient();
+
+    /** local {@link SocketAddress} */
+    SocketAddress getLocalAddr();
+
+    /** get remote address of the channel */
+    SocketAddress getRemoteAddr();
 
     /**
      * close this channel.
