@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.PipeContext;
 
 import java.util.Objects;
@@ -47,14 +46,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    private static final Logger                                        logger = Logger.getLogger(PipeLayerInvocation.class);
-    private final        String                                        name;
-    private final        PipeConfig                                    config;
-    private final        AtomicBoolean                                 inited;
+    private final String                                        name;
+    private final PipeConfig                                    config;
+    private final AtomicBoolean                                 inited;
     //
-    private              PipeQueue<RCV_DOWN>                           rcvDownEnd;
-    private              PipeQueue<SND_DOWN>                           sndDownEnd;
-    private final        PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer;
+    private       PipeQueue<RCV_DOWN>                           rcvDownEnd;
+    private       PipeQueue<SND_DOWN>                           sndDownEnd;
+    private final PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer;
 
     public PipeLayerInvocation(String name, PipeConfig config, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
         Objects.requireNonNull(config, "pipeConfig is null.");
@@ -96,13 +94,14 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     }
 
     public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) throws Exception {
-        PipeStatus status = this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
-
-        rcvUp.rcvSubmit();
-        this.rcvDownEnd.sndSubmit();
-        sndUp.rcvSubmit();
-        this.sndDownEnd.sndSubmit();
-        return status;
+        try {
+            return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
+        } finally {
+            rcvUp.rcvSubmit();
+            this.rcvDownEnd.sndSubmit();
+            sndUp.rcvSubmit();
+            this.sndDownEnd.sndSubmit();
+        }
     }
 
     public PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) {

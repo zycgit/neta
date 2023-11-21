@@ -13,20 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
-import java.net.ConnectException;
+package net.hasor.neta.handler;
+import net.hasor.neta.channel.PipeContext;
 
 /**
- * Thrown to indicate that there is an error creating or accessing a Socket.
+ * Transparent conveyor belt.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoTimeoutException extends ConnectException {
-
-    public SoTimeoutException() {
-    }
-
-    public SoTimeoutException(String msg) {
-        super(msg);
+public class CourierPipeHandler<T> implements PipeHandler<T, T> {
+    @Override
+    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
+        dst.offerMessage(src.takeMessage(src.queueSize()));
+        return PipeStatus.Next;
     }
 }

@@ -22,7 +22,6 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.net.SocketAddress;
-import java.nio.channels.ClosedChannelException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -145,6 +144,13 @@ class SoContextImpl implements SoContext {
         }
     }
 
+    /** test the channel has been closed */
+    @Override
+    public boolean isClose(long channelID) {
+        SoChannel<?> channel = this.channelMap.get(channelID);
+        return channel == null || channel.isClose();
+    }
+
     /** close all socket. */
     public void closeAll(boolean now) {
         List<Long> ids = new LinkedList<>();
@@ -162,13 +168,20 @@ class SoContextImpl implements SoContext {
 
         ids.forEach(channelID -> {
             String msg = "channel(" + channelID + ") close form closeAll.";
-            closeChannel(channelID, msg);
+            if (now) {
+                unsafeCloseChannel(channelID, msg, SoCloseException.INSTANCE);
+            } else {
+                safeCloseChannel(channelID, msg, SoCloseException.INSTANCE);
+            }
         });
     }
 
-    /** force close network channel, like {@link SoChannel#closeNow()} */
-    protected void closeChannel(long channelID, String message) {
-        logger.info(message);
+    /** The network channel is forced to close, and all data not sent is discarded. */
+    protected void unsafeCloseChannel(long channelID, String message, Throwable e) {
+        if (this.config.isNetlog()) {
+            logger.error(message, e);
+        }
+
         SoChannel<?> channel = this.channelMap.get(channelID);
         SoEventExecutor specialExecutor = this.taskExecutor.get(channelID);
         this.channelMap.remove(channelID);
@@ -176,20 +189,23 @@ class SoContextImpl implements SoContext {
 
         if (channel.isClient() || channel.isServer()) {
             NetChannel netChannel = (NetChannel) channel;
-            netChannel.pipeStack.release(netChannel.pipeContext);
+            netChannel.closeStatus.set(true);
 
+            // clean wQueue
             SoSndData data;
             do {
                 data = netChannel.wQueue.poll();
                 if (data != null) {
                     try {
-                        data.failed(new ClosedChannelException());
+                        data.failed(e);
                     } catch (Exception ignored) {
 
                     }
                 }
             } while (data != null);
 
+            // release pipeStack
+            netChannel.pipeStack.release(netChannel.pipeContext);
             NetListen listen = netChannel.getSource();
             if (netChannel.isServer()) {
                 listen.notifyClose(netChannel);
@@ -209,20 +225,15 @@ class SoContextImpl implements SoContext {
         }
     }
 
-    /** close network channel for error. */
-    protected void closeChannel(long channelID, String message, Throwable e) {
-        if (this.config.isNetlog()) {
-            logger.error(message, e);
-        }
-        this.notifyChannelError(channelID, e);
-        this.closeChannel(channelID, message);
-    }
-
-    /** test the channel has been closed */
-    @Override
-    public boolean isClose(long channelID) {
+    /** The read channel is set to close immediately, and then closed until all data has been sent. */
+    protected void safeCloseChannel(long channelID, String message, Throwable e) {
         SoChannel<?> channel = this.channelMap.get(channelID);
-        return channel == null || channel.isClose();
+        if (channel.isClient() || channel.isServer()) {
+            NetChannel netChannel = (NetChannel) channel;
+            //            this.config.getSoKeepIntervalSec() 等待写入需要设置一个最大等待时间，否则可能无法关闭连接
+            //            netChannel.channel.shutdownInput(); //当度被设置为 close 之后reader 会立刻触发 unsafeCloseChannel 需要处理
+            //            netChannel.channel.shutdownOutput();
+        }
     }
 
     /** receiving new data */

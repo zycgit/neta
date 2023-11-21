@@ -98,7 +98,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
             // rcv close
             String msg = "rcv(" + channelID + ") close form remote.";
-            context.closeChannel(this.channelID, msg);
+            context.unsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
         }
     }
 
@@ -125,21 +125,23 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 continueRcv(context.getConfig().getRetryIntervalMs());
             } else {
                 SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
-                this.context.closeChannel(this.channelID, cause.getMessage(), cause);
+
+                context.notifyChannelError(this.channelID, cause);
+                context.unsafeCloseChannel(this.channelID, cause.getMessage(), cause);
             }
             return;
         }
 
+        String errorMsg = "";
         if (e instanceof ShutdownChannelGroupException || e instanceof AsynchronousCloseException) {
-
             // rcv Close
-            String msg = "rcv(" + this.channelID + ") channel is closed " + e.getMessage();
-            context.closeChannel(this.channelID, msg, e);
+            errorMsg = "rcv(" + this.channelID + ") channel is closed " + e.getMessage();
         } else {
-
             // rcv Exception
-            String msg = "rcv(" + this.channelID + ") " + e.getMessage();
-            context.closeChannel(this.channelID, msg, e);
+            errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
         }
+
+        context.notifyChannelError(this.channelID, e);
+        context.unsafeCloseChannel(this.channelID, errorMsg, e);
     }
 }

@@ -184,7 +184,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     public Future<NetListen> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.channel.isOpen()) {
-                SoCloseTask task = new SoCloseTask(this.channelID, this.context);
+                SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
                 this.context.submitSoTask(this.channelID, task, this).onCompleted(f -> {
                     closeFuture.completed(this);
                 }).onFailed(f -> {
@@ -202,7 +202,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     @Override
     public Future<NetListen> closeNow() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
-            new SoCloseTask(this.channelID, this.context).run();
+            new SoCloseTask(this.channelID, this.context, true).run();
         }
 
         this.closeFuture.completed(this);

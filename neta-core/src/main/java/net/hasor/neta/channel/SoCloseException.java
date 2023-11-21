@@ -14,19 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.net.ConnectException;
-
 /**
- * Thrown to indicate that there is an error creating or accessing a Socket.
+ *  When {@link SoChannel} is closed.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoTimeoutException extends ConnectException {
+public class SoCloseException extends SoTimeoutException {
 
-    public SoTimeoutException() {
+    public static final SoCloseException INSTANCE = new SoCloseException();
+
+    public SoCloseException() {
     }
 
-    public SoTimeoutException(String msg) {
+    public SoCloseException(String msg) {
         super(msg);
     }
 }

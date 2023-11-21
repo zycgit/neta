@@ -13,20 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
-import java.net.ConnectException;
+package net.hasor.neta.handler;
+import net.hasor.neta.channel.SoChannel;
+
+import java.net.SocketAddress;
 
 /**
- * Thrown to indicate that there is an error creating or accessing a Socket.
+ * Base class for {@link SoChannel} implementations that are used in an embedded fashion.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoTimeoutException extends ConnectException {
-
-    public SoTimeoutException() {
-    }
-
-    public SoTimeoutException(String msg) {
-        super(msg);
+public class EmbeddedSocketAddress extends SocketAddress {
+    @Override
+    public String toString() {
+        return "embedded";
     }
 }

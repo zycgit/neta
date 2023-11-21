@@ -85,7 +85,9 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     @Override
     public void completed(Integer result, SoContextImpl context) {
-        logger.debug("snd(" + this.channelID + ") size:" + result);
+        if (logger.isDebugEnabled()) {
+            logger.debug("snd(" + this.channelID + ") size:" + result);
+        }
 
         this.sndSize += result;
 
@@ -136,11 +138,15 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                     return;
                 } else {
                     SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
-                    this.context.closeChannel(this.channelID, cause.getMessage(), cause);
+
+                    this.context.notifyChannelError(this.channelID, cause);
+                    this.context.unsafeCloseChannel(this.channelID, cause.getMessage(), cause);
                 }
             } else {
                 String msg = "snd(" + this.channelID + ") " + e.getMessage();
-                this.context.closeChannel(this.channelID, msg, e);
+
+                this.context.notifyChannelError(this.channelID, e);
+                this.context.unsafeCloseChannel(this.channelID, msg, e);
             }
 
             submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));
@@ -149,27 +155,26 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
+        String errorMsg;
+        Throwable cause = e;
+
         if (e instanceof InterruptedByTimeoutException) {
             // snd Close
-            String msg = "snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage();
-            context.closeChannel(this.channelID, msg, new SoWriteTimeoutException(msg));
-
+            errorMsg = "snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage();
+            cause = new SoWriteTimeoutException(errorMsg);
         } else if (e instanceof ShutdownChannelGroupException) {
-
             // snd Close
-            String msg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
-            context.closeChannel(this.channelID, msg);
+            errorMsg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
         } else if (e instanceof AsynchronousCloseException) {
-
             // snd Close
-            String msg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
-            context.closeChannel(this.channelID, msg);
+            errorMsg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
         } else {
-
             // snd Exception
-            String msg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
-            context.closeChannel(this.channelID, msg, e);
+            errorMsg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
         }
+
+        context.notifyChannelError(this.channelID, cause);
+        context.unsafeCloseChannel(this.channelID, errorMsg, cause);
 
         submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));
     }

@@ -22,16 +22,22 @@ package net.hasor.neta.channel;
 class SoCloseTask extends DefaultSoTask {
     private final long          channelID;
     private final SoContextImpl context;
+    private final boolean       force;
 
-    public SoCloseTask(long channelID, SoContextImpl context) {
+    public SoCloseTask(long channelID, SoContextImpl context, boolean force) {
         this.channelID = channelID;
         this.context = context;
+        this.force = force;
     }
 
     @Override
     protected void doWork(int retryCnt) {
         String msg = "channel(" + channelID + ") close form local.";
-        this.context.closeChannel(this.channelID, msg);
+        if (this.force) {
+            this.context.unsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+        } else {
+            this.context.safeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+        }
         this.finishTask();
     }
 }

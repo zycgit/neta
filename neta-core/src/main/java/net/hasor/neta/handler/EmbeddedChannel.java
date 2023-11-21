@@ -19,6 +19,7 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
 
+import java.net.SocketAddress;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -29,21 +30,22 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
-    private final   long                      channelID;
-    private final   long                      createdTime;
-    private         long                      lastActiveTime;
-    private final   boolean                   asServer;
-    private final   EmbeddedSoContext         context;
-    //    private static final SocketAddress LOCAL_ADDRESS = new EmbeddedSocketAddress();
-    //    private static final SocketAddress REMOTE_ADDRESS = new EmbeddedSocketAddress();
+    private final        long                      channelID;
+    private final        long                      createdTime;
+    private              long                      lastActiveTime;
+    private final        boolean                   asServer;
+    private final        EmbeddedSoContext         context;
+    private static final SocketAddress             LOCAL_ADDRESS  = new EmbeddedSocketAddress();
+    private static final SocketAddress             REMOTE_ADDRESS = new EmbeddedSocketAddress();
     //
-    private final   PipeQueue<Object>         rcvDown;
-    private final   PipeQueue<Object>         sndDown;
-    protected final PipeContextImpl           pipeCtx;
-    protected final PipeStack<Object, Object> pipeStack;
+    private final        PipeQueue<Object>         rcvDown;
+    private              Throwable                 rcvError;
+    private final        PipeQueue<Object>         sndDown;
+    protected final      PipeContextImpl           pipeCtx;
+    protected final      PipeStack<Object, Object> pipeStack;
     //
-    private final   AtomicBoolean             closeStatus;
-    private final   Future<EmbeddedChannel>   closeFuture;
+    private final        AtomicBoolean             closeStatus;
+    private final        Future<EmbeddedChannel>   closeFuture;
 
     private static class EmbeddedPipeContextImpl extends PipeContextImpl {
         protected EmbeddedPipeContextImpl(EmbeddedChannel channel, SoContext soContext) {
@@ -64,15 +66,23 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
             this.sndDown = new PipeQueue<>(-1);
             this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
             this.pipeStack = stackFactory.create(this.pipeCtx);
-        } catch (Exception e) {
+        } catch (Throwable e) {
             throw ExceptionUtils.toRuntime(e);
         }
 
         PipeChainRoot chainRoot = (PipeChainRoot) this.pipeStack;
         if (chainRoot.getListener() == null) {
-            chainRoot.bindListener((channel, data) -> {
-                this.rcvDown.offerMessage(data);
-                this.rcvDown.sndSubmit();
+            chainRoot.bindListener(new PipeReceiveListener<Object>() {
+                @Override
+                public void onReceive(SoChannel<?> channel, Object data) {
+                    rcvDown.offerMessage(data);
+                    rcvDown.sndSubmit();
+                }
+
+                @Override
+                public void onError(SoChannel<?> channel, Throwable e) {
+                    rcvError = e;
+                }
             });
         }
 
@@ -108,6 +118,16 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     @Override
     public boolean isClient() {
         return !this.asServer;
+    }
+
+    @Override
+    public SocketAddress getLocalAddr() {
+        return LOCAL_ADDRESS;
+    }
+
+    @Override
+    public SocketAddress getRemoteAddr() {
+        return REMOTE_ADDRESS;
     }
 
     @Override
@@ -150,6 +170,21 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
             closeNow();
             throw ExceptionUtils.toRuntime(e);
         }
+    }
+
+    /** Receive data protocol layer error */
+    public boolean isRcvError() {
+        return this.rcvError != null;
+    }
+
+    /** Get the possible received data protocol layer error */
+    public Throwable getRcvError() {
+        return this.rcvError;
+    }
+
+    /** Clear the RcvError status. */
+    public void clearRcvError() {
+        this.rcvError = null;
     }
 
     /**

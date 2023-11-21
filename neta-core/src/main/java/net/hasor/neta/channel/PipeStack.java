@@ -50,7 +50,7 @@ public interface PipeStack<RIN, ROUT> {
      * @param pipeContext pipeContext
      * @param soError network error.
      */
-    void soError(PipeContext pipeContext, Throwable soError);
+    ROUT[] soError(PipeContext pipeContext, Throwable soError);
 
     /**
      * before close.

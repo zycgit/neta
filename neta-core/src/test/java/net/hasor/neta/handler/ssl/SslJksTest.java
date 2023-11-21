@@ -25,15 +25,14 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslPipeTest {
+public class SslJksTest {
     @Test
-    public void sslHandshakeTest_1() {
+    public void sslJKSTest_1() {
         SslConfig sslConfig = new SslConfig();
-        sslConfig.setAuthType(SslAuthKeyType.PEM);
-        sslConfig.setPemCertChain("ssl/ca/server.crt");
-        sslConfig.setPemPrivate("ssl/ca/server.pem");
+        sslConfig.setAuthType(SslAuthKeyType.JKS);
+        sslConfig.setJksResource("ssl/jks/local.jks");
+        sslConfig.setKeyPassword("123456");
         sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
-        sslConfig.setAppProtocol(new String[] { "SPDY", "HTTP1.1", "HTTP2" });
 
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
@@ -43,7 +42,7 @@ public class SslPipeTest {
                 // SSL
                 .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
                 // bytes <-> String
-                .nextTo("String", pipeConfig, SslPipeTest::doDecoder1, SslPipeTest::doEncoder1)
+                .nextTo("String", pipeConfig, SslPemTest::doDecoder1, SslPemTest::doEncoder1)
                 // create Stack
                 .buildFactory();
 

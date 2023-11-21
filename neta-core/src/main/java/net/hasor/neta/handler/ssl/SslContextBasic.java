@@ -164,7 +164,7 @@ public abstract class SslContextBasic implements SslContext {
     /** create SSLEngine */
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws GeneralSecurityException;
 
-    private synchronized boolean tryHandshake(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    private synchronized boolean tryHandshake(boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslHandler != null && this.sslHandler.isHandshake()) {
             return true; // The handshake has been successful, and the SSL data decryption/encryption is processed
         }
@@ -176,7 +176,7 @@ public abstract class SslContextBasic implements SslContext {
         }
 
         // handshake requests
-        this.sslHandler.handshake(rcvUp, rcvDown, sndUp, sndDown);
+        this.sslHandler.handshake(isRcv, rcvUp, rcvDown, sndUp, sndDown);
 
         // Handshake successful
         return this.sslHandler.isHandshake(); // We've just completed the handshake, and we'll handle the SSL decryption/encryption
@@ -191,7 +191,7 @@ public abstract class SslContextBasic implements SslContext {
             return;
         }
 
-        if (this.tryHandshake(rcvUp, rcvDown, sndUp, sndDown)) {
+        if (this.tryHandshake(true, rcvUp, rcvDown, sndUp, sndDown)) {
             this.sslHandler.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
         }
     }
@@ -205,7 +205,7 @@ public abstract class SslContextBasic implements SslContext {
             return;
         }
 
-        if (this.tryHandshake(rcvUp, rcvDown, sndUp, sndDown)) {
+        if (this.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
             this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
         }
     }

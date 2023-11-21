@@ -106,6 +106,8 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
     @Override
     public void failed(Throwable e, SoContextImpl context) {
         String msg = "ERROR: Listen Failed " + e.getMessage();
-        context.closeChannel(this.forListen.getChannelID(), msg, e);
+
+        context.notifyChannelError(this.forListen.getChannelID(), e);
+        context.unsafeCloseChannel(this.forListen.getChannelID(), msg, e);
     }
 }

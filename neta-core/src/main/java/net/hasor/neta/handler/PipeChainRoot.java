@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
@@ -56,7 +57,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
     }
 
     @Override
-    public void init(PipeContext pipeContext) throws Exception {
+    public void init(PipeContext pipeContext) throws Throwable {
         for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
             layer.initLayer(pipeContext);
         }
@@ -70,10 +71,12 @@ class PipeChainRoot implements PipeStack<Object, Object> {
     }
 
     @Override
-    public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) throws Exception {
+    public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) {
         try {
-            this.rootRcvUp.offerMessage(rcvData);
-            this.rootRcvUp.sndSubmit();
+            if (rcvData != null) {
+                this.rootRcvUp.offerMessage(rcvData);
+                this.rootRcvUp.sndSubmit();
+            }
 
             // doPipeline
             PipeStatus status;
@@ -101,14 +104,16 @@ class PipeChainRoot implements PipeStack<Object, Object> {
                 }
             } while (needRestart);
 
-            // triggerListener
+            // triggerListener onReceive/onError
             PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
+
+            // 1st onReceive
             if (triggerListener && rcvDown.hasMore()) {
                 if (this.listener == null) {
                     // trigger tail. print event data to sto
                     while (rcvDown.hasMore()) {
                         Object msg = rcvDown.takeMessage();
-                        logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event : " + msg);
+                        logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event: " + msg);
                     }
                 } else {
                     // trigger the listener event.
@@ -120,6 +125,16 @@ class PipeChainRoot implements PipeStack<Object, Object> {
                 rcvDown.rcvSubmit();
             }
 
+            // 2st onError
+            Throwable ctxError = pipeContext.flash(RCV_ERROR_TAG);
+            if (ctxError != null) {
+                if (this.listener == null) {
+                    logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+                } else {
+                    this.listener.onError(pipeContext.channel(), ctxError);
+                }
+            }
+
             // result
             PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
             if (sndDown.hasMore()) {
@@ -129,13 +144,23 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             } else {
                 return EMPTY;
             }
+        } catch (Throwable e) {
+            // triggerListener onError
+            if (this.listener == null) {
+                // trigger tail. print error data to sto
+                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + e.getMessage(), e);
+            } else {
+                // trigger the listener event.
+                this.listener.onError(pipeContext.channel(), e);
+            }
+            return ArrayUtils.EMPTY_OBJECT_ARRAY;
         } finally {
             ((PipeContextImpl) pipeContext).clearFlash();
         }
     }
 
     @Override
-    public Object[] sndLayer(PipeContext pipeContext, Object sndData) throws Exception {
+    public Object[] sndLayer(PipeContext pipeContext, Object sndData) throws Throwable {
         try {
             if (!this.rootSndUp.offerMessage(sndData)) {
                 long channelID = pipeContext.channel().getChannelID();
@@ -183,7 +208,13 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         }
     }
 
-    private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws Exception {
+    @Override
+    public Object[] soError(PipeContext pipeContext, Throwable soError) {
+        pipeContext.flash(RCV_ERROR_TAG, soError);
+        return this.rcvLayer(pipeContext, null);
+    }
+
+    private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws Throwable {
         //                 PipeLayer(0)                    PipeLayer (1)
         //          /------------------------\      /------------------------\
         //          |                        |      |                        |
@@ -201,7 +232,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         PipeStatus status;
         do {
             PipeLayerInvocation layer = this.layers.get(i);
-            Exception ctxError = pipeContext.flash(errorTag);
+            Throwable ctxError = pipeContext.flash(errorTag);
 
             try {
                 if (ctxError == null) {
@@ -209,7 +240,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
                 } else {
                     status = layer.doError(pipeContext, isRcv, ctxError, layer.createExceptionHandler(errorTag, pipeContext, useRcvUp, useSndUp));
                 }
-            } catch (Exception e) {
+            } catch (Throwable e) {
                 String msg = isRcv ? "rcv" : "snd";
                 msg += "(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " an error has occurred " + e.getMessage();
                 logger.error(msg, e);

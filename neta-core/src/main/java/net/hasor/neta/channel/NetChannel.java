@@ -49,6 +49,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     private final        long                        createdTime;
     private              long                        lastSndTime;
     private              long                        lastRcvTime;
+    private              long                        lastNotifyRcvRetryTime;
     //
     private final        SoRcvCompletionHandler      rHandler;
     protected final      Queue<SoSndData>            wQueue;
@@ -151,7 +152,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     public Future<NetChannel> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.channel.isOpen()) {
-                SoCloseTask task = new SoCloseTask(this.channelID, this.context);
+                SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
                 this.context.submitSoTask(this.channelID, task, this).onCompleted(f -> {
                     closeFuture.completed(this);
                 }).onFailed(f -> {
@@ -170,7 +171,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     public Future<NetChannel> closeNow() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
             logger.info("channel(" + this.channelID + ") closeNow");
-            new SoCloseTask(this.channelID, this.context).run();
+            new SoCloseTask(this.channelID, this.context, true).run();
         }
         this.closeFuture.completed(this);
         return this.closeFuture;
@@ -180,6 +181,12 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     final void notifyRcv(int retryCnt) {
         if (retryCnt == 0) {
             this.lastRcvTime = System.currentTimeMillis();
+            this.lastNotifyRcvRetryTime = 0;
+        }
+
+        if (retryCnt > 3 && (this.lastNotifyRcvRetryTime + 3000) < System.currentTimeMillis()) {
+            logger.info("rcv(" + this.channelID + ") the receive buffer is full, ");
+            this.lastNotifyRcvRetryTime = System.currentTimeMillis();
         }
 
         try {
@@ -194,7 +201,38 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             }
         } catch (Throwable e) {
             // It is not executed unless the exception is thrown in PipeReceiveListener.onError(...)
-            logger.error("rcv(" + this.channelID + ") invoker pipeline failed: " + e.getMessage(), e);
+            String msg = "invoker pipeline failed: " + e.getMessage();
+            logger.error("rcv(" + this.channelID + ") " + msg, e);
+
+            this.closeStatus.set(true);
+            this.context.unsafeCloseChannel(this.channelID, msg, e);
+        } finally {
+            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+        }
+    }
+
+    /* Receive error */
+    final void notifyError(Throwable e) {
+        if (!(e instanceof SoReadTimeoutException)) {
+            this.lastRcvTime = System.currentTimeMillis();
+        }
+
+        try {
+            //The root Buffer cannot be deallocated
+            Object[] sndBufSet = this.pipeStack.soError(this.pipeContext, e);
+            for (Object sndBuf : sndBufSet) {
+                ByteBuf buf = (ByteBuf) sndBuf;
+                if (buf.hasReadable()) {
+                    appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
+                }
+            }
+        } catch (Throwable ee) {
+            // It is not executed unless the exception is thrown in PipeReceiveListener.onError(...)
+            String msg = "invoker pipeline failed: " + e.getMessage();
+            logger.error("rcv(" + this.channelID + ") " + msg, e);
+
+            this.closeStatus.set(true);
+            this.context.unsafeCloseChannel(this.channelID, msg, e);
         } finally {
             this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
@@ -211,19 +249,6 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
         @Override
         public void close() {
-        }
-    }
-
-    /* Receive error */
-    final void notifyError(Throwable e) {
-        this.lastRcvTime = System.currentTimeMillis();
-
-        try {
-            //The root Buffer cannot be deallocated
-            logger.error("rcv(" + this.channelID + ") " + e.getMessage(), e);
-            this.pipeStack.soError(this.pipeContext, e);
-        } finally {
-            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
     }
 
@@ -299,29 +324,33 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * Sets a timer that will fire readTimeout if no network data is received within a specified amount of time.
      * @see SoConfig#getSoReadTimeoutMs()
      */
-    public void setReadTimeoutTimer() {
+    public void setReadTimeout() {
         SoConfig config = this.context.getConfig();
         if (config.getSoReadTimeoutMs() > 0) {
-            this.setReadTimeoutTimer(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
+            this.setReadTimeout(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
         }
     }
 
     /** Sets a timer that will fire readTimeout if no network data is received within a specified amount of time. */
-    public void setReadTimeoutTimer(int timeout, TimeUnit unit) {
+    public void setReadTimeout(int timeout, TimeUnit unit) {
         final class CheckTimeout implements TimerTask {
             private final long lastRcvTime;
+            private final long waitTimeMs;
 
-            public CheckTimeout(long lastRcvTime) {
+            public CheckTimeout(long lastRcvTime, long waitTimeMs) {
                 this.lastRcvTime = lastRcvTime;
+                this.waitTimeMs = waitTimeMs;
             }
 
             @Override
             public void run(Timeout timeout) {
                 if (getLastRcvTime() <= this.lastRcvTime) {
-                    notifyError(new SoReadTimeoutException());
+                    notifyError(new SoReadTimeoutException("no data was received with " + this.waitTimeMs + " milliseconds."));
                 }
             }
         }
-        this.context.newTimeout(new CheckTimeout(this.lastRcvTime), timeout, unit);
+
+        long waitTimeMs = unit.toMillis(timeout);
+        this.context.newTimeout(new CheckTimeout(this.lastRcvTime, waitTimeMs), timeout, unit);
     }
 }

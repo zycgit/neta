@@ -18,7 +18,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.ClosedChannelException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
@@ -62,9 +61,8 @@ class SoSndCopyTask extends DefaultSoTask {
 
         // channel is close
         if (context.isClose(this.channelID)) {
-            ClosedChannelException e = new ClosedChannelException();
-            channelClose(e);
-            this.failedTask(e);
+            channelClose(SoCloseException.INSTANCE);
+            this.failedTask(SoCloseException.INSTANCE);
             return;
         }
 

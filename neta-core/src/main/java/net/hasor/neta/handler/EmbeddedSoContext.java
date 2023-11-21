@@ -17,6 +17,7 @@ package net.hasor.neta.handler;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
+import java.net.SocketAddress;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
@@ -57,6 +58,16 @@ public class EmbeddedSoContext implements SoContext {
         return this.defaultRm;
     }
 
+    @Override
+    public SocketAddress getRemoteAddress(long channelID) {
+        SoChannel<?> channel = this.channelMap.get(channelID);
+        if (channel == null || channel.isClose()) {
+            return null;
+        } else {
+            return channel.getRemoteAddr();
+        }
+    }
+
     /** new channel. */
     public void openChannel(SoChannel<?> channel) {
         logger.info("channel(" + channel.getChannelID() + ") created.");
@@ -70,8 +81,8 @@ public class EmbeddedSoContext implements SoContext {
         return channel == null || channel.isClose();
     }
 
-    @Override
-    public void closeChannel(long channelID, String message) {
+    /** force close network channel, like {@link SoChannel#closeNow()} */
+    protected void closeChannel(long channelID, String message) {
         logger.info("channel(" + channelID + ") close in progress, " + message);
         SoChannel<?> channel = this.channelMap.get(channelID);
         this.channelMap.remove(channelID);

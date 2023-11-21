@@ -21,7 +21,8 @@ import net.hasor.neta.channel.SoChannel;
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
  */
-@FunctionalInterface
 public interface PipeReceiveListener<T> {
     void onReceive(SoChannel<?> channel, T data);
+
+    void onError(SoChannel<?> channel, Throwable e);
 }
