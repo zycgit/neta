@@ -19,8 +19,8 @@ import java.nio.ByteBuffer;
 
 /**
  * 基于 NioChunk 的 ByteBuf 接口实现。
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public class SliceNioByteBuf extends AbstractByteBuf {
     protected     NioChunk          data;

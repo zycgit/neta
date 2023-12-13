@@ -18,8 +18,8 @@ import java.nio.ByteBuffer;
 
 /**
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     protected final int               initialCapacityByDefault;
@@ -51,7 +51,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf buffer() {
-        return this.buffer(this.initialCapacityByDefault, -1);
+        return this.buffer(this.initialCapacityByDefault, Integer.MAX_VALUE);
     }
 
     @Override
@@ -61,7 +61,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf arrayBuffer() {
-        return this.arrayBuffer(this.initialCapacityByDefault, -1);
+        return this.arrayBuffer(this.initialCapacityByDefault, Integer.MAX_VALUE);
     }
 
     @Override
@@ -86,7 +86,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf heapBuffer() {
-        return this.heapBuffer(this.initialCapacityByDefault, -1);
+        return this.heapBuffer(this.initialCapacityByDefault, Integer.MAX_VALUE);
     }
 
     @Override
@@ -101,7 +101,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf directBuffer() {
-        return this.directBuffer(this.initialCapacityByDefault, -1);
+        return this.directBuffer(this.initialCapacityByDefault, Integer.MAX_VALUE);
     }
 
     @Override
@@ -116,7 +116,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf pooledBuffer() {
-        return this.pooledBuffer(this.initialCapacityByDefault, -1, this.sliceSizeByDefault);
+        return this.pooledBuffer(this.initialCapacityByDefault, Integer.MAX_VALUE, this.sliceSizeByDefault);
     }
 
     @Override
@@ -126,7 +126,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf pooledHeapBuffer() {
-        return this.pooledHeapBuffer(this.initialCapacityByDefault, -1, this.sliceSizeByDefault);
+        return this.pooledHeapBuffer(this.initialCapacityByDefault, Integer.MAX_VALUE, this.sliceSizeByDefault);
     }
 
     @Override

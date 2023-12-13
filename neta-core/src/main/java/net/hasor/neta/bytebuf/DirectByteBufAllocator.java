@@ -16,8 +16,8 @@
 package net.hasor.neta.bytebuf;
 /**
  * 基于 堆外内存的 ByteBuf 接口实现。
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public class DirectByteBufAllocator extends AbstractByteBufAllocator {
     /** Create new instance */
@@ -42,6 +42,6 @@ public class DirectByteBufAllocator extends AbstractByteBufAllocator {
 
     @Override
     public ByteBuf pooledBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
-        return this.pooledDirectBuffer(initialCapacity, maxCapacity);
+        return this.pooledDirectBuffer(initialCapacity, maxCapacity, sliceSize);
     }
 }

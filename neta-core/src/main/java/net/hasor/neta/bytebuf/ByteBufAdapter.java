@@ -424,6 +424,11 @@ public class ByteBufAdapter implements ByteBuf {
         return this.byteBuf.read(dst);
     }
 
+    @Override
+    public int read(ByteBuf dst, int len) {
+        return this.byteBuf.read(dst, len);
+    }
+
     //    @Override
     //    public int read(ByteBuf dest, int off, int len) {
     //        return this.byteBuf.read(dest, off, len);

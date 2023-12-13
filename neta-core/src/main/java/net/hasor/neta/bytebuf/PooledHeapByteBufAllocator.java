@@ -16,8 +16,8 @@
 package net.hasor.neta.bytebuf;
 /**
  * ByteBufAllocator 接口实现用于创建池化的堆 ByteBuf
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public class PooledHeapByteBufAllocator extends AbstractByteBufAllocator {
     /** Create new instance */
@@ -42,6 +42,6 @@ public class PooledHeapByteBufAllocator extends AbstractByteBufAllocator {
 
     @Override
     public ByteBuf pooledBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
-        return this.pooledHeapBuffer(initialCapacity, maxCapacity);
+        return this.pooledHeapBuffer(initialCapacity, maxCapacity, sliceSize);
     }
 }

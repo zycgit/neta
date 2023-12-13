@@ -22,8 +22,8 @@ import static net.hasor.neta.bytebuf.Bits.*;
 
 /**
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public abstract class AbstractByteBuf implements ByteBuf {
     protected final ByteBufAllocator alloc;
@@ -37,7 +37,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     protected AbstractByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;
-        this.maxCapacity = maxCapacity;
+        this.maxCapacity = maxCapacity == -1 ? Integer.MAX_VALUE : maxCapacity;
         this.isFree = false;
     }
 
@@ -91,7 +91,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
     protected void recycleByteBuf() {
     }
 
-    /**  markedWriterIndex 向前推进，有更多的数据可读 */
+    /** markedWriterIndex 向前推进，有更多的数据可读 */
     protected void receivedBytes(int lastMarkedWriter, int currentMarkedWriter) {
     }
 
@@ -107,7 +107,7 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public int writableBytes() {
-        return this.capacity() - (this.writerIndex() - this.markedReaderIndex);
+        return this.getMaxCapacity() - (this.writerIndex() - this.markedReaderIndex);
     }
 
     @Override
@@ -120,7 +120,8 @@ public abstract class AbstractByteBuf implements ByteBuf {
     // 2. 移动 writerIndex 指针到 writableBytes 字节数之后
     // 3. 返回 writerIndex 变化前的值
     protected synchronized int nextWritable(int writableBytes) {
-        if (writableBytes > writableBytes()) {
+        int curLimit = this.capacity() - (this.writerIndex() - this.markedReaderIndex);
+        if (writableBytes > curLimit) {
             int targetCapacity = (this.writerIndex + writableBytes) - this.markedReaderIndex;
             this.extendByteBuf(targetCapacity);
         }
@@ -545,22 +546,25 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public int read(ByteBuf dst) {
+    public int read(ByteBuf dst, int len) {
         int copied = 0;
         int srcReadableBytes;
         byte[] buf = new byte[4096];
+        len = len < 0 ? this.readableBytes() : len;
 
         while (true) {
             if ((srcReadableBytes = this.readableBytes()) == 0 || !dst.hasWritable()) {
                 break;
             }
 
-            int len = Math.min(dst.writableBytes(), Math.min(buf.length, srcReadableBytes));
-            int readBytes = this.readBytes(buf, 0, len);
+            int copyBufSize = (buf.length + copied) > len ? (len - copied) : buf.length;
+
+            int copyLen = Math.min(dst.writableBytes(), Math.min(copyBufSize, srcReadableBytes));
+            int readBytes = this.readBytes(buf, 0, copyLen);
             if (readBytes <= 0) {
                 break;
             }
-            dst.writeBytes(buf, copied, readBytes);
+            dst.writeBytes(buf, 0, readBytes);
             copied += readBytes;
         }
 

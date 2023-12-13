@@ -522,4 +522,50 @@ public class ArrayByteBufTest {
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
     }
+
+    @Test
+    public void readBufTest1() {
+        byte[] cacheData = RandomUtils.nextBytes(100);
+        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        srcBuf.writeBytes(cacheData);
+        srcBuf.markWriter();
+
+        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        srcBuf.read(dstBuf, 5);
+        dstBuf.markWriter();
+
+        assert srcBuf.readableBytes() == 95;
+        assert dstBuf.readableBytes() == 5;
+    }
+
+    @Test
+    public void readBufTest2() throws NoSuchAlgorithmException {
+        byte[] cacheData = RandomUtils.nextBytes(8192);
+        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        srcBuf.writeBytes(cacheData);
+        srcBuf.markWriter();
+
+        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        srcBuf.read(dstBuf, 5000);
+        dstBuf.markWriter();
+
+        assert srcBuf.readableBytes() == 8192 - 5000;
+        assert dstBuf.readableBytes() == 5000;
+
+        //
+        byte[] array1 = new byte[5000];
+        System.arraycopy(cacheData, 0, array1, 0, 5000);
+        String array1Hash = MD5.encodeMD5(array1);
+
+        byte[] array2 = new byte[5000];
+        srcBuf.resetReader();
+        srcBuf.readBytes(array2);
+        String array2Hash = MD5.encodeMD5(array2);
+
+        byte[] array3 = dstBuf.array();
+        String array3Hash = MD5.encodeMD5(array3);
+
+        assert array1Hash.equals(array2Hash);
+        assert array2Hash.equals(array3Hash);
+    }
 }
