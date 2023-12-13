@@ -22,8 +22,8 @@ import java.nio.channels.*;
 
 /**
  * received Handler
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
     private static final Logger                    logger = Logger.getLogger(SoRcvCompletionHandler.class);

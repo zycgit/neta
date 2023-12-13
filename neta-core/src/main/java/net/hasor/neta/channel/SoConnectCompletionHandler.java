@@ -60,9 +60,10 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         long createdTime = System.currentTimeMillis();
         context.specialConfig(channelID, this.remoteAddress);
 
+        SoSndContext wContext = new SoSndContext(channelID, createdTime, context);
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, this.channel, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, this.channel, context);
-        NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, context);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, this.channel, wContext);
+        NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, wContext);
 
         // init and pipe
         try {

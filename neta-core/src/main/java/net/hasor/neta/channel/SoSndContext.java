@@ -17,9 +17,10 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Wrapper bean to reduce the number of {@link SoSndCopyTask} arguments
+ * send Data context
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -29,11 +30,11 @@ class SoSndContext {
     private final SoContextImpl    context;
     private final Queue<SoSndData> wQueue;
 
-    public SoSndContext(long channelID, long createdTime, SoContextImpl context, Queue<SoSndData> wQueue) {
+    public SoSndContext(long channelID, long createdTime, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.context = context;
-        this.wQueue = wQueue;
+        this.wQueue = new ConcurrentLinkedQueue<>();
     }
 
     /**
@@ -50,11 +51,36 @@ class SoSndContext {
         return this.wQueue.poll();
     }
 
+    /** purge hasn't sent data */
+    public void purge(Throwable e) {
+        SoSndData data;
+        do {
+            data = this.wQueue.poll();
+            if (data != null) {
+                try {
+                    data.failed(e);
+                } catch (Exception ignored) {
+
+                }
+            }
+        } while (data != null);
+    }
+
     /**
      * peek data form wQueue
      */
     public SoSndData peekData() {
         return this.wQueue.peek();
+    }
+
+    /** offer data to send */
+    public void offer(SoSndData sndData) {
+        this.wQueue.offer(sndData);
+    }
+
+    /** test wQueue is empty */
+    public boolean isEmpty() {
+        return this.wQueue.isEmpty();
     }
 
     /**

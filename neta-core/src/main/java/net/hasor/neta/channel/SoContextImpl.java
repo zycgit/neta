@@ -192,17 +192,7 @@ class SoContextImpl implements SoContext {
             netChannel.closeStatus.set(true);
 
             // clean wQueue
-            SoSndData data;
-            do {
-                data = netChannel.wQueue.poll();
-                if (data != null) {
-                    try {
-                        data.failed(e);
-                    } catch (Exception ignored) {
-
-                    }
-                }
-            } while (data != null);
+            netChannel.wContext.purge(e);
 
             // release pipeStack
             netChannel.pipeStack.release(netChannel.pipeContext);

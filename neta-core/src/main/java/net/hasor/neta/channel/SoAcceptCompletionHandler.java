@@ -79,9 +79,10 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         long createdTime = System.currentTimeMillis();
         context.specialConfig(channelID, remoteAddr);
 
+        SoSndContext wContext = new SoSndContext(channelID, createdTime, context);
         SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, context);
-        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, context);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, wContext);
+        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, wContext);
 
         // init and pipe
         try {

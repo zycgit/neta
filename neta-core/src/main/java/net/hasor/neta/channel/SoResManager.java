@@ -20,8 +20,8 @@ import java.nio.ByteBuffer;
 
 /**
  * Resource manager
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public interface SoResManager extends AutoCloseable {
     ByteBuf newByteBuf(int capacity);

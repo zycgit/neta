@@ -17,13 +17,12 @@ package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * asynchronous non-blocking copy receive data form swapBuffer {@link ByteBuffer} to rcvBuffer {@link ByteBuf}
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoRcvCopyTask extends DefaultSoTask {
     private final SoContextImpl context;
@@ -41,7 +40,7 @@ class SoRcvCopyTask extends DefaultSoTask {
     @Override
     protected void doWork(int retryCnt) {
         if (this.context.isClose(this.channelID)) {
-            this.failedTask(new ClosedChannelException());
+            this.failedTask(SoCloseException.INSTANCE);
             return;
         }
 

@@ -19,8 +19,9 @@ import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.ClosedChannelException;
 import java.nio.channels.NotYetConnectedException;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.TimeUnit;
 
@@ -37,36 +38,45 @@ class SoSndTask extends DefaultSoTask {
     private final        SoSndCompletionHandler    wHandler;
     private final        SoContextImpl             context;
     //
-    private final        List<SoSndData>           afterFinish;
+    private final        SoSndContext              wContext;
 
-    public SoSndTask(long channelID, long createdTime, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler,//
-            SoContextImpl context, List<SoSndData> afterFinish) {
+    public SoSndTask(long channelID, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
-        this.createdTime = createdTime;
+        this.createdTime = wContext.getCreatedTime();
         this.channel = channel;
         this.wHandler = wHandler;
-        this.context = context;
-        this.afterFinish = afterFinish;
+        this.context = wContext.getContext();
+        this.wContext = wContext;
     }
 
     @Override
     protected void doWork(int retryCnt) {
+        // channel is closed
         if (this.context.isClose(this.channelID)) {
-            this.failedTask(new ClosedChannelException());
+            this.failedTask(SoCloseException.INSTANCE);
             return;
         }
 
+        // when wHandler finish will wake up SoSndTask
+        if (this.wHandler.isSndWorking()) {
+            this.finishTask();
+            return;
+        }
+
+        // copy data from wQueue to sndBuf
+        ByteBuf sndBuf = this.wHandler.getSndBuffer();
+        List<SoSndData> afterFinish = fillByteBuf(sndBuf);
+        if (!sndBuf.hasReadable() && this.wContext.peekData() == null) {
+            this.finishTask();// nothing data to send.
+            return;
+        }
+
+        // send data
         try {
             Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
             ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
-            ByteBuf sndBuf = this.wHandler.getSndBuffer();
 
-            swapBuf.clear();
-            sndBuf.read(swapBuf);
-            sndBuf.markReader();
-            swapBuf.flip();
-
-            this.wHandler.prepareWrite(this.afterFinish);
+            this.wHandler.prepareWrite(afterFinish);
             if (wTimeoutMs != null && wTimeoutMs > 0) {
                 this.channel.write(swapBuf, wTimeoutMs, TimeUnit.MILLISECONDS, this.context, this.wHandler);
             } else {
@@ -97,5 +107,40 @@ class SoSndTask extends DefaultSoTask {
                 this.failedTask(e);
             }
         }
+    }
+
+    private List<SoSndData> fillByteBuf(ByteBuf sndBuf) {
+        SoSndData data = this.wContext.peekData();
+        if (data == null) {
+            return Collections.emptyList();
+        }
+
+        // merge SoSndData`s to sndBuffer
+        List<SoSndData> afterFinish = new ArrayList<>();
+        do {
+            int len = data.transferTo(sndBuf);
+            if (logger.isDebugEnabled()) {
+                logger.debug("snd(" + this.channelID + ") taskData transferTo sndBuffer " + len);
+            }
+
+            if (!data.hasReadable()) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("snd(" + this.channelID + ") taskData be merged. " + data);
+                }
+
+                afterFinish.add(this.wContext.popData());
+                data = this.wContext.peekData();
+
+                if (data == null) {
+                    break;
+                } else {
+                    continue;
+                }
+            }
+
+            break;
+        } while (true);
+
+        return afterFinish;
     }
 }

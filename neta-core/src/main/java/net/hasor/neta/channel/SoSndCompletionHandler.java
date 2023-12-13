@@ -33,6 +33,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        long                      channelID;
     private final        long                      createdTime;
     private final        AsynchronousSocketChannel channel;
+    private final        SoSndContext              wContext;
     private final        SoContextImpl             context;
     private final        ByteBuffer                swapBuffer;
     private final        ByteBuf                   sndBuffer;
@@ -41,13 +42,14 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private volatile     boolean                   sndWorking;
     private              List<SoSndData>           afterWorking1;
 
-    public SoSndCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context) {
+    public SoSndCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoSndContext wContext) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.channel = channel;
-        this.context = context;
+        this.wContext = wContext;
+        this.context = wContext.getContext();
 
-        SoResManager rm = context.getResourceManager();
+        SoResManager rm = this.context.getResourceManager();
         this.swapBuffer = rm.newSwapSndBuf();
         this.sndBuffer = rm.newLocalSndBuf();
     }
@@ -77,6 +79,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.sndSize = 0;
         this.sndWorking = true;
         this.afterWorking1 = afterWorking1;
+        this.copyData();
     }
 
     private Future<?> submitTask(DefaultSoTask task) {
@@ -98,23 +101,30 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
         } else if (this.sndBuffer.hasReadable()) {
 
-            // reset swap, and copy sndData to swap
-            this.swapBuffer.clear();
-            this.sndBuffer.read(this.swapBuffer);
-            this.sndBuffer.markReader();
-            this.swapBuffer.flip();
-
             // continue send data.
+            this.copyData();
             this.writeData();
         } else {
-            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize));
+
+            SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize);
+            SoSndTask sndTask = new SoSndTask(this.channelID, this.channel, this, this.wContext);
+
+            submitTask(cleanTask).onCompleted(f -> submitTask(sndTask));
             this.sndWorking = false;
         }
     }
 
+    // copy data from sndBuf to swapBuf
+    private void copyData() {
+        this.swapBuffer.clear();
+        this.sndBuffer.read(this.swapBuffer);
+        this.sndBuffer.markReader();
+        this.swapBuffer.flip();
+    }
+
     private void writeData() {
         if (this.context.isClose(this.channelID)) {
-            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, new ClosedChannelException()));
+            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, SoCloseException.INSTANCE));
             return;
         }
 

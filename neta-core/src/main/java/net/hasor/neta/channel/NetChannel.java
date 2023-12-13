@@ -24,25 +24,22 @@ import net.hasor.neta.bytebuf.ByteBufAdapter;
 
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.ClosedChannelException;
-import java.util.Queue;
-import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A tcp network channel
- *
  * the channel that binds to the Application layer network protocol stack.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class NetChannel extends AttributeChannel<NetChannel> {
     private static final Logger                      logger = Logger.getLogger(NetChannel.class);
     private final        long                        channelID;
     private final        NetListen                   forListen;
     protected final      AsynchronousSocketChannel   channel;
+    protected final      SoSndContext                wContext;
     protected final      SoContextImpl               context;
     private final        SocketAddress               localAddr;
     private final        SocketAddress               remoteAddr;
@@ -52,9 +49,8 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     private              long                        lastNotifyRcvRetryTime;
     //
     private final        SoRcvCompletionHandler      rHandler;
-    protected final      Queue<SoSndData>            wQueue;
-    private final        AtomicBoolean               wStatus;
     private final        SoSndCompletionHandler      wHandler;
+    private final        AtomicBoolean               wStatus;
     //
     protected            PipeContextImpl             pipeContext;
     protected            PipeStack<ByteBuf, ByteBuf> pipeStack;
@@ -63,7 +59,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     protected final      Future<NetChannel>          closeFuture;
 
     NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
-            AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoContextImpl context) {
+            AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
         this.forListen = forListen;
         this.createdTime = createdTime;
@@ -71,16 +67,16 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         this.lastRcvTime = createdTime;
 
         this.channel = channel;
-        this.context = context;
+        this.wContext = wContext;
+        this.context = wContext.getContext();
         this.localAddr = localAddr;
         this.remoteAddr = remoteAddr;
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
 
         this.rHandler = rHandler;
-        this.wQueue = new ConcurrentLinkedQueue<>();
-        this.wStatus = new AtomicBoolean(false);
         this.wHandler = wHandler;
+        this.wStatus = new AtomicBoolean(false);
     }
 
     protected void initPipe(PipeContextImpl pipeContext, PipeStack<?, ?> pipeStack) {
@@ -108,12 +104,12 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return Math.max(this.lastRcvTime, this.lastSndTime);
     }
 
-    /**  last sent data time */
+    /** last sent data time */
     public long getLastSndTime() {
         return this.lastSndTime;
     }
 
-    /**  last received data time */
+    /** last received data time */
     public long getLastRcvTime() {
         return this.lastRcvTime;
     }
@@ -138,7 +134,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return this.remoteAddr;
     }
 
-    /** Returns the {@link NetListen} that accepts this channel  */
+    /** Returns the {@link NetListen} that accepts this channel */
     public NetListen getSource() {
         return this.forListen;
     }
@@ -254,7 +250,6 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     /**
      * sent data to remote, The network IO transfer operation is performed asynchronously.
-     *
      * <p>data goes through the application layer network protocol stack</p>
      */
     public Future<NetChannel> sendData(Object writeData) {
@@ -297,24 +292,20 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     private void appendSoSndTask(SoSndData wTask) {
         if (this.closeStatus.get()) {
-            wTask.failed(new ClosedChannelException());
+            wTask.failed(SoCloseException.INSTANCE);
             return;
         }
 
-        this.wQueue.offer(wTask);
+        this.wContext.offer(wTask);
 
         if (this.wStatus.compareAndSet(false, true)) {
-            SoSndContext wContext = new SoSndContext(this.channelID, this.createdTime, this.context, this.wQueue);
-
-            // queue -> sndBuffer and sending
-            SoSndCopyTask task = new SoSndCopyTask(this.channelID, this.channel, this.wHandler, wContext);
-
-            wContext.submitTask(task, this).onCompleted(f -> {
+            SoSndTask sendTask = new SoSndTask(this.channelID, this.channel, this.wHandler, this.wContext);
+            this.wContext.submitTask(sendTask, this).onCompleted(f -> {
                 this.lastSndTime = System.currentTimeMillis();
-                if (this.wQueue.isEmpty()) {
+                if (this.wContext.isEmpty()) {
                     this.wStatus.compareAndSet(true, false);
                 } else {
-                    wContext.submitTask(task, this);
+                    this.wContext.submitTask(sendTask, this);
                 }
             });
         }
