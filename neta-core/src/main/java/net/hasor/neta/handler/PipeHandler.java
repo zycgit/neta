@@ -20,9 +20,8 @@ import java.io.IOException;
 
 /**
  * Used to represent a unidirectional data processor, two {@link PipeHandler}`s in opposite directions can to {@link PipeLayer}
- *
- * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-17
  * @see PipeLayer
  */
 @FunctionalInterface

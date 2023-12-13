@@ -24,8 +24,8 @@ import java.util.function.Consumer;
 
 /**
  * Application stack PipeBuilder
- * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
  */
 public final class PipeInitializer implements PipeBuilder {
     @Override
@@ -42,7 +42,7 @@ public final class PipeInitializer implements PipeBuilder {
     @Override
     public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
         PipeStackBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
-        return builder.nextTo(name, pipeConfig, new PipeDuplexHandler<>(decoder, encoder));
+        return builder.nextTo(name, pipeConfig, new PipeDuplexLayer<>(decoder, encoder));
     }
 
     static class PipeStackBuilderImpl<RCV_DOWN, SND_UP> implements PipeStackBuilder<RCV_DOWN, SND_UP> {
@@ -69,7 +69,7 @@ public final class PipeInitializer implements PipeBuilder {
             Objects.requireNonNull(decoder, "decoder is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
 
-            PipeDuplexHandler<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer = new PipeDuplexHandler<>(decoder, encoder);
+            PipeDuplexLayer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer = new PipeDuplexLayer<>(decoder, encoder);
             this.taskAppend.add(chainRoot -> {
                 chainRoot.addLayer(new PipeLayerInvocation<>(name, pipeConfig, pipeLayer));
             });

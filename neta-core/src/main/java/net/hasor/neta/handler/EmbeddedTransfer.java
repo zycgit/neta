@@ -15,22 +15,20 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.neta.channel.SoResManager;
 
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
  * Used for data transfer between two {@link EmbeddedChannel}.
- * @version : 2023-10-26
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-26
  */
 public class EmbeddedTransfer {
-    private final SoResManager    rm;
     private final EmbeddedChannel client;
     private final EmbeddedChannel server;
 
-    protected EmbeddedTransfer(SoResManager rm, EmbeddedChannel client, EmbeddedChannel server) {
+    protected EmbeddedTransfer(EmbeddedChannel client, EmbeddedChannel server) {
         if (!server.isServer()) {
             throw new IllegalStateException("joinChannel failed server Channel must be Server.");
         }
@@ -38,7 +36,6 @@ public class EmbeddedTransfer {
             throw new IllegalStateException("joinChannel failed client Channel must be Client.");
         }
 
-        this.rm = Objects.requireNonNull(rm);
         this.client = Objects.requireNonNull(client);
         this.server = Objects.requireNonNull(server);
     }
@@ -55,7 +52,6 @@ public class EmbeddedTransfer {
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from server to client.
-     *
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
      */
     public void transferToClient() {
@@ -64,9 +60,7 @@ public class EmbeddedTransfer {
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from server to client.
-     *
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     *
      * @param turn use turn parameter to determine number messages to send.
      */
     public void transferToClient(int turn) {
@@ -75,14 +69,14 @@ public class EmbeddedTransfer {
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from server to client.
-     *
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     *
      * @param turn use turn parameter to determine number messages to send.
      * @param duration The interval between two data transmissions
      * @param timeUnit A unit of interval time
      */
     public void transferToClient(int turn, int duration, TimeUnit timeUnit) {
+        turn = Math.min(this.server.readSndDownSize(), turn);
+
         for (int i = 0; i < turn; i++) {
             if (this.server.isClose()) {
                 break;
@@ -106,7 +100,6 @@ public class EmbeddedTransfer {
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from client to server.
-     *
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
      */
     public void transferToServer() {
@@ -115,9 +108,7 @@ public class EmbeddedTransfer {
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from client to server.
-     *
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     *
      * @param turn use turn parameter to determine number messages to send.
      */
     public void transferToServer(int turn) {
@@ -126,14 +117,14 @@ public class EmbeddedTransfer {
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from client to server.
-     *
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     *
      * @param turn use turn parameter to determine number messages to send.
      * @param duration The interval between two data transmissions
      * @param timeUnit A unit of interval time
      */
     public void transferToServer(int turn, int duration, TimeUnit timeUnit) {
+        turn = Math.min(this.client.readSndDownSize(), turn);
+
         for (int i = 0; i < turn; i++) {
             if (this.client.isClose()) {
                 break;

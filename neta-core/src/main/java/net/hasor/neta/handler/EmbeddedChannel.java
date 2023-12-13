@@ -26,8 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Base class for {@link SoChannel} implementations that are used in an embedded fashion.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     private final        long                      channelID;
@@ -155,7 +155,6 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
 
     /**
      * Write messages to the RCV_UP of this {@link SoChannel}.
-     *
      * @param object the messages to be written
      */
     public <T> void writeRcvUp(T object) {
@@ -218,8 +217,14 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     }
 
     /**
+     * read messages limit from the SND_DOWN of this {@link SoChannel}.
+     */
+    public int readSndDownSize() {
+        return this.sndDown.queueSize();
+    }
+
+    /**
      * Write messages to the SND_UP of this {@link SoChannel}.
-     *
      * @param object the messages to be written
      */
     public <T> void writeSndUp(T object) {

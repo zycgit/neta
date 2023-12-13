@@ -19,17 +19,16 @@ import net.hasor.neta.channel.PipeContext;
 import java.io.IOException;
 
 /**
- * Used to represent a unidirectional data processor, two {@link PipeDuplexHandler}`s in opposite directions can to {@link PipeLayer}
- *
- * @version : 2023-10-17
+ * Used to represent a unidirectional data processor, two {@link PipeDuplexLayer}`s in opposite directions can to {@link PipeLayer}
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-17
  * @see PipeLayer
  */
-public class PipeDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+public class PipeDuplexLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     private final PipeHandler<RCV_UP, RCV_DOWN> decoder;
     private final PipeHandler<SND_UP, SND_DOWN> encoder;
 
-    public PipeDuplexHandler(PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder) {
+    public PipeDuplexLayer(PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder) {
         this.decoder = decoder;
         this.encoder = encoder;
     }

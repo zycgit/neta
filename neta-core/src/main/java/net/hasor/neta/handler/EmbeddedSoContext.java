@@ -24,8 +24,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * Base class for {@link SoContext} implementations that are used in an embedded fashion.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class EmbeddedSoContext implements SoContext {
     private static final Logger                  logger = Logger.getLogger(EmbeddedSoContext.class);
@@ -99,6 +99,6 @@ public class EmbeddedSoContext implements SoContext {
      * @param server server side {@link EmbeddedTransfer}
      */
     public EmbeddedTransfer joinChannel(EmbeddedChannel client, EmbeddedChannel server) {
-        return new EmbeddedTransfer(this.defaultRm, client, server);
+        return new EmbeddedTransfer(client, server);
     }
 }

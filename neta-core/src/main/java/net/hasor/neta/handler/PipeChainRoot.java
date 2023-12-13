@@ -26,8 +26,8 @@ import java.util.List;
 
 /**
  * root Application stack
- * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
  */
 @SuppressWarnings({ "unchecked" })
 class PipeChainRoot implements PipeStack<Object, Object> {
