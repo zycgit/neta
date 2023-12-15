@@ -20,7 +20,6 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
 
 import java.net.SocketAddress;
-import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -153,24 +152,6 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         return this.closeStatus.get();
     }
 
-    /**
-     * Write messages to the RCV_UP of this {@link SoChannel}.
-     * @param object the messages to be written
-     */
-    public <T> void writeRcvUp(T object) {
-        try {
-            this.lastActiveTime = System.currentTimeMillis();
-            Object[] sndDownObj = this.pipeStack.rcvLayer(this.pipeCtx, object);
-            if (sndDownObj.length != 0) {
-                this.sndDown.offerMessage(Arrays.asList(sndDownObj));
-                this.sndDown.sndSubmit();
-            }
-        } catch (Throwable e) {
-            closeNow();
-            throw ExceptionUtils.toRuntime(e);
-        }
-    }
-
     /** Receive data protocol layer error */
     public boolean isRcvError() {
         return this.rcvError != null;
@@ -184,6 +165,32 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     /** Clear the RcvError status. */
     public void clearRcvError() {
         this.rcvError = null;
+    }
+
+    /**
+     * Write messages to the RCV_UP of this {@link SoChannel}.
+     * @param object the messages to be written
+     */
+    public <T> void writeRcvUp(T object) {
+        this.writeRcvUpArray(new Object[] { object });
+    }
+
+    /**
+     * Write messages to the RCV_UP of this {@link SoChannel}.
+     * @param object the messages to be written
+     */
+    public <T> void writeRcvUpArray(T[] object) {
+        try {
+            this.lastActiveTime = System.currentTimeMillis();
+            Object[] sndDownObj = this.pipeStack.rcvLayer(this.pipeCtx, object);
+            if (sndDownObj.length != 0) {
+                this.sndDown.offerMessage(sndDownObj);
+                this.sndDown.sndSubmit();
+            }
+        } catch (Throwable e) {
+            closeNow();
+            throw ExceptionUtils.toRuntime(e);
+        }
     }
 
     /**
@@ -202,6 +209,24 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     }
 
     /**
+     * read messages from the RCV_DOWN of this {@link SoChannel}.
+     */
+    public <T> T[] readRcvDownArray() {
+        try {
+            return (T[]) this.rcvDown.takeMessage(this.rcvDown.queueSize());
+        } finally {
+            this.rcvDown.rcvSubmit();
+        }
+    }
+
+    /**
+     * read messages limit from the RCV_DOWN of this {@link SoChannel}.
+     */
+    public int getRcvDownSize() {
+        return this.rcvDown.queueSize();
+    }
+
+    /**
      * read messages from the SND_DOWN of this {@link SoChannel}.
      */
     public <T> T readSndDown() {
@@ -217,9 +242,20 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     }
 
     /**
+     * read messages from the SND_DOWN of this {@link SoChannel}.
+     */
+    public <T> T[] readSndDownArray() {
+        try {
+            return (T[]) this.sndDown.takeMessage(this.sndDown.queueSize());
+        } finally {
+            this.sndDown.rcvSubmit();
+        }
+    }
+
+    /**
      * read messages limit from the SND_DOWN of this {@link SoChannel}.
      */
-    public int readSndDownSize() {
+    public int getSndDownSize() {
         return this.sndDown.queueSize();
     }
 
@@ -228,11 +264,19 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
      * @param object the messages to be written
      */
     public <T> void writeSndUp(T object) {
+        this.writeSndUpArray(new Object[] { object });
+    }
+
+    /**
+     * Write messages to the SND_UP of this {@link SoChannel}.
+     * @param object the messages to be written
+     */
+    public <T> void writeSndUpArray(T[] object) {
         try {
             Objects.requireNonNull(object);
             Object[] sndDownObj = this.pipeStack.sndLayer(this.pipeCtx, object);
             if (sndDownObj.length != 0) {
-                this.sndDown.offerMessage(Arrays.asList(sndDownObj));
+                this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
             }
         } catch (Throwable e) {

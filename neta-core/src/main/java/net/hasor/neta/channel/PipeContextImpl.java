@@ -19,8 +19,8 @@ import java.util.Map;
 
 /**
  * PipeContext implements
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class PipeContextImpl implements PipeContext {
     private final SoChannel<?>          channel;

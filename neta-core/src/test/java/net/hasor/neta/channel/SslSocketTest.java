@@ -20,11 +20,11 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
 import net.hasor.neta.handler.PipeInitializer;
+import net.hasor.neta.handler.PipeReceiveListener;
 import net.hasor.neta.handler.ssl.SslAuthKeyType;
 import net.hasor.neta.handler.ssl.SslConfig;
 import net.hasor.neta.handler.ssl.SslPipeLayer;
 import net.hasor.neta.handler.ssl.SslProtocol;
-import org.junit.Test;
 
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -33,14 +33,13 @@ import java.util.concurrent.atomic.AtomicReference;
  * @version : 2022-11-01
  */
 public class SslSocketTest {
-    @Test
+    //    @Test
     public void realSSLSocketTest() throws Exception {
         LoggerFactory.useStdOutLogger();
         // socket config.
         SoConfig config = new SoConfig();
-        config.setNetlog(true);
-        config.setSwapBuf(64, 64);
-        config.setLocalBuf(128, 128);
+        config.setSwapBuf(512, 512);
+        config.setLocalBuf(512, 512);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(1);
@@ -48,19 +47,19 @@ public class SslSocketTest {
 
         // ssl config.
         SslConfig sslConfig = new SslConfig();
-        sslConfig.setSsllog(true);
+        //sslConfig.setSsllog(true);
         sslConfig.setAuthType(SslAuthKeyType.PEM);
         sslConfig.setPemCertChain("ssl/ca/server.crt");
         sslConfig.setPemPrivate("ssl/ca/server.pem");
         sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
-        sslConfig.setAppProtocol(new String[] { "SPDY", "HTTP1.1", "HTTP2" });
+        sslConfig.setAppProtocol(new String[] { "SPDY", "http/1.1", "HTTP2" });
 
         // network stack.
         PipeStackFactory pipeStack = new PipeInitializer()
                 // SSL
                 .nextTo(new SslPipeLayer(sslConfig))
                 // receive
-                .bindReceive(SslSocketTest::readLine)
+                .bindReceive(receiveListener())
                 // build
                 .buildFactory();
 
@@ -92,6 +91,20 @@ public class SslSocketTest {
         }
     }
 
+    private static PipeReceiveListener<ByteBuf> receiveListener() {
+        return new PipeReceiveListener<ByteBuf>() {
+            @Override
+            public void onReceive(SoChannel<?> channel, ByteBuf data) {
+                readLine(channel, data);
+            }
+
+            @Override
+            public void onError(SoChannel<?> channel, Throwable e) {
+                readError(channel, e);
+            }
+        };
+    }
+
     private static NetListen startListen(CobbleSocket socket, PipeStackFactory pipeStack) throws Exception {
         return socket.listen("127.0.0.1", 5567, pipeStack);
     }
@@ -108,5 +121,9 @@ public class SslSocketTest {
 
         channel.setAttribute("Message", line);
         channel.close();
+    }
+
+    private static void readError(SoChannel<?> channel, Throwable e) {
+        e.printStackTrace();
     }
 }

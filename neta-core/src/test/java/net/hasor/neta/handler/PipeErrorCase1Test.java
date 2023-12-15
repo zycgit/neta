@@ -17,6 +17,7 @@ package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.PipeStackFactory;
 import net.hasor.neta.channel.SoChannel;
+import net.hasor.neta.codec.CourierPipeHandler;
 import net.hasor.neta.handler.PipeBuilder.PipeStackBuilder;
 import org.junit.Test;
 

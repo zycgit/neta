@@ -35,13 +35,19 @@ public class EmbeddedSoContext implements SoContext {
     private final        Map<Long, SoChannel<?>> channelMap;
 
     public EmbeddedSoContext() {
-        this(new SoConfig());
+        this(newSoConfig());
     }
 
     public EmbeddedSoContext(SoConfig config) {
         this.config = config;
         this.channelMap = new ConcurrentHashMap<>();
         this.defaultRm = new DefaultSoResManager(this.config);
+    }
+
+    protected static SoConfig newSoConfig() {
+        SoConfig config = new SoConfig();
+        config.setNetlog(true);
+        return config;
     }
 
     protected static long nextID() {

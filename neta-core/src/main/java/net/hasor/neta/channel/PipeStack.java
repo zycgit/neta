@@ -18,8 +18,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Application protocol stack
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public interface PipeStack<RIN, ROUT> {
     /**
@@ -35,7 +35,7 @@ public interface PipeStack<RIN, ROUT> {
      * @param rcvData received data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    ROUT[] rcvLayer(PipeContext pipeContext, RIN rcvData) throws Throwable;
+    ROUT[] rcvLayer(PipeContext pipeContext, RIN[] rcvData) throws Throwable;
 
     /**
      * Trigger sending data
@@ -43,14 +43,14 @@ public interface PipeStack<RIN, ROUT> {
      * @param sndData send data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    ROUT[] sndLayer(PipeContext pipeContext, Object sndData) throws Throwable;
+    ROUT[] sndLayer(PipeContext pipeContext, Object[] sndData) throws Throwable;
 
     /**
      * Errors from the network layer.
      * @param pipeContext pipeContext
      * @param soError network error.
      */
-    ROUT[] soError(PipeContext pipeContext, Throwable soError);
+    ROUT[] soError(PipeContext pipeContext, Throwable soError) throws Throwable;
 
     /**
      * before close.

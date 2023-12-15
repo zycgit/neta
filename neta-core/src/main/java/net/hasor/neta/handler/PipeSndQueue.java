@@ -19,8 +19,8 @@ import java.util.List;
 
 /**
  * The network protocol layer outputs the data queue of the endpoint
- * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-17
  * @see PipeRcvQueue
  */
 public interface PipeSndQueue<T> {

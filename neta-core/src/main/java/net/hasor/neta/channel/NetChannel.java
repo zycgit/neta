@@ -188,7 +188,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         try {
             //The root Buffer cannot be deallocated
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeContext, new ByteBufSafe(rcvByteBuf));
+            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeContext, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -259,7 +259,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
         Future<NetChannel> future = new BasicFuture<>();
         try {
-            Object[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, writeData);
+            Object[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, new Object[] { writeData });
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
             for (Object buf : sndByteBuf) {
                 Future<NetChannel> itemFuture = new BasicFuture<>();

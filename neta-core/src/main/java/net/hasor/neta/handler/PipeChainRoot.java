@@ -71,78 +71,30 @@ class PipeChainRoot implements PipeStack<Object, Object> {
     }
 
     @Override
-    public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) {
+    public Object[] rcvLayer(PipeContext pipeContext, Object[] rcvData) throws Throwable {
         try {
-            if (rcvData != null) {
+            if (rcvData != null && rcvData.length > 0) {
                 this.rootRcvUp.offerMessage(rcvData);
                 this.rootRcvUp.sndSubmit();
             }
 
-            // doPipeline
-            PipeStatus status;
-            boolean needRestart = false;
-            boolean triggerListener = false;
-            do {
-                for (int i = 0; i < this.layers.size(); i++) {
-                    status = this.doLayer(true, pipeContext, i);
-                    switch (status) {
-                        case Next:
-                        case Retry:
-                            triggerListener = (i == this.layers.size() - 1); // only the complete pipeline will fire listeners
-                            continue;
-                        case Again:
-                            needRestart = true;// restart when finished
-                            continue;
-                        case Exit:
-                            needRestart = false;
-                            triggerListener = false;
-                            break;
-                        case Restart:
-                            needRestart = true;
-                            break;
-                    }
-                }
-            } while (needRestart);
-
-            // triggerListener onReceive/onError
-            PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
-
-            // 1st onReceive
-            if (triggerListener && rcvDown.hasMore()) {
-                if (this.listener == null) {
-                    // trigger tail. print event data to sto
-                    while (rcvDown.hasMore()) {
-                        Object msg = rcvDown.takeMessage();
-                        logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event: " + msg);
-                    }
-                } else {
-                    // trigger the listener event.
-                    while (rcvDown.hasMore()) {
-                        Object msg = rcvDown.takeMessage();
-                        this.listener.onReceive(pipeContext.channel(), msg);
-                    }
-                }
-                rcvDown.rcvSubmit();
+            RcvResult rcvResult = this.doRcvPipe(pipeContext);
+            SndResult sndResult = this.doSndPipe(pipeContext, rcvResult.layerDepth);
+            if (rcvResult.triggerListener) {
+                this.triggerListener(pipeContext);
             }
 
-            // 2st onError
-            Throwable ctxError = pipeContext.flash(RCV_ERROR_TAG);
-            if (ctxError != null) {
-                if (this.listener == null) {
-                    logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
-                } else {
-                    this.listener.onError(pipeContext.channel(), ctxError);
-                }
-            }
-
-            // result
-            PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
-            if (sndDown.hasMore()) {
-                Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
-                sndDown.rcvSubmit();
-                return sndList;
+            Object[] dat1 = rcvResult.rcvData;
+            Object[] dat2 = sndResult.sndData;
+            if (dat1 == EMPTY) {
+                return dat2;
+            } else if (dat2 == EMPTY) {
+                return dat1;
             } else {
-                return EMPTY;
+                Object[] result = new Object[dat1.length + dat2.length];
+                System.arraycopy(dat1, 0, result, 0, dat1.length);
+                System.arraycopy(dat2, 0, result, dat1.length, dat2.length);
+                return result;
             }
         } catch (Throwable e) {
             // triggerListener onError
@@ -160,9 +112,9 @@ class PipeChainRoot implements PipeStack<Object, Object> {
     }
 
     @Override
-    public Object[] sndLayer(PipeContext pipeContext, Object sndData) throws Throwable {
+    public Object[] sndLayer(PipeContext pipeContext, Object[] sndData) throws Throwable {
         try {
-            if (!this.rootSndUp.offerMessage(sndData)) {
+            if (this.rootSndUp.offerMessage(sndData) != sndData.length) {
                 long channelID = pipeContext.channel().getChannelID();
                 String message = "snd(" + channelID + ") sndQueue[" + this.rootSndUp.slotSize() + "/" + this.rootSndUp.getCapacity() + "] is full.";
                 IllegalStateException e = new IllegalStateException(message);
@@ -171,47 +123,178 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             }
             this.rootSndUp.sndSubmit();
 
-            // doPipeline
-            PipeStatus status;
-            boolean needRestart = false;
-            do {
-                for (int i = this.layers.size() - 1; i >= 0; i--) {
-                    status = this.doLayer(false, pipeContext, i);
-                    switch (status) {
-                        case Next:
-                        case Retry:
-                            continue;
-                        case Again:
-                            needRestart = true;// restart when finished
-                            continue;
-                        case Exit:
-                            needRestart = false;
-                            break;
-                        case Restart:
-                            needRestart = true;
-                            break;
-                    }
-                }
-            } while (needRestart);
-
-            // result
-            PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
-            if (sndDown.hasMore()) {
-                Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
-                sndDown.rcvSubmit();
-                return sndList;
-            } else {
-                return EMPTY;
-            }
+            SndResult sndResult = this.doSndPipe(pipeContext, this.layers.size() - 1);
+            return sndResult.sndData;
         } finally {
             ((PipeContextImpl) pipeContext).clearFlash();
         }
     }
 
     @Override
-    public Object[] soError(PipeContext pipeContext, Throwable soError) {
-        pipeContext.flash(RCV_ERROR_TAG, soError);
-        return this.rcvLayer(pipeContext, null);
+    public Object[] soError(PipeContext pipeContext, Throwable soError) throws Throwable {
+        try {
+            pipeContext.flash(RCV_ERROR_TAG, soError);
+            RcvResult result = this.doRcvPipe(pipeContext);
+
+            if (result.triggerListener) {
+                this.triggerListener(pipeContext);
+            }
+
+            return result.rcvData;
+        } catch (Throwable e) {
+            // triggerListener onError
+            if (this.listener == null) {
+                // trigger tail. print error data to sto
+                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + e.getMessage(), e);
+            } else {
+                // trigger the listener event.
+                this.listener.onError(pipeContext.channel(), e);
+            }
+            return ArrayUtils.EMPTY_OBJECT_ARRAY;
+        } finally {
+            ((PipeContextImpl) pipeContext).clearFlash();
+        }
+    }
+
+    private RcvResult doRcvPipe(PipeContext pipeContext) throws Throwable {
+        boolean netLog = pipeContext.getConfig().isNetlog();
+        boolean needRestartLater;
+        boolean triggerListener;
+        int i;
+
+        do {
+            needRestartLater = false;
+            triggerListener = false;
+            i = 0;
+
+            while (i < this.layers.size()) {
+                PipeStatus status = this.doLayer(true, pipeContext, i);
+                switch (status) {
+                    case Retry: // <-- can't happen, The Retry has been processed at doLayer
+                    case Next:
+                        // only the complete pipeline will fire listeners
+                        triggerListener = (i == this.layers.size() - 1);
+                        i++;
+                        continue;
+                    case Again:
+                        needRestartLater = true;// restart when finished
+                        if (netLog) {
+                            logger.info("rcv(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
+                        }
+                        i++;
+                        continue;
+                    case Restart:
+                        needRestartLater = true;
+                        if (netLog) {
+                            logger.info("rcv(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
+                        }
+                        i++;
+                        break;
+                    case Exit:
+                        triggerListener = false;
+                        if (netLog) {
+                            logger.info("rcv(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
+                        }
+                        i++;
+                        break;
+                }
+
+                break;
+            }
+        } while (needRestartLater);
+
+        // result
+        PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
+        if (sndDown.hasMore()) {
+            Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
+            sndDown.rcvSubmit();
+            return new RcvResult(sndList, i - 1, triggerListener);
+        } else {
+            return new RcvResult(EMPTY, i - 1, triggerListener);
+        }
+    }
+
+    private SndResult doSndPipe(PipeContext pipeContext, int depth) throws Throwable {
+        boolean netLog = pipeContext.getConfig().isNetlog();
+        boolean needRestartLater;
+        do {
+            needRestartLater = false;
+            boolean breakFor = false;
+            for (int i = depth; i >= 0; i--) {
+                if (breakFor) {
+                    break;
+                }
+
+                PipeStatus status = this.doLayer(false, pipeContext, i);
+                switch (status) {
+                    case Retry: // <-- can't happen, The Retry has been processed at doLayer
+                    case Next:
+                        break;
+                    case Again:
+                        needRestartLater = true;// restart when finished
+                        if (netLog) {
+                            logger.info("snd(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
+                        }
+                        break;
+                    case Restart:
+                        needRestartLater = true;
+                        breakFor = true;
+                        if (netLog) {
+                            logger.info("snd(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
+                        }
+                        break;
+                    case Exit:
+                        breakFor = true;
+                        if (netLog) {
+                            logger.info("snd(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
+                        }
+                        break;
+                }
+            }
+        } while (needRestartLater);
+
+        // result
+        PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
+        if (sndDown.hasMore()) {
+            Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
+            sndDown.rcvSubmit();
+            return new SndResult(sndList);
+        } else {
+            return new SndResult(EMPTY);
+        }
+    }
+
+    private void triggerListener(PipeContext pipeContext) {
+        // find RCV_DOWN form last layer
+        PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
+
+        // 1st onReceive
+        if (rcvDown.hasMore()) {
+            if (this.listener == null) {
+                // trigger tail. print event data to sto
+                while (rcvDown.hasMore()) {
+                    Object msg = rcvDown.takeMessage();
+                    logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event: " + msg);
+                }
+            } else {
+                // trigger the listener event.
+                while (rcvDown.hasMore()) {
+                    Object msg = rcvDown.takeMessage();
+                    this.listener.onReceive(pipeContext.channel(), msg);
+                }
+            }
+            rcvDown.rcvSubmit();
+        }
+
+        // 2st onError
+        Throwable ctxError = pipeContext.flash(RCV_ERROR_TAG);
+        if (ctxError != null) {
+            if (this.listener == null) {
+                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+            } else {
+                this.listener.onError(pipeContext.channel(), ctxError);
+            }
+        }
     }
 
     private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws Throwable {
@@ -225,9 +308,11 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         //          |             \----------+------+----------/             |
         //          |                        |      |                        |
         //          \------------------------/      \------------------------/
+        boolean netLog = pipeContext.getConfig().isNetlog();
         PipeQueue<?> useRcvUp = i == 0 ? this.rootRcvUp : this.layers.get(i - 1).getRcvDown();
         PipeQueue<?> useSndUp = i == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(i + 1).getSndDown();
         String errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
+        String msgTag = isRcv ? "rcv" : "snd";
 
         PipeStatus status;
         do {
@@ -241,9 +326,8 @@ class PipeChainRoot implements PipeStack<Object, Object> {
                     status = layer.doError(pipeContext, isRcv, ctxError, layer.createExceptionHandler(errorTag, pipeContext, useRcvUp, useSndUp));
                 }
             } catch (Throwable e) {
-                String msg = isRcv ? "rcv" : "snd";
-                msg += "(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " an error has occurred " + e.getMessage();
-                logger.error(msg, e);
+                msgTag = msgTag + "(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " an error has occurred " + e.getMessage();
+                logger.error(msgTag, e);
 
                 ctxError = pipeContext.flash(errorTag, e);
                 status = layer.doError(pipeContext, isRcv, ctxError, layer.createExceptionHandler(errorTag, pipeContext, useRcvUp, useSndUp));
@@ -255,7 +339,31 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             if (status == PipeStatus.Interrupt) {
                 throw ctxError != null ? ctxError : new InterruptedException();
             }
+            if (status == PipeStatus.Retry && netLog) {
+                logger.info(msgTag + "(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " doRetry");
+            }
         } while (status == PipeStatus.Retry);
         return status;
     }
+
+    private static final class RcvResult {
+        public final Object[] rcvData;
+        public final int      layerDepth;
+        public final boolean  triggerListener;
+
+        public RcvResult(Object[] rcvData, int layerDepth, boolean triggerListener) {
+            this.rcvData = rcvData;
+            this.layerDepth = layerDepth;
+            this.triggerListener = triggerListener;
+        }
+    }
+
+    private static final class SndResult {
+        public final Object[] sndData;
+
+        public SndResult(Object[] sndData) {
+            this.sndData = sndData;
+        }
+    }
+
 }

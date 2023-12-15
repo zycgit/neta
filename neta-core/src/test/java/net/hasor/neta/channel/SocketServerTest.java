@@ -26,12 +26,14 @@ import net.hasor.neta.bytebuf.ByteBufUtil;
 public class SocketServerTest {
     public static void main(String[] args) throws Exception {
         SoConfig config = new SoConfig();
-        config.setSwapBuf(64, 64);
+        config.setSwapBuf(2, 2);
         config.setLocalBuf(32, 32);
-        //        config.setSoReadTimeoutMs(6000);
-        //        config.setSoKeepAlive(true);
-        //        config.setSoKeepIntervalSec(10);
-        //        config.setSoKeepIdleSec(10);
+
+        config.setSoReadTimeoutMs(1000);
+        config.setSoWriteTimeoutMs(1000);
+        config.setSoKeepAlive(true);
+        config.setSoKeepIntervalSec(10);
+        config.setSoKeepIdleSec(10);
         config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
         //
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
@@ -41,8 +43,10 @@ public class SocketServerTest {
         try (CobbleSocket socket = new CobbleSocket(config)) {
             NetListen listen = socket.listen("127.0.0.1", 5567, pipeCtx -> new PipeStack<Object, Object>() {
                 @Override
-                public Object[] rcvLayer(PipeContext pipeContext, Object rcvData) {
-                    ByteBuf rcvByteBuf = (ByteBuf) rcvData;
+                public Object[] rcvLayer(PipeContext pipeContext, Object[] rcvData) {
+                    ByteBuf[] rcvArrays = (ByteBuf[]) rcvData;
+                    ByteBuf rcvByteBuf = rcvArrays[0];
+
                     String line = rcvByteBuf.readLine();
                     rcvByteBuf.markReader();
 
@@ -56,9 +60,14 @@ public class SocketServerTest {
                 }
 
                 @Override
-                public Object[] sndLayer(PipeContext pipeContext, Object sndData) {
-                    ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + sndData + "\n").getBytes());
+                public Object[] sndLayer(PipeContext pipeContext, Object[] sndData) {
+                    ByteBuf buf = ByteBufAllocator.DEFAULT.wrap(("echo " + sndData[0] + "\n").getBytes());
                     return new ByteBuf[] { buf };
+                }
+
+                @Override
+                public Object[] soError(PipeContext pipeContext, Throwable sndData) {
+                    return null;
                 }
             });
             read(listen);

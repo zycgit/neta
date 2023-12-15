@@ -13,8 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.codec;
 import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.handler.PipeHandler;
+import net.hasor.neta.handler.PipeRcvQueue;
+import net.hasor.neta.handler.PipeSndQueue;
+import net.hasor.neta.handler.PipeStatus;
 
 /**
  * Transparent conveyor belt.

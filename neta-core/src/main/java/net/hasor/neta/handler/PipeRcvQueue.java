@@ -18,8 +18,8 @@ import java.util.List;
 
 /**
  * Network protocol layer input endpoint data queue
- * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-17
  * @see PipeSndQueue
  */
 public interface PipeRcvQueue<T> {
@@ -45,7 +45,6 @@ public interface PipeRcvQueue<T> {
 
     /**
      * Reset the queue, and the data that has been fetched will be returned.
-     *
      * <p>The method does not guarantee the data itself status.</p>
      */
     PipeRcvQueue<T> rcvReset();

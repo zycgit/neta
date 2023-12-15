@@ -16,8 +16,8 @@
 package net.hasor.neta.channel;
 /**
  * Each {@link NetChannel} has a {@link PipeContext}.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public interface PipeContext {
 
@@ -41,10 +41,8 @@ public interface PipeContext {
 
     /**
      * set flash to current {@link PipeContext}, the flash event.
-     *
      * <p>flash has a very short lifetime and will be automatically cleaned up after a full PipeLayer protocol stack is processed</p>
-     *
-     *  if you need long-term storage Use {@link #context(Class, Object)}
+     * if you need long-term storage Use {@link #context(Class, Object)}
      */
     <T> T flash(String key, T flash);
 }

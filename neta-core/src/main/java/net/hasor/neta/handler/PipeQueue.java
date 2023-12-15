@@ -21,8 +21,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * PipeRcvQueue/PipeSndQueue implements
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     private final int      capacity;
@@ -85,10 +85,8 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
 
         int added = 0;
         for (T item : offerList) {
-            if (!this.offerTemp.contains(item) && !this.linkedList.contains(item)) {
-                this.offerTemp.add(item);
-                added++;
-            }
+            this.offerTemp.add(item);
+            added++;
             if (added >= size) {
                 break;
             }
@@ -139,12 +137,17 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
         }
 
         int fixCnt = Math.min(cnt, this.queueSize());
-        return Collections.unmodifiableList(this.linkedList.subList(this.takeCount, fixCnt));
+        return Collections.unmodifiableList(this.linkedList.subList(this.takeCount, this.takeCount + fixCnt));
     }
 
     @Override
     public void skipMessage(int cnt) {
         int fixCnt = Math.min(cnt, this.queueSize());
         this.takeCount += fixCnt;
+    }
+
+    @Override
+    public String toString() {
+        return "PipeQueue@" + Integer.toHexString(hashCode()) + ", capacity:" + capacity + ", queueSize:" + this.queueSize() + ", slotSize:" + this.slotSize();
     }
 }

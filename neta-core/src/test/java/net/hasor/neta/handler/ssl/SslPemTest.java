@@ -18,6 +18,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.PipeStackFactory;
+import net.hasor.neta.codec.LimitFramePipeHandler;
 import net.hasor.neta.handler.*;
 import org.junit.Test;
 
@@ -33,12 +34,16 @@ public class SslPemTest {
         sslConfig.setPemCertChain("ssl/ca/server.crt");
         sslConfig.setPemPrivate("ssl/ca/server.pem");
         sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
+        sslConfig.setSsllog(true);
 
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
         PipeConfig pipeConfig = new PipeConfig();
+        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
         PipeStackFactory pipeStack = new PipeInitializer()
+                // limitFrame
+                .nextTo("LIMIT", pipeConfig, new PipeDuplexLayer<>(limitFrame, limitFrame))
                 // SSL
                 .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
                 // bytes <-> String
@@ -51,6 +56,7 @@ public class SslPemTest {
         EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
         EmbeddedChannel client = new EmbeddedChannel(false, pipeStack, context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
+        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
         client.writeSndUp("Hello Server, this message form client.\n");
         server.writeSndUp("Hello Client, this message form server.\n");

@@ -75,15 +75,15 @@ public class EmbeddedTransfer {
      * @param timeUnit A unit of interval time
      */
     public void transferToClient(int turn, int duration, TimeUnit timeUnit) {
-        turn = Math.min(this.server.readSndDownSize(), turn);
+        turn = Math.min(this.server.getSndDownSize(), turn);
 
         for (int i = 0; i < turn; i++) {
             if (this.server.isClose()) {
                 break;
             }
 
-            Object data = this.server.readSndDown();
-            if (data == null) {
+            Object[] data = this.server.readSndDownArray();
+            if (data == null || data.length == 0) {
                 break;
             }
             if (i > 0) {
@@ -93,7 +93,7 @@ public class EmbeddedTransfer {
             if (this.client.isClose()) {
                 break;
             } else {
-                this.client.writeRcvUp(data);
+                this.client.writeRcvUpArray(data);
             }
         }
     }
@@ -123,15 +123,15 @@ public class EmbeddedTransfer {
      * @param timeUnit A unit of interval time
      */
     public void transferToServer(int turn, int duration, TimeUnit timeUnit) {
-        turn = Math.min(this.client.readSndDownSize(), turn);
+        turn = Math.min(this.client.getSndDownSize(), turn);
 
         for (int i = 0; i < turn; i++) {
             if (this.client.isClose()) {
                 break;
             }
 
-            Object data = this.client.readSndDown();
-            if (data == null) {
+            Object[] data = this.client.readSndDownArray();
+            if (data == null || data.length == 0) {
                 break;
             }
             if (i > 0) {
@@ -141,7 +141,7 @@ public class EmbeddedTransfer {
             if (this.server.isClose()) {
                 break;
             } else {
-                this.server.writeRcvUp(data);
+                this.server.writeRcvUpArray(data);
             }
         }
     }
