@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.channel.PipeStackFactory;
 import net.hasor.neta.handler.PipeBuilder.PipeStackBuilder;
 import org.junit.Test;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -27,10 +29,10 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class PipeSndTest extends AbstractPipeTest {
     @Test
     public void nextTest_1() {
-        AtomicInteger decoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger decoderFailedCnt = new AtomicInteger(0);
-        AtomicInteger encoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger encoderFailedCnt = new AtomicInteger(0);
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
 
         PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
         PipeStackFactory stack = empty//
@@ -43,20 +45,20 @@ public class PipeSndTest extends AbstractPipeTest {
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
 
         // do Encoder
-        decoderFinishCnt.set(0);
-        encoderFinishCnt.set(0);
+        decoderFinishCnt.clear();
+        encoderFinishCnt.clear();
         channel.writeSndUp(123);// SND -> NET
-        assert decoderFinishCnt.get() == 0;
-        assert encoderFinishCnt.get() == 3;
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
         assert channel.readSndDown().equals(123);
     }
 
     @Test
     public void errorTest_1() {
-        AtomicInteger decoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger decoderFailedCnt = new AtomicInteger(0);
-        AtomicInteger encoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger encoderFailedCnt = new AtomicInteger(0);
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
 
         PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
         PipeStackFactory stack = empty//
@@ -69,24 +71,24 @@ public class PipeSndTest extends AbstractPipeTest {
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
 
         // do Encoder
-        decoderFinishCnt.set(0);
-        decoderFailedCnt.set(0);
-        encoderFinishCnt.set(0);
-        encoderFailedCnt.set(0);
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
         channel.writeSndUp(123);// SND -> NET
-        assert decoderFinishCnt.get() == 0;
-        assert decoderFailedCnt.get() == 0;
-        assert encoderFinishCnt.get() == 2;
-        assert encoderFailedCnt.get() == 2;
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoThrow");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("2EncErrThrow,1EncErrNext");
         assert channel.readSndDown() == null;
     }
 
     @Test
     public void retryTest_1() {
-        AtomicInteger decoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger decoderFailedCnt = new AtomicInteger(0);
-        AtomicInteger encoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger encoderFailedCnt = new AtomicInteger(0);
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
 
         PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
         PipeStackFactory stack = empty//
@@ -99,24 +101,24 @@ public class PipeSndTest extends AbstractPipeTest {
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
 
         // do Encoder
-        decoderFinishCnt.set(0);
-        decoderFailedCnt.set(0);
-        encoderFinishCnt.set(0);
-        encoderFailedCnt.set(0);
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
         channel.writeSndUp(123);// SND -> NET
-        assert decoderFinishCnt.get() == 0;
-        assert decoderFailedCnt.get() == 0;
-        assert encoderFinishCnt.get() == 5;
-        assert encoderFailedCnt.get() == 0;
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoNext");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert channel.readSndDown().equals(123);
     }
 
     @Test
     public void againTest_1() {
-        AtomicInteger decoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger decoderFailedCnt = new AtomicInteger(0);
-        AtomicInteger encoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger encoderFailedCnt = new AtomicInteger(0);
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
 
         PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
         PipeStackFactory stack = empty//
@@ -129,24 +131,24 @@ public class PipeSndTest extends AbstractPipeTest {
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
 
         // do Encoder
-        decoderFinishCnt.set(0);
-        decoderFailedCnt.set(0);
-        encoderFinishCnt.set(0);
-        encoderFailedCnt.set(0);
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
         channel.writeSndUp(123);// SND -> NET
-        assert decoderFinishCnt.get() == 0;
-        assert decoderFailedCnt.get() == 0;
-        assert encoderFinishCnt.get() == 9;
-        assert encoderFailedCnt.get() == 0;
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert channel.readSndDown().equals(123);
     }
 
     @Test
     public void againTest_2() {
-        AtomicInteger decoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger decoderFailedCnt = new AtomicInteger(0);
-        AtomicInteger encoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger encoderFailedCnt = new AtomicInteger(0);
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
 
         PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
         PipeStackFactory stack = empty//
@@ -159,24 +161,24 @@ public class PipeSndTest extends AbstractPipeTest {
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
 
         // do Encoder
-        decoderFinishCnt.set(0);
-        decoderFailedCnt.set(0);
-        encoderFinishCnt.set(0);
-        encoderFailedCnt.set(0);
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
         channel.writeSndUp(123);// SND -> NET
-        assert decoderFinishCnt.get() == 0;
-        assert decoderFailedCnt.get() == 0;
-        assert encoderFinishCnt.get() == 15;
-        assert encoderFailedCnt.get() == 0;
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert channel.readSndDown().equals(123);
     }
 
     @Test
     public void restartTest_1() {
-        AtomicInteger decoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger decoderFailedCnt = new AtomicInteger(0);
-        AtomicInteger encoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger encoderFailedCnt = new AtomicInteger(0);
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
 
         PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
         PipeStackFactory stack = empty//
@@ -189,24 +191,24 @@ public class PipeSndTest extends AbstractPipeTest {
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
 
         // do Encoder
-        decoderFinishCnt.set(0);
-        decoderFailedCnt.set(0);
-        encoderFinishCnt.set(0);
-        encoderFailedCnt.set(0);
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
         channel.writeSndUp(123);// SND -> NET
-        assert decoderFinishCnt.get() == 0;
-        assert decoderFailedCnt.get() == 0;
-        assert encoderFinishCnt.get() == 7;
-        assert encoderFailedCnt.get() == 0;
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,1EncDoNext");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert channel.readSndDown().equals(123);
     }
 
     @Test
     public void exitTest_1() {
-        AtomicInteger decoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger decoderFailedCnt = new AtomicInteger(0);
-        AtomicInteger encoderFinishCnt = new AtomicInteger(0);
-        AtomicInteger encoderFailedCnt = new AtomicInteger(0);
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
 
         PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
         PipeStackFactory stack = empty//
@@ -219,15 +221,15 @@ public class PipeSndTest extends AbstractPipeTest {
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
 
         // do Encoder
-        decoderFinishCnt.set(0);
-        decoderFailedCnt.set(0);
-        encoderFinishCnt.set(0);
-        encoderFailedCnt.set(0);
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
         channel.writeSndUp(123);// SND -> NET
-        assert decoderFinishCnt.get() == 0;
-        assert decoderFailedCnt.get() == 0;
-        assert encoderFinishCnt.get() == 2;
-        assert encoderFailedCnt.get() == 0;
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoExit");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert channel.readSndDown() == null;
     }
 }

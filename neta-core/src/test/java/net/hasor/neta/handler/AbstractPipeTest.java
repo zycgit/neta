@@ -16,40 +16,36 @@
 package net.hasor.neta.handler;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.SoChannel;
 
-import java.util.concurrent.atomic.AtomicInteger;
+import java.util.List;
 
 public class AbstractPipeTest {
     protected static final Logger logger = Logger.getLogger(AbstractPipeTest.class);
 
-    protected static PipeHandler<Integer, Integer> doExitHandler(String tag, AtomicInteger markFinish, AtomicInteger markFailed) {
+    protected static PipeHandler<Integer, Integer> doExitHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
             public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
-                logger.info(tag + ", doExitHandler(doHandler) -> " + markFinish.get());
+                recordFinish.add(tag + "DoExit");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
-                markFinish.incrementAndGet();
 
                 return PipeStatus.Exit;
             }
 
             @Override
             public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
-                logger.info(tag + ", doExitHandler(doError) -> " + markFailed.get());
-
-                markFailed.incrementAndGet();
+                recordFailed.add(tag + "ErrExit");
                 return PipeStatus.Next;
             }
         };
     }
 
-    protected static PipeHandler<Integer, Integer> doRestartHandler(String tag, AtomicInteger markFinish, AtomicInteger markFailed, int restartCnt) {
+    protected static PipeHandler<Integer, Integer> doRestartHandler(String tag, List<String> recordFinish, List<String> recordFailed, int restartCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
             public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
-                logger.info(tag + ", doRestartHandler(doHandler) -> " + markFinish.get());
+                recordFinish.add(tag + "DoRestart");
 
                 Integer restart = context.flash("restartCnt");
                 if (restart == null) {
@@ -59,7 +55,6 @@ public class AbstractPipeTest {
                 }
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
-                markFinish.incrementAndGet();
 
                 context.flash("restartCnt", restart);
 
@@ -73,19 +68,18 @@ public class AbstractPipeTest {
 
             @Override
             public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
-                logger.info(tag + ", doRestartHandler(doError) -> " + markFailed.get());
+                recordFailed.add(tag + "ErrRestart");
 
-                markFailed.incrementAndGet();
                 return PipeStatus.Next;
             }
         };
     }
 
-    protected static PipeHandler<Integer, Integer> doAgainHandler(String tag, AtomicInteger markFinish, AtomicInteger markFailed, int againCnt) {
+    protected static PipeHandler<Integer, Integer> doAgainHandler(String tag, List<String> recordFinish, List<String> recordFailed, int againCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
             public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
-                logger.info(tag + ", doAgainHandler(doHandler) -> " + markFinish.get());
+                recordFinish.add(tag + "DoAgain");
 
                 Integer again = context.flash("againCnt");
                 if (again == null) {
@@ -95,7 +89,6 @@ public class AbstractPipeTest {
                 }
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
-                markFinish.incrementAndGet();
 
                 context.flash("againCnt", again);
 
@@ -109,19 +102,18 @@ public class AbstractPipeTest {
 
             @Override
             public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
-                logger.info(tag + ", doRetryHandler(doError) -> " + markFailed.get());
+                recordFailed.add(tag + "ErrAgain");
 
-                markFailed.incrementAndGet();
                 return PipeStatus.Next;
             }
         };
     }
 
-    protected static PipeHandler<Integer, Integer> doRetryHandler(String tag, AtomicInteger markFinish, AtomicInteger markFailed, int retryCnt) {
+    protected static PipeHandler<Integer, Integer> doRetryHandler(String tag, List<String> recordFinish, List<String> recordFailed, int retryCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
             public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
-                logger.info(tag + ", doRetryHandler(doHandler) -> " + markFinish.get());
+                recordFinish.add(tag + "DoRetry");
 
                 Integer retry = context.flash("retryCnt");
                 if (retry == null) {
@@ -131,7 +123,6 @@ public class AbstractPipeTest {
                 }
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
-                markFinish.incrementAndGet();
 
                 context.flash("retryCnt", retry);
 
@@ -145,68 +136,48 @@ public class AbstractPipeTest {
 
             @Override
             public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
-                logger.info(tag + ", doRetryHandler(doError) -> " + markFailed.get());
+                recordFailed.add(tag + "ErrRetry");
 
-                markFailed.incrementAndGet();
                 return PipeStatus.Next;
             }
         };
     }
 
-    protected static PipeHandler<Integer, Integer> doThrowHandler(String tag, AtomicInteger markFinish, AtomicInteger markFailed) {
+    protected static PipeHandler<Integer, Integer> doThrowHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
             public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
-                logger.info(tag + ", doThrowHandler(doHandler) -> " + markFinish.get());
+                recordFinish.add(tag + "DoThrow");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
-                markFinish.incrementAndGet();
                 throw new IllegalArgumentException();
             }
 
             @Override
             public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
-                logger.info(tag + ", doNextHandler(doError) -> " + markFailed.get());
+                recordFailed.add(tag + "ErrThrow");
 
-                markFailed.incrementAndGet();
                 return PipeStatus.Next;
             }
         };
     }
 
-    protected static PipeHandler<Integer, Integer> doNextHandler(String tag, AtomicInteger markFinish, AtomicInteger markFailed) {
+    protected static PipeHandler<Integer, Integer> doNextHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
             public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
-                logger.info(tag + ", doNextHandler(doHandler) -> " + markFinish.get());
+                recordFinish.add(tag + "DoNext");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
-                markFinish.incrementAndGet();
                 return PipeStatus.Next;
             }
 
             @Override
             public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
-                logger.info(tag + ", doNextHandler(doError) -> " + markFailed.get());
+                recordFailed.add(tag + "ErrNext");
 
-                markFailed.incrementAndGet();
                 return PipeStatus.Next;
             }
         };
     }
-
-    protected static PipeReceiveListener<Object> onReceiveListener() {
-        return new PipeReceiveListener<Object>() {
-            @Override
-            public void onReceive(SoChannel<?> channel, Object data) {
-                logger.info("onReceiveListener(onReceive) -> " + data);
-            }
-
-            @Override
-            public void onError(SoChannel<?> channel, Throwable e) {
-                logger.info("onReceiveListener(onError) -> " + e.getMessage());
-            }
-        };
-    }
-
 }
