@@ -38,7 +38,7 @@ public interface PipeHandler<IN, OUT> {
     PipeStatus doHandler(PipeContext context, PipeRcvQueue<IN> src, PipeSndQueue<OUT> dst) throws IOException;
 
     /** Gets called if a Throwable was thrown. */
-    default PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+    default PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) throws Throwable {
         return PipeStatus.Next;
     }
 

@@ -239,13 +239,23 @@ class SoContextImpl implements SoContext {
         }
     }
 
+    /** receiving rcv Error data */
+    public void notifyRcvChannelError(long channelID, Throwable e) {
+        this.notifyChannelError(channelID, true, e);
+    }
+
+    /** receiving snd Error data */
+    public void notifySndChannelError(long channelID, Throwable e) {
+        this.notifyChannelError(channelID, false, e);
+    }
+
     /** receiving new data */
-    public void notifyChannelError(long channelID, Throwable e) {
+    protected void notifyChannelError(long channelID, boolean isRcv, Throwable e) {
         SoChannel<?> channel = this.channelMap.get(channelID);
         if (channel != null) {
             if (channel.isClient() || channel.isServer()) {
                 NetChannel netChannel = (NetChannel) channel;
-                netChannel.notifyError(e);
+                netChannel.notifyError(isRcv, e);
             } else {
                 NetListen netListen = (NetListen) channel;
                 netListen.notifyError(e);

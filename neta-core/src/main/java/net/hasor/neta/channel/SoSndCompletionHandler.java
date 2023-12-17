@@ -149,13 +149,13 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 } else {
                     SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
 
-                    this.context.notifyChannelError(this.channelID, cause);
+                    this.context.notifySndChannelError(this.channelID, cause);
                     this.context.unsafeCloseChannel(this.channelID, cause.getMessage(), cause);
                 }
             } else {
                 String msg = "snd(" + this.channelID + ") " + e.getMessage();
 
-                this.context.notifyChannelError(this.channelID, e);
+                this.context.notifySndChannelError(this.channelID, e);
                 this.context.unsafeCloseChannel(this.channelID, msg, e);
             }
 
@@ -183,7 +183,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             errorMsg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
         }
 
-        context.notifyChannelError(this.channelID, cause);
+        context.notifySndChannelError(this.channelID, cause);
         context.unsafeCloseChannel(this.channelID, errorMsg, cause);
 
         submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.PipeContext;
 
 import java.util.Objects;
@@ -46,13 +47,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  */
 class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    private final String                                        name;
-    private final PipeConfig                                    config;
-    private final AtomicBoolean                                 inited;
+    private static final Logger                                        logger        = Logger.getLogger(PipeLayerInvocation.class);
+    public static final  String                                        RCV_ERROR_TAG = PipeChainRoot.class.getName() + "-rcv-error-tag";
+    public static final  String                                        SND_ERROR_TAG = PipeChainRoot.class.getName() + "-snd-error-tag";
+    private final        String                                        name;
+    private final        PipeConfig                                    config;
+    private final        AtomicBoolean                                 inited;
     //
-    private       PipeQueue<RCV_DOWN>                           rcvDownEnd;
-    private       PipeQueue<SND_DOWN>                           sndDownEnd;
-    private final PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer;
+    private              PipeQueue<RCV_DOWN>                           rcvDownEnd;
+    private              PipeQueue<SND_DOWN>                           sndDownEnd;
+    private final        PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer;
 
     public PipeLayerInvocation(String name, PipeConfig config, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
         Objects.requireNonNull(config, "pipeConfig is null.");
@@ -79,7 +83,7 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         return "PipeLayer [name=" + this.name + ", queue=" + this.rcvDownEnd.queueSize() + ", slot=" + this.sndDownEnd.slotSize() + "]";
     }
 
-    public void initLayer(PipeContext pipeContext) throws Exception {
+    public void initLayer(PipeContext pipeContext) throws Throwable {
         if (this.inited.compareAndSet(false, true)) {
             this.rcvDownEnd = new PipeQueue<>(this.config.getPipeRcvDownStackSize());
             this.sndDownEnd = new PipeQueue<>(this.config.getPipeSndUpStackSize());
@@ -93,9 +97,22 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) throws Exception {
+    public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) throws Throwable {
+        String errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
         try {
-            return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
+            Throwable ctxError = context.flash(errorTag);
+            if (ctxError == null) {
+                return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
+            } else {
+                return this.pipeLayer.doError(context, isRcv, ctxError, this.createExceptionHandler(errorTag, context, rcvUp, sndUp));
+            }
+        } catch (Throwable e) {
+            String msgTag = isRcv ? "rcv" : "snd";
+            msgTag = msgTag + "(" + context.channel().getChannelID() + ") " + this.pipeLayer.getClass() + " an error has occurred " + e.getMessage();
+            logger.error(msgTag, e);
+
+            context.flash(errorTag, e);
+            return this.pipeLayer.doError(context, isRcv, e, this.createExceptionHandler(errorTag, context, rcvUp, sndUp));
         } finally {
             rcvUp.rcvSubmit();
             this.rcvDownEnd.sndSubmit();
@@ -104,11 +121,7 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    public PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) {
-        return this.pipeLayer.doError(context, isRcv, e, eh);
-    }
-
-    public PipeExceptionHandler createExceptionHandler(String errorTag, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
+    private PipeExceptionHandler createExceptionHandler(String errorTag, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
         return new PipeExceptionHandlerImpl(errorTag, pipeContext, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
     }
 

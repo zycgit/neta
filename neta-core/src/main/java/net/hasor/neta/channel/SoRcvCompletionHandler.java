@@ -126,7 +126,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             } else {
                 SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
 
-                context.notifyChannelError(this.channelID, cause);
+                context.notifyRcvChannelError(this.channelID, cause);
                 context.unsafeCloseChannel(this.channelID, cause.getMessage(), cause);
             }
             return;
@@ -141,7 +141,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
         }
 
-        context.notifyChannelError(this.channelID, e);
+        context.notifyRcvChannelError(this.channelID, e);
         context.unsafeCloseChannel(this.channelID, errorMsg, e);
     }
 }

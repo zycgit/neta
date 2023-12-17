@@ -95,14 +95,14 @@ class SoSndTask extends DefaultSoTask {
                 } else {
                     SoConnectTimeoutException cause = SoUtils.newTimeout(true, this.channelID, this.context, e);
 
-                    this.context.notifyChannelError(this.channelID, cause);
+                    this.context.notifySndChannelError(this.channelID, cause);
                     this.context.unsafeCloseChannel(this.channelID, cause.getMessage(), cause);
                     this.failedTask(e);
                 }
             } else {
                 String msg = "snd(" + this.channelID + ") " + e.getMessage();
 
-                this.context.notifyChannelError(this.channelID, e);
+                this.context.notifySndChannelError(this.channelID, e);
                 this.context.unsafeCloseChannel(this.channelID, msg, e);
                 this.failedTask(e);
             }

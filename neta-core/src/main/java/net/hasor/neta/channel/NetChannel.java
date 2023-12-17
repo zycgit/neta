@@ -208,14 +208,20 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     }
 
     /* Receive error */
-    final void notifyError(Throwable e) {
+    final void notifyError(boolean isRcv, Throwable e) {
         if (!(e instanceof SoReadTimeoutException)) {
             this.lastRcvTime = System.currentTimeMillis();
         }
 
         try {
             //The root Buffer cannot be deallocated
-            Object[] sndBufSet = this.pipeStack.soError(this.pipeContext, e);
+            Object[] sndBufSet;
+            if (isRcv) {
+                sndBufSet = this.pipeStack.rcvError(this.pipeContext, e);
+            } else {
+                sndBufSet = this.pipeStack.sndError(this.pipeContext, e);
+            }
+
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -336,7 +342,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             @Override
             public void run(Timeout timeout) {
                 if (getLastRcvTime() <= this.lastRcvTime) {
-                    notifyError(new SoReadTimeoutException("no data was received with " + this.waitTimeMs + " milliseconds."));
+                    notifyError(true, new SoReadTimeoutException("no data was received with " + this.waitTimeMs + " milliseconds."));
                 }
             }
         }

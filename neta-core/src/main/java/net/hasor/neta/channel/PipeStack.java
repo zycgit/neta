@@ -38,6 +38,13 @@ public interface PipeStack<RIN, ROUT> {
     ROUT[] rcvLayer(PipeContext pipeContext, RIN[] rcvData) throws Throwable;
 
     /**
+     * Errors from the network layer.
+     * @param pipeContext pipeContext
+     * @param rcvError network error.
+     */
+    ROUT[] rcvError(PipeContext pipeContext, Throwable rcvError) throws Throwable;
+
+    /**
      * Trigger sending data
      * @param pipeContext pipeContext
      * @param sndData send data
@@ -48,9 +55,9 @@ public interface PipeStack<RIN, ROUT> {
     /**
      * Errors from the network layer.
      * @param pipeContext pipeContext
-     * @param soError network error.
+     * @param sndError network error.
      */
-    ROUT[] soError(PipeContext pipeContext, Throwable soError) throws Throwable;
+    ROUT[] sndError(PipeContext pipeContext, Throwable sndError) throws Throwable;
 
     /**
      * before close.

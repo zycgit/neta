@@ -51,7 +51,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     /**
      * Initialize the protocol stack, when the Connected.
      */
-    default void init(PipeContext context) throws Exception {
+    default void init(PipeContext context) throws Throwable {
     }
 
     /**
@@ -63,7 +63,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
      *  <li>When the method throws, (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) keep state, and call {@link #doError(PipeContext, boolean, Throwable, PipeExceptionHandler)}.</li>
      * </ul>
      */
-    PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown) throws Exception;
+    PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeSndQueue<RCV_DOWN> rcvDown, PipeRcvQueue<SND_UP> sndUp, PipeSndQueue<SND_DOWN> sndDown) throws Throwable;
 
     /**
      * Gets called if a Throwable was thrown. If an exception occurs, piple executes in the following way.
@@ -82,7 +82,7 @@ public interface PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
      *  ... -> doLayer -> doError -> doError(invoker clear) -> doLayer -> ...
      * </pre>
      */
-    default PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) {
+    default PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) throws Throwable {
         return PipeStatus.Next;
     }
 

@@ -49,7 +49,7 @@ public class PipeDuplexLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pipe
     }
 
     @Override
-    public PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) {
+    public PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) throws Throwable {
         if (isRcv) {
             return this.decoder.doError(context, e, eh);
         } else {
