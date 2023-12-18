@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.util.Objects;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Used for data transfer between two {@link EmbeddedChannel}.
@@ -57,47 +55,29 @@ public class EmbeddedTransfer {
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
      */
     public void transferToClient() {
-        this.transferToClient(Integer.MAX_VALUE, 0, TimeUnit.MILLISECONDS);
+        this.transferToClient(Integer.MAX_VALUE);
     }
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from server to client.
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     * @param turn use turn parameter to determine number messages to send.
+     * @param copyPacket use turn parameter to determine number messages to send.
      */
-    public void transferToClient(int turn) {
-        this.transferToClient(turn, 0, TimeUnit.MILLISECONDS);
-    }
+    public void transferToClient(int copyPacket) {
+        copyPacket = Math.min(this.server.getSndDownSize(), copyPacket);
 
-    /**
-     * send the {@link EmbeddedChannel} SND_DOWN endpoint data from server to client.
-     * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     * @param turn use turn parameter to determine number messages to send.
-     * @param duration The interval between two data transmissions
-     * @param timeUnit A unit of interval time
-     */
-    public void transferToClient(int turn, int duration, TimeUnit timeUnit) {
-        turn = Math.min(this.server.getSndDownSize(), turn);
+        if (this.server.isClose()) {
+            return;
+        }
 
-        for (int i = 0; i < turn; i++) {
-            if (this.server.isClose()) {
-                break;
-            }
+        Object[] data = this.server.readSndDownArray(copyPacket);
+        if (data == null || data.length == 0) {
+            return;
+        }
 
-            Object[] data = this.server.readSndDownArray();
-            if (data == null || data.length == 0) {
-                break;
-            }
-            if (i > 0) {
-                ThreadUtils.sleep(duration, timeUnit);
-            }
-
-            if (this.client.isClose()) {
-                break;
-            } else {
-                logger.info("transferToClient packet: " + data.length);
-                this.client.writeRcvUpArray(data);
-            }
+        if (!this.client.isClose()) {
+            logger.info("transferToClient packet: " + data.length);
+            this.client.writeRcvUpArray(data);
         }
     }
 
@@ -106,47 +86,29 @@ public class EmbeddedTransfer {
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
      */
     public void transferToServer() {
-        this.transferToServer(Integer.MAX_VALUE, 0, TimeUnit.MILLISECONDS);
+        this.transferToServer(Integer.MAX_VALUE);
     }
 
     /**
      * send the {@link EmbeddedChannel} SND_DOWN endpoint data from client to server.
      * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     * @param turn use turn parameter to determine number messages to send.
+     * @param copyPacket use turn parameter to determine number messages to send.
      */
-    public void transferToServer(int turn) {
-        this.transferToServer(turn, 0, TimeUnit.MILLISECONDS);
-    }
+    public void transferToServer(int copyPacket) {
+        copyPacket = Math.min(this.client.getSndDownSize(), copyPacket);
 
-    /**
-     * send the {@link EmbeddedChannel} SND_DOWN endpoint data from client to server.
-     * SND_DOWN may be a multiple messages, use turn parameter to determine number messages to send.
-     * @param turn use turn parameter to determine number messages to send.
-     * @param duration The interval between two data transmissions
-     * @param timeUnit A unit of interval time
-     */
-    public void transferToServer(int turn, int duration, TimeUnit timeUnit) {
-        turn = Math.min(this.client.getSndDownSize(), turn);
+        if (this.client.isClose()) {
+            return;
+        }
 
-        for (int i = 0; i < turn; i++) {
-            if (this.client.isClose()) {
-                break;
-            }
+        Object[] data = this.client.readSndDownArray(copyPacket);
+        if (data == null || data.length == 0) {
+            return;
+        }
 
-            Object[] data = this.client.readSndDownArray();
-            if (data == null || data.length == 0) {
-                break;
-            }
-            if (i > 0) {
-                ThreadUtils.sleep(duration, timeUnit);
-            }
-
-            if (this.server.isClose()) {
-                break;
-            } else {
-                logger.info("transferToServer packet: " + data.length);
-                this.server.writeRcvUpArray(data);
-            }
+        if (!this.server.isClose()) {
+            logger.info("transferToServer packet: " + data.length);
+            this.server.writeRcvUpArray(data);
         }
     }
 }

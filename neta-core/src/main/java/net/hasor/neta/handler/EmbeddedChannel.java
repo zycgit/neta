@@ -419,9 +419,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     /**
      * read messages from the SND_DOWN of this {@link SoChannel}.
      */
-    public <T> T[] readSndDownArray() {
+    public <T> T[] readSndDownArray(int readSize) {
         try {
-            return (T[]) this.sndDown.takeMessage(this.sndDown.queueSize());
+            return (T[]) this.sndDown.takeMessage(Math.min(readSize, this.sndDown.queueSize()));
         } finally {
             this.sndDown.rcvSubmit();
         }

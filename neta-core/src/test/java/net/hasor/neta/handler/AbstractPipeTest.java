@@ -403,4 +403,21 @@ public class AbstractPipeTest {
             }
         };
     }
+
+    protected static PipeLayer<Integer, Integer, Integer, Integer> doPipeLayer(boolean rcvSend, boolean sndSend) {
+        return (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
+            if (isRcv) {
+                rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
+                if (rcvSend) {
+                    sndDown.offerMessage(888);
+                }
+            } else {
+                sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
+                if (sndSend) {
+                    sndDown.offerMessage(999);
+                }
+            }
+            return PipeStatus.Next;
+        };
+    }
 }
