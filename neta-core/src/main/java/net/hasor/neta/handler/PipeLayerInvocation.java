@@ -68,6 +68,11 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         this.pipeLayer = pipeLayer;
     }
 
+    /** return this {@link PipeLayer} name. */
+    public String getName() {
+        return this.name;
+    }
+
     /** the {@link PipeLayer} RCV_DOWN to connect the next {@link PipeLayer} RCV_UP. */
     public PipeQueue<RCV_DOWN> getRcvDown() {
         return this.rcvDownEnd;
@@ -81,6 +86,24 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     @Override
     public String toString() {
         return "PipeLayer [name=" + this.name + ", queue=" + this.rcvDownEnd.queueSize() + ", slot=" + this.sndDownEnd.slotSize() + "]";
+    }
+
+    public String toMonitorRcvString() {
+        int capacity = this.rcvDownEnd.getCapacity();
+        if (capacity > 500) {
+            return this.rcvDownEnd.queueSize() + "/500+";
+        } else {
+            return this.rcvDownEnd.queueSize() + "/" + capacity;
+        }
+    }
+
+    public String toMonitorSndString() {
+        int capacity = this.sndDownEnd.getCapacity();
+        if (capacity > 500) {
+            return this.sndDownEnd.queueSize() + "/500+";
+        } else {
+            return this.sndDownEnd.queueSize() + "/" + capacity;
+        }
     }
 
     public void initLayer(PipeContext pipeContext) throws Throwable {
@@ -99,20 +122,24 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) throws Throwable {
         String errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
+        Throwable ctxError = context.flash(errorTag);
         try {
-            Throwable ctxError = context.flash(errorTag);
             if (ctxError == null) {
                 return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
             } else {
                 return this.pipeLayer.doError(context, isRcv, ctxError, this.createExceptionHandler(errorTag, context, rcvUp, sndUp));
             }
         } catch (Throwable e) {
-            String msgTag = isRcv ? "rcv" : "snd";
-            msgTag = msgTag + "(" + context.channel().getChannelID() + ") " + this.pipeLayer.getClass() + " an error has occurred " + e.getMessage();
-            logger.error(msgTag, e);
+            if (ctxError == null) {
+                String msgTag = isRcv ? "rcv" : "snd";
+                msgTag = msgTag + "(" + context.channel().getChannelID() + ") " + this.pipeLayer.getClass() + " an error has occurred " + e.getMessage();
+                logger.error(msgTag, e);
 
-            context.flash(errorTag, e);
-            return this.pipeLayer.doError(context, isRcv, e, this.createExceptionHandler(errorTag, context, rcvUp, sndUp));
+                context.flash(errorTag, e);
+                return this.pipeLayer.doError(context, isRcv, e, this.createExceptionHandler(errorTag, context, rcvUp, sndUp));
+            } else {
+                throw e;
+            }
         } finally {
             rcvUp.rcvSubmit();
             this.rcvDownEnd.sndSubmit();
@@ -129,18 +156,34 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         private final String          errorTag;
         private final PipeContext     context;
         private final PipeRcvQueue<?> rcvUp;
-        private final PipeQueue<?>    rcvDown;
+        private final PipeSndQueue<?> rcvDown;
         private final PipeRcvQueue<?> sndUp;
-        private final PipeQueue<?>    sndDown;
+        private final PipeSndQueue<?> sndDown;
 
         public PipeExceptionHandlerImpl(String errorTag, PipeContext context, //
-                PipeRcvQueue<?> rcvUp, PipeQueue<?> rcvDown, PipeRcvQueue<?> sndUp, PipeQueue<?> sndDown) {
+                PipeRcvQueue<?> rcvUp, PipeSndQueue<?> rcvDown, PipeRcvQueue<?> sndUp, PipeSndQueue<?> sndDown) {
             this.errorTag = errorTag;
             this.context = context;
             this.rcvUp = rcvUp;
             this.rcvDown = rcvDown;
             this.sndUp = sndUp;
             this.sndDown = sndDown;
+        }
+
+        public PipeRcvQueue<?> getRcvUp() {
+            return this.rcvUp;
+        }
+
+        public PipeSndQueue<?> getRcvDown() {
+            return this.rcvDown;
+        }
+
+        public PipeRcvQueue<?> getSndUp() {
+            return this.sndUp;
+        }
+
+        public PipeSndQueue<?> getSndDown() {
+            return this.sndDown;
         }
 
         @Override

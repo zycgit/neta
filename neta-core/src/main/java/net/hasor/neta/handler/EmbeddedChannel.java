@@ -40,6 +40,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     private final        PipeQueue<Object>         rcvDown;
     private              Throwable                 rcvError;
     private final        PipeQueue<Object>         sndDown;
+    private              Throwable                 sndError;
     protected final      PipeContextImpl           pipeCtx;
     protected final      PipeStack<Object, Object> pipeStack;
     //
@@ -71,7 +72,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
 
         PipeChainRoot chainRoot = (PipeChainRoot) this.pipeStack;
         if (chainRoot.getListener() == null) {
-            chainRoot.bindListener(new PipeReceiveListener<Object>() {
+            chainRoot.bindListener(new PipeListener<Object>() {
                 @Override
                 public void onReceive(SoChannel<?> channel, Object data) {
                     rcvDown.offerMessage(data);
@@ -79,8 +80,18 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
                 }
 
                 @Override
-                public void onError(SoChannel<?> channel, Throwable e) {
+                public void onReceiveError(SoChannel<?> channel, Throwable e) {
                     rcvError = e;
+                }
+
+                @Override
+                public void onSend(SoChannel<?> channel) {
+
+                }
+
+                @Override
+                public void onSendError(SoChannel<?> channel, Throwable e) {
+                    sndError = e;
                 }
             });
         }
@@ -152,19 +163,13 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         return this.closeStatus.get();
     }
 
-    /** Receive data protocol layer error */
-    public boolean isRcvError() {
-        return this.rcvError != null;
-    }
-
-    /** Get the possible received data protocol layer error */
-    public Throwable getRcvError() {
-        return this.rcvError;
-    }
-
-    /** Clear the RcvError status. */
-    public void clearRcvError() {
-        this.rcvError = null;
+    /** Get protocol stack statistics */
+    public PipeStatistical getPipeStatistical() {
+        if (this.pipeStack instanceof PipeStatistical) {
+            return (PipeStatistical) this.pipeStack;
+        } else {
+            return null;
+        }
     }
 
     /**
@@ -190,6 +195,24 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         } catch (Throwable e) {
             closeNow();
             throw ExceptionUtils.toRuntime(e);
+        }
+    }
+
+    /**
+     * Write error to the RCV_UP of this {@link SoChannel}.
+     * @param e the messages to be written
+     */
+    public void writeRcvUpError(Throwable e) {
+        try {
+            this.lastActiveTime = System.currentTimeMillis();
+            Object[] sndDownObj = this.pipeStack.rcvError(this.pipeCtx, e);
+            if (sndDownObj.length != 0) {
+                this.sndDown.offerMessage(sndDownObj);
+                this.sndDown.sndSubmit();
+            }
+        } catch (Throwable ee) {
+            closeNow();
+            throw ExceptionUtils.toRuntime(ee);
         }
     }
 
@@ -226,6 +249,65 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         return this.rcvDown.queueSize();
     }
 
+    /** Receive data protocol layer error */
+    public boolean hasRcvError() {
+        return this.rcvError != null;
+    }
+
+    /** Get the possible received data protocol layer error */
+    public Throwable getRcvError() {
+        return this.rcvError;
+    }
+
+    /** Clear the RcvError status. */
+    public void clearRcvError() {
+        this.rcvError = null;
+    }
+
+    /**
+     * Write messages to the SND_UP of this {@link SoChannel}.
+     * @param object the messages to be written
+     */
+    public <T> void writeSndUp(T object) {
+        this.writeSndUpArray(new Object[] { object });
+    }
+
+    /**
+     * Write messages to the SND_UP of this {@link SoChannel}.
+     * @param object the messages to be written
+     */
+    public <T> void writeSndUpArray(T[] object) {
+        try {
+            Objects.requireNonNull(object);
+            Object[] sndDownObj = this.pipeStack.sndLayer(this.pipeCtx, object);
+            if (sndDownObj.length != 0) {
+                this.sndDown.offerMessage(sndDownObj);
+                this.sndDown.sndSubmit();
+            }
+        } catch (Throwable e) {
+            closeNow();
+            throw ExceptionUtils.toRuntime(e);
+        }
+    }
+
+    /**
+     * Write error to the SND_UP of this {@link SoChannel}.
+     * @param e the messages to be written
+     */
+    public void writeSndUpError(Throwable e) {
+        try {
+            Objects.requireNonNull(e);
+            Object[] sndDownObj = this.pipeStack.sndError(this.pipeCtx, e);
+            if (sndDownObj.length != 0) {
+                this.sndDown.offerMessage(sndDownObj);
+                this.sndDown.sndSubmit();
+            }
+        } catch (Throwable ee) {
+            closeNow();
+            throw ExceptionUtils.toRuntime(ee);
+        }
+    }
+
     /**
      * read messages from the SND_DOWN of this {@link SoChannel}.
      */
@@ -259,29 +341,18 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         return this.sndDown.queueSize();
     }
 
-    /**
-     * Write messages to the SND_UP of this {@link SoChannel}.
-     * @param object the messages to be written
-     */
-    public <T> void writeSndUp(T object) {
-        this.writeSndUpArray(new Object[] { object });
+    /** send data protocol layer error */
+    public boolean hasSndError() {
+        return this.sndError != null;
     }
 
-    /**
-     * Write messages to the SND_UP of this {@link SoChannel}.
-     * @param object the messages to be written
-     */
-    public <T> void writeSndUpArray(T[] object) {
-        try {
-            Objects.requireNonNull(object);
-            Object[] sndDownObj = this.pipeStack.sndLayer(this.pipeCtx, object);
-            if (sndDownObj.length != 0) {
-                this.sndDown.offerMessage(sndDownObj);
-                this.sndDown.sndSubmit();
-            }
-        } catch (Throwable e) {
-            closeNow();
-            throw ExceptionUtils.toRuntime(e);
-        }
+    /** Get the possible send data protocol layer error */
+    public Throwable getSndError() {
+        return this.sndError;
+    }
+
+    /** Clear the SndError status. */
+    public void clearSndError() {
+        this.sndError = null;
     }
 }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
@@ -29,27 +30,32 @@ import java.util.List;
  * @version : 2023-10-20
  */
 @SuppressWarnings({ "unchecked" })
-class PipeChainRoot implements PipeStack<Object, Object> {
-    private static final Logger                                logger    = Logger.getLogger(PipeChainRoot.class);
-    private static final ByteBuf[]                             EMPTY     = new ByteBuf[0];
+class PipeChainRoot implements PipeStack<Object, Object>, PipeStatistical {
+    private static final Logger                                logger = Logger.getLogger(PipeChainRoot.class);
+    private static final ByteBuf[]                             EMPTY  = new ByteBuf[0];
     private final        List<PipeLayerInvocation<?, ?, ?, ?>> layers;
-    private final        PipeQueue<Object>                     rootRcvUp = new PipeQueue<>(-1);
-    private final        PipeQueue<Object>                     rootSndUp = new PipeQueue<>(-1);
-    private              PipeReceiveListener<Object>           listener;
+    private final        PipeQueue<Object>                     rootRcvUp;
+    private final        PipeQueue<Object>                     rootSndUp;
+    private              PipeListener<Object>                  listener;
 
-    public PipeChainRoot() {
+    public PipeChainRoot(PipeConfig rootConfig) {
+        int rcvSize = rootConfig.getPipeRcvDownStackSize();
+        int sndSize = rootConfig.getPipeSndUpStackSize();
+
         this.layers = new ArrayList<>();
+        this.rootRcvUp = rcvSize < 0 ? new PipeQueue<>(-1) : new PipeQueue<>(rcvSize);
+        this.rootSndUp = sndSize < 0 ? new PipeQueue<>(-1) : new PipeQueue<>(sndSize);
     }
 
     public void addLayer(PipeLayerInvocation<?, ?, ?, ?> pipeLayer) {
         this.layers.add(pipeLayer);
     }
 
-    public <NEXT_RCV_DOWN> void bindListener(PipeReceiveListener<NEXT_RCV_DOWN> listener) {
-        this.listener = (PipeReceiveListener<Object>) listener;
+    public <NEXT_RCV_DOWN> void bindListener(PipeListener<NEXT_RCV_DOWN> listener) {
+        this.listener = (PipeListener<Object>) listener;
     }
 
-    public PipeReceiveListener<Object> getListener() {
+    public PipeListener<Object> getListener() {
         return this.listener;
     }
 
@@ -76,9 +82,9 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             String msgTag = isRcv ? "rcv" : "snd";
             long channelID = pipeContext.channel().getChannelID();
             int slotSize = queue.slotSize();
-            int capacity = queue.getCapacity();
+            int require = offerData.length;
 
-            String msg = String.format("%s(%s) %sQueue[%s/%s] is full.", msgTag, channelID, msgTag, slotSize, capacity);
+            String msg = String.format("%s(%s) %sQueue is full, available slot is %s, require %s.", msgTag, channelID, msgTag, slotSize, require);
             IllegalStateException e = new IllegalStateException(msg);
             logger.error(msg, e);
             throw e;
@@ -109,7 +115,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
     public Object[] sndLayer(PipeContext pipeContext, Object[] sndData) throws Throwable {
         try {
             this.offerMessage(false, pipeContext, this.rootSndUp, sndData);
-            return this.doSndPipe(pipeContext, this.layers.size() - 1);
+            return this.doSndLife(pipeContext);
         } finally {
             ((PipeContextImpl) pipeContext).clearFlash();
         }
@@ -119,7 +125,7 @@ class PipeChainRoot implements PipeStack<Object, Object> {
     public Object[] sndError(PipeContext pipeContext, Throwable sndError) throws Throwable {
         try {
             pipeContext.flash(PipeLayerInvocation.SND_ERROR_TAG, sndError);
-            return this.doSndPipe(pipeContext, this.layers.size() - 1);
+            return this.doSndLife(pipeContext);
         } finally {
             ((PipeContextImpl) pipeContext).clearFlash();
         }
@@ -131,11 +137,14 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         if (rcvResult.pipeFinish) {
             this.triggerReceive(pipeContext);
         }
-
-        Object[] dat1 = rcvResult.result;
-        Object[] dat2 = this.doSndPipe(pipeContext, rcvResult.layerDepth);
+        PipeResult sndResult = this.doSndPipe(pipeContext, rcvResult.layerDepth);
+        if (sndResult.pipeFinish) {
+            this.triggerSend(pipeContext);
+        }
 
         // return data(Will be written to SND)
+        Object[] dat1 = rcvResult.result;
+        Object[] dat2 = sndResult.result;
         if (dat1 == EMPTY) {
             return dat2;
         } else if (dat2 == EMPTY) {
@@ -148,37 +157,12 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         }
     }
 
-    private void triggerReceive(PipeContext pipeContext) {
-        // find RCV_DOWN form last layer
-        PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
-
-        // 1st onReceive
-        if (rcvDown.hasMore()) {
-            if (this.listener == null) {
-                // trigger tail. print event data to sto
-                while (rcvDown.hasMore()) {
-                    Object msg = rcvDown.takeMessage();
-                    logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event: " + msg);
-                }
-            } else {
-                // trigger the listener event.
-                while (rcvDown.hasMore()) {
-                    Object msg = rcvDown.takeMessage();
-                    this.listener.onReceive(pipeContext.channel(), msg);
-                }
-            }
-            rcvDown.rcvSubmit();
+    private Object[] doSndLife(PipeContext pipeContext) throws Throwable {
+        PipeResult sndResult = this.doSndPipe(pipeContext, this.layers.size() - 1);
+        if (sndResult.pipeFinish) {
+            this.triggerSend(pipeContext);
         }
-
-        // 2st onError
-        Throwable ctxError = pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG);
-        if (ctxError != null) {
-            if (this.listener == null) {
-                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
-            } else {
-                this.listener.onError(pipeContext.channel(), ctxError);
-            }
-        }
+        return sndResult.result;
     }
 
     private PipeResult doRcvPipe(final PipeContext pipeContext) throws Throwable {
@@ -239,13 +223,17 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         }
     }
 
-    private Object[] doSndPipe(PipeContext pipeContext, int depth) throws Throwable {
+    private PipeResult doSndPipe(PipeContext pipeContext, int depth) throws Throwable {
         boolean netLog = pipeContext.getConfig().isNetlog();
         boolean needRestartLater;
+        int i;
+
         do {
             needRestartLater = false;
             boolean breakFor = false;
-            for (int i = depth; i >= 0; i--) {
+            i = depth;
+
+            for (; i >= 0; i--) {
                 if (breakFor) {
                     break;
                 }
@@ -283,9 +271,61 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         if (sndDown.hasMore()) {
             Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
             sndDown.rcvSubmit();
-            return sndList;
+            return new PipeResult(sndList, i, i == -1);
         } else {
-            return EMPTY;
+            return new PipeResult(EMPTY, i, i == -1);
+        }
+    }
+
+    private void triggerReceive(PipeContext pipeContext) {
+        // find RCV_DOWN form last layer
+        PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
+
+        // 1st onReceive
+        if (rcvDown.hasMore()) {
+            if (this.listener == null) {
+                // trigger tail. print event data to sto
+                while (rcvDown.hasMore()) {
+                    Object msg = rcvDown.takeMessage();
+                    logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event: " + msg);
+                }
+            } else {
+                // trigger the listener event.
+                while (rcvDown.hasMore()) {
+                    Object msg = rcvDown.takeMessage();
+                    this.listener.onReceive(pipeContext.channel(), msg);
+                }
+            }
+            rcvDown.rcvSubmit();
+        }
+
+        // 2st onError
+        Throwable ctxError = pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG);
+        if (ctxError != null) {
+            if (this.listener == null) {
+                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+            } else {
+                this.listener.onReceiveError(pipeContext.channel(), ctxError);
+            }
+        }
+    }
+
+    private void triggerSend(PipeContext pipeContext) {
+        // 2st onError
+        Throwable ctxError = pipeContext.flash(PipeLayerInvocation.SND_ERROR_TAG);
+        if (ctxError != null) {
+            if (this.listener == null) {
+                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+            } else {
+                this.listener.onSendError(pipeContext.channel(), ctxError);
+            }
+        } else {
+            if (this.listener == null) {
+                logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event send.");
+            } else {
+                this.listener.onSend(pipeContext.channel());
+            }
+
         }
     }
 
@@ -327,6 +367,54 @@ class PipeChainRoot implements PipeStack<Object, Object> {
         return status;
     }
 
+    @Override
+    public int heapUpOfRcv() {
+        int heapUpOfRcv = this.rootRcvUp.queueSize();
+        for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
+            heapUpOfRcv += layer.getRcvDown().queueSize();
+        }
+        return heapUpOfRcv;
+    }
+
+    @Override
+    public int heapUpOfRcv(String layerName) {
+        for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
+            if (StringUtils.equals(layerName, layer.getName())) {
+                return layer.getRcvDown().queueSize();
+            }
+        }
+        return -1;
+    }
+
+    @Override
+    public int heapUpOfRcvRoot() {
+        return this.rootRcvUp.queueSize();
+    }
+
+    @Override
+    public int heapUpOfSnd() {
+        int heapUpOfSnd = this.rootSndUp.queueSize();
+        for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
+            heapUpOfSnd += layer.getSndDown().queueSize();
+        }
+        return heapUpOfSnd;
+    }
+
+    @Override
+    public int heapUpOfSnd(String layerName) {
+        for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
+            if (StringUtils.equals(layerName, layer.getName())) {
+                return layer.getSndDown().queueSize();
+            }
+        }
+        return -1;
+    }
+
+    @Override
+    public int heapUpOfSndRoot() {
+        return this.rootSndUp.queueSize();
+    }
+
     private static final class PipeResult {
         public final Object[] result;
         public final int      layerDepth;
@@ -336,6 +424,72 @@ class PipeChainRoot implements PipeStack<Object, Object> {
             this.result = result;
             this.layerDepth = layerDepth;
             this.pipeFinish = pipeFinish;
+        }
+    }
+
+    @Override
+    public String toString() {
+        List<String> layerNames = new ArrayList<>();
+        List<String> monitorRcv = new ArrayList<>();
+        List<String> monitorSnd = new ArrayList<>();
+        String rootRcv = rootMonitorRcvString() + " (RCV)";
+        String rootSnd = rootMonitorSndString() + " (SND)";
+        int layerSize = this.layers.size();
+
+        // nameLength
+        int maxNameLength = 0;
+        for (int i = layerSize - 1; i >= 0; i--) {
+            PipeLayerInvocation<?, ?, ?, ?> layer = this.layers.get(i);
+            String layerName = layer.getName();
+            layerName = StringUtils.isBlank(layerName) ? ("Layer@" + Integer.toHexString(layer.hashCode())) : layerName;
+            layerNames.add(layerName);
+            maxNameLength = Math.max(maxNameLength, layerName.length());
+
+            monitorRcv.add(layer.toMonitorRcvString() + ",");
+            monitorSnd.add(layer.toMonitorSndString());
+        }
+
+        // bodyLength
+        int rcvMaxLength = rootRcv.length() + 1;
+        int sndMaxLength = rootSnd.length();
+        for (int i = 0; i < this.layers.size(); i++) {
+            rcvMaxLength = Math.max(rcvMaxLength, monitorRcv.get(i).length());
+            sndMaxLength = Math.max(sndMaxLength, monitorSnd.get(i).length());
+        }
+
+        // build string
+        StringBuilder sb = new StringBuilder();
+        String nameBorder = StringUtils.repeat("━", maxNameLength);
+        String rcvBorder = StringUtils.repeat("━", rcvMaxLength);
+        String sndBorder = StringUtils.repeat("━", sndMaxLength);
+
+        sb.append(String.format("┏━%s━━━━%s ↓ %s ━┓\n", nameBorder, rcvBorder, rootSnd));
+        for (int i = 0; i < layerSize; i++) {
+            String layerName = layerNames.get(i);
+            String rcvPart = StringUtils.rightPad(monitorRcv.get(i), rcvMaxLength, " ");
+            String sndPart = StringUtils.rightPad(monitorSnd.get(i), sndMaxLength, " ");
+            sb.append(String.format("┃ %s [↑ %s ↓ %s] ┃\n", layerName, rcvPart, sndPart));
+        }
+        sb.append(String.format("┗━%s━ ↑ %s ━━━%s━━┛", nameBorder, rootRcv, sndBorder));
+
+        return sb.toString();
+    }
+
+    private String rootMonitorRcvString() {
+        int capacity = this.rootRcvUp.getCapacity();
+        if (capacity > 500) {
+            return this.rootRcvUp.queueSize() + "/500+";
+        } else {
+            return this.rootRcvUp.queueSize() + "/" + capacity;
+        }
+    }
+
+    private String rootMonitorSndString() {
+        int capacity = this.rootSndUp.getCapacity();
+        if (capacity > 500) {
+            return this.rootSndUp.queueSize() + "/500+";
+        } else {
+            return this.rootSndUp.queueSize() + "/" + capacity;
         }
     }
 }

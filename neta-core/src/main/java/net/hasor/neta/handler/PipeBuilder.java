@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeStack;
 import net.hasor.neta.channel.PipeStackFactory;
@@ -24,6 +25,23 @@ import net.hasor.neta.channel.PipeStackFactory;
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface PipeBuilder {
+    /**
+     * empty PipeStackBuilder is mostly used to develop the protocol stack via Embedded.
+     *
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is Undefined</li>
+     *  <li>SND_UP is Undefined</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     *
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    <RCV_UP, SND_DOWN> PipeStackBuilder<RCV_UP, SND_DOWN> pipeConfig(PipeConfig pipeConfig);
+
+    /** Get the default PipeConfig */
+    PipeConfig pipeConfig();
+
     /**
      * empty PipeStackBuilder is mostly used to develop the protocol stack via Embedded.
      *
@@ -52,7 +70,25 @@ public interface PipeBuilder {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer) {
-        return this.nextTo(pipeLayer.getClass().getSimpleName(), new PipeConfig(), pipeLayer);
+        return this.nextTo(pipeLayer.getClass().getSimpleName(), this.pipeConfig(), pipeLayer);
+    }
+
+    /**
+     * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
+     *
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf}</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf}</li>
+     * </ul>
+     *
+     * @param name pipeLayer name
+     * @param pipeLayer target pipeLayer
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer) {
+        return this.nextTo(name, this.pipeConfig(), pipeLayer);
     }
 
     /**
@@ -86,8 +122,31 @@ public interface PipeBuilder {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
-        String name = String.format("%s/%s", decoder.getClass().getSimpleName(), encoder.getClass().getSimpleName());
-        return this.nextTo(name, new PipeConfig(), decoder, encoder);
+        String decName = decoder.getClass().getSimpleName();
+        String encName = encoder.getClass().getSimpleName();
+        decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
+        encName = StringUtils.isBlank(encName) ? "Unknown" : encName;
+
+        String name = String.format("%s/%s", decName, encName);
+        return this.nextTo(name, this.pipeConfig(), decoder, encoder);
+    }
+
+    /**
+     * using decoder and encoder to combined for duplex.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf}</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf}</li>
+     * </ul>
+     *
+     * @param name pipeLayer name
+     * @param decoder RCV_UP to RCV_DOWN
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
+        return this.nextTo(name, this.pipeConfig(), decoder, encoder);
     }
 
     /**
@@ -109,6 +168,23 @@ public interface PipeBuilder {
 
     interface PipeStackBuilder<RCV_UP, SND_DOWN> {
         /**
+         * empty PipeStackBuilder is mostly used to develop the protocol stack via Embedded.
+         *
+         * <ul>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is Undefined</li>
+         *  <li>SND_UP is Undefined</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+         * </ul>
+         *
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> pipeConfig(PipeConfig pipeConfig);
+
+        /** Get the default PipeConfig */
+        PipeConfig pipeConfig();
+
+        /**
          * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
          *
          * <ul>
@@ -122,7 +198,25 @@ public interface PipeBuilder {
          * @throws NullPointerException if the specified handler is {@code null}
          */
         default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
-            return this.nextTo(pipeLayer.getClass().getSimpleName(), new PipeConfig(), pipeLayer);
+            return this.nextTo(pipeLayer.getClass().getSimpleName(), this.pipeConfig(), pipeLayer);
+        }
+
+        /**
+         * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
+         *
+         * <ul>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+         * </ul>
+         *
+         * @param name pipeLayer name
+         * @param pipeLayer target pipeLayer
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
+            return this.nextTo(name, this.pipeConfig(), pipeLayer);
         }
 
         /**
@@ -156,8 +250,30 @@ public interface PipeBuilder {
          * @throws NullPointerException if the specified handler is {@code null}
          */
         default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder) {
-            String name = String.format("%s/%s", decoder.getClass().getSimpleName(), encoder.getClass().getSimpleName());
-            return this.nextTo(name, new PipeConfig(), decoder, encoder);
+            String decName = decoder.getClass().getSimpleName();
+            String encName = encoder.getClass().getSimpleName();
+            decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
+            encName = StringUtils.isBlank(encName) ? "Unknown" : encName;
+
+            String name = String.format("%s/%s", decName, encName);
+            return this.nextTo(name, this.pipeConfig(), decoder, encoder);
+        }
+
+        /**
+         * using decoder and encoder to combined for duplex.
+         * <ul>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+         * </ul>
+         *
+         * @param decoder RCV_UP to RCV_DOWN
+         * @param encoder SND_UP to SND_DOWN
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder) {
+            return this.nextTo(name, this.pipeConfig(), decoder, encoder);
         }
 
         /**
@@ -180,9 +296,14 @@ public interface PipeBuilder {
         /**
          * It is used to receive network data after being processed by the protocol stack.
          */
-        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> bindReceive(PipeReceiveListener<RCV_DOWN> listener);
+        <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> bindReceive(PipeListener<RCV_DOWN> listener);
 
         /** build {@link PipeStack} */
-        PipeStackFactory buildFactory();
+        default PipeStackFactory buildFactory() {
+            return this.buildFactory(this.pipeConfig());
+        }
+
+        /** build {@link PipeStack} */
+        PipeStackFactory buildFactory(PipeConfig rootConfig);
     }
 }
