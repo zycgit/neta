@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.PipeStackFactory;
 import net.hasor.neta.handler.PipeBuilder.PipeStackBuilder;
 import org.junit.Test;
@@ -193,5 +194,56 @@ public class PipeEndpointTest extends AbstractPipeTest {
         assert channel.readRcvDown() == null;
 
         System.out.println(channel.pipeStack);
+    }
+
+    @Test
+    public void rcvToSendTest_1() {
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
+
+        PipeConfig pipConf = new PipeConfig();
+        pipConf.setPipeRcvDownStackSize(3);
+        pipConf.setPipeSndUpStackSize(4);
+        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().pipeConfig(pipConf);
+        PipeStackFactory stack = empty.nextTo(doCopyHandler(decoderFinishCnt, decoderFailedCnt)).buildFactory();
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+
+        // do Decoder
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
+        channel.writeSndUpArray(new Object[] { 1, 2, 3 });
+        channel.writeSndUpArray(new Object[] { 4, 5 });
+        channel.writeSndUpArray(new Object[] { 6, 7, 8 });
+        channel.writeSndUpArray(new Object[] { 9, 10, 11 });
+        channel.writeSndUpArray(new Object[] { 12, 13, 14 });
+
+        assert channel.getPipeStatistical().heapUpOfSnd() == 0;
+        assert channel.getPipeStatistical().heapUpOfSnd("L3") == 0;
+        assert channel.getPipeStatistical().heapUpOfSnd("L2") == 0;
+        assert channel.getPipeStatistical().heapUpOfSnd("L1") == 0;
+        assert channel.getPipeStatistical().heapUpOfSndRoot() == 0;
+        assert channel.readRcvDown() == null;
+
+        System.out.println(channel.pipeStack);
+    }
+
+    private PipeLayer<Integer, Integer, Integer, Integer> doCopyHandler(List<String> decoderFinishCnt, List<String> decoderFailedCnt) {
+        return new PipeLayer<Integer, Integer, Integer, Integer>() {
+            @Override
+            public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<Integer> rcvUp, PipeSndQueue<Integer> rcvDown, PipeRcvQueue<Integer> sndUp, PipeSndQueue<Integer> sndDown) throws Throwable {
+                return null;
+            }
+
+            @Override
+            public PipeStatus doError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHandler eh) throws Throwable {
+                return PipeLayer.super.doError(context, isRcv, e, eh);
+            }
+        };
     }
 }

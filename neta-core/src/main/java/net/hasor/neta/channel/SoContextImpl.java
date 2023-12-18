@@ -195,7 +195,7 @@ class SoContextImpl implements SoContext {
             netChannel.wContext.purge(e);
 
             // release pipeStack
-            netChannel.pipeStack.release(netChannel.pipeContext);
+            netChannel.pipeStack.release(netChannel.pipeCtx);
             NetListen listen = netChannel.getSource();
             if (netChannel.isServer()) {
                 listen.notifyClose(netChannel);

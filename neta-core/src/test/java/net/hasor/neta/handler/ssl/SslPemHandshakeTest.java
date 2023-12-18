@@ -26,7 +26,7 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslPemTest {
+public class SslPemHandshakeTest {
     @Test
     public void sslHandshakeTest_1() {
         SslConfig sslConfig = new SslConfig();
@@ -47,7 +47,7 @@ public class SslPemTest {
                 // SSL
                 .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
                 // bytes <-> String
-                .nextTo("String", pipeConfig, SslPemTest::doDecoder1, SslPemTest::doEncoder1)
+                .nextTo("String", pipeConfig, SslPemHandshakeTest::doDecoder1, SslPemHandshakeTest::doEncoder1)
                 // create Stack
                 .buildFactory();
 

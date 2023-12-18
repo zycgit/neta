@@ -127,7 +127,7 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
             if (ctxError == null) {
                 return this.pipeLayer.doLayer(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
             } else {
-                return this.pipeLayer.doError(context, isRcv, ctxError, this.createExceptionHandler(errorTag, context, rcvUp, sndUp));
+                return this.pipeLayer.doError(context, isRcv, ctxError, this.createExceptionHandler(isRcv, context, rcvUp, sndUp));
             }
         } catch (Throwable e) {
             if (ctxError == null) {
@@ -136,7 +136,7 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
                 logger.error(msgTag, e);
 
                 context.flash(errorTag, e);
-                return this.pipeLayer.doError(context, isRcv, e, this.createExceptionHandler(errorTag, context, rcvUp, sndUp));
+                return this.pipeLayer.doError(context, isRcv, e, this.createExceptionHandler(isRcv, context, rcvUp, sndUp));
             } else {
                 throw e;
             }
@@ -148,11 +148,12 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    private PipeExceptionHandler createExceptionHandler(String errorTag, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
-        return new PipeExceptionHandlerImpl(errorTag, pipeContext, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
+    private PipeExceptionHandler createExceptionHandler(boolean isRcv, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
+        return new PipeExceptionHandlerImpl(isRcv, pipeContext, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
     }
 
     private static class PipeExceptionHandlerImpl implements PipeExceptionHandler {
+        private final boolean         isRcv;
         private final String          errorTag;
         private final PipeContext     context;
         private final PipeRcvQueue<?> rcvUp;
@@ -160,9 +161,10 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         private final PipeRcvQueue<?> sndUp;
         private final PipeSndQueue<?> sndDown;
 
-        public PipeExceptionHandlerImpl(String errorTag, PipeContext context, //
+        public PipeExceptionHandlerImpl(boolean isRcv, PipeContext context, //
                 PipeRcvQueue<?> rcvUp, PipeSndQueue<?> rcvDown, PipeRcvQueue<?> sndUp, PipeSndQueue<?> sndDown) {
-            this.errorTag = errorTag;
+            this.isRcv = isRcv;
+            this.errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
             this.context = context;
             this.rcvUp = rcvUp;
             this.rcvDown = rcvDown;
@@ -170,25 +172,19 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
             this.sndDown = sndDown;
         }
 
-        public PipeRcvQueue<?> getRcvUp() {
-            return this.rcvUp;
-        }
-
-        public PipeSndQueue<?> getRcvDown() {
-            return this.rcvDown;
-        }
-
-        public PipeRcvQueue<?> getSndUp() {
-            return this.sndUp;
-        }
-
-        public PipeSndQueue<?> getSndDown() {
-            return this.sndDown;
-        }
-
         @Override
         public void clear() {
             this.context.flash(this.errorTag, null);
+        }
+
+        @Override
+        public PipeRcvQueue<?> src() {
+            return this.isRcv ? rcvUp : sndUp;
+        }
+
+        @Override
+        public PipeSndQueue<?> dst() {
+            return this.isRcv ? rcvDown : sndDown;
         }
     }
 }

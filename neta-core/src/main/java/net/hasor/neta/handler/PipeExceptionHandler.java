@@ -21,7 +21,7 @@ package net.hasor.neta.handler;
  * @see PipeLayer
  * @see PipeHandler
  * */
-public interface PipeExceptionHandler {
+public interface PipeExceptionHandler<IN, OUT> {
     /**
      * clear the exception state and continue piple execution
      *
@@ -32,4 +32,8 @@ public interface PipeExceptionHandler {
      * </pre>
      */
     void clear();
+
+    PipeRcvQueue<IN> src();
+
+    PipeSndQueue<OUT> dst();
 }

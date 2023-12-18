@@ -42,7 +42,7 @@ public class SslJksTest {
                 // SSL
                 .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
                 // bytes <-> String
-                .nextTo("String", pipeConfig, SslPemTest::doDecoder1, SslPemTest::doEncoder1)
+                .nextTo("String", pipeConfig, SslPemHandshakeTest::doDecoder1, SslPemHandshakeTest::doEncoder1)
                 // create Stack
                 .buildFactory();
 

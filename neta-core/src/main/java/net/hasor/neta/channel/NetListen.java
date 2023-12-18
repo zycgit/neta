@@ -118,6 +118,11 @@ public class NetListen extends AttributeChannel<NetListen> {
         return null;
     }
 
+    @Override
+    public <T> T findPipeContext(Class<T> serviceType) {
+        return null;
+    }
+
     /**
      * Returns the listener current suspend status.
      *

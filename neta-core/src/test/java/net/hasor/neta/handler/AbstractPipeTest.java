@@ -178,6 +178,25 @@ public class AbstractPipeTest {
         };
     }
 
+    protected static PipeHandler<Integer, Integer> doInterruptHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
+        return new PipeHandler<Integer, Integer>() {
+            @Override
+            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+                recordFinish.add(tag + "DoInterrupt");
+
+                dst.offerMessage(src.takeMessage(src.queueSize()));
+                return PipeStatus.Interrupt;
+            }
+
+            @Override
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+                recordFailed.add(tag + "ErrInterrupt");
+
+                return PipeStatus.Next;
+            }
+        };
+    }
+
     //
 
     protected static PipeHandler<Integer, Integer> errExitHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
@@ -329,6 +348,25 @@ public class AbstractPipeTest {
         };
     }
 
+    protected static PipeHandler<Integer, Integer> errInterruptHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
+        return new PipeHandler<Integer, Integer>() {
+            @Override
+            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+                recordFinish.add(tag + "DoInterrupt");
+
+                dst.offerMessage(src.takeMessage(src.queueSize()));
+                return PipeStatus.Next;
+            }
+
+            @Override
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+                recordFailed.add(tag + "ErrInterrupt");
+
+                return PipeStatus.Interrupt;
+            }
+        };
+    }
+
     //
 
     protected static PipeHandler<Integer, Integer> doCopyHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
@@ -365,5 +403,4 @@ public class AbstractPipeTest {
             }
         };
     }
-
 }

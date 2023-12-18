@@ -18,6 +18,7 @@ import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.ResourcesUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.handler.PipeRcvQueue;
 import net.hasor.neta.handler.PipeSndQueue;
@@ -40,21 +41,23 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class SslContextBasic implements SslContext {
-    private static final Logger     logger = Logger.getLogger(SslContextBasic.class);
-    protected final      long       channelID;
-    protected final      SoContext  soContext;
-    private final        boolean    clientMode;
-    protected final      boolean    sslLog;
-    protected final      boolean    netLog;
+    private static final Logger      logger = Logger.getLogger(SslContextBasic.class);
+    protected final      long        channelID;
+    protected final      PipeContext pipeContext;
+    protected final      SoContext   soContext;
+    private final        boolean     clientMode;
+    protected final      boolean     sslLog;
+    protected final      boolean     netLog;
     //
-    protected final      SslConfig  sslConfig;
-    private final        SSLContext sslContext;
-    private final        SSLEngine  sslEngine;
-    private volatile     SslHandle  sslHandler;
+    protected final      SslConfig   sslConfig;
+    private final        SSLContext  sslContext;
+    private final        SSLEngine   sslEngine;
+    private volatile     SslHandle   sslHandler;
 
-    public SslContextBasic(long channelID, SslConfig config, SoContext soContext, boolean clientMode) throws Exception {
+    public SslContextBasic(long channelID, SslConfig config, PipeContext pipeContext, boolean clientMode) throws Exception {
         this.channelID = channelID;
-        this.soContext = soContext;
+        this.pipeContext = pipeContext;
+        this.soContext = pipeContext.getSoContext();
         this.clientMode = clientMode;
         this.sslLog = config.isSsllog();
         this.netLog = soContext.getConfig().isNetlog();
@@ -208,5 +211,14 @@ public abstract class SslContextBasic implements SslContext {
         if (this.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
             this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
         }
+    }
+
+    @Override
+    public void close() {
+        SSLEngine engine = this.getEngine();
+        if (!engine.isOutboundDone()) {
+            engine.closeOutbound();
+        }
+        this.pipeContext.asyncFlush();
     }
 }

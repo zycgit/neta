@@ -241,4 +241,39 @@ public class PipeSndErrTest extends AbstractPipeTest {
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("3EncErrNext,2EncErrExit");
         assert channel.getSndError() == null;
     }
+
+    @Test
+    public void interruptTest_1() {
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
+
+        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
+        PipeStackFactory stack = empty//
+                .nextTo("L1", doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextTo("L2", doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errInterruptHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextTo("L3", doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+                .buildFactory();
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+
+        // do Decoder
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
+        try {
+            channel.writeSndUpError(new IllegalStateException("Test"));
+            assert false;
+        } catch (Exception e) {
+            assert e.getMessage().equals("Test");
+        }
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("3EncErrNext,2EncErrInterrupt");
+        assert channel.getSndError() == null;
+    }
 }

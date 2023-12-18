@@ -241,4 +241,39 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert channel.getRcvError() == null;
     }
+
+    @Test
+    public void interruptTest_1() {
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
+
+        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
+        PipeStackFactory stack = empty//
+                .nextTo("L1", errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextTo("L2", errInterruptHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextTo("L3", errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+                .buildFactory();
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+
+        // do Decoder
+        decoderFinishCnt.clear();
+        decoderFailedCnt.clear();
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
+        try {
+            channel.writeRcvUpError(new IllegalStateException("Test"));
+            assert false;
+        } catch (Exception e) {
+            assert e.getMessage().equals("Test");
+        }
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrInterrupt");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
+        assert channel.getRcvError() == null;
+    }
 }

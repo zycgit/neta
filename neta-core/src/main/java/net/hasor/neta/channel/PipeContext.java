@@ -14,12 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.concurrent.future.Future;
+
 /**
  * Each {@link NetChannel} has a {@link PipeContext}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public interface PipeContext {
+
+    String CURRENT_PIPE_STACK_NAME  = PipeContext.class.getName() + "_CURRENT_PIPE_STACK_NAME";
+    String CURRENT_PIPE_STACK_DEPTH = PipeContext.class.getName() + "_CURRENT_PIPE_STACK_DEPTH";
 
     /** global config */
     SoConfig getConfig();
@@ -45,4 +50,10 @@ public interface PipeContext {
      * if you need long-term storage Use {@link #context(Class, Object)}
      */
     <T> T flash(String key, T flash);
+
+    /** write data to protocol stack, the event propagates backward from the current protocol layer */
+    Future<?> asyncSend(Object writeData);
+
+    /** Refresh the protocol stack, the event propagates backward from the current protocol layer */
+    Future<?> asyncFlush();
 }

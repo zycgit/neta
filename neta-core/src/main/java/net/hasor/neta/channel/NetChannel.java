@@ -52,7 +52,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     private final        SoSndCompletionHandler      wHandler;
     private final        AtomicBoolean               wStatus;
     //
-    protected            PipeContextImpl             pipeContext;
+    protected            PipeContextImpl             pipeCtx;
     protected            PipeStack<ByteBuf, ByteBuf> pipeStack;
     //
     protected final      AtomicBoolean               closeStatus;
@@ -80,7 +80,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     }
 
     protected void initPipe(PipeContextImpl pipeContext, PipeStack<?, ?> pipeStack) {
-        this.pipeContext = pipeContext;
+        this.pipeCtx = pipeContext;
         this.pipeStack = (PipeStack<ByteBuf, ByteBuf>) pipeStack;
     }
 
@@ -132,6 +132,11 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     @Override
     public SocketAddress getRemoteAddr() {
         return this.remoteAddr;
+    }
+
+    @Override
+    public <T> T findPipeContext(Class<T> serviceType) {
+        return this.pipeCtx.context(serviceType);
     }
 
     /** Returns the {@link NetListen} that accepts this channel */
@@ -188,7 +193,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         try {
             //The root Buffer cannot be deallocated
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeContext, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
+            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -203,7 +208,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             this.closeStatus.set(true);
             this.context.unsafeCloseChannel(this.channelID, msg, e);
         } finally {
-            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+            this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
     }
 
@@ -217,9 +222,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             //The root Buffer cannot be deallocated
             Object[] sndBufSet;
             if (isRcv) {
-                sndBufSet = this.pipeStack.rcvError(this.pipeContext, e);
+                sndBufSet = this.pipeStack.rcvError(this.pipeCtx, null, e);
             } else {
-                sndBufSet = this.pipeStack.sndError(this.pipeContext, e);
+                sndBufSet = this.pipeStack.sndError(this.pipeCtx, null, e);
             }
 
             for (Object sndBuf : sndBufSet) {
@@ -236,7 +241,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             this.closeStatus.set(true);
             this.context.unsafeCloseChannel(this.channelID, msg, e);
         } finally {
-            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+            this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
     }
 
@@ -258,14 +263,18 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>
      */
-    public Future<NetChannel> sendData(Object writeData) {
-        if (writeData == null) {
-            return new BasicFuture<>(this);
-        }
+    public Future<?> sendData(Object writeData) {
+        return this.sendData(writeData, null);
+    }
 
+    /**
+     * sent data to remote, The network IO transfer operation is performed asynchronously.
+     * <p>data goes through the application layer network protocol stack</p>
+     */
+    public Future<NetChannel> sendData(Object writeData, String pipeName) {
         Future<NetChannel> future = new BasicFuture<>();
         try {
-            Object[] sndByteBuf = this.pipeStack.sndLayer(this.pipeContext, new Object[] { writeData });
+            Object[] sndByteBuf = this.pipeStack.sndLayer(this.pipeCtx, pipeName, new Object[] { writeData });
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
             for (Object buf : sndByteBuf) {
                 Future<NetChannel> itemFuture = new BasicFuture<>();
@@ -284,16 +293,24 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             logger.error("snd(" + channelID + ") failed, " + e.getMessage(), e);
             future.failed(e);
         } finally {
-            this.pipeContext.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+            this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
         return future;
     }
 
     /** flash */
-    public Future<NetChannel> flash() {
+    public Future<NetChannel> flush() {
         Future<NetChannel> future = new BasicFuture<>();
         appendSoSndTask(new SoSndData(SoSndData.EMPTY_DATA, future, this));
         return future;
+    }
+
+    /**
+     * sent data to remote, The network IO transfer operation is performed asynchronously.
+     * <p>data goes through the application layer network protocol stack</p>
+     */
+    public Future<?> flush(String pipeName) {
+        return null;
     }
 
     private void appendSoSndTask(SoSndData wTask) {

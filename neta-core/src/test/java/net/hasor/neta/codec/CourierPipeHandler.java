@@ -15,20 +15,25 @@
  */
 package net.hasor.neta.codec;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.PipeHandler;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.handler.*;
 
 /**
  * Transparent conveyor belt.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class CourierPipeHandler<T> implements PipeHandler<T, T> {
     @Override
     public PipeStatus doHandler(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
-        dst.offerMessage(src.takeMessage(src.queueSize()));
+        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
+        return PipeStatus.Next;
+    }
+
+    @Override
+    public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler<T, T> eh) {
+        PipeRcvQueue<T> src = eh.src();
+        PipeSndQueue<T> dst = eh.dst();
+        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
         return PipeStatus.Next;
     }
 }

@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.concurrent.future.Future;
+
 import java.util.HashMap;
 import java.util.Map;
 
@@ -78,5 +81,33 @@ public class PipeContextImpl implements PipeContext {
             this.flash.put(key, flash);
         }
         return flash;
+    }
+
+    @Override
+    public Future<?> asyncSend(Object writeData) {
+        if (this.channel instanceof NetChannel) {
+            String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
+            if (StringUtils.isNotBlank(current)) {
+                return ((NetChannel) this.channel).sendData(writeData, current);
+            } else {
+                return ((NetChannel) this.channel).sendData(writeData);
+            }
+        } else {
+            throw new UnsupportedOperationException();
+        }
+    }
+
+    @Override
+    public Future<?> asyncFlush() {
+        if (this.channel instanceof NetChannel) {
+            String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
+            if (StringUtils.isNotBlank(current)) {
+                return ((NetChannel) this.channel).sendData(current);
+            } else {
+                return ((NetChannel) this.channel).flush();
+            }
+        } else {
+            throw new UnsupportedOperationException();
+        }
     }
 }

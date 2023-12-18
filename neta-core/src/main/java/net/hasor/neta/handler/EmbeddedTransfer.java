@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.logging.Logger;
 
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
@@ -25,8 +26,9 @@ import java.util.concurrent.TimeUnit;
  * @version : 2023-10-26
  */
 public class EmbeddedTransfer {
-    private final EmbeddedChannel client;
-    private final EmbeddedChannel server;
+    private static final Logger          logger = Logger.getLogger(EmbeddedTransfer.class);
+    private final        EmbeddedChannel client;
+    private final        EmbeddedChannel server;
 
     protected EmbeddedTransfer(EmbeddedChannel client, EmbeddedChannel server) {
         if (!server.isServer()) {
@@ -93,6 +95,7 @@ public class EmbeddedTransfer {
             if (this.client.isClose()) {
                 break;
             } else {
+                logger.info("transferToClient packet: " + data.length);
                 this.client.writeRcvUpArray(data);
             }
         }
@@ -141,6 +144,7 @@ public class EmbeddedTransfer {
             if (this.server.isClose()) {
                 break;
             } else {
+                logger.info("transferToServer packet: " + data.length);
                 this.server.writeRcvUpArray(data);
             }
         }

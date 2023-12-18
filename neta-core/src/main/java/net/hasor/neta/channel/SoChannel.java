@@ -69,4 +69,7 @@ public interface SoChannel<T> {
 
     /** get SoChannel attributes */
     Object getAttribute(String key);
+
+    /** Get the attachment for {@link PipeContext} */
+    <T> T findPipeContext(Class<T> serviceType);
 }
