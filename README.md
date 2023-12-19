@@ -6,13 +6,19 @@ It provides an abstract asynchronous duplex programming model and works on top o
 ## Pipeline Model
 
 ```text
-         /-------------------------\      /-------------------------\
- DATA -> | RCV_UP         RCV_DOWN |  ->  | RCV_UP         RCV_DOWN |  -> ...
-         |                         |      |                         |
-         |      PipeLayer (1)      |      |      PipeLayer (2)      |
-         |                         |      |                         |
-  ... <- | SND_DOWN         SND_UP |  <-  | SND_DOWN         SND_UP |  <- DATA
-         \-------------------------/      \-------------------------/
+待补充...
+```
+
+## Duplex Model
+
+```text
+         ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓      ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
+ DATA -> ┃ RCV_UP         RCV_DOWN ┃  ->  ┃ RCV_UP         RCV_DOWN ┃  -> ...
+         ┃                         ┃      ┃                         ┃
+         ┃      PipeLayer (1)      ┃      ┃      PipeLayer (2)      ┃
+         ┃                         ┃      ┃                         ┃
+  ... <- ┃ SND_DOWN         SND_UP ┃  <-  ┃ SND_DOWN         SND_UP ┃  <- DATA
+         ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛      ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 ## 能力

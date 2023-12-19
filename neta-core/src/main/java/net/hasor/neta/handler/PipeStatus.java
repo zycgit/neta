@@ -23,9 +23,10 @@ public enum PipeStatus {
     /**
      * Continuing the execution pipeline
      * <pre>
-     *  /---------------\     /---------------\     /---------------\
-     *  | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) | > ...
-     *  \---------------/     \---------------/     \---------------/
+     *  ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓
+     *  ┃ PipeLayer (0) ┃ > ┃ PipeLayer (1) ┃ > ┃ PipeLayer (2) ┃ > ...
+     *  ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛
+     *        Next                Next                Next
      * </pre>
      */
     Next,
@@ -33,11 +34,11 @@ public enum PipeStatus {
     /**
      * Retry this method call, using again to avoid recursion
      * <pre>
-     *                     ┏━━━━━━┓
-     *  /---------------\  ┃  /---┸-----------\     /---------------\
-     *  | PipeLayer (0) |  ┸> | PipeLayer (1) |  >  | PipeLayer (2) | > ...
-     *  \---------------/     \---------------/     \---------------/
-     *                             Current
+     *                    ┏━━━━━━┓
+     *  ┏━━━━━━━━━━━━━━━┓ ┃  ┏━━━┻━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓
+     *  ┃ PipeLayer (0) ┃ ┸> ┃ PipeLayer (1) ┃ > ┃ PipeLayer (2) ┃ > ...
+     *  ┗━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛
+     *        Next                 Retry               Next
      * </pre>
      */
     Retry,
@@ -48,11 +49,11 @@ public enum PipeStatus {
      * <p>If the pipeline is Interrupt, it will not be restarted</p>
      *
      * <pre>
-     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     * ┃  /---------------\     /---------------\             /-┸-------------\
-     * ┗> | PipeLayer (0) |  >  | PipeLayer (1) |  >  ...  >  | PipeLayer (2) |
-     *    \---------------/     \---------------/             \---------------/
-     *                                Again        continue          End
+     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     * ┃  ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓         ┏━┻━━━━━━━━━━━━━┓
+     * ┗> ┃ PipeLayer (0) ┃ > ┃ PipeLayer (1) ┃ > ... > ┃ PipeLayer (2) ┃ > ...
+     *    ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━━━┛
+     *          Next                Again                     Next
      * </pre>
      */
     Again,
@@ -60,11 +61,11 @@ public enum PipeStatus {
     /**
      * Interrupt the pipeline event propagation and restarted of the pipeline.
      * <pre>
-     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     * ┃  /---------------\     /---------------\     /-┸-------------\
-     * ┗> | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) | ...
-     *    \---------------/     \---------------/     \---------------/
-     *        go head                                      Current
+     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     * ┃  ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓   ┏━┻━━━━━━━━━━━━━┓
+     * ┗> ┃ PipeLayer (0) ┃ > ┃ PipeLayer (1) ┃ > ┃ PipeLayer (2) ┃ > ...
+     *    ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛
+     *          Next                Next               Restart
      * </pre>
      */
     Restart,
@@ -72,10 +73,10 @@ public enum PipeStatus {
     /**
      * Interrupt pipeline event propagation, and Skip all the following {@link PipeLayer}
      * <pre>
-     *     /---------------\     /---------------\     /---------------\
-     * ... | PipeLayer (0) |  >  | PipeLayer (1) |  >  | PipeLayer (2) |
-     *     \---------------/     \---------------/     \---------------/
-     *          Current                Skip                  Skip
+     *     ┏━━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+     * ... ┃ PipeLayer (0) ┃ > ┆ PipeLayer (1) ┆ > ┆ PipeLayer (2) ┆ > ...
+     *     ┗━━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+     *           Exit                Skip                Skip
      * </pre>
      */
     Exit,
@@ -83,10 +84,10 @@ public enum PipeStatus {
     /**
      * Interrupt pipeline event propagation, and throw Error
      * <pre>
-     *     /---------------\
-     * ... | PipeLayer (0) |  >  Throw Error
-     *     \---------------/
-     *          Current
+     *     ┏━━━━━━━━━━━━━━━┓
+     * ... ┃ PipeLayer (0) ┃ > Throw Error
+     *     ┗━━━━━━━━━━━━━━━┛
+     *         Interrupt
      * </pre>
      */
     Interrupt,

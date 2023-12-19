@@ -28,13 +28,13 @@ import net.hasor.neta.channel.PipeContext;
  *  When there are multiple PipeLayer layers, the endpoints are linked, e.g, first {@link PipeLayer} RCV_DOWN -> next {@link PipeLayer} RCV_UP
  *
  * <pre>
- *         /-------------------------\      /-------------------------\
- * DATA -> | RCV_UP         RCV_DOWN |  ->  | RCV_UP         RCV_DOWN |  -> ...
- *         |                         |      |                         |
- *         |      PipeLayer (1)      |      |      PipeLayer (2)      |
- *         |                         |      |                         |
- *  ... <- | SND_DOWN         SND_UP |  <-  | SND_DOWN         SND_UP |  <- DATA
- *         \-------------------------/      \-------------------------/
+ *         ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓    ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
+ * DATA -> ┃ RCV_UP         RCV_DOWN ┃ -> ┃ RCV_UP         RCV_DOWN ┃  -> ...
+ *         ┃                         ┃    ┃                         ┃
+ *         ┃      PipeLayer (1)      ┃    ┃      PipeLayer (2)      ┃
+ *         ┃                         ┃    ┃                         ┃
+ *  ... <- ┃ SND_DOWN         SND_UP ┃ <- ┃ SND_DOWN         SND_UP ┃  <- DATA
+ *         ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
  * </pre>
  *
  *  <p>
