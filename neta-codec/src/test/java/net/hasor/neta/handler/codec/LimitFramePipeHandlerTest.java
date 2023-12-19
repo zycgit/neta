@@ -1,0 +1,106 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.handler.codec;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.PipeStackFactory;
+import net.hasor.neta.handler.EmbeddedChannel;
+import net.hasor.neta.handler.EmbeddedSoContext;
+import net.hasor.neta.handler.EmbeddedTransfer;
+import net.hasor.neta.handler.PipeInitializer;
+import org.junit.Test;
+
+/**
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
+ */
+public class LimitFramePipeHandlerTest {
+    @Test
+    public void limitFrame_1() {
+        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
+        PipeStackFactory pipeStack = new PipeInitializer().nextTo(new CourierPipeHandler<>(), limitFrame).buildFactory();
+
+        //
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
+        EmbeddedChannel client = new EmbeddedChannel(false, pipeStack, context);
+        EmbeddedTransfer transfer = context.joinChannel(client, server);
+
+        client.writeSndUp(ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }));
+        transfer.transferToServer();
+
+        assert server.getRcvDownSize() == 5;
+
+        ByteBuf buf1 = server.readRcvDown();
+        assert buf1.readableBytes() == 2;
+        assert buf1.getByte(0) == 0;
+        assert buf1.getByte(1) == 1;
+        ByteBuf buf2 = server.readRcvDown();
+        assert buf2.readableBytes() == 2;
+        assert buf2.getByte(0) == 2;
+        assert buf2.getByte(1) == 3;
+        ByteBuf buf3 = server.readRcvDown();
+        assert buf3.readableBytes() == 2;
+        assert buf3.getByte(0) == 4;
+        assert buf3.getByte(1) == 5;
+        ByteBuf buf4 = server.readRcvDown();
+        assert buf4.readableBytes() == 2;
+        assert buf4.getByte(0) == 6;
+        assert buf4.getByte(1) == 7;
+        ByteBuf buf5 = server.readRcvDown();
+        assert buf5.readableBytes() == 1;
+        assert buf5.getByte(0) == 8;
+    }
+
+    @Test
+    public void limitFrame_2() {
+        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
+        PipeStackFactory pipeStack = new PipeInitializer().nextTo(limitFrame, new CourierPipeHandler<>()).buildFactory();
+
+        //
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
+        EmbeddedChannel client = new EmbeddedChannel(false, pipeStack, context);
+        EmbeddedTransfer transfer = context.joinChannel(client, server);
+
+        client.writeSndUpArray(new Object[] {//
+                ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2 }),//
+                ByteBufAllocator.DEFAULT.wrap(new byte[] { 3, 4, 5, 6, 7, 8 }) });
+        transfer.transferToServer();
+
+        assert server.getRcvDownSize() == 5;
+
+        ByteBuf buf1 = server.readRcvDown();
+        assert buf1.readableBytes() == 2;
+        assert buf1.getByte(0) == 0;
+        assert buf1.getByte(1) == 1;
+        ByteBuf buf2 = server.readRcvDown();
+        assert buf2.readableBytes() == 2;
+        assert buf2.getByte(0) == 2;
+        assert buf2.getByte(1) == 3;
+        ByteBuf buf3 = server.readRcvDown();
+        assert buf3.readableBytes() == 2;
+        assert buf3.getByte(0) == 4;
+        assert buf3.getByte(1) == 5;
+        ByteBuf buf4 = server.readRcvDown();
+        assert buf4.readableBytes() == 2;
+        assert buf4.getByte(0) == 6;
+        assert buf4.getByte(1) == 7;
+        ByteBuf buf5 = server.readRcvDown();
+        assert buf5.readableBytes() == 1;
+        assert buf5.getByte(0) == 8;
+    }
+}
