@@ -21,6 +21,10 @@ import net.hasor.neta.channel.PipeStackFactory;
 import net.hasor.neta.codec.LimitFramePipeHandler;
 import net.hasor.neta.handler.*;
 
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
@@ -85,19 +89,49 @@ public class AbstractSslTest {
 
     /** Decoding the message: ByteBuf -> String */
     public static PipeStatus doDecoder1(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
-        ByteBuf byteBuf = src.takeMessage();
-        if (byteBuf == null) {
+        List<ByteBuf> bufArray = src.peekMessage(src.queueSize());
+        if (bufArray == null || bufArray.size() == 0) {
             return PipeStatus.Next;
         }
-        String line;
-        do {
-            line = byteBuf.readLine();
-            if (line != null) {
-                dst.offerMessage(line);
-            }
-        } while (line != null && dst.hasSlot());
 
-        byteBuf.markReader();
+        List<ByteBuf> temp = new ArrayList<>();
+        boolean hasLine = false;
+        for (ByteBuf buf : bufArray) {
+            temp.add(buf);
+            if (buf.hasLine()) {
+                hasLine = true;
+                break;
+            }
+        }
+        if (!hasLine) {
+            return PipeStatus.Next;
+        }
+
+        ByteBuf tmpBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        int lastIndex = temp.size() - 1;
+        for (int i = 0; i < temp.size(); i++) {
+            ByteBuf buf = temp.get(i);
+
+            if (i != lastIndex) {
+                buf.read(tmpBuf);
+                buf.markReader();
+                src.skipMessage(1);
+            } else {
+                int expect = buf.expect('\n', StandardCharsets.US_ASCII);
+                buf.read(tmpBuf, expect + 1);
+                buf.markReader();
+                if (!buf.hasReadable()) {
+                    src.skipMessage(1);
+                }
+            }
+        }
+        tmpBuf.markWriter();
+
+        //
+        String line = tmpBuf.readLine();
+        if (line != null) {
+            dst.offerMessage(line);
+        }
         return PipeStatus.Next;
     }
 

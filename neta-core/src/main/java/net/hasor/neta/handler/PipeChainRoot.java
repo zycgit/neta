@@ -285,9 +285,9 @@ class PipeChainRoot implements PipeStack<Object>, PipeStatistical {
         // result
         PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
         if (sndDown.hasMore()) {
-            Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
+            List<?> sndList = sndDown.takeMessage(sndDown.queueSize());
             sndDown.rcvSubmit();
-            return new PipeResult(sndList, i - 1, pipeFinish);
+            return new PipeResult(sndList.toArray(), i - 1, pipeFinish);
         } else {
             return new PipeResult(EMPTY, i - 1, pipeFinish);
         }
@@ -393,9 +393,9 @@ class PipeChainRoot implements PipeStack<Object>, PipeStatistical {
         // result
         PipeQueue<?> sndDown = this.layers.get(0).getSndDown();
         if (sndDown.hasMore()) {
-            Object[] sndList = sndDown.takeMessage(sndDown.queueSize());
+            List<?> sndList = sndDown.takeMessage(sndDown.queueSize());
             sndDown.rcvSubmit();
-            return new PipeResult(sndList, i, i == -1);
+            return new PipeResult(sndList.toArray(), i, i == -1);
         } else {
             return new PipeResult(EMPTY, i, i == -1);
         }
@@ -503,7 +503,7 @@ class PipeChainRoot implements PipeStack<Object>, PipeStatistical {
 
         sb.append(String.format("┏━%s━━━━%s ↓ %s ━┓\n", nameBorder, rcvBorder, rootSnd));
         for (int i = 0; i < layerSize; i++) {
-            String layerName = layerNames.get(i);
+            String layerName = StringUtils.rightPad(layerNames.get(i), maxNameLength, " ");
             String rcvPart = StringUtils.rightPad(monitorRcv.get(i), rcvMaxLength, " ");
             String sndPart = StringUtils.rightPad(monitorSnd.get(i), sndMaxLength, " ");
             sb.append(String.format("┃ %s [↑ %s ↓ %s] ┃\n", layerName, rcvPart, sndPart));

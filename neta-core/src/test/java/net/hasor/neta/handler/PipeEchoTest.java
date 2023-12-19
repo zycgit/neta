@@ -50,12 +50,12 @@ public class PipeEchoTest {
 
         //
         channel.writeRcvUp("hello");
-        TypeRequest request = channel.readRcvDown();
+        TypeRequest request = (TypeRequest) channel.readRcvDown();
         assert request.getHeader().equals("TypeFrame>TypeRequest");
         assert request.getMessage().equals("hello");
 
         channel.writeSndUp(new TypeResponse(request.getHeader(), "echo hello"));
-        String response = channel.readSndDown();
+        String response = (String) channel.readSndDown();
         assert response.equals("TypeFrame>TypeRequest>TypeResponse>TypeFrame echo hello");
     }
 

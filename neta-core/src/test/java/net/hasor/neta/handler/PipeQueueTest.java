@@ -17,6 +17,7 @@ package net.hasor.neta.handler;
 import org.junit.Test;
 
 import java.util.Arrays;
+import java.util.List;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -64,18 +65,18 @@ public class PipeQueueTest {
         assert queue.queueSize() == 10;
         assert queue.slotSize() == 0;
 
-        Object[] list = queue.takeMessage(100);
-        assert list.length == 10;
-        assert (int) list[0] == 4;
-        assert (int) list[1] == 5;
-        assert (int) list[2] == 6;
-        assert (int) list[3] == 7;
-        assert (int) list[4] == 8;
-        assert (int) list[5] == 10;
-        assert (int) list[6] == 11;
-        assert (int) list[7] == 12;
-        assert (int) list[8] == 13;
-        assert (int) list[9] == 14;
+        List<Object> list = queue.takeMessage(100);
+        assert list.size() == 10;
+        assert (int) list.get(0) == 4;
+        assert (int) list.get(1) == 5;
+        assert (int) list.get(2) == 6;
+        assert (int) list.get(3) == 7;
+        assert (int) list.get(4) == 8;
+        assert (int) list.get(5) == 10;
+        assert (int) list.get(6) == 11;
+        assert (int) list.get(7) == 12;
+        assert (int) list.get(8) == 13;
+        assert (int) list.get(9) == 14;
 
         assert queue.queueSize() == 0;
         assert queue.slotSize() == 0;
@@ -84,18 +85,18 @@ public class PipeQueueTest {
         assert queue.queueSize() == 10;
         assert queue.slotSize() == 0;
 
-        Object[] list2 = queue.takeMessage(100);
-        assert list2.length == 10;
-        assert (int) list2[0] == 4;
-        assert (int) list2[1] == 5;
-        assert (int) list2[2] == 6;
-        assert (int) list2[3] == 7;
-        assert (int) list2[4] == 8;
-        assert (int) list2[5] == 10;
-        assert (int) list2[6] == 11;
-        assert (int) list2[7] == 12;
-        assert (int) list2[8] == 13;
-        assert (int) list2[9] == 14;
+        List<Object> list2 = queue.takeMessage(100);
+        assert list2.size() == 10;
+        assert (int) list2.get(0) == 4;
+        assert (int) list2.get(1) == 5;
+        assert (int) list2.get(2) == 6;
+        assert (int) list2.get(3) == 7;
+        assert (int) list2.get(4) == 8;
+        assert (int) list2.get(5) == 10;
+        assert (int) list2.get(6) == 11;
+        assert (int) list2.get(7) == 12;
+        assert (int) list2.get(8) == 13;
+        assert (int) list2.get(9) == 14;
 
         queue.rcvSubmit();
         assert queue.queueSize() == 0;

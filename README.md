@@ -17,37 +17,25 @@ It provides an abstract asynchronous duplex programming model and works on top o
 
 ## 能力
 
-- AIO 模型
-- 异步模型
+- TCP/IP AIO 双工异步模型
 - 支持 ReadSocketTimeout、WriteSocketTimeout
-- 支持 KeepAlive
-- 支持 TCP
 - 支持 监听器挂起（监听器暂时失效）
-- 支持 EmbeddedChannel 方便开发协议栈
-- SSL 证书格式
-    - JKS 格式
-    - PEM/CER 格式
-- SSL 引擎
-    - JDK
-    - OpenSSL（待支持）
-- SSL 协议
-    - NONE、SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
-- SSL 客户端验证
-    - NONE
-    - OPTIONAL
-    - REQUIRE
+- 支持 EmbeddedChannel
+- 支持 Pipeline
+- SSL 
+  - 证书格式：JKS、PEM/CER
+  - SSL 引擎：JDK、OpenSSL（待支持）
+  - SSL 协议：NONE、SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
+  - SSL 客户端验证：NONE、OPTIONAL、REQUIRE
 - TLS 扩展
     - TLS NPN/ALPN，应用层协议协商
-- Pipeline
-    - 反压机制
-    - 双工模式
+    - 重协商/安全重协商（OpenSSL RFC5764，renegotiation_info） 待支持
 
 ## 质量
 
-- 代码覆盖率：50%
+- 有效代码行：3.6K
+- 代码覆盖率：54%
 
-
-TODO
 
 高优先
 

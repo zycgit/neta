@@ -736,6 +736,28 @@ public interface ByteBuf extends ByteChannel {
         return -1;
     }
 
+    /** 具有行结尾 */
+    default boolean hasLine() {
+        int available = this.readableBytes();
+        if (available == 0) {
+            return false;
+        }
+
+        int findIndex = -1;
+        for (int i = 0; i < available; i++) {
+            if (this.getUInt8(i) == '\n') {
+                if (i > 0 && this.getUInt8(i - 1) == '\r') {
+                    findIndex = i - 1;
+                } else {
+                    findIndex = i;
+                }
+                break;
+            }
+        }
+
+        return findIndex >= 0;
+    }
+
     /** 读一整行 */
     default String readLine() {
         return this.readLine(StandardCharsets.US_ASCII);

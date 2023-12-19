@@ -14,7 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import java.lang.reflect.Array;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -113,9 +114,9 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
-    public T[] takeMessage(int cnt) {
+    public List<T> takeMessage(int cnt) {
         if (cnt == 0) {
-            return (T[]) Array.newInstance(this.elementArrayType, 0);
+            return Collections.emptyList();
         }
 
         if (cnt < 0) {
@@ -125,23 +126,23 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
         int fixCnt = Math.min(cnt, this.queueSize());
         int to = this.takeCount + fixCnt;
 
-        T[] joinedArray = (T[]) Array.newInstance(this.elementArrayType, fixCnt);
+        List<T> result = new ArrayList<>(fixCnt);
         for (int i = this.takeCount; i < to; i++) {
-            joinedArray[i - this.takeCount] = this.linkedList.get(i);
+            result.add(this.linkedList.get(i));
         }
         this.takeCount += fixCnt;
-        return joinedArray;
+        return result;
     }
 
     @Override
-    public T[] peekMessage(int cnt) {
+    public List<T> peekMessage(int cnt) {
         if (cnt < 0) {
             cnt = this.queueSize();
         }
 
         int fixCnt = Math.min(cnt, this.queueSize());
         List<T> subList = this.linkedList.subList(this.takeCount, this.takeCount + fixCnt);
-        return (T[]) subList.toArray();
+        return Collections.unmodifiableList(subList);
     }
 
     @Override

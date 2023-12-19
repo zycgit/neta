@@ -44,23 +44,23 @@ public class LimitFramePipeHandlerTest {
 
         assert server.getRcvDownSize() == 5;
 
-        ByteBuf buf1 = server.readRcvDown();
+        ByteBuf buf1 = (ByteBuf) server.readRcvDown();
         assert buf1.readableBytes() == 2;
         assert buf1.getByte(0) == 0;
         assert buf1.getByte(1) == 1;
-        ByteBuf buf2 = server.readRcvDown();
+        ByteBuf buf2 = (ByteBuf) server.readRcvDown();
         assert buf2.readableBytes() == 2;
         assert buf2.getByte(0) == 2;
         assert buf2.getByte(1) == 3;
-        ByteBuf buf3 = server.readRcvDown();
+        ByteBuf buf3 = (ByteBuf) server.readRcvDown();
         assert buf3.readableBytes() == 2;
         assert buf3.getByte(0) == 4;
         assert buf3.getByte(1) == 5;
-        ByteBuf buf4 = server.readRcvDown();
+        ByteBuf buf4 = (ByteBuf) server.readRcvDown();
         assert buf4.readableBytes() == 2;
         assert buf4.getByte(0) == 6;
         assert buf4.getByte(1) == 7;
-        ByteBuf buf5 = server.readRcvDown();
+        ByteBuf buf5 = (ByteBuf) server.readRcvDown();
         assert buf5.readableBytes() == 1;
         assert buf5.getByte(0) == 8;
     }
@@ -83,23 +83,23 @@ public class LimitFramePipeHandlerTest {
 
         assert server.getRcvDownSize() == 5;
 
-        ByteBuf buf1 = server.readRcvDown();
+        ByteBuf buf1 = (ByteBuf) server.readRcvDown();
         assert buf1.readableBytes() == 2;
         assert buf1.getByte(0) == 0;
         assert buf1.getByte(1) == 1;
-        ByteBuf buf2 = server.readRcvDown();
+        ByteBuf buf2 = (ByteBuf) server.readRcvDown();
         assert buf2.readableBytes() == 2;
         assert buf2.getByte(0) == 2;
         assert buf2.getByte(1) == 3;
-        ByteBuf buf3 = server.readRcvDown();
+        ByteBuf buf3 = (ByteBuf) server.readRcvDown();
         assert buf3.readableBytes() == 2;
         assert buf3.getByte(0) == 4;
         assert buf3.getByte(1) == 5;
-        ByteBuf buf4 = server.readRcvDown();
+        ByteBuf buf4 = (ByteBuf) server.readRcvDown();
         assert buf4.readableBytes() == 2;
         assert buf4.getByte(0) == 6;
         assert buf4.getByte(1) == 7;
-        ByteBuf buf5 = server.readRcvDown();
+        ByteBuf buf5 = (ByteBuf) server.readRcvDown();
         assert buf5.readableBytes() == 1;
         assert buf5.getByte(0) == 8;
     }

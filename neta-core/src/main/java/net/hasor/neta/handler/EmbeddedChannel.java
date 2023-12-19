@@ -280,10 +280,10 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     /**
      * read messages from the RCV_DOWN of this {@link SoChannel}.
      */
-    public <T> T readRcvDown() {
+    public Object readRcvDown() {
         try {
             if (this.rcvDown.hasMore()) {
-                return (T) this.rcvDown.takeMessage();
+                return this.rcvDown.takeMessage();
             } else {
                 return null;
             }
@@ -295,9 +295,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     /**
      * read messages from the RCV_DOWN of this {@link SoChannel}.
      */
-    public <T> T[] readRcvDownArray() {
+    public Object[] readRcvDownArray() {
         try {
-            return (T[]) this.rcvDown.takeMessage(this.rcvDown.queueSize());
+            return this.rcvDown.takeMessage(this.rcvDown.queueSize()).toArray();
         } finally {
             this.rcvDown.rcvSubmit();
         }
@@ -404,10 +404,10 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     /**
      * read messages from the SND_DOWN of this {@link SoChannel}.
      */
-    public <T> T readSndDown() {
+    public Object readSndDown() {
         try {
             if (this.sndDown.hasMore()) {
-                return (T) this.sndDown.takeMessage();
+                return this.sndDown.takeMessage();
             } else {
                 return null;
             }
@@ -419,9 +419,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     /**
      * read messages from the SND_DOWN of this {@link SoChannel}.
      */
-    public <T> T[] readSndDownArray(int readSize) {
+    public Object[] readSndDownArray(int readSize) {
         try {
-            return (T[]) this.sndDown.takeMessage(Math.min(readSize, this.sndDown.queueSize()));
+            return this.sndDown.takeMessage(Math.min(readSize, this.sndDown.queueSize())).toArray();
         } finally {
             this.sndDown.rcvSubmit();
         }

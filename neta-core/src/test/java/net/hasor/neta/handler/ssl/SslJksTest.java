@@ -36,8 +36,8 @@ public class SslJksTest extends AbstractSslTest {
         server.writeSndUp("Hello Client, this message form server.\n");
         transfer(transfer, 500, 10);
 
-        String clientRcv = client.readRcvDown();
-        String serverRcv = server.readRcvDown();
+        String clientRcv = (String) client.readRcvDown();
+        String serverRcv = (String) server.readRcvDown();
         assert clientRcv.equals("Hello Client, this message form server.");
         assert serverRcv.equals("Hello Server, this message form client.");
     }
