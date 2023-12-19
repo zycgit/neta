@@ -21,7 +21,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public interface PipeStack<RIN, ROUT> {
+public interface PipeStack<OUT> {
     /**
      * when connected.
      * @param pipeContext pipeContext
@@ -35,14 +35,14 @@ public interface PipeStack<RIN, ROUT> {
      * @param rcvData received data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    ROUT[] rcvLayer(PipeContext pipeContext, String pipeName, RIN[] rcvData) throws Throwable;
+    OUT[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] rcvData) throws Throwable;
 
     /**
      * Errors from the network layer.
      * @param pipeContext pipeContext
      * @param rcvError network error.
      */
-    ROUT[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable;
+    OUT[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable;
 
     /**
      * Trigger sending data
@@ -50,14 +50,14 @@ public interface PipeStack<RIN, ROUT> {
      * @param sndData send data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    ROUT[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable;
+    OUT[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable;
 
     /**
      * Errors from the network layer.
      * @param pipeContext pipeContext
      * @param sndError network error.
      */
-    ROUT[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable;
+    OUT[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable;
 
     /**
      * before close.

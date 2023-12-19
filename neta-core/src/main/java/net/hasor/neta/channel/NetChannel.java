@@ -35,28 +35,28 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2023-09-24
  */
 public class NetChannel extends AttributeChannel<NetChannel> {
-    private static final Logger                      logger = Logger.getLogger(NetChannel.class);
-    private final        long                        channelID;
-    private final        NetListen                   forListen;
-    protected final      AsynchronousSocketChannel   channel;
-    protected final      SoSndContext                wContext;
-    protected final      SoContextImpl               context;
-    private final        SocketAddress               localAddr;
-    private final        SocketAddress               remoteAddr;
-    private final        long                        createdTime;
-    private              long                        lastSndTime;
-    private              long                        lastRcvTime;
-    private              long                        lastNotifyRcvRetryTime;
+    private static final Logger                    logger = Logger.getLogger(NetChannel.class);
+    private final        long                      channelID;
+    private final        NetListen                 forListen;
+    protected final      AsynchronousSocketChannel channel;
+    protected final      SoSndContext              wContext;
+    protected final      SoContextImpl             context;
+    private final        SocketAddress             localAddr;
+    private final        SocketAddress             remoteAddr;
+    private final        long                      createdTime;
+    private              long                      lastSndTime;
+    private              long                      lastRcvTime;
+    private              long                      lastNotifyRcvRetryTime;
     //
-    private final        SoRcvCompletionHandler      rHandler;
-    private final        SoSndCompletionHandler      wHandler;
-    private final        AtomicBoolean               wStatus;
+    private final        SoRcvCompletionHandler    rHandler;
+    private final        SoSndCompletionHandler    wHandler;
+    private final        AtomicBoolean             wStatus;
     //
-    protected            PipeContextImpl             pipeCtx;
-    protected            PipeStack<ByteBuf, ByteBuf> pipeStack;
+    protected            PipeContextImpl           pipeCtx;
+    protected            PipeStack<ByteBuf>        pipeStack;
     //
-    protected final      AtomicBoolean               closeStatus;
-    protected final      Future<NetChannel>          closeFuture;
+    protected final      AtomicBoolean             closeStatus;
+    protected final      Future<NetChannel>        closeFuture;
 
     NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
             AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
@@ -79,9 +79,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         this.wStatus = new AtomicBoolean(false);
     }
 
-    protected void initPipe(PipeContextImpl pipeContext, PipeStack<?, ?> pipeStack) {
+    protected void initPipe(PipeContextImpl pipeContext, PipeStack<?> pipeStack) {
         this.pipeCtx = pipeContext;
-        this.pipeStack = (PipeStack<ByteBuf, ByteBuf>) pipeStack;
+        this.pipeStack = (PipeStack<ByteBuf>) pipeStack;
     }
 
     @Override

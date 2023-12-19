@@ -21,5 +21,5 @@ package net.hasor.neta.channel;
  */
 @FunctionalInterface
 public interface PipeStackFactory {
-    PipeStack<Object, Object> create(PipeContext pipeContext) throws Throwable;
+    PipeStack<Object> create(PipeContext pipeContext) throws Throwable;
 }

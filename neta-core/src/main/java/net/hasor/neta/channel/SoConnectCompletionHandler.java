@@ -68,7 +68,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         // init and pipe
         try {
             PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
-            PipeStack<?, ?> pipeStack = this.stackFactory.create(pipeCtx);
+            PipeStack<?> pipeStack = this.stackFactory.create(pipeCtx);
             channel.initPipe(pipeCtx, pipeStack);
             context.openChannel(channel);
         } catch (Throwable e) {
