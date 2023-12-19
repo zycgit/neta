@@ -50,8 +50,10 @@ public abstract class SslContextBasic implements SslContext {
     protected final      boolean     netLog;
     //
     protected final      SslConfig   sslConfig;
+    protected            boolean     sslStatus;
+    protected            SslMode     sslMode;
     private final        SSLContext  sslContext;
-    private final        SSLEngine   sslEngine;
+    private              SSLEngine   sslEngine;
     private volatile     SslHandle   sslHandler;
 
     public SslContextBasic(long channelID, SslConfig config, PipeContext pipeContext, boolean clientMode) throws Exception {
@@ -63,8 +65,9 @@ public abstract class SslContextBasic implements SslContext {
         this.netLog = soContext.getConfig().isNetlog();
 
         this.sslConfig = config;
+        this.sslMode = config.getSslMode();
+        this.sslStatus = this.sslMode != SslMode.Manual;
         this.sslContext = this.createSSLContext();
-        this.sslEngine = this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine());
     }
 
     protected SSLEngine getEngine() {
@@ -165,7 +168,7 @@ public abstract class SslContextBasic implements SslContext {
     protected abstract SSLContext createSSLContext() throws GeneralSecurityException, IOException;
 
     /** create SSLEngine */
-    protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws GeneralSecurityException;
+    protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws IOException;
 
     private synchronized boolean tryHandshake(boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslHandler != null && this.sslHandler.isHandshake()) {
@@ -174,7 +177,11 @@ public abstract class SslContextBasic implements SslContext {
 
         // start handshake
         if (this.sslHandler == null) {
-            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.soContext, this.sslEngine);
+            this.sslEngine = this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine());
+            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.soContext, this.sslEngine, () -> {
+                this.sslHandler = null;
+                this.sslStatus = this.sslMode == SslMode.Always; // auto reset
+            });
             this.sslHandler.beginHandshake();
         }
 
@@ -194,8 +201,13 @@ public abstract class SslContextBasic implements SslContext {
             return;
         }
 
-        if (this.tryHandshake(true, rcvUp, rcvDown, sndUp, sndDown)) {
-            this.sslHandler.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
+        if (this.sslStatus) {
+            if (this.tryHandshake(true, rcvUp, rcvDown, sndUp, sndDown)) {
+                this.sslHandler.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
+            }
+        } else {
+            rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
+            sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
         }
     }
 
@@ -208,17 +220,41 @@ public abstract class SslContextBasic implements SslContext {
             return;
         }
 
-        if (this.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
-            this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
+        if (this.sslStatus) {
+            if (this.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
+                this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
+            }
+        } else {
+            rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
+            sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
         }
     }
 
     @Override
     public void close() {
+        if (!this.sslStatus) {
+            return;
+        }
+
         SSLEngine engine = this.getEngine();
         if (!engine.isOutboundDone()) {
             engine.closeOutbound();
         }
+
+        this.pipeContext.asyncFlush();
+    }
+
+    @Override
+    public void open() {
+        if (!this.sslStatus) {
+            return;
+        }
+
+        SSLEngine engine = this.getEngine();
+        if (!engine.isOutboundDone()) {
+            engine.closeOutbound();
+        }
+
         this.pipeContext.asyncFlush();
     }
 }

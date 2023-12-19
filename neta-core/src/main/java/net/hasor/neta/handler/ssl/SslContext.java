@@ -44,6 +44,12 @@ public interface SslContext {
     /** Returns the host name of the peer of this session. The host port is not authenticated. */
     int getPeerPort();
 
-    /** close this ssl session. socket is not closed. */
+    /** switch to no encryption, there is keep connect, close SSL. */
     void close();
+
+    /** switch to no encryption, there is keep connect, close SSL. */
+    void open();
+    //
+    //    /** switch to no encryption, there is keep connect, close SSL. */
+    //    void renegotiate();
 }

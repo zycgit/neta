@@ -14,90 +14,31 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.PipeStackFactory;
-import net.hasor.neta.handler.*;
+import net.hasor.neta.handler.EmbeddedChannel;
+import net.hasor.neta.handler.EmbeddedSoContext;
+import net.hasor.neta.handler.EmbeddedTransfer;
 import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslJksTest {
+public class SslJksTest extends AbstractSslTest {
     @Test
-    public void sslJKSTest_1() {
-        SslConfig sslConfig = new SslConfig();
-        sslConfig.setAuthType(SslAuthKeyType.JKS);
-        sslConfig.setJksResource("ssl/jks/local.jks");
-        sslConfig.setKeyPassword("123456");
-        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
-
-        //  Net      SSL     Message
-        // Bytes -> Bytes -> String
-        // Bytes <- Bytes <- String
-        PipeConfig pipeConfig = new PipeConfig();
-        PipeStackFactory pipeStack = new PipeInitializer()
-                // SSL
-                .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
-                // bytes <-> String
-                .nextTo("String", pipeConfig, SslJksTest::doDecoder1, SslJksTest::doEncoder1)
-                // create Stack
-                .buildFactory();
-
-        //
+    public void sslHandshakeTest_1() {
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, pipeStack, context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeStackUsingJKS(), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeStackUsingJKS(), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
+        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
         client.writeSndUp("Hello Server, this message form client.\n");
         server.writeSndUp("Hello Client, this message form server.\n");
-
-        // mock network transfer
-        for (int i = 0; i < 10; i++) {
-            System.out.println("trun " + (i++));
-            transfer.transferToServer(); // copy client to server
-            transfer.transferToClient(); // copy server to client
-        }
+        transfer(transfer, 500, 10);
 
         String clientRcv = client.readRcvDown();
         String serverRcv = server.readRcvDown();
         assert clientRcv.equals("Hello Client, this message form server.");
         assert serverRcv.equals("Hello Server, this message form client.");
-    }
-
-    /** Decoding the message: ByteBuf -> String */
-    public static PipeStatus doDecoder1(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
-        ByteBuf byteBuf = src.takeMessage();
-        if (byteBuf == null) {
-            return PipeStatus.Next;
-        }
-        String line;
-        do {
-            line = byteBuf.readLine();
-            if (line != null) {
-                dst.offerMessage(line);
-            }
-        } while (line != null && dst.hasSlot());
-
-        byteBuf.markReader();
-        return PipeStatus.Next;
-    }
-
-    /** encoded message: String -> ByteBuf */
-    public static PipeStatus doEncoder1(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<ByteBuf> dst) {
-        String message;
-        do {
-            message = src.takeMessage();
-            if (message != null) {
-                byte[] bytes = message.getBytes();
-                if (bytes.length > 0) {
-                    dst.offerMessage(ByteBufAllocator.DEFAULT.wrap(bytes));
-                }
-            }
-        } while (message != null);
-        return PipeStatus.Next;
     }
 }

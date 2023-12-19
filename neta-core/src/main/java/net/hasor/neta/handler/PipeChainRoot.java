@@ -30,7 +30,7 @@ import java.util.List;
  * @version : 2023-10-20
  */
 @SuppressWarnings({ "unchecked" })
-class PipeChainRoot implements PipeStack<Object, Object>, PipeStatistical {
+class PipeChainRoot implements PipeStack<Object>, PipeStatistical {
     private static final Logger                                logger = Logger.getLogger(PipeChainRoot.class);
     private static final ByteBuf[]                             EMPTY  = new ByteBuf[0];
     private final        List<PipeLayerInvocation<?, ?, ?, ?>> layers;
@@ -154,7 +154,7 @@ class PipeChainRoot implements PipeStack<Object, Object>, PipeStatistical {
     // ------------------------------------------------------------
 
     @Override
-    public Object[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
+    public synchronized Object[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
         try {
             int depth = this.findDepth(true, pipeName);
             PipeQueue useRcvUp = depth == 0 ? this.rootRcvUp : this.layers.get(depth - 1).getRcvDown();
@@ -166,7 +166,7 @@ class PipeChainRoot implements PipeStack<Object, Object>, PipeStatistical {
     }
 
     @Override
-    public Object[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable {
+    public synchronized Object[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable {
         try {
             pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG, rcvError);
             int depth = this.findDepth(true, pipeName);
@@ -298,7 +298,7 @@ class PipeChainRoot implements PipeStack<Object, Object>, PipeStatistical {
     // ------------------------------------------------------------
 
     @Override
-    public Object[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
+    public synchronized Object[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
         try {
             int depth = this.findDepth(false, pipeName);
             PipeQueue useSndUp = depth == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(depth + 1).getSndDown();
@@ -310,7 +310,7 @@ class PipeChainRoot implements PipeStack<Object, Object>, PipeStatistical {
     }
 
     @Override
-    public Object[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable {
+    public synchronized Object[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable {
         try {
             pipeContext.flash(PipeLayerInvocation.SND_ERROR_TAG, sndError);
             int depth = this.findDepth(false, pipeName);

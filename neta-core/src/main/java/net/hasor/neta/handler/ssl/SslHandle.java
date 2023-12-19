@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
-import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.SoContext;
@@ -37,7 +36,7 @@ import java.nio.ByteBuffer;
  * @version : 2023-10-18
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SslHandle {
+class SslHandle {
     private static final Logger       logger = Logger.getLogger(SslHandle.class);
     private final        long         channelID;
     private final        SslConfig    config;
@@ -46,14 +45,14 @@ public class SslHandle {
     private final        SoResManager rm;
     private final        boolean      sslLog;
     //
-    private volatile     boolean      handshake;
-    public static final  ByteBuffer   EMPTY  = ByteBuffer.wrap(ArrayUtils.EMPTY_BYTE_ARRAY);
+    private              boolean      handshake;
+    private final        Runnable     closeCallBack;
     public               ByteBuffer   inNetData;
     public               ByteBuffer   inAppData;
     public               ByteBuffer   outNetData;
     public               ByteBuffer   outAppData;
 
-    public SslHandle(long channelID, SslConfig config, SoContext context, SSLEngine engine) {
+    public SslHandle(long channelID, SslConfig config, SoContext context, SSLEngine engine, Runnable closeCallBack) {
         this.channelID = channelID;
         this.config = config;
         this.context = context;
@@ -61,21 +60,12 @@ public class SslHandle {
         this.rm = context.getResourceManager();
         this.sslLog = config.isSsllog();
         this.handshake = false;
+        this.closeCallBack = closeCallBack;
     }
 
     /** channelID */
     public long getChannelID() {
         return this.channelID;
-    }
-
-    /** Closing SSL sessions */
-    private void handleClose(boolean isRcv, SSLEngine sslEngine, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) {
-        if (isRcv) {
-
-        }
-        if (!sslEngine.isOutboundDone()) {
-            sslEngine.closeOutbound();
-        }
     }
 
     /** Failure from which there is no recovery will close the Socket */
@@ -147,6 +137,15 @@ public class SslHandle {
         this.inNetData = this.rm.newByteBuffer(session.getPacketBufferSize());
         this.outAppData = this.rm.newByteBuffer(session.getApplicationBufferSize());
         this.outNetData = this.rm.newByteBuffer(session.getPacketBufferSize());
+    }
+
+    public void afterClose() {
+        this.handshake = false;
+        this.inNetData = this.rm.freeObject(this.inNetData);
+        this.inAppData = this.rm.freeObject(this.inAppData);
+        this.outNetData = this.rm.freeObject(this.outNetData);
+        this.outAppData = this.rm.freeObject(this.outAppData);
+        this.closeCallBack.run();
     }
 
     /** The handshake phase is handled by rcv/snd in a unified manner */
@@ -331,9 +330,8 @@ public class SslHandle {
                 }
             }
             case CLOSED:
-            default: {
-                this.handleClose(isRcv, sslEngine, rcvUp, rcvDown, sndUp, sndDown);
-            }
+                this.afterClose();
+                return;
         }
     }
 
@@ -350,9 +348,9 @@ public class SslHandle {
 
         // Process incoming data
         this.inNetData.flip();
-        SSLEngineResult res = this.engine.unwrap(this.inNetData, this.inAppData);
+        SSLEngineResult result = this.engine.unwrap(this.inNetData, this.inAppData);
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
-        if (res.getStatus() == Status.BUFFER_OVERFLOW) {
+        if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             // try resizing Buf size.
             this.resizingBufOverflowForUnwrap("sslRcv", this.engine);
             // TODO rcvUpstream.resetReader();
@@ -361,8 +359,8 @@ public class SslHandle {
         }
 
         // has AppData
-        int consumedBytes = res.bytesConsumed();
-        int producedBytes = res.bytesProduced();
+        int consumedBytes = result.bytesConsumed();
+        int producedBytes = result.bytesProduced();
         if (this.sslLog) {
             logger.info("sslRcv(" + this.channelID + ") " + rcvTotal + "/" + consumedBytes + "/" + producedBytes + " (rcv > decode > data)");
         }
@@ -375,15 +373,15 @@ public class SslHandle {
         this.inAppData.compact();
         this.inNetData.compact();
 
-        switch (res.getStatus()) {
+        switch (result.getStatus()) {
             case BUFFER_UNDERFLOW: // need more data
             case OK:
                 break;
             case CLOSED:
-            default: {
-                this.handleClose(true, this.engine, rcvUp, rcvDown, sndUp, sndDown);
+                this.afterClose();
                 break;
-            }
+            default:
+                break;
         }
     }
 
@@ -400,9 +398,9 @@ public class SslHandle {
 
         // Process out data
         this.outAppData.flip();
-        SSLEngineResult res = this.engine.wrap(this.outAppData, this.outNetData);
+        SSLEngineResult result = this.engine.wrap(this.outAppData, this.outNetData);
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
-        if (res.getStatus() == Status.BUFFER_OVERFLOW) {
+        if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             // try resizing Buf size.
             this.resizingBufOverflowForWrap("sslSnd", this.engine);
             //sndUpstream.resetReader();
@@ -411,8 +409,8 @@ public class SslHandle {
         }
 
         // has AppData
-        int consumedBytes = res.bytesConsumed();
-        int producedBytes = res.bytesProduced();
+        int consumedBytes = result.bytesConsumed();
+        int producedBytes = result.bytesProduced();
         if (this.sslLog) {
             logger.info("sslSnd(" + this.channelID + ") " + sndTotal + "/" + consumedBytes + "/" + producedBytes + " (data > decode > snd)");
         }
@@ -425,15 +423,13 @@ public class SslHandle {
         this.outNetData.compact();
         this.outAppData.compact();
 
-        switch (res.getStatus()) {
+        switch (result.getStatus()) {
             case BUFFER_UNDERFLOW: // need more data
             case OK:
                 break;
             case CLOSED:
-            default: {
-                this.handleClose(false, this.engine, rcvUp, rcvDown, sndUp, sndDown);
+                this.afterClose();
                 break;
-            }
         }
     }
 }

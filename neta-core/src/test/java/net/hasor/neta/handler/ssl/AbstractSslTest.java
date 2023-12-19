@@ -25,12 +25,12 @@ import net.hasor.neta.handler.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class AbstractSslPemTest {
-    public static PipeStackFactory createPipeStackFactory() {
+public class AbstractSslTest {
+    public static PipeStackFactory createPipeStackUsingJKS() {
         SslConfig sslConfig = new SslConfig();
-        sslConfig.setAuthType(SslAuthKeyType.PEM);
-        sslConfig.setPemCertChain("ssl/ca/server.crt");
-        sslConfig.setPemPrivate("ssl/ca/server.pem");
+        sslConfig.setAuthType(SslAuthKeyType.JKS);
+        sslConfig.setJksResource("ssl/jks/local.jks");
+        sslConfig.setKeyPassword("123456");
         sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
         sslConfig.setSsllog(true);
 
@@ -45,7 +45,32 @@ public class AbstractSslPemTest {
                 // SSL
                 .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
                 // bytes <-> String
-                .nextTo("String", pipeConfig, AbstractSslPemTest::doDecoder1, AbstractSslPemTest::doEncoder1)
+                .nextTo("String", pipeConfig, AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                // create Stack
+                .buildFactory();
+    }
+
+    public static PipeStackFactory createPipeStackUsingPEM(SslMode mode) {
+        SslConfig sslConfig = new SslConfig();
+        sslConfig.setAuthType(SslAuthKeyType.PEM);
+        sslConfig.setPemCertChain("ssl/ca/server.crt");
+        sslConfig.setPemPrivate("ssl/ca/server.pem");
+        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
+        sslConfig.setSsllog(true);
+        sslConfig.setSslMode(mode);
+
+        //  Net      SSL     Message
+        // Bytes -> Bytes -> String
+        // Bytes <- Bytes <- String
+        PipeConfig pipeConfig = new PipeConfig();
+        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
+        return new PipeInitializer()
+                // limitFrame
+                .nextTo("LIMIT", pipeConfig, new PipeDuplexLayer<>(limitFrame, limitFrame))
+                // SSL
+                .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
+                // bytes <-> String
+                .nextTo("String", pipeConfig, AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
                 .buildFactory();
     }

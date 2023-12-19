@@ -26,6 +26,7 @@ import java.security.KeyStore;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SslConfig extends PipeConfig {
+    private SslMode                sslMode               = SslMode.Always;
     private SslProvider            provider              = SslProvider.JDK;      // default is JDK
     private SslClientAuth          clientAuth            = SslClientAuth.NONE;   //
     private String[]               appProtocol           = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
@@ -46,6 +47,14 @@ public class SslConfig extends PipeConfig {
     private SslAppProtocolSelector appProtocolSelector   = null;
     // other
     private boolean                ssllog                = false;               // 打印SSL日志
+
+    public SslMode getSslMode() {
+        return this.sslMode;
+    }
+
+    public void setSslMode(SslMode sslMode) {
+        this.sslMode = sslMode;
+    }
 
     public SslProvider getProvider() {
         return this.provider;
