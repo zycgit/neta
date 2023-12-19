@@ -73,9 +73,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
 
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
-                channel.writeSndUp(current, ArrayUtils.EMPTY_OBJECT_ARRAY);
+                channel.writeSndUpArray(current, ArrayUtils.EMPTY_OBJECT_ARRAY);
             } else {
-                channel.writeSndUp(ArrayUtils.EMPTY_OBJECT_ARRAY);
+                channel.writeSndUpArray(ArrayUtils.EMPTY_OBJECT_ARRAY);
             }
             return new BasicFuture<>(this);
         }

@@ -51,18 +51,23 @@ public class SslPemHandshakeTest extends AbstractSslPemTest {
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
+        // SSL enable
         client.writeSndUp("Hello Server, this message form client.\n");
         server.writeSndUp("Hello Client, this message form server.\n");
         transfer(transfer, 500, 10);
+        assert client.readRcvDown().equals("Hello Client, this message form server.");
+        assert server.readRcvDown().equals("Hello Server, this message form client.");
 
-        String clientRcv = client.readRcvDown();
-        String serverRcv = server.readRcvDown();
-        assert clientRcv.equals("Hello Client, this message form server.");
-        assert serverRcv.equals("Hello Server, this message form client.");
-
-        //
+        // Switch to no encryption, there is keep connect, close SSL
         SslContext sslContext = client.findPipeContext(SslContext.class);
         sslContext.close();
-        transfer.transferToServer(); // copy client to server
+        transfer(transfer, 500, 10);
+
+        // SSL disable
+        client.writeSndUp("Hello Server, this message form client.\n");
+        server.writeSndUp("Hello Client, this message form server.\n");
+        transfer(transfer, 500, 10);
+        assert client.readRcvDown().equals("Hello Client, this message form server.");
+        assert server.readRcvDown().equals("Hello Server, this message form client.");
     }
 }
