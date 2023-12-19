@@ -25,8 +25,9 @@ import net.hasor.neta.handler.PipeStatus;
 import java.util.Objects;
 
 /**
+ * in {@link ByteBuf} is split into multiple {@link ByteBuf} using a fixed length
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version : 2023-12-19
  */
 public class LimitFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
     private final int              maxLength;
