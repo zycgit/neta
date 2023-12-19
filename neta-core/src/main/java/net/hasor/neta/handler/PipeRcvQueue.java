@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import java.util.List;
-
 /**
  * Network protocol layer input endpoint data queue
  * @author 赵永春 (zyc@hasor.net)
@@ -67,15 +65,15 @@ public interface PipeRcvQueue<T> {
      * take message form queue
      */
     default T peekMessage() {
-        List<T> msg = this.peekMessage(1);
-        return msg == null || msg.isEmpty() ? null : msg.get(0);
+        T[] msg = this.peekMessage(1);
+        return msg == null || msg.length == 0 ? null : msg[0];
     }
 
     /**
      * peek message form queue
      * @param cnt The expected number of tack
      */
-    List<T> peekMessage(int cnt);
+    T[] peekMessage(int cnt);
 
     /**
      * skip message form queue

@@ -27,11 +27,11 @@ public enum SslMode {
     /**
      * first work in ssl mode, If ssl is closed, ssl will no longer be used.
      *
-     * ssl can be reactivated by {@link SslContext#open()}
+     * ssl can be reactivated by {@link SslContext#openSSL()}
      */
     Once,
     /**
-     * The use of ssl is done manually. see {@link SslContext#close()}、{@link SslContext#open()}
+     * The use of ssl is done manually. see {@link SslContext#closeSSL()}、{@link SslContext#openSSL()}
      */
     Manual,
 }

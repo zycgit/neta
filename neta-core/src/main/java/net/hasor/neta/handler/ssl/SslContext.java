@@ -45,11 +45,11 @@ public interface SslContext {
     int getPeerPort();
 
     /** switch to no encryption, there is keep connect, close SSL. */
-    void close();
+    void closeSSL();
 
-    /** switch to no encryption, there is keep connect, close SSL. */
-    void open();
-    //
+    /** switch to encryption, there is keep connect, close SSL. */
+    void openSSL();
+
     //    /** switch to no encryption, there is keep connect, close SSL. */
     //    void renegotiate();
 }

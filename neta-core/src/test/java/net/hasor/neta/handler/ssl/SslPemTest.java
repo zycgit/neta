@@ -60,15 +60,15 @@ public class SslPemTest extends AbstractSslTest {
 
         // Switch to no encryption, there is keep connect, close SSL
         SslContext sslContext = client.findPipeContext(SslContext.class);
-        sslContext.close();
+        sslContext.closeSSL();
         transfer(transfer, 500, 10);
 
         // SSL disable
-        client.writeSndUp("Hello Server, this message no encryption.\n");
-        server.writeSndUp("Hello Client, this message no encryption.\n");
+        client.writeSndUp("Hello Server, this message using encryption.\n");
+        server.writeSndUp("Hello Client, this message using encryption.\n");
         transfer(transfer, 500, 10);
-        assert client.readRcvDown().equals("Hello Client, this message no encryption.");
-        assert server.readRcvDown().equals("Hello Server, this message no encryption.");
+        assert client.readRcvDown().equals("Hello Client, this message using encryption.");
+        assert server.readRcvDown().equals("Hello Server, this message using encryption.");
     }
 
     @Test
@@ -88,7 +88,7 @@ public class SslPemTest extends AbstractSslTest {
 
         // Switch to no encryption, there is keep connect, close SSL
         SslContext sslContext = client.findPipeContext(SslContext.class);
-        sslContext.close();
+        sslContext.closeSSL();
         transfer(transfer, 500, 10);
 
         // SSL disable
@@ -116,7 +116,7 @@ public class SslPemTest extends AbstractSslTest {
 
         // Switch to no encryption, there is keep connect, close SSL
         SslContext sslContext = client.findPipeContext(SslContext.class);
-        sslContext.close();
+        sslContext.closeSSL();
         transfer(transfer, 500, 10);
 
         // SSL disable

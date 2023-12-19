@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.handler;
 import java.lang.reflect.Array;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -115,6 +114,10 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
 
     @Override
     public T[] takeMessage(int cnt) {
+        if (cnt == 0) {
+            return (T[]) Array.newInstance(this.elementArrayType, 0);
+        }
+
         if (cnt < 0) {
             cnt = this.queueSize();
         }
@@ -131,13 +134,14 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
-    public List<T> peekMessage(int cnt) {
+    public T[] peekMessage(int cnt) {
         if (cnt < 0) {
             cnt = this.queueSize();
         }
 
         int fixCnt = Math.min(cnt, this.queueSize());
-        return Collections.unmodifiableList(this.linkedList.subList(this.takeCount, this.takeCount + fixCnt));
+        List<T> subList = this.linkedList.subList(this.takeCount, this.takeCount + fixCnt);
+        return (T[]) subList.toArray();
     }
 
     @Override

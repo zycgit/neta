@@ -231,30 +231,22 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     @Override
-    public void close() {
+    public void closeSSL() {
         if (!this.sslStatus) {
             return;
         }
 
         SSLEngine engine = this.getEngine();
-        if (!engine.isOutboundDone()) {
+        if (engine != null && !engine.isOutboundDone()) {
             engine.closeOutbound();
+            this.pipeContext.asyncFlush();
         }
 
-        this.pipeContext.asyncFlush();
+        this.sslStatus = this.sslMode == SslMode.Always; // auto reset
     }
 
     @Override
-    public void open() {
-        if (!this.sslStatus) {
-            return;
-        }
-
-        SSLEngine engine = this.getEngine();
-        if (!engine.isOutboundDone()) {
-            engine.closeOutbound();
-        }
-
-        this.pipeContext.asyncFlush();
+    public void openSSL() {
+        this.sslStatus = true;
     }
 }
