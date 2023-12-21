@@ -45,8 +45,8 @@ public class CobbleSocket extends AbstractSocket {
      * @param pipeStack Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(int listenPort, PipeStackFactory pipeStack) throws IOException {
-        return this.listen(new InetSocketAddress("0.0.0.0", listenPort), pipeStack, null);
+    public synchronized NetListen listen(int listenPort, PipelineFactory pipeline) throws IOException {
+        return this.listen(new InetSocketAddress("0.0.0.0", listenPort), pipeline, null);
     }
 
     /**
@@ -54,21 +54,21 @@ public class CobbleSocket extends AbstractSocket {
      *
      * @param listenAddr local address for listen
      * @param listenPort local port for listen
-     * @param pipeStack Application layer network protocol
+     * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(String listenAddr, int listenPort, PipeStackFactory pipeStack) throws IOException {
-        return this.listen(new InetSocketAddress(listenAddr, listenPort), pipeStack, null);
+    public synchronized NetListen listen(String listenAddr, int listenPort, PipelineFactory pipeline) throws IOException {
+        return this.listen(new InetSocketAddress(listenAddr, listenPort), pipeline, null);
     }
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      *
      * @param listen local address:port for listen
-     * @param pipeStack Application layer network protocol
+     * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(InetSocketAddress listen, PipeStackFactory pipeStack, NetListenOptions options) throws IOException {
+    public synchronized NetListen listen(InetSocketAddress listen, PipelineFactory pipeline, NetListenOptions options) throws IOException {
         this.initChannelGroup();
 
         options = options == null ? NetListenOptions.DEFAULT : options;
@@ -78,7 +78,7 @@ public class CobbleSocket extends AbstractSocket {
 
         long channelID = SoContextImpl.nextID();
         long createdTime = System.currentTimeMillis();
-        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeStack, this.context, options);
+        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeline, this.context, options);
         this.context.openChannel(netListen);
 
         listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
@@ -89,35 +89,35 @@ public class CobbleSocket extends AbstractSocket {
     /**
      * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param localPort local port
-     * @param pipeStack Application layer network protocol
+     * @param pipeline Application layer network protocol
      */
-    public Future<NetChannel> connect(int localPort, PipeStackFactory pipeStack) {
-        return this.connect(new InetSocketAddress(localPort), pipeStack);
+    public Future<NetChannel> connect(int localPort, PipelineFactory pipeline) {
+        return this.connect(new InetSocketAddress(localPort), pipeline);
     }
 
     /**
      * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param remoteAddr local address
      * @param localPort local port
-     * @param pipeStack Application layer network protocol
+     * @param pipeline Application layer network protocol
      */
-    public Future<NetChannel> connect(String remoteAddr, int localPort, PipeStackFactory pipeStack) {
-        return this.connect(new InetSocketAddress(remoteAddr, localPort), pipeStack);
+    public Future<NetChannel> connect(String remoteAddr, int localPort, PipelineFactory pipeline) {
+        return this.connect(new InetSocketAddress(remoteAddr, localPort), pipeline);
     }
 
     /**
      * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
      * @param remoteAddr remoteAddr
-     * @param pipeStack Application layer network protocol
+     * @param pipeline Application layer network protocol
      */
-    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeStackFactory pipeStack) {
+    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipelineFactory pipeline) {
         Future<NetChannel> future = new BasicFuture<>();
         try {
             this.initChannelGroup();
 
             AsynchronousSocketChannel clientChannel = AsynchronousSocketChannel.open(this.channelGroup);
             SoConfigUtils.configSocket(this.context.getConfig(), clientChannel);
-            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, pipeStack, future));
+            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, pipeline, future));
             logger.info("connect to " + remoteAddr);
             return future;
         } catch (Exception e) {
@@ -156,10 +156,14 @@ public class CobbleSocket extends AbstractSocket {
     }
 
     @Override
-    protected void close0() {
+    protected void shutdown0(boolean now) {
         // close all channel
-        logger.info("close all channel.");
-        this.context.closeAll(false);
+        if (now) {
+            logger.info("close all channel for now.");
+        } else {
+            logger.info("close all channel.");
+        }
+        this.context.closeAll(now);
 
         // waiting close
         long t = System.currentTimeMillis();

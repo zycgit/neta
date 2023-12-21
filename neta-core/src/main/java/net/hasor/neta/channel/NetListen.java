@@ -31,26 +31,26 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class NetListen extends AttributeChannel<NetListen> {
-    private final   long                            channelID;
-    private final   long                            createdTime;
-    private         long                            lastActiveTime;
-    private         long                            lastAcceptTime;
-    private final   AtomicLong                      acceptCount;
-    private final   Object                          acceptLock;
-    private final   Object                          closeLock;
+    private final    long                            channelID;
+    private final    long                            createdTime;
+    private          long                            lastActiveTime;
+    private          long                            lastAcceptTime;
+    private final    AtomicLong                      acceptCount;
+    private final    Object                          acceptLock;
+    private final    Object                          closeLock;
     //
-    private final   InetSocketAddress               listen;
-    protected final AsynchronousServerSocketChannel channel;
-    private final   PipeStackFactory                stackFactory;
-    private final   SoContextImpl                   context;
-    private         boolean                         suspend;
-    private final   List<NetListener>               listeners;
+    private final    InetSocketAddress               listen;
+    protected final  AsynchronousServerSocketChannel channel;
+    private final    PipelineFactory                 pipeline;
+    private final    SoContextImpl                   context;
+    private volatile boolean                         suspend;
+    private final    List<NetListener>               listeners;
     //
-    protected final AtomicBoolean                   closeStatus;
-    protected final Future<NetListen>               closeFuture;
+    protected final  AtomicBoolean                   closeStatus;
+    protected final  Future<NetListen>               closeFuture;
 
     NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel,//
-            PipeStackFactory stackFactory, SoContextImpl context, NetListenOptions options) {
+            PipelineFactory pipeline, SoContextImpl context, NetListenOptions options) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
@@ -59,7 +59,7 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.closeLock = new Object();
         this.listen = listen;
         this.channel = channel;
-        this.stackFactory = stackFactory;
+        this.pipeline = pipeline;
         this.context = context;
         this.suspend = options.isSuspend();
         this.listeners = new ArrayList<>();
@@ -116,6 +116,10 @@ public class NetListen extends AttributeChannel<NetListen> {
     @Override
     public SocketAddress getRemoteAddr() {
         return null;
+    }
+
+    public SoContext getContext() {
+        return this.context;
     }
 
     @Override
@@ -176,8 +180,8 @@ public class NetListen extends AttributeChannel<NetListen> {
     /**
      * return Application layer network protocol stack to use
      */
-    PipeStackFactory getStackFactory() {
-        return this.stackFactory;
+    PipelineFactory getPipeline() {
+        return this.pipeline;
     }
 
     @Override
@@ -222,10 +226,6 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.lastAcceptTime = System.currentTimeMillis();
         this.acceptCount.incrementAndGet();
 
-        synchronized (this.acceptLock) {
-            this.acceptLock.notifyAll();
-        }
-
         this.context.submitSoTask(channel.getChannelID(), new DefaultSoTask() {
             @Override
             protected void doWork(int retryCnt) {
@@ -235,6 +235,10 @@ public class NetListen extends AttributeChannel<NetListen> {
                     } catch (Exception ignored) {
 
                     }
+                }
+
+                synchronized (acceptLock) {
+                    acceptLock.notifyAll();
                 }
             }
         }, this);
@@ -247,10 +251,6 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.lastActiveTime = System.currentTimeMillis();
         this.acceptCount.decrementAndGet();
 
-        synchronized (this.closeLock) {
-            this.closeLock.notifyAll();
-        }
-
         this.context.submitSoTask(channel.getChannelID(), new DefaultSoTask() {
             @Override
             protected void doWork(int retryCnt) {
@@ -259,6 +259,10 @@ public class NetListen extends AttributeChannel<NetListen> {
                         listener.close(channel);
                     } catch (Exception ignored) {
                     }
+                }
+
+                synchronized (closeLock) {
+                    closeLock.notifyAll();
                 }
             }
         }, this);
@@ -269,6 +273,14 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     /** Wait for an incoming. */
     public boolean waitAnyAccept() {
+        if (this.acceptCount.get() > 0) {
+            return true;
+        }
+        return this.waitAnyNewAccept();
+    }
+
+    /** Wait for an new incoming. */
+    public boolean waitAnyNewAccept() {
         synchronized (this.acceptLock) {
             try {
                 this.acceptLock.wait();

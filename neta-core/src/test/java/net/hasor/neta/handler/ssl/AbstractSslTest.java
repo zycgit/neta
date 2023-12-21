@@ -17,7 +17,7 @@ package net.hasor.neta.handler.ssl;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.PipeStackFactory;
+import net.hasor.neta.channel.PipelineFactory;
 import net.hasor.neta.codec.LimitFramePipeHandler;
 import net.hasor.neta.handler.*;
 
@@ -30,53 +30,21 @@ import java.util.List;
  * @version : 2022-11-01
  */
 public class AbstractSslTest {
-    public static PipeStackFactory createPipeStackUsingJKS() {
-        SslConfig sslConfig = new SslConfig();
-        sslConfig.setAuthType(SslAuthKeyType.JKS);
-        sslConfig.setJksResource("ssl/jks/local.jks");
-        sslConfig.setKeyPassword("123456");
-        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
-        sslConfig.setSsllog(true);
 
+    public static PipelineFactory createPipeline(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        PipeConfig pipeConfig = new PipeConfig();
         LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
         return new PipeInitializer()
                 // limitFrame
-                .nextTo("LIMIT", pipeConfig, new PipeDuplexLayer<>(limitFrame, limitFrame))
+                .nextTo("LIMIT", new PipeDuplexLayer<>(limitFrame, limitFrame))
                 // SSL
-                .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
+                .nextTo("SSL", new SslPipeLayer(sslConf))
                 // bytes <-> String
-                .nextTo("String", pipeConfig, AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                .nextTo("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .buildFactory();
-    }
-
-    public static PipeStackFactory createPipeStackUsingPEM(SslMode mode) {
-        SslConfig sslConfig = new SslConfig();
-        sslConfig.setAuthType(SslAuthKeyType.PEM);
-        sslConfig.setPemCertChain("ssl/ca/server.crt");
-        sslConfig.setPemPrivate("ssl/ca/server.pem");
-        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
-        sslConfig.setSsllog(true);
-        sslConfig.setSslMode(mode);
-
-        //  Net      SSL     Message
-        // Bytes -> Bytes -> String
-        // Bytes <- Bytes <- String
-        PipeConfig pipeConfig = new PipeConfig();
-        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        return new PipeInitializer()
-                // limitFrame
-                .nextTo("LIMIT", pipeConfig, new PipeDuplexLayer<>(limitFrame, limitFrame))
-                // SSL
-                .nextTo("SSL", pipeConfig, new SslPipeLayer(sslConfig))
-                // bytes <-> String
-                .nextTo("String", pipeConfig, AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
-                // create Stack
-                .buildFactory();
+                .build();
     }
 
     public static void transfer(EmbeddedTransfer transfer, int turn, int copyPacket) {

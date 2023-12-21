@@ -26,12 +26,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public abstract class AbstractSocket implements AutoCloseable {
+public abstract class AbstractSocket {
     private static final Logger          logger = Logger.getLogger(AbstractSocket.class);
     protected            ExecutorService ioExec;
     protected            SoConfig        config;
     protected            SoContextImpl   context;
-    protected            AtomicBoolean   inited;
+    private              AtomicBoolean   shutdown;
 
     /** return {@link SoConfig} */
     public SoConfig getConfig() {
@@ -44,38 +44,40 @@ public abstract class AbstractSocket implements AutoCloseable {
     }
 
     protected void initTcp(SoConfig config) {
+        if (this.shutdown != null && this.shutdown.get()) {
+            throw new IllegalStateException("service is shutdown.");
+        }
         this.config = config;
         this.context = new SoContextImpl(config);
-        this.inited = new AtomicBoolean(false);
+        this.shutdown = new AtomicBoolean(false);
     }
 
-    @Override
-    public final void close() throws IOException {
-        if (!this.inited.get()) {
-            return;
-        }
+    public final void shutdown() throws IOException {
+        if (this.shutdown.compareAndSet(false, true)) {
+            // do close
+            this.shutdown0(true);
 
-        // do close
-        this.close0();
-
-        // waiting close
-        long t = System.currentTimeMillis();
-        // waiting close accept
-        if (this.ioExec != null) {
-            this.ioExec.shutdown();
-            while (!this.ioExec.isTerminated()) {
-                long cost = System.currentTimeMillis() - t;
-                if (cost > 3000) {
-                    t = System.currentTimeMillis();
-                    logger.info("close ioExecutor waiting...");
+            // waiting close
+            long t = System.currentTimeMillis();
+            // waiting close accept
+            if (this.ioExec != null) {
+                this.ioExec.shutdown();
+                while (!this.ioExec.isTerminated()) {
+                    long cost = System.currentTimeMillis() - t;
+                    if (cost > 3000) {
+                        t = System.currentTimeMillis();
+                        logger.info("shutdown ioExecutor waiting...");
+                    }
+                    ThreadUtils.sleep(50);
                 }
-                ThreadUtils.sleep(50);
+                logger.info("shutdown ioExecutor done.");
             }
-            logger.info("close ioExecutor done.");
-        }
 
-        logger.info("close done.");
+            logger.info("service is shutdown.");
+        } else {
+            logger.error("service already shutdown.");
+        }
     }
 
-    protected abstract void close0() throws IOException;
+    protected abstract void shutdown0(boolean now) throws IOException;
 }

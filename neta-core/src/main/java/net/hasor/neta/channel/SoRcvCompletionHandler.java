@@ -134,6 +134,9 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
         String errorMsg = "";
         if (e instanceof ShutdownChannelGroupException || e instanceof AsynchronousCloseException) {
+            if (context.isClose(this.channelID)) {
+                return;
+            }
             // rcv Close
             errorMsg = "rcv(" + this.channelID + ") channel is closed " + e.getMessage();
         } else {

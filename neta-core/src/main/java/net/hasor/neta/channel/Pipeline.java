@@ -21,7 +21,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public interface PipeStack<OUT> {
+public interface Pipeline<OUT> {
     /**
      * when connected.
      * @param pipeContext pipeContext

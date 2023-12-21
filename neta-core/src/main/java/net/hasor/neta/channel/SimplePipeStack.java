@@ -19,28 +19,28 @@ package net.hasor.neta.channel;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public abstract class SimplePipeStack<OUT> implements PipeStack<OUT> {
+public abstract class SimplePipeStack implements Pipeline<Object> {
     @Override
-    public final OUT[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] rcvData) throws Throwable {
+    public final Object[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] rcvData) throws Throwable {
         return this.onNotify(true, pipeContext, rcvData);
     }
 
     @Override
-    public final OUT[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable {
+    public final Object[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable {
         return this.onError(true, pipeContext, rcvError);
     }
 
     @Override
-    public final OUT[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
+    public final Object[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
         return this.onNotify(false, pipeContext, sndData);
     }
 
     @Override
-    public final OUT[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable {
+    public final Object[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable {
         return this.onError(false, pipeContext, sndError);
     }
 
-    protected abstract OUT[] onNotify(boolean isRcv, PipeContext pipeContext, Object[] data) throws Throwable;
+    protected abstract Object[] onNotify(boolean isRcv, PipeContext pipeContext, Object[] data) throws Throwable;
 
-    protected abstract OUT[] onError(boolean isRcv, PipeContext pipeContext, Throwable error) throws Throwable;
+    protected abstract Object[] onError(boolean isRcv, PipeContext pipeContext, Throwable error) throws Throwable;
 }

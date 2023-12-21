@@ -23,13 +23,25 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslPemTest extends AbstractSslTest {
+public class SslJdkPemTest extends AbstractSslTest {
+
+    public static SslConfig sslConfig(SslMode mode) {
+        SslConfig sslConfig = new SslConfig();
+        sslConfig.setAuthType(SslAuthKeyType.PEM);
+        sslConfig.setPemCertChain("ssl/ca/server.crt");
+        sslConfig.setPemPrivate("ssl/ca/server.pem");
+        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
+        sslConfig.setSsllog(true);
+        sslConfig.setSslMode(mode);
+        return sslConfig;
+    }
 
     @Test
     public void sslHandshakeTest_1() {
+        SslConfig sslConf = sslConfig(SslMode.Always);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeStackUsingPEM(SslMode.Always), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeStackUsingPEM(SslMode.Always), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -43,9 +55,10 @@ public class SslPemTest extends AbstractSslTest {
 
     @Test
     public void sslModelAlwaysTest_1() {
+        SslConfig sslConf = sslConfig(SslMode.Always);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeStackUsingPEM(SslMode.Always), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeStackUsingPEM(SslMode.Always), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -71,9 +84,10 @@ public class SslPemTest extends AbstractSslTest {
 
     @Test
     public void sslModelOnceTest_1() {
+        SslConfig sslConf = sslConfig(SslMode.Once);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeStackUsingPEM(SslMode.Once), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeStackUsingPEM(SslMode.Once), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -99,9 +113,10 @@ public class SslPemTest extends AbstractSslTest {
 
     @Test
     public void sslModelOnceTest_2() {
+        SslConfig sslConf = sslConfig(SslMode.Once);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeStackUsingPEM(SslMode.Once), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeStackUsingPEM(SslMode.Once), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -127,9 +142,10 @@ public class SslPemTest extends AbstractSslTest {
 
     @Test
     public void sslModelManualTest_1() {
+        SslConfig sslConf = sslConfig(SslMode.Manual);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeStackUsingPEM(SslMode.Manual), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeStackUsingPEM(SslMode.Manual), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 

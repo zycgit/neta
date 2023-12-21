@@ -19,7 +19,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.PipeContextImpl;
-import net.hasor.neta.channel.PipeStack;
+import net.hasor.neta.channel.Pipeline;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +30,7 @@ import java.util.List;
  * @version : 2023-10-20
  */
 @SuppressWarnings({ "unchecked" })
-class PipeChainRoot implements PipeStack<Object>, PipeStatistical {
+class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     private static final Logger                                logger = Logger.getLogger(PipeChainRoot.class);
     private static final ByteBuf[]                             EMPTY  = new ByteBuf[0];
     private final        List<PipeLayerInvocation<?, ?, ?, ?>> layers;
@@ -105,15 +105,15 @@ class PipeChainRoot implements PipeStack<Object>, PipeStatistical {
 
     private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws Throwable {
         //                 PipeLayer(0)                    PipeLayer (1)
-        //          ┏━━━━━━━━━━━━━━━━━━━━━━━━┓      ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
-        //          ┃                        ┃      ┃                        ┃
-        //          ┃             ┏━━━━━━━━━━┻━━━━━━┻━━━━━━━━━━┓             ┃
-        //  DATA -> ┃ RCV_UP      ┃ RCV_DOWN    ->    RCV_UP   ┃    RCV_DOWN ┃  -> ...
-        //          ┃             ┃                            ┃             ┃
-        //  ...  <- ┃ SND_DOWN    ┃ SND_UP      <-    SND_DOWN ┃      SND_UP ┃  <- DATA
-        //          ┃             ┗━━━━━━━━━━┳━━━━━━┳━━━━━━━━━━┛             ┃
-        //          ┃                        ┃      ┃                        ┃
-        //          ┗━━━━━━━━━━━━━━━━━━━━━━━━┛      ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
+        //          ┏━━━━━━━━━━━━━━━━━━━━━━━━┓       ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+        //          ┃                        ┃       ┃                        ┃
+        //          ┃             ╭┄┄┄┄┄┄┄┄┄┄┸┄┄┄┄┄┄┄┸┄┄┄┄┄┄┄┄┄┄╮             ┃
+        //  DATA -> ┃ RCV_UP      ┆ RCV_DOWN    <=>    RCV_UP   ┆    RCV_DOWN ┃  -> ...
+        //          ┃             ┆                             ┆             ┃
+        //  ...  <- ┃ SND_DOWN    ┆ SND_UP      <=>    SND_DOWN ┆      SND_UP ┃  <- DATA
+        //          ┃             ╰┄┄┄┄┄┄┄┄┄┄┰┄┄┄┄┄┄┄┰┄┄┄┄┄┄┄┄┄┄╯             ┃
+        //          ┃                        ┃       ┃                        ┃
+        //          ┗━━━━━━━━━━━━━━━━━━━━━━━━┛       ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
         boolean netLog = pipeContext.getConfig().isNetlog();
         PipeQueue<?> useRcvUp = i == 0 ? this.rootRcvUp : this.layers.get(i - 1).getRcvDown();
         PipeQueue<?> useSndUp = i == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(i + 1).getSndDown();

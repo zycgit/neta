@@ -81,7 +81,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         }
     }
 
-    public EmbeddedChannel(boolean asServer, PipeStackFactory stackFactory, EmbeddedSoContext context) {
+    public EmbeddedChannel(boolean asServer, PipelineFactory stackFactory, EmbeddedSoContext context) {
         this.channelID = EmbeddedSoContext.nextID();
         this.createdTime = System.currentTimeMillis();
         this.lastActiveTime = System.currentTimeMillis();

@@ -27,7 +27,9 @@ public interface PipeListener<T> {
     default void onReceiveError(SoChannel<?> channel, Throwable e) {
     }
 
-    void onSend(SoChannel<?> channel);
+    default void onSend(SoChannel<?> channel) {
+
+    }
 
     default void onSendError(SoChannel<?> channel, Throwable e) {
     }

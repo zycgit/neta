@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.PipeStackFactory;
+import net.hasor.neta.channel.PipelineFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,8 +31,20 @@ import java.util.function.Consumer;
 public final class PipeInitializer implements PipeBuilder {
     private final AtomicReference<PipeConfig> defaultPipeConfigRef = new AtomicReference<>(new PipeConfig());
 
+    public static PipelineFactory empty() {
+        return new PipeInitializer().nextTo().build();
+    }
+
+    public static <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> builder() {
+        return new PipeInitializer().nextTo();
+    }
+
+    public static PipelineFactory builder(PipeListener<ByteBuf> listener) {
+        return new PipeInitializer().nextTo().bindReceive(listener).build();
+    }
+
     @Override
-    public <RCV_UP, SND_DOWN> PipeStackBuilder<RCV_UP, SND_DOWN> pipeConfig(PipeConfig pipeConfig) {
+    public <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> pipeConfig(PipeConfig pipeConfig) {
         defaultPipeConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
         return new PipeStackBuilderImpl<>(new ArrayList<>());
     }
@@ -43,23 +55,23 @@ public final class PipeInitializer implements PipeBuilder {
     }
 
     @Override
-    public <RCV_UP, SND_DOWN> PipeStackBuilder<RCV_UP, SND_DOWN> empty() {
+    public <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> nextTo() {
         return new PipeStackBuilderImpl<>(new ArrayList<>());
     }
 
     @Override
-    public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer) {
-        PipeStackBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
+    public <RCV_DOWN, SND_UP> PipelineBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> pipeLayer) {
+        PipelineBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
         return builder.nextTo(name, pipeConfig, pipeLayer);
     }
 
     @Override
-    public <RCV_DOWN, SND_UP> PipeStackBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
-        PipeStackBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
+    public <RCV_DOWN, SND_UP> PipelineBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
+        PipelineBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
         return builder.nextTo(name, pipeConfig, new PipeDuplexLayer<>(decoder, encoder));
     }
 
-    class PipeStackBuilderImpl<RCV_DOWN, SND_UP> implements PipeStackBuilder<RCV_DOWN, SND_UP> {
+    class PipeStackBuilderImpl<RCV_DOWN, SND_UP> implements PipelineBuilder<RCV_DOWN, SND_UP> {
         private final List<Consumer<PipeChainRoot>> taskAppend;
 
         PipeStackBuilderImpl(List<Consumer<PipeChainRoot>> taskAppend) {
@@ -67,7 +79,7 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public <RCV_DOWN1, SND_UP1> PipeStackBuilder<RCV_DOWN1, SND_UP1> pipeConfig(PipeConfig pipeConfig) {
+        public <RCV_DOWN1, SND_UP1> PipelineBuilder<RCV_DOWN1, SND_UP1> pipeConfig(PipeConfig pipeConfig) {
             defaultPipeConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
             return new PipeStackBuilderImpl<>(this.taskAppend);
         }
@@ -78,7 +90,7 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipelineBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeLayer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer) {
             Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
             Objects.requireNonNull(pipeLayer, "pipeLayer is null.");
 
@@ -89,7 +101,7 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, PipeHandler<NEXT_SND_UP, SND_UP> encoder) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipelineBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, PipeHandler<NEXT_SND_UP, SND_UP> encoder) {
             Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
             Objects.requireNonNull(decoder, "decoder is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
@@ -102,7 +114,7 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeStackBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> bindReceive(PipeListener<NEXT_RCV_DOWN> listener) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipelineBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> bindReceive(PipeListener<NEXT_RCV_DOWN> listener) {
             this.taskAppend.add(chainRoot -> {
                 chainRoot.bindListener(listener);
             });
@@ -110,7 +122,7 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public PipeStackFactory buildFactory(PipeConfig rootConfig) {
+        public PipelineFactory build(PipeConfig rootConfig) {
             return pipeCtx -> {
                 PipeChainRoot root = new PipeChainRoot(rootConfig);
                 for (Consumer<PipeChainRoot> consumer : taskAppend) {

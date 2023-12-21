@@ -20,6 +20,6 @@ package net.hasor.neta.channel;
  * @author 赵永春 (zyc@hasor.net)
  */
 @FunctionalInterface
-public interface PipeStackFactory {
-    PipeStack<Object> create(PipeContext pipeContext) throws Throwable;
+public interface PipelineFactory {
+    Pipeline<Object> create(PipeContext pipeContext) throws Throwable;
 }

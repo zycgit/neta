@@ -53,7 +53,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     private final        AtomicBoolean             wStatus;
     //
     protected            PipeContextImpl           pipeCtx;
-    protected            PipeStack<ByteBuf>        pipeStack;
+    protected            Pipeline<ByteBuf>         pipeline;
     //
     protected final      AtomicBoolean             closeStatus;
     protected final      Future<NetChannel>        closeFuture;
@@ -79,9 +79,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         this.wStatus = new AtomicBoolean(false);
     }
 
-    protected void initPipe(PipeContextImpl pipeContext, PipeStack<?> pipeStack) {
+    protected void initPipe(PipeContextImpl pipeContext, Pipeline<?> pipeline) {
         this.pipeCtx = pipeContext;
-        this.pipeStack = (PipeStack<ByteBuf>) pipeStack;
+        this.pipeline = (Pipeline<ByteBuf>) pipeline;
     }
 
     @Override
@@ -193,7 +193,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         try {
             //The root Buffer cannot be deallocated
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            Object[] sndBufSet = this.pipeStack.rcvLayer(this.pipeCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
+            Object[] sndBufSet = this.pipeline.rcvLayer(this.pipeCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -222,9 +222,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             //The root Buffer cannot be deallocated
             Object[] sndBufSet;
             if (isRcv) {
-                sndBufSet = this.pipeStack.rcvError(this.pipeCtx, null, e);
+                sndBufSet = this.pipeline.rcvError(this.pipeCtx, null, e);
             } else {
-                sndBufSet = this.pipeStack.sndError(this.pipeCtx, null, e);
+                sndBufSet = this.pipeline.sndError(this.pipeCtx, null, e);
             }
 
             for (Object sndBuf : sndBufSet) {
@@ -274,7 +274,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     public Future<NetChannel> sendData(Object writeData, String pipeName) {
         Future<NetChannel> future = new BasicFuture<>();
         try {
-            Object[] sndByteBuf = this.pipeStack.sndLayer(this.pipeCtx, pipeName, new Object[] { writeData });
+            Object[] sndByteBuf = this.pipeline.sndLayer(this.pipeCtx, pipeName, new Object[] { writeData });
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
             for (Object buf : sndByteBuf) {
                 Future<NetChannel> itemFuture = new BasicFuture<>();

@@ -179,7 +179,11 @@ class SoContextImpl implements SoContext {
     /** The network channel is forced to close, and all data not sent is discarded. */
     protected void unsafeCloseChannel(long channelID, String message, Throwable e) {
         if (this.config.isNetlog()) {
-            logger.error(message, e);
+            if (e == SoCloseException.INSTANCE) {
+                logger.info(message);
+            } else {
+                logger.error(message, e);
+            }
         }
 
         SoChannel<?> channel = this.channelMap.get(channelID);
@@ -195,7 +199,7 @@ class SoContextImpl implements SoContext {
             netChannel.wContext.purge(e);
 
             // release pipeStack
-            netChannel.pipeStack.release(netChannel.pipeCtx);
+            netChannel.pipeline.release(netChannel.pipeCtx);
             NetListen listen = netChannel.getSource();
             if (netChannel.isServer()) {
                 listen.notifyClose(netChannel);

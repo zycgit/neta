@@ -19,6 +19,7 @@ import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
@@ -32,10 +33,12 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
     private static final Logger                          logger = Logger.getLogger(SoAcceptCompletionHandler.class);
     private final        NetListen                       forListen;
     private final        AsynchronousServerSocketChannel acceptChannel;
+    private final        boolean                         netLog;
 
     public SoAcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel acceptChannel) {
         this.forListen = forListen;
         this.acceptChannel = acceptChannel;
+        this.netLog = forListen.getContext().getConfig().isNetlog();
     }
 
     @Override
@@ -45,6 +48,12 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
 
         // listen is suspend
         if (this.forListen.isSuspend()) {
+            if (this.netLog) {
+                try {
+                    logger.warn("ERROR: Listen is Suspend, Close the incoming connection " + result.getRemoteAddress());
+                } catch (Exception ignored) {
+                }
+            }
             IOUtils.closeQuietly(result);
             return;
         }
@@ -87,8 +96,8 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         // init and pipe
         try {
             PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
-            PipeStack<?> pipeStack = this.forListen.getStackFactory().create(pipeCtx);
-            channel.initPipe(pipeCtx, pipeStack);
+            Pipeline<?> pipeline = this.forListen.getPipeline().create(pipeCtx);
+            channel.initPipe(pipeCtx, pipeline);
             context.openChannel(channel);
             logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
         } catch (Throwable e) {
@@ -106,8 +115,11 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
-        String msg = "ERROR: Listen Failed " + e.getMessage();
+        if (e instanceof AsynchronousCloseException && this.forListen.isClose()) {
+            return;
+        }
 
+        String msg = "ERROR: Listen Failed " + e.getMessage();
         context.unsafeCloseChannel(this.forListen.getChannelID(), msg, e);
     }
 }

@@ -15,8 +15,8 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.cobble.StringUtils;
-import net.hasor.neta.channel.PipeStackFactory;
-import net.hasor.neta.handler.PipeBuilder.PipeStackBuilder;
+import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.handler.PipeBuilder.PipelineBuilder;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -34,15 +34,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextTo(errNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextTo(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -64,15 +64,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextTo(errThrowHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv(Err)/snd +1
                 .nextTo(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -99,15 +99,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errRetryHandler("2Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -129,15 +129,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo(errAgainHandler("1Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -159,15 +159,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo(errAgainHandler("1Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errRetryHandler("2Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -189,15 +189,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errRestartHandler("2Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -219,15 +219,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errExitHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -249,15 +249,15 @@ public class PipeRcvErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipeStackBuilder<Integer, Integer> empty = new PipeInitializer().empty();
-        PipeStackFactory stack = empty//
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineFactory pipeline = empty//
                 .nextTo("L1", errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo("L2", errInterruptHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo("L3", errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .buildFactory();
+                .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
 
         // do Decoder
         decoderFinishCnt.clear();

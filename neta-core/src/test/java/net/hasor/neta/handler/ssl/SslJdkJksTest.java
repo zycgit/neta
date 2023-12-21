@@ -23,12 +23,24 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslJksTest extends AbstractSslTest {
+public class SslJdkJksTest extends AbstractSslTest {
+    public static SslConfig sslConfig(SslMode mode) {
+        SslConfig sslConfig = new SslConfig();
+        sslConfig.setAuthType(SslAuthKeyType.JKS);
+        sslConfig.setJksResource("ssl/jks/local.jks");
+        sslConfig.setKeyPassword("123456");
+        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
+        sslConfig.setSsllog(true);
+        sslConfig.setSslMode(mode);
+        return sslConfig;
+    }
+
     @Test
     public void sslHandshakeTest_1() {
+        SslConfig sslConf = sslConfig(SslMode.Always);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeStackUsingJKS(), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeStackUsingJKS(), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -36,9 +48,7 @@ public class SslJksTest extends AbstractSslTest {
         server.writeSndUp("Hello Client, this message form server.\n");
         transfer(transfer, 500, 10);
 
-        String clientRcv = (String) client.readRcvDown();
-        String serverRcv = (String) server.readRcvDown();
-        assert clientRcv.equals("Hello Client, this message form server.");
-        assert serverRcv.equals("Hello Server, this message form client.");
+        assert client.readRcvDown().equals("Hello Client, this message form server.");
+        assert server.readRcvDown().equals("Hello Server, this message form client.");
     }
 }
