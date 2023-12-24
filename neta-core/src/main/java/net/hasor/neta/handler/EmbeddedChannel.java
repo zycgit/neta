@@ -55,7 +55,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         }
 
         @Override
-        public Future<?> asyncSend(Object writeData) {
+        public Future<?> sendData(Object writeData) {
             EmbeddedChannel channel = (EmbeddedChannel) channel();
 
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
@@ -68,7 +68,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         }
 
         @Override
-        public Future<?> asyncFlush() {
+        public Future<?> flush() {
             EmbeddedChannel channel = (EmbeddedChannel) channel();
 
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);

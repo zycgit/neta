@@ -16,6 +16,7 @@
 package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.SoOverflowException;
 import net.hasor.neta.channel.SoResManager;
@@ -41,6 +42,7 @@ class SslHandle {
     private final        long         channelID;
     private final        SslConfig    config;
     private final        SoContext    context;
+    private final        PipeContext  pipeContext;
     private final        SSLEngine    engine;
     private final        SoResManager rm;
     private final        boolean      sslLog;
@@ -52,12 +54,13 @@ class SslHandle {
     public               ByteBuffer   outNetData;
     public               ByteBuffer   outAppData;
 
-    public SslHandle(long channelID, SslConfig config, SoContext context, SSLEngine engine, Runnable closeCallBack) {
+    public SslHandle(long channelID, SslConfig config, PipeContext context, SSLEngine engine, Runnable closeCallBack) {
         this.channelID = channelID;
         this.config = config;
-        this.context = context;
+        this.context = context.getSoContext();
+        this.pipeContext = context;
         this.engine = engine;
-        this.rm = context.getResourceManager();
+        this.rm = this.context.getResourceManager();
         this.sslLog = config.isSsllog();
         this.handshake = false;
         this.closeCallBack = closeCallBack;
@@ -89,6 +92,9 @@ class SslHandle {
             }
         }
 
+        this.handleWrap(isRcv, sslEngine, rcvUp, rcvDown, sndUp, sndDown);
+        this.pipeContext.flush();
+        afterClose();
         throw e;
     }
 

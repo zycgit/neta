@@ -54,6 +54,38 @@ public class SslJdkPemTest extends AbstractSslTest {
     }
 
     @Test
+    public void sslHandshakeDisorderTest_1() {
+        SslConfig sslConf = sslConfig(SslMode.Once);
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
+        EmbeddedTransfer transfer = context.joinChannel(client, server);
+        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+
+        // mock network disorder this is failed
+        server.writeSndUp("Hello Client, this message form server.\n");
+        client.writeSndUp("Hello Server, this message form client.\n");
+        Object[] data = client.readSndDownArray(client.getSndDownSize());
+        server.writeRcvUpArray(biasedArray(data));
+        transfer(transfer, 500, 10);
+        client.readRcvDownArray();
+        server.readRcvDownArray();
+
+        SslContext serverSSL = server.findPipeContext(SslContext.class);
+        SslContext clientSSL = client.findPipeContext(SslContext.class);
+        serverSSL.openSSL();
+        clientSSL.openSSL();
+
+        // re send this is ok.
+        System.out.println("!!!!!!!!!!");
+        server.writeSndUp("Hello Client, this message form server.\n");
+        client.writeSndUp("Hello Server, this message form client.\n");
+        transfer(transfer, 500, 10);
+        assert server.readRcvDown().equals("Hello Server, this message form client.");
+        assert client.readRcvDown().equals("Hello Client, this message form server.");
+    }
+
+    @Test
     public void sslModelAlwaysTest_1() {
         SslConfig sslConf = sslConfig(SslMode.Always);
         EmbeddedSoContext context = new EmbeddedSoContext();

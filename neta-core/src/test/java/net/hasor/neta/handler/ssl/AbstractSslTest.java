@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
+import net.hasor.cobble.RandomUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipeContext;
@@ -23,6 +24,7 @@ import net.hasor.neta.handler.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -116,5 +118,17 @@ public class AbstractSslTest {
             }
         } while (message != null);
         return PipeStatus.Next;
+    }
+
+    protected Object[] biasedArray(Object[] data) {
+        List<Object> list = new ArrayList<>(Arrays.asList(data));
+        ArrayList<Object> result = new ArrayList<>();
+        int cnt = list.size();
+
+        for (int i = 0; i < cnt; i++) {
+            int idx = RandomUtils.nextInt(0, list.size() - 1);
+            result.add(list.remove(idx));
+        }
+        return result.toArray();
     }
 }

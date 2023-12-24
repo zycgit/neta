@@ -29,7 +29,7 @@ import java.util.function.Consumer;
  * @version : 2023-10-20
  */
 public final class PipeInitializer implements PipeBuilder {
-    private final AtomicReference<PipeConfig> defaultPipeConfigRef = new AtomicReference<>(new PipeConfig());
+    private final AtomicReference<PipeConfig> defaultConfigRef = new AtomicReference<>(new PipeConfig());
 
     public static PipelineFactory empty() {
         return new PipeInitializer().nextTo().build();
@@ -45,13 +45,13 @@ public final class PipeInitializer implements PipeBuilder {
 
     @Override
     public <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> pipeConfig(PipeConfig pipeConfig) {
-        defaultPipeConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
+        defaultConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
         return new PipeStackBuilderImpl<>(new ArrayList<>());
     }
 
     @Override
     public PipeConfig pipeConfig() {
-        return defaultPipeConfigRef.get();
+        return defaultConfigRef.get();
     }
 
     @Override
@@ -79,14 +79,14 @@ public final class PipeInitializer implements PipeBuilder {
         }
 
         @Override
-        public <RCV_DOWN1, SND_UP1> PipelineBuilder<RCV_DOWN1, SND_UP1> pipeConfig(PipeConfig pipeConfig) {
-            defaultPipeConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipelineBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> pipeConfig(PipeConfig pipeConfig) {
+            defaultConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
             return new PipeStackBuilderImpl<>(this.taskAppend);
         }
 
         @Override
         public PipeConfig pipeConfig() {
-            return defaultPipeConfigRef.get();
+            return defaultConfigRef.get();
         }
 
         @Override
@@ -128,7 +128,6 @@ public final class PipeInitializer implements PipeBuilder {
                 for (Consumer<PipeChainRoot> consumer : taskAppend) {
                     consumer.accept(root);
                 }
-
                 root.init(pipeCtx);
                 return root;
             };

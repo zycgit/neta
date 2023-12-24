@@ -87,6 +87,11 @@ public class EmbeddedSoContext implements SoContext {
         return channel == null || channel.isClose();
     }
 
+    @Override
+    public SoChannel<?> findChannel(long channelID) {
+        return this.channelMap.get(channelID);
+    }
+
     /** force close network channel, like {@link SoChannel#closeNow()} */
     protected void closeChannel(long channelID, String message) {
         logger.info("channel(" + channelID + ") close in progress, " + message);

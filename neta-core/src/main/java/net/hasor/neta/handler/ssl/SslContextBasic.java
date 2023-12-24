@@ -178,7 +178,7 @@ public abstract class SslContextBasic implements SslContext {
         // start handshake
         if (this.sslHandler == null) {
             this.sslEngine = this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine());
-            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.soContext, this.sslEngine, () -> {
+            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.pipeContext, this.sslEngine, () -> {
                 this.sslHandler = null;
                 this.sslStatus = this.sslMode == SslMode.Always; // auto reset
             });
@@ -189,7 +189,7 @@ public abstract class SslContextBasic implements SslContext {
         this.sslHandler.handshake(isRcv, rcvUp, rcvDown, sndUp, sndDown);
 
         // Handshake successful
-        return this.sslHandler.isHandshake(); // We've just completed the handshake, and we'll handle the SSL decryption/encryption
+        return this.sslHandler != null && this.sslHandler.isHandshake(); // We've just completed the handshake, and we'll handle the SSL decryption/encryption
     }
 
     /** Receiving SSL data */
@@ -239,7 +239,7 @@ public abstract class SslContextBasic implements SslContext {
         SSLEngine engine = this.getEngine();
         if (engine != null && !engine.isOutboundDone()) {
             engine.closeOutbound();
-            this.pipeContext.asyncFlush();
+            this.pipeContext.flush();
         }
 
         this.sslStatus = this.sslMode == SslMode.Always; // auto reset

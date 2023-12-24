@@ -154,11 +154,15 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     // ------------------------------------------------------------
 
     @Override
-    public synchronized Object[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
+    public synchronized Object[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] rcvData) throws Throwable {
         try {
+            if (this.layers.isEmpty()) {
+                return this.triggerReceiveByEmptyLayers(pipeContext, rcvData);
+            }
+
             int depth = this.findDepth(true, pipeName);
             PipeQueue useRcvUp = depth == 0 ? this.rootRcvUp : this.layers.get(depth - 1).getRcvDown();
-            this.offerMessage(true, pipeContext, useRcvUp, sndData);
+            this.offerMessage(true, pipeContext, useRcvUp, rcvData);
             return this.doRcvLife(pipeContext, depth);
         } finally {
             ((PipeContextImpl) pipeContext).clearFlash();
@@ -235,6 +239,20 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         }
     }
 
+    private Object[] triggerReceiveByEmptyLayers(PipeContext pipeContext, Object[] sndData) {
+        if (this.listener == null) {
+            // trigger tail. print event data to sto
+            logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping eventSize: " + sndData.length);
+        } else {
+            // trigger the listener event.
+            for (Object obj : sndData) {
+                this.listener.onReceive(pipeContext.channel(), obj);
+            }
+        }
+
+        return EMPTY;
+    }
+
     private PipeResult doRcvPipe(final PipeContext pipeContext, int depth) throws Throwable {
         boolean netLog = pipeContext.getConfig().isNetlog();
         boolean needRestartLater;
@@ -300,6 +318,10 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     @Override
     public synchronized Object[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable {
         try {
+            if (this.layers.isEmpty()) {
+                return this.triggerSendByEmptyLayers(pipeContext, sndData);
+            }
+
             int depth = this.findDepth(false, pipeName);
             PipeQueue useSndUp = depth == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(depth + 1).getSndDown();
             this.offerMessage(false, pipeContext, useSndUp, sndData);
@@ -313,6 +335,11 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     public synchronized Object[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable {
         try {
             pipeContext.flash(PipeLayerInvocation.SND_ERROR_TAG, sndError);
+
+            if (this.layers.isEmpty()) {
+                return this.triggerSendByEmptyLayers(pipeContext, EMPTY);
+            }
+
             int depth = this.findDepth(false, pipeName);
             return this.doSndLife(pipeContext, depth);
         } finally {
@@ -345,6 +372,11 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             }
 
         }
+    }
+
+    private Object[] triggerSendByEmptyLayers(PipeContext pipeContext, Object[] sndData) {
+        this.triggerSend(pipeContext);
+        return sndData;
     }
 
     private PipeResult doSndPipe(PipeContext pipeContext, int depth) throws Throwable {
