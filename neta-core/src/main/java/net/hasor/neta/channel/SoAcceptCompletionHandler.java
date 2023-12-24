@@ -120,6 +120,6 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         }
 
         String msg = "ERROR: Listen Failed " + e.getMessage();
-        context.unsafeCloseChannel(this.forListen.getChannelID(), msg, e);
+        context.asyncUnsafeCloseChannel(this.forListen.getChannelID(), msg, e);
     }
 }

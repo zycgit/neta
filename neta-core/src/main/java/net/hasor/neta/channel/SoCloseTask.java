@@ -34,7 +34,7 @@ class SoCloseTask extends DefaultSoTask {
     protected void doWork(int retryCnt) {
         String msg = "channel(" + channelID + ") close form local.";
         if (this.force) {
-            this.context.unsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+            this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
         } else {
             this.context.safeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
         }

@@ -226,49 +226,53 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.lastAcceptTime = System.currentTimeMillis();
         this.acceptCount.incrementAndGet();
 
-        this.context.submitSoTask(channel.getChannelID(), new DefaultSoTask() {
-            @Override
-            protected void doWork(int retryCnt) {
-                for (NetListener listener : listeners) {
-                    try {
-                        listener.accept(channel);
-                    } catch (Exception ignored) {
+        Runnable task = () -> {
+            for (NetListener listener : listeners) {
+                try {
+                    listener.accept(channel);
+                } catch (Exception ignored) {
 
-                    }
-                }
-
-                synchronized (acceptLock) {
-                    acceptLock.notifyAll();
                 }
             }
-        }, this);
+
+            synchronized (acceptLock) {
+                acceptLock.notifyAll();
+            }
+        };
+
+        this.context.submitSoTask(channel.getChannelID(), new SimpleTask(task), this);
     }
 
     /**
      * socket closed
      */
-    final void notifyClose(NetChannel channel) {
+    final Future<NetListen> notifyClose(NetChannel channel, boolean async) {
         this.lastActiveTime = System.currentTimeMillis();
         this.acceptCount.decrementAndGet();
 
-        this.context.submitSoTask(channel.getChannelID(), new DefaultSoTask() {
-            @Override
-            protected void doWork(int retryCnt) {
-                for (NetListener listener : listeners) {
-                    try {
-                        listener.close(channel);
-                    } catch (Exception ignored) {
-                    }
-                }
-
-                synchronized (closeLock) {
-                    closeLock.notifyAll();
+        Runnable task = () -> {
+            for (NetListener listener : listeners) {
+                try {
+                    listener.close(channel);
+                } catch (Exception ignored) {
                 }
             }
-        }, this);
+
+            synchronized (closeLock) {
+                closeLock.notifyAll();
+            }
+        };
+
+        if (async) {
+            return this.context.submitSoTask(channel.getChannelID(), new SimpleTask(task), this);
+        } else {
+            task.run();
+            return new BasicFuture<>(this);
+        }
     }
 
     public void notifyError(Throwable e) {
+
     }
 
     /** Wait for an incoming. */

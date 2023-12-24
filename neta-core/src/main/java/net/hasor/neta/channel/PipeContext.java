@@ -52,8 +52,8 @@ public interface PipeContext {
     <T> T flash(String key, T flash);
 
     /** write data to protocol stack, the event propagates backward from the current protocol layer */
-    Future<?> asyncSend(Object writeData);
+    Future<?> sendData(Object writeData);
 
     /** Refresh the protocol stack, the event propagates backward from the current protocol layer */
-    Future<?> asyncFlush();
+    Future<?> flush();
 }

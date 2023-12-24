@@ -84,7 +84,7 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
-    public Future<?> asyncSend(Object writeData) {
+    public Future<?> sendData(Object writeData) {
         if (this.channel instanceof NetChannel) {
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
@@ -98,7 +98,7 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
-    public Future<?> asyncFlush() {
+    public Future<?> flush() {
         if (this.channel instanceof NetChannel) {
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {

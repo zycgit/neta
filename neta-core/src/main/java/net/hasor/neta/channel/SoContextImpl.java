@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.concurrent.timer.TimerTask;
@@ -33,7 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
-    private static final AtomicLong                 nextID = new AtomicLong(1);
+    private static final AtomicLong                 nextID = new AtomicLong(0);
     private final        SoConfig                   config;
     private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
@@ -151,6 +152,11 @@ class SoContextImpl implements SoContext {
         return channel == null || channel.isClose();
     }
 
+    @Override
+    public SoChannel<?> findChannel(long channelID) {
+        return this.channelMap.get(channelID);
+    }
+
     /** close all socket. */
     public void closeAll(boolean now) {
         List<Long> ids = new LinkedList<>();
@@ -169,7 +175,7 @@ class SoContextImpl implements SoContext {
         ids.forEach(channelID -> {
             String msg = "channel(" + channelID + ") close form closeAll.";
             if (now) {
-                unsafeCloseChannel(channelID, msg, SoCloseException.INSTANCE);
+                syncUnsafeCloseChannel(channelID, msg, SoCloseException.INSTANCE);
             } else {
                 safeCloseChannel(channelID, msg, SoCloseException.INSTANCE);
             }
@@ -177,7 +183,16 @@ class SoContextImpl implements SoContext {
     }
 
     /** The network channel is forced to close, and all data not sent is discarded. */
-    protected void unsafeCloseChannel(long channelID, String message, Throwable e) {
+    protected void asyncUnsafeCloseChannel(long channelID, String message, Throwable e) {
+        this.unsafeCloseChannel(channelID, message, e, true);
+    }
+
+    /** The network channel is forced to close, and all data not sent is discarded. */
+    protected void syncUnsafeCloseChannel(long channelID, String message, Throwable e) {
+        this.unsafeCloseChannel(channelID, message, e, false);
+    }
+
+    private void unsafeCloseChannel(long channelID, String message, Throwable e, boolean async) {
         if (this.config.isNetlog()) {
             if (e == SoCloseException.INSTANCE) {
                 logger.info(message);
@@ -199,15 +214,21 @@ class SoContextImpl implements SoContext {
             netChannel.wContext.purge(e);
 
             // release pipeStack
-            netChannel.pipeline.release(netChannel.pipeCtx);
-            NetListen listen = netChannel.getSource();
-            if (netChannel.isServer()) {
-                listen.notifyClose(netChannel);
+            NetListen forListen = netChannel.getSource();
+            Future<NetListen> result;
+            if (forListen != null) {
+                result = forListen.notifyClose(netChannel, async);
+            } else {
+                result = new BasicFuture<>((NetListen) null);
             }
 
-            IOUtils.closeQuietly(netChannel.channel);
-            IOUtils.closeQuietly(specialExecutor);
-            logger.info("channel(" + channelID + ") closed.");
+            result.onCompleted(future -> {
+                netChannel.pipeline.release(netChannel.pipeCtx);
+                IOUtils.closeQuietly(netChannel.channel);
+                IOUtils.closeQuietly(specialExecutor);
+                logger.info("channel(" + channelID + ") closed.");
+            });
+
             this.channelList.remove(channel);
         } else {
 

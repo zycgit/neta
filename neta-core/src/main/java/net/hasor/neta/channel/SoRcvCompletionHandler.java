@@ -98,7 +98,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
             // rcv close
             String msg = "rcv(" + channelID + ") close form remote.";
-            context.unsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+            context.asyncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
         }
     }
 
@@ -127,7 +127,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
 
                 context.notifyRcvChannelError(this.channelID, cause);
-                context.unsafeCloseChannel(this.channelID, cause.getMessage(), cause);
+                context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
             }
             return;
         }
@@ -145,6 +145,6 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         }
 
         context.notifyRcvChannelError(this.channelID, e);
-        context.unsafeCloseChannel(this.channelID, errorMsg, e);
+        context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
     }
 }

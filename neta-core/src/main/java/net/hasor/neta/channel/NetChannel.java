@@ -55,6 +55,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     protected            PipeContextImpl           pipeCtx;
     protected            Pipeline<ByteBuf>         pipeline;
     //
+    private              boolean                   netLog;
     protected final      AtomicBoolean             closeStatus;
     protected final      Future<NetChannel>        closeFuture;
 
@@ -71,6 +72,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         this.context = wContext.getContext();
         this.localAddr = localAddr;
         this.remoteAddr = remoteAddr;
+        this.netLog = this.context.getConfig().isNetlog();
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
 
@@ -206,7 +208,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             logger.error("rcv(" + this.channelID + ") " + msg, e);
 
             this.closeStatus.set(true);
-            this.context.unsafeCloseChannel(this.channelID, msg, e);
+            this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
         } finally {
             this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
@@ -239,7 +241,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             logger.error("rcv(" + this.channelID + ") " + msg, e);
 
             this.closeStatus.set(true);
-            this.context.unsafeCloseChannel(this.channelID, msg, e);
+            this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
         } finally {
             this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
@@ -314,6 +316,10 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     }
 
     private void appendSoSndTask(SoSndData wTask) {
+        if (this.netLog) {
+            logger.info("snd(" + this.channelID + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
+        }
+
         if (this.closeStatus.get()) {
             wTask.failed(SoCloseException.INSTANCE);
             return;

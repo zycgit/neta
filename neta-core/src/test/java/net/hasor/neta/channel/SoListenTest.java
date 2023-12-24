@@ -145,7 +145,7 @@ public class SoListenTest extends AbstractSoTest {
 
         server.shutdown();
 
-        assert atomicListen.get() == 0;
+        assert atomicListen.get() == -1; //because one already existed before we added the counter
         assert listen.getChannelCount() == 0;
     }
 }
