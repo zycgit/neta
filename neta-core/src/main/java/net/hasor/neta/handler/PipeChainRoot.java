@@ -67,6 +67,24 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     @Override
+    public boolean rcvAvailable() {
+        if (this.layers.isEmpty()) {
+            return true;
+        } else {
+            return this.rootRcvUp.slotSize() > 0;
+        }
+    }
+
+    @Override
+    public boolean sndAvailable() {
+        if (this.layers.isEmpty()) {
+            return true;
+        } else {
+            return this.layers.get(this.findDepth(false, null)).getSndDown().slotSize() > 0;
+        }
+    }
+
+    @Override
     public void release(PipeContext pipeContext) {
         for (PipeLayerInvocation<?, ?, ?, ?> layer : this.layers) {
             layer.releaseLayer(pipeContext);

@@ -44,7 +44,7 @@ public class SslConfig extends PipeConfig {
     private KeyStore               keyStore              = null;
     private KeyManagerFactory      keyManagerFactory     = null;
     private TrustManagerFactory    trustManagerFactory   = null;
-    private SslAppProtocolSelector appProtocolSelector   = null;
+    private SslAppProtocolSelector appProtocolSelector   = null;                // 用于 NPN/ALPN
     // other
     private boolean                ssllog                = false;               // 打印SSL日志
 

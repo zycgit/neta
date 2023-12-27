@@ -30,6 +30,16 @@ public interface Pipeline<OUT> {
     }
 
     /**
+     * Returns whether pipleline rcv is available
+     */
+    boolean rcvAvailable();
+
+    /**
+     * Returns whether pipleline snd is available
+     */
+    boolean sndAvailable();
+
+    /**
      * Processing received data
      * @param pipeContext pipeContext
      * @param rcvData received data

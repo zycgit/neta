@@ -76,11 +76,13 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             // copy buffer form swap to rcv
             this.swapBuffer.flip();
             SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, context, getSwapBuffer(), getRcvBuffer());
-
             this.context.submitSoTask(this.channelID, copyTask, this).onCompleted(f -> {
-                this.continueRcv(0);
+                this.continueRcv();
             }).onFailed(f -> {
-                this.failed(f.getCause(), context);
+                Throwable e = f.getCause();
+                String errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
+                context.notifyRcvChannelError(this.channelID, e);
+                context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
             });
 
         } else if (result == 0) {
@@ -89,7 +91,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             }
 
             // rcv continue
-            this.continueRcv(0);
+            this.continueRcv();
 
         } else {
             if (logger.isDebugEnabled()) {
@@ -102,16 +104,9 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         }
     }
 
-    private void continueRcv(int delayInterval) {
-        // It is async to avoid recursion.
-        this.context.submitSoTask(this.channelID, new SoDelayTask(delayInterval), this).onCompleted(f -> {
-            try {
-                this.resetSwapBuffer();
-                this.channel.read(this.getSwapBuffer(), this.context, this);
-            } catch (Exception e) {
-                this.failed(e, this.context);
-            }
-        });
+    private void continueRcv() {
+        this.resetSwapBuffer();
+        this.channel.read(this.getSwapBuffer(), this.context, this);
     }
 
     @Override
@@ -122,7 +117,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 if (logger.isDebugEnabled()) {
                     logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
                 }
-                continueRcv(context.getConfig().getRetryIntervalMs());
+                this.continueRcv();
             } else {
                 SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
 

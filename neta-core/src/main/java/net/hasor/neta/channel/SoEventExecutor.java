@@ -95,13 +95,13 @@ class SoEventExecutor implements Closeable {
             TaskWorker<?> poll = this.tasks.poll();
             if (poll != null) {
                 poll.run();
-            }
-
-            if (this.tasks.isEmpty()) {
-                LockSupport.park();
-                if (Thread.currentThread().isInterrupted()) {
-                    logger.warn("task thread interrupted, (" + Thread.currentThread().getName() + ")");
-                    return;
+            } else {
+                if (this.tasks.isEmpty()) {
+                    LockSupport.park();
+                    if (Thread.currentThread().isInterrupted()) {
+                        logger.warn("task thread interrupted, (" + Thread.currentThread().getName() + ")");
+                        return;
+                    }
                 }
             }
         }

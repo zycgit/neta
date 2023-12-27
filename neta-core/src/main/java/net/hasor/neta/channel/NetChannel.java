@@ -181,7 +181,11 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     }
 
     /* Receive data without concurrency */
-    final void notifyRcv(int retryCnt) {
+    synchronized final void notifyRcv(int retryCnt) {
+        if (this.netLog) {
+            logger.info("rcv(" + this.channelID + ") the receive retryCnt is " + retryCnt);
+        }
+
         if (retryCnt == 0) {
             this.lastRcvTime = System.currentTimeMillis();
             this.lastNotifyRcvRetryTime = 0;
@@ -193,6 +197,14 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         }
 
         try {
+            this.pipeCtx.flash(PipeContext.SO_CHANNEL_RETRY_CNT, retryCnt);
+
+            if (!this.pipeline.rcvAvailable()) {
+                logger.info("rcv(" + this.channelID + ") the pipeline is not available.");
+                this.pipeline.rcvError(this.pipeCtx, null, PipeFullException.INSTANCE);
+                return;
+            }
+
             //The root Buffer cannot be deallocated
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
             Object[] sndBufSet = this.pipeline.rcvLayer(this.pipeCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
@@ -215,7 +227,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     }
 
     /* Receive error */
-    final void notifyError(boolean isRcv, Throwable e) {
+    synchronized final void notifyError(boolean isRcv, Throwable e) {
         if (!(e instanceof SoReadTimeoutException)) {
             this.lastRcvTime = System.currentTimeMillis();
         }
@@ -275,6 +287,13 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      */
     public Future<NetChannel> sendData(Object writeData, String pipeName) {
         Future<NetChannel> future = new BasicFuture<>();
+
+        if (!this.pipeline.sndAvailable()) {
+            logger.info("snd(" + this.channelID + ") the pipeline is not available.");
+            future.failed(PipeFullException.INSTANCE);
+            return future;
+        }
+
         try {
             Object[] sndByteBuf = this.pipeline.sndLayer(this.pipeCtx, pipeName, new Object[] { writeData });
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);

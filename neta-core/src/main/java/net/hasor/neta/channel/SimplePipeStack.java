@@ -21,6 +21,16 @@ package net.hasor.neta.channel;
  */
 public abstract class SimplePipeStack implements Pipeline<Object> {
     @Override
+    public boolean rcvAvailable() {
+        return true;
+    }
+
+    @Override
+    public boolean sndAvailable() {
+        return true;
+    }
+
+    @Override
     public final Object[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] rcvData) throws Throwable {
         return this.onNotify(true, pipeContext, rcvData);
     }

@@ -25,6 +25,7 @@ public interface PipeContext {
 
     String CURRENT_PIPE_STACK_NAME  = PipeContext.class.getName() + "_CURRENT_PIPE_STACK_NAME";
     String CURRENT_PIPE_STACK_DEPTH = PipeContext.class.getName() + "_CURRENT_PIPE_STACK_DEPTH";
+    String SO_CHANNEL_RETRY_CNT     = PipeContext.class.getName() + "SO_CHANNEL_RETRY_CNT";
 
     /** global config */
     SoConfig getConfig();
@@ -37,6 +38,16 @@ public interface PipeContext {
 
     /** Get the attachment for {@link PipeContext} */
     <T> T context(Class<T> attachment);
+
+    /** receive buffer full */
+    default boolean rcvFull() {
+        Object retryCnt = flash(SO_CHANNEL_RETRY_CNT);
+        if (retryCnt == null) {
+            return false;
+        } else {
+            return (int) retryCnt > 0;
+        }
+    }
 
     /** bind attachment to {@link PipeContext} */
     <T> T context(Class<T> attachmentType, T attachment);

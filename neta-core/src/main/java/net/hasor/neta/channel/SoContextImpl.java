@@ -61,6 +61,7 @@ class SoContextImpl implements SoContext {
         // timer
         ThreadFactory timerThread = ThreadUtils.daemonThreadFactory(this.useClassLoader, "Cobble-AIO-Timer");
         this.globalTimer = new HashedWheelTimer(timerThread, 50, TimeUnit.MILLISECONDS);
+        this.globalTimer.start();
 
         // io exec
         int defaultProcess = this.config.getIoThreads();
