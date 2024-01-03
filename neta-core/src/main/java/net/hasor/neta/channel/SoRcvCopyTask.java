@@ -46,7 +46,7 @@ class SoRcvCopyTask extends DefaultSoTask {
 
         if (this.srcBuffer.hasRemaining()) {
             if (this.dstBuffer.writableBytes() <= 0) {
-                this.context.notifyChannelRcv(this.channelID, retryCnt);
+                this.context.notifyChannelRcv(this.channelID, 0, retryCnt);
                 if (retryCnt > 5) {
                     this.delayTask(this.context.getConfig().getRetryIntervalMs(), TimeUnit.MILLISECONDS);
                 } else {
@@ -54,10 +54,10 @@ class SoRcvCopyTask extends DefaultSoTask {
                 }
             } else {
                 // swapBuffer -> rcvBuffer
-                this.dstBuffer.write(this.srcBuffer);
+                int len = this.dstBuffer.write(this.srcBuffer);
                 this.dstBuffer.markWriter();
 
-                this.context.notifyChannelRcv(this.channelID, retryCnt);
+                this.context.notifyChannelRcv(this.channelID, len, retryCnt);
                 this.continueTask();
             }
         } else {

@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
-    private static final AtomicLong                 nextID = new AtomicLong(0);
+    private final        AtomicLong                 nextID = new AtomicLong(0);
     private final        SoConfig                   config;
     private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
@@ -86,7 +86,7 @@ class SoContextImpl implements SoContext {
         this.listenList = new ConcurrentLinkedQueue<>();
     }
 
-    public static long nextID() {
+    public long nextID() {
         return nextID.incrementAndGet();
     }
 
@@ -253,12 +253,12 @@ class SoContextImpl implements SoContext {
     }
 
     /** receiving new data */
-    public void notifyChannelRcv(long channelID, int retryCnt) {
+    public void notifyChannelRcv(long channelID, int dataSize, int retryCnt) {
         SoChannel<?> channel = this.channelMap.get(channelID);
         if (channel != null) {
             if (channel.isClient() || channel.isServer()) {
                 NetChannel netChannel = (NetChannel) channel;
-                netChannel.notifyRcv(retryCnt);
+                netChannel.notifyRcv(dataSize, retryCnt);
             } else {
                 throw new UnsupportedOperationException(); // Can't happen
             }

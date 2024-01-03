@@ -56,7 +56,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
             return;
         }
 
-        long channelID = SoContextImpl.nextID();
+        long channelID = context.nextID();
         long createdTime = System.currentTimeMillis();
         context.specialConfig(channelID, this.remoteAddress);
 

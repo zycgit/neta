@@ -55,9 +55,11 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     protected            PipeContextImpl           pipeCtx;
     protected            Pipeline<ByteBuf>         pipeline;
     //
-    private              boolean                   netLog;
+    private final        boolean                   netLog;
     protected final      AtomicBoolean             closeStatus;
     protected final      Future<NetChannel>        closeFuture;
+    private volatile     long                      counterReceived;
+    //private volatile     long                      counterSend;
 
     NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
             AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
@@ -180,10 +182,28 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return this.closeFuture;
     }
 
+    /** Returns whether pipleline rcv is available. */
+    public boolean isRcvAvailable() {
+        return this.pipeline.rcvAvailable();
+    }
+
+    /** Number of bytes received */
+    public long getReceivedBytes() {
+        return this.counterReceived;
+    }
+
+    /** Returns whether pipleline snd is available. */
+    public boolean isSndAvailable() {
+        return this.pipeline.sndAvailable();
+    }
+
     /* Receive data without concurrency */
-    synchronized final void notifyRcv(int retryCnt) {
+    synchronized final void notifyRcv(int dataSize, int retryCnt) {
+        this.counterReceived += dataSize;
+
         if (this.netLog) {
-            logger.info("rcv(" + this.channelID + ") the receive retryCnt is " + retryCnt);
+            String retryMsg = (retryCnt > 0) ? (", retryCnt is " + retryCnt) : "";
+            logger.info("rcv(" + this.channelID + ") the receive " + dataSize + " bytes" + retryMsg);
         }
 
         if (retryCnt == 0) {

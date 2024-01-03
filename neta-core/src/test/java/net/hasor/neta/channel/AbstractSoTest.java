@@ -21,6 +21,7 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.SocketException;
+import java.security.MessageDigest;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -29,7 +30,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class AbstractSoTest {
     public static int safePort() throws IOException {
-        for (int i = 24608; i < 65525; i++) {
+        for (int i = 24601; i < 65525; i++) {
             try {
                 ServerSocket ss = new ServerSocket();
                 ss.bind(new InetSocketAddress("127.0.0.1", i));
@@ -73,5 +74,14 @@ public class AbstractSoTest {
                 counter.decrementAndGet();
             }
         };
+    }
+
+    public static String toMd5(MessageDigest digest) {
+        byte[] hashBytes = digest.digest();
+        StringBuilder sb = new StringBuilder();
+        for (byte b : hashBytes) {
+            sb.append(Integer.toString((b & 0xff) + 0x100, 16).substring(1));
+        }
+        return sb.toString();
     }
 }

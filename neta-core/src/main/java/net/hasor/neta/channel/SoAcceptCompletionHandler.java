@@ -84,7 +84,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         }
 
         // openChannel
-        long channelID = SoContextImpl.nextID();
+        long channelID = context.nextID();
         long createdTime = System.currentTimeMillis();
         context.specialConfig(channelID, remoteAddr);
 
