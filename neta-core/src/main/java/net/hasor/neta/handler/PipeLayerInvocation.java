@@ -132,8 +132,8 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         } catch (Throwable e) {
             if (ctxError == null) {
                 String msgTag = isRcv ? "rcv" : "snd";
-                msgTag = msgTag + "(" + context.channel().getChannelID() + ") " + this.pipeLayer.getClass() + " an error has occurred " + e.getMessage();
-                logger.error(msgTag, e);
+                long channelID = context.channel().getChannelID();
+                logger.error(msgTag + "(" + channelID + ") " + this.pipeLayer.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage());
 
                 context.flash(errorTag, e);
                 return this.pipeLayer.doError(context, isRcv, e, this.createExceptionHandler(isRcv, context, rcvUp, sndUp));

@@ -22,8 +22,9 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAdapter;
 
+import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.NotYetConnectedException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -35,39 +36,41 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2023-09-24
  */
 public class NetChannel extends AttributeChannel<NetChannel> {
-    private static final Logger                    logger = Logger.getLogger(NetChannel.class);
-    private final        long                      channelID;
-    private final        NetListen                 forListen;
-    protected final      AsynchronousSocketChannel channel;
-    protected final      SoSndContext              wContext;
-    protected final      SoContextImpl             context;
-    private final        SocketAddress             localAddr;
-    private final        SocketAddress             remoteAddr;
-    private final        long                      createdTime;
-    private              long                      lastSndTime;
-    private              long                      lastRcvTime;
-    private              long                      lastNotifyRcvRetryTime;
+    private static final Logger                 logger = Logger.getLogger(NetChannel.class);
+    private final        long                   channelID;
+    private final        NetListen              forListen;
+    protected final      SoAsyncChannel         channel;
+    protected final      SoSndContext           wContext;
+    protected final      SoContextImpl          context;
+    private final        SocketAddress          localAddr;
+    private final        SocketAddress          remoteAddr;
+    private final        long                   createdTime;
+    private              long                   lastSndTime;
+    private              long                   lastRcvTime;
+    private final        Object                 readTimeoutSyncObj;
+    private              long                   lastNotifyRcvRetryTime;
     //
-    private final        SoRcvCompletionHandler    rHandler;
-    private final        SoSndCompletionHandler    wHandler;
-    private final        AtomicBoolean             wStatus;
+    private final        SoRcvCompletionHandler rHandler;
+    private final        SoSndCompletionHandler wHandler;
+    private final        AtomicBoolean          wStatus;
     //
-    protected            PipeContextImpl           pipeCtx;
-    protected            Pipeline<ByteBuf>         pipeline;
+    protected            PipeContextImpl        pipeCtx;
+    protected            Pipeline<ByteBuf>      pipeline;
     //
-    private final        boolean                   netLog;
-    protected final      AtomicBoolean             closeStatus;
-    protected final      Future<NetChannel>        closeFuture;
-    private volatile     long                      counterReceived;
-    //private volatile     long                      counterSend;
+    private final        boolean                netLog;
+    protected final      AtomicBoolean          closeStatus;
+    protected final      Future<NetChannel>     closeFuture;
+    private volatile     long                   counterReceived;
+    //private volatile     long                    counterSend;
 
     NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
-            AsynchronousSocketChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
+            SoAsyncChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
         this.forListen = forListen;
         this.createdTime = createdTime;
         this.lastSndTime = createdTime;
         this.lastRcvTime = createdTime;
+        this.readTimeoutSyncObj = new Object();
 
         this.channel = channel;
         this.wContext = wContext;
@@ -126,6 +129,47 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     @Override
     public boolean isClient() {
         return this.forListen == null;
+    }
+
+    /** Returns whether the read channel is closed. */
+    public boolean isShutdownInput() {
+        return this.channel.isShutdownInput();
+    }
+
+    /** Shutdown the connection for reading without closing the channel. */
+    public void shutdownInput() {
+        try {
+            if (this.netLog) {
+                logger.info("channel(" + this.channelID + ") shutdownInput.");
+            }
+            this.channel.shutdownInput();
+        } catch (NotYetConnectedException | IOException e) {
+            logger.warn("channel(" + this.channelID + ") shutdownInput, failed " + e.getMessage(), e);
+        }
+    }
+
+    /** Returns the receiving Handler state */
+    public SoHandlerStatus getRcvHandlerStatus() {
+        return this.rHandler.getStatus();
+    }
+
+    /** Returns whether the write channel is closed. */
+    public boolean isShutdownOutput() {
+        return this.channel.isShutdownOutput();
+    }
+
+    /** Shutdown the connection for write without closing the channel. */
+    public void shutdownOutput() {
+        try {
+            this.channel.shutdownOutput();
+        } catch (NotYetConnectedException | IOException e) {
+            logger.warn("channel(" + this.channelID + ") shutdownOutput " + e.getMessage(), e);
+        }
+    }
+
+    /** Returns the send Handler state */
+    public SoHandlerStatus getSndHandlerStatus() {
+        return this.wHandler.getStatus();
     }
 
     @Override
@@ -209,6 +253,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         if (retryCnt == 0) {
             this.lastRcvTime = System.currentTimeMillis();
             this.lastNotifyRcvRetryTime = 0;
+            synchronized (this.readTimeoutSyncObj) {
+                this.readTimeoutSyncObj.notifyAll();
+            }
         }
 
         if (retryCnt > 3 && (this.lastNotifyRcvRetryTime + 3000) < System.currentTimeMillis()) {
@@ -248,10 +295,6 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     /* Receive error */
     synchronized final void notifyError(boolean isRcv, Throwable e) {
-        if (!(e instanceof SoReadTimeoutException)) {
-            this.lastRcvTime = System.currentTimeMillis();
-        }
-
         try {
             //The root Buffer cannot be deallocated
             Object[] sndBufSet;
@@ -269,8 +312,8 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             }
         } catch (Throwable ee) {
             // It is not executed unless the exception is thrown in PipeReceiveListener.onError(...)
-            String msg = "invoker pipeline failed: " + e.getMessage();
-            logger.error("rcv(" + this.channelID + ") " + msg, e);
+            String msg = "invoker pipeline failed: " + ee.getMessage();
+            logger.error("rcv(" + this.channelID + ") " + msg, ee);
 
             this.closeStatus.set(true);
             this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
@@ -319,9 +362,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
             for (Object buf : sndByteBuf) {
                 Future<NetChannel> itemFuture = new BasicFuture<>();
-                new BasicFuture<>().onFailed(f -> {
+                itemFuture.onFailed(f -> {
                     future.failed(f.getCause());
-                }).onCompleted(f -> {
+                }).onFinal(f -> {
                     cnt.decrementAndGet();
                     if (cnt.get() == 0) {
                         future.completed(this);
@@ -387,6 +430,8 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         SoConfig config = this.context.getConfig();
         if (config.getSoReadTimeoutMs() > 0) {
             this.setReadTimeout(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
+        } else {
+            this.setReadTimeout(6, TimeUnit.SECONDS);
         }
     }
 
@@ -411,5 +456,36 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
         long waitTimeMs = unit.toMillis(timeout);
         this.context.newTimeout(new CheckTimeout(this.lastRcvTime, waitTimeMs), timeout, unit);
+    }
+
+    /**
+     * expect new data to be received within SoReadTimeoutMs
+     * @see SoConfig#getSoReadTimeoutMs()
+     */
+    public void waitReceive() throws InterruptedException, SoReadTimeoutException {
+        SoConfig config = this.context.getConfig();
+        if (config.getSoReadTimeoutMs() > 0) {
+            this.waitReceive(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
+        } else {
+            this.waitReceive(6, TimeUnit.SECONDS);
+        }
+    }
+
+    /**
+     * expect new data to be received within timeout.
+     * @see SoConfig#getSoReadTimeoutMs()
+     */
+    public void waitReceive(int timeout, TimeUnit unit) throws InterruptedException, SoReadTimeoutException {
+        long waitTimeMs = unit.toMillis(timeout);
+        long startTime = System.currentTimeMillis();
+
+        synchronized (this.readTimeoutSyncObj) {
+            this.readTimeoutSyncObj.wait(waitTimeMs);
+
+            long cost = System.currentTimeMillis() - startTime;
+            if (cost >= waitTimeMs) {
+                throw new SoReadTimeoutException("no data was received with " + waitTimeMs + " milliseconds.");
+            }
+        }
     }
 }

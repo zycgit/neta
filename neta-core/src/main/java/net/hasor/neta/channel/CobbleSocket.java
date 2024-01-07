@@ -35,14 +35,14 @@ public class CobbleSocket extends AbstractSocket {
     protected            AsynchronousChannelGroup channelGroup;
 
     public CobbleSocket(SoConfig config) {
-        this.initTcp(config);
+        super(config);
     }
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      *
      * @param listenPort local port for listen
-     * @param pipeStack Application layer network protocol
+     * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
     public synchronized NetListen listen(int listenPort, PipelineFactory pipeline) throws IOException {
@@ -115,9 +115,11 @@ public class CobbleSocket extends AbstractSocket {
         try {
             this.initChannelGroup();
 
-            AsynchronousSocketChannel clientChannel = AsynchronousSocketChannel.open(this.channelGroup);
-            SoConfigUtils.configSocket(this.context.getConfig(), clientChannel);
-            clientChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(clientChannel, pipeline, future));
+            AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.channelGroup);
+            SoConfigUtils.configSocket(this.context.getConfig(), channel);
+
+            SoAsyncChannel asyncChannel = new SoAsyncChannel(channel, this.config);
+            asyncChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(asyncChannel, pipeline, future));
             logger.info("connect to " + remoteAddr);
             return future;
         } catch (Exception e) {
@@ -150,6 +152,10 @@ public class CobbleSocket extends AbstractSocket {
     //    }
 
     protected void initChannelGroup() throws IOException {
+        if (this.shutdown.get()) {
+            throw new IllegalStateException("service is shutdown.");
+        }
+
         if (this.channelGroup == null) {
             this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
         }

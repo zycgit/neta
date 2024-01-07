@@ -29,9 +29,15 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class AbstractSocket {
     private static final Logger          logger = Logger.getLogger(AbstractSocket.class);
     protected            ExecutorService ioExec;
-    protected            SoConfig        config;
-    protected            SoContextImpl   context;
-    private              AtomicBoolean   shutdown;
+    protected final      SoConfig        config;
+    protected final      SoContextImpl   context;
+    protected final      AtomicBoolean   shutdown;
+
+    public AbstractSocket(SoConfig config) {
+        this.config = config;
+        this.context = new SoContextImpl(config);
+        this.shutdown = new AtomicBoolean(false);
+    }
 
     /** return {@link SoConfig} */
     public SoConfig getConfig() {
@@ -41,15 +47,6 @@ public abstract class AbstractSocket {
     /** return {@link SoContext} */
     public SoContext getContext() {
         return this.context;
-    }
-
-    protected void initTcp(SoConfig config) {
-        if (this.shutdown != null && this.shutdown.get()) {
-            throw new IllegalStateException("service is shutdown.");
-        }
-        this.config = config;
-        this.context = new SoContextImpl(config);
-        this.shutdown = new AtomicBoolean(false);
     }
 
     public final void shutdown() throws IOException {

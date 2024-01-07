@@ -14,19 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.net.SocketException;
-
 /**
- * Thrown to indicate that there is an error creating or accessing a Socket.
- * @version : 2023-09-24
+ * Handler status
+ * @version : 2024-01-07
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoTimeoutException extends SocketException {
-
-    public SoTimeoutException() {
-    }
-
-    public SoTimeoutException(String msg) {
-        super(msg);
-    }
+public enum SoHandlerStatus {
+    /** Waiting to be processed or in progress */
+    PENDING,
+    /** Waiting for IO. */
+    WAITING,
+    /** Idle, which usually means that the handler has exited the event loop. */
+    IDLE
 }

@@ -21,7 +21,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 
 /**
  * send Handler
@@ -29,22 +28,26 @@ import java.util.concurrent.TimeUnit;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
-    private static final Logger                    logger = Logger.getLogger(SoSndCompletionHandler.class);
-    private final        long                      channelID;
-    private final        long                      createdTime;
-    private final        AsynchronousSocketChannel channel;
-    private final        SoSndContext              wContext;
-    private final        SoContextImpl             context;
-    private final        ByteBuffer                swapBuffer;
-    private final        ByteBuf                   sndBuffer;
+    private static final Logger          logger = Logger.getLogger(SoSndCompletionHandler.class);
+    private final        long            channelID;
+    private final        long            createdTime;
+    private volatile     SoHandlerStatus status;
     //
-    private              int                       sndSize;
-    private volatile     boolean                   sndWorking;
-    private              List<SoSndData>           afterWorking1;
+    private final        SoAsyncChannel  channel;
+    private final        SoSndContext    wContext;
+    private final        SoContextImpl   context;
+    private final        ByteBuffer      swapBuffer;
+    private final        ByteBuf         sndBuffer;
+    //
+    private              int             sndSize;
+    private volatile     boolean         sndWorking;
+    private              List<SoSndData> afterWorking1;
 
-    public SoSndCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoSndContext wContext) {
+    public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext wContext) {
         this.channelID = channelID;
         this.createdTime = createdTime;
+        this.status = SoHandlerStatus.PENDING;
+
         this.channel = channel;
         this.wContext = wContext;
         this.context = wContext.getContext();
@@ -68,6 +71,11 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         return this.sndBuffer;
     }
 
+    /** Returns this Handler status. */
+    public SoHandlerStatus getStatus() {
+        return this.status;
+    }
+
     /**
      * The data in ByteBuf is sent in batches, before it is completed {@link #isSndWorking()} Always true.
      */
@@ -88,6 +96,8 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     @Override
     public void completed(Integer result, SoContextImpl context) {
+        this.status = SoHandlerStatus.PENDING;
+
         if (logger.isDebugEnabled()) {
             logger.debug("snd(" + this.channelID + ") size:" + result);
         }
@@ -123,17 +133,17 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     private void writeData() {
-        if (this.context.isClose(this.channelID)) {
+        if (this.channel.isShutdownOutput()) {
             submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, SoCloseException.INSTANCE));
+            this.status = SoHandlerStatus.IDLE;
             return;
         }
 
         try {
-            Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
-            if (wTimeoutMs != null && wTimeoutMs > 0) {
-                this.channel.write(this.swapBuffer, wTimeoutMs, TimeUnit.MILLISECONDS, this.context, this);
-            } else {
-                this.channel.write(this.swapBuffer, this.context, this);
+            this.status = SoHandlerStatus.WAITING;
+            boolean res = this.channel.write(this.swapBuffer, this.context, this);
+            if (!res) {
+                this.status = SoHandlerStatus.IDLE;
             }
         } catch (Throwable e) {
             if (e instanceof NotYetConnectedException) {
@@ -149,12 +159,14 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 } else {
                     SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
 
+                    this.status = SoHandlerStatus.IDLE;
                     this.context.notifySndChannelError(this.channelID, cause);
                     this.context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
                 }
             } else {
                 String msg = "snd(" + this.channelID + ") " + e.getMessage();
 
+                this.status = SoHandlerStatus.IDLE;
                 this.context.notifySndChannelError(this.channelID, e);
                 this.context.asyncUnsafeCloseChannel(this.channelID, msg, e);
             }
@@ -165,6 +177,8 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
+        this.status = SoHandlerStatus.PENDING;
+
         String errorMsg;
         Throwable cause = e;
 
@@ -175,7 +189,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         } else if (e instanceof ShutdownChannelGroupException) {
             // snd Close
             errorMsg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
-        } else if (e instanceof AsynchronousCloseException) {
+        } else if (e instanceof ClosedChannelException) {
             // snd Close
             errorMsg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
         } else {
@@ -183,6 +197,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             errorMsg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
         }
 
+        this.status = SoHandlerStatus.IDLE;
         context.notifySndChannelError(this.channelID, cause);
         context.asyncUnsafeCloseChannel(this.channelID, errorMsg, cause);
 

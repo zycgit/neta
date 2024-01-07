@@ -191,6 +191,10 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     public synchronized Object[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable {
         try {
             pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG, rcvError);
+            if (this.layers.isEmpty()) {
+                return this.triggerReceiveByEmptyLayers(pipeContext, null);
+            }
+
             int depth = this.findDepth(true, pipeName);
             return this.doRcvLife(pipeContext, depth);
         } finally {
@@ -258,13 +262,26 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     private Object[] triggerReceiveByEmptyLayers(PipeContext pipeContext, Object[] sndData) {
+        // 1st onReceive
         if (this.listener == null) {
             // trigger tail. print event data to sto
             logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping eventSize: " + sndData.length);
         } else {
             // trigger the listener event.
-            for (Object obj : sndData) {
-                this.listener.onReceive(pipeContext.channel(), obj);
+            if (sndData != null) {
+                for (Object obj : sndData) {
+                    this.listener.onReceive(pipeContext.channel(), obj);
+                }
+            }
+        }
+
+        // 2st onError
+        Throwable ctxError = pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG);
+        if (ctxError != null) {
+            if (this.listener == null) {
+                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+            } else {
+                this.listener.onReceiveError(pipeContext.channel(), ctxError);
             }
         }
 

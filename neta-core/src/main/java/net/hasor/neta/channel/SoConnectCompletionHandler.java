@@ -20,7 +20,6 @@ import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 
 /**
@@ -29,13 +28,13 @@ import java.nio.channels.CompletionHandler;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
-    private static final Logger                    logger = Logger.getLogger(SoConnectCompletionHandler.class);
-    private final        SocketAddress             remoteAddress;
-    private final        PipelineFactory           stackFactory;
-    private final        AsynchronousSocketChannel channel;
-    private final        Future<NetChannel>        future;
+    private static final Logger             logger = Logger.getLogger(SoConnectCompletionHandler.class);
+    private final        SocketAddress      remoteAddress;
+    private final        PipelineFactory    stackFactory;
+    private final        SoAsyncChannel     channel;
+    private final        Future<NetChannel> future;
 
-    public SoConnectCompletionHandler(AsynchronousSocketChannel channel, PipelineFactory stackFactory, Future<NetChannel> future) throws IOException {
+    public SoConnectCompletionHandler(SoAsyncChannel channel, PipelineFactory stackFactory, Future<NetChannel> future) throws IOException {
         this.remoteAddress = channel.getRemoteAddress();
         this.channel = channel;
         this.stackFactory = stackFactory;
@@ -44,14 +43,22 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
 
     @Override
     public void completed(Void result, SoContextImpl context) {
+        // when close then exit.
+        if (context.isClose()) {
+            logger.error("ERROR: Connect Failed, context is closed.");
+            IOUtils.closeQuietly(this.channel);
+            this.failed(SoCloseException.INSTANCE, context);
+            return;
+        }
+
         SocketAddress localAddr;
         SocketAddress remoteAddr;
         try {
             localAddr = this.channel.getLocalAddress();
             remoteAddr = this.channel.getRemoteAddress();
         } catch (Exception e) {
+            logger.error("ERROR: Connect Failed, " + e.getMessage(), e);
             IOUtils.closeQuietly(this.channel);
-            logger.error("ERROR: Connect Failed " + e.getMessage(), e);
             this.failed(e, context);
             return;
         }
@@ -72,8 +79,9 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
             channel.initPipe(pipeCtx, pipeStack);
             context.openChannel(channel);
         } catch (Throwable e) {
+            logger.error("ERROR: Connect Failed, " + e.getMessage(), e);
             IOUtils.closeQuietly(this.channel);
-            logger.error("connect failed " + e.getMessage(), e);
+            this.failed(e, context);
             return;
         }
 
@@ -85,8 +93,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         }
 
         // async read data
-        rChannel.resetSwapBuffer();
-        this.channel.read(rChannel.getSwapBuffer(), context, rChannel);
+        this.channel.read(context, rChannel);
         this.future.completed(channel);
     }
 

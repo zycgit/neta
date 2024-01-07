@@ -22,22 +22,61 @@ package net.hasor.neta.channel;
 class SoCloseTask extends DefaultSoTask {
     private final long          channelID;
     private final SoContextImpl context;
-    private final boolean       force;
+    private final boolean       forceNow;
+    //
+    private       boolean       notifyStatus;
 
-    public SoCloseTask(long channelID, SoContextImpl context, boolean force) {
+    public SoCloseTask(long channelID, SoContextImpl context, boolean forceNow) {
         this.channelID = channelID;
         this.context = context;
-        this.force = force;
+        this.forceNow = forceNow;
+        this.notifyStatus = false;
     }
 
     @Override
     protected void doWork(int retryCnt) {
-        String msg = "channel(" + channelID + ") close form local.";
-        if (this.force) {
-            this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
-        } else {
-            this.context.safeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+        SoChannel<?> channel = this.context.findChannel(this.channelID);
+        if (channel == null) {
+            finishTask();
+            return;
         }
-        this.finishTask();
+
+        String msg = "channel(" + this.channelID + ") close form local.";
+        if (channel.isClient() || channel.isServer()) {
+            if (this.forceNow) {
+                this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+                this.finishTask();
+            } else {
+                NetChannel netChannel = (NetChannel) channel;
+
+                // shutdownInput
+                if (!netChannel.isShutdownInput()) {
+                    netChannel.shutdownInput();
+                }
+
+                // notifyRcv last message
+                if (!this.notifyStatus) {
+                    netChannel.notifyError(true, SoCloseException.INSTANCE);
+                    this.notifyStatus = true;
+                }
+
+                // wait send finish
+                if (!netChannel.wContext.isEmpty()) {
+                    continueTask();
+                    return;
+                }
+
+                //
+                // 5. 还要考虑远程 buffer 可能满了导致永远无法关闭的问题
+                // 5. -- pipline
+                //            this.config.getSoKeepIntervalSec() 等待写入需要设置一个最大等待时间，否则可能无法关闭连接
+                //            netChannel.channel.shutdownInput(); //当度被设置为 close 之后reader 会立刻触发 unsafeCloseChannel 需要处理
+                //            netChannel.channel.shutdownOutput();
+                continueTask();
+            }
+        } else {
+            this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+            this.finishTask();
+        }
     }
 }

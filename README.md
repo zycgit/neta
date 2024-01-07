@@ -12,13 +12,16 @@ It provides an abstract asynchronous duplex programming model and works on top o
 ## Duplex Model
 
 ```text
-         ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓      ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
- DATA -> ┃ RCV_UP         RCV_DOWN ┃  ->  ┃ RCV_UP         RCV_DOWN ┃  -> ...
-         ┃                         ┃      ┃                         ┃
-         ┃      PipeLayer (1)      ┃      ┃      PipeLayer (2)      ┃
-         ┃                         ┃      ┃                         ┃
-  ... <- ┃ SND_DOWN         SND_UP ┃  <-  ┃ SND_DOWN         SND_UP ┃  <- DATA
-         ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛      ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
+               PipeLayer(0)                    PipeLayer (1)
+        ┏━━━━━━━━━━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+        ┃                        ┃     ┃                        ┃
+        ┃             ╭┄┄┄┄┄┄┄┄┄┄┸┄┄┄┄┄┸┄┄┄┄┄┄┄┄┄┄╮             ┃
+DATA -> ┃ RCV_UP      ┆ RCV_DOWN   <=>   RCV_UP   ┆    RCV_DOWN ┃  -> ...
+        ┃             ┆                           ┆             ┃
+...  <- ┃ SND_DOWN    ┆ SND_UP     <=>   SND_DOWN ┆      SND_UP ┃  <- DATA
+        ┃             ╰┄┄┄┄┄┄┄┄┄┄┰┄┄┄┄┄┰┄┄┄┄┄┄┄┄┄┄╯             ┃
+        ┃                        ┃     ┃                        ┃
+        ┗━━━━━━━━━━━━━━━━━━━━━━━━┛     ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 ## 能力
@@ -28,11 +31,14 @@ It provides an abstract asynchronous duplex programming model and works on top o
 - 支持 监听器挂起（监听器暂时失效）
 - 支持 EmbeddedChannel
 - 支持 Pipeline
-- SSL 
-  - 证书格式：JKS、PEM/CER
-  - SSL 引擎：JDK、OpenSSL（待支持）
-  - SSL 协议：NONE、SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
-  - SSL 客户端验证：NONE、OPTIONAL、REQUIRE
+    - 支持 Next、Retry、Again、Restart、Exit、Interrupt 共 6 种流转控制方式
+- 支持 安全关闭
+- 支持 shutdownOutput、shutdownInput
+- SSL
+    - 证书格式：JKS、PEM/CER
+    - SSL 引擎：JDK、OpenSSL（待支持）
+    - SSL 协议：NONE、SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
+    - SSL 客户端验证：NONE、OPTIONAL、REQUIRE
 - TLS 扩展
     - TLS NPN/ALPN，应用层协议协商
     - 重协商/安全重协商（OpenSSL RFC5764，renegotiation_info） 待支持
@@ -42,10 +48,8 @@ It provides an abstract asynchronous duplex programming model and works on top o
 - 有效代码行：3.6K
 - 代码覆盖率：54%
 
-
 高优先
 
-1. SSL Close 的处理，防止尾部攻击
 2. SSL Buffer 溢出问题
 3. ByteBuf 清理和释放机制，需要部分重构将其池化。思路需要借鉴 Netty
 4. IP 白名单机制
@@ -59,6 +63,7 @@ It provides an abstract asynchronous duplex programming model and works on top o
 3. ByteBuf 大文件 或输入输出流的 传输
 4. PipeRoute
 5. 流量控制
+6. 
 
 ## 参考资料
 
@@ -67,3 +72,4 @@ It provides an abstract asynchronous duplex programming model and works on top o
 - https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html
 - https://datatracker.ietf.org/doc/html/rfc6066
 - https://halfrost.com/https-extensions/#toc-0
+- https://zhuanlan.zhihu.com/p/477461157?utm_id=0

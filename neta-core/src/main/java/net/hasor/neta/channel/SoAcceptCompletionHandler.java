@@ -34,27 +34,34 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
     private final        NetListen                       forListen;
     private final        AsynchronousServerSocketChannel acceptChannel;
     private final        boolean                         netLog;
+    private volatile     boolean                         running;
 
     public SoAcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel acceptChannel) {
         this.forListen = forListen;
         this.acceptChannel = acceptChannel;
         this.netLog = forListen.getContext().getConfig().isNetlog();
+        this.running = true;
+    }
+
+    public boolean isRunning() {
+        return this.running;
     }
 
     @Override
     public void completed(AsynchronousSocketChannel result, SoContextImpl context) {
+        // when close then exit.
+        if (this.forListen.isClose() || context.isClose()) {
+            this.running = false;
+            closeAccept(result, "Listen is Closed");
+            return;
+        }
+
         // accept the next connection
         this.acceptChannel.accept(context, this);
 
         // listen is suspend
         if (this.forListen.isSuspend()) {
-            if (this.netLog) {
-                try {
-                    logger.warn("ERROR: Listen is Suspend, Close the incoming connection " + result.getRemoteAddress());
-                } catch (Exception ignored) {
-                }
-            }
-            IOUtils.closeQuietly(result);
+            closeAccept(result, "Listen is Suspend");
             return;
         }
 
@@ -89,9 +96,10 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         context.specialConfig(channelID, remoteAddr);
 
         SoSndContext wContext = new SoSndContext(channelID, createdTime, context);
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, result, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, result, wContext);
-        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, result, rChannel, wChannel, wContext);
+        SoAsyncChannel asyncChannel = new SoAsyncChannel(result, context.getConfig());
+        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, context);
+        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
+        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, asyncChannel, rChannel, wChannel, wContext);
 
         // init and pipe
         try {
@@ -109,17 +117,28 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         this.forListen.notifyAccept(channel);
 
         // async read data
-        rChannel.resetSwapBuffer();
-        result.read(rChannel.getSwapBuffer(), context, rChannel);
+        asyncChannel.read(context, rChannel);
     }
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
+        this.running = false;
+
         if (e instanceof AsynchronousCloseException && this.forListen.isClose()) {
             return;
         }
 
         String msg = "ERROR: Listen Failed " + e.getMessage();
         context.asyncUnsafeCloseChannel(this.forListen.getChannelID(), msg, e);
+    }
+
+    private void closeAccept(AsynchronousSocketChannel result, String msg) {
+        if (this.netLog) {
+            try {
+                logger.warn("ERROR: " + msg + ", Close the incoming connection " + result.getRemoteAddress());
+            } catch (Exception ignored) {
+            }
+        }
+        IOUtils.closeQuietly(result);
     }
 }

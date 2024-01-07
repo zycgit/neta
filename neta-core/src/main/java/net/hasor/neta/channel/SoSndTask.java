@@ -18,7 +18,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NotYetConnectedException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,16 +30,16 @@ import java.util.concurrent.TimeUnit;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoSndTask extends DefaultSoTask {
-    private static final Logger                    logger = Logger.getLogger(SoSndTask.class);
-    private final        long                      channelID;
-    private final        long                      createdTime;
-    private final        AsynchronousSocketChannel channel;
-    private final        SoSndCompletionHandler    wHandler;
-    private final        SoContextImpl             context;
+    private static final Logger                 logger = Logger.getLogger(SoSndTask.class);
+    private final        long                   channelID;
+    private final        long                   createdTime;
+    private final        SoAsyncChannel         channel;
+    private final        SoSndCompletionHandler wHandler;
+    private final        SoContextImpl          context;
     //
-    private final        SoSndContext              wContext;
+    private final        SoSndContext           wContext;
 
-    public SoSndTask(long channelID, AsynchronousSocketChannel channel, SoSndCompletionHandler wHandler, SoSndContext wContext) {
+    public SoSndTask(long channelID, SoAsyncChannel channel, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
         this.createdTime = wContext.getCreatedTime();
         this.channel = channel;
@@ -73,15 +72,10 @@ class SoSndTask extends DefaultSoTask {
 
         // send data
         try {
-            Integer wTimeoutMs = this.context.getConfig().getSoWriteTimeoutMs();
             ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
 
             this.wHandler.prepareWrite(afterFinish);
-            if (wTimeoutMs != null && wTimeoutMs > 0) {
-                this.channel.write(swapBuf, wTimeoutMs, TimeUnit.MILLISECONDS, this.context, this.wHandler);
-            } else {
-                this.channel.write(swapBuf, this.context, this.wHandler);
-            }
+            this.channel.write(swapBuf, this.context, this.wHandler);
 
             this.finishTask();
         } catch (Exception e) {

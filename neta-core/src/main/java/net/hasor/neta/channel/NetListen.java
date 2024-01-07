@@ -115,7 +115,7 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     @Override
     public SocketAddress getRemoteAddr() {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     public SoContext getContext() {
@@ -124,7 +124,7 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     @Override
     public <T> T findPipeContext(Class<T> serviceType) {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     /**

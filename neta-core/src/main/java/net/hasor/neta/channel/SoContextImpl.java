@@ -26,6 +26,7 @@ import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
  * SoContext implements
@@ -41,9 +42,12 @@ class SoContextImpl implements SoContext {
     //
     private final        HashedWheelTimer           globalTimer;
     private final        ExecutorService            ioExecutor;
-    private final        Map<Long, SoEventExecutor> taskExecutor;
+    private final        SoEventExecutor            defaultTaskExecutor;
+    private final        Map<Long, SoEventExecutor> specialTaskExecutor;
     private final        SoResManager               bufferManager;
     //
+    private volatile     boolean                    closeStatus;
+    private final        ReentrantReadWriteLock     closeSyncLock;
     private final        Map<Long, SoChannel<?>>    channelMap;
     private final        Queue<NetChannel>          channelList;
     private final        Queue<NetListen>           listenList;
@@ -76,11 +80,13 @@ class SoContextImpl implements SoContext {
         if (taskWorkSize < 1) {
             taskWorkSize = Runtime.getRuntime().availableProcessors();
         }
-        this.taskExecutor = new ConcurrentHashMap<>();
-        this.taskExecutor.put(0L, new SoEventExecutor("default", this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer));
+        this.defaultTaskExecutor = new SoEventExecutor("default", this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer);
+        this.specialTaskExecutor = new ConcurrentHashMap<>();
 
         //
         this.bufferManager = new DefaultSoResManager(this.config);
+        this.closeStatus = false;
+        this.closeSyncLock = new ReentrantReadWriteLock(true);
         this.channelMap = new ConcurrentHashMap<>();
         this.channelList = new ConcurrentLinkedQueue<>();
         this.listenList = new ConcurrentLinkedQueue<>();
@@ -122,7 +128,7 @@ class SoContextImpl implements SoContext {
         if (this.specialResManager(remoteAddress)) {
             int threads = this.config.getTaskThreads();
             SoEventExecutor executor = new SoEventExecutor(String.valueOf(channelID), this.useClassLoader, this.useSoThreadFactory, threads, this.globalTimer);
-            this.taskExecutor.put(channelID, executor);
+            this.specialTaskExecutor.put(channelID, executor);
         }
     }
 
@@ -133,16 +139,30 @@ class SoContextImpl implements SoContext {
 
     /** Whether to accept link socket. */
     public boolean acceptChannel(SocketAddress remoteAddress) {
+        if (this.closeStatus) {
+            return false;
+        }
+
         return true;
     }
 
-    /** new channel. */
+    /** new channel, The method {@link #openChannel(SoChannel)} and {@link #closeAll(boolean)} are mutually exclusive */
     public void openChannel(SoChannel<?> channel) {
-        this.channelMap.put(channel.getChannelID(), channel);
-        if (channel.isListen()) {
-            this.listenList.add((NetListen) channel);
-        } else {
-            this.channelList.add((NetChannel) channel);
+        try {
+            this.closeSyncLock.readLock().lock();
+
+            this.channelMap.put(channel.getChannelID(), channel);
+            if (channel.isListen()) {
+                this.listenList.add((NetListen) channel);
+            } else {
+                this.channelList.add((NetChannel) channel);
+            }
+
+            if (this.closeStatus) {
+                this.defaultTaskExecutor.submitSoTask(new SimpleTask(channel::closeNow), this);
+            }
+        } finally {
+            this.closeSyncLock.readLock().unlock();
         }
     }
 
@@ -153,34 +173,69 @@ class SoContextImpl implements SoContext {
         return channel == null || channel.isClose();
     }
 
+    /** close status. */
+    public boolean isClose() {
+        return this.closeStatus;
+    }
+
     @Override
     public SoChannel<?> findChannel(long channelID) {
         return this.channelMap.get(channelID);
     }
 
-    /** close all socket. */
+    /** close all socket, The method {@link #openChannel(SoChannel)} and {@link #closeAll(boolean)} are mutually exclusive */
     public void closeAll(boolean now) {
-        List<Long> ids = new LinkedList<>();
-
-        // lock close method.
-        for (NetListen listen : this.listenList) {
-            listen.suspend();
-            listen.closeFuture.completed(listen);
-            ids.add(listen.getChannelID());
-        }
-        for (NetChannel channel : this.channelList) {
-            channel.closeFuture.completed(channel);
-            ids.add(channel.getChannelID());
+        // mark close is true.
+        try {
+            this.closeSyncLock.writeLock().lock();
+            this.closeStatus = true;
+        } finally {
+            this.closeSyncLock.writeLock().unlock();
         }
 
-        ids.forEach(channelID -> {
-            String msg = "channel(" + channelID + ") close form closeAll.";
-            if (now) {
-                syncUnsafeCloseChannel(channelID, msg, SoCloseException.INSTANCE);
-            } else {
-                safeCloseChannel(channelID, msg, SoCloseException.INSTANCE);
+        List<Future<?>> waitFinish = new LinkedList<>();
+
+        // close all NetListen
+        while (!this.listenList.isEmpty()) {
+            NetListen listen = this.listenList.poll();
+            if (listen != null) {
+                if (now) {
+                    listen.closeNow();
+                } else {
+                    waitFinish.add(listen.close());
+                }
             }
-        });
+        }
+
+        // close all NetChannel
+        while (!this.channelList.isEmpty()) {
+            NetChannel channel = this.channelList.poll();
+            if (channel != null) {
+                if (now) {
+                    channel.closeNow();
+                } else {
+                    waitFinish.add(channel.close());
+                }
+            }
+        }
+
+        // wait all finish
+        while (true) {
+            boolean allFinish = true;
+
+            for (Future<?> future : waitFinish) {
+                allFinish = future.isDone();
+                if (!allFinish) {
+                    break;
+                }
+            }
+
+            if (!allFinish) {
+                ThreadUtils.sleep(300);
+            } else {
+                break;
+            }
+        }
     }
 
     /** The network channel is forced to close, and all data not sent is discarded. */
@@ -203,9 +258,9 @@ class SoContextImpl implements SoContext {
         }
 
         SoChannel<?> channel = this.channelMap.get(channelID);
-        SoEventExecutor specialExecutor = this.taskExecutor.get(channelID);
+        SoEventExecutor specialExecutor = this.specialTaskExecutor.get(channelID);
         this.channelMap.remove(channelID);
-        this.taskExecutor.remove(channelID);
+        this.specialTaskExecutor.remove(channelID);
 
         if (channel.isClient() || channel.isServer()) {
             NetChannel netChannel = (NetChannel) channel;
@@ -234,21 +289,11 @@ class SoContextImpl implements SoContext {
         } else {
 
             NetListen netListen = (NetListen) channel;
+            netListen.closeStatus.set(true);
             IOUtils.closeQuietly(netListen.channel);
             IOUtils.closeQuietly(specialExecutor);
             logger.info("listen(" + channelID + ") closed, port :" + netListen.getListenPort());
             this.listenList.remove(channel);
-        }
-    }
-
-    /** The read channel is set to close immediately, and then closed until all data has been sent. */
-    protected void safeCloseChannel(long channelID, String message, Throwable e) {
-        SoChannel<?> channel = this.channelMap.get(channelID);
-        if (channel.isClient() || channel.isServer()) {
-            NetChannel netChannel = (NetChannel) channel;
-            //            this.config.getSoKeepIntervalSec() 等待写入需要设置一个最大等待时间，否则可能无法关闭连接
-            //            netChannel.channel.shutdownInput(); //当度被设置为 close 之后reader 会立刻触发 unsafeCloseChannel 需要处理
-            //            netChannel.channel.shutdownOutput();
         }
     }
 
@@ -291,9 +336,9 @@ class SoContextImpl implements SoContext {
 
     /** asynchronously copy data from swap to rcv/snd */
     public <T> Future<T> submitSoTask(long channelID, DefaultSoTask task, T result) {
-        SoEventExecutor executor = this.taskExecutor.get(channelID);
+        SoEventExecutor executor = this.specialTaskExecutor.get(channelID);
         if (executor == null) {
-            executor = this.taskExecutor.get(0L);
+            executor = this.defaultTaskExecutor;
         }
         return executor.submitSoTask(task, result);
     }

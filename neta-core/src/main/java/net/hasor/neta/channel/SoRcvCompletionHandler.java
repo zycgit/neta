@@ -18,7 +18,10 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.ClosedChannelException;
+import java.nio.channels.CompletionHandler;
+import java.nio.channels.NotYetConnectedException;
+import java.nio.channels.ShutdownChannelGroupException;
 
 /**
  * received Handler
@@ -26,61 +29,53 @@ import java.nio.channels.*;
  * @version : 2023-09-24
  */
 class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
-    private static final Logger                    logger = Logger.getLogger(SoRcvCompletionHandler.class);
-    private final        long                      channelID;
-    private final        long                      createdTime;
-    private final        AsynchronousSocketChannel channel;
-    private final        SoContextImpl             context;
-    private final        ByteBuffer                swapBuffer;
-    private final        ByteBuf                   rcvBuffer;
+    private static final Logger          logger = Logger.getLogger(SoRcvCompletionHandler.class);
+    private final        long            channelID;
+    private final        long            createdTime;
+    private volatile     SoHandlerStatus status;
+    //
+    private final        SoAsyncChannel  channel;
+    private final        SoContextImpl   context;
+    private final        ByteBuf         rcvBuffer;
 
-    public SoRcvCompletionHandler(long channelID, long createdTime, AsynchronousSocketChannel channel, SoContextImpl context) {
+    public SoRcvCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
+        this.status = SoHandlerStatus.PENDING;
+
         this.channel = channel;
         this.context = context;
-
-        SoResManager rm = context.getResourceManager();
-        this.swapBuffer = rm.newSwapRcvBuf();
-        this.rcvBuffer = rm.newLocalRcvBuf();
+        this.rcvBuffer = context.getResourceManager().newLocalRcvBuf();
     }
 
-    /**
-     * Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data.
-     */
-    public ByteBuffer getSwapBuffer() {
-        return this.swapBuffer;
-    }
-
-    /**
-     * Enhanced {@link ByteBuffer}.
-     */
+    /** Enhanced {@link ByteBuffer}. */
     public ByteBuf getRcvBuffer() {
         return this.rcvBuffer;
     }
 
-    /**
-     * reset swap {@link ByteBuffer} for next receive.
-     */
-    public void resetSwapBuffer() {
-        this.swapBuffer.clear();
+    /** Returns this Handler status. */
+    public SoHandlerStatus getStatus() {
+        return this.status;
     }
 
     @Override
     public void completed(Integer result, SoContextImpl context) {
+        this.status = SoHandlerStatus.PENDING;
+
         if (result > 0) {
             if (logger.isDebugEnabled()) {
                 logger.debug("rcv(" + this.channelID + ") size:" + result);
             }
 
             // copy buffer form swap to rcv
-            this.swapBuffer.flip();
-            SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, context, getSwapBuffer(), getRcvBuffer());
+            SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, this.channel, context, getRcvBuffer());
             this.context.submitSoTask(this.channelID, copyTask, this).onCompleted(f -> {
                 this.continueRcv();
             }).onFailed(f -> {
                 Throwable e = f.getCause();
                 String errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
+
+                this.status = SoHandlerStatus.IDLE;
                 context.notifyRcvChannelError(this.channelID, e);
                 context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
             });
@@ -94,23 +89,37 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             this.continueRcv();
 
         } else {
-            if (logger.isDebugEnabled()) {
-                logger.debug("rcv(" + this.channelID + ") end");
-            }
 
-            // rcv close
-            String msg = "rcv(" + channelID + ") close form remote.";
-            context.asyncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+            this.status = SoHandlerStatus.IDLE;
+            if (this.channel.isShutdownInput()) {
+                // for ShutdownInput
+                String msg = "rcv(" + channelID + ") close form shutdownInput.";
+                if (logger.isDebugEnabled()) {
+                    logger.debug(msg);
+                }
+                this.context.notifyRcvChannelError(this.channelID, SoInputCloseException.INSTANCE);
+            } else {
+                // for Remote
+                String msg = "rcv(" + channelID + ") close form remote.";
+                if (logger.isDebugEnabled()) {
+                    logger.debug(msg);
+                }
+                context.asyncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+            }
         }
     }
 
     private void continueRcv() {
-        this.resetSwapBuffer();
-        this.channel.read(this.getSwapBuffer(), this.context, this);
+        this.status = SoHandlerStatus.WAITING;
+        if (!this.channel.read(this.context, this)) {
+            this.status = SoHandlerStatus.IDLE;
+        }
     }
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
+        this.status = SoHandlerStatus.PENDING;
+
         if (e instanceof NotYetConnectedException) {
             long costTimeMs = System.currentTimeMillis() - this.createdTime;
             if (costTimeMs < context.getConnectTimeoutMs()) {
@@ -121,6 +130,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             } else {
                 SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
 
+                this.status = SoHandlerStatus.IDLE;
                 context.notifyRcvChannelError(this.channelID, cause);
                 context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
             }
@@ -128,7 +138,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         }
 
         String errorMsg = "";
-        if (e instanceof ShutdownChannelGroupException || e instanceof AsynchronousCloseException) {
+        if (e instanceof ShutdownChannelGroupException || e instanceof ClosedChannelException) {
             if (context.isClose(this.channelID)) {
                 return;
             }
@@ -139,6 +149,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
         }
 
+        this.status = SoHandlerStatus.IDLE;
         context.notifyRcvChannelError(this.channelID, e);
         context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
     }

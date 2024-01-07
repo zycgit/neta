@@ -25,22 +25,26 @@ import java.util.concurrent.TimeUnit;
  * @version : 2023-09-24
  */
 class SoRcvCopyTask extends DefaultSoTask {
-    private final SoContextImpl context;
-    private final long          channelID;
-    private final ByteBuffer    srcBuffer;
-    private final ByteBuf       dstBuffer;
+    private final SoContextImpl  context;
+    private final long           channelID;
+    private final SoAsyncChannel channel;
+    private final ByteBuffer     srcBuffer;
+    private final ByteBuf        dstBuffer;
 
-    public SoRcvCopyTask(long channelID, SoContextImpl context, ByteBuffer srcBuffer, ByteBuf dstBuffer) {
+    public SoRcvCopyTask(long channelID, SoAsyncChannel channel, SoContextImpl context, ByteBuf dstBuffer) {
         this.channelID = channelID;
+        this.channel = channel;
         this.context = context;
-        this.srcBuffer = srcBuffer;
+        this.srcBuffer = channel.getRcvBuffer();
         this.dstBuffer = dstBuffer;
+
+        this.srcBuffer.flip();
     }
 
     @Override
     protected void doWork(int retryCnt) {
-        if (this.context.isClose(this.channelID)) {
-            this.failedTask(SoCloseException.INSTANCE);
+        if (this.channel.isShutdownInput()) {
+            finishTask();
             return;
         }
 
