@@ -148,4 +148,16 @@ public class SoListenTest extends AbstractSoTest {
         assert atomicListen.get() == -1; //because one already existed before we added the counter
         assert listen.getChannelCount() == 0;
     }
+
+    @Test
+    public void foundTest_1() throws Exception {
+        // start server
+        int safePort = safePort();
+        CobbleSocket server = new CobbleSocket(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
+
+        assert listen == server.findListen(safePort);
+
+        server.shutdown();
+    }
 }

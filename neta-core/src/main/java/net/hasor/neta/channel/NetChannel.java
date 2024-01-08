@@ -21,9 +21,11 @@ import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAdapter;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.nio.ByteBuffer;
 import java.nio.channels.NotYetConnectedException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -340,7 +342,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>
      */
-    public Future<?> sendData(Object writeData) {
+    public Future<?> sendData(Object writeData) throws IOException {
         return this.sendData(writeData, null);
     }
 
@@ -348,7 +350,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>
      */
-    public Future<NetChannel> sendData(Object writeData, String pipeName) {
+    public Future<NetChannel> sendData(Object writeData, String pipeName) throws IOException {
         Future<NetChannel> future = new BasicFuture<>();
 
         if (!this.pipeline.sndAvailable()) {
@@ -371,11 +373,24 @@ public class NetChannel extends AttributeChannel<NetChannel> {
                     }
                 });
 
-                appendSoSndTask(new SoSndData((ByteBuf) buf, itemFuture, this));
+                if (buf instanceof byte[]) {
+                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((byte[]) buf);
+                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+                } else if (buf instanceof ByteBuffer) {
+                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((ByteBuffer) buf);
+                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+                } else if (buf instanceof ByteBuf) {
+                    ByteBuf wrap = (ByteBuf) buf;
+                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+                } else {
+                    throw new ClassCastException(writeData.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
+                }
             }
+        } catch (RuntimeException | IOException e) {
+            throw e;
         } catch (Throwable e) {
             logger.error("snd(" + channelID + ") failed, " + e.getMessage(), e);
-            future.failed(e);
+            throw new IOException(e);
         } finally {
             this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
@@ -394,7 +409,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * <p>data goes through the application layer network protocol stack</p>
      */
     public Future<?> flush(String pipeName) {
-        return null;
+        throw new UnsupportedOperationException();
     }
 
     private void appendSoSndTask(SoSndData wTask) {

@@ -239,7 +239,15 @@ public abstract class SslContextBasic implements SslContext {
         SSLEngine engine = this.getEngine();
         if (engine != null && !engine.isOutboundDone()) {
             engine.closeOutbound();
-            this.pipeContext.flush();
+            try {
+                this.pipeContext.flush();
+            } catch (IOException e) {
+                if (this.sslLog) {
+                    logger.error("ssl(" + this.channelID + ") closeSSL, flash close_notify failed, " + e.getMessage(), e);
+                } else {
+                    logger.error("ssl(" + this.channelID + ") closeSSL, flash close_notify failed, " + e.getMessage());
+                }
+            }
         }
 
         this.sslStatus = this.sslMode == SslMode.Always; // auto reset

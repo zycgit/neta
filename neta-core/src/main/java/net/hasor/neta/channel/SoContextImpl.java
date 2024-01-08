@@ -27,6 +27,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
 
 /**
  * SoContext implements
@@ -181,6 +182,10 @@ class SoContextImpl implements SoContext {
     @Override
     public SoChannel<?> findChannel(long channelID) {
         return this.channelMap.get(channelID);
+    }
+
+    void foreachListen(Consumer<NetListen> consumer) {
+        this.listenList.forEach(consumer);
     }
 
     /** close all socket, The method {@link #openChannel(SoChannel)} and {@link #closeAll(boolean)} are mutually exclusive */

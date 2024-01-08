@@ -17,6 +17,7 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
 
+import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -84,7 +85,7 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
-    public Future<?> sendData(Object writeData) {
+    public Future<?> sendData(Object writeData) throws IOException {
         if (this.channel instanceof NetChannel) {
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
@@ -98,7 +99,7 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
-    public Future<?> flush() {
+    public Future<?> flush() throws IOException {
         if (this.channel instanceof NetChannel) {
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {

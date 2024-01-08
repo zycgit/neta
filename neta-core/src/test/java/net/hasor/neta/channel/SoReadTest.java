@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -44,8 +45,12 @@ public class SoReadTest extends AbstractSoTest {
         // echo anything from remote
         CobbleSocket server = new CobbleSocket(crateConfig(2, 32));
         server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
-            ((NetChannel) channel).sendData(data); // echo
-            cnt.incrementAndGet();// packet ++
+            try {
+                ((NetChannel) channel).sendData(data); // echo
+                cnt.incrementAndGet();// packet ++
+            } catch (Exception e) {
+                throw ExceptionUtils.toRuntime(e);
+            }
         }));
 
         // client: send data to server

@@ -16,6 +16,8 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 
+import java.io.IOException;
+
 /**
  * Each {@link NetChannel} has a {@link PipeContext}.
  * @author 赵永春 (zyc@hasor.net)
@@ -63,8 +65,8 @@ public interface PipeContext {
     <T> T flash(String key, T flash);
 
     /** write data to protocol stack, the event propagates backward from the current protocol layer */
-    Future<?> sendData(Object writeData);
+    Future<?> sendData(Object writeData) throws IOException;
 
     /** Refresh the protocol stack, the event propagates backward from the current protocol layer */
-    Future<?> flush();
+    Future<?> flush() throws IOException;
 }

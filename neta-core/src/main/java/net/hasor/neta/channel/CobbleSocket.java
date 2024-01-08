@@ -24,6 +24,7 @@ import java.net.InetSocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * AIO TCP/IP,UDP/IP
@@ -126,6 +127,23 @@ public class CobbleSocket extends AbstractSocket {
             future.failed(e);
             return future;
         }
+    }
+
+    /** find SoChannel by id */
+    public SoChannel<?> findChannel(long channelID) {
+        return this.context.findChannel(channelID);
+    }
+
+    /** find NetListen by listenPort */
+    public NetListen findListen(int port) {
+        AtomicReference<NetListen> found = new AtomicReference<>();
+        this.context.foreachListen(netListen -> {
+            if (netListen.getListenPort() == port) {
+                found.set(netListen);
+            }
+        });
+
+        return found.get();
     }
 
     //    /**
