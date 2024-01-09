@@ -31,7 +31,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrExit");
                 return PipeStatus.Next;
             }
@@ -64,7 +64,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRestart");
 
                 return PipeStatus.Next;
@@ -98,7 +98,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrAgain");
 
                 return PipeStatus.Next;
@@ -132,7 +132,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRetry");
 
                 return PipeStatus.Next;
@@ -151,7 +151,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrThrow");
 
                 return PipeStatus.Next;
@@ -170,7 +170,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
 
                 return PipeStatus.Next;
@@ -189,7 +189,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrInterrupt");
 
                 return PipeStatus.Next;
@@ -209,7 +209,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrExit");
                 return PipeStatus.Exit;
             }
@@ -226,7 +226,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRestart");
 
                 Integer restart = context.flash("restartCnt");
@@ -258,7 +258,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrAgain");
 
                 Integer again = context.flash("againCnt");
@@ -290,7 +290,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRetry");
 
                 Integer retry = context.flash("retryCnt");
@@ -322,7 +322,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) throws Throwable {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 recordFailed.add(tag + "ErrThrow");
                 throw e;
             }
@@ -340,7 +340,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
 
                 return PipeStatus.Next;
@@ -359,7 +359,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrInterrupt");
 
                 return PipeStatus.Interrupt;
@@ -380,7 +380,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
 
                 return PipeStatus.Next;
@@ -397,7 +397,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHandler eh) {
+            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
                 return PipeStatus.Next;
             }

@@ -38,7 +38,7 @@ public class PipeEchoTest {
         // String -> TypeFrame -> TypeRequest
         // String <- TypeFrame <- TypeResponse
         PipeConfig pipeConfig = new PipeConfig();
-        PipelineBuilder<String, String> empty = PipeInitializer.builder();
+        PipelineBuilder<String, String> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty
                 // String <-> TypeFrame
                 .nextTo("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)

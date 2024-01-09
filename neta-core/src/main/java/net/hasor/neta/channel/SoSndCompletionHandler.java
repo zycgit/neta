@@ -46,7 +46,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext wContext) {
         this.channelID = channelID;
         this.createdTime = createdTime;
-        this.status = SoHandlerStatus.PENDING;
+        this.status = SoHandlerStatus.IDLE;
 
         this.channel = channel;
         this.wContext = wContext;
@@ -121,6 +121,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
             submitTask(cleanTask).onCompleted(f -> submitTask(sndTask));
             this.sndWorking = false;
+            this.status = SoHandlerStatus.IDLE;
         }
     }
 
@@ -134,7 +135,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     private void writeData() {
         if (this.channel.isShutdownOutput()) {
-            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, SoCloseException.INSTANCE));
+            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, SoOutputCloseException.INSTANCE));
             this.status = SoHandlerStatus.IDLE;
             return;
         }
@@ -163,6 +164,13 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                     this.context.notifySndChannelError(this.channelID, cause);
                     this.context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
                 }
+            } else if (e instanceof InterruptedByTimeoutException) {
+                String errorMsg = "send data timeout with " + this.context.getConfig().getSoWriteTimeoutMs() + " milliseconds.";
+                String msg = "snd(" + this.channelID + ") " + errorMsg;
+
+                this.status = SoHandlerStatus.IDLE;
+                this.context.notifySndChannelError(this.channelID, e);
+                this.context.asyncUnsafeCloseChannel(this.channelID, msg, new SoWriteTimeoutException(errorMsg));
             } else {
                 String msg = "snd(" + this.channelID + ") " + e.getMessage();
 

@@ -109,7 +109,7 @@ public class SoReadTest extends AbstractSoTest {
         AtomicBoolean rcvErr = new AtomicBoolean(false);
         PipeConfig pipeConfig = new PipeConfig();
         pipeConfig.setPipeRcvDownStackSize(3);
-        PipelineBuilder<ByteBuf, ByteBuf> empty = PipeInitializer.builder().pipeConfig(pipeConfig);
+        PipelineBuilder<ByteBuf, ByteBuf> empty = PipeInitializer.embedded().pipeConfig(pipeConfig);
         PipelineFactory build = empty//
                 .nextTo("L1", (PipeLayer<ByteBuf, String, String, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
                     // gen message to L2
@@ -125,7 +125,7 @@ public class SoReadTest extends AbstractSoTest {
                     }
 
                     @Override
-                    public void onReceiveError(SoChannel<?> channel, Throwable e) {
+                    public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
                         rcvErr.set(e instanceof PipeFullException);
                     }
                 }).build();
@@ -245,7 +245,7 @@ public class SoReadTest extends AbstractSoTest {
             }
 
             @Override
-            public void onReceiveError(SoChannel<?> channel, Throwable e) {
+            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
                 rcvError.set(e instanceof SoInputCloseException);
             }
         }));
@@ -315,7 +315,7 @@ public class SoReadTest extends AbstractSoTest {
             }
 
             @Override
-            public void onReceiveError(SoChannel<?> channel, Throwable e) {
+            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
@@ -354,7 +354,7 @@ public class SoReadTest extends AbstractSoTest {
             }
 
             @Override
-            public void onReceiveError(SoChannel<?> channel, Throwable e) {
+            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
@@ -391,7 +391,7 @@ public class SoReadTest extends AbstractSoTest {
             }
 
             @Override
-            public void onReceiveError(SoChannel<?> channel, Throwable e) {
+            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
@@ -432,7 +432,7 @@ public class SoReadTest extends AbstractSoTest {
             }
 
             @Override
-            public void onReceiveError(SoChannel<?> channel, Throwable e) {
+            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
@@ -472,7 +472,7 @@ public class SoReadTest extends AbstractSoTest {
                     }
 
                     @Override
-                    public void onReceiveError(SoChannel<?> channel, Throwable e) {
+                    public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
                         rcvErr1.set(e instanceof IllegalStateException);
                         throw new IllegalArgumentException();
                     }

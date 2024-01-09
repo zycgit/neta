@@ -13,18 +13,27 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
-import java.net.SocketException;
-
+package net.hasor.neta.handler;
 /**
- *  When {@link SoChannel} is closed.
- * @version : 2023-09-24
+ * Gets called if a Throwable was thrown.
+ * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
- */
-public class SoCloseException extends SocketException {
+ * @see PipeLayer
+ * @see PipeHandler
+ * */
+public interface PipeExceptionHolder<IN, OUT> {
+    /**
+     * clear the exception state and continue piple execution
+     *
+     * <p>You can clear the exception flag with the {@link PipeExceptionHolder#clear()} method, and piple execution will continue normally</p>
+     *
+     * <pre>
+     *  ... -> doLayer -> doError -> doError(invoker clear) -> doLayer -> ...
+     * </pre>
+     */
+    void clear();
 
-    public static final SoCloseException INSTANCE = new SoCloseException();
+    PipeRcvQueue<IN> src();
 
-    public SoCloseException() {
-    }
+    PipeSndQueue<OUT> dst();
 }

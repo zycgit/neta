@@ -15,25 +15,9 @@
  */
 package net.hasor.neta.handler;
 /**
- * Gets called if a Throwable was thrown.
- * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
- * @see PipeLayer
- * @see PipeHandler
- * */
-public interface PipeExceptionHandler<IN, OUT> {
-    /**
-     * clear the exception state and continue piple execution
-     *
-     * <p>You can clear the exception flag with the {@link PipeExceptionHandler#clear()} method, and piple execution will continue normally</p>
-     *
-     * <pre>
-     *  ... -> doLayer -> doError -> doError(invoker clear) -> doLayer -> ...
-     * </pre>
-     */
-    void clear();
+ * @version : 2022-11-01
+ */
+public class PipeBasicTest extends AbstractPipeTest {
 
-    PipeRcvQueue<IN> src();
-
-    PipeSndQueue<OUT> dst();
 }

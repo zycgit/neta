@@ -114,6 +114,12 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
+    public int offerMessage(PipeRcvQueue<T> offerList) {
+        int size = Math.min(offerList.queueSize(), this.slotSize());
+        return this.offerMessage(offerList.takeMessage(size));
+    }
+
+    @Override
     public List<T> takeMessage(int cnt) {
         if (cnt == 0) {
             return Collections.emptyList();
@@ -153,6 +159,10 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
 
     @Override
     public String toString() {
-        return "PipeQueue@" + Integer.toHexString(hashCode()) + ", capacity:" + capacity + ", queueSize:" + this.queueSize() + ", slotSize:" + this.slotSize();
+        if (Integer.MAX_VALUE == this.capacity) {
+            return "PipeQueue@" + Integer.toHexString(hashCode()) + ", capacity:INT_MAX_VALUE, queueSize:" + this.queueSize() + ", slotSize:" + this.slotSize();
+        } else {
+            return "PipeQueue@" + Integer.toHexString(hashCode()) + ", capacity:" + capacity + ", queueSize:" + this.queueSize() + ", slotSize:" + this.slotSize();
+        }
     }
 }

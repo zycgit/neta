@@ -107,18 +107,12 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
                 }
 
                 @Override
-                public void onReceiveError(SoChannel<?> channel, Throwable e) {
-                    rcvError = e;
-                }
-
-                @Override
-                public void onSend(SoChannel<?> channel) {
-
-                }
-
-                @Override
-                public void onSendError(SoChannel<?> channel, Throwable e) {
-                    sndError = e;
+                public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+                    if (isRcv) {
+                        rcvError = e;
+                    } else {
+                        sndError = e;
+                    }
                 }
             });
         }

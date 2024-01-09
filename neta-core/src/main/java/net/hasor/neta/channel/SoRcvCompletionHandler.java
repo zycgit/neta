@@ -41,7 +41,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     public SoRcvCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
-        this.status = SoHandlerStatus.PENDING;
+        this.status = SoHandlerStatus.IDLE;
 
         this.channel = channel;
         this.context = context;
@@ -56,6 +56,11 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     /** Returns this Handler status. */
     public SoHandlerStatus getStatus() {
         return this.status;
+    }
+
+    public void read(SoContextImpl context) {
+        this.status = SoHandlerStatus.WAITING;
+        this.channel.read(context, this);
     }
 
     @Override

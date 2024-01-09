@@ -197,7 +197,7 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
     @Test
     public void rcvToSendTest_1() {
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty.nextTo(doPipeLayer(true, false)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -210,7 +210,7 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
     @Test
     public void rcvToSendTest_2() {
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory stack = empty.nextTo(doPipeLayer(false, true)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -223,7 +223,7 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
     @Test
     public void rcvToSendTest_3() {
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty.nextTo(doPipeLayer(true, true)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();

@@ -23,9 +23,6 @@ import java.net.ConnectException;
  */
 public class SoWriteTimeoutException extends SoTimeoutException {
 
-    public SoWriteTimeoutException() {
-    }
-
     public SoWriteTimeoutException(String msg) {
         super(msg);
     }

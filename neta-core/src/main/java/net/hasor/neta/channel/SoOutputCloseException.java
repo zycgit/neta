@@ -14,17 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.net.SocketException;
-
 /**
- *  When {@link SoChannel} is closed.
+ *  When {@link NetChannel#shutdownOutput()} called.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoCloseException extends SocketException {
+public class SoOutputCloseException extends SoCloseException {
 
-    public static final SoCloseException INSTANCE = new SoCloseException();
+    public static final SoOutputCloseException INSTANCE = new SoOutputCloseException();
 
-    public SoCloseException() {
+    public SoOutputCloseException() {
     }
 }

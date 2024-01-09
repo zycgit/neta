@@ -35,7 +35,11 @@ public final class PipeInitializer implements PipeBuilder {
         return new PipeInitializer().nextTo().build();
     }
 
-    public static <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> builder() {
+    public static PipelineBuilder<ByteBuf, ByteBuf> builder() {
+        return new PipeInitializer().nextTo();
+    }
+
+    public static <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> embedded() {
         return new PipeInitializer().nextTo();
     }
 

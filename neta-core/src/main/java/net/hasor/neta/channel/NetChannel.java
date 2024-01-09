@@ -353,6 +353,12 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     public Future<NetChannel> sendData(Object writeData, String pipeName) throws IOException {
         Future<NetChannel> future = new BasicFuture<>();
 
+        if (this.isShutdownOutput()) {
+            logger.info("snd(" + this.channelID + ") the channel is shutdownOutput.");
+            future.failed(SoOutputCloseException.INSTANCE);
+            return future;
+        }
+
         if (!this.pipeline.sndAvailable()) {
             logger.info("snd(" + this.channelID + ") the pipeline is not available.");
             future.failed(PipeFullException.INSTANCE);

@@ -256,7 +256,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             if (this.listener == null) {
                 logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
             } else {
-                this.listener.onReceiveError(pipeContext.channel(), ctxError);
+                this.listener.onError(pipeContext.channel(), ctxError, true);
             }
         }
     }
@@ -281,7 +281,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             if (this.listener == null) {
                 logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
             } else {
-                this.listener.onReceiveError(pipeContext.channel(), ctxError);
+                this.listener.onError(pipeContext.channel(), ctxError, true);
             }
         }
 
@@ -397,13 +397,13 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             if (this.listener == null) {
                 logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
             } else {
-                this.listener.onSendError(pipeContext.channel(), ctxError);
+                this.listener.onError(pipeContext.channel(), ctxError, false);
             }
         } else {
             if (this.listener == null) {
                 logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event send.");
             } else {
-                this.listener.onSend(pipeContext.channel());
+                //this.listener.onSend(pipeContext.channel());
             }
 
         }

@@ -148,11 +148,11 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    private PipeExceptionHandler createExceptionHandler(boolean isRcv, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
+    private PipeExceptionHolder createExceptionHandler(boolean isRcv, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
         return new PipeExceptionHandlerImpl(isRcv, pipeContext, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
     }
 
-    private static class PipeExceptionHandlerImpl implements PipeExceptionHandler {
+    private static class PipeExceptionHandlerImpl implements PipeExceptionHolder {
         private final boolean         isRcv;
         private final String          errorTag;
         private final PipeContext     context;

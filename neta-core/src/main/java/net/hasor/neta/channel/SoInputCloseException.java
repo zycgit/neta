@@ -25,8 +25,4 @@ public class SoInputCloseException extends SoCloseException {
 
     public SoInputCloseException() {
     }
-
-    public SoInputCloseException(String msg) {
-        super(msg);
-    }
 }

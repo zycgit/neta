@@ -113,12 +113,16 @@ public class SoAsyncChannel implements Closeable {
 
     @Override
     public void close() throws IOException {
+        this.shutdownInputSignal.set(true);
+        this.shutdownOutputSignal.set(true);
         this.channel.close();
+
         while (!this.resources.isEmpty()) {
             ByteBuf byteBuf = this.resources.get(0);
             this.resources.remove(0);
             byteBuf.free();
         }
+
     }
 
     /** Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data. */

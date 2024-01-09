@@ -34,7 +34,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextTo(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
@@ -64,7 +64,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextTo(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errThrowHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv(Err)/snd +1
@@ -99,7 +99,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
@@ -129,7 +129,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
                 .nextTo(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
@@ -159,7 +159,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
                 .nextTo(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
@@ -189,7 +189,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errRestartHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
@@ -219,7 +219,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errExitHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
@@ -249,7 +249,7 @@ public class PipeSndErrTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.builder();
+        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
         PipelineFactory pipeline = empty//
                 .nextTo("L1", doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), errNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextTo("L2", doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), errInterruptHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//

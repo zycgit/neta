@@ -24,13 +24,6 @@ import net.hasor.neta.channel.SoChannel;
 public interface PipeListener<T> {
     void onReceive(SoChannel<?> channel, T data);
 
-    default void onReceiveError(SoChannel<?> channel, Throwable e) {
-    }
-
-    default void onSend(SoChannel<?> channel) {
-
-    }
-
-    default void onSendError(SoChannel<?> channel, Throwable e) {
+    default void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
     }
 }

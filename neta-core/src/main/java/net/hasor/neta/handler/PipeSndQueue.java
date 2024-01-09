@@ -58,6 +58,11 @@ public interface PipeSndQueue<T> {
     int offerMessage(List<T> offerList);
 
     /**
+     * offer message to queue, return accept count.
+     */
+    int offerMessage(PipeRcvQueue<T> offerList);
+
+    /**
      * offer message to queue, return accept status.
      */
     default boolean offerMessage(T offerMessage) {

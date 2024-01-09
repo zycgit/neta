@@ -117,7 +117,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         this.forListen.notifyAccept(channel);
 
         // async read data
-        asyncChannel.read(context, rChannel);
+        rChannel.read(context);
     }
 
     @Override

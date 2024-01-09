@@ -93,7 +93,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         }
 
         // async read data
-        this.channel.read(context, rChannel);
+        rChannel.read(context);
         this.future.completed(channel);
     }
 
