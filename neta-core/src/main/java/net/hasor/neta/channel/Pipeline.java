@@ -32,12 +32,12 @@ public interface Pipeline<OUT> {
     /**
      * Returns whether pipleline rcv is available
      */
-    boolean rcvAvailable();
+    boolean rcvSlotIsFull();
 
     /**
      * Returns whether pipleline snd is available
      */
-    boolean sndAvailable();
+    boolean sndSlotIsFull();
 
     /**
      * Processing received data

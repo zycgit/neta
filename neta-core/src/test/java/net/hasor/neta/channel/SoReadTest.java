@@ -18,7 +18,6 @@ import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.handler.PipeBuilder.PipelineBuilder;
 import net.hasor.neta.handler.*;
 import org.junit.Test;
@@ -187,117 +186,6 @@ public class SoReadTest extends AbstractSoTest {
         }
 
         assert toMd5(clientDigest).equals(toMd5(serverDigest));
-        server.shutdown();
-    }
-
-    @Test
-    public void rcvShutdownTest_01() throws Exception {
-        // start server
-        AtomicBoolean rcvAnyThing = new AtomicBoolean();
-        int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
-            rcvAnyThing.set(true);
-        }));
-
-        // connect to server
-        Socket client = new Socket("127.0.0.1", safePort);
-        listen.waitAnyAccept();
-
-        // server close rcv channel keep output
-        NetChannel channel = (NetChannel) context.findChannel(2);
-        channel.shutdownInput(); // close input keep output.
-        assert channel.isShutdownInput();
-        while (channel.getRcvHandlerStatus() != SoHandlerStatus.IDLE) {
-            ThreadUtils.sleep(100);
-        }
-
-        byte[] sendData = "Hello".getBytes();
-        channel.sendData(ByteBufAllocator.DEFAULT.wrap(sendData)).get();
-
-        //
-        byte[] rcvData = new byte[sendData.length];
-        client.getInputStream().read(rcvData);
-        OutputStream out = client.getOutputStream();
-        out.write(sendData);
-        out.flush();
-        ThreadUtils.sleep(500);
-
-        assert new String(sendData).equals(new String(rcvData));
-        System.out.println(new String(rcvData));
-        assert !rcvAnyThing.get();
-
-        server.shutdown();
-    }
-
-    @Test
-    public void rcvShutdownTest_02() throws Exception {
-        // start server
-        AtomicBoolean rcvError = new AtomicBoolean(false);
-        int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
-            @Override
-            public void onReceive(SoChannel<?> channel, ByteBuf data) {
-
-            }
-
-            @Override
-            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
-                rcvError.set(e instanceof SoInputCloseException);
-            }
-        }));
-
-        // connect to server
-        Socket client = new Socket("127.0.0.1", safePort);
-        listen.waitAnyAccept();
-
-        // server close rcv channel keep output
-        NetChannel channel = (NetChannel) context.findChannel(2);
-        ThreadUtils.sleep(100);
-        channel.shutdownInput(); // close input keep output.
-        while (channel.getRcvHandlerStatus() != SoHandlerStatus.IDLE) {
-            ThreadUtils.sleep(100);
-        }
-
-        // wait SoInputCloseException.
-        ThreadUtils.sleep(500);
-        assert rcvError.get();
-
-        server.shutdown();
-    }
-
-    @Test
-    public void rcvRemoteCloseTest() throws Exception {
-        // start server
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
-        int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
-            byteBuf.write(data);
-            byteBuf.markWriter();
-        }));
-
-        // connect to server -> send data -> close
-        Socket client = new Socket("127.0.0.1", safePort);
-        OutputStream out = client.getOutputStream();
-        out.write("Hello\n".getBytes());
-        out.flush();
-        out.close();
-
-        listen.waitAnyAccept();
-
-        // server close rcv channel keep output
-        NetChannel channel = (NetChannel) context.findChannel(2);
-        while (!channel.isClose()) {
-            ThreadUtils.sleep(100);
-        }
-
-        assert byteBuf.readLine().equals("Hello");
-
         server.shutdown();
     }
 

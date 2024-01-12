@@ -122,6 +122,19 @@ public class NetListen extends AttributeChannel<NetListen> {
         return this.context;
     }
 
+    /**
+     * Search for NetChannel by id,
+     *  return null if NetChannel is not from this NetListen
+     */
+    public NetChannel findChannel(long channelID) {
+        SoChannel<?> channel = this.context.findChannel(channelID);
+        if (channel != null && ((NetChannel) channel).getSource() == this) {
+            return (NetChannel) channel;
+        } else {
+            return null;
+        }
+    }
+
     @Override
     public <T> T findPipeContext(Class<T> serviceType) {
         throw new UnsupportedOperationException();
@@ -141,8 +154,9 @@ public class NetListen extends AttributeChannel<NetListen> {
      *
      * <p>all new accept socket will be closed when suspend = true.</p>
      */
-    public void suspend() {
+    public NetListen suspend() {
         this.suspend = true;
+        return this;
     }
 
     /**
@@ -150,8 +164,9 @@ public class NetListen extends AttributeChannel<NetListen> {
      *
      * <p>all new accept socket will be closed when suspend = true.</p>
      */
-    public void resume() {
+    public NetListen resume() {
         this.suspend = false;
+        return this;
     }
 
     /**
@@ -164,17 +179,19 @@ public class NetListen extends AttributeChannel<NetListen> {
     /**
      * add {@link NetListener}
      */
-    public void addListener(NetListener listener) {
+    public NetListen addListener(NetListener listener) {
         if (!this.listeners.contains(listener)) {
             this.listeners.add(listener);
         }
+        return this;
     }
 
     /**
      * remove {@link NetListener}
      */
-    public void removeListener(NetListener listener) {
+    public NetListen removeListener(NetListener listener) {
         this.listeners.remove(listener);
+        return this;
     }
 
     /**
@@ -226,21 +243,17 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.lastAcceptTime = System.currentTimeMillis();
         this.acceptCount.incrementAndGet();
 
-        Runnable task = () -> {
-            for (NetListener listener : listeners) {
-                try {
-                    listener.accept(channel);
-                } catch (Exception ignored) {
+        for (NetListener listener : listeners) {
+            try {
+                listener.accept(channel);
+            } catch (Exception ignored) {
 
-                }
             }
+        }
 
-            synchronized (acceptLock) {
-                acceptLock.notifyAll();
-            }
-        };
-
-        this.context.submitSoTask(channel.getChannelID(), new SimpleTask(task), this);
+        synchronized (acceptLock) {
+            acceptLock.notifyAll();
+        }
     }
 
     /**

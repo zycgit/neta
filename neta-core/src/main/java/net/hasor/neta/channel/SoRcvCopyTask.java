@@ -44,6 +44,7 @@ class SoRcvCopyTask extends DefaultSoTask {
     @Override
     protected void doWork(int retryCnt) {
         if (this.channel.isShutdownInput()) {
+            this.context.notifyRcvChannelError(this.channelID, SoInputCloseException.INSTANCE);
             finishTask();
             return;
         }

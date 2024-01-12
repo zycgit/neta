@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2024-01-06
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SoAsyncChannel implements Closeable {
+class SoAsyncChannel implements Closeable {
     private final AsynchronousSocketChannel channel;
     private final List<ByteBuf>             resources;
     //
@@ -42,6 +42,8 @@ public class SoAsyncChannel implements Closeable {
     private final AtomicBoolean             shutdownInputSignal;
     private final AtomicBoolean             shutdownOutputSignal;
     private final ByteBuffer                rcvSwapBuffer;
+    //
+    private       boolean                   ignoreReadEofFlag;
 
     public SoAsyncChannel(AsynchronousSocketChannel channel, SoConfig soConfig) {
         this.channel = channel;
@@ -53,6 +55,12 @@ public class SoAsyncChannel implements Closeable {
 
         ByteBufAllocator bufAllocator = soConfig.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : soConfig.getBufAllocator();
         this.rcvSwapBuffer = this.newByteBuf(bufAllocator, soConfig.getRcvSwapBuf()).asByteBuffer();
+
+        this.ignoreReadEofFlag = false;
+    }
+
+    public void ignoreReadEofFlag() {
+        this.ignoreReadEofFlag = true;
     }
 
     /** Returns whether the read channel is closed. */
@@ -111,6 +119,10 @@ public class SoAsyncChannel implements Closeable {
         }
     }
 
+    public boolean isIgnoreReadEofFlag() {
+        return this.ignoreReadEofFlag;
+    }
+
     @Override
     public void close() throws IOException {
         this.shutdownInputSignal.set(true);
@@ -138,6 +150,7 @@ public class SoAsyncChannel implements Closeable {
 
         this.rcvSwapBuffer.clear();
         this.channel.read(this.rcvSwapBuffer, context, rHandler);
+
         return true;
     }
 
@@ -152,6 +165,7 @@ public class SoAsyncChannel implements Closeable {
         } else {
             this.channel.write(swapBuf, context, wHandler);
         }
+
         return true;
     }
 

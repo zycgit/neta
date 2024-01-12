@@ -50,14 +50,17 @@ class SoSndTask extends DefaultSoTask {
 
     @Override
     protected void doWork(int retryCnt) {
-        // channel is closed
         if (this.context.isClose(this.channelID)) {
             this.failedTask(SoCloseException.INSTANCE);
             return;
         }
+        if (this.channel.isShutdownOutput()) {
+            this.failedTask(SoOutputCloseException.INSTANCE);
+            return;
+        }
 
         // when wHandler finish will wake up SoSndTask
-        if (this.wHandler.isSndWorking()) {
+        if (this.wHandler.getStatus() != SoHandlerStatus.IDLE) {
             this.finishTask();
             return;
         }
@@ -66,6 +69,10 @@ class SoSndTask extends DefaultSoTask {
         ByteBuf sndBuf = this.wHandler.getSndBuffer();
         List<SoSndData> afterFinish = fillByteBuf(sndBuf);
         if (!sndBuf.hasReadable() && this.wContext.peekData() == null) {
+            if (!afterFinish.isEmpty()) {
+                SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, afterFinish, 0, null);
+                this.context.submitSoTask(this.channelID, cleanTask, this);
+            }
             this.finishTask();// nothing data to send.
             return;
         }
@@ -74,7 +81,7 @@ class SoSndTask extends DefaultSoTask {
         try {
             ByteBuffer swapBuf = this.wHandler.getSwapBuffer();
 
-            this.wHandler.prepareWrite(afterFinish);
+            this.wHandler.prepare(afterFinish);
             this.channel.write(swapBuf, this.context, this.wHandler);
 
             this.finishTask();
@@ -122,7 +129,10 @@ class SoSndTask extends DefaultSoTask {
                     logger.debug("snd(" + this.channelID + ") taskData be merged. " + data);
                 }
 
-                afterFinish.add(this.wContext.popData());
+                SoSndData popData = this.wContext.popData();
+                if (popData != null) {
+                    afterFinish.add(popData);
+                }
                 data = this.wContext.peekData();
 
                 if (data == null) {

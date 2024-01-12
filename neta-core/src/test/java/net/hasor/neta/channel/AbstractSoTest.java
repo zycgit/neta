@@ -14,14 +14,21 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.function.Callable;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
 
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.SocketException;
 import java.security.MessageDigest;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -84,4 +91,46 @@ public class AbstractSoTest {
         }
         return sb.toString();
     }
+
+    public static Thread blackHole(Socket socket, AtomicBoolean signal) {
+        return ThreadUtils.daemonThread(true, (Callable) () -> {
+            try {
+                byte[] bytes = new byte[4096];
+                InputStream in = socket.getInputStream();
+                while (!socket.isClosed()) {
+                    int len = Math.min(bytes.length, in.available());
+                    int read = in.read(bytes, 0, len);
+                    signal.compareAndSet(false, read > 0);
+                    Thread.sleep(50);
+                }
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    public static Thread whiteHole(Socket socket) {
+        return ThreadUtils.daemonThread(true, (Callable) () -> {
+            try {
+                OutputStream out = socket.getOutputStream();
+                while (!socket.isClosed()) {
+                    out.write(RandomUtils.nextBytes(32));
+                    Thread.sleep(50);
+                }
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
+    public static Thread whiteHole(NetChannel channel) {
+        return ThreadUtils.daemonThread(true, (Callable) () -> {
+            try {
+                while (!channel.isClose() && !channel.isShutdownOutput()) {
+                    channel.sendData(ByteBufAllocator.DEFAULT.wrap(RandomUtils.nextBytes(32)));
+                    Thread.sleep(50);
+                }
+            } catch (Exception ignored) {
+            }
+        });
+    }
+
 }

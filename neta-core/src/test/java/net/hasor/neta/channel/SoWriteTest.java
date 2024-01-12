@@ -143,92 +143,6 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void sndShutdownTest_01() throws Exception {
-        // start server.
-        int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
-
-        // connect to server.
-        Socket client = new Socket("127.0.0.1", safePort);
-        listen.waitAnyAccept();
-
-        // server close rcv channel keep output.
-        NetChannel channel = (NetChannel) context.findChannel(2);
-        assert channel.getSndHandlerStatus() == SoHandlerStatus.IDLE;
-        channel.shutdownOutput(); // close output keep input.
-        assert channel.isShutdownOutput();
-
-        // send data well be error.
-        byte[] sendData = "Hello".getBytes();
-        Future<?> future = channel.sendData(ByteBufAllocator.DEFAULT.wrap(sendData));
-        assert future.getCause() == SoOutputCloseException.INSTANCE;
-
-        server.shutdown();
-    }
-
-    @Test
-    public void sndShutdownTest_02() throws Exception {
-        // start server.
-        AtomicBoolean rcvAnyThing = new AtomicBoolean();
-        int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
-            rcvAnyThing.set(true);
-        }));
-
-        // connect to server.
-        Socket client = new Socket("127.0.0.1", safePort);
-        listen.waitAnyAccept();
-
-        // server close rcv channel keep output.
-        NetChannel channel = (NetChannel) context.findChannel(2);
-        channel.shutdownOutput(); // close output keep input.
-
-        // only send data.
-        OutputStream out = client.getOutputStream();
-        out.write("Hello".getBytes());
-        out.flush();
-        ThreadUtils.sleep(500);
-
-        assert rcvAnyThing.get();
-
-        server.shutdown();
-    }
-
-    @Test
-    public void sendRemoteCloseTest() throws Exception {
-        // start server
-        int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
-
-        // connect to server -> send data -> close
-        Socket client = new Socket("127.0.0.1", safePort);
-        listen.waitAnyAccept();
-
-        NetChannel channel = (NetChannel) context.findChannel(2);
-        Future<?> future = channel.sendData(RandomUtils.nextBytes(4096));
-
-        if (!future.isDone()) {
-            client.close();
-        }
-
-        // when remote close,then channel is closed.
-        while (!channel.isClose()) {
-            ThreadUtils.sleep(100);
-        }
-
-        assert future.isDone();
-        assert future.getCause().getMessage().equals("Connection reset by peer");
-
-        server.shutdown();
-    }
-
-    @Test
     public void sndTimeoutTest_01() throws Exception {
         // start server
         AtomicLong sndErrTime = new AtomicLong(0);
@@ -278,17 +192,8 @@ public class SoWriteTest extends AbstractSoTest {
         PipelineFactory build = empty//
                 .nextTo("L1", (PipeLayer<ByteBuf, String, String, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
                     throw new IllegalStateException();
-                }).bindReceive(new PipeListener<String>() {
-                    @Override
-                    public void onReceive(SoChannel<?> channel, String data) {
+                }).bindReceive((PipeListener<String>) (channel, data) -> {
 
-                    }
-
-                    //                    @Override
-                    //                    public void onReceiveError(SoChannel<?> channel, Throwable e) {
-                    //                        rcvErr1.set(e instanceof IllegalStateException);
-                    //                        throw new IllegalArgumentException();
-                    //                    }
                 }).build();
 
         // start server

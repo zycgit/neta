@@ -40,8 +40,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        ByteBuf         sndBuffer;
     //
     private              int             sndSize;
-    private volatile     boolean         sndWorking;
-    private              List<SoSndData> afterWorking1;
+    private              List<SoSndData> afterWorking;
 
     public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext wContext) {
         this.channelID = channelID;
@@ -76,18 +75,12 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         return this.status;
     }
 
-    /**
-     * The data in ByteBuf is sent in batches, before it is completed {@link #isSndWorking()} Always true.
-     */
-    public boolean isSndWorking() {
-        return this.sndWorking;
-    }
-
-    public void prepareWrite(List<SoSndData> afterWorking1) {
+    public void prepare(List<SoSndData> afterWorking) {
+        this.status = SoHandlerStatus.PENDING;
         this.sndSize = 0;
-        this.sndWorking = true;
-        this.afterWorking1 = afterWorking1;
+        this.afterWorking = afterWorking;
         this.copyData();
+        this.status = SoHandlerStatus.WAITING;
     }
 
     private Future<?> submitTask(DefaultSoTask task) {
@@ -116,11 +109,10 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             this.writeData();
         } else {
 
-            SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize);
+            SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize);
             SoSndTask sndTask = new SoSndTask(this.channelID, this.channel, this, this.wContext);
 
             submitTask(cleanTask).onCompleted(f -> submitTask(sndTask));
-            this.sndWorking = false;
             this.status = SoHandlerStatus.IDLE;
         }
     }
@@ -135,7 +127,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     private void writeData() {
         if (this.channel.isShutdownOutput()) {
-            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, SoOutputCloseException.INSTANCE));
+            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, SoOutputCloseException.INSTANCE));
             this.status = SoHandlerStatus.IDLE;
             return;
         }
@@ -147,68 +139,66 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 this.status = SoHandlerStatus.IDLE;
             }
         } catch (Throwable e) {
-            if (e instanceof NotYetConnectedException) {
-                long costTimeMs = System.currentTimeMillis() - this.createdTime;
-                if (costTimeMs < this.context.getConnectTimeoutMs()) {
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
-                    }
-                    submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
-                        writeData();
-                    });
-                    return;
-                } else {
-                    SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
-
-                    this.status = SoHandlerStatus.IDLE;
-                    this.context.notifySndChannelError(this.channelID, cause);
-                    this.context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
-                }
-            } else if (e instanceof InterruptedByTimeoutException) {
-                String errorMsg = "send data timeout with " + this.context.getConfig().getSoWriteTimeoutMs() + " milliseconds.";
-                String msg = "snd(" + this.channelID + ") " + errorMsg;
-
-                this.status = SoHandlerStatus.IDLE;
-                this.context.notifySndChannelError(this.channelID, e);
-                this.context.asyncUnsafeCloseChannel(this.channelID, msg, new SoWriteTimeoutException(errorMsg));
-            } else {
-                String msg = "snd(" + this.channelID + ") " + e.getMessage();
-
-                this.status = SoHandlerStatus.IDLE;
-                this.context.notifySndChannelError(this.channelID, e);
-                this.context.asyncUnsafeCloseChannel(this.channelID, msg, e);
-            }
-
-            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));
+            handleException(e);
         }
     }
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
-        this.status = SoHandlerStatus.PENDING;
+        this.handleException(e);
+    }
 
-        String errorMsg;
-        Throwable cause = e;
+    private void handleException(Throwable e) {
+        String finalMsg;
+        Throwable finalErr;
 
-        if (e instanceof InterruptedByTimeoutException) {
-            // snd Close
-            errorMsg = "snd(" + this.channelID + ") writeTimeout, msg:" + e.getMessage();
-            cause = new SoWriteTimeoutException(errorMsg);
-        } else if (e instanceof ShutdownChannelGroupException) {
-            // snd Close
-            errorMsg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
+        if (e instanceof NotYetConnectedException) {
+            long costTimeMs = System.currentTimeMillis() - this.createdTime;
+            if (costTimeMs < this.context.getConnectTimeoutMs()) {
+                if (logger.isDebugEnabled()) {
+                    logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
+                }
+                submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
+                    writeData();
+                });
+                return;
+            } else {
+                finalErr = SoUtils.newTimeout(false, this.channelID, this.context, e);
+                finalMsg = finalErr.getMessage();
+            }
+        } else if (e instanceof InterruptedByTimeoutException) {
+            String errorMsg = "send data timeout with " + this.context.getConfig().getSoWriteTimeoutMs() + " milliseconds.";
+            String msg = "snd(" + this.channelID + ") " + errorMsg;
+
+            finalErr = new SoWriteTimeoutException(errorMsg);
+            finalMsg = msg;
         } else if (e instanceof ClosedChannelException) {
-            // snd Close
-            errorMsg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
+            if (this.channel.isShutdownOutput()) {
+                this.context.notifySndChannelError(this.channelID, SoOutputCloseException.INSTANCE);
+                this.status = SoHandlerStatus.IDLE;
+                return;
+            } else {
+                finalMsg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
+                finalErr = e;
+            }
+        } else if (e instanceof ShutdownChannelGroupException) {
+            finalMsg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
+            finalErr = e;
         } else {
-            // snd Exception
-            errorMsg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
+            finalMsg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
+            finalErr = e;
         }
 
-        this.status = SoHandlerStatus.IDLE;
-        context.notifySndChannelError(this.channelID, cause);
-        context.asyncUnsafeCloseChannel(this.channelID, errorMsg, cause);
+        try {
+            this.channel.shutdownOutput();
+        } catch (Exception ee) {
+            logger.warn("snd(" + this.channelID + ") other errors occur in error handling, " + ee.getMessage());
+        }
 
-        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking1, this.sndSize, e));
+        this.context.notifySndChannelError(this.channelID, e);
+        this.context.asyncUnsafeCloseChannel(this.channelID, finalMsg, finalErr);
+        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, e));
+        this.status = SoHandlerStatus.IDLE;
     }
+
 }

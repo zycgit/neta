@@ -138,6 +138,19 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return this.channel.isShutdownInput();
     }
 
+    /**
+     * <p>When shutdownOutput is called remotely, an end of read flag was encountered, which usually means closing the channel.
+     * But the remote still has the ability to receive data.</p>
+     *
+     * <p>so use {@link #ignoreReadEofFlag()} method, keep the channel state and continue to send data</p>
+     *
+     * <p>Once {@link #ignoreReadEofFlag()} is activated, the release of remote connections needs to be managed manually,
+     * leading to {@link NetChannel} leakage if not released in time</p>
+     */
+    public void ignoreReadEofFlag() {
+        this.channel.ignoreReadEofFlag();
+    }
+
     /** Shutdown the connection for reading without closing the channel. */
     public void shutdownInput() {
         try {
@@ -230,7 +243,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     /** Returns whether pipleline rcv is available. */
     public boolean isRcvAvailable() {
-        return this.pipeline.rcvAvailable();
+        return this.pipeline.rcvSlotIsFull();
     }
 
     /** Number of bytes received */
@@ -240,7 +253,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     /** Returns whether pipleline snd is available. */
     public boolean isSndAvailable() {
-        return this.pipeline.sndAvailable();
+        return this.pipeline.sndSlotIsFull();
     }
 
     /* Receive data without concurrency */
@@ -268,8 +281,8 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         try {
             this.pipeCtx.flash(PipeContext.SO_CHANNEL_RETRY_CNT, retryCnt);
 
-            if (!this.pipeline.rcvAvailable()) {
-                logger.info("rcv(" + this.channelID + ") the pipeline is not available.");
+            if (!this.pipeline.rcvSlotIsFull()) {
+                logger.info("rcv(" + this.channelID + ") the pipeline slot is full.");
                 this.pipeline.rcvError(this.pipeCtx, null, PipeFullException.INSTANCE);
                 return;
             }
@@ -351,17 +364,8 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * <p>data goes through the application layer network protocol stack</p>
      */
     public Future<NetChannel> sendData(Object writeData, String pipeName) throws IOException {
-        Future<NetChannel> future = new BasicFuture<>();
-
-        if (this.isShutdownOutput()) {
-            logger.info("snd(" + this.channelID + ") the channel is shutdownOutput.");
-            future.failed(SoOutputCloseException.INSTANCE);
-            return future;
-        }
-
-        if (!this.pipeline.sndAvailable()) {
-            logger.info("snd(" + this.channelID + ") the pipeline is not available.");
-            future.failed(PipeFullException.INSTANCE);
+        Future<NetChannel> future = newFutureForSend();
+        if (future.isDone()) {
             return future;
         }
 
@@ -405,7 +409,11 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     /** flash */
     public Future<NetChannel> flush() {
-        Future<NetChannel> future = new BasicFuture<>();
+        Future<NetChannel> future = newFutureForSend();
+        if (future.isDone()) {
+            return future;
+        }
+
         appendSoSndTask(new SoSndData(SoSndData.EMPTY_DATA, future, this));
         return future;
     }
@@ -415,7 +423,36 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * <p>data goes through the application layer network protocol stack</p>
      */
     public Future<?> flush(String pipeName) {
+        Future<NetChannel> future = newFutureForSend();
+        if (future.isDone()) {
+            return future;
+        }
+
         throw new UnsupportedOperationException();
+    }
+
+    private Future<NetChannel> newFutureForSend() {
+        Future<NetChannel> future = new BasicFuture<>();
+
+        if (this.isShutdownOutput()) {
+            logger.info("snd(" + this.channelID + ") the channel is shutdownOutput.");
+            future.failed(SoOutputCloseException.INSTANCE);
+            return future;
+        }
+
+        if (!this.pipeline.sndSlotIsFull()) {
+            logger.info("snd(" + this.channelID + ") the pipeline slot is full.");
+            future.failed(PipeFullException.INSTANCE);
+            return future;
+        }
+
+        if (this.closeStatus.get()) {
+            logger.info("snd(" + this.channelID + ") the channel is closed.");
+            future.failed(SoCloseException.INSTANCE);
+            return future;
+        }
+
+        return future;
     }
 
     private void appendSoSndTask(SoSndData wTask) {
@@ -423,23 +460,23 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             logger.info("snd(" + this.channelID + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
         }
 
-        if (this.closeStatus.get()) {
-            wTask.failed(SoCloseException.INSTANCE);
-            return;
-        }
+        synchronized (this.wStatus) {
+            this.wContext.offer(wTask);
 
-        this.wContext.offer(wTask);
+            if (this.wStatus.compareAndSet(false, true)) {
+                SoSndTask sendTask = new SoSndTask(this.channelID, this.channel, this.wHandler, this.wContext);
 
-        if (this.wStatus.compareAndSet(false, true)) {
-            SoSndTask sendTask = new SoSndTask(this.channelID, this.channel, this.wHandler, this.wContext);
-            this.wContext.submitTask(sendTask, this).onCompleted(f -> {
-                this.lastSndTime = System.currentTimeMillis();
-                if (this.wContext.isEmpty()) {
-                    this.wStatus.compareAndSet(true, false);
-                } else {
-                    this.wContext.submitTask(sendTask, this);
-                }
-            });
+                this.wContext.submitTask(sendTask, this).onCompleted(f -> {
+                    synchronized (this.wStatus) {
+                        this.lastSndTime = System.currentTimeMillis();
+                        if (this.wContext.isEmpty()) {
+                            this.wStatus.compareAndSet(true, false);
+                        } else {
+                            this.wContext.submitTask(sendTask, this);
+                        }
+                    }
+                });
+            }
         }
     }
 

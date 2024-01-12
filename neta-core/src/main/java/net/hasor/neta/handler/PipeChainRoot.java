@@ -67,7 +67,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     @Override
-    public boolean rcvAvailable() {
+    public boolean rcvSlotIsFull() {
         if (this.layers.isEmpty()) {
             return true;
         } else {
@@ -76,7 +76,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     @Override
-    public boolean sndAvailable() {
+    public boolean sndSlotIsFull() {
         if (this.layers.isEmpty()) {
             return true;
         } else {
@@ -192,7 +192,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         try {
             pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG, rcvError);
             if (this.layers.isEmpty()) {
-                return this.triggerReceiveByEmptyLayers(pipeContext, null);
+                return this.triggerReceiveByEmptyLayers(pipeContext, EMPTY);
             }
 
             int depth = this.findDepth(true, pipeName);

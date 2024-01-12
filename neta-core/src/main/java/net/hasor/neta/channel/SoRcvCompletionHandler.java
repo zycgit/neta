@@ -58,11 +58,6 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         return this.status;
     }
 
-    public void read(SoContextImpl context) {
-        this.status = SoHandlerStatus.WAITING;
-        this.channel.read(context, this);
-    }
-
     @Override
     public void completed(Integer result, SoContextImpl context) {
         this.status = SoHandlerStatus.PENDING;
@@ -75,14 +70,14 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             // copy buffer form swap to rcv
             SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, this.channel, context, getRcvBuffer());
             this.context.submitSoTask(this.channelID, copyTask, this).onCompleted(f -> {
-                this.continueRcv();
+                this.read();
             }).onFailed(f -> {
                 Throwable e = f.getCause();
                 String errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
 
-                this.status = SoHandlerStatus.IDLE;
                 context.notifyRcvChannelError(this.channelID, e);
                 context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
+                this.status = SoHandlerStatus.IDLE;
             });
 
         } else if (result == 0) {
@@ -91,30 +86,29 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             }
 
             // rcv continue
-            this.continueRcv();
+            this.read();
 
         } else {
 
             this.status = SoHandlerStatus.IDLE;
+
             if (this.channel.isShutdownInput()) {
-                // for ShutdownInput
-                String msg = "rcv(" + channelID + ") close form shutdownInput.";
-                if (logger.isDebugEnabled()) {
-                    logger.debug(msg);
-                }
+                // for ShutdownInput local
+                String msg = "rcv(" + this.channelID + ") shutdownInput form local.";
+                logger.info(msg);
                 this.context.notifyRcvChannelError(this.channelID, SoInputCloseException.INSTANCE);
-            } else {
+            } else if (!this.channel.isIgnoreReadEofFlag()) {
                 // for Remote
-                String msg = "rcv(" + channelID + ") close form remote.";
-                if (logger.isDebugEnabled()) {
-                    logger.debug(msg);
-                }
+                String msg = "rcv(" + this.channelID + ") close form remote.";
+                logger.info(msg);
                 context.asyncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+            } else {
+                logger.info("rcv(" + this.channelID + ") shutdownInput form remote.");
             }
         }
     }
 
-    private void continueRcv() {
+    public void read() {
         this.status = SoHandlerStatus.WAITING;
         if (!this.channel.read(this.context, this)) {
             this.status = SoHandlerStatus.IDLE;
@@ -131,13 +125,13 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 if (logger.isDebugEnabled()) {
                     logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
                 }
-                this.continueRcv();
+                this.read();
             } else {
                 SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
 
-                this.status = SoHandlerStatus.IDLE;
                 context.notifyRcvChannelError(this.channelID, cause);
                 context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
+                this.status = SoHandlerStatus.IDLE;
             }
             return;
         }
@@ -154,8 +148,8 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
         }
 
-        this.status = SoHandlerStatus.IDLE;
         context.notifyRcvChannelError(this.channelID, e);
         context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
+        this.status = SoHandlerStatus.IDLE;
     }
 }
