@@ -38,6 +38,7 @@ class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
     private final        AtomicLong                 nextID = new AtomicLong(0);
     private final        SoConfig                   config;
+    private final        CobbleSocket               cobble;
     private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
     //
@@ -53,7 +54,8 @@ class SoContextImpl implements SoContext {
     private final        Queue<NetChannel>          channelList;
     private final        Queue<NetListen>           listenList;
 
-    public SoContextImpl(SoConfig config) {
+    public SoContextImpl(SoConfig config, CobbleSocket cobble) {
+        this.cobble = cobble;
         this.config = Objects.requireNonNull(config);
         this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
 
@@ -182,6 +184,11 @@ class SoContextImpl implements SoContext {
     @Override
     public SoChannel<?> findChannel(long channelID) {
         return this.channelMap.get(channelID);
+    }
+
+    @Override
+    public CobbleSocket getCobble() {
+        return this.cobble;
     }
 
     void foreachListen(Consumer<NetListen> consumer) {

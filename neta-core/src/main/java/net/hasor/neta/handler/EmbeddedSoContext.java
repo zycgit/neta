@@ -92,6 +92,11 @@ public class EmbeddedSoContext implements SoContext {
         return this.channelMap.get(channelID);
     }
 
+    @Override
+    public CobbleSocket getCobble() {
+        throw new UnsupportedOperationException();
+    }
+
     /** force close network channel, like {@link SoChannel#closeNow()} */
     protected void closeChannel(long channelID, String message) {
         logger.info("channel(" + channelID + ") close in progress, " + message);

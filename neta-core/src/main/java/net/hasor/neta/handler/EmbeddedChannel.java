@@ -162,6 +162,11 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     }
 
     @Override
+    public SoContext getContext() {
+        return this.context;
+    }
+
+    @Override
     public <T> T findPipeContext(Class<T> serviceType) {
         return this.pipeCtx.context(serviceType);
     }

@@ -48,6 +48,9 @@ public interface SoChannel<T> {
     /** get remote address of the channel */
     SocketAddress getRemoteAddr();
 
+    /** get context */
+    SoContext getContext();
+
     /**
      * close this channel.
      *

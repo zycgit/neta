@@ -198,6 +198,11 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     }
 
     @Override
+    public SoContext getContext() {
+        return this.context;
+    }
+
+    @Override
     public <T> T findPipeContext(Class<T> serviceType) {
         return this.pipeCtx.context(serviceType);
     }
