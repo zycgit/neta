@@ -352,7 +352,11 @@ public class SoReadTest extends AbstractSoTest {
         PipelineBuilder<ByteBuf, ByteBuf> empty = PipeInitializer.builder();
         PipelineFactory build = empty//
                 .nextTo("L1", (PipeLayer<ByteBuf, String, String, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-                    throw new IllegalStateException();
+                    if (isRcv) {
+                        throw new IllegalStateException();
+                    } else {
+                        return PipeStatus.Next;
+                    }
                 }).bindReceive(new PipeListener<String>() {
                     @Override
                     public void onReceive(SoChannel<?> channel, String data) {

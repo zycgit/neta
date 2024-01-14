@@ -1,0 +1,43 @@
+1. 偶现
+
+严重: snd(2) null
+java.lang.ArrayIndexOutOfBoundsException
+	at java.lang.System.arraycopy(Native Method)
+	at java.nio.HeapByteBuffer.put(HeapByteBuffer.java:193)
+	at net.hasor.neta.bytebuf.AbstractByteBuf.read(AbstractByteBuf.java:541)
+	at net.hasor.neta.channel.SoSndCompletionHandler.copyData(SoSndCompletionHandler.java:123)
+	at net.hasor.neta.channel.SoSndCompletionHandler.prepare(SoSndCompletionHandler.java:82)
+	at net.hasor.neta.channel.SoSndTask.doWork(SoSndTask.java:84)
+	at net.hasor.neta.channel.DefaultSoTask.run(DefaultSoTask.java:80)
+	at net.hasor.neta.channel.SoEventExecutor$TaskWorker.run(SoEventExecutor.java:157)
+	at net.hasor.neta.channel.SoEventExecutor.doWork(SoEventExecutor.java:97)
+	at java.lang.Thread.run(Thread.java:750)
+
+
+
+高优先
+
+2. SSL Buffer 溢出问题
+3. ByteBuf 清理和释放机制，需要部分重构将其池化。思路需要借鉴 Netty
+4. IP 白名单机制
+5. soReadTimeoutMs 的作用和平时认知有一些偏差，需要进一步拟合这种偏差
+
+
+次优先
+
+1. 协议路由，用来支持 NPN/ALPN
+2. 通过 SSL 参数支持 peerHost 能力
+3. ByteBuf 大文件 或输入输出流的 传输
+4. PipeRoute
+5. 流量控制
+6.  - 重协商/安全重协商（OpenSSL RFC5764，renegotiation_info） 待支持
+7. 支持 OpenSSL
+
+## 参考资料
+
+- https://openjdk.org/projects/nio/resources/AsynchronousIo.html
+- https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html
+- https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html
+- https://datatracker.ietf.org/doc/html/rfc6066
+- https://halfrost.com/https-extensions/#toc-0
+- https://zhuanlan.zhihu.com/p/477461157?utm_id=0

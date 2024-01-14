@@ -185,15 +185,28 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void rcvThrowTest_01() throws Exception {
-        AtomicBoolean rcvErr1 = new AtomicBoolean(false);
+    public void sndThrowTest_01() throws Exception {
+        AtomicBoolean sndErr1 = new AtomicBoolean(false);
 
         PipeBuilder.PipelineBuilder<ByteBuf, ByteBuf> empty = PipeInitializer.builder();
         PipelineFactory build = empty//
                 .nextTo("L1", (PipeLayer<ByteBuf, String, String, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-                    throw new IllegalStateException();
-                }).bindReceive((PipeListener<String>) (channel, data) -> {
+                    if (!isRcv) {
+                        throw new IllegalStateException();
+                    } else {
+                        return PipeStatus.Next;
+                    }
+                }).bindReceive(new PipeListener<String>() {
+                    @Override
+                    public void onReceive(SoChannel<?> channel, String data) {
 
+                    }
+
+                    @Override
+                    public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+                        sndErr1.set(e instanceof IllegalStateException);
+                        throw new IllegalArgumentException();
+                    }
                 }).build();
 
         // start server
@@ -215,7 +228,7 @@ public class SoWriteTest extends AbstractSoTest {
         ThreadUtils.sleep(500);
 
         assert channel.isClose();
-        assert rcvErr1.get();
+        assert sndErr1.get();
 
         server.shutdown();
     }
@@ -302,6 +315,4 @@ public class SoWriteTest extends AbstractSoTest {
     //
     //        server.shutdown();
     //    }
-    //
-    //
 }

@@ -18,6 +18,7 @@ import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.SoChannel;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -78,7 +79,7 @@ public class JdkSslContext extends SslContextBasic {
 
     @Override
     public String getApplicationProtocol() {
-        if (JdkAlpnSslUtils.supportsAlpn()) {
+        if (this.getEngine() != null && JdkAlpnSslUtils.supportsAlpn()) {
             String appProtocol = JdkAlpnSslUtils.getApplicationProtocol(this.getEngine());
             if (appProtocol != null) {
                 return appProtocol.isEmpty() ? null : appProtocol;
@@ -152,8 +153,12 @@ public class JdkSslContext extends SslContextBasic {
         String[] appProtocol = this.sslConfig.getAppProtocol();
         appProtocol = (appProtocol == null) ? ArrayUtils.EMPTY_STRING_ARRAY : appProtocol;
         JdkAlpnSslUtils.setApplicationProtocols(sslEngine, appProtocol);
-        if (this.sslConfig.getAppProtocolSelector() != null) {
-            JdkAlpnSslUtils.setHandshakeApplicationProtocolSelector(sslEngine, this.sslConfig.getAppProtocolSelector());
+        final SslAppProtocolSelector protocolSelector = this.sslConfig.getAppProtocolSelector();
+        if (protocolSelector != null) {
+            JdkAlpnSslUtils.setHandshakeApplicationProtocolSelector(sslEngine, (engine, strings) -> {
+                SoChannel<?> channel = this.soContext.findChannel(this.channelID);
+                return protocolSelector.selector(channel, engine, strings);
+            });
         }
 
         return sslEngine;

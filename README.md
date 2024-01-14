@@ -26,50 +26,25 @@ DATA -> ┃ RCV_UP      ┆ RCV_DOWN   <=>   RCV_UP   ┆    RCV_DOWN ┃  -> ..
 
 ## 能力
 
-- TCP/IP AIO 双工异步模型
-- 支持 ReadSocketTimeout、WriteSocketTimeout
-- 支持 监听器挂起（监听器暂时失效）
-- 支持 EmbeddedChannel
 - 支持 Pipeline
-    - 支持 Next、Retry、Again、Restart、Exit、Interrupt 共 6 种流转控制方式
+  - 提供 Next、Retry、Again、Restart、Exit、Interrupt 共 6 种流转控制方式
+- 支持 单向 Socket 通信
+  - shutdownOutput 单方面永久关闭输出通道
+  - shutdownInput 单方面永久关闭输入通道
+- 支持 EmbeddedChannel 协议开发更加容易
+- 支持 ReadSocketTimeout、WriteSocketTimeout
+- 支持 监听器挂起，不在接受新的连接直到恢复
 - 支持 安全关闭
-- 支持 shutdownOutput、shutdownInput
-- SSL
-    - 证书格式：JKS、PEM/CER
-    - SSL 引擎：JDK、OpenSSL（待支持）
-    - SSL 协议：NONE、SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
-    - SSL 客户端验证：NONE、OPTIONAL、REQUIRE
-- TLS 扩展
-    - TLS NPN/ALPN，应用层协议协商
-    - 重协商/安全重协商（OpenSSL RFC5764，renegotiation_info） 待支持
-
+- TLS/SSL
+  - 证书格式：JKS、PEM/CER
+  - TLS/SSL 引擎：JDK、OpenSSL（计划中）
+  - TLS/SSL 协议：NONE、SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
+  - TLS/SSL 客户端验证：NONE、OPTIONAL、REQUIRE
+- TLS/SSL 扩展
+  - NPN/ALPN，应用层协议协商
+ 
 ## 质量
 
-- 有效代码行：3.6K
-- 代码覆盖率：54%
-
-高优先
-
-2. SSL Buffer 溢出问题
-3. ByteBuf 清理和释放机制，需要部分重构将其池化。思路需要借鉴 Netty
-4. IP 白名单机制
-5. soReadTimeoutMs 的作用和平时认知有一些偏差，需要进一步拟合这种偏差
-6. 场景测试覆盖率不足
-
-次优先
-
-1. 协议路由，用来支持 NPN/ALPN
-2. 通过 SSL 参数支持 peerHost 能力
-3. ByteBuf 大文件 或输入输出流的 传输
-4. PipeRoute
-5. 流量控制
-6. 
-
-## 参考资料
-
-- https://openjdk.org/projects/nio/resources/AsynchronousIo.html
-- https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html
-- https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html
-- https://datatracker.ietf.org/doc/html/rfc6066
-- https://halfrost.com/https-extensions/#toc-0
-- https://zhuanlan.zhihu.com/p/477461157?utm_id=0
+neta-core
+- 有效代码行：3.9K
+- 代码覆盖率：74%

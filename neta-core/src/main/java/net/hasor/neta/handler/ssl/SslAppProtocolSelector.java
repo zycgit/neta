@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
+import net.hasor.neta.channel.SoChannel;
+
 import javax.net.ssl.SSLEngine;
 import java.util.List;
-import java.util.function.BiFunction;
 
 /**
  * Select a protocol that is supported in the TLS NPN/ALPN extension.
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public interface SslAppProtocolSelector extends BiFunction<SSLEngine, List<String>, String> {
-
+public interface SslAppProtocolSelector {
+    String selector(SoChannel<?> channel, SSLEngine sslEngine, List<String> protocols);
 }
