@@ -27,9 +27,12 @@ import org.junit.Test;
 
 import javax.net.ssl.*;
 import java.io.BufferedReader;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.security.KeyStore;
+import java.security.cert.CertificateException;
+import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -42,6 +45,28 @@ import static net.hasor.neta.channel.AbstractSoTest.safePort;
  * @version : 2022-11-01
  */
 public class SslSocketTest extends AbstractSslTest {
+    static class MyTrustManager implements TrustManager, X509TrustManager {
+        public X509Certificate[] getAcceptedIssuers() {
+            return null;
+        }
+
+        public boolean isServerTrusted(X509Certificate[] certs) {
+            return true;
+        }
+
+        public boolean isClientTrusted(X509Certificate[] certs) {
+            return true;
+        }
+
+        public void checkServerTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+            return;
+        }
+
+        public void checkClientTrusted(X509Certificate[] certs, String authType) throws CertificateException {
+            return;
+        }
+    }
+
     public static SSLContext sslContext() throws Exception {
         char[] password = "123456".toCharArray();
         KeyStore jsk = KeyStore.getInstance("JKS");
@@ -52,7 +77,7 @@ public class SslSocketTest extends AbstractSslTest {
 
         // SSL Server
         SSLContext sslContext = SSLContext.getInstance("SSLv3");
-        sslContext.init(kmf.getKeyManagers(), null, null);
+        sslContext.init(kmf.getKeyManagers(), new TrustManager[] { new MyTrustManager() }, null);
 
         return sslContext;
     }
@@ -161,44 +186,43 @@ public class SslSocketTest extends AbstractSslTest {
     }
 
     //    @Test
-    //    public void realSocketTest_02() throws IOException {
-    //        int safePort = safePort();
-    //        SoConfig soConf = crateConfig(128, 4096);
-    //        soConf.setNetlog(true);
-    //        SslConfig sslConf = sslConfig(SslMode.Always);
-    //        CobbleSocket neta = new CobbleSocket(soConf);
-    //
-    //        // Server
-    //        List<String> serverRcvData = new ArrayList<>();
-    //        neta.listen("127.0.0.1", safePort, createPipeline(sslConf, (channel, data) -> {
-    //            serverRcvData.add(data);
-    //        }));
-    //
-    //        // Client
-    //        List<String> clientRcvData = new ArrayList<>();
-    //        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, createPipeline(sslConf, (channel, data) -> {
-    //            clientRcvData.add(data);
-    //        }));
-    //
-    //        //
-    //        while (!connect.isDone()) {
-    //            ThreadUtils.sleep(100);
-    //        }
-    //
-    //        NetChannel client = (NetChannel) neta.getContext().findChannel(2);
-    //        NetChannel server = (NetChannel) neta.getContext().findChannel(3);
-    //
-    //        Future<?> send1 = client.sendData("Hello Server, this message form client.\n");
-    //        Future<?> send2 = server.sendData("Hello Client, this message form server.\n");
-    //
-    //        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
-    //            ThreadUtils.sleep(100);
-    //        }
-    //
-    //        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-    //        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-    //
-    //        neta.shutdown();
-    //    }
+    public void realSocketTest_02() throws IOException {
+        int safePort = safePort();
+        SoConfig soConf = crateConfig(128, 4096);
+        soConf.setNetlog(true);
+        SslConfig sslConf = sslConfig(SslMode.Always);
+        CobbleSocket neta = new CobbleSocket(soConf);
 
+        // Server
+        List<String> serverRcvData = new ArrayList<>();
+        neta.listen("127.0.0.1", safePort, createPipeline(sslConf, (channel, data) -> {
+            serverRcvData.add(data);
+        }));
+
+        // Client
+        List<String> clientRcvData = new ArrayList<>();
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, createPipeline(sslConf, (channel, data) -> {
+            clientRcvData.add(data);
+        }));
+
+        //
+        while (!connect.isDone()) {
+            ThreadUtils.sleep(100);
+        }
+
+        NetChannel client = (NetChannel) neta.getContext().findChannel(2);
+        NetChannel server = (NetChannel) neta.getContext().findChannel(3);
+
+        Future<?> send1 = client.sendData("Hello Server, this message form client.\n");
+        Future<?> send2 = server.sendData("Hello Client, this message form server.\n");
+
+        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+
+        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+
+        neta.shutdown();
+    }
 }

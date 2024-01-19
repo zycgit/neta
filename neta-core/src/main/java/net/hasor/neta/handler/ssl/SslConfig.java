@@ -17,6 +17,7 @@ package net.hasor.neta.handler.ssl;
 import net.hasor.neta.handler.PipeConfig;
 
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import java.security.KeyStore;
 
@@ -42,7 +43,9 @@ public class SslConfig extends PipeConfig {
     private String                 keyPassword           = null;
     //
     private KeyStore               keyStore              = null;
+    //    private KeyManager[]           keyManagers;
     private KeyManagerFactory      keyManagerFactory     = null;
+    private TrustManager[]         trustManagers;
     private TrustManagerFactory    trustManagerFactory   = null;
     private SslAppProtocolSelector appProtocolSelector   = null;                // 用于 NPN/ALPN
     // other
@@ -166,6 +169,14 @@ public class SslConfig extends PipeConfig {
 
     public void setKeyManagerFactory(KeyManagerFactory keyManagerFactory) {
         this.keyManagerFactory = keyManagerFactory;
+    }
+
+    public TrustManager[] getTrustManagers() {
+        return this.trustManagers;
+    }
+
+    public void setTrustManagers(TrustManager[] trustManagers) {
+        this.trustManagers = trustManagers;
     }
 
     public TrustManagerFactory getTrustManagerFactory() {

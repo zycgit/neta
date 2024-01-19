@@ -24,10 +24,7 @@ import net.hasor.neta.handler.PipeRcvQueue;
 import net.hasor.neta.handler.PipeSndQueue;
 import net.hasor.neta.handler.PipeStatus;
 
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
@@ -161,8 +158,14 @@ public abstract class SslContextBasic implements SslContext {
     /** create TrustManagerFactory */
     protected TrustManagerFactory getTrustManagers(KeyStore keyStore) throws GeneralSecurityException, IOException {
         TrustManagerFactory tmf = this.sslConfig.getTrustManagerFactory();
+        TrustManager[] tm = this.sslConfig.getTrustManagers();
+
         if (tmf == null) {
-            tmf = TrustManagerFactory.getInstance("SunX509");
+            if (tm != null && tm.length > 0) {
+                tmf = new SslTmfWrapper(tm);
+            } else {
+                tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
+            }
         }
         SslUtils.buildTrustManagerFactory(keyStore, tmf);
         tmf.init(keyStore);
