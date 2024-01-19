@@ -32,6 +32,21 @@ import java.util.List;
  * @version : 2022-11-01
  */
 public class AbstractSslTest {
+    public static PipelineFactory createPipeline(SslConfig sslConf, PipeListener<String> listener) {
+        //  Net      SSL     Message
+        // Bytes -> Bytes -> String
+        // Bytes <- Bytes <- String
+        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
+        return new PipeInitializer()
+                // limitFrame
+                .nextTo("LIMIT", new PipeDuplexLayer<>(limitFrame, limitFrame))
+                // SSL
+                .nextTo("SSL", new SslPipeLayer(sslConf))
+                // bytes <-> String
+                .nextTo("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                // create Stack
+                .bindReceive(listener).build();
+    }
 
     public static PipelineFactory createPipeline(SslConfig sslConf) {
         //  Net      SSL     Message

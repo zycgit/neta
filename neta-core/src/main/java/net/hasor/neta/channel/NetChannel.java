@@ -360,7 +360,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>
      */
-    public Future<?> sendData(Object writeData) throws IOException {
+    public Future<?> sendData(Object writeData) {
         return this.sendData(writeData, null);
     }
 
@@ -368,7 +368,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>
      */
-    public Future<NetChannel> sendData(Object writeData, String pipeName) throws IOException {
+    public Future<NetChannel> sendData(Object writeData, String pipeName) {
         Future<NetChannel> future = newFutureForSend();
         if (future.isDone()) {
             return future;
@@ -401,11 +401,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
                     throw new ClassCastException(writeData.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
                 }
             }
-        } catch (RuntimeException | IOException e) {
-            throw e;
         } catch (Throwable e) {
             logger.error("snd(" + channelID + ") failed, " + e.getMessage(), e);
-            throw new IOException(e);
+            future.failed(e);
         } finally {
             this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }

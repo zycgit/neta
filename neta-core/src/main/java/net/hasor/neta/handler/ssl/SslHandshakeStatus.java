@@ -13,19 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.handler.ssl;
 /**
- * For NetListen you can listen to the accepted channel and NetChannel close events.
- * For NetChannel, only close events can be listened to
- * @version : 2023-09-24
+ * SSL mode of working
+ * @version : 2023-12-19
  * @author 赵永春 (zyc@hasor.net)
  */
-@FunctionalInterface
-public interface NetListener {
-    /** accepted channel */
-    void accept(NetChannel channel);
+enum SslHandshakeStatus {
 
-    /** close channel */
-    default void close(NetChannel channel) {
-    }
+    NotHandshaking,
+
+    Handshaking,
+
+    Finish,
 }

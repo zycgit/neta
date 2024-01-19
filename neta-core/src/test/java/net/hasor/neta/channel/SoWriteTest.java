@@ -109,11 +109,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void serverEchoTest() throws Exception {
         // echo pipeline
         PipelineFactory pipeline = PipeInitializer.builder((channel, data) -> {
-            try {
-                ((NetChannel) channel).sendData(data);
-            } catch (Exception e) {
-
-            }
+            ((NetChannel) channel).sendData(data);
         });
 
         // server start

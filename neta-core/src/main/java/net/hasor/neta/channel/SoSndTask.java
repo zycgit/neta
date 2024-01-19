@@ -38,6 +38,7 @@ class SoSndTask extends DefaultSoTask {
     private final        SoContextImpl          context;
     //
     private final        SoSndContext           wContext;
+    private final        boolean                netLog;
 
     public SoSndTask(long channelID, SoAsyncChannel channel, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
@@ -46,6 +47,7 @@ class SoSndTask extends DefaultSoTask {
         this.wHandler = wHandler;
         this.context = wContext.getContext();
         this.wContext = wContext;
+        this.netLog = wContext.getContext().getConfig().isNetlog();
     }
 
     @Override
@@ -89,8 +91,8 @@ class SoSndTask extends DefaultSoTask {
             if (e instanceof NotYetConnectedException) {
                 long costTimeMs = System.currentTimeMillis() - this.createdTime;
                 if (costTimeMs < this.context.getConnectTimeoutMs()) {
-                    if (logger.isDebugEnabled()) {
-                        logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
+                    if (this.netLog) {
+                        logger.info("snd(" + this.channelID + ") NotYetConnected, write try again later.");
                     }
                     this.delayTask(this.context.getConfig().getRetryIntervalMs(), TimeUnit.MILLISECONDS);
                 } else {
@@ -120,13 +122,13 @@ class SoSndTask extends DefaultSoTask {
         List<SoSndData> afterFinish = new ArrayList<>();
         do {
             int len = data.transferTo(sndBuf);
-            if (logger.isDebugEnabled()) {
-                logger.debug("snd(" + this.channelID + ") taskData transferTo sndBuffer " + len);
+            if (this.netLog) {
+                logger.info("snd(" + this.channelID + ") taskData transferTo sndBuffer " + len);
             }
 
             if (!data.hasReadable()) {
-                if (logger.isDebugEnabled()) {
-                    logger.debug("snd(" + this.channelID + ") taskData be merged. " + data);
+                if (this.netLog) {
+                    logger.info("snd(" + this.channelID + ") taskData be merged. " + data);
                 }
 
                 SoSndData popData = this.wContext.popData();

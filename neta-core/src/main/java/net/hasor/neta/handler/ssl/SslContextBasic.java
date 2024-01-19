@@ -22,6 +22,7 @@ import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.handler.PipeRcvQueue;
 import net.hasor.neta.handler.PipeSndQueue;
+import net.hasor.neta.handler.PipeStatus;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -41,20 +42,20 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  */
 public abstract class SslContextBasic implements SslContext {
-    private static final Logger      logger = Logger.getLogger(SslContextBasic.class);
-    protected final      long        channelID;
-    protected final      PipeContext pipeContext;
-    protected final      SoContext   soContext;
-    private final        boolean     clientMode;
-    protected final      boolean     sslLog;
-    protected final      boolean     netLog;
+    private static final Logger        logger = Logger.getLogger(SslContextBasic.class);
+    protected final      long          channelID;
+    protected final      PipeContext   pipeContext;
+    protected final      SoContext     soContext;
+    private final        boolean       clientMode;
+    protected final      boolean       sslLog;
+    protected final      boolean       netLog;
     //
-    protected final      SslConfig   sslConfig;
-    protected            boolean     sslStatus;
-    protected            SslMode     sslMode;
-    private final        SSLContext  sslContext;
-    private              SSLEngine   sslEngine;
-    private volatile     SslHandle   sslHandler;
+    protected final      SslConfig     sslConfig;
+    protected volatile   boolean       sslStatus;
+    protected            SslMode       sslMode;
+    private final        SSLContext    sslContext;
+    private final        SslEngineWrap sslEngine;
+    private final        SslHandle     sslHandler;
 
     public SslContextBasic(long channelID, SslConfig config, PipeContext pipeContext, boolean clientMode) throws Exception {
         this.channelID = channelID;
@@ -62,15 +63,19 @@ public abstract class SslContextBasic implements SslContext {
         this.soContext = pipeContext.getSoContext();
         this.clientMode = clientMode;
         this.sslLog = config.isSsllog();
-        this.netLog = soContext.getConfig().isNetlog();
+        this.netLog = this.soContext.getConfig().isNetlog();
 
         this.sslConfig = config;
         this.sslMode = config.getSslMode();
         this.sslStatus = this.sslMode != SslMode.Manual;
         this.sslContext = this.createSSLContext();
+        this.sslEngine = new SslEngineWrap(channelID, config, () -> this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine()));
+        this.sslHandler = new SslHandle(channelID, pipeContext, this.sslEngine, () -> {
+            this.sslStatus = this.sslMode == SslMode.Always; // auto reset
+        });
     }
 
-    protected SSLEngine getEngine() {
+    protected SslEngineWrap getEngine() {
         return this.sslEngine;
     }
 
@@ -170,63 +175,45 @@ public abstract class SslContextBasic implements SslContext {
     /** create SSLEngine */
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws IOException;
 
-    private synchronized boolean tryHandshake(boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
-        if (this.sslHandler != null && this.sslHandler.isHandshake()) {
-            return true; // The handshake has been successful, and the SSL data decryption/encryption is processed
-        }
-
-        // start handshake
-        if (this.sslHandler == null) {
-            this.sslEngine = this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine());
-            this.sslHandler = new SslHandle(this.channelID, this.sslConfig, this.pipeContext, this.sslEngine, () -> {
-                this.sslHandler = null;
-                this.sslStatus = this.sslMode == SslMode.Always; // auto reset
-            });
-            this.sslHandler.beginHandshake();
-        }
-
-        // handshake requests
-        this.sslHandler.handshake(isRcv, rcvUp, rcvDown, sndUp, sndDown);
-
-        // Handshake successful
-        return this.sslHandler != null && this.sslHandler.isHandshake(); // We've just completed the handshake, and we'll handle the SSL decryption/encryption
-    }
-
     /** Receiving SSL data */
-    public void handRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public PipeStatus handRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
             if (this.netLog) {
                 logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
             }
-            return;
+            return PipeStatus.Next;
         }
 
         if (this.sslStatus) {
-            if (this.tryHandshake(true, rcvUp, rcvDown, sndUp, sndDown)) {
+            if (this.sslHandler.tryHandshake(true, rcvUp, rcvDown, sndUp, sndDown)) {
                 this.sslHandler.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
             }
+            return PipeStatus.Next;
         } else {
             rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
             sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
+            return PipeStatus.Next;
         }
     }
 
     /** Sending SSL data */
-    public void handSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public PipeStatus handSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
             if (this.netLog) {
                 logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
             }
-            return;
+            return PipeStatus.Next;
         }
 
         if (this.sslStatus) {
-            if (this.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
+            if (this.sslHandler.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
                 this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
             }
+            return PipeStatus.Next;
         } else {
             rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
             sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
+            return PipeStatus.Next;
         }
     }
 
@@ -236,7 +223,7 @@ public abstract class SslContextBasic implements SslContext {
             return;
         }
 
-        SSLEngine engine = this.getEngine();
+        SslEngineWrap engine = this.getEngine();
         if (engine != null && !engine.isOutboundDone()) {
             engine.closeOutbound();
             try {

@@ -27,7 +27,7 @@ import java.nio.ByteBuffer;
  * @author netty, reference io.netty.util.internal.Cleaner、io.netty.util.internal.PlatformDependent0
  * @author 赵永春 (zyc@hasor.net)
  */
-abstract class Cleaner {
+public abstract class Cleaner {
     protected static final Logger logger = Logger.getLogger(Cleaner.class);
     protected static final Unsafe UNSAFE;
 

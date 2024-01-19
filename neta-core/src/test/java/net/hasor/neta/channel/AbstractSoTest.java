@@ -123,12 +123,9 @@ public class AbstractSoTest {
 
     public static Thread whiteHole(NetChannel channel) {
         return ThreadUtils.daemonThread(true, (Callable) () -> {
-            try {
-                while (!channel.isClose() && !channel.isShutdownOutput()) {
-                    channel.sendData(ByteBufAllocator.DEFAULT.wrap(RandomUtils.nextBytes(32)));
-                    Thread.sleep(50);
-                }
-            } catch (Exception ignored) {
+            while (!channel.isClose() && !channel.isShutdownOutput()) {
+                channel.sendData(ByteBufAllocator.DEFAULT.wrap(RandomUtils.nextBytes(32)));
+                Thread.sleep(50);
             }
         });
     }

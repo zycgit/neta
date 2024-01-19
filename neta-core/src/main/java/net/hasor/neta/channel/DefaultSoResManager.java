@@ -39,8 +39,7 @@ public class DefaultSoResManager implements SoResManager, AutoCloseable {
         this.resources = new ArrayList<>();
     }
 
-    @Override
-    public ByteBuf newByteBuf(int capacity) {
+    private ByteBuf newByteBuf(int capacity) {
         ByteBuf byteBuf;
         if (this.bufAllocator.isDirect()) {
             if (capacity < 0) {
@@ -61,16 +60,6 @@ public class DefaultSoResManager implements SoResManager, AutoCloseable {
     }
 
     @Override
-    public ByteBuffer newByteBuffer(int capacity) {
-        return this.newByteBuf(capacity).asByteBuffer();
-    }
-
-    @Override
-    public ByteBuffer newSwapRcvBuf() {
-        return this.newByteBuf(this.config.getRcvSwapBuf()).asByteBuffer();
-    }
-
-    @Override
     public ByteBuffer newSwapSndBuf() {
         return this.newByteBuf(this.config.getSndSwapBuf()).asByteBuffer();
     }
@@ -86,17 +75,8 @@ public class DefaultSoResManager implements SoResManager, AutoCloseable {
     }
 
     @Override
-    public synchronized <T> T freeObject(Object refObj) {
-        int index = this.resources.indexOf(refObj);
-        if (index > 0) {
-            this.resources.remove(index);
-            if (refObj instanceof Closeable) {
-                IOUtils.closeQuietly((Closeable) refObj);
-            } else if (refObj instanceof AutoCloseable) {
-                IOUtils.closeQuietly((AutoCloseable) refObj);
-            }
-        }
-        return null;
+    public ByteBufAllocator getByteBufAllocator() {
+        return this.bufAllocator;
     }
 
     @Override

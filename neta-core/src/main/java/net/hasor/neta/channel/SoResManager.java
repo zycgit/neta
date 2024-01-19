@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.nio.ByteBuffer;
 
@@ -24,11 +25,6 @@ import java.nio.ByteBuffer;
  * @version : 2023-09-24
  */
 public interface SoResManager extends AutoCloseable {
-    ByteBuf newByteBuf(int capacity);
-
-    ByteBuffer newByteBuffer(int capacity);
-
-    ByteBuffer newSwapRcvBuf();
 
     ByteBuffer newSwapSndBuf();
 
@@ -36,6 +32,5 @@ public interface SoResManager extends AutoCloseable {
 
     ByteBuf newLocalSndBuf();
 
-    /** always return null */
-    <T> T freeObject(Object refObj);
+    ByteBufAllocator getByteBufAllocator();
 }

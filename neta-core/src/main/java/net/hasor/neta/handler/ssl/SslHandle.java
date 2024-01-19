@@ -16,19 +16,18 @@
 package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtil;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.SoOverflowException;
-import net.hasor.neta.channel.SoResManager;
 import net.hasor.neta.handler.PipeRcvQueue;
 import net.hasor.neta.handler.PipeSndQueue;
 
-import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLEngineResult.Status;
-import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLSession;
+import javax.net.ssl.SSLHandshakeException;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -38,31 +37,33 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SslHandle {
-    private static final Logger       logger = Logger.getLogger(SslHandle.class);
-    private final        long         channelID;
-    private final        SslConfig    config;
-    private final        SoContext    context;
-    private final        PipeContext  pipeContext;
-    private final        SSLEngine    engine;
-    private final        SoResManager rm;
-    private final        boolean      sslLog;
+    private static final Logger             logger = Logger.getLogger(SslHandle.class);
+    private static final ByteBuffer         EMPTY  = ByteBuffer.allocate(0);
     //
-    private              boolean      handshake;
-    private final        Runnable     closeCallBack;
-    public               ByteBuffer   inNetData;
-    public               ByteBuffer   inAppData;
-    public               ByteBuffer   outNetData;
-    public               ByteBuffer   outAppData;
+    private final        long               channelID;
+    private final        SslConfig          config;
+    private final        SoContext          context;
+    private final        PipeContext        pipeContext;
+    private final        SslEngineWrap      engine;
+    private final        ByteBufAllocator   bufAllocator;
+    private final        boolean            sslLog;
+    //
+    private volatile     SslHandshakeStatus handshake;
+    private final        Runnable           closeCallBack;
+    private              ByteBuffer         inNetData;
+    private              ByteBuffer         inAppData;
+    private              ByteBuffer         outNetData;
+    private              ByteBuffer         outAppData;
 
-    public SslHandle(long channelID, SslConfig config, PipeContext context, SSLEngine engine, Runnable closeCallBack) {
+    public SslHandle(long channelID, PipeContext context, SslEngineWrap engine, Runnable closeCallBack) {
         this.channelID = channelID;
-        this.config = config;
+        this.config = engine.getConfig();
         this.context = context.getSoContext();
         this.pipeContext = context;
         this.engine = engine;
-        this.rm = this.context.getResourceManager();
+        this.bufAllocator = this.context.getResourceManager().getByteBufAllocator();
         this.sslLog = config.isSsllog();
-        this.handshake = false;
+        this.handshake = SslHandshakeStatus.NotHandshaking;
         this.closeCallBack = closeCallBack;
     }
 
@@ -71,34 +72,7 @@ class SslHandle {
         return this.channelID;
     }
 
-    /** Failure from which there is no recovery will close the Socket */
-    private void handleHandshakeFailed(boolean isRcv, SSLEngine sslEngine, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown, IOException e) throws IOException {
-        String type = isRcv ? "rcv" : "snd";
-        logger.error("sslHandshake(" + this.channelID + ") " + type + "Failed: " + e.getMessage());
-
-        // Release all resources such as internal buffers that SSLEngine is managing.
-        sslEngine.closeOutbound();
-
-        try {
-            sslEngine.closeInbound();
-        } catch (SSLException ee) {
-            if (logger.isDebugEnabled()) {
-                // only log in debug mode as it most likely harmless and latest chrome still trigger this all the time.
-                //  See https://github.com/netty/netty/issues/1340
-                String msg = e.getMessage();
-                if (msg == null || !(msg.contains("possible truncation attack") || msg.contains("closing inbound before receiving peer's close_notify"))) {
-                    logger.error(this.channelID + " SSLEngine.closeInbound() raised an exception.", e);
-                }
-            }
-        }
-
-        this.handleWrap(isRcv, sslEngine, rcvUp, rcvDown, sndUp, sndDown);
-        this.pipeContext.flush();
-        afterClose();
-        throw e;
-    }
-
-    private int readData(PipeRcvQueue<ByteBuf> src, ByteBuffer dst) {
+    private int queueToBuffer(PipeRcvQueue<ByteBuf> src, ByteBuffer dst) {
         int total = 0;
         while (src.hasMore()) {
             ByteBuf data = src.peekMessage();
@@ -113,12 +87,14 @@ class SslHandle {
         return total;
     }
 
-    private int writeData(ByteBuffer src, PipeSndQueue<ByteBuf> dst) {
+    private int bufferToQueue(ByteBuffer src, PipeSndQueue<ByteBuf> dst) {
         int length = src.limit();
-        ByteBuf byteBuf = this.rm.newByteBuf(src.limit());
-        byteBuf.write(src);
-        byteBuf.markWriter();
-        dst.offerMessage(byteBuf);
+        if (length > 0) {
+            ByteBuf byteBuf = this.bufAllocator.buffer(length);
+            byteBuf.write(src);
+            byteBuf.markWriter();
+            dst.offerMessage(byteBuf);
+        }
         return length;
     }
 
@@ -128,60 +104,113 @@ class SslHandle {
     //
     // --------------------------------------------------------------------------------------------
 
-    /** test handshake */
-    public boolean isHandshake() {
-        return this.handshake;
-    }
+    public boolean tryHandshake(boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+        if (this.handshake == SslHandshakeStatus.Finish) {
+            return true; // The handshake has been successful, and the SSL data decryption/encryption is processed
+        }
 
-    /** begin handshake */
-    public void beginHandshake() throws SSLException {
-        logger.info("sslHandshake(" + this.channelID + ") begin.");
-        this.engine.beginHandshake();
+        // start handshake
+        if (this.handshake == SslHandshakeStatus.NotHandshaking) {
+            logger.info("sslHandshake(" + this.channelID + ") begin.");
+            this.engine.beginHandshake();
+            this.inAppData = this.resizingBuffer(null, this.engine.getApplicationBufferSize());
+            this.inNetData = this.resizingBuffer(null, this.engine.getPacketBufferSize());
+            this.outAppData = this.resizingBuffer(null, this.engine.getApplicationBufferSize());
+            this.outNetData = this.resizingBuffer(null, this.engine.getPacketBufferSize());
+            this.handshake = SslHandshakeStatus.Handshaking;
+        }
 
-        SSLSession session = this.engine.getSession();
-        this.inAppData = this.rm.newByteBuffer(session.getApplicationBufferSize());
-        this.inNetData = this.rm.newByteBuffer(session.getPacketBufferSize());
-        this.outAppData = this.rm.newByteBuffer(session.getApplicationBufferSize());
-        this.outNetData = this.rm.newByteBuffer(session.getPacketBufferSize());
-    }
+        // handshake requests
+        if (this.handshake == SslHandshakeStatus.Handshaking) {
+            try {
+                this.doHandshake(rcvUp, rcvDown, sndUp, sndDown);
+            } catch (IOException e) {
+                String type = isRcv ? "rcv" : "snd";
+                logger.error("sslHandshake(" + this.channelID + ") " + type + "Failed: " + e.getMessage(), e);
+                this.handleClose(sndDown);
+                throw e;
+            }
+        }
 
-    public void afterClose() {
-        this.handshake = false;
-        this.inNetData = this.rm.freeObject(this.inNetData);
-        this.inAppData = this.rm.freeObject(this.inAppData);
-        this.outNetData = this.rm.freeObject(this.outNetData);
-        this.outAppData = this.rm.freeObject(this.outAppData);
-        this.closeCallBack.run();
+        // Handshake successful
+        return this.handshake == SslHandshakeStatus.Finish;
     }
 
     /** The handshake phase is handled by rcv/snd in a unified manner */
-    public void handshake(boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
-        // Handshake already done, no need to process
-        if (this.handshake) {
-            return;
-        }
+    private void doHandshake(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+        HandshakeStatus hs = this.engine.getHandshakeStatus();
+        while (hs != HandshakeStatus.FINISHED && hs != HandshakeStatus.NOT_HANDSHAKING) {
+            SSLEngineResult result;
+            switch (hs) {
+                case NEED_UNWRAP:
+                    result = this.handshakeUnwrap(rcvUp, rcvDown);
+                    hs = result.getHandshakeStatus();
+                    break;
+                case NEED_WRAP:
+                    result = this.handshakeWrap(sndUp, sndDown);
+                    hs = result.getHandshakeStatus();
+                    break;
+                case NEED_TASK:
+                    this.engine.getTask().run();
+                    hs = this.engine.getHandshakeStatus();
+                    continue;
+                default:
+                    throw new SSLHandshakeException("inner error ,can't happen.");
+                    // Handle other status:  // FINISHED or NOT_HANDSHAKING
+            }
 
-        // Handling the SSL handshake
-        try {
-            switch (this.engine.getHandshakeStatus()) {
-                case NEED_UNWRAP: {
-                    this.handleUnwrap(isRcv, this.engine, rcvUp, rcvDown, sndUp, sndDown);
-                    break;
+            // process Status
+            switch (result.getStatus()) {
+                case BUFFER_UNDERFLOW: {
+                    if (rcvUp.hasMore()) {
+                        continue;
+                    } else {
+                        return;
+                    }
                 }
-                case NEED_WRAP: {
-                    this.handleWrap(isRcv, this.engine, rcvUp, rcvDown, sndUp, sndDown);
-                    break;
+                case OK: {
+                    if (hs == HandshakeStatus.FINISHED) {
+                        this.handshake = SslHandshakeStatus.Finish;
+                        logger.info("sslHandshake(" + this.channelID + ") finish.");
+                        if (this.outAppData.hasRemaining()) {
+                            this.handshakeWrap(sndUp, sndDown);
+                        }
+                        return;
+                    } else {
+                        break;
+                    }
+                }
+                case CLOSED: {
+                    this.handleClose(sndDown);
+                    return;
                 }
             }
-        } catch (IOException e) {
-            this.handleHandshakeFailed(isRcv, this.engine, rcvUp, rcvDown, sndUp, sndDown, e);
         }
     }
 
+    /** Failure from which there is no recovery will close the Socket */
+    private void handleClose(PipeSndQueue<ByteBuf> sndDown) throws IOException {
+        // Release all resources such as internal buffers that SSLEngine is managing.
+        this.engine.closeOutbound();
+        this.engine.closeInbound();
+
+        this.outNetData.clear();
+        while (!this.engine.isOutboundDone()) {
+            SSLEngineResult res = this.engine.wrap(EMPTY, this.outNetData);
+            if (res.bytesProduced() > 0) {
+                this.outNetData.flip();
+                this.bufferToQueue(this.outNetData, sndDown);
+            }
+            this.outNetData.compact();
+        }
+
+        this.afterClose();
+    }
+
     /** The Unwrap operation is responsible for processing the received network data */
-    private void handleUnwrap(boolean isRcv, SSLEngine sslEngine, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    private SSLEngineResult handshakeUnwrap(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) throws IOException {
         // rcvUp to inNetData.
-        int rcvTotal = this.readData(rcvUp, this.inNetData);
+        int rcvTotal = this.queueToBuffer(rcvUp, this.inNetData);
         this.inNetData.flip();
 
         // handshake
@@ -190,18 +219,10 @@ class SslHandle {
         int consumedBytes = 0;
         int producedBytes = 0;
         do {
-            result = sslEngine.unwrap(this.inNetData, this.inAppData);
+            result = this.engine.unwrap(this.inNetData, this.inAppData);
             hsStatus = result.getHandshakeStatus();
             consumedBytes += result.bytesConsumed();
             producedBytes += result.bytesProduced();
-
-            if (hsStatus == HandshakeStatus.NEED_TASK) {
-                Runnable runnable;
-                while ((runnable = this.engine.getDelegatedTask()) != null) {
-                    runnable.run();
-                }
-                hsStatus = this.engine.getHandshakeStatus();
-            }
 
             // During an handshake renegotiation we might need to perform several unwraps to consume the handshake data.
         } while (result.getStatus() == Status.OK            // process
@@ -210,10 +231,9 @@ class SslHandle {
 
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            this.resizingBufOverflowForUnwrap("sslHandshake", this.engine);
+            this.resizingBufOverflowForUnwrap("sslHandshake");
             // TODO rcvUpstream.resetReader();
-            this.handleUnwrap(isRcv, sslEngine, rcvUp, rcvDown, sndUp, sndDown);
-            return;
+            return this.handshakeUnwrap(rcvUp, rcvDown);
         }
 
         // has AppData
@@ -223,54 +243,27 @@ class SslHandle {
 
         this.inAppData.flip();
         if (producedBytes > 0) {
-            this.writeData(this.inAppData, rcvDown);
+            this.bufferToQueue(this.inAppData, rcvDown);
         }
 
         this.inAppData.compact();
         this.inNetData.compact();
-        this.afterWrapUnwrap(isRcv, sslEngine, rcvUp, rcvDown, sndUp, sndDown, result);
-    }
-
-    private void resizingBufOverflowForUnwrap(String type, SSLEngine engine) {
-        SSLSession session = engine.getSession();
-        int oldNetSize = this.inNetData.capacity();
-        int oldAppSize = this.inAppData.capacity();
-        int newNetSize = session.getPacketBufferSize();
-        int newAppSize = session.getApplicationBufferSize();
-
-        if (newNetSize > this.config.getMaxResizingNetBufSize() || newAppSize > this.config.getMaxResizingAppBufSize()) {
-            String part1 = newNetSize + "/" + newAppSize;
-            String part2 = this.config.getMaxResizingNetBufSize() + "/" + this.config.getMaxResizingAppBufSize();
-            String errorMsg = "Unwrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (decodeBuf/dataBuf)";
-
-            logger.error(type + "(" + this.channelID + ") " + errorMsg);
-            throw new SoOverflowException(errorMsg);
-        }
-
-        String part1 = oldNetSize + "/" + oldAppSize;
-        String part2 = newNetSize + "/" + newAppSize;
-        logger.warn(type + " (" + this.channelID + ") Unwrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (decodeBuf/dataBuf)");
-
-        this.inNetData = this.rm.freeObject(this.inNetData);
-        this.inNetData = this.rm.newByteBuffer(newNetSize);
-        this.inAppData = this.rm.freeObject(this.inAppData);
-        this.inAppData = this.rm.newByteBuffer(newAppSize);
+        return result;
     }
 
     /** n the handshake, the Wrap operation is responsible for sending network data */
-    private void handleWrap(boolean isRcv, SSLEngine sslEngine, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    private SSLEngineResult handshakeWrap(PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         // read data to outAppData
-        int dataTotal = this.readData(sndUp, this.outAppData);
+        int dataTotal = this.queueToBuffer(sndUp, this.outAppData);
         this.outAppData.flip();
 
         // wrap Data to SSL Data.
-        SSLEngineResult result = sslEngine.wrap(this.outAppData, this.outNetData);
+        SSLEngineResult result = this.engine.wrap(this.outAppData, this.outNetData);
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            this.resizingBufOverflowForWrap("sslHandshake", this.engine);
+            this.resizingBufOverflowForWrap("sslHandshake");
             // TODO rcvUpstream.resetReader();
-            this.handleWrap(isRcv, sslEngine, rcvUp, rcvDown, sndUp, sndDown);
-            return;
+            return this.handshakeWrap(sndUp, sndDown);
         }
 
         // has NetData
@@ -282,26 +275,48 @@ class SslHandle {
 
         this.outNetData.flip();
         if (bytesProduced > 0) {
-            this.writeData(this.outNetData, sndDown);
+            this.bufferToQueue(this.outNetData, sndDown);
         }
 
         // finish
         this.outAppData.compact();
         this.outNetData.compact();
-        this.afterWrapUnwrap(isRcv, sslEngine, rcvUp, rcvDown, sndUp, sndDown, result);
+        return result;
     }
 
-    private void resizingBufOverflowForWrap(String type, SSLEngine engine) {
-        SSLSession session = engine.getSession();
+    private void resizingBufOverflowForUnwrap(String type) {
+        int oldNetSize = this.inNetData.capacity();
+        int oldAppSize = this.inAppData.capacity();
+        int newNetSize = this.engine.getPacketBufferSize();
+        int newAppSize = this.engine.getApplicationBufferSize();
+
+        if (newNetSize > this.config.getMaxResizingNetBufSize() || newAppSize > this.config.getMaxResizingAppBufSize()) {
+            String part1 = newNetSize + "/" + newAppSize;
+            String part2 = this.config.getMaxResizingNetBufSize() + "/" + this.config.getMaxResizingAppBufSize();
+            String errorMsg = "Unwrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (netBuf/appBuf)";
+
+            logger.error(type + "(" + this.channelID + ") " + errorMsg);
+            throw new SoOverflowException(errorMsg);
+        }
+
+        String part1 = oldNetSize + "/" + oldAppSize;
+        String part2 = newNetSize + "/" + newAppSize;
+        logger.warn(type + " (" + this.channelID + ") Unwrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (netBuf/appBuf)");
+
+        this.inNetData = resizingBuffer(this.inNetData, newNetSize);
+        this.inAppData = resizingBuffer(this.inAppData, newAppSize);
+    }
+
+    private void resizingBufOverflowForWrap(String type) {
         int oldNetSize = this.outNetData.capacity();
         int oldAppSize = this.outAppData.capacity();
-        int newNetSize = session.getPacketBufferSize();
-        int newAppSize = session.getApplicationBufferSize();
+        int newNetSize = this.engine.getPacketBufferSize();
+        int newAppSize = this.engine.getApplicationBufferSize();
 
         if (newAppSize > this.config.getMaxResizingAppBufSize() || newNetSize > this.config.getMaxResizingNetBufSize()) {
             String part1 = newAppSize + "/" + newNetSize;
             String part2 = this.config.getMaxResizingAppBufSize() + "/" + this.config.getMaxResizingNetBufSize();
-            String errorMsg = "Wrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (dataBuf/encodeBuf)";
+            String errorMsg = "Wrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (netBuf/appBuf)";
 
             logger.error(type + "(" + this.channelID + ") " + errorMsg);
             throw new SoOverflowException(errorMsg);
@@ -309,38 +324,40 @@ class SslHandle {
 
         String part1 = oldAppSize + "/" + oldNetSize;
         String part2 = newAppSize + "/" + newNetSize;
-        logger.warn(type + "(" + this.channelID + ") Wrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (dataBuf/encodeBuf)");
+        logger.warn(type + "(" + this.channelID + ") Wrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (netBuf/appBuf)");
 
-        this.outNetData = this.rm.freeObject(this.outNetData);
-        this.outNetData = this.rm.newByteBuffer(newNetSize);
-        this.outAppData = this.rm.freeObject(this.outAppData);
-        this.outAppData = this.rm.newByteBuffer(newAppSize);
+        this.outNetData = resizingBuffer(this.outNetData, newNetSize);
+        this.outAppData = resizingBuffer(this.outAppData, newAppSize);
     }
 
-    /** in the handshake, after Unwrap/Wrap */
-    private void afterWrapUnwrap(boolean isRcv, SSLEngine sslEngine, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown, SSLEngineResult result) throws IOException {
-        switch (result.getStatus()) {
-            case BUFFER_UNDERFLOW:
-                return;//need more data
-            case OK: {
-                if (result.getHandshakeStatus() == HandshakeStatus.FINISHED) {
-                    this.handshake = true;
-                    logger.info("sslHandshake(" + this.channelID + ") finish.");
-                    if (this.outAppData.hasRemaining()) {
-                        this.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
-                    }
-                    return;
-                } else {
-                    this.handshake(isRcv, rcvUp, rcvDown, sndUp, sndDown);
-                    return;
-                }
-            }
-            case CLOSED:
-                this.afterClose();
-                return;
+    private ByteBuffer resizingBuffer(ByteBuffer oldBuf, int newSize) {
+        ByteBuffer newBuf;
+        if (this.bufAllocator.isDirect()) {
+            newBuf = ByteBuffer.allocateDirect(newSize);
+        } else {
+            newBuf = ByteBuffer.allocate(newSize);
         }
+
+        if (oldBuf != null) {
+            newBuf.put(oldBuf);
+            ByteBufUtil.CLEANER.freeDirectBuffer(oldBuf);
+        }
+
+        return newBuf;
     }
 
+    public void clearBuffers() {
+        this.inNetData.clear();
+        this.inAppData.clear();
+        this.outNetData.clear();
+        this.outAppData.clear();
+    }
+
+    public void afterClose() {
+        this.clearBuffers();
+        this.handshake = SslHandshakeStatus.NotHandshaking;
+        this.closeCallBack.run();
+    }
     // --------------------------------------------------------------------------------------------
     //
     // After the handshake, receive data
@@ -350,7 +367,10 @@ class SslHandle {
     /** After the handshake, receive data */
     public void handlerRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         // rcvUp to inNetData.
-        int rcvTotal = this.readData(rcvUp, this.inNetData);
+        int rcvTotal = this.queueToBuffer(rcvUp, this.inNetData);
+        if (rcvTotal == 0) {
+            return;
+        }
 
         // Process incoming data
         this.inNetData.flip();
@@ -358,7 +378,7 @@ class SslHandle {
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             // try resizing Buf size.
-            this.resizingBufOverflowForUnwrap("sslRcv", this.engine);
+            this.resizingBufOverflowForUnwrap("sslRcv");
             // TODO rcvUpstream.resetReader();
             this.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
             return;
@@ -373,7 +393,7 @@ class SslHandle {
 
         this.inAppData.flip();
         if (producedBytes > 0) {
-            this.writeData(this.inAppData, rcvDown);
+            this.bufferToQueue(this.inAppData, rcvDown);
         }
 
         this.inAppData.compact();
@@ -391,16 +411,13 @@ class SslHandle {
         }
     }
 
-    // --------------------------------------------------------------------------------------------
-    //
-    // After the handshake, send data
-    //
-    // --------------------------------------------------------------------------------------------
-
     /** After the handshake, the data sent is processed */
     public void handlerSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         // read data to outAppData
-        int sndTotal = this.readData(sndUp, this.outAppData);
+        int sndTotal = this.queueToBuffer(sndUp, this.outAppData);
+        if (sndTotal == 0) {
+            return;
+        }
 
         // Process out data
         this.outAppData.flip();
@@ -408,7 +425,7 @@ class SslHandle {
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             // try resizing Buf size.
-            this.resizingBufOverflowForWrap("sslSnd", this.engine);
+            this.resizingBufOverflowForWrap("sslSnd");
             //sndUpstream.resetReader();
             this.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
             return;
@@ -423,7 +440,7 @@ class SslHandle {
 
         this.outNetData.flip();
         if (producedBytes > 0) {
-            this.writeData(this.outNetData, sndDown);
+            this.bufferToQueue(this.outNetData, sndDown);
         }
 
         this.outNetData.compact();

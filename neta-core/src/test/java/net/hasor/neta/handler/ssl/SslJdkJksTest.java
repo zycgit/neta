@@ -27,7 +27,7 @@ public class SslJdkJksTest extends AbstractSslTest {
     public static SslConfig sslConfig(SslMode mode) {
         SslConfig sslConfig = new SslConfig();
         sslConfig.setAuthType(SslAuthKeyType.JKS);
-        sslConfig.setJksResource("ssl/jks/local.jks");
+        sslConfig.setJksResource("ssl/jks/keystore.jks");
         sslConfig.setKeyPassword("123456");
         sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
         sslConfig.setSsllog(true);
