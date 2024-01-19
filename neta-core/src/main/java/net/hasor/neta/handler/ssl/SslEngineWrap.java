@@ -26,15 +26,15 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 
 /**
- * An implementation of the {@link SslContext} interface that provides SSL handshake support
+ * Encapsulate SSLEngine.
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
  */
-public class SslEngineWrap {
+class SslEngineWrap {
     private static final Logger                            logger = Logger.getLogger(SslHandle.class);
     private final        long                              channelID;
-    private              SslConfig                         sslConfig;
-    private              ESupplier<SSLEngine, IOException> sslEngineFactory;
+    private final        SslConfig                         sslConfig;
+    private final        ESupplier<SSLEngine, IOException> sslEngineFactory;
     private              SSLEngine                         sslEngine;
     private              SSLSession                        sslSession;
 

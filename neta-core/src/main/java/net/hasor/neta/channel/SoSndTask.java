@@ -61,9 +61,8 @@ class SoSndTask extends DefaultSoTask {
             return;
         }
 
-        // when wHandler finish will wake up SoSndTask
         if (this.wHandler.getStatus() != SoHandlerStatus.IDLE) {
-            this.finishTask();
+            this.continueTask();
             return;
         }
 
@@ -123,14 +122,10 @@ class SoSndTask extends DefaultSoTask {
         do {
             int len = data.transferTo(sndBuf);
             if (this.netLog) {
-                logger.info("snd(" + this.channelID + ") taskData transferTo sndBuffer " + len);
+                logger.info("snd(" + this.channelID + ") " + len + " bytes to buffer.");
             }
 
             if (!data.hasReadable()) {
-                if (this.netLog) {
-                    logger.info("snd(" + this.channelID + ") taskData be merged. " + data);
-                }
-
                 SoSndData popData = this.wContext.popData();
                 if (popData != null) {
                     afterFinish.add(popData);

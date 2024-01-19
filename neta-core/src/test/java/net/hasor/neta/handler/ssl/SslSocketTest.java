@@ -28,6 +28,7 @@ import org.junit.Test;
 import javax.net.ssl.*;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.security.KeyStore;
 import java.util.ArrayList;
 import java.util.List;
@@ -61,7 +62,7 @@ public class SslSocketTest extends AbstractSslTest {
         sslConfig.setAuthType(SslAuthKeyType.JKS);
         sslConfig.setJksResource("ssl/jks/keystore.jks");
         sslConfig.setKeyPassword("123456");
-        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
+        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1, SslProtocol.TLS_v1_2 });
         sslConfig.setSsllog(true);
         sslConfig.setSslMode(mode);
         return sslConfig;
@@ -81,12 +82,11 @@ public class SslSocketTest extends AbstractSslTest {
     }
 
     @Test
-    public void realSocketTest_01() throws Exception {
+    public void netaAsSslClientTest_01() throws Exception {
+        // SSL Server
         int safePort = safePort();
         SSLServerSocketFactory sslFactory = sslContext().getServerSocketFactory();
-        SSLServerSocket serverSocket = (SSLServerSocket) sslFactory.createServerSocket(safePort);// 创建并进入监听
-
-        // wait message
+        SSLServerSocket serverSocket = (SSLServerSocket) sslFactory.createServerSocket(safePort);
         AtomicBoolean readFinish = new AtomicBoolean();
         List<String> rcvMessage = new ArrayList<>();
         ThreadUtils.daemonThread(true, (Callable) () -> {
@@ -100,7 +100,7 @@ public class SslSocketTest extends AbstractSslTest {
             }
         });
 
-        // client
+        // SSL Client
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(true);
         SslConfig sslConf = sslConfig(SslMode.Always);
@@ -109,7 +109,6 @@ public class SslSocketTest extends AbstractSslTest {
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
         }
-
         NetChannel client = connect.get();
         Future<?> send = client.sendData("Hello Server, this message form client.\n");
         send.get();
@@ -121,6 +120,43 @@ public class SslSocketTest extends AbstractSslTest {
         assert rcvMessage.get(0).equals("Hello Server, this message form client.");
 
         serverSocket.close();
+        neta.shutdown();
+    }
+
+    @Test
+    public void netaAsSslServerTest_01() throws Exception {
+        int safePort = safePort();
+        SoConfig soConf = crateConfig(128, 4096);
+        soConf.setNetlog(false);
+        SslConfig sslConf = sslConfig(SslMode.Always);
+        CobbleSocket neta = new CobbleSocket(soConf);
+
+        List<String> rcvMessage = new ArrayList<>();
+        neta.listen("127.0.0.1", safePort, createPipeline(sslConf, (channel, data) -> {
+            rcvMessage.add(data);
+        }));
+
+        // client
+        AtomicBoolean writeFinish = new AtomicBoolean();
+        ThreadUtils.daemonThread(true, (Callable) () -> {
+            try {
+                SSLSocketFactory socketFactory = sslContext().getSocketFactory();
+                SSLSocket socket = (SSLSocket) socketFactory.createSocket("127.0.0.1", safePort);
+                OutputStream out = socket.getOutputStream();
+                out.write("Hello Server, this message form client.\n".getBytes());
+                out.flush();
+                writeFinish.set(true);
+            } catch (Exception e) {
+                System.out.println("@@@@ " + e.getMessage());
+                writeFinish.set(true);
+            }
+        });
+
+        while (!writeFinish.get()) {
+            ThreadUtils.sleep(100);
+        }
+        assert rcvMessage.get(0).equals("Hello Server, this message form client.");
+
         neta.shutdown();
     }
 

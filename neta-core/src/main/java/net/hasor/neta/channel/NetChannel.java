@@ -468,16 +468,21 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
             if (this.wStatus.compareAndSet(false, true)) {
                 SoSndTask sendTask = new SoSndTask(this.channelID, this.channel, this.wHandler, this.wContext);
-
                 this.wContext.submitTask(sendTask, this).onCompleted(f -> {
-                    synchronized (this.wStatus) {
-                        this.lastSndTime = System.currentTimeMillis();
-                        if (this.wContext.isEmpty()) {
-                            this.wStatus.compareAndSet(true, false);
-                        } else {
-                            this.wContext.submitTask(sendTask, this);
-                        }
-                    }
+                    checkOrSend(sendTask);
+                });
+            }
+        }
+    }
+
+    private void checkOrSend(SoSndTask sendTask) {
+        synchronized (this.wStatus) {
+            this.lastSndTime = System.currentTimeMillis();
+            if (this.wContext.isEmpty()) {
+                this.wStatus.compareAndSet(true, false);
+            } else {
+                this.wContext.submitTask(sendTask, this).onCompleted(f -> {
+                    checkOrSend(sendTask);
                 });
             }
         }

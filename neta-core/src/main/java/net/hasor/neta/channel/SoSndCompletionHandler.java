@@ -34,7 +34,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private volatile     SoHandlerStatus status;
     //
     private final        SoAsyncChannel  channel;
-    private final        SoSndContext    wContext;
     private final        SoContextImpl   context;
     private final        ByteBuffer      swapBuffer;
     private final        ByteBuf         sndBuffer;
@@ -48,7 +47,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.status = SoHandlerStatus.IDLE;
 
         this.channel = channel;
-        this.wContext = wContext;
         this.context = wContext.getContext();
 
         SoResManager rm = this.context.getResourceManager();
@@ -110,10 +108,9 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         } else {
 
             SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize);
-            SoSndTask sndTask = new SoSndTask(this.channelID, this.channel, this, this.wContext);
-
-            submitTask(cleanTask).onCompleted(f -> submitTask(sndTask));
-            this.status = SoHandlerStatus.IDLE;
+            submitTask(cleanTask).onFinal(f -> {
+                this.status = SoHandlerStatus.IDLE;
+            });
         }
     }
 
@@ -126,21 +123,20 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     private void writeData() {
-        if (this.channel.isShutdownOutput()) {
-            submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, SoOutputCloseException.INSTANCE));
-            this.status = SoHandlerStatus.IDLE;
-            return;
-        }
-
-        try {
-            this.status = SoHandlerStatus.WAITING;
-            boolean res = this.channel.write(this.swapBuffer, this.context, this);
-            if (!res) {
-                this.status = SoHandlerStatus.IDLE;
+        this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+            try {
+                this.status = SoHandlerStatus.WAITING;
+                boolean res = this.channel.write(this.swapBuffer, this.context, this);
+                if (!res) {
+                    SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, SoOutputCloseException.INSTANCE);
+                    submitTask(cleanTask).onFinal(ff -> {
+                        this.status = SoHandlerStatus.IDLE;
+                    });
+                }
+            } catch (Throwable e) {
+                handleException(e);
             }
-        } catch (Throwable e) {
-            handleException(e);
-        }
+        });
     }
 
     @Override
@@ -197,8 +193,9 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
         this.context.notifySndChannelError(this.channelID, e);
         this.context.asyncUnsafeCloseChannel(this.channelID, finalMsg, finalErr);
-        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, e));
-        this.status = SoHandlerStatus.IDLE;
+        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, e)).onFinal(f -> {
+            this.status = SoHandlerStatus.IDLE;
+        });
     }
 
 }

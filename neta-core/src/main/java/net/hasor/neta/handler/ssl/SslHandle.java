@@ -126,7 +126,11 @@ class SslHandle {
                 this.doHandshake(rcvUp, rcvDown, sndUp, sndDown);
             } catch (IOException e) {
                 String type = isRcv ? "rcv" : "snd";
-                logger.error("sslHandshake(" + this.channelID + ") " + type + "Failed: " + e.getMessage(), e);
+                if (this.sslLog) {
+                    logger.error("sslHandshake(" + this.channelID + ") " + type + "Failed: " + e.getMessage(), e);
+                } else {
+                    logger.error("sslHandshake(" + this.channelID + ") " + type + "Failed: " + e.getMessage());
+                }
                 this.handleClose(sndDown);
                 throw e;
             }

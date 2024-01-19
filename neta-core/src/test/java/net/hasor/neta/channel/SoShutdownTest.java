@@ -351,7 +351,7 @@ public class SoShutdownTest extends AbstractSoTest {
         AtomicBoolean sending = new AtomicBoolean(false);
         ThreadUtils.daemonThread(true, (Callable) () -> {
             while (!channel.isClose() && !channel.isShutdownOutput()) {
-                channel.sendData(ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4, 5, 6 }));
+                channel.sendData(ByteBufAllocator.DEFAULT.wrap(RandomUtils.nextBytes(1024)));
                 sending.set(true);
             }
         });
