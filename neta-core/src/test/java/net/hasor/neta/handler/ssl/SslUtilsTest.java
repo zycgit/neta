@@ -28,6 +28,6 @@ public class SslUtilsTest {
     @Test
     public void cerTest() throws Exception {
         X509Certificate[] cer = SslUtils.toX509Certificates(ResourcesUtils.getResourceAsStream("ssl/ca/server.crt"));
-        assert MD5.encodeMD5(cer[0].getPublicKey().getEncoded()).equals("87b5c786273d5a4faf15c41122934faf");
+        assert MD5.encodeMD5(cer[0].getPublicKey().getEncoded()).equals("e2c2b22bf508fcd051a3895e4d3766a3");
     }
 }

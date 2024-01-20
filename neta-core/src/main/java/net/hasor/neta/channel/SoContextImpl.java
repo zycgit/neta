@@ -270,6 +270,10 @@ class SoContextImpl implements SoContext {
         }
 
         SoChannel<?> channel = this.channelMap.get(channelID);
+        if (channel == null) {
+            return;// it does not exist, It is usually the io that triggers the shutdown early
+        }
+
         SoEventExecutor specialExecutor = this.specialTaskExecutor.get(channelID);
         this.channelMap.remove(channelID);
         this.specialTaskExecutor.remove(channelID);
@@ -299,7 +303,6 @@ class SoContextImpl implements SoContext {
 
             this.channelList.remove(channel);
         } else {
-
             NetListen netListen = (NetListen) channel;
             netListen.closeStatus.set(true);
             IOUtils.closeQuietly(netListen.channel);

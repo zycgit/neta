@@ -265,7 +265,7 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.acceptCount.decrementAndGet();
 
         Runnable task = () -> {
-            for (NetListener listener : listeners) {
+            for (NetListener listener : this.listeners) {
                 try {
                     listener.close(channel);
                 } catch (Exception ignored) {
