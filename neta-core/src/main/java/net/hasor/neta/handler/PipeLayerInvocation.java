@@ -132,7 +132,7 @@ class PipeLayerInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         } catch (Throwable e) {
             if (ctxError == null) {
                 String msgTag = isRcv ? "rcv" : "snd";
-                long channelID = context.channel().getChannelID();
+                long channelID = context.getChannel().getChannelID();
                 if (context.getConfig().isNetlog()) {
                     logger.error(msgTag + "(" + channelID + ") " + this.pipeLayer.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage(), e);
                 } else {

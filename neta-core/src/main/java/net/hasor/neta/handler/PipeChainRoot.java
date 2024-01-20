@@ -98,7 +98,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             queue.sndReset();
 
             String msgTag = isRcv ? "rcv" : "snd";
-            long channelID = pipeContext.channel().getChannelID();
+            long channelID = pipeContext.getChannel().getChannelID();
             int slotSize = queue.slotSize();
             int require = offerData.length;
 
@@ -161,7 +161,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
 
             if (status == PipeStatus.Retry && netLog) {
                 String msgTag = isRcv ? "rcv" : "snd";
-                logger.info(msgTag + "(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " doRetry");
+                logger.info(msgTag + "(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " doRetry");
             }
         } while (status == PipeStatus.Retry);
         return status;
@@ -238,13 +238,13 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                 // trigger tail. print event data to sto
                 while (rcvDown.hasMore()) {
                     Object msg = rcvDown.takeMessage();
-                    logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event: " + msg);
+                    logger.warn("rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program listeners, Skipping event: " + msg);
                 }
             } else {
                 // trigger the listener event.
                 while (rcvDown.hasMore()) {
                     Object msg = rcvDown.takeMessage();
-                    this.listener.onReceive(pipeContext.channel(), msg);
+                    this.listener.onReceive(pipeContext.getChannel(), msg);
                 }
             }
             rcvDown.rcvSubmit();
@@ -254,9 +254,9 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         Throwable ctxError = pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
             if (this.listener == null) {
-                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+                logger.error("rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
             } else {
-                this.listener.onError(pipeContext.channel(), ctxError, true);
+                this.listener.onError(pipeContext.getChannel(), ctxError, true);
             }
         }
     }
@@ -265,12 +265,12 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         // 1st onReceive
         if (this.listener == null) {
             // trigger tail. print event data to sto
-            logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping eventSize: " + sndData.length);
+            logger.warn("rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program listeners, Skipping eventSize: " + sndData.length);
         } else {
             // trigger the listener event.
             if (sndData != null) {
                 for (Object obj : sndData) {
-                    this.listener.onReceive(pipeContext.channel(), obj);
+                    this.listener.onReceive(pipeContext.getChannel(), obj);
                 }
             }
         }
@@ -279,9 +279,9 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         Throwable ctxError = pipeContext.flash(PipeLayerInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
             if (this.listener == null) {
-                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+                logger.error("rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
             } else {
-                this.listener.onError(pipeContext.channel(), ctxError, true);
+                this.listener.onError(pipeContext.getChannel(), ctxError, true);
             }
         }
 
@@ -311,21 +311,21 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                     case Again:
                         needRestartLater = true;// restart when finished
                         if (netLog) {
-                            logger.info("rcv(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
+                            logger.info("rcv(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
                         }
                         i++;
                         continue;
                     case Restart:
                         needRestartLater = true;
                         if (netLog) {
-                            logger.info("rcv(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
+                            logger.info("rcv(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
                         }
                         i++;
                         break;
                     case Exit:
                         pipeFinish = false;
                         if (netLog) {
-                            logger.info("rcv(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
+                            logger.info("rcv(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
                         }
                         i++;
                         break;
@@ -395,13 +395,13 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         Throwable ctxError = pipeContext.flash(PipeLayerInvocation.SND_ERROR_TAG);
         if (ctxError != null) {
             if (this.listener == null) {
-                logger.error("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
+                logger.error("rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program listeners, Skipping exception: " + ctxError.getMessage(), ctxError);
             } else {
-                this.listener.onError(pipeContext.channel(), ctxError, false);
+                this.listener.onError(pipeContext.getChannel(), ctxError, false);
             }
         } else {
             if (this.listener == null) {
-                logger.warn("rcv(" + pipeContext.channel().getChannelID() + ") There are no program listeners, Skipping event send.");
+                logger.warn("rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program listeners, Skipping event send.");
             } else {
                 //this.listener.onSend(pipeContext.channel());
             }
@@ -437,20 +437,20 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                     case Again:
                         needRestartLater = true;// restart when finished
                         if (netLog) {
-                            logger.info("snd(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
+                            logger.info("snd(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
                         }
                         break;
                     case Restart:
                         needRestartLater = true;
                         breakFor = true;
                         if (netLog) {
-                            logger.info("snd(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
+                            logger.info("snd(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
                         }
                         break;
                     case Exit:
                         breakFor = true;
                         if (netLog) {
-                            logger.info("snd(" + pipeContext.channel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
+                            logger.info("snd(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
                         }
                         break;
                 }

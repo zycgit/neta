@@ -45,7 +45,7 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
-    public SoChannel<?> channel() {
+    public SoChannel<?> getChannel() {
         return this.channel;
     }
 

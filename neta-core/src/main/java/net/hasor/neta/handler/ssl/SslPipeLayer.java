@@ -37,7 +37,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
 
     @Override
     public void init(PipeContext context) throws Exception {
-        SoChannel<?> channel = context.channel();
+        SoChannel<?> channel = context.getChannel();
 
         long channelID = channel.getChannelID();
         boolean clientMode = channel.isClient();

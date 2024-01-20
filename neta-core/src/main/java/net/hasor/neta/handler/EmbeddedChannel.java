@@ -56,7 +56,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
 
         @Override
         public Future<?> sendData(Object writeData) {
-            EmbeddedChannel channel = (EmbeddedChannel) channel();
+            EmbeddedChannel channel = (EmbeddedChannel) getChannel();
 
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
@@ -69,7 +69,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
 
         @Override
         public Future<?> flush() {
-            EmbeddedChannel channel = (EmbeddedChannel) channel();
+            EmbeddedChannel channel = (EmbeddedChannel) getChannel();
 
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {

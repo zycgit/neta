@@ -33,7 +33,7 @@ public interface PipeContext {
     SoConfig getConfig();
 
     /** the channel */
-    SoChannel<?> channel();
+    SoChannel<?> getChannel();
 
     /** the SoContext */
     SoContext getSoContext();
@@ -42,7 +42,7 @@ public interface PipeContext {
     <T> T context(Class<T> attachment);
 
     /** receive buffer full */
-    default boolean rcvFull() {
+    default boolean isRcvFull() {
         Object retryCnt = flash(SO_CHANNEL_RETRY_CNT);
         if (retryCnt == null) {
             return false;
