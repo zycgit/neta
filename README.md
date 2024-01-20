@@ -6,22 +6,27 @@ It provides an abstract asynchronous duplex programming model and works on top o
 ## Pipeline Model
 
 ```text
-待补充...
+       PipeLayer 0     PipeLayer 1     PipeLayer 2
+      ┏━━━━━━━━━━━┓   ┏━━━━━━━━━━━┓   ┏━━━━━━━━━━━┓
+      ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃
+Net → ┃  ┆ RCV ┆  ┃ → ┃  ┆ RCV ┆  ┃ → ┃  ┆ RCV ┆  ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+      ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┆             ┆
+      ┃     ↓     ┃   ┃     ↓     ┃   ┃     ↓     ┃   ┆ Application ┆
+      ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┆             ┆
+Net ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+      ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃
+      ┗━━━━━━━━━━━┛   ┗━━━━━━━━━━━┛   ┗━━━━━━━━━━━┛
 ```
 
 ## Duplex Model
 
 ```text
-               PipeLayer(0)                    PipeLayer (1)
-        ┏━━━━━━━━━━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
-        ┃                        ┃     ┃                        ┃
-        ┃             ╭┄┄┄┄┄┄┄┄┄┄┸┄┄┄┄┄┸┄┄┄┄┄┄┄┄┄┄╮             ┃
-DATA -> ┃ RCV_UP      ┆ RCV_DOWN   <=>   RCV_UP   ┆    RCV_DOWN ┃  -> ...
-        ┃             ┆                           ┆             ┃
-...  <- ┃ SND_DOWN    ┆ SND_UP     <=>   SND_DOWN ┆      SND_UP ┃  <- DATA
-        ┃             ╰┄┄┄┄┄┄┄┄┄┄┰┄┄┄┄┄┰┄┄┄┄┄┄┄┄┄┄╯             ┃
-        ┃                        ┃     ┃                        ┃
-        ┗━━━━━━━━━━━━━━━━━━━━━━━━┛     ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
+           PipeLayer(0)                PipeLayer (1)
+      ┏━━━━━━━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━┓
+Net → ┃ RCV_UP     RCV_DOWN ┃ <=> ┃ RCV_UP     RCV_DOWN ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+      ┃                     ┃     ┃                     ┃   ┆ Application ┆
+Net → ┃ SND_DOWN     SND_UP ┃ <=> ┃ SND_DOWN     SND_UP ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+      ┗━━━━━━━━━━━━━━━━━━━━━┛     ┗━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 ## 能力
@@ -46,5 +51,31 @@ DATA -> ┃ RCV_UP      ┆ RCV_DOWN   <=>   RCV_UP   ┆    RCV_DOWN ┃  -> ..
 ## 质量
 
 neta-core
-- 有效代码行：3.9K
-- 代码覆盖率：74%
+- 有效代码行：4K
+- 代码覆盖率：75%
+
+## Hello Word
+```java
+      ┏━━ nextToDecoder(..) ━┓   ┏━━ StringPipeLayer ━━┓
+      ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃
+Net → ┃  ┆ LineBasedFrame ┆  ┃ → ┃  ┆ StringDecoder ┆  ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+      ┃  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯  ┃   ┆             ┆
+      ┃                      ┃   ┃                     ┃   ┆ echo + data ┆
+      ┃                      ┃   ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃   ┆             ┆
+Net ← ┃                      ┃ ← ┃  ┆ StringEncoder ┆  ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+      ┃                      ┃   ┃  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯  ┃
+      ┗━━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━┛
+
+PipelineFactory pipeline = PipeInitializer.builder()
+        //split according to \r\n, max line is 4K
+        .nextToDecoder(new LineBasedFramePipeHandler(4096, false))
+        // encoder/decoder string
+        .nextTo(new StringPipeLayer())
+        // echo any message to client
+        .bindReceive((PipeListener<String>) (channel, data) -> {
+            ((NetChannel) channel).sendData("echo " + data);
+        }).build();
+
+CobbleSocket socket = new CobbleSocket(new SoConfig());
+socket.listen("127.0.0.1", 5567, pipeline);
+```

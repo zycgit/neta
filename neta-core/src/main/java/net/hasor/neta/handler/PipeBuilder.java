@@ -294,6 +294,110 @@ public interface PipeBuilder {
         <RCV_DOWN, SND_UP> PipelineBuilder<RCV_DOWN, SND_UP> nextTo(String name, PipeConfig pipeConfig, PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder);
 
         /**
+         * using decoder, the encoder is transparent
+         * <ul>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN equal to SND_UP</li>
+         * </ul>
+         *
+         * @param decoder RCV_UP to RCV_DOWN
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <RCV_DOWN> PipelineBuilder<RCV_DOWN, SND_DOWN> nextToDecoder(PipeHandler<RCV_UP, RCV_DOWN> decoder) {
+            String decName = decoder.getClass().getSimpleName();
+            decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
+
+            String name = String.format("%s/--", decName);
+            return this.nextToDecoder(name, this.pipeConfig(), decoder);
+        }
+
+        /**
+         * using decoder, the encoder is transparent
+         * <ul>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN equal to SND_UP</li>
+         * </ul>
+         *
+         * @param name pipeLayer name
+         * @param decoder RCV_UP to RCV_DOWN
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <RCV_DOWN> PipelineBuilder<RCV_DOWN, SND_DOWN> nextToDecoder(String name, PipeHandler<RCV_UP, RCV_DOWN> decoder) {
+            return this.nextToDecoder(name, this.pipeConfig(), decoder);
+        }
+
+        /**
+         * using decoder, the encoder is transparent
+         * <ul>
+         *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+         *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN equal to SND_UP</li>
+         * </ul>
+         *
+         * @param name pipeLayer name
+         * @param pipeConfig pipeLayer config
+         * @param decoder RCV_UP to RCV_DOWN
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <RCV_DOWN> PipelineBuilder<RCV_DOWN, SND_DOWN> nextToDecoder(String name, PipeConfig pipeConfig, PipeHandler<RCV_UP, RCV_DOWN> decoder) {
+            return this.nextTo(name, pipeConfig, decoder, new PipeCourierHandler<>());
+        }
+
+        /**
+         * using encoder, the decoder is transparent
+         * <ul>
+         *  <li>RCV_UP equal to RCV_DOWN</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+         * </ul>
+         *
+         * @param encoder SND_UP to SND_DOWN
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <SND_UP> PipelineBuilder<RCV_UP, SND_UP> nextToEncoder(PipeHandler<SND_UP, SND_DOWN> encoder) {
+            String decName = encoder.getClass().getSimpleName();
+            decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
+
+            String name = String.format("--/%s", decName);
+            return this.nextToEncoder(name, this.pipeConfig(), encoder);
+        }
+
+        /**
+         * using encoder, the decoder is transparent
+         * <ul>
+         *  <li>RCV_UP equal to RCV_DOWN</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+         * </ul>
+         *
+         * @param name pipeLayer name
+         * @param encoder SND_UP to SND_DOWN
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <SND_UP> PipelineBuilder<RCV_UP, SND_UP> nextToEncoder(String name, PipeHandler<SND_UP, SND_DOWN> encoder) {
+            return this.nextToEncoder(name, this.pipeConfig(), encoder);
+        }
+
+        /**
+         * using encoder, the decoder is transparent
+         * <ul>
+         *  <li>RCV_UP equal to RCV_DOWN</li>
+         *  <li>SND_UP is {@link ByteBuf} or Message</li>
+         *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+         * </ul>
+         *
+         * @param name pipeLayer name
+         * @param pipeConfig pipeLayer config
+         * @param encoder SND_UP to SND_DOWN
+         * @throws NullPointerException if the specified handler is {@code null}
+         */
+        default <SND_UP> PipelineBuilder<RCV_UP, SND_UP> nextToEncoder(String name, PipeConfig pipeConfig, PipeHandler<SND_UP, SND_DOWN> encoder) {
+            return this.nextTo(name, pipeConfig, new PipeCourierHandler<>(), encoder);
+        }
+
+        /**
          * It is used to receive network data after being processed by the protocol stack.
          */
         <RCV_DOWN, SND_UP> PipelineBuilder<RCV_DOWN, SND_UP> bindReceive(PipeListener<RCV_DOWN> listener);

@@ -736,11 +736,11 @@ public interface ByteBuf extends ByteChannel {
         return -1;
     }
 
-    /** 具有行结尾 */
-    default boolean hasLine() {
+    /** 查找最近的一个 '\n'，该方法不会更新 readerIndex 值。如果不存在期待的字符串，那么返回 -1 */
+    default int expectLine() {
         int available = this.readableBytes();
         if (available == 0) {
-            return false;
+            return -1;
         }
 
         int findIndex = -1;
@@ -755,7 +755,12 @@ public interface ByteBuf extends ByteChannel {
             }
         }
 
-        return findIndex >= 0;
+        return findIndex;
+    }
+
+    /** 具有行结尾 */
+    default boolean hasLine() {
+        return expectLine() >= 0;
     }
 
     /** 读一整行 */

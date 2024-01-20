@@ -1,27 +1,13 @@
-1. 偶现
 
-严重: snd(2) null
-java.lang.ArrayIndexOutOfBoundsException
-	at java.lang.System.arraycopy(Native Method)
-	at java.nio.HeapByteBuffer.put(HeapByteBuffer.java:193)
-	at net.hasor.neta.bytebuf.AbstractByteBuf.read(AbstractByteBuf.java:541)
-	at net.hasor.neta.channel.SoSndCompletionHandler.copyData(SoSndCompletionHandler.java:123)
-	at net.hasor.neta.channel.SoSndCompletionHandler.prepare(SoSndCompletionHandler.java:82)
-	at net.hasor.neta.channel.SoSndTask.doWork(SoSndTask.java:84)
-	at net.hasor.neta.channel.DefaultSoTask.run(DefaultSoTask.java:80)
-	at net.hasor.neta.channel.SoEventExecutor$TaskWorker.run(SoEventExecutor.java:157)
-	at net.hasor.neta.channel.SoEventExecutor.doWork(SoEventExecutor.java:97)
-	at java.lang.Thread.run(Thread.java:750)
-
+2. 兼容 PKCS12
+JKS 密钥库使用专用格式。建议使用 "keytool -importkeystore -srckeystore local.jks -destkeystore local.jks -deststoretype pkcs12" 迁移到行业标准格式 PKCS12。
 
 
 高优先
-
-2. SSL Buffer 溢出问题
+1. 优雅关闭（需要测试）
+2. SSL Buffer 溢出问题（需要测试）
 3. ByteBuf 清理和释放机制，需要部分重构将其池化。思路需要借鉴 Netty
 4. IP 白名单机制
-5. soReadTimeoutMs 的作用和平时认知有一些偏差，需要进一步拟合这种偏差
-
 
 次优先
 
