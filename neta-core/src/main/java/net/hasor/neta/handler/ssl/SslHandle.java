@@ -179,6 +179,9 @@ class SslHandle {
                         if (this.outAppData.hasRemaining()) {
                             this.handshakeWrap(sndUp, sndDown);
                         }
+                        if (this.inNetData.hasRemaining()) {
+                            this.handshakeUnwrap(rcvUp, rcvDown);
+                        }
                         return;
                     } else {
                         break;

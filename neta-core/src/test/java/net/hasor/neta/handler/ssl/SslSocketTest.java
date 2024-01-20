@@ -185,8 +185,8 @@ public class SslSocketTest extends AbstractSslTest {
         neta.shutdown();
     }
 
-    //    @Test
-    public void realSocketTest_02() throws IOException {
+    @Test
+    public void netaToNetaTest_01() throws IOException {
         int safePort = safePort();
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(true);
