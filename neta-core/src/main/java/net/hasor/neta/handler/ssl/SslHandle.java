@@ -375,9 +375,6 @@ class SslHandle {
     public void handlerRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         // rcvUp to inNetData.
         int rcvTotal = this.queueToBuffer(rcvUp, this.inNetData);
-        if (rcvTotal == 0) {
-            return;
-        }
 
         // Process incoming data
         this.inNetData.flip();
@@ -422,9 +419,6 @@ class SslHandle {
     public void handlerSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         // read data to outAppData
         int sndTotal = this.queueToBuffer(sndUp, this.outAppData);
-        if (sndTotal == 0) {
-            return;
-        }
 
         // Process out data
         this.outAppData.flip();

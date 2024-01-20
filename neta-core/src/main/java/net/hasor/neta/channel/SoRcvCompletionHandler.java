@@ -22,6 +22,7 @@ import java.nio.channels.ClosedChannelException;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.NotYetConnectedException;
 import java.nio.channels.ShutdownChannelGroupException;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * received Handler
@@ -33,6 +34,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        long            channelID;
     private final        long            createdTime;
     private volatile     SoHandlerStatus status;
+    private final        AtomicLong      counterBytes;
     //
     private final        SoAsyncChannel  channel;
     private final        SoContextImpl   context;
@@ -42,6 +44,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.status = SoHandlerStatus.IDLE;
+        this.counterBytes = new AtomicLong();
 
         this.channel = channel;
         this.context = context;
@@ -58,11 +61,17 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         return this.status;
     }
 
+    /** Gets the number of bytes that have been received. */
+    public long getCounterBytes() {
+        return this.counterBytes.get();
+    }
+
     @Override
     public void completed(Integer result, SoContextImpl context) {
         this.status = SoHandlerStatus.PENDING;
 
         if (result > 0) {
+            this.counterBytes.addAndGet(result);
             if (logger.isDebugEnabled()) {
                 logger.debug("rcv(" + this.channelID + ") size:" + result);
             }

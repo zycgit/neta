@@ -62,8 +62,6 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     private final        boolean                netLog;
     protected final      AtomicBoolean          closeStatus;
     protected final      Future<NetChannel>     closeFuture;
-    private volatile     long                   counterReceived;
-    //private volatile     long                    counterSend;
 
     NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
             SoAsyncChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
@@ -253,7 +251,12 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     /** Number of bytes received */
     public long getReceivedBytes() {
-        return this.counterReceived;
+        return this.rHandler.getCounterBytes();
+    }
+
+    /** Number of bytes send */
+    public long getSendBytes() {
+        return this.wHandler.getCounterBytes();
     }
 
     /** Returns whether pipleline snd is available. */
@@ -263,8 +266,6 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
     /* Receive data without concurrency */
     synchronized final void notifyRcv(int dataSize, int retryCnt) {
-        this.counterReceived += dataSize;
-
         if (this.netLog) {
             String retryMsg = (retryCnt > 0) ? (", retryCnt is " + retryCnt) : "";
             logger.info("rcv(" + this.channelID + ") the receive " + dataSize + " bytes" + retryMsg);
@@ -501,7 +502,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         }
     }
 
-    /** Sets a timer that will fire readTimeout if no network data is received within a specified amount of time. */
+    /**
+     * Sets a timer that will fire readTimeout if no network data is received within a specified amount of time.
+     */
     public void setReadTimeout(int timeout, TimeUnit unit) {
         final class CheckTimeout implements TimerTask {
             private final long lastRcvTime;

@@ -180,14 +180,14 @@ public abstract class SslContextBasic implements SslContext {
 
     /** Receiving SSL data */
     public PipeStatus handRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
-        if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
-            if (this.netLog) {
-                logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
-            }
-            return PipeStatus.Next;
-        }
-
         if (this.sslStatus) {
+            if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
+                if (this.netLog) {
+                    logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
+                }
+                return PipeStatus.Next;
+            }
+
             if (this.sslHandler.tryHandshake(true, rcvUp, rcvDown, sndUp, sndDown)) {
                 this.sslHandler.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
             }
@@ -201,14 +201,14 @@ public abstract class SslContextBasic implements SslContext {
 
     /** Sending SSL data */
     public PipeStatus handSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
-        if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
-            if (this.netLog) {
-                logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
-            }
-            return PipeStatus.Next;
-        }
-
         if (this.sslStatus) {
+            if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
+                if (this.netLog) {
+                    logger.info("sslSnd(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
+                }
+                return PipeStatus.Next;
+            }
+
             if (this.sslHandler.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
                 this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
             }

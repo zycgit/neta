@@ -21,6 +21,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * send Handler
@@ -32,19 +33,22 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        long            channelID;
     private final        long            createdTime;
     private volatile     SoHandlerStatus status;
+    private final        AtomicLong      counterBytes;
+    private volatile     int             lastSndSize;
     //
     private final        SoAsyncChannel  channel;
     private final        SoContextImpl   context;
     private final        ByteBuffer      swapBuffer;
     private final        ByteBuf         sndBuffer;
     //
-    private              int             sndSize;
-    private              List<SoSndData> afterWorking;
+
+    private List<SoSndData> afterWorking;
 
     public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext wContext) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.status = SoHandlerStatus.IDLE;
+        this.counterBytes = new AtomicLong();
 
         this.channel = channel;
         this.context = wContext.getContext();
@@ -54,16 +58,12 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         this.sndBuffer = rm.newLocalSndBuf();
     }
 
-    /**
-     * Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data.
-     */
+    /** Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data. */
     public ByteBuffer getSwapBuffer() {
         return this.swapBuffer;
     }
 
-    /**
-     * Enhanced {@link ByteBuffer}.
-     */
+    /** Enhanced {@link ByteBuffer}. */
     public ByteBuf getSndBuffer() {
         return this.sndBuffer;
     }
@@ -73,9 +73,14 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         return this.status;
     }
 
+    /** Gets the number of bytes that have been sent. */
+    public long getCounterBytes() {
+        return this.counterBytes.get();
+    }
+
     public void prepare(List<SoSndData> afterWorking) {
         this.status = SoHandlerStatus.PENDING;
-        this.sndSize = 0;
+        this.lastSndSize = 0;
         this.afterWorking = afterWorking;
         this.copyData();
         this.status = SoHandlerStatus.WAITING;
@@ -93,7 +98,8 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             logger.debug("snd(" + this.channelID + ") size:" + result);
         }
 
-        this.sndSize += result;
+        this.lastSndSize += result;
+        this.counterBytes.addAndGet(result);
 
         if (this.swapBuffer.hasRemaining()) {
 
@@ -107,7 +113,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             this.writeData();
         } else {
 
-            SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize);
+            SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.lastSndSize);
             submitTask(cleanTask).onFinal(f -> {
                 this.status = SoHandlerStatus.IDLE;
             });
@@ -128,7 +134,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
                 this.status = SoHandlerStatus.WAITING;
                 boolean res = this.channel.write(this.swapBuffer, this.context, this);
                 if (!res) {
-                    SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, SoOutputCloseException.INSTANCE);
+                    SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.lastSndSize, SoOutputCloseException.INSTANCE);
                     submitTask(cleanTask).onFinal(ff -> {
                         this.status = SoHandlerStatus.IDLE;
                     });
@@ -193,9 +199,8 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
         this.context.notifySndChannelError(this.channelID, e);
         this.context.asyncUnsafeCloseChannel(this.channelID, finalMsg, finalErr);
-        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.sndSize, e)).onFinal(f -> {
+        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.lastSndSize, e)).onFinal(f -> {
             this.status = SoHandlerStatus.IDLE;
         });
     }
-
 }
