@@ -14,26 +14,31 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.*;
-
 /**
- * Transparent conveyor belt.
+ * An {@link Exception} which is thrown by a codec.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class CourierPipeHandler<T> implements PipeHandler<T, T> {
-    @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
+public class CodecException extends RuntimeException {
+
+    private static final long serialVersionUID = -1464830400709348473L;
+
+    /** Creates a new instance. */
+    public CodecException() {
     }
 
-    @Override
-    public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder<T, T> eh) {
-        PipeRcvQueue<T> src = eh.src();
-        PipeSndQueue<T> dst = eh.dst();
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
+    /** Creates a new instance. */
+    public CodecException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    /** Creates a new instance. */
+    public CodecException(String message) {
+        super(message);
+    }
+
+    /** Creates a new instance. */
+    public CodecException(Throwable cause) {
+        super(cause);
     }
 }

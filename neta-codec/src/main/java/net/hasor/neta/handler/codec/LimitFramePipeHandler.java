@@ -26,8 +26,29 @@ import java.util.Objects;
 
 /**
  * in {@link ByteBuf} is split into multiple {@link ByteBuf} using a fixed length
+ *
+ * <pre>
+ * <b>Case 1</b>
+ * <b>maxLength</b>   = <b>10</b>
+ *
+ * BEFORE (25 bytes)    AFTER (25 bytes)
+ * +----------+        +----------+----------+---------+
+ * | 25 bytes | -----> | 10 bytes | 10 bytes | 5 bytes |
+ * +----------+        +----------+----------+---------+
+ * </pre>
+ *
+ * <pre>
+ * <b>Case 2</b>
+ * <b>maxLength</b>   = <b>10</b>
+ *
+ * BEFORE (14 bytes)                     AFTER (14 bytes)
+ * +------------------------------+      +------------+-----------+
+ * | 3 bytes | 10 bytes | 1 bytes | ---> | (10 bytes) | (4 bytes) |
+ * +------------------------------+      +------------+-----------+
+ * </pre>
+ *
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-12-19
+ * @version : 2024-01-20
  */
 public class LimitFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
     private final int              maxLength;

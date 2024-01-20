@@ -14,26 +14,32 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.*;
-
 /**
- * Transparent conveyor belt.
+ * An {@link CodecException} which is thrown when the length of the frame
+ * decoded is greater than the allowed maximum.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class CourierPipeHandler<T> implements PipeHandler<T, T> {
-    @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
+public class TooLongFrameException extends CodecException {
+
+    private static final long serialVersionUID = -1995801950698951640L;
+
+    /** Creates a new instance. */
+    public TooLongFrameException() {
     }
 
-    @Override
-    public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder<T, T> eh) {
-        PipeRcvQueue<T> src = eh.src();
-        PipeSndQueue<T> dst = eh.dst();
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
+    /** Creates a new instance. */
+    public TooLongFrameException(String message, Throwable cause) {
+        super(message, cause);
+    }
+
+    /** Creates a new instance. */
+    public TooLongFrameException(String message) {
+        super(message);
+    }
+
+    /** Creates a new instance. */
+    public TooLongFrameException(Throwable cause) {
+        super(cause);
     }
 }

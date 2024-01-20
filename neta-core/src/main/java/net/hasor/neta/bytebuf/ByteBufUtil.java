@@ -102,4 +102,11 @@ public class ByteBufUtil {
             CLEANER = CleanerJava6.isSupported() ? new CleanerJava6() : null;
         }
     }
+
+    public static byte[] toBytes(ByteBuf buf) {
+        int available = buf.readableBytes();
+        byte[] bytes = new byte[available];
+        buf.readBytes(bytes);
+        return bytes;
+    }
 }
