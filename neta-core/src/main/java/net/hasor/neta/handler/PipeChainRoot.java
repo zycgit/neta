@@ -67,20 +67,20 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     @Override
-    public boolean rcvSlotIsFull() {
+    public int getRcvSlotSize() {
         if (this.layers.isEmpty()) {
-            return true;
+            return Integer.MAX_VALUE;
         } else {
-            return this.rootRcvUp.slotSize() > 0;
+            return this.rootRcvUp.slotSize();
         }
     }
 
     @Override
-    public boolean sndSlotIsFull() {
+    public int getSndSlotSize() {
         if (this.layers.isEmpty()) {
-            return true;
+            return Integer.MAX_VALUE;
         } else {
-            return this.layers.get(this.findDepth(false, null)).getSndDown().slotSize() > 0;
+            return this.layers.get(this.findDepth(false, null)).getSndDown().slotSize();
         }
     }
 

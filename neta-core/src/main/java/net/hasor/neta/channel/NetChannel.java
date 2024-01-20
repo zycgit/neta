@@ -244,24 +244,46 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return this.closeFuture;
     }
 
-    /** Returns whether pipleline rcv is available. */
-    public boolean isRcvAvailable() {
-        return this.pipeline.rcvSlotIsFull();
-    }
-
     /** Number of bytes received */
-    public long getReceivedBytes() {
+    public long getRcvBytes() {
         return this.rHandler.getCounterBytes();
     }
 
     /** Number of bytes send */
-    public long getSendBytes() {
+    public long getSndBytes() {
         return this.wHandler.getCounterBytes();
     }
 
-    /** Returns whether pipleline snd is available. */
-    public boolean isSndAvailable() {
-        return this.pipeline.sndSlotIsFull();
+    /** Returns the received buffer size. */
+    public int getRcvBufferSize() {
+        return this.rHandler.getRcvBuffer().capacity();
+    }
+
+    /** Returns the send buffer size. */
+    public int getSndBufferSize() {
+        return this.wHandler.getSndBuffer().capacity();
+    }
+
+    /** Returns the size of the received buffer used. */
+    public int getRcvBufferUsed() {
+        ByteBuf rcvBuf = this.rHandler.getRcvBuffer();
+        return rcvBuf.capacity() - rcvBuf.writableBytes();
+    }
+
+    /** Returns the size of the send buffer used. */
+    public int getSndBufferUsed() {
+        ByteBuf sndBuf = this.wHandler.getSndBuffer();
+        return sndBuf.capacity() - sndBuf.writableBytes();
+    }
+
+    /** Returns the number of pipeline received slots. */
+    public int getRcvSlotSize() {
+        return this.pipeline.getRcvSlotSize();
+    }
+
+    /** Returns the number of pipeline send slots. */
+    public int getSndSlotSize() {
+        return this.pipeline.getSndSlotSize();
     }
 
     /* Receive data without concurrency */
@@ -287,7 +309,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         try {
             this.pipeCtx.flash(PipeContext.SO_CHANNEL_RETRY_CNT, retryCnt);
 
-            if (!this.pipeline.rcvSlotIsFull()) {
+            if (this.pipeline.getRcvSlotSize() == 0) {
                 logger.info("rcv(" + this.channelID + ") the pipeline slot is full.");
                 this.pipeline.rcvError(this.pipeCtx, null, PipeFullException.INSTANCE);
                 return;
@@ -444,7 +466,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             return future;
         }
 
-        if (!this.pipeline.sndSlotIsFull()) {
+        if (this.pipeline.getSndSlotSize() == 0) {
             logger.info("snd(" + this.channelID + ") the pipeline slot is full.");
             future.failed(PipeFullException.INSTANCE);
             return future;

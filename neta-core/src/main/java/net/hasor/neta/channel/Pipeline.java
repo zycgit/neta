@@ -30,14 +30,14 @@ public interface Pipeline<OUT> {
     }
 
     /**
-     * Returns whether pipleline rcv is available
+     * Returns the number of available pipeline receive slots, The maximum value is Integer.MAX_VALUE
      */
-    boolean rcvSlotIsFull();
+    int getRcvSlotSize();
 
     /**
-     * Returns whether pipleline snd is available
+     * Returns the number of pipeline send slots available, The maximum value is Integer.MAX_VALUE
      */
-    boolean sndSlotIsFull();
+    int getSndSlotSize();
 
     /**
      * Processing received data

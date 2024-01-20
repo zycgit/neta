@@ -87,14 +87,14 @@ public class SoReadTest extends AbstractSoTest {
 
         // server: rcvBuffer max is 30, Wait for to fill full
         NetChannel channel = (NetChannel) context.findChannel(2);
-        while (channel.getReceivedBytes() < 30) {
+        while (channel.getRcvBytes() < 30) {
             ThreadUtils.sleep(100);
         }
 
         // test result
-        assert channel.getReceivedBytes() == 30; // is full
+        assert channel.getRcvBytes() == 32; // is full
         ThreadUtils.sleep(500);       // wait 0.5s
-        assert channel.getReceivedBytes() == 30; // server No extra data is received, data well be backpressed.
+        assert channel.getRcvBufferUsed() == channel.getRcvBufferSize(); // server No extra data is received, data well be backpressed.
         server.shutdown();
     }
 
@@ -144,7 +144,7 @@ public class SoReadTest extends AbstractSoTest {
         ThreadUtils.sleep(500);
 
         assert rcvErr.get();
-        assert !channel.isRcvAvailable();
+        assert channel.getRcvSlotSize() == 0;
 
         server.shutdown();
     }
@@ -176,7 +176,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // wait full.
         NetChannel channel = (NetChannel) context.findChannel(2);
-        while (channel.getReceivedBytes() < 32 * 3) {
+        while (channel.getRcvBytes() < 32 * 3) {
             ThreadUtils.sleep(100);
         }
 

@@ -21,13 +21,13 @@ package net.hasor.neta.channel;
  */
 public abstract class SimplePipeStack implements Pipeline<Object> {
     @Override
-    public boolean rcvSlotIsFull() {
-        return true;
+    public int getRcvSlotSize() {
+        return Integer.MAX_VALUE;
     }
 
     @Override
-    public boolean sndSlotIsFull() {
-        return true;
+    public int getSndSlotSize() {
+        return Integer.MAX_VALUE;
     }
 
     @Override
