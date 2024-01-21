@@ -31,7 +31,7 @@ public class LimitFrameHandlerTest {
     @Test
     public void limitFrame_1() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        PipelineFactory pipeStack = new PipeInitializer().nextTo(new CourierHandler<>(), limitFrame).build();
+        PipelineFactory pipeStack = PipeInitializer.builder().nextToEncoder(limitFrame).build();
 
         //
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -68,7 +68,7 @@ public class LimitFrameHandlerTest {
     @Test
     public void limitFrame_2() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        PipelineFactory pipeStack = new PipeInitializer().nextTo(limitFrame, new CourierHandler<>()).build();
+        PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(limitFrame).build();
 
         //
         EmbeddedSoContext context = new EmbeddedSoContext();

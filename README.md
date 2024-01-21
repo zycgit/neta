@@ -55,6 +55,15 @@ neta-core
 - 代码覆盖率：75%
 
 ## Hello Word
+
+```xml
+<dependency>
+    <groupId>net.hasor</groupId>
+    <artifactId>neta-all</artifactId>
+    <version>1.0.0</version>
+</dependency>
+```
+
 ```java
 //       ┏━━ nextToDecoder(..) ━┓   ┏━━ StringPipeLayer ━━┓
 //       ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃
@@ -78,4 +87,15 @@ PipelineFactory pipeline = PipeInitializer.builder()
 
 CobbleSocket socket = new CobbleSocket(new SoConfig());
 socket.listen("127.0.0.1", 5567, pipeline);
+```
+
+use the telnet command as follows:
+
+```text
+telnet 127.0.0.1 5567
+Trying 127.0.0.1...
+Connected to localhost.
+Escape character is '^]'.
+Hello Word.
+echo Hello Word.
 ```
