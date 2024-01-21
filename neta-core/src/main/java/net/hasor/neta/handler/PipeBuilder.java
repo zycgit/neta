@@ -342,7 +342,7 @@ public interface PipeBuilder {
          * @throws NullPointerException if the specified handler is {@code null}
          */
         default <RCV_DOWN> PipelineBuilder<RCV_DOWN, SND_DOWN> nextToDecoder(String name, PipeConfig pipeConfig, PipeHandler<RCV_UP, RCV_DOWN> decoder) {
-            return this.nextTo(name, pipeConfig, decoder, new PipeCourierHandler<>());
+            return this.nextTo(name, pipeConfig, decoder, new CourierHandler<>());
         }
 
         /**
@@ -394,7 +394,7 @@ public interface PipeBuilder {
          * @throws NullPointerException if the specified handler is {@code null}
          */
         default <SND_UP> PipelineBuilder<RCV_UP, SND_UP> nextToEncoder(String name, PipeConfig pipeConfig, PipeHandler<SND_UP, SND_DOWN> encoder) {
-            return this.nextTo(name, pipeConfig, new PipeCourierHandler<>(), encoder);
+            return this.nextTo(name, pipeConfig, new CourierHandler<>(), encoder);
         }
 
         /**

@@ -13,21 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler.codec;
+package net.hasor.neta.handler;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipelineFactory;
-import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class CourierPipeHandlerTest {
+public class CourierHandlerTest {
     @Test
     public void courierFrame_1() {
-        CourierPipeHandler<ByteBuf> courier = new CourierPipeHandler<>();
+        CourierHandler<ByteBuf> courier = new CourierHandler<>();
         PipelineFactory pipeStack = new PipeInitializer().nextTo(courier, courier).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -57,7 +56,7 @@ public class CourierPipeHandlerTest {
 
     @Test
     public void courierFrame_2() {
-        CourierPipeHandler<ByteBuf> courier = new CourierPipeHandler<>();
+        CourierHandler<ByteBuf> courier = new CourierHandler<>();
 
         PipelineFactory pipeStack = new PipeInitializer()//
                 .nextTo((PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {

@@ -14,26 +14,25 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.handler.*;
 
+import java.io.IOException;
+import java.io.UnsupportedEncodingException;
+
 /**
- * Transparent conveyor belt.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class CourierPipeHandler<T> implements PipeHandler<T, T> {
+public class DelimiterBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
     @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
+    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws IOException {
+        throw new UnsupportedEncodingException();
     }
 
     @Override
-    public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder<T, T> eh) {
-        PipeRcvQueue<T> src = eh.src();
-        PipeSndQueue<T> dst = eh.dst();
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
+    public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder<ByteBuf, ByteBuf> eh) throws Throwable {
+        throw new UnsupportedEncodingException();
     }
 }

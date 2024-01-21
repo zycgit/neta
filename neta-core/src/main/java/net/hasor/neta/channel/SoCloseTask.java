@@ -66,13 +66,13 @@ class SoCloseTask extends DefaultSoTask {
                     return;
                 }
 
-                //
-                // 5. 还要考虑远程 buffer 可能满了导致永远无法关闭的问题
-                // 5. -- pipline
-                //            this.config.getSoKeepIntervalSec() 等待写入需要设置一个最大等待时间，否则可能无法关闭连接
-                //            netChannel.channel.shutdownInput(); //当度被设置为 close 之后reader 会立刻触发 unsafeCloseChannel 需要处理
-                //            netChannel.channel.shutdownOutput();
-                continueTask();
+                if (netChannel.getSndHandlerStatus() != SoHandlerStatus.IDLE) {
+                    continueTask();
+                    return;
+                }
+
+                netChannel.shutdownOutput();
+                finishTask();
             }
         } else {
             this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
