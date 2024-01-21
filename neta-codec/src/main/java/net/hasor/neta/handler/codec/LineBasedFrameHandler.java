@@ -38,7 +38,7 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class LineBasedFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
+public class LineBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
     /** Maximum length of a frame we're willing to decode, Throws an exception when maxLength is exceeded  */
     private final int     maxLength;
     private final boolean stripDelimiter;
@@ -46,7 +46,7 @@ public class LineBasedFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> 
     /**
      * Creates a new decoder. the maximum length is Integer.MAX_VALUE
      */
-    public LineBasedFramePipeHandler() {
+    public LineBasedFrameHandler() {
         this(Integer.MAX_VALUE, true);
     }
 
@@ -55,7 +55,7 @@ public class LineBasedFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> 
      * @param maxLength  the maximum length of the decoded frame.
      *                   A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
      */
-    public LineBasedFramePipeHandler(final int maxLength) {
+    public LineBasedFrameHandler(final int maxLength) {
         this(maxLength, true);
     }
 
@@ -65,7 +65,7 @@ public class LineBasedFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> 
      *                   A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
      * @param stripDelimiter  whether the decoded frame should strip out the delimiter or not
      */
-    public LineBasedFramePipeHandler(int maxLength, boolean stripDelimiter) {
+    public LineBasedFrameHandler(int maxLength, boolean stripDelimiter) {
         this.maxLength = maxLength;
         this.stripDelimiter = stripDelimiter;
     }
@@ -123,17 +123,24 @@ public class LineBasedFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> 
                 buf.markReader();
                 src.skipMessage(1);
             } else {
-                int expect = buf.expectLine();
+                int readLen = buf.expectLine();
+                int skipLen = 0;
                 if (this.stripDelimiter) {
-                    if (buf.getUInt8(expect) == '\r') {
-                        buf.read(tmpBuf, expect + 2);
+                    if (buf.getUInt8(readLen) == '\r') {
+                        readLen += 2;
                     } else {
-                        buf.read(tmpBuf, expect + 1);
+                        readLen += 1;
                     }
-
                 } else {
-                    buf.read(tmpBuf, expect + 1);
+                    if (buf.getUInt8(readLen) == '\r') {
+                        skipLen = 2;
+                    } else {
+                        skipLen = 1;
+                    }
                 }
+
+                buf.read(tmpBuf, readLen);
+                buf.skipReadableBytes(skipLen);
                 buf.markReader();
                 if (!buf.hasReadable()) {
                     src.skipMessage(1);

@@ -1,0 +1,61 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.handler.codec.string;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.handler.PipeHandler;
+import net.hasor.neta.handler.PipeRcvQueue;
+import net.hasor.neta.handler.PipeSndQueue;
+import net.hasor.neta.handler.PipeStatus;
+
+import java.nio.charset.Charset;
+import java.util.Objects;
+
+/**
+ * Encodes the requested {@link String} into a {@link ByteBuf}.
+ * A typical setup for a text-based line protocol in a TCP/IP socket
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2024-01-21
+ */
+public class StringEncoderHandler implements PipeHandler<String, ByteBuf> {
+    private final Charset charset;
+
+    /**
+     * Creates a new instance with the current system character set.
+     */
+    public StringEncoderHandler() {
+        this(Charset.defaultCharset());
+    }
+
+    /**
+     * Creates a new instance with the specified character set.
+     */
+    public StringEncoderHandler(Charset charset) {
+        this.charset = Objects.requireNonNull(charset, "charset");
+    }
+
+    @Override
+    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<ByteBuf> dst) {
+        boolean hasAny = false;
+        while (src.hasMore()) {
+            String string = src.takeMessage();
+            dst.offerMessage(ByteBufAllocator.DEFAULT.wrap(string.getBytes(this.charset)));
+            hasAny = true;
+        }
+        return hasAny ? PipeStatus.Next : PipeStatus.Exit;
+    }
+}

@@ -27,10 +27,10 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class LineBasedFramePipeHandlerTest {
+public class LineBasedFrameHandlerTest {
     @Test
     public void lineBasedFrame_1() {
-        LineBasedFramePipeHandler lineBasedFrame = new LineBasedFramePipeHandler();
+        LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
         PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(lineBasedFrame).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -47,7 +47,7 @@ public class LineBasedFramePipeHandlerTest {
 
     @Test
     public void lineBasedFrame_2() {
-        LineBasedFramePipeHandler lineBasedFrame = new LineBasedFramePipeHandler();
+        LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
         PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(lineBasedFrame).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -61,7 +61,7 @@ public class LineBasedFramePipeHandlerTest {
 
     @Test
     public void lineBasedFrame_3() {
-        LineBasedFramePipeHandler lineBasedFrame = new LineBasedFramePipeHandler();
+        LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
         PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(lineBasedFrame).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();

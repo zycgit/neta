@@ -27,11 +27,11 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class LimitFramePipeHandlerTest {
+public class LimitFrameHandlerTest {
     @Test
     public void limitFrame_1() {
-        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        PipelineFactory pipeStack = new PipeInitializer().nextTo(new CourierPipeHandler<>(), limitFrame).build();
+        LimitFrameHandler limitFrame = new LimitFrameHandler(2);
+        PipelineFactory pipeStack = new PipeInitializer().nextTo(new CourierHandler<>(), limitFrame).build();
 
         //
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -67,8 +67,8 @@ public class LimitFramePipeHandlerTest {
 
     @Test
     public void limitFrame_2() {
-        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        PipelineFactory pipeStack = new PipeInitializer().nextTo(limitFrame, new CourierPipeHandler<>()).build();
+        LimitFrameHandler limitFrame = new LimitFrameHandler(2);
+        PipelineFactory pipeStack = new PipeInitializer().nextTo(limitFrame, new CourierHandler<>()).build();
 
         //
         EmbeddedSoContext context = new EmbeddedSoContext();

@@ -50,7 +50,7 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class LimitFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
+public class LimitFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
     private final int              maxLength;
     private final ByteBufAllocator bufAllocator;
 
@@ -58,7 +58,7 @@ public class LimitFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
      * Creates a new decoder.
      * @param maxLength the maximum length of the decoded frame.
      */
-    public LimitFramePipeHandler(final int maxLength) {
+    public LimitFrameHandler(final int maxLength) {
         this(maxLength, ByteBufAllocator.DEFAULT);
     }
 
@@ -66,7 +66,7 @@ public class LimitFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
      * Creates a new decoder.
      * @param maxLength the maximum length of the decoded frame.
      */
-    public LimitFramePipeHandler(final int maxLength, ByteBufAllocator bufAllocator) {
+    public LimitFrameHandler(final int maxLength, ByteBufAllocator bufAllocator) {
         this.maxLength = maxLength;
         this.bufAllocator = Objects.requireNonNull(bufAllocator);
     }
