@@ -12,9 +12,9 @@ dependency-reduced-pom.xml
 package-lock.json
 node_modules
 dist
-npm-debug.logger*
-yarn-debug.logger*
-yarn-error.logger*
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
 # Editor directories and files
 .settings
@@ -30,9 +30,14 @@ target
 *.njsproj
 *.sln
 pom.xml.versionsBackup
+pom.xml.releaseBackup
+release.properties
 
 # codes
 gen/
 logs/*
-hasor-dataql/logs/*
-hasor-rsf/logs/*
+
+# docs
+.docusaurus
+.cache-loader
+neta-doc/build/
