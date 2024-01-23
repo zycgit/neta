@@ -47,7 +47,7 @@ public class SoConnectTest extends AbstractSoTest {
 
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer();
-        CobbleSocket neta = new CobbleSocket(crateConfig(2, 32));
+        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
         Future<NetChannel> future = neta.connect(safePort, PipeInitializer.builder((channel, data) -> {
             buf.write(data);
             buf.markWriter();
@@ -70,7 +70,7 @@ public class SoConnectTest extends AbstractSoTest {
         int safePort = safePort();
 
         //
-        CobbleSocket neta = new CobbleSocket(crateConfig(2, 32));
+        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
         Future<NetChannel> future = neta.connect(safePort, PipeInitializer.empty());
         neta.shutdown();
 

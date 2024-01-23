@@ -41,7 +41,7 @@ public class SoReadTest extends AbstractSoTest {
         AtomicInteger cnt = new AtomicInteger();
 
         // echo anything from remote
-        CobbleSocket server = new CobbleSocket(crateConfig(2, 32));
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
         server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
             ((NetChannel) channel).sendData(data); // echo
             cnt.incrementAndGet();// packet ++
@@ -73,7 +73,7 @@ public class SoReadTest extends AbstractSoTest {
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setSoRcvBuf(32);
         soConfig.setNetlog(false);
-        CobbleSocket server = new CobbleSocket(soConfig);
+        NetaSocket server = new NetaSocket(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty()); // <-- stacking without handling
 
@@ -126,7 +126,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(2, 30));
+        NetaSocket server = new NetaSocket(crateConfig(2, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 
@@ -154,7 +154,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         MessageDigest serverDigest = MessageDigest.getInstance("MD5");
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
             int len = data.readableBytes();
@@ -189,7 +189,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         AtomicLong rcvErrTime = new AtomicLong(0);
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -228,7 +228,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(8, 30);
         soConfig.setSoReadTimeoutMs(500);
-        CobbleSocket server = new CobbleSocket(soConfig);
+        NetaSocket server = new NetaSocket(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -265,7 +265,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         AtomicLong rcvErrTime = new AtomicLong(0);
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -306,7 +306,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(8, 30);
         soConfig.setSoReadTimeoutMs(500);
-        CobbleSocket server = new CobbleSocket(soConfig);
+        NetaSocket server = new NetaSocket(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -369,7 +369,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
-        CobbleSocket server = new CobbleSocket(soConfig);
+        NetaSocket server = new NetaSocket(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 

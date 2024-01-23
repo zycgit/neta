@@ -31,11 +31,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class CobbleSocket extends AbstractSocket {
-    private static final Logger                   logger = Logger.getLogger(CobbleSocket.class);
+public class NetaSocket extends AbstractSocket {
+    private static final Logger                   logger = Logger.getLogger(NetaSocket.class);
     protected            AsynchronousChannelGroup channelGroup;
 
-    public CobbleSocket(SoConfig config) {
+    public NetaSocket(SoConfig config) {
         super(config);
     }
 

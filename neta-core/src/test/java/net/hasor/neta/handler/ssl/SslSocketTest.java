@@ -18,7 +18,7 @@ import net.hasor.cobble.ResourcesUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
-import net.hasor.neta.channel.CobbleSocket;
+import net.hasor.neta.channel.NetaSocket;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.PipelineFactory;
 import net.hasor.neta.channel.SoConfig;
@@ -129,7 +129,7 @@ public class SslSocketTest extends AbstractSslTest {
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(true);
         SslConfig sslConf = sslConfig(SslMode.Always);
-        CobbleSocket neta = new CobbleSocket(soConf);
+        NetaSocket neta = new NetaSocket(soConf);
         Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, createPipeline(sslConf));
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
@@ -154,7 +154,7 @@ public class SslSocketTest extends AbstractSslTest {
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(false);
         SslConfig sslConf = sslConfig(SslMode.Always);
-        CobbleSocket neta = new CobbleSocket(soConf);
+        NetaSocket neta = new NetaSocket(soConf);
 
         List<String> rcvMessage = new ArrayList<>();
         neta.listen("127.0.0.1", safePort, createPipeline(sslConf, (channel, data) -> {
@@ -191,7 +191,7 @@ public class SslSocketTest extends AbstractSslTest {
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(true);
         SslConfig sslConf = sslConfig(SslMode.Always);
-        CobbleSocket neta = new CobbleSocket(soConf);
+        NetaSocket neta = new NetaSocket(soConf);
 
         // Server
         List<String> serverRcvData = new ArrayList<>();

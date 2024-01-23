@@ -93,7 +93,7 @@ public class EmbeddedSoContext implements SoContext {
     }
 
     @Override
-    public CobbleSocket getCobble() {
+    public NetaSocket getNeta() {
         throw new UnsupportedOperationException();
     }
 

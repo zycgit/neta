@@ -37,6 +37,6 @@ public interface SoContext {
     /** find SoChannel by id */
     SoChannel<?> findChannel(long channelID);
 
-    /** get CobbleSocket */
-    CobbleSocket getCobble();
+    /** get {@link NetaSocket} */
+    NetaSocket getNeta();
 }

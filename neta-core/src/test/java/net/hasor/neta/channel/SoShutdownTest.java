@@ -41,7 +41,7 @@ public class SoShutdownTest extends AbstractSoTest {
         int safePort = safePort();
 
         // start listen
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
             public void onReceive(SoChannel<?> channel, ByteBuf data) {
@@ -95,7 +95,7 @@ public class SoShutdownTest extends AbstractSoTest {
         int safePort = safePort();
 
         // start listen
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
             public void onReceive(SoChannel<?> channel, ByteBuf data) {
@@ -145,7 +145,7 @@ public class SoShutdownTest extends AbstractSoTest {
         int safePort = safePort();
 
         // start listen
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
             public void onReceive(SoChannel<?> channel, ByteBuf data) {
@@ -187,7 +187,7 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_01() throws Exception {
         // start server
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
 
         // connect to server
@@ -208,7 +208,7 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_02() throws Exception {
         // start server
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
 
         // connect to server
@@ -231,7 +231,7 @@ public class SoShutdownTest extends AbstractSoTest {
         int safePort = safePort();
 
         // start listen
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -280,7 +280,7 @@ public class SoShutdownTest extends AbstractSoTest {
         int safePort = safePort();
 
         // start listen
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -325,7 +325,7 @@ public class SoShutdownTest extends AbstractSoTest {
         int safePort = safePort();
 
         // start listen
-        CobbleSocket server = new CobbleSocket(crateConfig(2, 8192));
+        NetaSocket server = new NetaSocket(crateConfig(2, 8192));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -379,7 +379,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start server.
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
             rcvAnyThing.set(true);
@@ -408,7 +408,7 @@ public class SoShutdownTest extends AbstractSoTest {
     public void sndRemoteShutdownInputTest_01() throws Exception {
         // start server
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
 
         // connect to server -> send data -> close
@@ -443,7 +443,7 @@ public class SoShutdownTest extends AbstractSoTest {
         int safePort = safePort();
 
         // start listen
-        CobbleSocket server = new CobbleSocket(crateConfig(2, 30));
+        NetaSocket server = new NetaSocket(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
             public void onReceive(SoChannel<?> channel, ByteBuf data) {

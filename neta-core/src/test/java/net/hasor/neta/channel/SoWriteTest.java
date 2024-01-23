@@ -39,7 +39,7 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
 
         // server say Hello
-        CobbleSocket server = new CobbleSocket(crateConfig(2, 32));
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
         Socket client = new Socket("127.0.0.1", safePort);
 
@@ -77,7 +77,7 @@ public class SoWriteTest extends AbstractSoTest {
 
         // server start
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(4096, 4096));
+        NetaSocket server = new NetaSocket(crateConfig(4096, 4096));
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 
         // client start
@@ -114,7 +114,7 @@ public class SoWriteTest extends AbstractSoTest {
 
         // server start
         int safePort = safePort();
-        CobbleSocket server = new CobbleSocket(crateConfig(4096, 4096));
+        NetaSocket server = new NetaSocket(crateConfig(4096, 4096));
         NetListen listen = server.listen("127.0.0.1", safePort, pipeline);
 
         // client start
@@ -147,7 +147,7 @@ public class SoWriteTest extends AbstractSoTest {
 
         soConfig.setSoWriteTimeoutMs(1);
 
-        CobbleSocket server = new CobbleSocket(soConfig);
+        NetaSocket server = new NetaSocket(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
             @Override
@@ -209,7 +209,7 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
-        CobbleSocket server = new CobbleSocket(soConfig);
+        NetaSocket server = new NetaSocket(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 

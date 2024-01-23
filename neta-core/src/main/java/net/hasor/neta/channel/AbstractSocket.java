@@ -35,7 +35,7 @@ public abstract class AbstractSocket {
 
     public AbstractSocket(SoConfig config) {
         this.config = config;
-        this.context = new SoContextImpl(config, (CobbleSocket) this);
+        this.context = new SoContextImpl(config, (NetaSocket) this);
         this.shutdown = new AtomicBoolean(false);
     }
 

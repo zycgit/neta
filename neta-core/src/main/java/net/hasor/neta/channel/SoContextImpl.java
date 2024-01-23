@@ -37,9 +37,9 @@ import java.util.function.Consumer;
 class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
     private final        AtomicLong                 nextID = new AtomicLong(0);
-    private final        SoConfig                   config;
-    private final        CobbleSocket               cobble;
-    private final        ClassLoader                useClassLoader;
+    private final SoConfig    config;
+    private final NetaSocket  cobble;
+    private final ClassLoader useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
     //
     private final        HashedWheelTimer           globalTimer;
@@ -54,7 +54,7 @@ class SoContextImpl implements SoContext {
     private final        Queue<NetChannel>          channelList;
     private final        Queue<NetListen>           listenList;
 
-    public SoContextImpl(SoConfig config, CobbleSocket cobble) {
+    public SoContextImpl(SoConfig config, NetaSocket cobble) {
         this.cobble = cobble;
         this.config = Objects.requireNonNull(config);
         this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
@@ -187,7 +187,7 @@ class SoContextImpl implements SoContext {
     }
 
     @Override
-    public CobbleSocket getCobble() {
+    public NetaSocket getNeta() {
         return this.cobble;
     }
 
