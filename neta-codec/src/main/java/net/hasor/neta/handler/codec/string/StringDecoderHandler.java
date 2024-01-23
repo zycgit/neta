@@ -57,8 +57,10 @@ public class StringDecoderHandler implements PipeHandler<ByteBuf, String> {
         boolean hasAny = false;
         while (src.hasMore()) {
             ByteBuf byteBuf = src.takeMessage();
-            dst.offerMessage(byteBuf.readString(byteBuf.readableBytes(), this.charset));
-            hasAny = true;
+            if (byteBuf != null) {
+                dst.offerMessage(byteBuf.readString(byteBuf.readableBytes(), this.charset));
+                hasAny = true;
+            }
         }
         return hasAny ? PipeStatus.Next : PipeStatus.Exit;
     }

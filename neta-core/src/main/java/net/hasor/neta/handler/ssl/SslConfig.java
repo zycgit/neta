@@ -28,7 +28,7 @@ import java.security.KeyStore;
  */
 public class SslConfig extends PipeConfig {
     private SslMode                sslMode               = SslMode.Always;
-    private SslProvider            provider              = SslProvider.JDK;      // default is JDK
+    private SslProvider            provider              = SslProvider.JSSE;      // default is JDK
     private SslClientAuth          clientAuth            = SslClientAuth.NONE;   //
     private String[]               appProtocol           = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
     private String[]               ciphers               = null;                 // JSSE Cipher Suite Names 使用的密钥套件

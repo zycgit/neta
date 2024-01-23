@@ -20,9 +20,6 @@ package net.hasor.neta.handler.codec;
  * @version : 2024-01-20
  */
 public class CodecException extends RuntimeException {
-
-    private static final long serialVersionUID = -1464830400709348473L;
-
     /** Creates a new instance. */
     public CodecException() {
     }

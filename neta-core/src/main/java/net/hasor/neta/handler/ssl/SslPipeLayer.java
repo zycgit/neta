@@ -42,7 +42,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
         long channelID = channel.getChannelID();
         boolean clientMode = channel.isClient();
 
-        if (this.config.getProvider() == SslProvider.JDK) {
+        if (this.config.getProvider() == SslProvider.JSSE) {
             context.context(SslContext.class, new JdkSslContext(channelID, context, this.config, clientMode));
         } else {
             throw new UnsupportedOperationException(this.config.getProvider() + " Unsupported.");

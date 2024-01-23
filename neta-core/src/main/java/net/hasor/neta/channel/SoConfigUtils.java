@@ -48,13 +48,13 @@ class SoConfigUtils {
 
         if (Boolean.TRUE.equals(config.getSoKeepAlive())) {
             channel.setOption(SoOptions.SO_KEEPALIVE, true);
-            if (config.getSoKeepIdleSec() != null) {
+            if (config.getSoKeepIdleSec() != null && SoOptions.TCP_KEEPIDLE != null) {
                 channel.setOption(SoOptions.TCP_KEEPIDLE, config.getSoKeepIdleSec());
             }
-            if (config.getSoKeepIntervalSec() != null) {
+            if (config.getSoKeepIntervalSec() != null && SoOptions.TCP_KEEPINTERVAL != null) {
                 channel.setOption(SoOptions.TCP_KEEPINTERVAL, config.getSoKeepIntervalSec());
             }
-            if (config.getSoKeepCount() != null) {
+            if (config.getSoKeepCount() != null && SoOptions.TCP_KEEPCOUNT != null) {
                 channel.setOption(SoOptions.TCP_KEEPCOUNT, config.getSoKeepCount());
             }
         }

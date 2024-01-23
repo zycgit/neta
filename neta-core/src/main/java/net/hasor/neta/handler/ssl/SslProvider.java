@@ -22,10 +22,13 @@ package net.hasor.neta.handler.ssl;
 public enum SslProvider {
     /**
      * JDK's default implementation.
+     * see: <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/JSSERefGuide.html">JSSE Guide</a>,
+     * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html">JSSE TLS</a>
      */
-    JDK,
+    JSSE,
     /**
      * OpenSSL-based implementation.
+     * see:
      */
     OPEN_SSL,
 }

@@ -21,9 +21,6 @@ package net.hasor.neta.handler.codec;
  * @version : 2024-01-20
  */
 public class TooLongFrameException extends CodecException {
-
-    private static final long serialVersionUID = -1995801950698951640L;
-
     /** Creates a new instance. */
     public TooLongFrameException() {
     }

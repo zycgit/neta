@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import jdk.net.ExtendedSocketOptions;
+import net.hasor.cobble.logging.Logger;
 
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
@@ -25,11 +26,41 @@ import java.net.StandardSocketOptions;
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoOptions {
-    public static final SocketOption<Integer> SO_SNDBUF        = StandardSocketOptions.SO_SNDBUF;
-    public static final SocketOption<Integer> SO_RCVBUF        = StandardSocketOptions.SO_RCVBUF;
-    public static final SocketOption<Boolean> SO_REUSEADDR     = StandardSocketOptions.SO_REUSEADDR;
-    public static final SocketOption<Boolean> SO_KEEPALIVE     = StandardSocketOptions.SO_KEEPALIVE;
-    public static final SocketOption<Integer> TCP_KEEPIDLE     = ExtendedSocketOptions.TCP_KEEPIDLE;
-    public static final SocketOption<Integer> TCP_KEEPINTERVAL = ExtendedSocketOptions.TCP_KEEPINTERVAL;
-    public static final SocketOption<Integer> TCP_KEEPCOUNT    = ExtendedSocketOptions.TCP_KEEPCOUNT;
+    private static final Logger                logger       = Logger.getLogger(SoOptions.class);
+    public static final  SocketOption<Integer> SO_SNDBUF    = StandardSocketOptions.SO_SNDBUF;
+    public static final  SocketOption<Integer> SO_RCVBUF    = StandardSocketOptions.SO_RCVBUF;
+    public static final  SocketOption<Boolean> SO_REUSEADDR = StandardSocketOptions.SO_REUSEADDR;
+    public static final  SocketOption<Boolean> SO_KEEPALIVE = StandardSocketOptions.SO_KEEPALIVE;
+    public static final  SocketOption<Integer> TCP_KEEPIDLE;
+    public static final  SocketOption<Integer> TCP_KEEPINTERVAL;
+    public static final  SocketOption<Integer> TCP_KEEPCOUNT;
+
+    static {
+        SocketOption<Integer> tcpKeepIdleTmp;
+        try {
+            tcpKeepIdleTmp = ExtendedSocketOptions.TCP_KEEPIDLE;
+        } catch (Exception e) {
+            logger.warn("your jdk does not support TCP_KEEPIDLE parameter, please upgrade to 1.8.0_333+");
+            tcpKeepIdleTmp = null;
+        }
+        TCP_KEEPIDLE = tcpKeepIdleTmp;
+
+        SocketOption<Integer> tcpKeepIntervalTmp;
+        try {
+            tcpKeepIntervalTmp = ExtendedSocketOptions.TCP_KEEPINTERVAL;
+        } catch (Exception e) {
+            logger.warn("your jdk does not support TCP_KEEPINTERVAL parameter, please upgrade to 1.8.0_333+");
+            tcpKeepIntervalTmp = null;
+        }
+        TCP_KEEPINTERVAL = tcpKeepIntervalTmp;
+
+        SocketOption<Integer> tcpKeepCountTmp;
+        try {
+            tcpKeepCountTmp = ExtendedSocketOptions.TCP_KEEPCOUNT;
+        } catch (Exception e) {
+            logger.warn("your jdk does not support TCP_KEEPCOUNT parameter, please upgrade to 1.8.0_333+");
+            tcpKeepCountTmp = null;
+        }
+        TCP_KEEPCOUNT = tcpKeepCountTmp;
+    }
 }

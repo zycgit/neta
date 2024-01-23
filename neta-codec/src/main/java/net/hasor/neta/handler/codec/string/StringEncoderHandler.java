@@ -53,8 +53,10 @@ public class StringEncoderHandler implements PipeHandler<String, ByteBuf> {
         boolean hasAny = false;
         while (src.hasMore()) {
             String string = src.takeMessage();
-            dst.offerMessage(ByteBufAllocator.DEFAULT.wrap(string.getBytes(this.charset)));
-            hasAny = true;
+            if (string != null) {
+                dst.offerMessage(ByteBufAllocator.DEFAULT.wrap(string.getBytes(this.charset)));
+                hasAny = true;
+            }
         }
         return hasAny ? PipeStatus.Next : PipeStatus.Exit;
     }
