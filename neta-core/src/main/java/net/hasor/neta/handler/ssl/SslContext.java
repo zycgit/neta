@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
-import net.hasor.neta.handler.PipeLayer;
+import net.hasor.neta.handler.PipeDuplex;
 
 /**
- * A status for {@link PipeLayer}
+ * A status for {@link PipeDuplex}
  * @version : 2023-10-18
  * @author 赵永春 (zyc@hasor.net)
  */

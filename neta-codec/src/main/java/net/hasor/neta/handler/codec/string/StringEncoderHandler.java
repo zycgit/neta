@@ -49,7 +49,7 @@ public class StringEncoderHandler implements PipeHandler<String, ByteBuf> {
     }
 
     @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<ByteBuf> dst) {
+    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<ByteBuf> dst) {
         boolean hasAny = false;
         while (src.hasMore()) {
             String string = src.takeMessage();

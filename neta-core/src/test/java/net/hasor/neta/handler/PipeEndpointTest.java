@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.channel.PipeInitializer;
 import net.hasor.neta.handler.PipeBuilder.PipelineBuilder;
 import org.junit.Test;
 
@@ -37,11 +37,11 @@ public class PipeEndpointTest extends AbstractPipeTest {
         PipeConfig pipConf = new PipeConfig();
         pipConf.setPipeRcvDownStackSize(3);
         pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeInitializer().pipeConfig(pipConf);
-        PipelineFactory pipeline = empty//
-                .nextTo("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L3", doNotCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
+        PipeInitializer pipeline = empty//
+                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L3", doNotCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -68,7 +68,7 @@ public class PipeEndpointTest extends AbstractPipeTest {
         assert channel.getPipeStatistical().heapUpOfRcvRoot() == 2;
         assert channel.readRcvDown() == null;
 
-        System.out.println(channel.pipeStack);
+        System.out.println(channel.pipeline);
     }
 
     @Test
@@ -81,11 +81,11 @@ public class PipeEndpointTest extends AbstractPipeTest {
         PipeConfig pipConf = new PipeConfig();
         pipConf.setPipeRcvDownStackSize(3);
         pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeInitializer().pipeConfig(pipConf);
-        PipelineFactory pipeline = empty//
-                .nextTo("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
+        PipeInitializer pipeline = empty//
+                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -118,11 +118,11 @@ public class PipeEndpointTest extends AbstractPipeTest {
         PipeConfig pipConf = new PipeConfig();
         pipConf.setPipeRcvDownStackSize(3);
         pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeInitializer().pipeConfig(pipConf);
-        PipelineFactory pipeline = empty//
-                .nextTo("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNotCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
+        PipeInitializer pipeline = empty//
+                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNotCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -151,7 +151,7 @@ public class PipeEndpointTest extends AbstractPipeTest {
         assert channel.getPipeStatistical().heapUpOfSndRoot() == 3;
         assert channel.readRcvDown() == null;
 
-        System.out.println(channel.pipeStack);
+        System.out.println(channel.pipeline);
     }
 
     @Test
@@ -164,11 +164,11 @@ public class PipeEndpointTest extends AbstractPipeTest {
         PipeConfig pipConf = new PipeConfig();
         pipConf.setPipeRcvDownStackSize(3);
         pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeInitializer().pipeConfig(pipConf);
-        PipelineFactory pipeline = empty//
-                .nextTo("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextTo("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
+        PipeInitializer pipeline = empty//
+                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextHandler("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -192,13 +192,13 @@ public class PipeEndpointTest extends AbstractPipeTest {
         assert channel.getPipeStatistical().heapUpOfSndRoot() == 0;
         assert channel.readRcvDown() == null;
 
-        System.out.println(channel.pipeStack);
+        System.out.println(channel.pipeline);
     }
 
     @Test
     public void rcvToSendTest_1() {
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
-        PipelineFactory pipeline = empty.nextTo(doPipeLayer(true, false)).build();
+        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
+        PipeInitializer pipeline = empty.nextDuplex(doPipeLayer(true, false)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
@@ -210,8 +210,8 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
     @Test
     public void rcvToSendTest_2() {
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
-        PipelineFactory stack = empty.nextTo(doPipeLayer(false, true)).build();
+        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
+        PipeInitializer stack = empty.nextDuplex(doPipeLayer(false, true)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
@@ -223,8 +223,8 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
     @Test
     public void rcvToSendTest_3() {
-        PipelineBuilder<Integer, Integer> empty = PipeInitializer.embedded();
-        PipelineFactory pipeline = empty.nextTo(doPipeLayer(true, true)).build();
+        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
+        PipeInitializer pipeline = empty.nextDuplex(doPipeLayer(true, true)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);

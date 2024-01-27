@@ -16,7 +16,7 @@
 package net.hasor.neta.handler.codec.string;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.PipeLayer;
+import net.hasor.neta.handler.PipeDuplex;
 import net.hasor.neta.handler.PipeRcvQueue;
 import net.hasor.neta.handler.PipeSndQueue;
 import net.hasor.neta.handler.PipeStatus;
@@ -35,7 +35,7 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
-public class StringPipeLayer implements PipeLayer<ByteBuf, String, String, ByteBuf> {
+public class StringPipeLayer implements PipeDuplex<ByteBuf, String, String, ByteBuf> {
     private final StringDecoderHandler stringDecoder;
     private final StringEncoderHandler stringEncoder;
 
@@ -56,12 +56,11 @@ public class StringPipeLayer implements PipeLayer<ByteBuf, String, String, ByteB
     }
 
     @Override
-    public PipeStatus doLayer(PipeContext context, boolean isRcv, //
-            PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<String> rcvDown, PipeRcvQueue<String> sndUp, PipeSndQueue<ByteBuf> sndDown) {
+    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<String> rcvDown, PipeRcvQueue<String> sndUp, PipeSndQueue<ByteBuf> sndDown) {
         if (isRcv) {
-            return this.stringDecoder.doHandler(context, rcvUp, rcvDown);
+            return this.stringDecoder.onMessage(context, rcvUp, rcvDown);
         } else {
-            return this.stringEncoder.doHandler(context, sndUp, sndDown);
+            return this.stringEncoder.onMessage(context, sndUp, sndDown);
         }
     }
 }

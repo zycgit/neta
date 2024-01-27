@@ -17,10 +17,10 @@ package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
-import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.channel.PipeInitializer;
 import net.hasor.neta.handler.EmbeddedChannel;
 import net.hasor.neta.handler.EmbeddedSoContext;
-import net.hasor.neta.handler.PipeInitializer;
+import net.hasor.neta.handler.PipeHelper;
 import org.junit.Test;
 
 /**
@@ -31,7 +31,7 @@ public class LineBasedFrameHandlerTest {
     @Test
     public void lineBasedFrame_1() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(lineBasedFrame).build();
+        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(lineBasedFrame).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);
@@ -48,7 +48,7 @@ public class LineBasedFrameHandlerTest {
     @Test
     public void lineBasedFrame_2() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(lineBasedFrame).build();
+        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(lineBasedFrame).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);
@@ -62,7 +62,7 @@ public class LineBasedFrameHandlerTest {
     @Test
     public void lineBasedFrame_3() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(lineBasedFrame).build();
+        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(lineBasedFrame).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);

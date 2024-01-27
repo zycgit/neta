@@ -17,10 +17,7 @@ package net.hasor.neta.handler.ssl;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoChannel;
-import net.hasor.neta.handler.PipeLayer;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.handler.*;
 
 import java.io.IOException;
 import java.util.Objects;
@@ -28,7 +25,7 @@ import java.util.Objects;
 /**
  * SSL 网络协议层
  */
-public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
+public class SslPipeLayer implements PipeDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
     private final SslConfig config;
 
     public SslPipeLayer(SslConfig config) {
@@ -36,7 +33,7 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
     }
 
     @Override
-    public void init(PipeContext context) throws Exception {
+    public void onInit(PipeContext context) throws Throwable {
         SoChannel<?> channel = context.getChannel();
 
         long channelID = channel.getChannelID();
@@ -50,7 +47,12 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
     }
 
     @Override
-    public PipeStatus doLayer(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public void onActive(PipeContext context) throws Exception {
+
+    }
+
+    @Override
+    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
         if (isRcv) {
             return ((SslContextBasic) context.context(SslContext.class)).handRcv(rcvUp, rcvDown, sndUp, sndDown);
         } else {
@@ -59,7 +61,12 @@ public class SslPipeLayer implements PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBu
     }
 
     @Override
-    public void release(PipeContext context) {
+    public PipeStatus onError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHolder eh) throws Throwable {
+        return PipeStatus.Next;
+    }
+
+    @Override
+    public void onClose(PipeContext context) {
 
     }
 }

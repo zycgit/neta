@@ -16,11 +16,11 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.channel.PipeInitializer;
 import net.hasor.neta.handler.EmbeddedChannel;
 import net.hasor.neta.handler.EmbeddedSoContext;
 import net.hasor.neta.handler.EmbeddedTransfer;
-import net.hasor.neta.handler.PipeInitializer;
+import net.hasor.neta.handler.PipeHelper;
 import org.junit.Test;
 
 /**
@@ -31,7 +31,7 @@ public class LimitFrameHandlerTest {
     @Test
     public void limitFrame_1() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        PipelineFactory pipeStack = PipeInitializer.builder().nextToEncoder(limitFrame).build();
+        PipeInitializer pipeStack = PipeHelper.builder().nextEncoder(limitFrame).build();
 
         //
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -68,7 +68,7 @@ public class LimitFrameHandlerTest {
     @Test
     public void limitFrame_2() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        PipelineFactory pipeStack = PipeInitializer.builder().nextToDecoder(limitFrame).build();
+        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(limitFrame).build();
 
         //
         EmbeddedSoContext context = new EmbeddedSoContext();

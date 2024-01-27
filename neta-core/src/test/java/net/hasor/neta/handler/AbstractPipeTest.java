@@ -22,7 +22,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doExitHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoExit");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
@@ -31,7 +31,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrExit");
                 return PipeStatus.Next;
             }
@@ -41,7 +41,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doRestartHandler(String tag, List<String> recordFinish, List<String> recordFailed, int restartCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoRestart");
 
                 Integer restart = context.flash("restartCnt");
@@ -64,7 +64,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRestart");
 
                 return PipeStatus.Next;
@@ -75,7 +75,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doAgainHandler(String tag, List<String> recordFinish, List<String> recordFailed, int againCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoAgain");
 
                 Integer again = context.flash("againCnt");
@@ -98,7 +98,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrAgain");
 
                 return PipeStatus.Next;
@@ -109,7 +109,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doRetryHandler(String tag, List<String> recordFinish, List<String> recordFailed, int retryCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoRetry");
 
                 Integer retry = context.flash("retryCnt");
@@ -132,7 +132,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRetry");
 
                 return PipeStatus.Next;
@@ -143,7 +143,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doThrowHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoThrow");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
@@ -151,7 +151,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrThrow");
 
                 return PipeStatus.Next;
@@ -162,7 +162,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doNextHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoNext");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
@@ -170,7 +170,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
 
                 return PipeStatus.Next;
@@ -181,7 +181,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doInterruptHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoInterrupt");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
@@ -189,7 +189,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrInterrupt");
 
                 return PipeStatus.Next;
@@ -197,19 +197,17 @@ public class AbstractPipeTest {
         };
     }
 
-    //
-
     protected static PipeHandler<Integer, Integer> errExitHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoExit");
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return PipeStatus.Next;
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrExit");
                 return PipeStatus.Exit;
             }
@@ -219,14 +217,14 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> errRestartHandler(String tag, List<String> recordFinish, List<String> recordFailed, int restartCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoRestart");
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return PipeStatus.Next;
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRestart");
 
                 Integer restart = context.flash("restartCnt");
@@ -251,14 +249,14 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> errAgainHandler(String tag, List<String> recordFinish, List<String> recordFailed, int againCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoAgain");
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return PipeStatus.Next;
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrAgain");
 
                 Integer again = context.flash("againCnt");
@@ -283,14 +281,14 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> errRetryHandler(String tag, List<String> recordFinish, List<String> recordFailed, int retryCnt) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoRetry");
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return PipeStatus.Next;
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrRetry");
 
                 Integer retry = context.flash("retryCnt");
@@ -315,14 +313,14 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> errThrowHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoThrow");
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return PipeStatus.Next;
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 recordFailed.add(tag + "ErrThrow");
                 throw e;
             }
@@ -332,7 +330,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> errNextHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoNext");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
@@ -340,7 +338,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
 
                 return PipeStatus.Next;
@@ -351,7 +349,7 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> errInterruptHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoInterrupt");
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
@@ -359,7 +357,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrInterrupt");
 
                 return PipeStatus.Interrupt;
@@ -367,12 +365,10 @@ public class AbstractPipeTest {
         };
     }
 
-    //
-
     protected static PipeHandler<Integer, Integer> doCopyHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoNext");
 
                 dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
@@ -380,7 +376,7 @@ public class AbstractPipeTest {
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
 
                 return PipeStatus.Next;
@@ -391,20 +387,20 @@ public class AbstractPipeTest {
     protected static PipeHandler<Integer, Integer> doNotCopyHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new PipeHandler<Integer, Integer>() {
             @Override
-            public PipeStatus doHandler(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
                 recordFinish.add(tag + "DoNext");
                 return PipeStatus.Next;
             }
 
             @Override
-            public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 recordFailed.add(tag + "ErrNext");
                 return PipeStatus.Next;
             }
         };
     }
 
-    protected static PipeLayer<Integer, Integer, Integer, Integer> doPipeLayer(boolean rcvSend, boolean sndSend) {
+    protected static PipeDuplex<Integer, Integer, Integer, Integer> doPipeLayer(boolean rcvSend, boolean sndSend) {
         return (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
             if (isRcv) {
                 rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));

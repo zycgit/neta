@@ -16,7 +16,10 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.*;
+import net.hasor.neta.handler.PipeHandler;
+import net.hasor.neta.handler.PipeRcvQueue;
+import net.hasor.neta.handler.PipeSndQueue;
+import net.hasor.neta.handler.PipeStatus;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -27,12 +30,7 @@ import java.io.UnsupportedEncodingException;
  */
 public class DelimiterBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
     @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws IOException {
-        throw new UnsupportedEncodingException();
-    }
-
-    @Override
-    public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder<ByteBuf, ByteBuf> eh) throws Throwable {
+    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws IOException {
         throw new UnsupportedEncodingException();
     }
 }

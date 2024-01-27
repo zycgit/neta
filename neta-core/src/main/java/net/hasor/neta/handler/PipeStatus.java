@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.handler;
 /**
- * A status for {@link PipeLayer}
+ * A status for {@link PipeDuplex}
  * @version : 2023-10-18
  * @author 赵永春 (zyc@hasor.net)
  */
@@ -23,9 +23,9 @@ public enum PipeStatus {
     /**
      * Continuing the execution pipeline
      * <pre>
-     *  ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓
-     *  ┃ PipeLayer (0) ┃ > ┃ PipeLayer (1) ┃ > ┃ PipeLayer (2) ┃ > ...
-     *  ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛
+     *  ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓
+     *  ┃ PipeDuplex (0) ┃ > ┃ PipeDuplex (1) ┃ > ┃ PipeDuplex (2) ┃ > ...
+     *  ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛
      *        Next                Next                Next
      * </pre>
      */
@@ -34,10 +34,10 @@ public enum PipeStatus {
     /**
      * Retry this method call, using again to avoid recursion
      * <pre>
-     *                    ┏━━━━━━┓
-     *  ┏━━━━━━━━━━━━━━━┓ ┃  ┏━━━┻━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓
-     *  ┃ PipeLayer (0) ┃ ┸> ┃ PipeLayer (1) ┃ > ┃ PipeLayer (2) ┃ > ...
-     *  ┗━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛
+     *                     ┏━━━━━━┓
+     *  ┏━━━━━━━━━━━━━━━━┓ ┃  ┏━━━┻━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓
+     *  ┃ PipeDuplex (0) ┃ ┸> ┃ PipeDuplex (1) ┃ > ┃ PipeDuplex (2) ┃ > ...
+     *  ┗━━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛
      *        Next                 Retry               Next
      * </pre>
      */
@@ -49,10 +49,10 @@ public enum PipeStatus {
      * <p>If the pipeline is Interrupt, it will not be restarted</p>
      *
      * <pre>
-     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     * ┃  ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓         ┏━┻━━━━━━━━━━━━━┓
-     * ┗> ┃ PipeLayer (0) ┃ > ┃ PipeLayer (1) ┃ > ... > ┃ PipeLayer (2) ┃ > ...
-     *    ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━━━┛
+     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     * ┃  ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓         ┏━┻━━━━━━━━━━━━━━┓
+     * ┗> ┃ PipeDuplex (0) ┃ > ┃ PipeDuplex (1) ┃ > ... > ┃ PipeDuplex (2) ┃ > ...
+     *    ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━━━━┛
      *          Next                Again                     Next
      * </pre>
      */
@@ -61,21 +61,21 @@ public enum PipeStatus {
     /**
      * Interrupt the pipeline event propagation and restarted of the pipeline.
      * <pre>
-     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     * ┃  ┏━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━┓   ┏━┻━━━━━━━━━━━━━┓
-     * ┗> ┃ PipeLayer (0) ┃ > ┃ PipeLayer (1) ┃ > ┃ PipeLayer (2) ┃ > ...
-     *    ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━┛
+     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+     * ┃  ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓   ┏━┻━━━━━━━━━━━━━━┓
+     * ┗> ┃ PipeDuplex (0) ┃ > ┃ PipeDuplex (1) ┃ > ┃ PipeDuplex (2) ┃ > ...
+     *    ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛
      *          Next                Next               Restart
      * </pre>
      */
     Restart,
 
     /**
-     * Interrupt pipeline event propagation, and Skip all the following {@link PipeLayer}
+     * Interrupt pipeline event propagation, and Skip all the following {@link PipeDuplex}
      * <pre>
-     *     ┏━━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-     * ... ┃ PipeLayer (0) ┃ > ┆ PipeLayer (1) ┆ > ┆ PipeLayer (2) ┆ > ...
-     *     ┗━━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+     *     ┏━━━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+     * ... ┃ PipeDuplex (0) ┃ > ┆ PipeDuplex (1) ┆ > ┆ PipeDuplex (2) ┆ > ...
+     *     ┗━━━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
      *           Exit                Skip                Skip
      * </pre>
      */
@@ -84,9 +84,9 @@ public enum PipeStatus {
     /**
      * Interrupt pipeline event propagation, and throw Error
      * <pre>
-     *     ┏━━━━━━━━━━━━━━━┓
-     * ... ┃ PipeLayer (0) ┃ > Throw Error
-     *     ┗━━━━━━━━━━━━━━━┛
+     *     ┏━━━━━━━━━━━━━━━━┓
+     * ... ┃ PipeDuplex (0) ┃ > Throw Error
+     *     ┗━━━━━━━━━━━━━━━━┛
      *         Interrupt
      * </pre>
      */

@@ -33,7 +33,7 @@ public interface PipeContext {
     SoConfig getConfig();
 
     /** the channel */
-    SoChannel<?> getChannel();
+    NetDuplexChannel<?> getChannel();
 
     /** the SoContext */
     SoContext getSoContext();

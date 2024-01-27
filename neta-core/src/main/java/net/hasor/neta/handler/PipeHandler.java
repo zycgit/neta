@@ -16,32 +16,41 @@
 package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
 
-import java.io.IOException;
-
 /**
- * Used to represent a unidirectional data processor, two {@link PipeHandler}`s in opposite directions can to {@link PipeLayer}
+ * Used to represent a unidirectional data processor, two {@link PipeHandler}`s in opposite directions can to {@link PipeDuplex}
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
- * @see PipeLayer
+ * @see PipeDuplex
  */
 @FunctionalInterface
 public interface PipeHandler<IN, OUT> {
     /**
-     * Initialize the protocol stack
+     * Initialize the protocol stack.
      */
-    default void initHandler(PipeContext pipeContext) throws Exception {
+    default void onInit(PipeContext context) throws Throwable {
     }
 
     /**
-     * release protocol stack
+     * when the Connected.
      */
-    PipeStatus doHandler(PipeContext context, PipeRcvQueue<IN> src, PipeSndQueue<OUT> dst) throws IOException;
+    default void onActive(PipeContext context) throws Throwable {
+    }
 
-    /** Gets called if a Throwable was thrown. */
-    default PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder<IN, OUT> eh) throws Throwable {
+    /**
+     * process data the protocol stack.
+     */
+    PipeStatus onMessage(PipeContext context, PipeRcvQueue<IN> src, PipeSndQueue<OUT> dst) throws Throwable;
+
+    /**
+     * Gets called if a Throwable was thrown. If an exception occurs, piple executes in the following way.
+     */
+    default PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
         return PipeStatus.Next;
     }
 
-    default void releaseHandler(PipeContext pipeContext) {
+    /**
+     * release protocol stack, connection close.
+     */
+    default void onClose(PipeContext context) {
     }
 }

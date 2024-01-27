@@ -14,12 +14,9 @@
  * limitations under the License.
  */
 package com.example.demo;
-import net.hasor.neta.channel.CobbleSocket;
-import net.hasor.neta.channel.NetChannel;
-import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.channel.NetChannelManager;
 import net.hasor.neta.channel.SoConfig;
-import net.hasor.neta.handler.PipeInitializer;
-import net.hasor.neta.handler.PipeListener;
+import net.hasor.neta.handler.PipeHelper;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
 import net.hasor.neta.handler.codec.string.StringPipeLayer;
 
@@ -31,25 +28,15 @@ import java.io.IOException;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class AioEchoServer {
-    private static final String CTRL_C = new String(new byte[] { -17, -65, -67, -17, -65, -67, -17, -65, -67, -17, -65, -67, 6 });
-
     public static void main(String[] args) throws IOException {
-        PipelineFactory pipeline = PipeInitializer.builder()
+        NetChannelManager socket = new NetChannelManager(new SoConfig());
+        socket.listen("127.0.0.1", 5567, PipeHelper.builder()
                 //split according to \r\n, max line is 4K
-                .nextToDecoder(new LineBasedFrameHandler(4096, false))
+                .nextDecoder(new LineBasedFrameHandler(4096, false))
                 // encoder/decoder string
-                .nextTo(new StringPipeLayer())
+                .nextDuplex(new StringPipeLayer())
                 // echo any message to client
-                .bindReceive((PipeListener<String>) (channel, data) -> {
-                    if (CTRL_C.equals(data)) {
-                        ((NetChannel) channel).sendData("bye.").onFinal(f -> channel.close());
-                    } else {
-                        ((NetChannel) channel).sendData("echo " + data + "\n");
-                    }
-                }).build();
-
-        CobbleSocket socket = new CobbleSocket(new SoConfig());
-        socket.listen("127.0.0.1", 5567, pipeline);
+                .nextDecoder(new TelnetEchoPipeDuplex()).build());
 
         System.in.read();
     }

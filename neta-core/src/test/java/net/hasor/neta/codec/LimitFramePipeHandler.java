@@ -17,10 +17,7 @@ package net.hasor.neta.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.PipeHandler;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.handler.*;
 
 import java.util.Objects;
 
@@ -51,7 +48,12 @@ public class LimitFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
     }
 
     @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+    public void onActive(PipeContext context) throws Throwable {
+
+    }
+
+    @Override
+    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
         ByteBuf dstBuf = null;
 
         while (src.hasMore() && dst.hasSlot()) {
@@ -84,6 +86,16 @@ public class LimitFramePipeHandler implements PipeHandler<ByteBuf, ByteBuf> {
         }
 
         return PipeStatus.Next;
+    }
+
+    @Override
+    public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+        return PipeStatus.Next;
+    }
+
+    @Override
+    public void onClose(PipeContext context) {
+
     }
 
     private int fillLimitFrame(ByteBuf src, ByteBuf dst) {

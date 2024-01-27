@@ -22,12 +22,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2023-09-24
  */
 public interface Pipeline<OUT> {
-    /**
-     * when connected.
-     * @param pipeContext pipeContext
-     */
-    default void init(PipeContext pipeContext) throws Throwable {
-    }
 
     /**
      * Returns the number of available pipeline receive slots, The maximum value is Integer.MAX_VALUE
@@ -40,19 +34,31 @@ public interface Pipeline<OUT> {
     int getSndSlotSize();
 
     /**
+     * when init.
+     * @param pipeContext pipeContext
+     */
+    void onInit(PipeContext pipeContext) throws Throwable;
+
+    /**
+     * when connected.
+     * @param pipeContext pipeContext
+     */
+    void onActive(PipeContext pipeContext) throws Throwable;
+
+    /**
      * Processing received data
      * @param pipeContext pipeContext
      * @param rcvData received data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    OUT[] rcvLayer(PipeContext pipeContext, String pipeName, Object[] rcvData) throws Throwable;
+    OUT[] onRcvMessage(PipeContext pipeContext, String pipeName, Object[] rcvData) throws Throwable;
 
     /**
      * Errors from the network layer.
      * @param pipeContext pipeContext
      * @param rcvError network error.
      */
-    OUT[] rcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable;
+    OUT[] onRcvError(PipeContext pipeContext, String pipeName, Throwable rcvError) throws Throwable;
 
     /**
      * Trigger sending data
@@ -60,19 +66,18 @@ public interface Pipeline<OUT> {
      * @param sndData send data
      * @return The return {@link ByteBuf} or Message, well be send to remote.
      */
-    OUT[] sndLayer(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable;
+    OUT[] onSndMessage(PipeContext pipeContext, String pipeName, Object[] sndData) throws Throwable;
 
     /**
      * Errors from the network layer.
      * @param pipeContext pipeContext
      * @param sndError network error.
      */
-    OUT[] sndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable;
+    OUT[] onSndError(PipeContext pipeContext, String pipeName, Throwable sndError) throws Throwable;
 
     /**
      * before close.
      * @param pipeContext pipeContext
      */
-    default void release(PipeContext pipeContext) {
-    }
+    void onClose(PipeContext pipeContext);
 }

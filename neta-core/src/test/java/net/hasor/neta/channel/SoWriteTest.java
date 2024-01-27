@@ -39,8 +39,8 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
 
         // server say Hello
-        NetaSocket server = new NetaSocket(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty());
+        NetChannelManager server = new NetChannelManager(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty());
         Socket client = new Socket("127.0.0.1", safePort);
 
         listen.waitAnyAccept();
@@ -63,21 +63,24 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void serverSayHelloTest_02() throws Exception {
         // echo pipeline
-        PipelineBuilder<ByteBuf, ByteBuf> pipeline = PipeInitializer.builder();
-        PipelineFactory build = pipeline.nextTo((PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-            if (isRcv) {
-                rcvDown.offerMessage(rcvUp);
-                context.sendData(ByteBufAllocator.DEFAULT.wrap("Hello this message form server.\n".getBytes()));
-            } else {
-                sndDown.offerMessage(sndUp);
-            }
+        PipelineBuilder<ByteBuf, ByteBuf> pipeline = PipeHelper.builder();
+        PipeInitializer build = pipeline.nextDuplex(new SimplePipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
+            @Override
+            public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws Throwable {
+                if (isRcv) {
+                    rcvDown.offerMessage(rcvUp);
+                    context.sendData(ByteBufAllocator.DEFAULT.wrap("Hello this message form server.\n".getBytes()));
+                } else {
+                    sndDown.offerMessage(sndUp);
+                }
 
-            return PipeStatus.Next;
+                return PipeStatus.Next;
+            }
         }).build();
 
         // server start
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(4096, 4096));
+        NetChannelManager server = new NetChannelManager(crateConfig(4096, 4096));
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 
         // client start
@@ -108,14 +111,14 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void serverEchoTest() throws Exception {
         // echo pipeline
-        PipelineFactory pipeline = PipeInitializer.builder((channel, data) -> {
-            ((NetChannel) channel).sendData(data);
-        });
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder((ReceiveHandler<ByteBuf, ByteBuf>) (context, data) -> {
+            ((NetChannel) context.getChannel()).sendData(data);
+        }).build();
 
         // server start
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(4096, 4096));
-        NetListen listen = server.listen("127.0.0.1", safePort, pipeline);
+        NetChannelManager server = new NetChannelManager(crateConfig(4096, 4096));
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // client start
         Socket client = new Socket("127.0.0.1", safePort);
@@ -142,26 +145,28 @@ public class SoWriteTest extends AbstractSoTest {
     public void sndTimeoutTest_01() throws Exception {
         // start server
         AtomicLong sndErrTime = new AtomicLong(0);
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
+
+            }
+
+            @Override
+            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+                if (e instanceof SoWriteTimeoutException) {
+                    sndErrTime.set(System.currentTimeMillis());
+                }
+            }
+        }).build();
+
         int safePort = safePort();
         SoConfig soConfig = crateConfig(8, 30);
 
         soConfig.setSoWriteTimeoutMs(1);
 
-        NetaSocket server = new NetaSocket(soConfig);
+        NetChannelManager server = new NetChannelManager(soConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
-            @Override
-            public void onReceive(SoChannel<?> channel, ByteBuf data) {
-
-            }
-
-            @Override
-            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
-                if (e instanceof SoWriteTimeoutException) {
-                    sndErrTime.set(System.currentTimeMillis());
-                }
-            }
-        }));
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -184,22 +189,25 @@ public class SoWriteTest extends AbstractSoTest {
     public void sndThrowTest_01() throws Exception {
         AtomicBoolean sndErr1 = new AtomicBoolean(false);
 
-        PipeBuilder.PipelineBuilder<ByteBuf, ByteBuf> empty = PipeInitializer.builder();
-        PipelineFactory build = empty//
-                .nextTo("L1", (PipeLayer<ByteBuf, String, String, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-                    if (!isRcv) {
-                        throw new IllegalStateException();
-                    } else {
-                        return PipeStatus.Next;
-                    }
-                }).bindReceive(new PipeListener<String>() {
+        PipeBuilder.PipelineBuilder<ByteBuf, ByteBuf> empty = PipeHelper.builder();
+        PipeInitializer build = empty//
+                .nextDuplex("L1", new SimplePipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
                     @Override
-                    public void onReceive(SoChannel<?> channel, String data) {
+                    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws Throwable {
+                        if (!isRcv) {
+                            throw new IllegalStateException();
+                        } else {
+                            return PipeStatus.Next;
+                        }
+                    }
+                }).nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
+                    @Override
+                    public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
 
                     }
 
                     @Override
-                    public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+                    public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                         sndErr1.set(e instanceof IllegalStateException);
                         throw new IllegalArgumentException();
                     }
@@ -209,7 +217,7 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetChannelManager server = new NetChannelManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 

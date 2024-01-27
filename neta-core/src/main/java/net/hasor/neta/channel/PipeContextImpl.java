@@ -27,12 +27,12 @@ import java.util.Map;
  * @version : 2023-09-24
  */
 public class PipeContextImpl implements PipeContext {
-    private final SoChannel<?>          channel;
+    private final NetDuplexChannel<?>   channel;
     private final SoContext             soContext;
     private final Map<Class<?>, Object> pipeContext;
     private final Map<String, Object>   flash;
 
-    protected PipeContextImpl(SoChannel<?> channel, SoContext soContext) {
+    protected PipeContextImpl(NetDuplexChannel<?> channel, SoContext soContext) {
         this.channel = channel;
         this.soContext = soContext;
         this.pipeContext = new HashMap<>();
@@ -45,7 +45,7 @@ public class PipeContextImpl implements PipeContext {
     }
 
     @Override
-    public SoChannel<?> getChannel() {
+    public NetDuplexChannel<?> getChannel() {
         return this.channel;
     }
 

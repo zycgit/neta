@@ -16,7 +16,9 @@
 package net.hasor.neta.handler;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.PipeInitializer;
+import net.hasor.neta.channel.SimplePipeLayer;
 import org.junit.Test;
 
 /**
@@ -27,7 +29,7 @@ public class CourierHandlerTest {
     @Test
     public void courierFrame_1() {
         CourierHandler<ByteBuf> courier = new CourierHandler<>();
-        PipelineFactory pipeStack = new PipeInitializer().nextTo(courier, courier).build();
+        PipeInitializer pipeStack = new PipeHelper().nextHandler(courier, courier).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
@@ -58,30 +60,25 @@ public class CourierHandlerTest {
     public void courierFrame_2() {
         CourierHandler<ByteBuf> courier = new CourierHandler<>();
 
-        PipelineFactory pipeStack = new PipeInitializer()//
-                .nextTo((PipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-                    rcvDown.offerMessage(rcvUp);
-                    sndDown.offerMessage(sndUp);
-                    throw new IllegalStateException();
-                }).nextTo(courier, courier).build();
+        PipeInitializer pipeStack = new PipeHelper()//
+                .nextDuplex("L1", new SimplePipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
+                    @Override
+                    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws Throwable {
+                        rcvDown.offerMessage(rcvUp);
+                        sndDown.offerMessage(sndUp);
+                        throw new IllegalStateException();
+                    }
+                }).nextHandler(courier, courier).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);
 
+        assert channel.getPipeStatistical().heapUpOfRcv() == 0;
+
         channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }));
 
-        ByteBuf buf1 = (ByteBuf) channel.readRcvDown();
-        assert buf1.readableBytes() == 9;
-        assert buf1.getByte(0) == 0;
-        assert buf1.getByte(1) == 1;
-        assert buf1.getByte(2) == 2;
-        assert buf1.getByte(3) == 3;
-        assert buf1.getByte(4) == 4;
-        assert buf1.getByte(5) == 5;
-        assert buf1.getByte(6) == 6;
-        assert buf1.getByte(7) == 7;
-        assert buf1.getByte(8) == 8;
-        ByteBuf buf2 = (ByteBuf) channel.readRcvDown();
-        assert buf2 == null;
+        assert channel.readRcvDown() == null;
+        assert channel.readRcvDown() == null;
+        assert channel.getPipeStatistical().heapUpOfRcv() == 1;
     }
 }

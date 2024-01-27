@@ -23,15 +23,7 @@ import net.hasor.neta.channel.PipeContext;
  */
 public class CourierHandler<T> implements PipeHandler<T, T> {
     @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
-    }
-
-    @Override
-    public PipeStatus doError(PipeContext context, Throwable e, PipeExceptionHolder<T, T> eh) {
-        PipeRcvQueue<T> src = eh.src();
-        PipeSndQueue<T> dst = eh.dst();
+    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
         dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
         return PipeStatus.Next;
     }

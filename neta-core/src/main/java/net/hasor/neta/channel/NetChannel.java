@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetChannel extends AttributeChannel<NetChannel> {
+public class NetChannel extends AttributeChannel<NetChannel> implements NetDuplexChannel<NetChannel> {
     private static final Logger                 logger = Logger.getLogger(NetChannel.class);
     private final        long                   channelID;
     private final        NetListen              forListen;
@@ -52,8 +52,8 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     private final        Object                 readTimeoutSyncObj;
     private              long                   lastNotifyRcvRetryTime;
     //
-    private final        SoRcvCompletionHandler rHandler;
-    private final        SoSndCompletionHandler wHandler;
+    protected final      SoRcvCompletionHandler rHandler;
+    protected final      SoSndCompletionHandler wHandler;
     private final        AtomicBoolean          wStatus;
     //
     protected            PipeContextImpl        pipeCtx;
@@ -86,7 +86,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         this.wStatus = new AtomicBoolean(false);
     }
 
-    protected void initPipe(PipeContextImpl pipeContext, Pipeline<?> pipeline) {
+    protected void initChannel(PipeContextImpl pipeContext, Pipeline<?> pipeline) {
         this.pipeCtx = pipeContext;
         this.pipeline = (Pipeline<ByteBuf>) pipeline;
     }
@@ -121,6 +121,16 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return this.lastRcvTime;
     }
 
+    /** Returns the receiving Handler state */
+    public SoHandlerStatus getRcvHandlerStatus() {
+        return this.rHandler.getStatus();
+    }
+
+    /** Returns the send Handler state */
+    public SoHandlerStatus getSndHandlerStatus() {
+        return this.wHandler.getStatus();
+    }
+
     @Override
     public boolean isServer() {
         return this.forListen != null;
@@ -131,25 +141,17 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         return this.forListen == null;
     }
 
-    /** Returns whether the read channel is closed. */
+    @Override
     public boolean isShutdownInput() {
         return this.channel.isShutdownInput();
     }
 
-    /**
-     * <p>When shutdownOutput is called remotely, an end of read flag was encountered, which usually means closing the channel.
-     * But the remote still has the ability to receive data.</p>
-     *
-     * <p>so use {@link #ignoreReadEofFlag()} method, keep the channel state and continue to send data</p>
-     *
-     * <p>Once {@link #ignoreReadEofFlag()} is activated, the release of remote connections needs to be managed manually,
-     * leading to {@link NetChannel} leakage if not released in time</p>
-     */
+    @Override
     public void ignoreReadEofFlag() {
         this.channel.ignoreReadEofFlag();
     }
 
-    /** Shutdown the connection for reading without closing the channel. */
+    @Override
     public void shutdownInput() {
         try {
             if (this.netLog) {
@@ -161,28 +163,18 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         }
     }
 
-    /** Returns the receiving Handler state */
-    public SoHandlerStatus getRcvHandlerStatus() {
-        return this.rHandler.getStatus();
-    }
-
-    /** Returns whether the write channel is closed. */
+    @Override
     public boolean isShutdownOutput() {
         return this.channel.isShutdownOutput();
     }
 
-    /** Shutdown the connection for write without closing the channel. */
+    @Override
     public void shutdownOutput() {
         try {
             this.channel.shutdownOutput();
         } catch (NotYetConnectedException | IOException e) {
             logger.warn("channel(" + this.channelID + ") shutdownOutput " + e.getMessage(), e);
         }
-    }
-
-    /** Returns the send Handler state */
-    public SoHandlerStatus getSndHandlerStatus() {
-        return this.wHandler.getStatus();
     }
 
     @Override
@@ -206,7 +198,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
     }
 
     /** Returns the {@link NetListen} that accepts this channel */
-    public NetListen getSource() {
+    public NetListen getListen() {
         return this.forListen;
     }
 
@@ -311,13 +303,13 @@ public class NetChannel extends AttributeChannel<NetChannel> {
 
             if (this.pipeline.getRcvSlotSize() == 0) {
                 logger.info("rcv(" + this.channelID + ") the pipeline slot is full.");
-                this.pipeline.rcvError(this.pipeCtx, null, PipeFullException.INSTANCE);
+                this.pipeline.onRcvError(this.pipeCtx, null, PipeFullException.INSTANCE);
                 return;
             }
 
             //The root Buffer cannot be deallocated
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            Object[] sndBufSet = this.pipeline.rcvLayer(this.pipeCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
+            Object[] sndBufSet = this.pipeline.onRcvMessage(this.pipeCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -342,9 +334,9 @@ public class NetChannel extends AttributeChannel<NetChannel> {
             //The root Buffer cannot be deallocated
             Object[] sndBufSet;
             if (isRcv) {
-                sndBufSet = this.pipeline.rcvError(this.pipeCtx, null, e);
+                sndBufSet = this.pipeline.onRcvError(this.pipeCtx, null, e);
             } else {
-                sndBufSet = this.pipeline.sndError(this.pipeCtx, null, e);
+                sndBufSet = this.pipeline.onSndError(this.pipeCtx, null, e);
             }
 
             for (Object sndBuf : sndBufSet) {
@@ -365,6 +357,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         }
     }
 
+    @Deprecated
     private static class ByteBufSafe extends ByteBufAdapter {
         public ByteBufSafe(ByteBuf byteBuf) {
             super(byteBuf);
@@ -398,7 +391,7 @@ public class NetChannel extends AttributeChannel<NetChannel> {
         }
 
         try {
-            Object[] sndByteBuf = this.pipeline.sndLayer(this.pipeCtx, pipeName, new Object[] { writeData });
+            Object[] sndByteBuf = this.pipeline.onSndMessage(this.pipeCtx, pipeName, new Object[] { writeData });
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
             for (Object buf : sndByteBuf) {
                 Future<NetChannel> itemFuture = new BasicFuture<>();

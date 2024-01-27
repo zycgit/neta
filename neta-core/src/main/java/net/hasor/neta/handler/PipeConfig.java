@@ -30,7 +30,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  *
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
- * @see PipeLayer
+ * @see PipeDuplex
  */
 public class PipeConfig {
     private int pipeRcvDownStackSize = -1;

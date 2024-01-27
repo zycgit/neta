@@ -1,7 +1,7 @@
 
 2. 兼容 PKCS12
 JKS 密钥库使用专用格式。建议使用 "keytool -importkeystore -srckeystore local.jks -destkeystore local.jks -deststoretype pkcs12" 迁移到行业标准格式 PKCS12。
-
+https://tomcat.apache.org/native-doc/
 
 高优先
 1. 优雅关闭（需要测试）

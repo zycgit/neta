@@ -53,7 +53,7 @@ public class StringDecoderHandler implements PipeHandler<ByteBuf, String> {
     }
 
     @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
+    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
         boolean hasAny = false;
         while (src.hasMore()) {
             ByteBuf byteBuf = src.takeMessage();

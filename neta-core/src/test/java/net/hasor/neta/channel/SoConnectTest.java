@@ -19,7 +19,8 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.handler.PipeInitializer;
+import net.hasor.neta.handler.PipeHelper;
+import net.hasor.neta.handler.ReceiveHandler;
 import org.junit.Test;
 
 import java.io.OutputStream;
@@ -47,12 +48,13 @@ public class SoConnectTest extends AbstractSoTest {
 
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer();
-        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
-        Future<NetChannel> future = neta.connect(safePort, PipeInitializer.builder((channel, data) -> {
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder((ReceiveHandler<ByteBuf, ByteBuf>) (context, data) -> {
             buf.write(data);
-            buf.markWriter();
             data.markReader();
-        }));
+        }).build();
+
+        NetChannelManager neta = new NetChannelManager(crateConfig(2, 32));
+        Future<NetChannel> future = neta.connect(safePort, initializer);
 
         NetChannel remote = future.get();
         while (!remote.isClose()) {
@@ -70,8 +72,8 @@ public class SoConnectTest extends AbstractSoTest {
         int safePort = safePort();
 
         //
-        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
-        Future<NetChannel> future = neta.connect(safePort, PipeInitializer.empty());
+        NetChannelManager neta = new NetChannelManager(crateConfig(2, 32));
+        Future<NetChannel> future = neta.connect(safePort, PipeHelper.empty());
         neta.shutdown();
 
         ServerSocket server = new ServerSocket(safePort);

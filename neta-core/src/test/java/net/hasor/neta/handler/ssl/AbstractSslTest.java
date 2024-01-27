@@ -18,7 +18,7 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.channel.PipeInitializer;
 import net.hasor.neta.codec.LimitFramePipeHandler;
 import net.hasor.neta.handler.*;
 
@@ -32,34 +32,34 @@ import java.util.List;
  * @version : 2022-11-01
  */
 public class AbstractSslTest {
-    public static PipelineFactory createPipeline(SslConfig sslConf, PipeListener<String> listener) {
+    public static PipeInitializer createPipeline(SslConfig sslConf, PipeHandler<String, String> last) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
         LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        return new PipeInitializer()
+        return new PipeHelper()
                 // limitFrame
-                .nextTo("LIMIT", new PipeDuplexLayer<>(limitFrame, limitFrame))
+                .nextDuplex("LIMIT", new PipeDuplexHandler<>(limitFrame, limitFrame))
                 // SSL
-                .nextTo("SSL", new SslPipeLayer(sslConf))
+                .nextDuplex("SSL", new SslPipeLayer(sslConf))
                 // bytes <-> String
-                .nextTo("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                .nextHandler("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .bindReceive(listener).build();
+                .nextDecoder(last).build();
     }
 
-    public static PipelineFactory createPipeline(SslConfig sslConf) {
+    public static PipeInitializer createPipeline(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
         LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        return new PipeInitializer()
+        return new PipeHelper()
                 // limitFrame
-                .nextTo("LIMIT", new PipeDuplexLayer<>(limitFrame, limitFrame))
+                .nextDuplex("LIMIT", new PipeDuplexHandler<>(limitFrame, limitFrame))
                 // SSL
-                .nextTo("SSL", new SslPipeLayer(sslConf))
+                .nextDuplex("SSL", new SslPipeLayer(sslConf))
                 // bytes <-> String
-                .nextTo("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                .nextHandler("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
                 .build();
     }

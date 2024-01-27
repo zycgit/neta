@@ -20,8 +20,6 @@ import net.hasor.cobble.concurrent.future.Future;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -41,16 +39,15 @@ public class NetListen extends AttributeChannel<NetListen> {
     //
     private final    InetSocketAddress               listen;
     protected final  AsynchronousServerSocketChannel channel;
-    private final    PipelineFactory                 pipeline;
+    private final    PipeInitializer                 initializer;
     private final    SoContextImpl                   context;
     private volatile boolean                         suspend;
-    private final    List<NetListener>               listeners;
     //
     protected final  AtomicBoolean                   closeStatus;
     protected final  Future<NetListen>               closeFuture;
 
     NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel,//
-            PipelineFactory pipeline, SoContextImpl context, NetListenOptions options) {
+            PipeInitializer initializer, SoContextImpl context, NetListenOptions options) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
@@ -59,10 +56,9 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.closeLock = new Object();
         this.listen = listen;
         this.channel = channel;
-        this.pipeline = pipeline;
+        this.initializer = initializer;
         this.context = context;
         this.suspend = options.isSuspend();
-        this.listeners = new ArrayList<>();
 
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
@@ -129,7 +125,7 @@ public class NetListen extends AttributeChannel<NetListen> {
      */
     public NetChannel findChannel(long channelID) {
         SoChannel<?> channel = this.context.findChannel(channelID);
-        if (channel != null && ((NetChannel) channel).getSource() == this) {
+        if (channel != null && ((NetChannel) channel).getListen() == this) {
             return (NetChannel) channel;
         } else {
             return null;
@@ -177,29 +173,9 @@ public class NetListen extends AttributeChannel<NetListen> {
         return this.listen.getPort();
     }
 
-    /**
-     * add {@link NetListener}
-     */
-    public NetListen addListener(NetListener listener) {
-        if (!this.listeners.contains(listener)) {
-            this.listeners.add(listener);
-        }
-        return this;
-    }
-
-    /**
-     * remove {@link NetListener}
-     */
-    public NetListen removeListener(NetListener listener) {
-        this.listeners.remove(listener);
-        return this;
-    }
-
-    /**
-     * return Application layer network protocol stack to use
-     */
-    PipelineFactory getPipeline() {
-        return this.pipeline;
+    /** return Application layer network protocol stack to use */
+    PipeInitializer getInitializer() {
+        return initializer;
     }
 
     @Override
@@ -240,53 +216,29 @@ public class NetListen extends AttributeChannel<NetListen> {
      * a new accept socket
      */
     final void notifyAccept(NetChannel channel) {
-        this.lastActiveTime = System.currentTimeMillis();
-        this.lastAcceptTime = System.currentTimeMillis();
-        this.acceptCount.incrementAndGet();
+        if (channel.getListen() == this) {
+            this.lastActiveTime = System.currentTimeMillis();
+            this.lastAcceptTime = System.currentTimeMillis();
+            this.acceptCount.incrementAndGet();
 
-        for (NetListener listener : listeners) {
-            try {
-                listener.accept(channel);
-            } catch (Exception ignored) {
-
+            synchronized (this.acceptLock) {
+                this.acceptLock.notifyAll();
             }
-        }
-
-        synchronized (acceptLock) {
-            acceptLock.notifyAll();
         }
     }
 
     /**
      * socket closed
      */
-    final Future<NetListen> notifyClose(NetChannel channel, boolean async) {
-        this.lastActiveTime = System.currentTimeMillis();
-        this.acceptCount.decrementAndGet();
+    final void notifyClose(NetChannel channel) {
+        if (channel.getListen() == this) {
+            this.lastActiveTime = System.currentTimeMillis();
+            this.acceptCount.decrementAndGet();
 
-        Runnable task = () -> {
-            for (NetListener listener : this.listeners) {
-                try {
-                    listener.close(channel);
-                } catch (Exception ignored) {
-                }
+            synchronized (this.closeLock) {
+                this.closeLock.notifyAll();
             }
-
-            synchronized (closeLock) {
-                closeLock.notifyAll();
-            }
-        };
-
-        if (async) {
-            return this.context.submitSoTask(channel.getChannelID(), new SimpleTask(task), this);
-        } else {
-            task.run();
-            return new BasicFuture<>(this);
         }
-    }
-
-    public void notifyError(Throwable e) {
-
     }
 
     /** Wait for an incoming. */
@@ -312,7 +264,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     /** Wait for all disconnection. */
     public boolean waitIdle() {
         while (true) {
-            if (this.acceptCount.get() == 0) {
+            if (this.acceptCount.get() <= 0) {
                 return true;
             }
             synchronized (this.closeLock) {

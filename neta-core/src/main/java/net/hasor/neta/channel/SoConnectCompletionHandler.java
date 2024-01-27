@@ -15,11 +15,8 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 
-import java.io.IOException;
-import java.net.SocketAddress;
 import java.nio.channels.CompletionHandler;
 
 /**
@@ -29,15 +26,13 @@ import java.nio.channels.CompletionHandler;
  */
 class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger             logger = Logger.getLogger(SoConnectCompletionHandler.class);
-    private final        SocketAddress      remoteAddress;
-    private final        PipelineFactory    stackFactory;
-    private final        SoAsyncChannel     channel;
+    private final        Pipeline<?>        pipeline;
+    private final        NetChannel         channel;
     private final        Future<NetChannel> future;
 
-    public SoConnectCompletionHandler(SoAsyncChannel channel, PipelineFactory stackFactory, Future<NetChannel> future) throws IOException {
-        this.remoteAddress = channel.getRemoteAddress();
+    public SoConnectCompletionHandler(NetChannel channel, Pipeline<?> pipeline, Future<NetChannel> future) {
+        this.pipeline = pipeline;
         this.channel = channel;
-        this.stackFactory = stackFactory;
         this.future = future;
     }
 
@@ -46,55 +41,18 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         // when close then exit.
         if (context.isClose()) {
             logger.error("ERROR: Connect Failed, context is closed.");
-            IOUtils.closeQuietly(this.channel);
-            this.failed(SoCloseException.INSTANCE, context);
+            this.channel.close();
             return;
         }
 
-        SocketAddress localAddr;
-        SocketAddress remoteAddr;
         try {
-            localAddr = this.channel.getLocalAddress();
-            remoteAddr = this.channel.getRemoteAddress();
-        } catch (Exception e) {
-            logger.error("ERROR: Connect Failed, " + e.getMessage(), e);
-            IOUtils.closeQuietly(this.channel);
-            this.failed(e, context);
-            return;
-        }
-
-        long channelID = context.nextID();
-        long createdTime = System.currentTimeMillis();
-        context.specialConfig(channelID, this.remoteAddress);
-
-        SoSndContext wContext = new SoSndContext(channelID, createdTime, context);
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, this.channel, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, this.channel, wContext);
-        NetChannel channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, this.channel, rChannel, wChannel, wContext);
-
-        // init and pipe
-        try {
-            PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
-            Pipeline<?> pipeStack = this.stackFactory.create(pipeCtx);
-            channel.initPipe(pipeCtx, pipeStack);
-            context.openChannel(channel);
+            this.pipeline.onActive(this.channel.pipeCtx);
+            this.future.completed(this.channel);
         } catch (Throwable e) {
-            logger.error("ERROR: Connect Failed, " + e.getMessage(), e);
-            IOUtils.closeQuietly(this.channel);
-            this.failed(e, context);
-            return;
+            logger.error("ERROR: Connect finish, but onActive failed.");
+            this.channel.close();
+            this.future.failed(e);
         }
-
-        // continue accept
-        try {
-            logger.info("connect(" + channelID + ") L:" + this.channel.getLocalAddress() + " -> R:" + this.channel.getRemoteAddress());
-        } catch (Exception e) {
-            logger.info("connect(" + channelID + ")");
-        }
-
-        // async read data
-        rChannel.read();
-        this.future.completed(channel);
     }
 
     @Override

@@ -52,7 +52,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         // when close then exit.
         if (this.forListen.isClose() || context.isClose()) {
             this.running = false;
-            closeAccept(result, "Listen is Closed");
+            closeAccept(result, "Listen is Closed.");
             return;
         }
 
@@ -61,7 +61,7 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
 
         // listen is suspend
         if (this.forListen.isSuspend()) {
-            closeAccept(result, "Listen is Suspend");
+            closeAccept(result, "Listen is Suspend.");
             return;
         }
 
@@ -97,27 +97,30 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
 
         SoSndContext wContext = new SoSndContext(channelID, createdTime, context);
         SoAsyncChannel asyncChannel = new SoAsyncChannel(result, context.getConfig());
-        SoRcvCompletionHandler rChannel = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, context);
-        SoSndCompletionHandler wChannel = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
-        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, asyncChannel, rChannel, wChannel, wContext);
+        SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, context);
+        SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
+        NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
 
         // init and pipe
         try {
             PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
-            Pipeline<?> pipeline = this.forListen.getPipeline().create(pipeCtx);
-            channel.initPipe(pipeCtx, pipeline);
+            Pipeline<?> pipeline = this.forListen.getInitializer().create(pipeCtx);
+            channel.initChannel(pipeCtx, pipeline);
             context.openChannel(channel);
+
+            pipeline.onInit(channel.pipeCtx);
+            pipeline.onActive(pipeCtx);
+
             logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
+            this.forListen.notifyAccept(channel);
         } catch (Throwable e) {
             IOUtils.closeQuietly(result);
             logger.error("ERROR: Accept Failed " + e.getMessage(), e);
             return;
         }
 
-        this.forListen.notifyAccept(channel);
-
         // async read data
-        rChannel.read();
+        rHandler.read();
     }
 
     @Override

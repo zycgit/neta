@@ -72,7 +72,7 @@ public class LimitFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
     }
 
     @Override
-    public PipeStatus doHandler(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
         ByteBuf dstBuf = null;
 
         while (src.hasMore() && dst.hasSlot()) {

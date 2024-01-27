@@ -93,7 +93,7 @@ public class EmbeddedSoContext implements SoContext {
     }
 
     @Override
-    public NetaSocket getNeta() {
+    public NetChannelManager getNeta() {
         throw new UnsupportedOperationException();
     }
 
@@ -104,7 +104,7 @@ public class EmbeddedSoContext implements SoContext {
         this.channelMap.remove(channelID);
 
         EmbeddedChannel netChannel = (EmbeddedChannel) channel;
-        netChannel.pipeStack.release(netChannel.pipeCtx);
+        netChannel.pipeline.onClose(netChannel.pipeCtx);
 
         logger.info("channel(" + channelID + ") closed.");
     }

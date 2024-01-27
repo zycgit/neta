@@ -14,23 +14,26 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.logging.Logger;
+
 /**
  * closing the channel.
  * @version : 2023-10-09
  * @author 赵永春 (zyc@hasor.net)
  */
 class SoCloseTask extends DefaultSoTask {
-    private final long          channelID;
-    private final SoContextImpl context;
-    private final boolean       forceNow;
+    private static final Logger        logger = Logger.getLogger(SoCloseTask.class);
+    private final        long          channelID;
+    private final        SoContextImpl context;
+    private final        boolean       forceNow;
     //
-    private       boolean       notifyStatus;
+    private              boolean       printLog;
 
     public SoCloseTask(long channelID, SoContextImpl context, boolean forceNow) {
         this.channelID = channelID;
         this.context = context;
         this.forceNow = forceNow;
-        this.notifyStatus = false;
+        this.printLog = false;
     }
 
     @Override
@@ -41,27 +44,32 @@ class SoCloseTask extends DefaultSoTask {
             return;
         }
 
-        String msg = "channel(" + this.channelID + ") close form local.";
         if (channel.isClient() || channel.isServer()) {
             if (this.forceNow) {
+                String msg = "channel(" + this.channelID + ") close now form local.";
                 this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
                 this.finishTask();
             } else {
                 NetChannel netChannel = (NetChannel) channel;
+                boolean needWaiting = !netChannel.wContext.isEmpty();
+
+                // notifyRcv last message
+                if (!this.printLog) {
+                    if (needWaiting) {
+                        logger.info("channel(" + this.channelID + ") safe close form local, waiting send finish.");
+                    } else {
+                        logger.info("channel(" + this.channelID + ") safe close form local.");
+                    }
+                    this.printLog = true;
+                }
 
                 // shutdownInput
                 if (!netChannel.isShutdownInput()) {
                     netChannel.shutdownInput();
                 }
 
-                // notifyRcv last message
-                if (!this.notifyStatus) {
-                    netChannel.notifyError(true, SoCloseException.INSTANCE);
-                    this.notifyStatus = true;
-                }
-
                 // wait send finish
-                if (!netChannel.wContext.isEmpty()) {
+                if (needWaiting) {
                     continueTask();
                     return;
                 }
@@ -71,10 +79,13 @@ class SoCloseTask extends DefaultSoTask {
                     return;
                 }
 
+                String msg = "channel(" + this.channelID + ") safe close form local.";
+                this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
                 netChannel.shutdownOutput();
                 finishTask();
             }
         } else {
+            String msg = "channel(" + this.channelID + ") close Listen.";
             this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
             this.finishTask();
         }

@@ -19,6 +19,10 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
+import net.hasor.neta.handler.PipeHandler;
+import net.hasor.neta.handler.PipeRcvQueue;
+import net.hasor.neta.handler.PipeSndQueue;
+import net.hasor.neta.handler.PipeStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -69,15 +73,20 @@ public class AbstractSoTest {
         return config;
     }
 
-    public static NetListener counter(AtomicInteger counter) {
-        return new NetListener() {
+    public static PipeHandler counter(AtomicInteger counter) {
+        return new PipeHandler() {
             @Override
-            public void accept(NetChannel channel) {
+            public void onActive(PipeContext context) throws Throwable {
                 counter.incrementAndGet();
             }
 
             @Override
-            public void close(NetChannel channel) {
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue src, PipeSndQueue dst) throws Throwable {
+                return PipeStatus.Next;
+            }
+
+            @Override
+            public void onClose(PipeContext context) {
                 counter.decrementAndGet();
             }
         };

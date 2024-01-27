@@ -39,7 +39,7 @@ class SoOptions {
         SocketOption<Integer> tcpKeepIdleTmp;
         try {
             tcpKeepIdleTmp = ExtendedSocketOptions.TCP_KEEPIDLE;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             logger.warn("your jdk does not support TCP_KEEPIDLE parameter, please upgrade to 1.8.0_333+");
             tcpKeepIdleTmp = null;
         }
@@ -48,7 +48,7 @@ class SoOptions {
         SocketOption<Integer> tcpKeepIntervalTmp;
         try {
             tcpKeepIntervalTmp = ExtendedSocketOptions.TCP_KEEPINTERVAL;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             logger.warn("your jdk does not support TCP_KEEPINTERVAL parameter, please upgrade to 1.8.0_333+");
             tcpKeepIntervalTmp = null;
         }
@@ -57,7 +57,7 @@ class SoOptions {
         SocketOption<Integer> tcpKeepCountTmp;
         try {
             tcpKeepCountTmp = ExtendedSocketOptions.TCP_KEEPCOUNT;
-        } catch (Exception e) {
+        } catch (Throwable e) {
             logger.warn("your jdk does not support TCP_KEEPCOUNT parameter, please upgrade to 1.8.0_333+");
             tcpKeepCountTmp = null;
         }

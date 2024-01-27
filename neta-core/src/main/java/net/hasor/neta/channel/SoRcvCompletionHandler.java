@@ -103,9 +103,12 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
             if (this.channel.isShutdownInput()) {
                 // for ShutdownInput local
-                String msg = "rcv(" + this.channelID + ") shutdownInput form local.";
-                logger.info(msg);
-                this.context.notifyRcvChannelError(this.channelID, SoInputCloseException.INSTANCE);
+                NetChannel netChannel = (NetChannel) this.context.findChannel(this.channelID);
+                if (netChannel != null && !netChannel.closeStatus.get()) {
+                    String msg = "rcv(" + this.channelID + ") shutdownInput form local.";
+                    logger.info(msg);
+                    this.context.notifyRcvChannelError(this.channelID, SoInputCloseException.INSTANCE);
+                }
             } else if (!this.channel.isIgnoreReadEofFlag()) {
                 // for Remote
                 String msg = "rcv(" + this.channelID + ") close form remote.";

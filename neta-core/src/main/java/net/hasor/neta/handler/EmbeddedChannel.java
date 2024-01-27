@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
+public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implements NetDuplexChannel<EmbeddedChannel> {
     private final        long                    channelID;
     private final        long                    createdTime;
     private              long                    lastActiveTime;
@@ -44,7 +44,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     private final        PipeQueue<Object>       sndDown;
     private              Throwable               sndError;
     protected final      PipeContext             pipeCtx;
-    protected final      PipeChainRoot           pipeStack;
+    protected final      PipeChainRoot           pipeline;
     //
     private final        AtomicBoolean           closeStatus;
     private final        Future<EmbeddedChannel> closeFuture;
@@ -81,7 +81,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         }
     }
 
-    public EmbeddedChannel(boolean asServer, PipelineFactory stackFactory, EmbeddedSoContext context) {
+    public EmbeddedChannel(boolean asServer, PipeInitializer initializer, EmbeddedSoContext context) {
         this.channelID = EmbeddedSoContext.nextID();
         this.createdTime = System.currentTimeMillis();
         this.lastActiveTime = System.currentTimeMillis();
@@ -93,28 +93,39 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
             this.rcvDown = new PipeQueue<>(-1);
             this.sndDown = new PipeQueue<>(-1);
             this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
-            this.pipeStack = (PipeChainRoot) stackFactory.create(this.pipeCtx);
-        } catch (Throwable e) {
-            throw ExceptionUtils.toRuntime(e);
-        }
+            this.pipeline = (PipeChainRoot) initializer.create(this.pipeCtx);
+            this.pipeline.addLayer(new PipeInvocation<>("Embedded", new PipeConfig(), new PipeDuplex<Object, Object, Object, Object>() {
 
-        if (this.pipeStack.getListener() == null) {
-            this.pipeStack.bindListener(new PipeListener<Object>() {
                 @Override
-                public void onReceive(SoChannel<?> channel, Object data) {
-                    rcvDown.offerMessage(data);
-                    rcvDown.sndSubmit();
+                public PipeStatus onMessage(PipeContext context, boolean isRcv,     //
+                        PipeRcvQueue<Object> rcvUp, PipeSndQueue<Object> rcvIgnore, //
+                        PipeRcvQueue<Object> sndUp, PipeSndQueue<Object> sndIgnore) {
+                    if (isRcv) {
+                        rcvDown.offerMessage(rcvUp);
+                        rcvDown.sndSubmit();
+                    } else {
+                        sndDown.offerMessage(sndUp);
+                        sndDown.sndSubmit();
+                    }
+                    return PipeStatus.Next;
                 }
 
                 @Override
-                public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+                public PipeStatus onError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHolder eh) {
                     if (isRcv) {
                         rcvError = e;
                     } else {
                         sndError = e;
                     }
+                    eh.clear();
+                    return PipeStatus.Next;
                 }
-            });
+            }));
+
+            this.pipeline.onInit(this.pipeCtx);
+            this.pipeline.onActive(this.pipeCtx);
+        } catch (Throwable e) {
+            throw ExceptionUtils.toRuntime(e);
         }
 
         this.closeStatus = new AtomicBoolean(false);
@@ -194,9 +205,34 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         return this.closeStatus.get();
     }
 
+    @Override
+    public boolean isShutdownInput() {
+        return false;
+    }
+
+    @Override
+    public void shutdownInput() {
+
+    }
+
+    @Override
+    public void ignoreReadEofFlag() {
+
+    }
+
+    @Override
+    public boolean isShutdownOutput() {
+        return false;
+    }
+
+    @Override
+    public void shutdownOutput() {
+
+    }
+
     /** Get protocol stack statistics */
     public PipeStatistical getPipeStatistical() {
-        return this.pipeStack;
+        return this.pipeline;
     }
 
     /**
@@ -239,7 +275,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
         try {
             Objects.requireNonNull(object, "object is null.");
             this.lastActiveTime = System.currentTimeMillis();
-            Object[] sndDownObj = this.pipeStack.rcvLayer(this.pipeCtx, pipeName, object);
+            Object[] sndDownObj = this.pipeline.onRcvMessage(this.pipeCtx, pipeName, object);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
@@ -265,7 +301,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     public void writeRcvUpError(String pipeName, Throwable e) {
         try {
             this.lastActiveTime = System.currentTimeMillis();
-            Object[] sndDownObj = this.pipeStack.rcvError(this.pipeCtx, pipeName, e);
+            Object[] sndDownObj = this.pipeline.onRcvError(this.pipeCtx, pipeName, e);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
@@ -363,7 +399,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     public <T> void writeSndUpArray(String pipeName, T[] object) {
         try {
             Objects.requireNonNull(object, "object is null.");
-            Object[] sndDownObj = this.pipeStack.sndLayer(this.pipeCtx, pipeName, object);
+            Object[] sndDownObj = this.pipeline.onSndMessage(this.pipeCtx, pipeName, object);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
@@ -389,7 +425,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> {
     public void writeSndUpError(String pipeName, Throwable e) {
         try {
             Objects.requireNonNull(e);
-            Object[] sndDownObj = this.pipeStack.sndError(this.pipeCtx, pipeName, e);
+            Object[] sndDownObj = this.pipeline.onSndError(this.pipeCtx, pipeName, e);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();

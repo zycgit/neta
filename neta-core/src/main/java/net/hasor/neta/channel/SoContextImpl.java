@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.concurrent.timer.TimerTask;
@@ -37,9 +36,9 @@ import java.util.function.Consumer;
 class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
     private final        AtomicLong                 nextID = new AtomicLong(0);
-    private final SoConfig    config;
-    private final NetaSocket  cobble;
-    private final ClassLoader useClassLoader;
+    private final        SoConfig                   config;
+    private final        NetChannelManager          cobble;
+    private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
     //
     private final        HashedWheelTimer           globalTimer;
@@ -54,7 +53,7 @@ class SoContextImpl implements SoContext {
     private final        Queue<NetChannel>          channelList;
     private final        Queue<NetListen>           listenList;
 
-    public SoContextImpl(SoConfig config, NetaSocket cobble) {
+    public SoContextImpl(SoConfig config, NetChannelManager cobble) {
         this.cobble = cobble;
         this.config = Objects.requireNonNull(config);
         this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
@@ -187,7 +186,7 @@ class SoContextImpl implements SoContext {
     }
 
     @Override
-    public NetaSocket getNeta() {
+    public NetChannelManager getNeta() {
         return this.cobble;
     }
 
@@ -286,20 +285,15 @@ class SoContextImpl implements SoContext {
             netChannel.wContext.purge(e);
 
             // release pipeStack
-            NetListen forListen = netChannel.getSource();
-            Future<NetListen> result;
+            NetListen forListen = netChannel.getListen();
             if (forListen != null) {
-                result = forListen.notifyClose(netChannel, async);
-            } else {
-                result = new BasicFuture<>((NetListen) null);
+                forListen.notifyClose(netChannel);
             }
 
-            result.onCompleted(future -> {
-                netChannel.pipeline.release(netChannel.pipeCtx);
-                IOUtils.closeQuietly(netChannel.channel);
-                IOUtils.closeQuietly(specialExecutor);
-                logger.info("channel(" + channelID + ") closed.");
-            });
+            netChannel.pipeline.onClose(netChannel.pipeCtx);
+            IOUtils.closeQuietly(netChannel.channel);
+            IOUtils.closeQuietly(specialExecutor);
+            logger.info("channel(" + channelID + ") closed.");
 
             this.channelList.remove(channel);
         } else {
@@ -342,9 +336,6 @@ class SoContextImpl implements SoContext {
             if (channel.isClient() || channel.isServer()) {
                 NetChannel netChannel = (NetChannel) channel;
                 netChannel.notifyError(isRcv, e);
-            } else {
-                NetListen netListen = (NetListen) channel;
-                netListen.notifyError(e);
             }
         }
     }

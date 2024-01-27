@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.PipelineFactory;
+import net.hasor.neta.channel.PipeInitializer;
 import net.hasor.neta.handler.PipeBuilder.PipelineBuilder;
 import net.hasor.neta.handler.frames.TypeFrame;
 import net.hasor.neta.handler.frames.TypeRequest;
@@ -27,7 +27,7 @@ import org.junit.Test;
  * @version : 2022-11-01
  */
 public class PipeEchoTest {
-    private EmbeddedChannel createChannel(PipelineFactory pipeStack) {
+    private EmbeddedChannel createChannel(PipeInitializer pipeStack) {
         EmbeddedSoContext context = new EmbeddedSoContext();
         return new EmbeddedChannel(true, pipeStack, context);
     }
@@ -38,12 +38,12 @@ public class PipeEchoTest {
         // String -> TypeFrame -> TypeRequest
         // String <- TypeFrame <- TypeResponse
         PipeConfig pipeConfig = new PipeConfig();
-        PipelineBuilder<String, String> empty = PipeInitializer.embedded();
-        PipelineFactory pipeline = empty
+        PipelineBuilder<String, String> empty = PipeHelper.embedded();
+        PipeInitializer pipeline = empty
                 // String <-> TypeFrame
-                .nextTo("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)
+                .nextHandler("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)
                 // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
-                .nextTo("TypeRequest/Response", pipeConfig, PipeEchoTest::doDecoder2, PipeEchoTest::doEncoder2)
+                .nextHandler("TypeRequest/Response", pipeConfig, PipeEchoTest::doDecoder2, PipeEchoTest::doEncoder2)
                 // create Stack
                 .build();
         EmbeddedChannel channel = createChannel(pipeline);

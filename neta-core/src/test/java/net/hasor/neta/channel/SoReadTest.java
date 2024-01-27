@@ -37,15 +37,16 @@ import java.util.concurrent.atomic.AtomicLong;
 public class SoReadTest extends AbstractSoTest {
     @Test
     public void echoTest() throws Exception {
-        int safePort = safePort();
         AtomicInteger cnt = new AtomicInteger();
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder((ReceiveHandler<ByteBuf, ByteBuf>) (context, data) -> {
+            ((NetChannel) context.getChannel()).sendData(data); // echo
+            cnt.incrementAndGet();// packet ++
+        }).build();
 
         // echo anything from remote
-        NetaSocket server = new NetaSocket(crateConfig(2, 32));
-        server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
-            ((NetChannel) channel).sendData(data); // echo
-            cnt.incrementAndGet();// packet ++
-        }));
+        int safePort = safePort();
+        NetChannelManager server = new NetChannelManager(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // client: send data to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -73,9 +74,9 @@ public class SoReadTest extends AbstractSoTest {
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setSoRcvBuf(32);
         soConfig.setNetlog(false);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetChannelManager server = new NetChannelManager(soConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.empty()); // <-- stacking without handling
+        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty()); // <-- stacking without handling
 
         // client: send a lot of pack
         Socket client = new Socket("127.0.0.1", safePort);
@@ -103,30 +104,36 @@ public class SoReadTest extends AbstractSoTest {
         AtomicBoolean rcvErr = new AtomicBoolean(false);
         PipeConfig pipeConfig = new PipeConfig();
         pipeConfig.setPipeRcvDownStackSize(3);
-        PipelineBuilder<ByteBuf, ByteBuf> empty = PipeInitializer.embedded().pipeConfig(pipeConfig);
-        PipelineFactory build = empty//
-                .nextTo("L1", (PipeLayer<ByteBuf, String, String, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-                    // gen message to L2
-                    rcvDown.offerMessage("msg");
-                    return PipeStatus.Next;
-                }).nextTo("L2", (PipeLayer<String, String, String, String>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-                    // message keep on L2
-                    return PipeStatus.Next;
-                }).bindReceive(new PipeListener<String>() {
+        PipelineBuilder<ByteBuf, ByteBuf> empty = PipeHelper.embedded().pipeConfig(pipeConfig);
+        PipeInitializer build = empty//
+                .nextDuplex("L1", new SimplePipeLayer<ByteBuf, String, String, ByteBuf>() {
                     @Override
-                    public void onReceive(SoChannel<?> channel, String data) {
+                    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<String> rcvDown, PipeRcvQueue<String> sndUp, PipeSndQueue<ByteBuf> sndDown) throws Throwable {
+                        // gen message to L2
+                        rcvDown.offerMessage("msg");
+                        return PipeStatus.Next;
+                    }
+                }).nextDuplex("L2", new SimplePipeLayer<String, String, String, String>() {
+                    @Override
+                    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<String> rcvUp, PipeSndQueue<String> rcvDown, PipeRcvQueue<String> sndUp, PipeSndQueue<String> sndDown) throws Throwable {
+                        // message keep on L2
+                        return PipeStatus.Next;
+                    }
+                }).nextDecoder(new ReceiveHandler<String, String>() {
+                    @Override
+                    public void rcvMessage(PipeContext context, String data) throws Throwable {
 
                     }
 
                     @Override
-                    public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+                    public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                         rcvErr.set(e instanceof PipeFullException);
                     }
                 }).build();
 
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 30));
+        NetChannelManager server = new NetChannelManager(crateConfig(2, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 
@@ -153,16 +160,18 @@ public class SoReadTest extends AbstractSoTest {
     public void rcvCounterTest() throws Exception {
         // start server
         MessageDigest serverDigest = MessageDigest.getInstance("MD5");
-        int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder((channel, data) -> {
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder((ReceiveHandler<ByteBuf, ByteBuf>) (context, data) -> {
             int len = data.readableBytes();
             byte[] bytes = new byte[len];
             data.readBytes(bytes);
             data.markReader();
             serverDigest.digest(bytes);
-        }));
+        }).build();
+
+        int safePort = safePort();
+        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        SoContext context = server.getContext();
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // client send
         MessageDigest clientDigest = MessageDigest.getInstance("MD5");
@@ -186,24 +195,26 @@ public class SoReadTest extends AbstractSoTest {
 
     @Test
     public void rcvReadTimeoutTest_01() throws Exception {
-        // start server
         AtomicLong rcvErrTime = new AtomicLong(0);
-        int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onReceive(SoChannel<?> channel, ByteBuf data) {
+            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
 
             }
 
             @Override
-            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
             }
-        }));
+        }).build();
+
+        // start server
+        int safePort = safePort();
+        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        SoContext context = server.getContext();
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -225,24 +236,26 @@ public class SoReadTest extends AbstractSoTest {
     public void rcvReadTimeoutTest_02() throws Exception {
         // start server
         AtomicLong rcvErrTime = new AtomicLong(0);
-        int safePort = safePort();
-        SoConfig soConfig = crateConfig(8, 30);
-        soConfig.setSoReadTimeoutMs(500);
-        NetaSocket server = new NetaSocket(soConfig);
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onReceive(SoChannel<?> channel, ByteBuf data) {
+            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
 
             }
 
             @Override
-            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
             }
-        }));
+        }).build();
+
+        int safePort = safePort();
+        SoConfig soConfig = crateConfig(8, 30);
+        soConfig.setSoReadTimeoutMs(500);
+        NetChannelManager server = new NetChannelManager(soConfig);
+        SoContext context = server.getContext();
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -264,22 +277,24 @@ public class SoReadTest extends AbstractSoTest {
     public void waitReceiveTest_01() throws Exception {
         // start server
         AtomicLong rcvErrTime = new AtomicLong(0);
-        int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onReceive(SoChannel<?> channel, ByteBuf data) {
+            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
 
             }
 
             @Override
-            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
             }
-        }));
+        }).build();
+
+        int safePort = safePort();
+        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        SoContext context = server.getContext();
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -303,24 +318,26 @@ public class SoReadTest extends AbstractSoTest {
     public void waitReceiveTest_02() throws Exception {
         // start server
         AtomicLong rcvErrTime = new AtomicLong(0);
-        int safePort = safePort();
-        SoConfig soConfig = crateConfig(8, 30);
-        soConfig.setSoReadTimeoutMs(500);
-        NetaSocket server = new NetaSocket(soConfig);
-        SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeInitializer.builder(new PipeListener<ByteBuf>() {
+        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onReceive(SoChannel<?> channel, ByteBuf data) {
+            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
 
             }
 
             @Override
-            public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
             }
-        }));
+        }).build();
+
+        int safePort = safePort();
+        SoConfig soConfig = crateConfig(8, 30);
+        soConfig.setSoReadTimeoutMs(500);
+        NetChannelManager server = new NetChannelManager(soConfig);
+        SoContext context = server.getContext();
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -344,22 +361,25 @@ public class SoReadTest extends AbstractSoTest {
     public void rcvThrowTest_01() throws Exception {
         AtomicBoolean rcvErr1 = new AtomicBoolean(false);
 
-        PipelineBuilder<ByteBuf, ByteBuf> empty = PipeInitializer.builder();
-        PipelineFactory build = empty//
-                .nextTo("L1", (PipeLayer<ByteBuf, String, String, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-                    if (isRcv) {
-                        throw new IllegalStateException();
-                    } else {
-                        return PipeStatus.Next;
-                    }
-                }).bindReceive(new PipeListener<String>() {
+        PipelineBuilder<ByteBuf, ByteBuf> empty = PipeHelper.builder();
+        PipeInitializer build = empty//
+                .nextDuplex("L1", new SimplePipeLayer<ByteBuf, String, String, ByteBuf>() {
                     @Override
-                    public void onReceive(SoChannel<?> channel, String data) {
+                    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<String> rcvDown, PipeRcvQueue<String> sndUp, PipeSndQueue<ByteBuf> sndDown) throws Throwable {
+                        if (isRcv) {
+                            throw new IllegalStateException();
+                        } else {
+                            return PipeStatus.Next;
+                        }
+                    }
+                }).nextDecoder(new ReceiveHandler<String, String>() {
+                    @Override
+                    public void rcvMessage(PipeContext context, String data) throws Throwable {
 
                     }
 
                     @Override
-                    public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+                    public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                         rcvErr1.set(e instanceof IllegalStateException);
                         throw new IllegalArgumentException();
                     }
@@ -369,7 +389,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetChannelManager server = new NetChannelManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, build);
 
