@@ -242,37 +242,30 @@ public class NetListen extends AttributeChannel<NetListen> {
     }
 
     /** Wait for an incoming. */
-    public boolean waitAnyAccept() {
-        if (this.acceptCount.get() > 0) {
-            return true;
+    public void waitAnyAccept() throws InterruptedException {
+        synchronized (this.acceptLock) {
+            if (this.acceptCount.get() > 0) {
+                return;
+            }
+            this.waitAnyNewAccept();
         }
-        return this.waitAnyNewAccept();
     }
 
     /** Wait for an new incoming. */
-    public boolean waitAnyNewAccept() {
+    public void waitAnyNewAccept() throws InterruptedException {
         synchronized (this.acceptLock) {
-            try {
-                this.acceptLock.wait();
-                return true;
-            } catch (InterruptedException e) {
-                return false;
-            }
+            this.acceptLock.wait();
         }
     }
 
     /** Wait for all disconnection. */
-    public boolean waitIdle() {
+    public void waitIdle() throws InterruptedException {
         while (true) {
             if (this.acceptCount.get() <= 0) {
-                return true;
+                return;
             }
             synchronized (this.closeLock) {
-                try {
-                    this.closeLock.wait();
-                } catch (InterruptedException e) {
-                    return false;
-                }
+                this.closeLock.wait();
             }
         }
     }

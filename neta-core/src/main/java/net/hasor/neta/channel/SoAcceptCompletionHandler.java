@@ -16,6 +16,7 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -101,26 +102,24 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
         NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
 
+        PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
+        Pipeline<ByteBuf> pipeline = this.forListen.getInitializer().config(pipeCtx);
+        channel.initChannel(pipeCtx, pipeline);
+
         // init and pipe
         try {
-            PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
-            Pipeline<?> pipeline = this.forListen.getInitializer().create(pipeCtx);
-            channel.initChannel(pipeCtx, pipeline);
-            context.openChannel(channel);
-
-            pipeline.onInit(channel.pipeCtx);
-            pipeline.onActive(pipeCtx);
-
             logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
+            context.openChannel(channel, remoteAddr);
+            channel.pipeline.onInit(channel.pipeCtx);
+            channel.pipeline.onActive(pipeCtx);
+            rHandler.read();
+
             this.forListen.notifyAccept(channel);
         } catch (Throwable e) {
-            IOUtils.closeQuietly(result);
             logger.error("ERROR: Accept Failed " + e.getMessage(), e);
-            return;
+            IOUtils.closeQuietly(result);
+            context.syncUnsafeCloseChannel(channelID, e.getMessage(), e);
         }
-
-        // async read data
-        rHandler.read();
     }
 
     @Override

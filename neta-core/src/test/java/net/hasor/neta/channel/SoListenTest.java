@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.handler.PipeHelper;
 import org.junit.Test;
 
@@ -27,13 +28,12 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2022-11-01
  */
 public class SoListenTest extends AbstractSoTest {
-
     @Test
     public void acceptTest_1() throws Exception {
         // start server
         int safePort = safePort();
-        NetChannelManager server = new NetChannelManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty());
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort, context -> PipeHelper.builder().build());
 
         Socket client = new Socket("127.0.0.1", safePort);
         InputStream soInput = client.getInputStream();
@@ -57,8 +57,8 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void suspendTest_1() throws Exception {
         int safePort = safePort();
-        NetChannelManager server = new NetChannelManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty());
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort, context -> PipeHelper.builder().build());
 
         listen.suspend();
         Socket testClient1 = new Socket("127.0.0.1", safePort);
@@ -85,9 +85,9 @@ public class SoListenTest extends AbstractSoTest {
 
     @Test
     public void acceptListener_1() throws Exception {
-        NetChannelManager server = new NetChannelManager(crateConfig(2, 32));
-        NetListen listen1 = server.listen("127.0.0.1", safePort(), PipeHelper.empty());
-        NetListen listen2 = server.listen("127.0.0.1", safePort(), PipeHelper.empty());
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetListen listen1 = server.listen("127.0.0.1", safePort(), context -> PipeHelper.builder().build());
+        NetListen listen2 = server.listen("127.0.0.1", safePort(), context -> PipeHelper.builder().build());
         int safePort1 = listen1.getListenPort();
         int safePort2 = listen2.getListenPort();
 
@@ -120,27 +120,30 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void acceptListener_2() throws Exception {
         AtomicInteger atomicListen = new AtomicInteger();
-        PipeInitializer initializer = PipeHelper.builder().nextDecoder(counter(atomicListen)).build();
-
-        NetChannelManager server = new NetChannelManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort(), initializer);
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort(), new PipeInitializer() {
+            @Override
+            public Pipeline<ByteBuf> config(PipeContext ctx) {
+                return PipeHelper.builder().nextDecoder(counter(atomicListen)).build();
+            }
+        });
 
         assert atomicListen.get() == 0;
         assert listen.getChannelCount() == 0;
         Socket client1 = new Socket("127.0.0.1", listen.getListenPort());
         listen.waitAnyAccept();
-        assert atomicListen.get() == 0;
+        assert atomicListen.get() == 1;
         assert listen.getChannelCount() == 1;
 
         Socket client2 = new Socket("127.0.0.1", listen.getListenPort());
         Thread.sleep(500);
 
-        assert atomicListen.get() == 1;
+        assert atomicListen.get() == 2;
         assert listen.getChannelCount() == 2;
 
         server.shutdown();
 
-        assert atomicListen.get() == -1; //because one already existed before we added the counter
+        assert atomicListen.get() == 0;
         assert listen.getChannelCount() == 0;
     }
 
@@ -148,8 +151,8 @@ public class SoListenTest extends AbstractSoTest {
     public void foundTest_1() throws Exception {
         // start server
         int safePort = safePort();
-        NetChannelManager server = new NetChannelManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty());
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort, context -> PipeHelper.builder().build());
 
         assert listen == server.findListen(safePort);
 

@@ -37,6 +37,9 @@ public interface PipeSndQueue<T> {
         return slotSize() > 0;
     }
 
+    /** Changes can be submitted */
+    boolean hasCommit();
+
     /**
      * marks slots locke them in this Queue, {@link #sndReset()} will not affect them.
      */

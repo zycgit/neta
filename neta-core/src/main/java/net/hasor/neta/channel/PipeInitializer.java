@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.bytebuf.ByteBuf;
+
 /**
  * Application protocol stack
  * @version : 2023-09-24
@@ -21,5 +23,5 @@ package net.hasor.neta.channel;
  */
 @FunctionalInterface
 public interface PipeInitializer {
-    Pipeline create(PipeContext context);
+    Pipeline<ByteBuf> config(PipeContext ctx);
 }

@@ -17,14 +17,11 @@ package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
 
 /**
- * Transparent conveyor belt.
- * @author 赵永春 (zyc@hasor.net)
+ * Application protocol stack
  * @version : 2023-09-24
+ * @author 赵永春 (zyc@hasor.net)
  */
-public class CourierHandler<T> implements PipeHandler<T, T> {
-    @Override
-    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
-    }
+@FunctionalInterface
+public interface EmbeddedInitializer<RCV, SND> {
+    PipeBuilder<RCV, SND> config(PipeContext context);
 }

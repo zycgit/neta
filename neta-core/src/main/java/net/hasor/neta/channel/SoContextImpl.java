@@ -37,7 +37,7 @@ class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
     private final        AtomicLong                 nextID = new AtomicLong(0);
     private final        SoConfig                   config;
-    private final        NetChannelManager          cobble;
+    private final        NetaSocket                 cobble;
     private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
     //
@@ -53,7 +53,7 @@ class SoContextImpl implements SoContext {
     private final        Queue<NetChannel>          channelList;
     private final        Queue<NetListen>           listenList;
 
-    public SoContextImpl(SoConfig config, NetChannelManager cobble) {
+    public SoContextImpl(SoConfig config, NetaSocket cobble) {
         this.cobble = cobble;
         this.config = Objects.requireNonNull(config);
         this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
@@ -148,8 +148,8 @@ class SoContextImpl implements SoContext {
         return true;
     }
 
-    /** new channel, The method {@link #openChannel(SoChannel)} and {@link #closeAll(boolean)} are mutually exclusive */
-    public void openChannel(SoChannel<?> channel) {
+    /** new channel, The method {@link #openChannel(SoChannel, SocketAddress)} and {@link #closeAll(boolean)} are mutually exclusive */
+    public void openChannel(SoChannel<?> channel, SocketAddress remoteAddress) {
         try {
             this.closeSyncLock.readLock().lock();
 
@@ -163,6 +163,8 @@ class SoContextImpl implements SoContext {
             if (this.closeStatus) {
                 this.defaultTaskExecutor.submitSoTask(new SimpleTask(channel::closeNow), this);
             }
+
+            this.specialConfig(channel.getChannelID(), remoteAddress);
         } finally {
             this.closeSyncLock.readLock().unlock();
         }
@@ -186,7 +188,7 @@ class SoContextImpl implements SoContext {
     }
 
     @Override
-    public NetChannelManager getNeta() {
+    public NetaSocket getNeta() {
         return this.cobble;
     }
 

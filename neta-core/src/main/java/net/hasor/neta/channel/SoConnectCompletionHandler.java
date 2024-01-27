@@ -47,16 +47,17 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
 
         try {
             this.pipeline.onActive(this.channel.pipeCtx);
+            this.channel.rHandler.read();
             this.future.completed(this.channel);
         } catch (Throwable e) {
             logger.error("ERROR: Connect finish, but onActive failed.");
-            this.channel.close();
+            context.syncUnsafeCloseChannel(this.channel.getChannelID(), e.getMessage(), e);
             this.future.failed(e);
         }
     }
 
     @Override
-    public void failed(Throwable exc, SoContextImpl attachment) {
-        this.future.failed(exc);
+    public void failed(Throwable e, SoContextImpl context) {
+        this.future.failed(e);
     }
 }

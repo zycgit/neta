@@ -15,12 +15,11 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.PipeInitializer;
+import net.hasor.neta.channel.Pipeline;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
 /**
@@ -28,80 +27,57 @@ import java.util.function.Consumer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
-public final class PipeHelper implements PipeBuilder {
-    private final AtomicReference<PipeConfig> defaultConfigRef = new AtomicReference<>(new PipeConfig());
-
-    public static PipeInitializer empty() {
-        return new PipeHelper().nextTo().build();
+public final class PipeHelper {
+    public static PipeBuilder<ByteBuf, ByteBuf> builder() {
+        return new PipeHelper().nextTo(new PipeConfig());
     }
 
-    public static PipelineBuilder<ByteBuf, ByteBuf> builder() {
-        return new PipeHelper().nextTo();
+    public static PipeBuilder<ByteBuf, ByteBuf> builder(PipeConfig pipeConfig) {
+        return new PipeHelper().nextTo(pipeConfig);
     }
 
-    public static <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> embedded() {
-        return new PipeHelper().nextTo();
+    public static <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> embedded() {
+        return new PipeHelper().nextTo(new PipeConfig());
     }
 
-    @Override
-    public <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> pipeConfig(PipeConfig pipeConfig) {
-        defaultConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
-        return new PipeStackBuilderImpl<>(new ArrayList<>());
+    public static <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> embedded(PipeConfig pipeConfig) {
+        return new PipeHelper().nextTo(pipeConfig);
     }
 
-    @Override
-    public PipeConfig pipeConfig() {
-        return defaultConfigRef.get();
+    //
+    //
+
+    private <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> nextTo(PipeConfig pipeConfig) {
+        return new PipeStackBuilderImpl<>(pipeConfig, new ArrayList<>());
     }
 
-    @Override
-    public <RCV_UP, SND_DOWN> PipelineBuilder<RCV_UP, SND_DOWN> nextTo() {
-        return new PipeStackBuilderImpl<>(new ArrayList<>());
-    }
-
-    @Override
-    public <RCV_DOWN, SND_UP> PipelineBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, PipeConfig pipeConfig, PipeDuplex<ByteBuf, RCV_DOWN, SND_UP, ByteBuf> duplexer) {
-        PipelineBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
-        return builder.nextDuplex(name, pipeConfig, duplexer);
-    }
-
-    @Override
-    public <RCV_DOWN, SND_UP> PipelineBuilder<RCV_DOWN, SND_UP> nextHandler(String name, PipeConfig pipeConfig, PipeHandler<ByteBuf, RCV_DOWN> decoder, PipeHandler<SND_UP, ByteBuf> encoder) {
-        PipelineBuilder<ByteBuf, ByteBuf> builder = new PipeStackBuilderImpl<>(new ArrayList<>());
-        return builder.nextDuplex(name, pipeConfig, new PipeDuplexHandler<>(decoder, encoder));
-    }
-
-    class PipeStackBuilderImpl<RCV_DOWN, SND_UP> implements PipelineBuilder<RCV_DOWN, SND_UP> {
+    class PipeStackBuilderImpl<RCV_DOWN, SND_UP> implements PipeBuilder<RCV_DOWN, SND_UP> {
+        private final PipeConfig                    defaultConf;
         private final List<Consumer<PipeChainRoot>> taskAppend;
 
-        PipeStackBuilderImpl(List<Consumer<PipeChainRoot>> taskAppend) {
+        PipeStackBuilderImpl(PipeConfig pipeConfig, List<Consumer<PipeChainRoot>> taskAppend) {
+            this.defaultConf = Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
             this.taskAppend = taskAppend;
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipelineBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> pipeConfig(PipeConfig pipeConfig) {
-            defaultConfigRef.set(Objects.requireNonNull(pipeConfig, "pipeConfig is null."));
-            return new PipeStackBuilderImpl<>(this.taskAppend);
-        }
-
-        @Override
         public PipeConfig pipeConfig() {
-            return defaultConfigRef.get();
+            return this.defaultConf;
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipelineBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, PipeConfig pipeConfig, PipeDuplex<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, PipeConfig pipeConfig, PipeDuplex<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
             Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
             Objects.requireNonNull(duplexer, "pipeLayer is null.");
 
             this.taskAppend.add(chainRoot -> {
                 chainRoot.addLayer(new PipeInvocation<>(name, pipeConfig, duplexer));
             });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
+            return new PipeStackBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipelineBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextHandler(String name, PipeConfig pipeConfig, PipeHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, PipeHandler<NEXT_SND_UP, SND_UP> encoder) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> PipeBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, PipeConfig pipeConfig, PipeHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, PipeHandler<NEXT_SND_UP, SND_UP> encoder) {
             Objects.requireNonNull(pipeConfig, "pipeConfig is null.");
             Objects.requireNonNull(decoder, "decoder is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
@@ -110,18 +86,16 @@ public final class PipeHelper implements PipeBuilder {
             this.taskAppend.add(chainRoot -> {
                 chainRoot.addLayer(new PipeInvocation<>(name, pipeConfig, pipeLayer));
             });
-            return new PipeStackBuilderImpl<>(this.taskAppend);
+            return new PipeStackBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
         @Override
-        public PipeInitializer build(PipeConfig rootConfig) {
-            return (context) -> {
-                PipeChainRoot root = new PipeChainRoot(rootConfig);
-                for (Consumer<PipeChainRoot> consumer : taskAppend) {
-                    consumer.accept(root);
-                }
-                return root;
-            };
+        public <T> Pipeline<T> build() {
+            PipeChainRoot root = new PipeChainRoot(pipeConfig());
+            for (Consumer<PipeChainRoot> consumer : taskAppend) {
+                consumer.accept(root);
+            }
+            return (Pipeline<T>) root;
         }
     }
 }

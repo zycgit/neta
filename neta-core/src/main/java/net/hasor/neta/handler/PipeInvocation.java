@@ -129,7 +129,12 @@ class PipeInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         Throwable ctxError = context.flash(errorTag);
         try {
             if (ctxError == null) {
-                return this.pipeLayer.onMessage(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
+                PipeStatus expect = this.pipeLayer.onMessage(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
+                if (this.rcvDownEnd.hasCommit() || this.sndDownEnd.hasCommit()) {
+                    return expect;
+                } else {
+                    return PipeStatus.Exit;
+                }
             } else {
                 return this.pipeLayer.onError(context, isRcv, ctxError, this.createExceptionHandler(isRcv, context, rcvUp, sndUp));
             }

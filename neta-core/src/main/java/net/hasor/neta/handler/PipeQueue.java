@@ -54,6 +54,11 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     }
 
     @Override
+    public boolean hasCommit() {
+        return this.takeCount > 0 || !this.offerTemp.isEmpty();
+    }
+
+    @Override
     public synchronized PipeRcvQueue<T> rcvSubmit() {
         this.linkedList.subList(0, this.takeCount).clear();
         this.takeCount = 0;
@@ -101,10 +106,8 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
 
         int added = 0;
         for (T item : offerList) {
-            if (!this.offerTemp.contains(item) && !this.linkedList.contains(item)) {
-                this.offerTemp.add(item);
-                added++;
-            }
+            this.offerTemp.add(item);
+            added++;
             if (added >= size) {
                 break;
             }

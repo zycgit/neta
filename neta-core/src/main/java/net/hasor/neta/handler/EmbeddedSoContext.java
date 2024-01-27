@@ -93,7 +93,7 @@ public class EmbeddedSoContext implements SoContext {
     }
 
     @Override
-    public NetChannelManager getNeta() {
+    public NetaSocket getNeta() {
         throw new UnsupportedOperationException();
     }
 

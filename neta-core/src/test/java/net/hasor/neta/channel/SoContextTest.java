@@ -26,7 +26,6 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2022-11-01
  */
 public class SoContextTest {
-
     @Test
     public void submitSoTask_Test() throws ExecutionException, InterruptedException {
         SoConfig config = new SoConfig();

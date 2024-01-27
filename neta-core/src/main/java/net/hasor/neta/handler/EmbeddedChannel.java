@@ -44,7 +44,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     private final        PipeQueue<Object>       sndDown;
     private              Throwable               sndError;
     protected final      PipeContext             pipeCtx;
-    protected final      PipeChainRoot           pipeline;
+    protected final      Pipeline<Object>        pipeline;
     //
     private final        AtomicBoolean           closeStatus;
     private final        Future<EmbeddedChannel> closeFuture;
@@ -81,7 +81,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         }
     }
 
-    public EmbeddedChannel(boolean asServer, PipeInitializer initializer, EmbeddedSoContext context) {
+    public EmbeddedChannel(boolean asServer, EmbeddedInitializer initializer, EmbeddedSoContext context) {
         this.channelID = EmbeddedSoContext.nextID();
         this.createdTime = System.currentTimeMillis();
         this.lastActiveTime = System.currentTimeMillis();
@@ -93,9 +93,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
             this.rcvDown = new PipeQueue<>(-1);
             this.sndDown = new PipeQueue<>(-1);
             this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
-            this.pipeline = (PipeChainRoot) initializer.create(this.pipeCtx);
-            this.pipeline.addLayer(new PipeInvocation<>("Embedded", new PipeConfig(), new PipeDuplex<Object, Object, Object, Object>() {
 
+            PipeBuilder builder = initializer.config(this.pipeCtx);
+            builder.nextDuplex("Embedded", new PipeConfig(), new PipeDuplex<Object, Object, Object, Object>() {
                 @Override
                 public PipeStatus onMessage(PipeContext context, boolean isRcv,     //
                         PipeRcvQueue<Object> rcvUp, PipeSndQueue<Object> rcvIgnore, //
@@ -120,8 +120,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
                     eh.clear();
                     return PipeStatus.Next;
                 }
-            }));
+            });
 
+            this.pipeline = builder.build();
             this.pipeline.onInit(this.pipeCtx);
             this.pipeline.onActive(this.pipeCtx);
         } catch (Throwable e) {
@@ -232,7 +233,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
     /** Get protocol stack statistics */
     public PipeStatistical getPipeStatistical() {
-        return this.pipeline;
+        return (PipeStatistical) this.pipeline;
     }
 
     /**

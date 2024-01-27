@@ -27,6 +27,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.NotYetConnectedException;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -86,9 +87,9 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         this.wStatus = new AtomicBoolean(false);
     }
 
-    protected void initChannel(PipeContextImpl pipeContext, Pipeline<?> pipeline) {
+    protected void initChannel(PipeContextImpl pipeContext, Pipeline<ByteBuf> pipeline) {
         this.pipeCtx = pipeContext;
-        this.pipeline = (Pipeline<ByteBuf>) pipeline;
+        this.pipeline = Objects.requireNonNull(pipeline, "pipeline is null.");
     }
 
     @Override

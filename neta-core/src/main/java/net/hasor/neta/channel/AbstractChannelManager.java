@@ -35,7 +35,7 @@ public abstract class AbstractChannelManager {
 
     public AbstractChannelManager(SoConfig config) {
         this.config = config;
-        this.context = new SoContextImpl(config, (NetChannelManager) this);
+        this.context = new SoContextImpl(config, (NetaSocket) this);
         this.shutdown = new AtomicBoolean(false);
     }
 

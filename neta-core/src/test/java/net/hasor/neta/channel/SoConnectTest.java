@@ -19,8 +19,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.handler.PipeHelper;
-import net.hasor.neta.handler.ReceiveHandler;
+import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 import java.io.OutputStream;
@@ -32,7 +31,6 @@ import java.net.Socket;
  * @version : 2022-11-01
  */
 public class SoConnectTest extends AbstractSoTest {
-
     @Test
     public void connectToTest_01() throws Exception {
         // start server
@@ -48,13 +46,24 @@ public class SoConnectTest extends AbstractSoTest {
 
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer();
-        PipeInitializer initializer = PipeHelper.builder().nextDecoder((ReceiveHandler<ByteBuf, ByteBuf>) (context, data) -> {
-            buf.write(data);
-            data.markReader();
-        }).build();
-
-        NetChannelManager neta = new NetChannelManager(crateConfig(2, 32));
-        Future<NetChannel> future = neta.connect(safePort, initializer);
+        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
+        Future<NetChannel> future = neta.connect(safePort, new PipeInitializer() {
+            @Override
+            public Pipeline<ByteBuf> config(PipeContext ctx) {
+                return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+                    @Override
+                    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws Throwable {
+                        while (src.hasMore()) {
+                            ByteBuf data = src.takeMessage();
+                            buf.write(data);
+                            data.markReader();
+                            buf.markWriter();
+                        }
+                        return PipeStatus.Next;
+                    }
+                }).build();
+            }
+        });
 
         NetChannel remote = future.get();
         while (!remote.isClose()) {
@@ -71,9 +80,13 @@ public class SoConnectTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
 
-        //
-        NetChannelManager neta = new NetChannelManager(crateConfig(2, 32));
-        Future<NetChannel> future = neta.connect(safePort, PipeHelper.empty());
+        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
+        Future<NetChannel> future = neta.connect(safePort, new PipeInitializer() {
+            @Override
+            public Pipeline<ByteBuf> config(PipeContext ctx) {
+                return PipeHelper.builder().build();
+            }
+        });
         neta.shutdown();
 
         ServerSocket server = new ServerSocket(safePort);
@@ -90,5 +103,4 @@ public class SoConnectTest extends AbstractSoTest {
 
         server.close();
     }
-
 }

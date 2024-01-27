@@ -33,11 +33,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-public class NetChannelManager extends AbstractChannelManager {
-    private static final Logger                   logger = Logger.getLogger(NetChannelManager.class);
+public class NetaSocket extends AbstractChannelManager {
+    private static final Logger                   logger = Logger.getLogger(NetaSocket.class);
     protected            AsynchronousChannelGroup channelGroup;
 
-    public NetChannelManager(SoConfig config) {
+    public NetaSocket(SoConfig config) {
         super(config);
     }
 
@@ -82,7 +82,7 @@ public class NetChannelManager extends AbstractChannelManager {
         long channelID = this.context.nextID();
         long createdTime = System.currentTimeMillis();
         NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeline, this.context, options);
-        this.context.openChannel(netListen);
+        this.context.openChannel(netListen, listen);
 
         listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
         logger.info("listen at " + listen);
@@ -115,23 +115,19 @@ public class NetChannelManager extends AbstractChannelManager {
      */
     public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeInitializer initializer) {
         Future<NetChannel> future = new BasicFuture<>();
-        SoAsyncChannel asyncChannel;
-        Pipeline<?> pipeline;
+        long channelID = this.context.nextID();
+        SoAsyncChannel asyncChannel = null;
         NetChannel channel;
 
         try {
-            this.initChannelGroup();
-
             // aio Channel
+            this.initChannelGroup();
             AsynchronousSocketChannel aioChannel = AsynchronousSocketChannel.open(this.channelGroup);
             SoConfigUtils.configSocket(this.context.getConfig(), aioChannel);
             asyncChannel = new SoAsyncChannel(aioChannel, this.config);
 
             // init NetChannel
-            long channelID = this.context.nextID();
             long createdTime = System.currentTimeMillis();
-            this.context.specialConfig(channelID, remoteAddr);
-
             SoSndContext wContext = new SoSndContext(channelID, createdTime, this.context);
             SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, this.context);
             SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
@@ -141,23 +137,24 @@ public class NetChannelManager extends AbstractChannelManager {
 
             // init Pipeline
             PipeContextImpl pipeCtx = new PipeContextImpl(channel, this.context);
-            pipeline = initializer.create(pipeCtx);
-            channel.initChannel(pipeCtx, pipeline);
-            this.context.openChannel(channel);
+            channel.initChannel(pipeCtx, initializer.config(pipeCtx));
         } catch (Throwable e) {
+            IOUtils.closeQuietly(asyncChannel);
             future.failed(e);
             return future;
         }
 
         try {
+            // init pipeline
+            this.context.openChannel(channel, remoteAddr);
+            channel.pipeline.onInit(channel.pipeCtx);
+
             // connect to
-            pipeline.onInit(channel.pipeCtx);
-            asyncChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(channel, pipeline, future));
-            channel.rHandler.read();
+            asyncChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(channel, channel.pipeline, future));
             logger.info("connect(" + channel.getChannelID() + ") to  L:" + asyncChannel.getLocalAddress() + " -> R:" + remoteAddr);
             return future;
         } catch (Throwable e) {
-            IOUtils.closeQuietly(asyncChannel);
+            this.context.syncUnsafeCloseChannel(channelID, e.getMessage(), e);
             future.failed(e);
             return future;
         }

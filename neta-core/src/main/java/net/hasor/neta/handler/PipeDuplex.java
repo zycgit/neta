@@ -44,7 +44,7 @@ import net.hasor.neta.channel.PipeContext;
  * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
  * @see net.hasor.neta.handler.PipeHandler
- * @see net.hasor.neta.handler.PipeConfig
+ * @see PipeConfig
  */
 @FunctionalInterface
 public interface PipeDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {

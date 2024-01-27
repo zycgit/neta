@@ -37,6 +37,6 @@ public interface SoContext {
     /** find SoChannel by id */
     SoChannel<?> findChannel(long channelID);
 
-    /** get {@link NetChannelManager} */
-    NetChannelManager getNeta();
+    /** get {@link NetaSocket} */
+    NetaSocket getNeta();
 }

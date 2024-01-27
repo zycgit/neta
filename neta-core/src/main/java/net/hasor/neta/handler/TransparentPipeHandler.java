@@ -13,29 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
-import net.hasor.neta.handler.PipeDuplex;
-import net.hasor.neta.handler.PipeExceptionHolder;
-import net.hasor.neta.handler.PipeStatus;
+package net.hasor.neta.handler;
+import net.hasor.neta.channel.PipeContext;
 
 /**
+ * Transparent conveyor belt.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2022-11-01
+ * @version : 2023-09-24
  */
-public abstract class SimplePipeLayer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> //
-        implements PipeDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+public class TransparentPipeHandler<T> implements PipeHandler<T, T> {
     @Override
-    public void onActive(PipeContext context) throws Throwable {
-
-    }
-
-    @Override
-    public PipeStatus onError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHolder eh) throws Throwable {
+    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
+        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
         return PipeStatus.Next;
-    }
-
-    @Override
-    public void onClose(PipeContext context) {
-
     }
 }
