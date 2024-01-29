@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.Pipeline;
 
 /**
  * Application protocol stack
@@ -22,6 +23,6 @@ import net.hasor.neta.channel.PipeContext;
  * @author 赵永春 (zyc@hasor.net)
  */
 @FunctionalInterface
-public interface EmbeddedInitializer<RCV, SND> {
-    PipeBuilder<RCV, SND> config(PipeContext context);
+public interface EmbeddedInitializer {
+    Pipeline<?> config(PipeContext ctx);
 }

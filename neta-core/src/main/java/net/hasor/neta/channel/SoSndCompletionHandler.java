@@ -40,7 +40,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        SoContextImpl   context;
     private final        ByteBuffer      swapBuffer;
     private final        ByteBuf         sndBuffer;
-    //
 
     private List<SoSndData> afterWorking;
 
@@ -197,7 +196,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             logger.warn("snd(" + this.channelID + ") other errors occur in error handling, " + ee.getMessage());
         }
 
-        this.context.notifySndChannelError(this.channelID, e);
+        this.context.notifySndChannelError(this.channelID, finalErr);
         this.context.asyncUnsafeCloseChannel(this.channelID, finalMsg, finalErr);
         submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.lastSndSize, e)).onFinal(f -> {
             this.status = SoHandlerStatus.IDLE;

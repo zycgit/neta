@@ -16,9 +16,6 @@
 package net.hasor.neta.handler;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.PipeInitializer;
-import net.hasor.neta.channel.SimplePipeLayer;
 import org.junit.Test;
 
 /**
@@ -28,12 +25,14 @@ import org.junit.Test;
 public class CourierHandlerTest {
     @Test
     public void courierFrame_1() {
-        CourierHandler<ByteBuf> courier = new CourierHandler<>();
-        PipeInitializer pipeStack = new PipeHelper().nextHandler(courier, courier).build();
+        TransparentPipeHandler<ByteBuf> courier = new TransparentPipeHandler<>();
+        EmbeddedInitializer initializer = ctx -> {
+            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDuplex(courier, courier).build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, pipeStack, context);
+        EmbeddedChannel server = new EmbeddedChannel(true, initializer, context);
+        EmbeddedChannel client = new EmbeddedChannel(false, initializer, context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
 
         client.writeSndUp(ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }));
@@ -58,20 +57,17 @@ public class CourierHandlerTest {
 
     @Test
     public void courierFrame_2() {
-        CourierHandler<ByteBuf> courier = new CourierHandler<>();
-
-        PipeInitializer pipeStack = new PipeHelper()//
-                .nextDuplex("L1", new SimplePipeLayer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
-                    @Override
-                    public PipeStatus onMessage(PipeContext context, boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws Throwable {
-                        rcvDown.offerMessage(rcvUp);
-                        sndDown.offerMessage(sndUp);
-                        throw new IllegalStateException();
-                    }
-                }).nextHandler(courier, courier).build();
+        TransparentPipeHandler<ByteBuf> courier = new TransparentPipeHandler<>();
+        EmbeddedInitializer initializer = ctx -> {
+            return PipeHelper.builder().nextDuplex("L1", (PipeDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf>) (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
+                rcvDown.offerMessage(rcvUp);
+                sndDown.offerMessage(sndUp);
+                throw new IllegalStateException();
+            }).nextDuplex(courier, courier).build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         assert channel.getPipeStatistical().heapUpOfRcv() == 0;
 

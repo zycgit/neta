@@ -44,7 +44,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     private final        PipeQueue<Object>       sndDown;
     private              Throwable               sndError;
     protected final      PipeContext             pipeCtx;
-    protected final      Pipeline<Object>        pipeline;
+    protected final      Pipeline<?>             pipeline;
     //
     private final        AtomicBoolean           closeStatus;
     private final        Future<EmbeddedChannel> closeFuture;
@@ -81,6 +81,48 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         }
     }
 
+    private Pipeline<?> initPipeline(EmbeddedInitializer initializer) {
+        Pipeline<?> pipeline = initializer.config(this.pipeCtx);
+
+        PipeHandler<Object, Object> finalDecoder = new PipeHandler<Object, Object>() {
+            @Override
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Object> src, PipeSndQueue<Object> dst) throws Throwable {
+                rcvDown.offerMessage(src);
+                rcvDown.sndSubmit();
+                return PipeStatus.Next;
+            }
+
+            @Override
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+                rcvError = e;
+                eh.clear();
+                return PipeStatus.Next;
+            }
+        };
+        PipeHandler<Object, Object> finalEncoder = new PipeHandler<Object, Object>() {
+            @Override
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Object> src, PipeSndQueue<Object> dst) throws Throwable {
+                sndDown.offerMessage(src);
+                sndDown.sndSubmit();
+                return PipeStatus.Next;
+            }
+
+            @Override
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+                sndError = e;
+                eh.clear();
+                return PipeStatus.Next;
+            }
+        };
+
+        PipeDuplexHandler<Object, Object, Object, Object> embeddedFirst = new PipeDuplexHandler<>(new TransparentPipeHandler<>(), finalEncoder);
+        PipeDuplexHandler<Object, Object, Object, Object> embeddedLast = new PipeDuplexHandler<>(finalDecoder, new TransparentPipeHandler<>());
+
+        ((PipeChainRoot) pipeline).addFirstLayer(new PipeInvocation<>("EmbeddedDecoder", new PipeConfig(), embeddedFirst));
+        ((PipeChainRoot) pipeline).addLastLayer(new PipeInvocation<>("EmbeddedEncoder", new PipeConfig(), embeddedLast));
+        return pipeline;
+    }
+
     public EmbeddedChannel(boolean asServer, EmbeddedInitializer initializer, EmbeddedSoContext context) {
         this.channelID = EmbeddedSoContext.nextID();
         this.createdTime = System.currentTimeMillis();
@@ -93,36 +135,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
             this.rcvDown = new PipeQueue<>(-1);
             this.sndDown = new PipeQueue<>(-1);
             this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
-
-            PipeBuilder builder = initializer.config(this.pipeCtx);
-            builder.nextDuplex("Embedded", new PipeConfig(), new PipeDuplex<Object, Object, Object, Object>() {
-                @Override
-                public PipeStatus onMessage(PipeContext context, boolean isRcv,     //
-                        PipeRcvQueue<Object> rcvUp, PipeSndQueue<Object> rcvIgnore, //
-                        PipeRcvQueue<Object> sndUp, PipeSndQueue<Object> sndIgnore) {
-                    if (isRcv) {
-                        rcvDown.offerMessage(rcvUp);
-                        rcvDown.sndSubmit();
-                    } else {
-                        sndDown.offerMessage(sndUp);
-                        sndDown.sndSubmit();
-                    }
-                    return PipeStatus.Next;
-                }
-
-                @Override
-                public PipeStatus onError(PipeContext context, boolean isRcv, Throwable e, PipeExceptionHolder eh) {
-                    if (isRcv) {
-                        rcvError = e;
-                    } else {
-                        sndError = e;
-                    }
-                    eh.clear();
-                    return PipeStatus.Next;
-                }
-            });
-
-            this.pipeline = builder.build();
+            this.pipeline = initPipeline(initializer);
             this.pipeline.onInit(this.pipeCtx);
             this.pipeline.onActive(this.pipeCtx);
         } catch (Throwable e) {
@@ -328,9 +341,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         }
     }
 
-    /**
-     * read messages from the RCV_DOWN of this {@link SoChannel}.
-     */
+    /** read messages from the RCV_DOWN of this {@link SoChannel}. */
     public Object[] readRcvDownArray() {
         try {
             return this.rcvDown.takeMessage(this.rcvDown.queueSize()).toArray();
@@ -339,9 +350,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         }
     }
 
-    /**
-     * read messages limit from the RCV_DOWN of this {@link SoChannel}.
-     */
+    /** read messages limit from the RCV_DOWN of this {@link SoChannel}. */
     public int getRcvDownSize() {
         return this.rcvDown.queueSize();
     }
@@ -437,9 +446,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         }
     }
 
-    /**
-     * read messages from the SND_DOWN of this {@link SoChannel}.
-     */
+    /** read messages from the SND_DOWN of this {@link SoChannel}. */
     public Object readSndDown() {
         try {
             if (this.sndDown.hasMore()) {
@@ -452,9 +459,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         }
     }
 
-    /**
-     * read messages from the SND_DOWN of this {@link SoChannel}.
-     */
+    /** read messages from the SND_DOWN of this {@link SoChannel}. */
     public Object[] readSndDownArray(int readSize) {
         try {
             return this.sndDown.takeMessage(Math.min(readSize, this.sndDown.queueSize())).toArray();
@@ -463,9 +468,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         }
     }
 
-    /**
-     * read messages limit from the SND_DOWN of this {@link SoChannel}.
-     */
+    /** read messages limit from the SND_DOWN of this {@link SoChannel}. */
     public int getSndDownSize() {
         return this.sndDown.queueSize();
     }

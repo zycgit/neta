@@ -46,7 +46,11 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         this.rootSndUp = sndSize < 0 ? new PipeQueue<>(-1) : new PipeQueue<>(sndSize);
     }
 
-    public void addLayer(PipeInvocation<?, ?, ?, ?> pipeLayer) {
+    public void addFirstLayer(PipeInvocation<?, ?, ?, ?> pipeLayer) {
+        this.layers.add(0, pipeLayer);
+    }
+
+    public void addLastLayer(PipeInvocation<?, ?, ?, ?> pipeLayer) {
         this.layers.add(pipeLayer);
     }
 

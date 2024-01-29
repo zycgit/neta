@@ -15,8 +15,6 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.PipeInitializer;
-import net.hasor.neta.handler.PipeBuilder.PipelineBuilder;
 import net.hasor.neta.handler.frames.TypeFrame;
 import net.hasor.neta.handler.frames.TypeRequest;
 import net.hasor.neta.handler.frames.TypeResponse;
@@ -27,9 +25,9 @@ import org.junit.Test;
  * @version : 2022-11-01
  */
 public class PipeEchoTest {
-    private EmbeddedChannel createChannel(PipeInitializer pipeStack) {
+    private EmbeddedChannel createChannel(EmbeddedInitializer initializer) {
         EmbeddedSoContext context = new EmbeddedSoContext();
-        return new EmbeddedChannel(true, pipeStack, context);
+        return new EmbeddedChannel(true, initializer, context);
     }
 
     @Test
@@ -38,15 +36,15 @@ public class PipeEchoTest {
         // String -> TypeFrame -> TypeRequest
         // String <- TypeFrame <- TypeResponse
         PipeConfig pipeConfig = new PipeConfig();
-        PipelineBuilder<String, String> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty
-                // String <-> TypeFrame
-                .nextHandler("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)
-                // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
-                .nextHandler("TypeRequest/Response", pipeConfig, PipeEchoTest::doDecoder2, PipeEchoTest::doEncoder2)
-                // create Stack
-                .build();
-        EmbeddedChannel channel = createChannel(pipeline);
+        EmbeddedInitializer initializer = context -> {
+            return PipeHelper.embedded(String.class, String.class)//
+                    .nextDuplex("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)
+                    // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
+                    .nextDuplex("TypeRequest/Response", pipeConfig, PipeEchoTest::doDecoder2, PipeEchoTest::doEncoder2)
+                    // build
+                    .build();
+        };
+        EmbeddedChannel channel = createChannel(initializer);
 
         //
         channel.writeRcvUp("hello");

@@ -36,11 +36,11 @@ public final class PipeHelper {
         return new PipeHelper().nextTo(pipeConfig);
     }
 
-    public static <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> embedded() {
+    public static <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> embedded(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown) {
         return new PipeHelper().nextTo(new PipeConfig());
     }
 
-    public static <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> embedded(PipeConfig pipeConfig) {
+    public static <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> embedded(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown, PipeConfig pipeConfig) {
         return new PipeHelper().nextTo(pipeConfig);
     }
 
@@ -71,7 +71,7 @@ public final class PipeHelper {
             Objects.requireNonNull(duplexer, "pipeLayer is null.");
 
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addLayer(new PipeInvocation<>(name, pipeConfig, duplexer));
+                chainRoot.addLastLayer(new PipeInvocation<>(name, pipeConfig, duplexer));
             });
             return new PipeStackBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
@@ -84,7 +84,7 @@ public final class PipeHelper {
 
             PipeDuplexHandler<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> pipeLayer = new PipeDuplexHandler<>(decoder, encoder);
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addLayer(new PipeInvocation<>(name, pipeConfig, pipeLayer));
+                chainRoot.addLastLayer(new PipeInvocation<>(name, pipeConfig, pipeLayer));
             });
             return new PipeStackBuilderImpl<>(this.defaultConf, this.taskAppend);
         }

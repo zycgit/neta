@@ -20,9 +20,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.handler.PipeExceptionHolder;
-import net.hasor.neta.handler.PipeHelper;
-import net.hasor.neta.handler.ReceiveHandler;
+import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 import java.io.OutputStream;
@@ -35,34 +33,38 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class SoShutdownTest extends AbstractSoTest {
 
+    // shutdownInput with accept.
     @Test
     public void rcvLocalShutdownInputTest_01() throws Exception {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
-            @Override
-            public void onActive(PipeContext context) throws Throwable {
-                context.getChannel().shutdownInput();// shutdownInput with accept.
-            }
+        PipeInitializer initializer = ctx -> {
+            return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+                @Override
+                public void onActive(PipeContext context) {
+                    context.getChannel().shutdownInput();// shutdownInput with accept.
+                }
 
-            @Override
-            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
-                rcvAnyThing.set(true);
-            }
+                @Override
+                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                    rcvAnyThing.set(true);
+                    return PipeStatus.Next;
+                }
 
-            @Override
-            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
-                rcvError.set(e instanceof SoInputCloseException);
-            }
-        }).build();
-
-        int safePort = safePort();
+                @Override
+                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                    rcvError.set(e instanceof SoInputCloseException);
+                    return PipeStatus.Next;
+                }
+            }).build();
+        };
 
         // start listen
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
-        // start client
+        // start client and snd data
         ThreadUtils.daemonThread(true, (Callable) () -> {
             Socket client = new Socket("127.0.0.1", safePort);
             OutputStream out = client.getOutputStream();
@@ -70,7 +72,7 @@ public class SoShutdownTest extends AbstractSoTest {
             out.flush();
         });
 
-        //
+        // inputShutdown
         listen.waitAnyAccept();
         NetChannel channel = listen.findChannel(2);
         assert channel.isShutdownInput();
@@ -86,27 +88,35 @@ public class SoShutdownTest extends AbstractSoTest {
         server.shutdown();
     }
 
+    // in onMessage shutdownInput using Decoder
     @Test
     public void rcvLocalShutdownInputTest_02() throws Exception {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
-            @Override
-            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
-                data.skipReadableBytes(data.readableBytes());
-                rcvAnyThing.set(true);
-            }
+        PipeInitializer initializer = ctx -> {
+            return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+                @Override
+                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                    while (rcvUp.hasMore()) {
+                        ByteBuf data = rcvUp.takeMessage();
+                        data.skipReadableBytes(data.readableBytes());
+                        data.markReader();
+                        rcvAnyThing.set(true);
+                    }
+                    return PipeStatus.Next;
+                }
 
-            @Override
-            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
-                rcvError.set(e instanceof SoInputCloseException);
-            }
-        }).build();
-
-        int safePort = safePort();
+                @Override
+                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                    rcvError.set(e instanceof SoInputCloseException);
+                    return PipeStatus.Next;
+                }
+            }).build();
+        };
 
         // start listen
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // start client
@@ -138,33 +148,43 @@ public class SoShutdownTest extends AbstractSoTest {
         server.shutdown();
     }
 
+    // in onMessage shutdownInput using Encoder
     @Test
     public void rcvLocalShutdownInputTest_03() throws Exception {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        PipeInitializer initializer = PipeHelper.builder().nextDecoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
-            @Override
-            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
-                data.skipReadableBytes(data.readableBytes());
-                rcvAnyThing.set(true);
-            }
+        PipeInitializer initializer = ctx -> {
+            return PipeHelper.builder().nextEncoder(new PipeHandler<ByteBuf, ByteBuf>() {
+                @Override
+                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                    while (rcvUp.hasMore()) {
+                        ByteBuf data = rcvUp.takeMessage();
+                        data.skipReadableBytes(data.readableBytes());
+                        data.markReader();
+                        rcvAnyThing.set(true);
+                    }
+                    return PipeStatus.Next;
+                }
 
-            @Override
-            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
-                rcvError.set(e instanceof SoInputCloseException);
-            }
-        }).build();
-
-        int safePort = safePort();
+                @Override
+                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                    rcvError.set(e instanceof SoInputCloseException);
+                    return PipeStatus.Next;
+                }
+            }).build();
+        };
 
         // start listen
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // start client
         Socket client = new Socket("127.0.0.1", safePort);
+        whiteHole(client);
+        ThreadUtils.sleep(300);
 
-        // test case
+        //
         listen.waitAnyAccept();
         NetChannel channel = listen.findChannel(2);
         channel.shutdownInput();
@@ -172,15 +192,71 @@ public class SoShutdownTest extends AbstractSoTest {
         assert channel.getRcvHandlerStatus() != SoHandlerStatus.IDLE;//shutdownInput are async
         ThreadUtils.sleep(300);
         assert channel.getRcvHandlerStatus() == SoHandlerStatus.IDLE;
+
+        assert !rcvAnyThing.get();
+        assert !rcvError.get();
+
+        try {
+            OutputStream out = client.getOutputStream();
+            out.write(RandomUtils.nextBytes(4096));
+            out.flush();
+            assert false;
+        } catch (Exception e) {
+            assert e.getMessage().contains("Broken pipe (Write failed)");
+        }
+
+        server.shutdown();
+    }
+
+    // shutdownInput with api.
+    @Test
+    public void rcvLocalShutdownInputTest_04() throws Exception {
+        AtomicBoolean rcvAnyThing = new AtomicBoolean();
+        AtomicBoolean rcvError = new AtomicBoolean(false);
+        PipeInitializer initializer = ctx -> {
+            return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+                @Override
+                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                    rcvAnyThing.set(true);
+                    return PipeStatus.Next;
+                }
+
+                @Override
+                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                    rcvError.set(e instanceof SoInputCloseException);
+                    return PipeStatus.Next;
+                }
+            }).build();
+        };
+
+        // start listen
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+
+        // start client
+        Socket client = new Socket("127.0.0.1", safePort);
+        listen.waitAnyAccept();
+
+        NetChannel channel = listen.findChannel(2);
+        channel.shutdownInput();
+        ThreadUtils.sleep(300);
+        assert channel.isShutdownInput();
+
         assert !rcvAnyThing.get();
         assert rcvError.get();
 
-        //
-        OutputStream out = client.getOutputStream();
-        out.write(RandomUtils.nextBytes(4096));
-        out.flush();
+        try {
+            OutputStream out = client.getOutputStream();
+            out.write(RandomUtils.nextBytes(4096 * 128));
+            out.flush();
+            assert false;
+        } catch (Exception e) {
+            assert e.getMessage().contains("Broken pipe (Write failed)");
+        }
+
+        ThreadUtils.sleep(1000);
         assert !rcvAnyThing.get();
-        assert rcvError.get();
 
         server.shutdown();
     }
@@ -189,8 +265,8 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_01() throws Exception {
         // start server
         int safePort = safePort();
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty());
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -210,8 +286,8 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_02() throws Exception {
         // start server
         int safePort = safePort();
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty());
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -230,27 +306,27 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndLocalShutdownOutputTest_01() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = PipeHelper.builder().nextEncoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
+        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onActive(PipeContext context) throws Throwable {
+            public void onActive(PipeContext context) {
                 context.getChannel().shutdownOutput();// shutdownOutput with accept.
             }
 
             @Override
-            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
-
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+                return PipeStatus.Next;
             }
 
             @Override
-            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 sndError.set(e instanceof SoOutputCloseException);
+                return PipeStatus.Next;
             }
         }).build();
 
-        int safePort = safePort();
-
         // start listen
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -276,22 +352,22 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndLocalShutdownOutputTest_02() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = PipeHelper.builder().nextEncoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
+        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
-
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+                return PipeStatus.Next;
             }
 
             @Override
-            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 sndError.set(e instanceof SoOutputCloseException);
+                return PipeStatus.Next;
             }
         }).build();
 
-        int safePort = safePort();
-
         // start listen
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -323,22 +399,22 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndLocalShutdownOutputTest_03() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = PipeHelper.builder().nextEncoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
+        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
-
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+                return PipeStatus.Next;
             }
 
             @Override
-            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
                 sndError.set(e instanceof SoOutputCloseException);
+                return PipeStatus.Next;
             }
         }).build();
 
-        int safePort = safePort();
-
         // start listen
-        NetChannelManager server = new NetChannelManager(crateConfig(2, 8192));
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(2, 8192));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -381,12 +457,16 @@ public class SoShutdownTest extends AbstractSoTest {
     public void sndLocalShutdownOutputTest_04() throws Exception {
         // start server.
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
-        PipeInitializer initializer = PipeHelper.builder().nextEncoder((ReceiveHandler<ByteBuf, ByteBuf>) (context, data) -> {
-            rcvAnyThing.set(true);
+        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+                rcvAnyThing.set(true);
+                return PipeStatus.Next;
+            }
         }).build();
 
         int safePort = safePort();
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -413,8 +493,8 @@ public class SoShutdownTest extends AbstractSoTest {
     public void sndRemoteShutdownInputTest_01() throws Exception {
         // start server
         int safePort = safePort();
-        NetChannelManager server = new NetChannelManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, PipeHelper.empty());
+        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -445,22 +525,22 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndRemoteShutdownInputTest_02() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = PipeHelper.builder().nextEncoder(new ReceiveHandler<ByteBuf, ByteBuf>() {
+        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void rcvMessage(PipeContext context, ByteBuf data) throws Throwable {
-
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+                return PipeStatus.Next;
             }
 
             @Override
-            public void rcvError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
                 sndError.set(e instanceof SoOutputCloseException);
+                return PipeStatus.Next;
             }
         }).build();
 
-        int safePort = safePort();
-
         // start listen
-        NetChannelManager server = new NetChannelManager(crateConfig(2, 30));
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // client reading...
@@ -489,5 +569,4 @@ public class SoShutdownTest extends AbstractSoTest {
 
         server.shutdown();
     }
-
 }
