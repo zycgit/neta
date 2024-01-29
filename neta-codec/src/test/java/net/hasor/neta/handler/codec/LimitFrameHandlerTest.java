@@ -16,11 +16,7 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.PipeInitializer;
-import net.hasor.neta.handler.EmbeddedChannel;
-import net.hasor.neta.handler.EmbeddedSoContext;
-import net.hasor.neta.handler.EmbeddedTransfer;
-import net.hasor.neta.handler.PipeHelper;
+import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 /**
@@ -31,12 +27,13 @@ public class LimitFrameHandlerTest {
     @Test
     public void limitFrame_1() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        PipeInitializer pipeStack = PipeHelper.builder().nextEncoder(limitFrame).build();
+        EmbeddedInitializer initializer = ctx -> {
+            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", limitFrame).build();
+        };
 
-        //
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, pipeStack, context);
+        EmbeddedChannel server = new EmbeddedChannel(true, initializer, context);
+        EmbeddedChannel client = new EmbeddedChannel(false, initializer, context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
 
         client.writeSndUp(ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }));
@@ -68,12 +65,14 @@ public class LimitFrameHandlerTest {
     @Test
     public void limitFrame_2() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(limitFrame).build();
+        EmbeddedInitializer initializer = ctx -> {
+            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDuplex(limitFrame, limitFrame).build();
+        };
 
         //
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, pipeStack, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, pipeStack, context);
+        EmbeddedChannel server = new EmbeddedChannel(true, initializer, context);
+        EmbeddedChannel client = new EmbeddedChannel(false, initializer, context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
 
         client.writeSndUpArray(new Object[] {//

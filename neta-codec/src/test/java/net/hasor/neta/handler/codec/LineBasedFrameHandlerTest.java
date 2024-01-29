@@ -17,8 +17,8 @@ package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtil;
-import net.hasor.neta.channel.PipeInitializer;
 import net.hasor.neta.handler.EmbeddedChannel;
+import net.hasor.neta.handler.EmbeddedInitializer;
 import net.hasor.neta.handler.EmbeddedSoContext;
 import net.hasor.neta.handler.PipeHelper;
 import org.junit.Test;
@@ -31,10 +31,12 @@ public class LineBasedFrameHandlerTest {
     @Test
     public void lineBasedFrame_1() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(lineBasedFrame).build();
+        EmbeddedInitializer initializer = ctx -> {
+            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("abc".getBytes()));
         assert channel.readRcvDown() == null;
@@ -48,10 +50,12 @@ public class LineBasedFrameHandlerTest {
     @Test
     public void lineBasedFrame_2() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(lineBasedFrame).build();
+        EmbeddedInitializer initializer = ctx -> {
+            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("abc\r\n123".getBytes()));
 
@@ -62,10 +66,12 @@ public class LineBasedFrameHandlerTest {
     @Test
     public void lineBasedFrame_3() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        PipeInitializer pipeStack = PipeHelper.builder().nextDecoder(lineBasedFrame).build();
+        EmbeddedInitializer initializer = ctx -> {
+            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeStack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
         channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("abc\r\n123".getBytes()));
         channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("\r\n".getBytes()));
 
@@ -74,5 +80,4 @@ public class LineBasedFrameHandlerTest {
         ByteBuf dat2 = (ByteBuf) channel.readRcvDown();
         assert new String(ByteBufUtil.toBytes(dat2)).equals("123\r\n");
     }
-
 }
