@@ -64,20 +64,20 @@ public class EmbeddedTransfer {
      * @param copyPacket use turn parameter to determine number messages to send.
      */
     public void transferToClient(int copyPacket) {
-        copyPacket = Math.min(this.server.getSndDownSize(), copyPacket);
+        copyPacket = Math.min(this.server.getSndSize(), copyPacket);
 
         if (this.server.isClose()) {
             return;
         }
 
-        Object[] data = this.server.readSndDownArray(copyPacket);
+        Object[] data = this.server.readSndArray(copyPacket);
         if (data == null || data.length == 0) {
             return;
         }
 
         if (!this.client.isClose()) {
             logger.info("transferToClient packet: " + data.length);
-            this.client.writeRcvUpArray(data);
+            this.client.receive(data);
         }
     }
 
@@ -95,20 +95,20 @@ public class EmbeddedTransfer {
      * @param copyPacket use turn parameter to determine number messages to send.
      */
     public void transferToServer(int copyPacket) {
-        copyPacket = Math.min(this.client.getSndDownSize(), copyPacket);
+        copyPacket = Math.min(this.client.getSndSize(), copyPacket);
 
         if (this.client.isClose()) {
             return;
         }
 
-        Object[] data = this.client.readSndDownArray(copyPacket);
+        Object[] data = this.client.readSndArray(copyPacket);
         if (data == null || data.length == 0) {
             return;
         }
 
         if (!this.server.isClose()) {
             logger.info("transferToServer packet: " + data.length);
-            this.server.writeRcvUpArray(data);
+            this.server.receive(data);
         }
     }
 }

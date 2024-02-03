@@ -38,12 +38,12 @@ public class LineBasedFrameHandlerTest {
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
-        channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("abc".getBytes()));
-        assert channel.readRcvDown() == null;
+        channel.receive(ByteBufAllocator.DEFAULT.wrap("abc".getBytes()));
+        assert channel.readRcv() == null;
 
-        channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("\r\n".getBytes()));
+        channel.receive(ByteBufAllocator.DEFAULT.wrap("\r\n".getBytes()));
 
-        ByteBuf rcvDown = (ByteBuf) channel.readRcvDown();
+        ByteBuf rcvDown = (ByteBuf) channel.readRcv();
         assert new String(ByteBufUtil.toBytes(rcvDown)).equals("abc\r\n");
     }
 
@@ -57,9 +57,9 @@ public class LineBasedFrameHandlerTest {
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
-        channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("abc\r\n123".getBytes()));
+        channel.receive(ByteBufAllocator.DEFAULT.wrap("abc\r\n123".getBytes()));
 
-        ByteBuf rcvDown = (ByteBuf) channel.readRcvDown();
+        ByteBuf rcvDown = (ByteBuf) channel.readRcv();
         assert new String(ByteBufUtil.toBytes(rcvDown)).equals("abc\r\n");
     }
 
@@ -72,12 +72,12 @@ public class LineBasedFrameHandlerTest {
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("abc\r\n123".getBytes()));
-        channel.writeRcvUp(ByteBufAllocator.DEFAULT.wrap("\r\n".getBytes()));
+        channel.receive(ByteBufAllocator.DEFAULT.wrap("abc\r\n123".getBytes()));
+        channel.receive(ByteBufAllocator.DEFAULT.wrap("\r\n".getBytes()));
 
-        ByteBuf dat1 = (ByteBuf) channel.readRcvDown();
+        ByteBuf dat1 = (ByteBuf) channel.readRcv();
         assert new String(ByteBufUtil.toBytes(dat1)).equals("abc\r\n");
-        ByteBuf dat2 = (ByteBuf) channel.readRcvDown();
+        ByteBuf dat2 = (ByteBuf) channel.readRcv();
         assert new String(ByteBufUtil.toBytes(dat2)).equals("123\r\n");
     }
 }

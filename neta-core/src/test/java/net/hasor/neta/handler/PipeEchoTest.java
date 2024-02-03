@@ -36,24 +36,22 @@ public class PipeEchoTest {
         // String -> TypeFrame -> TypeRequest
         // String <- TypeFrame <- TypeResponse
         PipeConfig pipeConfig = new PipeConfig();
-        EmbeddedInitializer initializer = context -> {
-            return PipeHelper.embedded(String.class, String.class)//
-                    .nextDuplex("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)
-                    // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
-                    .nextDuplex("TypeRequest/Response", pipeConfig, PipeEchoTest::doDecoder2, PipeEchoTest::doEncoder2)
-                    // build
-                    .build();
-        };
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(String.class, String.class)//
+                .nextDuplex("TypeFrame", pipeConfig, PipeEchoTest::doDecoder1, PipeEchoTest::doEncoder1)
+                // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
+                .nextDuplex("TypeRequest/Response", pipeConfig, PipeEchoTest::doDecoder2, PipeEchoTest::doEncoder2)
+                // build
+                .build();
         EmbeddedChannel channel = createChannel(initializer);
 
         //
-        channel.writeRcvUp("hello");
-        TypeRequest request = (TypeRequest) channel.readRcvDown();
+        channel.receive("hello");
+        TypeRequest request = (TypeRequest) channel.readRcv();
         assert request.getHeader().equals("TypeFrame>TypeRequest");
         assert request.getMessage().equals("hello");
 
-        channel.writeSndUp(new TypeResponse(request.getHeader(), "echo hello"));
-        String response = (String) channel.readSndDown();
+        channel.send(new TypeResponse(request.getHeader(), "echo hello"));
+        String response = (String) channel.readSnd();
         assert response.equals("TypeFrame>TypeRequest>TypeResponse>TypeFrame echo hello");
     }
 

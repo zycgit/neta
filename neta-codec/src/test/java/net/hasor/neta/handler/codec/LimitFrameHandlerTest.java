@@ -36,28 +36,28 @@ public class LimitFrameHandlerTest {
         EmbeddedChannel client = new EmbeddedChannel(false, initializer, context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
 
-        client.writeSndUp(ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }));
+        client.send(ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2, 3, 4, 5, 6, 7, 8 }));
         transfer.transferToServer();
 
-        assert server.getRcvDownSize() == 5;
+        assert server.getRcvSize() == 5;
 
-        ByteBuf buf1 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf1 = (ByteBuf) server.readRcv();
         assert buf1.readableBytes() == 2;
         assert buf1.getByte(0) == 0;
         assert buf1.getByte(1) == 1;
-        ByteBuf buf2 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf2 = (ByteBuf) server.readRcv();
         assert buf2.readableBytes() == 2;
         assert buf2.getByte(0) == 2;
         assert buf2.getByte(1) == 3;
-        ByteBuf buf3 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf3 = (ByteBuf) server.readRcv();
         assert buf3.readableBytes() == 2;
         assert buf3.getByte(0) == 4;
         assert buf3.getByte(1) == 5;
-        ByteBuf buf4 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf4 = (ByteBuf) server.readRcv();
         assert buf4.readableBytes() == 2;
         assert buf4.getByte(0) == 6;
         assert buf4.getByte(1) == 7;
-        ByteBuf buf5 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf5 = (ByteBuf) server.readRcv();
         assert buf5.readableBytes() == 1;
         assert buf5.getByte(0) == 8;
     }
@@ -75,30 +75,30 @@ public class LimitFrameHandlerTest {
         EmbeddedChannel client = new EmbeddedChannel(false, initializer, context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
 
-        client.writeSndUpArray(new Object[] {//
+        client.send(new Object[] {//
                 ByteBufAllocator.DEFAULT.wrap(new byte[] { 0, 1, 2 }),//
                 ByteBufAllocator.DEFAULT.wrap(new byte[] { 3, 4, 5, 6, 7, 8 }) });
         transfer.transferToServer();
 
-        assert server.getRcvDownSize() == 5;
+        assert server.getRcvSize() == 5;
 
-        ByteBuf buf1 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf1 = (ByteBuf) server.readRcv();
         assert buf1.readableBytes() == 2;
         assert buf1.getByte(0) == 0;
         assert buf1.getByte(1) == 1;
-        ByteBuf buf2 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf2 = (ByteBuf) server.readRcv();
         assert buf2.readableBytes() == 2;
         assert buf2.getByte(0) == 2;
         assert buf2.getByte(1) == 3;
-        ByteBuf buf3 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf3 = (ByteBuf) server.readRcv();
         assert buf3.readableBytes() == 2;
         assert buf3.getByte(0) == 4;
         assert buf3.getByte(1) == 5;
-        ByteBuf buf4 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf4 = (ByteBuf) server.readRcv();
         assert buf4.readableBytes() == 2;
         assert buf4.getByte(0) == 6;
         assert buf4.getByte(1) == 7;
-        ByteBuf buf5 = (ByteBuf) server.readRcvDown();
+        ByteBuf buf5 = (ByteBuf) server.readRcv();
         assert buf5.readableBytes() == 1;
         assert buf5.getByte(0) == 8;
     }

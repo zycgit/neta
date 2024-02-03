@@ -13,8 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.codec;
 import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.handler.PipeHandler;
+import net.hasor.neta.handler.PipeRcvQueue;
+import net.hasor.neta.handler.PipeSndQueue;
+import net.hasor.neta.handler.PipeStatus;
 
 /**
  * Transparent conveyor belt.
@@ -25,6 +29,6 @@ public class TransparentPipeHandler<T> implements PipeHandler<T, T> {
     @Override
     public PipeStatus onMessage(PipeContext context, PipeRcvQueue<T> src, PipeSndQueue<T> dst) {
         dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return PipeStatus.Next;
+        return src.hasMore() && !dst.hasSlot() ? PipeStatus.Back : PipeStatus.Next;
     }
 }

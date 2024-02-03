@@ -33,6 +33,18 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @see PipeDuplex
  */
 public class PipeConfig {
+    public static final PipeConfig DEFAULT = new PipeConfig() {
+        @Override
+        public void setPipeRcvDownStackSize(int pipeRcvDownStackSize) {
+            throw new UnsupportedOperationException();
+        }
+
+        @Override
+        public void setPipeSndUpStackSize(int pipeSndUpStackSize) {
+            throw new UnsupportedOperationException();
+        }
+    };
+
     private int pipeRcvDownStackSize = -1;
     private int pipeSndUpStackSize   = -1;
 

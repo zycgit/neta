@@ -54,8 +54,8 @@ class PipeInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     private final        PipeConfig                                     config;
     private final        AtomicBoolean                                  inited;
     //
-    private              PipeQueue<RCV_DOWN>                            rcvDownEnd;
-    private              PipeQueue<SND_DOWN>                            sndDownEnd;
+    private              PipeQueue<RCV_DOWN>                            rcvDown;
+    private              PipeQueue<SND_DOWN>                            sndDown;
     private final        PipeDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer;
 
     public PipeInvocation(String name, PipeConfig config, PipeDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> pipeLayer) {
@@ -75,41 +75,41 @@ class PipeInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     /** the {@link PipeDuplex} RCV_DOWN to connect the next {@link PipeDuplex} RCV_UP. */
     public PipeQueue<RCV_DOWN> getRcvDown() {
-        return this.rcvDownEnd;
+        return this.rcvDown;
     }
 
     /** the {@link PipeDuplex} SND_DOWN to connect the next {@link PipeDuplex} SND_UP. */
     public PipeQueue<SND_DOWN> getSndDown() {
-        return this.sndDownEnd;
+        return this.sndDown;
     }
 
     @Override
     public String toString() {
-        return "PipeLayer [name=" + this.name + ", queue=" + this.rcvDownEnd.queueSize() + ", slot=" + this.sndDownEnd.slotSize() + "]";
+        return "PipeLayer [name=" + this.name + ", queue=" + this.rcvDown.queueSize() + ", slot=" + this.sndDown.slotSize() + "]";
     }
 
     public String toMonitorRcvString() {
-        int capacity = this.rcvDownEnd.getCapacity();
+        int capacity = this.rcvDown.getCapacity();
         if (capacity > 500) {
-            return this.rcvDownEnd.queueSize() + "/500+";
+            return this.rcvDown.queueSize() + "/500+";
         } else {
-            return this.rcvDownEnd.queueSize() + "/" + capacity;
+            return this.rcvDown.queueSize() + "/" + capacity;
         }
     }
 
     public String toMonitorSndString() {
-        int capacity = this.sndDownEnd.getCapacity();
+        int capacity = this.sndDown.getCapacity();
         if (capacity > 500) {
-            return this.sndDownEnd.queueSize() + "/500+";
+            return this.sndDown.queueSize() + "/500+";
         } else {
-            return this.sndDownEnd.queueSize() + "/" + capacity;
+            return this.sndDown.queueSize() + "/" + capacity;
         }
     }
 
     public void onInit(PipeContext pipeContext) throws Throwable {
         if (this.inited.compareAndSet(false, true)) {
-            this.rcvDownEnd = new PipeQueue<>(this.config.getPipeRcvDownStackSize());
-            this.sndDownEnd = new PipeQueue<>(this.config.getPipeSndUpStackSize());
+            this.rcvDown = new PipeQueue<>(this.config.getPipeRcvDownStackSize());
+            this.sndDown = new PipeQueue<>(this.config.getPipeSndUpStackSize());
             this.pipeLayer.onInit(pipeContext);
         }
     }
@@ -129,12 +129,7 @@ class PipeInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         Throwable ctxError = context.flash(errorTag);
         try {
             if (ctxError == null) {
-                PipeStatus expect = this.pipeLayer.onMessage(context, isRcv, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd);
-                if (this.rcvDownEnd.hasCommit() || this.sndDownEnd.hasCommit()) {
-                    return expect;
-                } else {
-                    return PipeStatus.Exit;
-                }
+                return this.pipeLayer.onMessage(context, isRcv, rcvUp, this.rcvDown, sndUp, this.sndDown);
             } else {
                 return this.pipeLayer.onError(context, isRcv, ctxError, this.createExceptionHandler(isRcv, context, rcvUp, sndUp));
             }
@@ -155,15 +150,13 @@ class PipeInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
             }
         } finally {
             rcvUp.rcvSubmit();
-            this.rcvDownEnd.sndSubmit();
+            this.rcvDown.sndSubmit();
             sndUp.rcvSubmit();
-            this.sndDownEnd.sndSubmit();
+            this.sndDown.sndSubmit();
         }
     }
 
     private PipeExceptionHolder createExceptionHandler(boolean isRcv, PipeContext pipeContext, PipeRcvQueue<RCV_UP> rcvUp, PipeRcvQueue<SND_UP> sndUp) {
-        /*, rcvUp, this.rcvDownEnd, sndUp, this.sndDownEnd*/
-        /*,PipeRcvQueue<?> rcvUp, PipeSndQueue<?> rcvDown, PipeRcvQueue<?> sndUp, PipeSndQueue<?> sndDown*/
         return new PipeExceptionHandlerImpl(isRcv, pipeContext);
     }
 

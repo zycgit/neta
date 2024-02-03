@@ -23,10 +23,10 @@ public enum PipeStatus {
     /**
      * Continuing the execution pipeline
      * <pre>
-     *  ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓
-     *  ┃ PipeDuplex (0) ┃ > ┃ PipeDuplex (1) ┃ > ┃ PipeDuplex (2) ┃ > ...
-     *  ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛
-     *        Next                Next                Next
+     *  ┏━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━┓
+     *  ┃ PipeNode (0) ┃ > ┃ PipeNode (1) ┃ > ┃ PipeNode (2) ┃ > ...
+     *  ┗━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━┛
+     *        Next               Next               Next
      * </pre>
      */
     Next,
@@ -34,11 +34,11 @@ public enum PipeStatus {
     /**
      * Retry this method call, using again to avoid recursion
      * <pre>
-     *                     ┏━━━━━━┓
-     *  ┏━━━━━━━━━━━━━━━━┓ ┃  ┏━━━┻━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓
-     *  ┃ PipeDuplex (0) ┃ ┸> ┃ PipeDuplex (1) ┃ > ┃ PipeDuplex (2) ┃ > ...
-     *  ┗━━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛
-     *        Next                 Retry               Next
+     *                   ╭──────╮
+     *  ┏━━━━━━━━━━━━━━┓ │  ┏━━━┷━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━┓
+     *  ┃ PipeNode (0) ┃ ┷> ┃ PipeNode (1) ┃ > ┃ PipeNode (2) ┃ > ...
+     *  ┗━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━┛
+     *        Next                Retry              Next
      * </pre>
      */
     Retry,
@@ -49,34 +49,60 @@ public enum PipeStatus {
      * <p>If the pipeline is Interrupt, it will not be restarted</p>
      *
      * <pre>
-     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     * ┃  ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓         ┏━┻━━━━━━━━━━━━━━┓
-     * ┗> ┃ PipeDuplex (0) ┃ > ┃ PipeDuplex (1) ┃ > ... > ┃ PipeDuplex (2) ┃ > ...
-     *    ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━━━━┛
-     *          Next                Again                     Next
+     * ╭────────────────────────────────────────────────╮
+     * │  ┏━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━┓         ┏━┷━━━━━━━━━━━━┓
+     * ┕> ┃ PipeNode (0) ┃ > ┃ PipeNode (1) ┃ > ... > ┃ PipeNode (2) ┃ > ...
+     *    ┗━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━━┛
+     *          Next               Again                    Next
      * </pre>
      */
     Again,
 
     /**
+     * restarted from the current node after pipeline finished.
+     *
+     * <p>If the pipeline is Interrupt, it will not be restarted</p>
+     *
+     * <pre>
+     *                   ╭─────────────────────────────╮
+     *  ┏━━━━━━━━━━━━━━┓ │  ┏━━━━━━━━━━━━━━┓         ┏━┷━━━━━━━━━━━━┓
+     *  ┃ PipeNode (0) ┃ ┷> ┃ PipeNode (1) ┃ > ... > ┃ PipeNode (2) ┃ > ...
+     *  ┗━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━━┛
+     *        Next                Back                     Next
+     * </pre>
+     */
+    Back,
+
+    /**
      * Interrupt the pipeline event propagation and restarted of the pipeline.
      * <pre>
-     * ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
-     * ┃  ┏━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓   ┏━┻━━━━━━━━━━━━━━┓
-     * ┗> ┃ PipeDuplex (0) ┃ > ┃ PipeDuplex (1) ┃ > ┃ PipeDuplex (2) ┃ > ...
-     *    ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛
-     *          Next                Next               Restart
+     * ╭───────────────────────╮
+     * │  ┏━━━━━━━━━━━━━━┓   ┏━┷━━━━━━━━━━━━┓   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+     * ┕> ┃ PipeNode (0) ┃ > ┃ PipeNode (1) ┃ > ┆ PipeNode (2) ┆ > ...
+     *    ┗━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+     *          Next             Restart              Skip
      * </pre>
      */
     Restart,
 
     /**
+     * Execution continues by skipping the next node of the pipeline.
+     * <pre>
+     *     ┏━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┏━━━━━━━━━━━━━━┓
+     * ... ┃ PipeNode (0) ┃ > ┆ PipeNode (1) ┆ > ┃ PipeNode (2) ┃ > ...
+     *     ┗━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ┗━━━━━━━━━━━━━━┛
+     *           Skip            (skipped)             Next
+     * </pre>
+     */
+    Skip,
+
+    /**
      * Interrupt pipeline event propagation, and Skip all the following {@link PipeDuplex}
      * <pre>
-     *     ┏━━━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-     * ... ┃ PipeDuplex (0) ┃ > ┆ PipeDuplex (1) ┆ > ┆ PipeDuplex (2) ┆ > ...
-     *     ┗━━━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
-     *           Exit                Skip                Skip
+     *     ┏━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+     * ... ┃ PipeNode (0) ┃ > ┆ PipeNode (1) ┆ > ┆ PipeNode (2) ┆ > ...
+     *     ┗━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+     *           Exit               Skip               Skip
      * </pre>
      */
     Exit,
@@ -84,9 +110,9 @@ public enum PipeStatus {
     /**
      * Interrupt pipeline event propagation, and throw Error
      * <pre>
-     *     ┏━━━━━━━━━━━━━━━━┓
-     * ... ┃ PipeDuplex (0) ┃ > Throw Error
-     *     ┗━━━━━━━━━━━━━━━━┛
+     *     ┏━━━━━━━━━━━━━━┓
+     * ... ┃ PipeNode (0) ┃ > Throw Error
+     *     ┗━━━━━━━━━━━━━━┛
      *         Interrupt
      * </pre>
      */

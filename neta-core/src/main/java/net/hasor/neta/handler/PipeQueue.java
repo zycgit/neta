@@ -32,7 +32,7 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     private final Class<?> elementArrayType;
 
     public PipeQueue(int capacity) {
-        this.capacity = capacity == -1 ? Integer.MAX_VALUE : capacity;
+        this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
         this.linkedList = new CopyOnWriteArrayList<>();
         this.offerTemp = new CopyOnWriteArrayList<>();
         this.elementArrayType = this.linkedList.toArray().getClass().getComponentType();
@@ -87,33 +87,19 @@ public class PipeQueue<T> implements PipeRcvQueue<T>, PipeSndQueue<T> {
     @Override
     public int offerMessage(T[] offerList) {
         int size = Math.min(this.slotSize(), offerList.length);
-
-        int added = 0;
-        for (T item : offerList) {
-            this.offerTemp.add(item);
-            added++;
-            if (added >= size) {
-                break;
-            }
+        for (int i = 0; i < size; i++) {
+            this.offerTemp.add(offerList[i]);
         }
-
-        return added;
+        return size;
     }
 
     @Override
     public int offerMessage(List<T> offerList) {
         int size = Math.min(this.slotSize(), offerList.size());
-
-        int added = 0;
-        for (T item : offerList) {
-            this.offerTemp.add(item);
-            added++;
-            if (added >= size) {
-                break;
-            }
+        for (int i = 0; i < size; i++) {
+            this.offerTemp.add(offerList.get(i));
         }
-
-        return added;
+        return size;
     }
 
     @Override

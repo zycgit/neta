@@ -18,7 +18,6 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.PipeInitializer;
 import net.hasor.neta.codec.LimitFramePipeHandler;
 import net.hasor.neta.handler.*;
 
@@ -32,34 +31,18 @@ import java.util.List;
  * @version : 2022-11-01
  */
 public class AbstractSslTest {
-    public static PipeInitializer createPipeline(SslConfig sslConf, PipeHandler<String, String> last) {
+    public static EmbeddedInitializer createPipeline(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
         LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        return new PipeHelper()
+        return ctx -> PipeHelper.embedded(ByteBuf.class, ByteBuf.class)
                 // limitFrame
                 .nextDuplex("LIMIT", new PipeDuplexHandler<>(limitFrame, limitFrame))
                 // SSL
                 .nextDuplex("SSL", new SslPipeLayer(sslConf))
                 // bytes <-> String
-                .nextHandler("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
-                // create Stack
-                .nextDecoder(last).build();
-    }
-
-    public static PipeInitializer createPipeline(SslConfig sslConf) {
-        //  Net      SSL     Message
-        // Bytes -> Bytes -> String
-        // Bytes <- Bytes <- String
-        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        return new PipeHelper()
-                // limitFrame
-                .nextDuplex("LIMIT", new PipeDuplexHandler<>(limitFrame, limitFrame))
-                // SSL
-                .nextDuplex("SSL", new SslPipeLayer(sslConf))
-                // bytes <-> String
-                .nextHandler("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
                 .build();
     }

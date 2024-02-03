@@ -22,6 +22,7 @@ import net.hasor.neta.channel.PipeContextImpl;
 import net.hasor.neta.channel.Pipeline;
 
 import java.util.ArrayList;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -34,24 +35,28 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     private static final Logger                           logger = Logger.getLogger(PipeChainRoot.class);
     private static final ByteBuf[]                        EMPTY  = new ByteBuf[0];
     private final        List<PipeInvocation<?, ?, ?, ?>> layers;
-    private final        PipeQueue<Object>                rootRcvUp;
-    private final        PipeQueue<Object>                rootSndUp;
+    private final        PipeQueue<Object>                headRcvUp;
+    private final        PipeQueue<Object>                headSndUp;
+    private              PipeListener                     listener;
+    private              long                             channelID;
+    private              boolean                          netLog;
 
     public PipeChainRoot(PipeConfig rootConfig) {
         int rcvSize = rootConfig.getPipeRcvDownStackSize();
         int sndSize = rootConfig.getPipeSndUpStackSize();
 
         this.layers = new ArrayList<>();
-        this.rootRcvUp = rcvSize < 0 ? new PipeQueue<>(-1) : new PipeQueue<>(rcvSize);
-        this.rootSndUp = sndSize < 0 ? new PipeQueue<>(-1) : new PipeQueue<>(sndSize);
+        this.headRcvUp = new PipeQueue<>(rcvSize < 0 ? -1 : rcvSize);
+        this.headSndUp = new PipeQueue<>(sndSize < 0 ? -1 : sndSize);
+        this.netLog = false;
     }
 
-    public void addFirstLayer(PipeInvocation<?, ?, ?, ?> pipeLayer) {
-        this.layers.add(0, pipeLayer);
-    }
-
-    public void addLastLayer(PipeInvocation<?, ?, ?, ?> pipeLayer) {
+    public void addLayer(PipeInvocation<?, ?, ?, ?> pipeLayer) {
         this.layers.add(pipeLayer);
+    }
+
+    public void bindListener(PipeListener listener) {
+        this.listener = listener;
     }
 
     @Override
@@ -59,7 +64,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         if (this.layers.isEmpty()) {
             return Integer.MAX_VALUE;
         } else {
-            return this.rootRcvUp.slotSize();
+            return this.headRcvUp.slotSize();
         }
     }
 
@@ -74,6 +79,9 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
 
     @Override
     public void onInit(PipeContext pipeContext) throws Throwable {
+        this.netLog = pipeContext.getConfig().isNetlog();
+        this.channelID = pipeContext.getChannel().getChannelID();
+
         for (PipeInvocation<?, ?, ?, ?> layer : this.layers) {
             layer.onInit(pipeContext);
         }
@@ -93,18 +101,16 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         }
     }
 
-    private void offerMessage(boolean isRcv, PipeContext pipeContext, PipeQueue<Object> queue, Object[] offerData) throws IllegalStateException {
+    private void offerMessage(boolean isRcv, PipeQueue<Object> queue, Object[] offerData) throws IllegalStateException {
         if (queue.offerMessage(offerData) == offerData.length) {
             queue.sndSubmit();
         } else {
             queue.sndReset();
-
             String msgTag = isRcv ? "rcv" : "snd";
-            long channelID = pipeContext.getChannel().getChannelID();
             int slotSize = queue.slotSize();
             int require = offerData.length;
 
-            String msg = String.format("%s(%s) %sQueue is full, available slot is %s, require %s.", msgTag, channelID, msgTag, slotSize, require);
+            String msg = String.format("%s(%s) %sQueue is full, available slot is %s, require %s.", msgTag, this.channelID, msgTag, slotSize, require);
             IllegalStateException e = new IllegalStateException(msg);
             logger.error(msg, e);
             throw e;
@@ -123,6 +129,18 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         return isRcv ? 0 : (this.layers.size() - 1);
     }
 
+    private void printLog(boolean isRcv, String msg) {
+        if (!this.netLog) {
+            return;
+        }
+
+        if (isRcv) {
+            logger.info("rcv(" + this.channelID + ") " + msg);
+        } else {
+            logger.info("snd(" + this.channelID + ") " + msg);
+        }
+    }
+
     private PipeStatus doLayer(boolean isRcv, PipeContext pipeContext, int i) throws Throwable {
         //                 PipeLayer(0)                    PipeLayer (1)
         //          ┏━━━━━━━━━━━━━━━━━━━━━━━━┓       ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -135,8 +153,8 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         //          ┃                        ┃       ┃                        ┃
         //          ┗━━━━━━━━━━━━━━━━━━━━━━━━┛       ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
         boolean netLog = pipeContext.getConfig().isNetlog();
-        PipeQueue<?> useRcvUp = i == 0 ? this.rootRcvUp : this.layers.get(i - 1).getRcvDown();
-        PipeQueue<?> useSndUp = i == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(i + 1).getSndDown();
+        PipeQueue<?> useRcvUp = i == 0 ? this.headRcvUp : this.layers.get(i - 1).getRcvDown();
+        PipeQueue<?> useSndUp = i == (this.layers.size() - 1) ? this.headSndUp : this.layers.get(i + 1).getSndDown();
 
         PipeStatus status;
         do {
@@ -163,7 +181,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
 
             if (status == PipeStatus.Retry && netLog) {
                 String msgTag = isRcv ? "rcv" : "snd";
-                logger.info(msgTag + "(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " doRetry");
+                logger.info(msgTag + "(" + this.channelID + ") PipeLayer " + i + "/" + this.layers.size() + " doRetry");
             }
         } while (status == PipeStatus.Retry);
         return status;
@@ -181,8 +199,8 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             }
 
             int depth = this.findDepth(true, pipeName);
-            PipeQueue useRcvUp = depth == 0 ? this.rootRcvUp : this.layers.get(depth - 1).getRcvDown();
-            this.offerMessage(true, pipeContext, useRcvUp, rcvData);
+            PipeQueue useRcvUp = depth == 0 ? this.headRcvUp : this.layers.get(depth - 1).getRcvDown();
+            this.offerMessage(true, useRcvUp, rcvData);
             return this.onRcvLife(pipeContext, depth);
         } finally {
             ((PipeContextImpl) pipeContext).clearFlash();
@@ -205,27 +223,62 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     private Object[] onRcvLife(PipeContext pipeContext, int depth) throws Throwable {
-        // do RCV
-        PipeResult rcvResult = this.doRcvPipe(pipeContext, depth);
-        if (rcvResult.finish) {
-            this.triggerRcv(pipeContext);
-        }
-        PipeResult sndResult = this.doSndPipe(pipeContext, rcvResult.layerDepth);
-        if (sndResult.finish) {
-            this.triggerSend(pipeContext);
-        }
+        LinkedList<Object[]> returnData = new LinkedList<>();
+        int arraySize = 0;
+
+        // do RCV, process PipeStatus.Back
+        int usingRcvDepth = depth;
+        PipeResult rcvResult;
+        do {
+            rcvResult = this.doRcvPipe(pipeContext, usingRcvDepth);
+            if (rcvResult.finish) {
+                this.triggerRcv(pipeContext);
+            }
+
+            if (rcvResult.result != EMPTY && rcvResult.result.length > 0) {
+                returnData.add(rcvResult.result);
+                arraySize = arraySize + rcvResult.result.length;
+            }
+
+            if (rcvResult.backTo == -1) {
+                break;
+            }
+
+            usingRcvDepth = rcvResult.backTo;
+        } while (true);
+
+        //
+        // do SND, process PipeStatus.Back
+        int usingSndDepth = rcvResult.layerDepth;
+        PipeResult sndResult;
+        do {
+            sndResult = this.doSndPipe(pipeContext, usingSndDepth);
+            if (sndResult.finish) {
+                this.triggerSend(pipeContext);
+            }
+
+            if (sndResult.result != EMPTY && sndResult.result.length > 0) {
+                returnData.add(sndResult.result);
+                arraySize = arraySize + sndResult.result.length;
+            }
+
+            if (sndResult.backTo == -1) {
+                break;
+            }
+
+            usingSndDepth = sndResult.backTo;
+        } while (true);
 
         // return data(Will be written to SND)
-        Object[] dat1 = rcvResult.result;
-        Object[] dat2 = sndResult.result;
-        if (dat1 == EMPTY) {
-            return dat2;
-        } else if (dat2 == EMPTY) {
-            return dat1;
+        if (arraySize == 0) {
+            return EMPTY;
         } else {
-            Object[] result = new Object[dat1.length + dat2.length];
-            System.arraycopy(dat1, 0, result, 0, dat1.length);
-            System.arraycopy(dat2, 0, result, dat1.length, dat2.length);
+            Object[] result = new Object[arraySize];
+            int dstPos = 0;
+            for (Object[] objs : returnData) {
+                System.arraycopy(objs, 0, result, dstPos, objs.length);
+                dstPos = dstPos + objs.length;
+            }
             return result;
         }
     }
@@ -234,10 +287,19 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         // 1st onReceive
         PipeQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
         if (rcvDown.hasMore()) {
-            while (rcvDown.hasMore()) {
-                Object data = rcvDown.takeMessage();
-                String msg = "rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program at the tail of the pipeline, Skipping event: ";
-                logger.warn(msg + data);
+            if (this.listener == null) {
+                // trigger tail. print event data to log
+                while (rcvDown.hasMore()) {
+                    Object data = rcvDown.takeMessage();
+                    String msg = "rcv(" + this.channelID + ") There are no program at the tail of the pipeline, Skipping event: ";
+                    logger.warn(msg + data);
+                }
+            } else {
+                // trigger the listener event.
+                while (rcvDown.hasMore()) {
+                    Object msg = rcvDown.takeMessage();
+                    this.listener.onReceive(pipeContext.getChannel(), msg);
+                }
             }
             rcvDown.rcvSubmit();
         }
@@ -245,36 +307,52 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         // 2st onError
         Throwable ctxError = pipeContext.flash(PipeInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            String msg = "rcv(" + pipeContext.getChannel().getChannelID() + ") rcv Exception was fired, and it reached at the tail of the pipeline." //
-                    + " It usually means the last handler in the pipeline did not handle the rcv exception.";
-            logger.warn(msg, ctxError);
+            if (this.listener == null) {
+                String msg = "rcv(" + this.channelID + ") rcv Exception was fired, and it reached at the tail of the pipeline." //
+                        + " It usually means the last handler in the pipeline did not handle the rcv exception.";
+                logger.warn(msg, ctxError);
+            } else {
+                this.listener.onError(pipeContext.getChannel(), ctxError, true);
+            }
         }
     }
 
     private Object[] triggerRcvWithEmptyPipe(PipeContext pipeContext, Object[] sndData) {
         // 1st onReceive
         if (sndData != null) {
-            for (Object obj : sndData) {
-                String msg = "rcv(" + pipeContext.getChannel().getChannelID() + ") There are no program at the tail of the pipeline, Skipping event: ";
-                logger.warn(msg + obj);
+            if (this.listener == null) {
+                // trigger tail. print event data to log
+                for (Object obj : sndData) {
+                    String msg = "rcv(" + this.channelID + ") There are no program at the tail of the pipeline, Skipping event: ";
+                    logger.warn(msg + obj);
+                }
+            } else {
+                // trigger the listener event.
+                for (Object obj : sndData) {
+                    this.listener.onReceive(pipeContext.getChannel(), obj);
+                }
             }
         }
 
         // 2st onError
         Throwable ctxError = pipeContext.flash(PipeInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            String msg = "rcv(" + pipeContext.getChannel().getChannelID() + ") rcv Exception was fired, and it reached at the tail of the pipeline." //
-                    + " It usually means the last handler in the pipeline did not handle the rcv exception.";
-            logger.warn(msg, ctxError);
+            if (this.listener == null) {
+                String msg = "rcv(" + this.channelID + ") rcv Exception was fired, and it reached at the tail of the pipeline." //
+                        + " It usually means the last handler in the pipeline did not handle the rcv exception.";
+                logger.warn(msg, ctxError);
+            } else {
+                this.listener.onError(pipeContext.getChannel(), ctxError, true);
+            }
         }
         return EMPTY;
     }
 
     private PipeResult doRcvPipe(final PipeContext pipeContext, int depth) throws Throwable {
-        boolean netLog = pipeContext.getConfig().isNetlog();
         boolean needRestartLater;
         boolean pipeFinish;
         int i;
+        int backTo = -1;
 
         do {
             needRestartLater = false;
@@ -286,29 +364,38 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
                     case Next:
-                        // only the complete pipeline will fire listeners
+                    case Skip:
+                    case Back:
+                        // only the complete pipeline will fire triggerRcv
                         pipeFinish = (i == this.layers.size() - 1);
+
+                        if (status == PipeStatus.Back) {
+                            if (backTo == -1) {
+                                backTo = i;
+                                this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Back to " + backTo);
+                            } else {
+                                this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " Back has been set to " + backTo);
+                            }
+                        } else if (status == PipeStatus.Skip) {
+                            this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Skip");
+                            i++; // if skip then skip next to next.
+                        }
+
                         i++;
                         continue;
                     case Again:
                         needRestartLater = true;// restart when finished
-                        if (netLog) {
-                            logger.info("rcv(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
-                        }
+                        this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Again");
                         i++;
                         continue;
                     case Restart:
                         needRestartLater = true;
-                        if (netLog) {
-                            logger.info("rcv(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
-                        }
+                        this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Restart");
                         i++;
                         break;
                     case Exit:
                         pipeFinish = false;
-                        if (netLog) {
-                            logger.info("rcv(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
-                        }
+                        this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Exit");
                         i++;
                         break;
                 }
@@ -322,9 +409,9 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         if (sndDown.hasMore()) {
             List<?> sndList = sndDown.takeMessage(sndDown.queueSize());
             sndDown.rcvSubmit();
-            return new PipeResult(sndList.toArray(), i - 1, pipeFinish);
+            return new PipeResult(sndList.toArray(), backTo, i - 1, pipeFinish);
         } else {
-            return new PipeResult(EMPTY, i - 1, pipeFinish);
+            return new PipeResult(EMPTY, backTo, i - 1, pipeFinish);
         }
     }
 
@@ -340,8 +427,8 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             }
 
             int depth = this.findDepth(false, pipeName);
-            PipeQueue useSndUp = depth == (this.layers.size() - 1) ? this.rootSndUp : this.layers.get(depth + 1).getSndDown();
-            this.offerMessage(false, pipeContext, useSndUp, sndData);
+            PipeQueue useSndUp = depth == (this.layers.size() - 1) ? this.headSndUp : this.layers.get(depth + 1).getSndDown();
+            this.offerMessage(false, useSndUp, sndData);
             return this.doSndLife(pipeContext, depth);
         } finally {
             ((PipeContextImpl) pipeContext).clearFlash();
@@ -366,26 +453,60 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     private Object[] doSndLife(PipeContext pipeContext, int depth) throws Throwable {
-        PipeResult sndResult = this.doSndPipe(pipeContext, depth);
-        if (sndResult.finish) {
-            this.triggerSend(pipeContext);
+        LinkedList<Object[]> returnData = new LinkedList<>();
+        int arraySize = 0;
+
+        int usingSndDepth = depth;
+        PipeResult sndResult;
+        do {
+            sndResult = this.doSndPipe(pipeContext, usingSndDepth);
+            if (sndResult.finish) {
+                this.triggerSend(pipeContext);
+            }
+
+            if (sndResult.result != EMPTY && sndResult.result.length > 0) {
+                returnData.add(sndResult.result);
+                arraySize = arraySize + sndResult.result.length;
+            }
+
+            if (sndResult.backTo == -1) {
+                break;
+            }
+
+            usingSndDepth = sndResult.backTo;
+        } while (true);
+
+        // return data(Will be written to SND)
+        if (arraySize == 0) {
+            return EMPTY;
+        } else {
+            Object[] result = new Object[arraySize];
+            int dstPos = 0;
+            for (Object[] objs : returnData) {
+                System.arraycopy(objs, 0, result, dstPos, objs.length);
+                dstPos = dstPos + objs.length;
+            }
+            return result;
         }
-        return sndResult.result;
     }
 
     private void triggerSend(PipeContext pipeContext) {
         Throwable ctxError = pipeContext.flash(PipeInvocation.SND_ERROR_TAG);
         if (ctxError != null) {
-            String msg = "snd(" + pipeContext.getChannel().getChannelID() + ") snd Exception was fired, and it reached at the head of the pipeline." //
-                    + " It usually means the first handler in the pipeline did not handle the snd exception.";
-            logger.warn(msg, ctxError);
+            if (this.listener == null) {
+                String msg = "snd(" + this.channelID + ") snd Exception was fired, and it reached at the head of the pipeline." //
+                        + " It usually means the first handler in the pipeline did not handle the snd exception.";
+                logger.warn(msg, ctxError);
+            } else {
+                this.listener.onError(pipeContext.getChannel(), ctxError, false);
+            }
         }
     }
 
     private PipeResult doSndPipe(PipeContext pipeContext, int depth) throws Throwable {
-        boolean netLog = pipeContext.getConfig().isNetlog();
         boolean needRestartLater;
         int i;
+        int backTo = -1;
 
         do {
             needRestartLater = false;
@@ -401,25 +522,32 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
                     case Next:
+                    case Skip:
+                    case Back:
+                        if (status == PipeStatus.Skip) {
+                            this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Skip");
+                            i--; // if skip then skip next to next.
+                        } else if (status == PipeStatus.Back) {
+                            if (backTo == -1) {
+                                backTo = i;
+                                this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Back to " + backTo);
+                            } else {
+                                this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " Back has been set to " + backTo);
+                            }
+                        }
                         break;
                     case Again:
                         needRestartLater = true;// restart when finished
-                        if (netLog) {
-                            logger.info("snd(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Again");
-                        }
+                        this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Again");
                         break;
                     case Restart:
                         needRestartLater = true;
                         breakFor = true;
-                        if (netLog) {
-                            logger.info("snd(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Restart");
-                        }
+                        this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Restart");
                         break;
                     case Exit:
                         breakFor = true;
-                        if (netLog) {
-                            logger.info("snd(" + pipeContext.getChannel().getChannelID() + ") PipeLayer " + i + "/" + this.layers.size() + " require Exit");
-                        }
+                        this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Exit");
                         break;
                 }
             }
@@ -430,9 +558,9 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
         if (sndDown.hasMore()) {
             List<?> sndList = sndDown.takeMessage(sndDown.queueSize());
             sndDown.rcvSubmit();
-            return new PipeResult(sndList.toArray(), i, i == -1);
+            return new PipeResult(sndList.toArray(), backTo, i, i == -1);
         } else {
-            return new PipeResult(EMPTY, i, i == -1);
+            return new PipeResult(EMPTY, backTo, i, i == -1);
         }
     }
 
@@ -442,7 +570,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
 
     @Override
     public int heapUpOfRcv() {
-        int heapUpOfRcv = this.rootRcvUp.queueSize();
+        int heapUpOfRcv = this.headRcvUp.queueSize();
         for (PipeInvocation<?, ?, ?, ?> layer : this.layers) {
             heapUpOfRcv += layer.getRcvDown().queueSize();
         }
@@ -461,12 +589,12 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
 
     @Override
     public int heapUpOfRcvRoot() {
-        return this.rootRcvUp.queueSize();
+        return this.headRcvUp.queueSize();
     }
 
     @Override
     public int heapUpOfSnd() {
-        int heapUpOfSnd = this.rootSndUp.queueSize();
+        int heapUpOfSnd = this.headSndUp.queueSize();
         for (PipeInvocation<?, ?, ?, ?> layer : this.layers) {
             heapUpOfSnd += layer.getSndDown().queueSize();
         }
@@ -485,16 +613,18 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
 
     @Override
     public int heapUpOfSndRoot() {
-        return this.rootSndUp.queueSize();
+        return this.headSndUp.queueSize();
     }
 
     private static final class PipeResult {
         public final Object[] result;
+        public final int      backTo;
         public final int      layerDepth;
         public final boolean  finish;
 
-        public PipeResult(Object[] result, int layerDepth, boolean finish) {
+        public PipeResult(Object[] result, int backTo, int layerDepth, boolean finish) {
             this.result = result;
+            this.backTo = backTo;
             this.layerDepth = layerDepth;
             this.finish = finish;
         }
@@ -549,20 +679,20 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     }
 
     private String rootMonitorRcvString() {
-        int capacity = this.rootRcvUp.getCapacity();
+        int capacity = this.headRcvUp.getCapacity();
         if (capacity > 500) {
-            return this.rootRcvUp.queueSize() + "/500+";
+            return this.headRcvUp.queueSize() + "/500+";
         } else {
-            return this.rootRcvUp.queueSize() + "/" + capacity;
+            return this.headRcvUp.queueSize() + "/" + capacity;
         }
     }
 
     private String rootMonitorSndString() {
-        int capacity = this.rootSndUp.getCapacity();
+        int capacity = this.headSndUp.getCapacity();
         if (capacity > 500) {
-            return this.rootSndUp.queueSize() + "/500+";
+            return this.headSndUp.queueSize() + "/500+";
         } else {
-            return this.rootSndUp.queueSize() + "/" + capacity;
+            return this.headSndUp.queueSize() + "/" + capacity;
         }
     }
 }

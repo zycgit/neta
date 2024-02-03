@@ -416,4 +416,28 @@ public class AbstractPipeTest {
             return PipeStatus.Next;
         };
     }
+
+    protected static PipeHandler<Integer, Integer> doCopyUsingBlackHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
+        return new PipeHandler<Integer, Integer>() {
+            @Override
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+                dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
+
+                if (src.hasMore() && !dst.hasSlot()) {
+                    recordFinish.add(tag + "DoBack");
+                    return PipeStatus.Back;
+                } else {
+                    recordFinish.add(tag + "DoNext");
+                    return PipeStatus.Next;
+                }
+            }
+
+            @Override
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                recordFailed.add(tag + "ErrNext");
+
+                return PipeStatus.Next;
+            }
+        };
+    }
 }

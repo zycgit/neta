@@ -18,7 +18,9 @@ import net.hasor.cobble.ResourcesUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.LimitFramePipeHandler;
 import net.hasor.neta.handler.*;
 import org.junit.Test;
 
@@ -111,17 +113,33 @@ public class SslSocketTest extends AbstractSslTest {
         }
     }
 
-    public static PipeInitializer createPipeline(SslConfig sslConf) {
+    public static PipeInitializer sslSocketPipeline(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return new PipeHelper()
+        return ctx -> PipeHelper.builder()
                 // SSL
                 .nextDuplex("SSL", new SslPipeLayer(sslConf))
                 // bytes <-> String
-                .nextHandler("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
                 .build();
+    }
+
+    public static PipeInitializer sslSocketPipeline(SslConfig sslConf, PipeHandler<String, String> last) {
+        //  Net      SSL     Message
+        // Bytes -> Bytes -> String
+        // Bytes <- Bytes <- String
+        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
+        return ctx -> PipeHelper.embedded(ByteBuf.class, ByteBuf.class)
+                // limitFrame
+                .nextDuplex("LIMIT", new PipeDuplexHandler<>(limitFrame, limitFrame))
+                // SSL
+                .nextDuplex("SSL", new SslPipeLayer(sslConf))
+                // bytes <-> String
+                .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                // create Stack
+                .nextDecoder(last).build();
     }
 
     @Test
@@ -147,8 +165,8 @@ public class SslSocketTest extends AbstractSslTest {
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(true);
         SslConfig sslConf = sslConfig(SslMode.Always);
-        NetChannelManager neta = new NetChannelManager(soConf);
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, createPipeline(sslConf));
+        NetaSocket neta = new NetaSocket(soConf);
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, sslSocketPipeline(sslConf));
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
         }
@@ -172,10 +190,10 @@ public class SslSocketTest extends AbstractSslTest {
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(false);
         SslConfig sslConf = sslConfig(SslMode.Always);
-        NetChannelManager neta = new NetChannelManager(soConf);
+        NetaSocket neta = new NetaSocket(soConf);
 
         List<String> rcvMessage = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, createPipeline(sslConf, new RcvToListPipeHandler(rcvMessage)));
+        neta.listen("127.0.0.1", safePort, sslSocketPipeline(sslConf, new RcvToListPipeHandler(rcvMessage)));
 
         // client
         AtomicBoolean writeFinish = new AtomicBoolean();
@@ -207,15 +225,15 @@ public class SslSocketTest extends AbstractSslTest {
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(true);
         SslConfig sslConf = sslConfig(SslMode.Always);
-        NetChannelManager neta = new NetChannelManager(soConf);
+        NetaSocket neta = new NetaSocket(soConf);
 
         // Server
         List<String> serverRcvData = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, createPipeline(sslConf, new RcvToListPipeHandler(serverRcvData)));
+        neta.listen("127.0.0.1", safePort, sslSocketPipeline(sslConf, new RcvToListPipeHandler(serverRcvData)));
 
         // Client
         List<String> clientRcvData = new ArrayList<>();
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, createPipeline(sslConf, new RcvToListPipeHandler(clientRcvData)));
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, sslSocketPipeline(sslConf, new RcvToListPipeHandler(clientRcvData)));
 
         //
         while (!connect.isDone()) {

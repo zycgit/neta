@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.neta.channel.PipeInitializer;
-import net.hasor.neta.handler.PipeBuilder.PipelineBuilder;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -29,209 +27,211 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
     @Test
     public void rcvHeapUpTest_1() {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        PipeConfig pipConf = new PipeConfig();
-        pipConf.setPipeRcvDownStackSize(3);
-        pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
-        PipeInitializer pipeline = empty//
-                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L3", doNotCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build();
+        EmbeddedInitializer initializer = (ctx) -> {
+            List<String> ignore = new ArrayList<>();
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextDecoder("COPY", pipConf, doCopyHandler("Dec1", ignore, ignore))       // rcv +1
+                    .nextDecoder("NO_COPY", pipConf, doNotCopyHandler("Dec2", ignore, ignore)) // rcv +1
+                    .build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.receive(new Object[] { 1, 2 }); // in "COPY" rcvDown
+        channel.receive(new Object[] { 3, 4 }); // in pipline rcv up
 
-        // do Decoder
-        decoderFinishCnt.clear();
-        decoderFailedCnt.clear();
-        encoderFinishCnt.clear();
-        encoderFailedCnt.clear();
-        channel.writeRcvUpArray(new Object[] { 1, 2, 3 });
-        channel.writeRcvUpArray(new Object[] { 4, 5 });
-        channel.writeRcvUpArray(new Object[] { 6, 7, 8 });
         try {
-            channel.writeRcvUpArray(new Object[] { 9, 10, 11 });
+            channel.receive(new Object[] { 5, 6 });
             assert false;
         } catch (Exception e) {
-            assert e.getMessage().endsWith("available slot is 1, require 3.");
+            assert e.getMessage().endsWith("available slot is 0, require 2.");
         }
 
-        assert channel.getPipeStatistical().heapUpOfRcv() == 8;
-        assert channel.getPipeStatistical().heapUpOfRcv("L2") == 3;
-        assert channel.getPipeStatistical().heapUpOfRcv("L1") == 3;
+        assert channel.getPipeStatistical().heapUpOfRcv() == 4;
+        assert channel.getPipeStatistical().heapUpOfRcv("COPY") == 2;
+        assert channel.getPipeStatistical().heapUpOfRcv("NO_COPY") == 0;
         assert channel.getPipeStatistical().heapUpOfRcvRoot() == 2;
-        assert channel.readRcvDown() == null;
-
-        System.out.println(channel.pipeline);
+        assert channel.readRcv() == null;
     }
 
     @Test
     public void rcvHeapUpTest_2() {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        PipeConfig pipConf = new PipeConfig();
-        pipConf.setPipeRcvDownStackSize(3);
-        pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
-        PipeInitializer pipeline = empty//
-                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build();
+        EmbeddedInitializer initializer = (ctx) -> {
+            List<String> ignore = new ArrayList<>();
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextDecoder("COPY1", pipConf, doCopyHandler("Dec1", ignore, ignore)) // rcv +1
+                    .nextDecoder("COPY2", pipConf, doCopyHandler("Dec2", ignore, ignore)) // rcv +1
+                    .build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
-
-        // do Decoder
-        decoderFinishCnt.clear();
-        decoderFailedCnt.clear();
-        encoderFinishCnt.clear();
-        encoderFailedCnt.clear();
-        channel.writeRcvUpArray(new Object[] { 1, 2, 3 });
-        channel.writeRcvUpArray(new Object[] { 4, 5 });
-        channel.writeRcvUpArray(new Object[] { 6, 7, 8 });
-        channel.writeRcvUpArray(new Object[] { 9, 10, 11 });
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.receive(new Object[] { 1, 2 });
+        channel.receive(new Object[] { 3 });
+        channel.receive(new Object[] { 4 });
+        channel.receive(new Object[] { 5 });
 
         assert channel.getPipeStatistical().heapUpOfRcv() == 0;
-        assert channel.getPipeStatistical().heapUpOfRcv("L2") == 0;
-        assert channel.getPipeStatistical().heapUpOfRcv("L1") == 0;
+        assert channel.getPipeStatistical().heapUpOfRcv("COPY1") == 0;
+        assert channel.getPipeStatistical().heapUpOfRcv("COPY2") == 0;
         assert channel.getPipeStatistical().heapUpOfRcvRoot() == 0;
-        assert channel.getRcvDownSize() == 11;
+        assert channel.getRcvSize() == 5;
+    }
+
+    @Test
+    public void rcvHeapUpTest_3() {
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(Integer.class, Integer.class).build();
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+
+        channel.receive(new Object[] { 1, 2 });
+        channel.receive(new Object[] { 3, 4 });
+        channel.receive(new Object[] { 5, 6, 7 });
+        channel.receive(new Object[] { 8, 9, 10 });
+        assert channel.getRcvSize() == 10;
+    }
+
+    @Test
+    public void rcvHeapUpTest_4() {
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(Integer.class, Integer.class).build();
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+
+        Exception e = new Exception("Error");
+        channel.receiveError(e);
+
+        assert channel.getRcvError() == e;
     }
 
     @Test
     public void sndHeapUpTest_1() {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        PipeConfig pipConf = new PipeConfig();
-        pipConf.setPipeRcvDownStackSize(3);
-        pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
-        PipeInitializer pipeline = empty//
-                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNotCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build();
+        EmbeddedInitializer initializer = (ctx) -> {
+            List<String> ignore = new ArrayList<>();
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextEncoder("COPY", pipConf, doCopyHandler("Enc1", ignore, ignore))       // snd +1
+                    .nextEncoder("NO_COPY", pipConf, doNotCopyHandler("Enc2", ignore, ignore)) // snd +1
+                    .build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
-
-        // do Decoder
-        decoderFinishCnt.clear();
-        decoderFailedCnt.clear();
-        encoderFinishCnt.clear();
-        encoderFailedCnt.clear();
-        channel.writeSndUpArray(new Object[] { 1, 2, 3 });
-        channel.writeSndUpArray(new Object[] { 4, 5 });
-        channel.writeSndUpArray(new Object[] { 6, 7, 8 });
-        channel.writeSndUpArray(new Object[] { 9, 10, 11 });
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.send(new Object[] { 1, 2 }); // in "COPY" rcvDown
         try {
-            channel.writeSndUpArray(new Object[] { 12, 13, 14 });
+            channel.send(new Object[] { 3, 4 });
             assert false;
         } catch (Exception e) {
-            assert e.getMessage().endsWith("available slot is 1, require 3.");
+            assert e.getMessage().endsWith("available slot is 0, require 2.");
         }
 
-        assert channel.getPipeStatistical().heapUpOfSnd() == 11;
-        assert channel.getPipeStatistical().heapUpOfSnd("L3") == 4;
-        assert channel.getPipeStatistical().heapUpOfSnd("L2") == 4;
-        assert channel.getPipeStatistical().heapUpOfSnd("L1") == 0;
-        assert channel.getPipeStatistical().heapUpOfSndRoot() == 3;
-        assert channel.readRcvDown() == null;
-
-        System.out.println(channel.pipeline);
+        assert channel.getPipeStatistical().heapUpOfSnd() == 2;
+        assert channel.getPipeStatistical().heapUpOfRcv("COPY") == 0;
+        assert channel.getPipeStatistical().heapUpOfRcv("NO_COPY") == 0;
+        assert channel.getPipeStatistical().heapUpOfSndRoot() == 2;
+        assert channel.readSnd() == null;
     }
 
     @Test
     public void sndHeapUpTest_2() {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        PipeConfig pipConf = new PipeConfig();
-        pipConf.setPipeRcvDownStackSize(3);
-        pipConf.setPipeSndUpStackSize(4);
-        PipelineBuilder<Integer, Integer> empty = new PipeHelper().pipeConfig(pipConf);
-        PipeInitializer pipeline = empty//
-                .nextHandler("L1", doCopyHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L2", doCopyHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler("L3", doCopyHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doCopyHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build();
+        EmbeddedInitializer initializer = (ctx) -> {
+            List<String> ignore = new ArrayList<>();
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextEncoder("COPY1", pipConf, doCopyHandler("Dec1", ignore, ignore)) //
+                    .nextEncoder("COPY2", pipConf, doCopyHandler("Dec2", ignore, ignore)) //
+                    .build();
+        };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
-
-        // do Decoder
-        decoderFinishCnt.clear();
-        decoderFailedCnt.clear();
-        encoderFinishCnt.clear();
-        encoderFailedCnt.clear();
-        channel.writeSndUpArray(new Object[] { 1, 2, 3 });
-        channel.writeSndUpArray(new Object[] { 4, 5 });
-        channel.writeSndUpArray(new Object[] { 6, 7, 8 });
-        channel.writeSndUpArray(new Object[] { 9, 10, 11 });
-        channel.writeSndUpArray(new Object[] { 12, 13, 14 });
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.send(new Object[] { 1, 2 });
+        channel.send(new Object[] { 3 });
+        channel.send(new Object[] { 4 });
+        channel.send(new Object[] { 5 });
 
         assert channel.getPipeStatistical().heapUpOfSnd() == 0;
-        assert channel.getPipeStatistical().heapUpOfSnd("L3") == 0;
-        assert channel.getPipeStatistical().heapUpOfSnd("L2") == 0;
-        assert channel.getPipeStatistical().heapUpOfSnd("L1") == 0;
+        assert channel.getPipeStatistical().heapUpOfSnd("COPY1") == 0;
+        assert channel.getPipeStatistical().heapUpOfSnd("COPY2") == 0;
         assert channel.getPipeStatistical().heapUpOfSndRoot() == 0;
-        assert channel.readRcvDown() == null;
+        assert channel.getSndSize() == 5;
+    }
 
-        System.out.println(channel.pipeline);
+    @Test
+    public void sndHeapUpTest_3() {
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(Integer.class, Integer.class).build();
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+
+        channel.send(new Object[] { 1, 2 });
+        channel.send(new Object[] { 3, 4 });
+        channel.send(new Object[] { 5, 6, 7 });
+        channel.send(new Object[] { 8, 9, 10 });
+        assert channel.getSndSize() == 10;
+    }
+
+    @Test
+    public void sndHeapUpTest_4() {
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(Integer.class, Integer.class).build();
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+
+        Exception e = new Exception("Error");
+        channel.sendError(e);
+
+        assert channel.getSndError() == e;
     }
 
     @Test
     public void rcvToSendTest_1() {
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty.nextDuplex(doPipeLayer(true, false)).build();
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doPipeLayer(true, false)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
-        channel.writeRcvUp(123);
-        assert channel.readRcvDown().equals(123);
-        assert channel.readSndDown().equals(888);
+        channel.receive(123);
+        assert channel.readRcv().equals(123);
+        assert channel.readSnd().equals(888);
     }
 
     @Test
     public void rcvToSendTest_2() {
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer stack = empty.nextDuplex(doPipeLayer(false, true)).build();
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doPipeLayer(false, true)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, stack, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
-        channel.writeRcvUp(123);
-        assert channel.readRcvDown().equals(123);
-        assert channel.readSndDown().equals(999);
+        channel.receive(123);
+        assert channel.readRcv().equals(123);
+        assert channel.readSnd().equals(999);
     }
 
     @Test
     public void rcvToSendTest_3() {
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty.nextDuplex(doPipeLayer(true, true)).build();
+        EmbeddedInitializer initializer = (ctx) -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doPipeLayer(true, true)).build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
-        channel.writeRcvUp(123);
-        assert channel.readRcvDown().equals(123);
-        assert channel.readSndDown().equals(888);
-        assert channel.readSndDown().equals(999);
+        channel.receive(123);
+        assert channel.readRcv().equals(123);
+        assert channel.readSnd().equals(888);
+        assert channel.readSnd().equals(999);
     }
 }

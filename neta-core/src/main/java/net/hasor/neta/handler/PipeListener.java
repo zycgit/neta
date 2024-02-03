@@ -14,25 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.neta.codec.TransparentPipeHandler;
-import org.junit.Test;
+import net.hasor.neta.channel.SoChannel;
 
 /**
+ * The message receiving listener at the tail of the pipe.
+ * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2022-11-01
  */
-public class PipeBasicTest extends AbstractPipeTest {
-    @Test
-    public void nextTest_0() {
-        EmbeddedInitializer initializer = (ctx) -> {
-            return PipeHelper.embedded(Integer.class, Integer.class)        //
-                    .nextDecoder("L1", new TransparentPipeHandler<>())//
-                    .build();
-        };
+interface PipeListener {
+    void onReceive(SoChannel<?> channel, Object data);
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        System.out.println(channel.pipeline);
-
-    }
+    void onError(SoChannel<?> channel, Throwable e, boolean isRcv);
 }

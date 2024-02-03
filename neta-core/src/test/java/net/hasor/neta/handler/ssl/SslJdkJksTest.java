@@ -44,11 +44,11 @@ public class SslJdkJksTest extends AbstractSslTest {
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
-        client.writeSndUp("Hello Server, this message form client.\n");
-        server.writeSndUp("Hello Client, this message form server.\n");
+        client.send("Hello Server, this message form client.\n");
+        server.send("Hello Client, this message form server.\n");
         transfer(transfer, 500, 10);
 
-        assert client.readRcvDown().equals("Hello Client, this message form server.");
-        assert server.readRcvDown().equals("Hello Server, this message form client.");
+        assert client.readRcv().equals("Hello Client, this message form server.");
+        assert server.readRcv().equals("Hello Server, this message form client.");
     }
 }

@@ -18,14 +18,14 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.Pipeline;
 
+import java.util.Objects;
+
 /**
  * Application stack builder
  * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface PipeBuilder<RCV_UP, SND_DOWN> {
-    /** Get the default PipeConfig */
-    PipeConfig pipeConfig();
 
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
@@ -41,7 +41,7 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN, SND_UP> PipeBuilder<RCV_DOWN, SND_UP> nextDuplex(PipeDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
-        return this.nextDuplex(duplexer.getClass().getSimpleName(), this.pipeConfig(), duplexer);
+        return this.nextDuplex(duplexer.getClass().getSimpleName(), PipeConfig.DEFAULT, duplexer);
     }
 
     /**
@@ -59,7 +59,7 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN, SND_UP> PipeBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, PipeDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
-        return this.nextDuplex(name, this.pipeConfig(), duplexer);
+        return this.nextDuplex(name, PipeConfig.DEFAULT, duplexer);
     }
 
     /**
@@ -93,13 +93,16 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN, SND_UP> PipeBuilder<RCV_DOWN, SND_UP> nextDuplex(PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder) {
+        Objects.requireNonNull(decoder, "decoder is null.");
+        Objects.requireNonNull(encoder, "encoder is null.");
+
         String decName = decoder.getClass().getSimpleName();
         String encName = encoder.getClass().getSimpleName();
         decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
         encName = StringUtils.isBlank(encName) ? "Unknown" : encName;
 
         String name = String.format("%s/%s", decName, encName);
-        return this.nextDuplex(name, this.pipeConfig(), decoder, encoder);
+        return this.nextDuplex(name, PipeConfig.DEFAULT, decoder, encoder);
     }
 
     /**
@@ -116,7 +119,7 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN, SND_UP> PipeBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, PipeHandler<RCV_UP, RCV_DOWN> decoder, PipeHandler<SND_UP, SND_DOWN> encoder) {
-        return this.nextDuplex(name, this.pipeConfig(), decoder, encoder);
+        return this.nextDuplex(name, PipeConfig.DEFAULT, decoder, encoder);
     }
 
     /**
@@ -148,11 +151,12 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN> PipeBuilder<RCV_DOWN, SND_DOWN> nextDecoder(PipeHandler<RCV_UP, RCV_DOWN> decoder) {
+        Objects.requireNonNull(decoder, "decoder is null.");
         String decName = decoder.getClass().getSimpleName();
         decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
 
         String name = String.format("%s/--", decName);
-        return this.nextDecoder(name, this.pipeConfig(), decoder);
+        return this.nextDecoder(name, PipeConfig.DEFAULT, decoder);
     }
 
     /**
@@ -167,7 +171,7 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <RCV_DOWN> PipeBuilder<RCV_DOWN, SND_DOWN> nextDecoder(String name, PipeHandler<RCV_UP, RCV_DOWN> decoder) {
-        return this.nextDecoder(name, this.pipeConfig(), decoder);
+        return this.nextDecoder(name, PipeConfig.DEFAULT, decoder);
     }
 
     /**
@@ -182,9 +186,7 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @param decoder RCV_UP to RCV_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    default <RCV_DOWN> PipeBuilder<RCV_DOWN, SND_DOWN> nextDecoder(String name, PipeConfig pipeConfig, PipeHandler<RCV_UP, RCV_DOWN> decoder) {
-        return this.nextDuplex(name, pipeConfig, decoder, new TransparentPipeHandler<>());
-    }
+    <RCV_DOWN> PipeBuilder<RCV_DOWN, SND_DOWN> nextDecoder(String name, PipeConfig pipeConfig, PipeHandler<RCV_UP, RCV_DOWN> decoder);
 
     /**
      * using encoder, the decoder is transparent
@@ -198,11 +200,12 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <SND_UP> PipeBuilder<RCV_UP, SND_UP> nextEncoder(PipeHandler<SND_UP, SND_DOWN> encoder) {
+        Objects.requireNonNull(encoder, "encoder is null.");
         String decName = encoder.getClass().getSimpleName();
         decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
 
         String name = String.format("--/%s", decName);
-        return this.nextEncoder(name, this.pipeConfig(), encoder);
+        return this.nextEncoder(name, PipeConfig.DEFAULT, encoder);
     }
 
     /**
@@ -217,7 +220,7 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     default <SND_UP> PipeBuilder<RCV_UP, SND_UP> nextEncoder(String name, PipeHandler<SND_UP, SND_DOWN> encoder) {
-        return this.nextEncoder(name, this.pipeConfig(), encoder);
+        return this.nextEncoder(name, PipeConfig.DEFAULT, encoder);
     }
 
     /**
@@ -232,9 +235,7 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    default <SND_UP> PipeBuilder<RCV_UP, SND_UP> nextEncoder(String name, PipeConfig pipeConfig, PipeHandler<SND_UP, SND_DOWN> encoder) {
-        return this.nextDuplex(name, pipeConfig, new TransparentPipeHandler<>(), encoder);
-    }
+    <SND_UP> PipeBuilder<RCV_UP, SND_UP> nextEncoder(String name, PipeConfig pipeConfig, PipeHandler<SND_UP, SND_DOWN> encoder);
 
     /** build {@link Pipeline} */
     <T> Pipeline<T> build();

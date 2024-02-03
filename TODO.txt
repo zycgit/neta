@@ -1,3 +1,6 @@
+1. net.hasor.neta.channel.SoReadTest.rcvBackPressedTest_02
+    - FULL 异常的引发是因为 L1 的 rcvUp 满了，但 L1 的 rcvUp 中是重复的 ByteBufSafe 对象。这个问题需要在 ByteBuf 提供 split 方法时才能解决.
+2. 优雅关闭无效，在优雅关闭下尾部数据似乎没有被传输. see AioEchoServer.java
 
 2. 兼容 PKCS12
 JKS 密钥库使用专用格式。建议使用 "keytool -importkeystore -srckeystore local.jks -destkeystore local.jks -deststoretype pkcs12" 迁移到行业标准格式 PKCS12。

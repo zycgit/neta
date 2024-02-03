@@ -60,9 +60,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
-                channel.writeSndUp(current, writeData);
+                channel.send(current, writeData);
             } else {
-                channel.writeSndUp(writeData);
+                channel.send(writeData);
             }
             return new BasicFuture<>(this);
         }
@@ -73,54 +73,12 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
-                channel.writeSndUpArray(current, ArrayUtils.EMPTY_OBJECT_ARRAY);
+                channel.send(current, ArrayUtils.EMPTY_OBJECT_ARRAY);
             } else {
-                channel.writeSndUpArray(ArrayUtils.EMPTY_OBJECT_ARRAY);
+                channel.send(ArrayUtils.EMPTY_OBJECT_ARRAY);
             }
             return new BasicFuture<>(this);
         }
-    }
-
-    private Pipeline<?> initPipeline(EmbeddedInitializer initializer) {
-        Pipeline<?> pipeline = initializer.config(this.pipeCtx);
-
-        PipeHandler<Object, Object> finalDecoder = new PipeHandler<Object, Object>() {
-            @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Object> src, PipeSndQueue<Object> dst) throws Throwable {
-                rcvDown.offerMessage(src);
-                rcvDown.sndSubmit();
-                return PipeStatus.Next;
-            }
-
-            @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
-                rcvError = e;
-                eh.clear();
-                return PipeStatus.Next;
-            }
-        };
-        PipeHandler<Object, Object> finalEncoder = new PipeHandler<Object, Object>() {
-            @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Object> src, PipeSndQueue<Object> dst) throws Throwable {
-                sndDown.offerMessage(src);
-                sndDown.sndSubmit();
-                return PipeStatus.Next;
-            }
-
-            @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
-                sndError = e;
-                eh.clear();
-                return PipeStatus.Next;
-            }
-        };
-
-        PipeDuplexHandler<Object, Object, Object, Object> embeddedFirst = new PipeDuplexHandler<>(new TransparentPipeHandler<>(), finalEncoder);
-        PipeDuplexHandler<Object, Object, Object, Object> embeddedLast = new PipeDuplexHandler<>(finalDecoder, new TransparentPipeHandler<>());
-
-        ((PipeChainRoot) pipeline).addFirstLayer(new PipeInvocation<>("EmbeddedDecoder", new PipeConfig(), embeddedFirst));
-        ((PipeChainRoot) pipeline).addLastLayer(new PipeInvocation<>("EmbeddedEncoder", new PipeConfig(), embeddedLast));
-        return pipeline;
     }
 
     public EmbeddedChannel(boolean asServer, EmbeddedInitializer initializer, EmbeddedSoContext context) {
@@ -132,11 +90,30 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
         try {
             context.openChannel(this);
+            this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
+            this.pipeline = initializer.config(this.pipeCtx);
+            this.pipeline.onInit(this.pipeCtx);
             this.rcvDown = new PipeQueue<>(-1);
             this.sndDown = new PipeQueue<>(-1);
-            this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
-            this.pipeline = initPipeline(initializer);
-            this.pipeline.onInit(this.pipeCtx);
+
+            PipeChainRoot chainRoot = (PipeChainRoot) this.pipeline;
+            chainRoot.bindListener(new PipeListener() {
+                @Override
+                public void onReceive(SoChannel<?> channel, Object data) {
+                    rcvDown.offerMessage(data);
+                    rcvDown.sndSubmit();
+                }
+
+                @Override
+                public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+                    if (isRcv) {
+                        rcvError = e;
+                    } else {
+                        sndError = e;
+                    }
+                }
+            });
+
             this.pipeline.onActive(this.pipeCtx);
         } catch (Throwable e) {
             throw ExceptionUtils.toRuntime(e);
@@ -253,39 +230,20 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      * Write messages to the RCV_UP of this {@link SoChannel}.
      * @param object the messages to be written
      */
-    public <T> void writeRcvUp(T object) {
-        if (object != null) {
-            this.writeRcvUpArray(null, new Object[] { object });
-        } else {
-            this.writeRcvUpArray(null, ArrayUtils.EMPTY_OBJECT_ARRAY);
-        }
-    }
-
-    /**
-     * Write messages to the RCV_UP of this {@link SoChannel}.
-     * @param object the messages to be written
-     */
-    public <T> void writeRcvUpArray(T[] object) {
-        this.writeRcvUpArray(null, object);
+    public void receive(Object... object) {
+        this.receiveTo(null, object);
     }
 
     /**
      * Write messages to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
+     * @param pipeName specific protocol layer
      * @param object the messages to be written
      */
-    public <T> void writeRcvUp(String pipeName, T object) {
-        if (object != null) {
-            this.writeRcvUpArray(pipeName, new Object[] { object });
-        } else {
-            this.writeRcvUpArray(pipeName, ArrayUtils.EMPTY_OBJECT_ARRAY);
+    public void receiveTo(String pipeName, Object... object) {
+        if (object == null || object.length == 0) {
+            return;
         }
-    }
 
-    /**
-     * Write messages to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
-     * @param object the messages to be written
-     */
-    public <T> void writeRcvUpArray(String pipeName, T[] object) {
         try {
             Objects.requireNonNull(object, "object is null.");
             this.lastActiveTime = System.currentTimeMillis();
@@ -304,15 +262,19 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      * Write error to the RCV_UP of this {@link SoChannel}.
      * @param e the messages to be written
      */
-    public void writeRcvUpError(Throwable e) {
-        this.writeRcvUpError(null, e);
+    public void receiveError(Throwable e) {
+        this.receiveError(null, e);
     }
 
     /**
      * Write error to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void writeRcvUpError(String pipeName, Throwable e) {
+    public void receiveError(String pipeName, Throwable e) {
+        if (e == null) {
+            return;
+        }
+
         try {
             this.lastActiveTime = System.currentTimeMillis();
             Object[] sndDownObj = this.pipeline.onRcvError(this.pipeCtx, pipeName, e);
@@ -329,7 +291,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     /**
      * read messages from the RCV_DOWN of this {@link SoChannel}.
      */
-    public Object readRcvDown() {
+    public Object readRcv() {
         try {
             if (this.rcvDown.hasMore()) {
                 return this.rcvDown.takeMessage();
@@ -342,7 +304,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** read messages from the RCV_DOWN of this {@link SoChannel}. */
-    public Object[] readRcvDownArray() {
+    public Object[] readRcvArray() {
         try {
             return this.rcvDown.takeMessage(this.rcvDown.queueSize()).toArray();
         } finally {
@@ -351,7 +313,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** read messages limit from the RCV_DOWN of this {@link SoChannel}. */
-    public int getRcvDownSize() {
+    public int getRcvSize() {
         return this.rcvDown.queueSize();
     }
 
@@ -374,39 +336,20 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      * Write messages to the SND_UP of this {@link SoChannel}.
      * @param object the messages to be written
      */
-    public <T> void writeSndUp(T object) {
-        if (object != null) {
-            this.writeSndUpArray(null, new Object[] { object });
-        } else {
-            this.writeSndUpArray(null, ArrayUtils.EMPTY_OBJECT_ARRAY);
-        }
-    }
-
-    /**
-     * Write messages to the SND_UP of this {@link SoChannel}.
-     * @param object the messages to be written
-     */
-    public <T> void writeSndUpArray(T[] object) {
-        this.writeSndUpArray(null, object);
+    public void send(Object... object) {
+        this.sendTo(null, object);
     }
 
     /**
      * Write messages to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
+     * @param pipeName specific protocol layer
      * @param object the messages to be written
      */
-    public <T> void writeSndUp(String pipeName, T object) {
-        if (object != null) {
-            this.writeSndUpArray(pipeName, new Object[] { object });
-        } else {
-            this.writeSndUpArray(pipeName, ArrayUtils.EMPTY_OBJECT_ARRAY);
+    public void sendTo(String pipeName, Object... object) {
+        if (object == null || object.length == 0) {
+            return;
         }
-    }
 
-    /**
-     * Write messages to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
-     * @param object the messages to be written
-     */
-    public <T> void writeSndUpArray(String pipeName, T[] object) {
         try {
             Objects.requireNonNull(object, "object is null.");
             Object[] sndDownObj = this.pipeline.onSndMessage(this.pipeCtx, pipeName, object);
@@ -424,15 +367,19 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      * Write error to the SND_UP of this {@link SoChannel}.
      * @param e the messages to be written
      */
-    public void writeSndUpError(Throwable e) {
-        this.writeSndUpError(null, e);
+    public void sendError(Throwable e) {
+        this.sendError(null, e);
     }
 
     /**
      * Write error to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void writeSndUpError(String pipeName, Throwable e) {
+    public void sendError(String pipeName, Throwable e) {
+        if (e == null) {
+            return;
+        }
+
         try {
             Objects.requireNonNull(e);
             Object[] sndDownObj = this.pipeline.onSndError(this.pipeCtx, pipeName, e);
@@ -447,7 +394,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** read messages from the SND_DOWN of this {@link SoChannel}. */
-    public Object readSndDown() {
+    public Object readSnd() {
         try {
             if (this.sndDown.hasMore()) {
                 return this.sndDown.takeMessage();
@@ -460,7 +407,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** read messages from the SND_DOWN of this {@link SoChannel}. */
-    public Object[] readSndDownArray(int readSize) {
+    public Object[] readSndArray(int readSize) {
         try {
             return this.sndDown.takeMessage(Math.min(readSize, this.sndDown.queueSize())).toArray();
         } finally {
@@ -469,7 +416,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** read messages limit from the SND_DOWN of this {@link SoChannel}. */
-    public int getSndDownSize() {
+    public int getSndSize() {
         return this.sndDown.queueSize();
     }
 

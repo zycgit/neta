@@ -15,8 +15,6 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.cobble.StringUtils;
-import net.hasor.neta.channel.PipeInitializer;
-import net.hasor.neta.handler.PipeBuilder.PipelineBuilder;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -34,23 +32,22 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Encoder
         decoderFinishCnt.clear();
         encoderFinishCnt.clear();
-        channel.writeSndUp(123);// SND -> NET
+        channel.send(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
-        assert channel.readSndDown().equals(123);
+        assert channel.readSnd().equals(123);
     }
 
     @Test
@@ -60,27 +57,26 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextHandler(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doThrowHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd(Err) +1
-                .nextHandler(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doThrowHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd(Err) +1
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.writeSndUp(123);// SND -> NET
+        channel.send(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoThrow");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("2EncErrThrow,1EncErrNext");
-        assert channel.readSndDown() == null;
+        assert channel.readSnd() == null;
     }
 
     @Test
@@ -90,27 +86,26 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextHandler(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextHandler(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.writeSndUp(123);// SND -> NET
+        channel.send(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSndDown().equals(123);
+        assert channel.readSnd().equals(123);
     }
 
     @Test
@@ -120,27 +115,26 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextHandler(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextHandler(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.writeSndUp(123);// SND -> NET
+        channel.send(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSndDown().equals(123);
+        assert channel.readSnd().equals(123);
     }
 
     @Test
@@ -150,27 +144,26 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextHandler(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextHandler(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.writeSndUp(123);// SND -> NET
+        channel.send(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSndDown().equals(123);
+        assert channel.readSnd().equals(123);
     }
 
     @Test
@@ -180,27 +173,26 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextHandler(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRestartHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextHandler(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRestartHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.writeSndUp(123);// SND -> NET
+        channel.send(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSndDown().equals(123);
+        assert channel.readSnd().equals(123);
     }
 
     @Test
@@ -210,27 +202,26 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextHandler(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doExitHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextHandler(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doExitHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.writeSndUp(123);// SND -> NET
+        channel.send(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoExit");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSndDown() == null;
+        assert channel.readSnd() == null;
     }
 
     @Test
@@ -240,15 +231,14 @@ public class PipeSndTest extends AbstractPipeTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        PipelineBuilder<Integer, Integer> empty = PipeHelper.embedded();
-        PipeInitializer pipeline = empty//
-                .nextHandler("L1", doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextHandler("L2", doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doInterruptHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextHandler("L3", doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+        EmbeddedInitializer initializer = ctx -> PipeHelper.embedded(Integer.class, Integer.class)//
+                .nextDuplex("L1", doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex("L2", doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doInterruptHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex("L3", doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, pipeline, context);
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
         // do Decoder
         decoderFinishCnt.clear();
@@ -256,7 +246,7 @@ public class PipeSndTest extends AbstractPipeTest {
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
         try {
-            channel.writeSndUp(123);
+            channel.send(123);
             assert false;
         } catch (Exception e) {
             assert e.getMessage().endsWith("- Interrupted by L2");
@@ -265,6 +255,39 @@ public class PipeSndTest extends AbstractPipeTest {
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoInterrupt");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSndDown() == null;
+        assert channel.readSnd() == null;
+    }
+
+    @Test
+    public void blackTest_1() {
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
+
+        EmbeddedInitializer initializer = ctx -> {
+            PipeConfig pipConf1 = new PipeConfig();
+            pipConf1.setPipeRcvDownStackSize(3);
+            pipConf1.setPipeSndUpStackSize(3);
+
+            PipeConfig pipConf2 = new PipeConfig();
+            pipConf2.setPipeRcvDownStackSize(2);
+            pipConf2.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class)//
+                    .nextEncoder("COPY1", pipConf1, doCopyUsingBlackHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                    .nextEncoder("COPY2", pipConf2, doCopyUsingBlackHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                    .build();
+        };
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+
+        // do Decoder
+        encoderFinishCnt.clear();
+        encoderFailedCnt.clear();
+        channel.send(1, 2, 3); // RCV -> SND -> NET
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("2EncDoBack,1EncDoNext,2EncDoNext,1EncDoNext");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
+        assert channel.readSnd().equals(1);
+        assert channel.readSnd().equals(2);
+        assert channel.readSnd().equals(3);
     }
 }

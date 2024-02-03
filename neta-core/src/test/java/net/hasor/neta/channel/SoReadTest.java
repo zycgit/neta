@@ -165,7 +165,7 @@ public class SoReadTest extends AbstractSoTest {
         pipeConfig.setPipeRcvDownStackSize(3);
 
         PipeBuilder<String, ByteBuf> builder = PipeHelper.builder(pipeConfig)//
-                .nextDecoder("L1", (PipeHandler<ByteBuf, String>) (context, rcvUp, rcvDown) -> {
+                .nextDecoder("L1", pipeConfig, (PipeHandler<ByteBuf, String>) (context, rcvUp, rcvDown) -> {
                     while (rcvUp.hasMore() && rcvDown.hasSlot()) {
                         ByteBuf byteBuf = rcvUp.peekMessage();
                         while (byteBuf.hasLine()) {
@@ -178,7 +178,7 @@ public class SoReadTest extends AbstractSoTest {
                     }
                     // gen message to L2
                     return PipeStatus.Next;
-                }).nextDecoder("L2", (PipeHandler<String, String>) (context, rcvUp, rcvDown) -> {
+                }).nextDecoder("L2", pipeConfig, (PipeHandler<String, String>) (context, rcvUp, rcvDown) -> {
                     return PipeStatus.Next; //No data consumption
                 }).nextDecoder(new PipeHandler<String, String>() {
                     @Override
