@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.hasor</groupId>
     <artifactId>neta-parent</artifactId>
-    <version>1.0.2-SNAPSHOT</version>
+    <version>1.0.2</version>
     <packaging>pom</packaging>
 
     <!-- 项目信息 -->
@@ -26,7 +26,7 @@
         <connection>scm:git:git@git.oschina.net:zycgit/neta.git</connection>
         <developerConnection>scm:git:git@git.oschina.net:zycgit/neta.git</developerConnection>
         <url>git@git.oschina.net:zycgit/neta.git</url>
-        <tag>HEAD</tag>
+        <tag>Release.Neta-1.0.2</tag>
     </scm>
 
     <!-- 开发者 -->
