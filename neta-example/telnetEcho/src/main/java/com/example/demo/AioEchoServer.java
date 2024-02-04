@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 package com.example.demo;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.NetaSocket;
+import net.hasor.neta.channel.PipeInitializer;
+import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.handler.PipeHelper;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
 import net.hasor.neta.handler.codec.string.StringPipeLayer;
@@ -29,19 +30,18 @@ import java.io.IOException;
  */
 public class AioEchoServer {
     public static void main(String[] args) throws IOException {
+        PipeInitializer initializer = ctx -> {
+            return PipeHelper.builder()
+                    //split according to \r\n, max line is 4K
+                    .nextDecoder("max length", new LineBasedFrameHandler(4096, false))
+                    // encoder/decoder string
+                    .nextDuplex("string", new StringPipeLayer())
+                    // echo any message to client
+                    .nextDecoder("echo", new TelnetEchoPipeDuplex()).build();
+        };
+
         NetaSocket socket = new NetaSocket(new SoConfig());
-        socket.listen("127.0.0.1", 5567, new PipeInitializer() {
-            @Override
-            public Pipeline<ByteBuf> config(PipeContext ctx) {
-                return PipeHelper.builder()
-                        //split according to \r\n, max line is 4K
-                        .nextDecoder("max length", new LineBasedFrameHandler(4096, false))
-                        // encoder/decoder string
-                        .nextDuplex("string", new StringPipeLayer())
-                        // echo any message to client
-                        .nextDecoder("echo", new TelnetEchoPipeDuplex()).build();
-            }
-        });
+        socket.listen("127.0.0.1", 5567, initializer);
 
         System.in.read();
     }

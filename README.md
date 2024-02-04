@@ -51,8 +51,8 @@ Net → ┃ SND_DOWN     SND_UP ┃ <=> ┃ SND_DOWN     SND_UP ┃ ← ╰┄�
 ## 质量
 
 neta-core
-- 有效代码行：4K
-- 代码覆盖率：75%
+- 有效代码行：4.1K
+- 代码覆盖率：76%
 
 ## Hello Word
 
@@ -75,18 +75,20 @@ neta-core
 //       ┃                      ┃   ┃  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯  ┃
 //       ┗━━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━┛
 
-PipelineFactory pipeline = PipeInitializer.builder()
-        //split according to \r\n, max line is 4K
-        .nextToDecoder(new LineBasedFramePipeHandler(4096, false))
-        // encoder/decoder string
-        .nextTo(new StringPipeLayer())
-        // echo any message to client
-        .bindReceive((PipeListener<String>) (channel, data) -> {
-            ((NetChannel) channel).sendData("echo " + data);
-        }).build();
+PipeInitializer initializer = ctx -> {
+    return PipeHelper.builder()
+      //split according to \r\n, max line is 4K
+      .nextDecoder("max length", new LineBasedFrameHandler(4096, false))
+      // encoder/decoder string
+      .nextDuplex("string", new StringPipeLayer())
+      // echo any message to client
+      .nextDecoder("echo", new TelnetEchoPipeDuplex())
+      // build pipline
+      .build();
+};
 
-CobbleSocket socket = new CobbleSocket(new SoConfig());
-socket.listen("127.0.0.1", 5567, pipeline);
+NetaSocket socket = new NetaSocket(new SoConfig());
+socket.listen("127.0.0.1", 5567, initializer);
 ```
 
 use the telnet command as follows:
