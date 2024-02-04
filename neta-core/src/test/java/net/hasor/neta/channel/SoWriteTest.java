@@ -264,6 +264,32 @@ public class SoWriteTest extends AbstractSoTest {
         server.shutdown();
     }
 
+    @Test
+    public void sendWaitFinishTest_01() throws Exception {
+        // server say Hello
+        int safePort = safePort();
+        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
+        Socket client = new Socket("127.0.0.1", safePort);
+
+        listen.waitAnyAccept();
+        NetChannel channel = (NetChannel) server.findChannel(2);
+        Future<?> future = channel.sendData("Hello this message form server.\n".getBytes());
+        while (!future.isDone()) {
+            ThreadUtils.sleep(100);
+        }
+
+        // client: read echo data
+        InputStream soIn = client.getInputStream();
+        int available = soIn.available();
+        byte[] rcvBytes = new byte[available];
+        soIn.read(rcvBytes);
+
+        // test result
+        assert "Hello this message form server.\n".equals(new String(rcvBytes));
+        server.shutdown();
+    }
+
     //    @Test
     //    public void sndFullTest_01() throws Exception {
     //        // start server

@@ -70,143 +70,174 @@ public class SoSslTest extends AbstractSslTest {
         neta.shutdown();
     }
 
-    //    @Test
-    //    public void sslModelAlwaysTest_1() throws IOException {
-    //        int safePort = safePort();
-    //        SoConfig soConf = crateConfig(128, 4096);
-    //        soConf.setNetlog(true);
-    //        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Once);
-    //        NetaSocket neta = new NetaSocket(soConf);
-    //
-    //        // Server
-    //        List<String> serverRcvData = new ArrayList<>();
-    //        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
-    //
-    //        // Client
-    //        List<String> clientRcvData = new ArrayList<>();
-    //        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
-    //
-    //        //
-    //        while (!connect.isDone()) {
-    //            ThreadUtils.sleep(100);
-    //        }
-    //
-    //        NetChannel client = (NetChannel) neta.getContext().findChannel(2);
-    //        NetChannel server = (NetChannel) neta.getContext().findChannel(3);
-    //        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
-    //
-    //        // SSL enable
-    //        Future<?> future1 = server.sendData("Hello Client, this message form server.\n");
-    //        Future<?> future2 = client.sendData("Hello Server, this message form client.\n");
-    //        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
-    //            ThreadUtils.sleep(100);
-    //        }
-    //        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-    //        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-    //
-    //        // SSL disable
-    //        // Switch to no encryption, there is keep connect, close SSL
-    //        SslContext sslContext = client.findPipeContext(SslContext.class);
-    //        sslContext.closeSSL();
-    //
-    //        clientRcvData.clear();
-    //        serverRcvData.clear();
-    //        client.sendData("Hello Server, this message using encryption.\n");
-    //        server.sendData("Hello Client, this message using encryption.\n");
-    //        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
-    //            ThreadUtils.sleep(100);
-    //        }
-    //
-    //        assert clientRcvData.get(1).equals("Hello Client, this message using encryption.");
-    //        assert serverRcvData.get(1).equals("Hello Server, this message using encryption.");
-    //    }
-    //
-    //    @Test
-    //    public void sslModelOnceTest_1() {
-    //        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Once);
-    //        EmbeddedSoContext context = new EmbeddedSoContext();
-    //        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-    //        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
-    //        EmbeddedTransfer transfer = context.joinChannel(client, server);
-    //        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
-    //
-    //        // SSL enable
-    //        client.send("Hello Server, this message using encryption.\n");
-    //        server.send("Hello Client, this message using encryption.\n");
-    //        transfer(transfer, 500, 10);
-    //        assert client.readRcv().equals("Hello Client, this message using encryption.");
-    //        assert server.readRcv().equals("Hello Server, this message using encryption.");
-    //
-    //        // Switch to no encryption, there is keep connect, close SSL
-    //        SslContext clientSSL = client.findPipeContext(SslContext.class);
-    //        clientSSL.closeSSL();
-    //        transfer(transfer, 500, 10);
-    //
-    //        // SSL disable
-    //        client.send("Hello Server, this message no encryption.\n");
-    //        server.send("Hello Client, this message no encryption.\n");
-    //        transfer(transfer, 500, 10);
-    //        assert client.readRcv().equals("Hello Client, this message no encryption.");
-    //        assert server.readRcv().equals("Hello Server, this message no encryption.");
-    //    }
-    //
-    //    @Test
-    //    public void sslModelOnceTest_2() {
-    //        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Once);
-    //        EmbeddedSoContext context = new EmbeddedSoContext();
-    //        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-    //        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
-    //        EmbeddedTransfer transfer = context.joinChannel(client, server);
-    //        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
-    //
-    //        // SSL enable
-    //        client.send("Hello Server, this message using encryption.\n");
-    //        server.send("Hello Client, this message using encryption.\n");
-    //        transfer(transfer, 500, 10);
-    //        assert client.readRcv().equals("Hello Client, this message using encryption.");
-    //        assert server.readRcv().equals("Hello Server, this message using encryption.");
-    //
-    //        // Switch to no encryption, there is keep connect, close SSL
-    //        SslContext serverSSL = server.findPipeContext(SslContext.class);
-    //        serverSSL.closeSSL();
-    //        transfer(transfer, 500, 10);
-    //
-    //        // SSL disable
-    //        client.send("Hello Server, this message no encryption.\n");
-    //        server.send("Hello Client, this message no encryption.\n");
-    //        transfer(transfer, 500, 10);
-    //        assert client.readRcv().equals("Hello Client, this message no encryption.");
-    //        assert server.readRcv().equals("Hello Server, this message no encryption.");
-    //    }
-    //
-    //    @Test
-    //    public void sslModelManualTest_1() {
-    //        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Manual);
-    //        EmbeddedSoContext context = new EmbeddedSoContext();
-    //        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-    //        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
-    //        EmbeddedTransfer transfer = context.joinChannel(client, server);
-    //        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
-    //
-    //        // SSL disable
-    //        client.send("Hello Server, this message no encryption.\n");
-    //        server.send("Hello Client, this message no encryption.\n");
-    //        transfer(transfer, 500, 10);
-    //        assert client.readRcv().equals("Hello Client, this message no encryption.");
-    //        assert server.readRcv().equals("Hello Server, this message no encryption.");
-    //
-    //        // Switch to no encryption, there is keep connect, close SSL
-    //        SslContext clientSSL = client.findPipeContext(SslContext.class);
-    //        SslContext serverSSL = server.findPipeContext(SslContext.class);
-    //        clientSSL.openSSL();
-    //        serverSSL.openSSL();
-    //        transfer(transfer, 500, 10);
-    //
-    //        // SSL enable
-    //        client.send("Hello Server, this message using encryption.\n");
-    //        server.send("Hello Client, this message using encryption.\n");
-    //        transfer(transfer, 500, 10);
-    //        assert client.readRcv().equals("Hello Client, this message using encryption.");
-    //        assert server.readRcv().equals("Hello Server, this message using encryption.");
-    //    }
+    @Test
+    public void sslModelOnceTest_1() throws IOException {
+        int safePort = safePort();
+        SoConfig soConf = crateConfig(128, 4096);
+        soConf.setNetlog(true);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Once);
+        NetaSocket neta = new NetaSocket(soConf);
+
+        // Server
+        List<String> serverRcvData = new ArrayList<>();
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
+
+        // Client
+        List<String> clientRcvData = new ArrayList<>();
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
+
+        //
+        while (!connect.isDone()) {
+            ThreadUtils.sleep(100);
+        }
+
+        NetChannel client = (NetChannel) neta.getContext().findChannel(2);
+        NetChannel server = (NetChannel) neta.getContext().findChannel(3);
+        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+
+        // SSL enable
+        Future<?> future1 = server.sendData("Hello Client, this message form server.\n");
+        Future<?> future2 = client.sendData("Hello Server, this message form client.\n");
+        while (!future1.isDone() || !future2.isDone()) {
+            ThreadUtils.sleep(100);
+        }
+        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+
+        // SSL disable
+        // Switch to no encryption, there is keep connect, close SSL
+        SslContext sslContext = client.findPipeContext(SslContext.class);
+        sslContext.closeSSL();
+
+        clientRcvData.clear();
+        serverRcvData.clear();
+        client.sendData("Hello Server, this message using encryption.\n");
+        server.sendData("Hello Client, this message using encryption.\n");
+        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+
+        assert clientRcvData.get(0).equals("Hello Client, this message using encryption.");
+        assert serverRcvData.get(0).equals("Hello Server, this message using encryption.");
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void sslModelOnceTest_2() throws IOException {
+        int safePort = safePort();
+        SoConfig soConf = crateConfig(128, 4096);
+        soConf.setNetlog(true);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Once);
+        NetaSocket neta = new NetaSocket(soConf);
+
+        // Server
+        List<String> serverRcvData = new ArrayList<>();
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
+
+        // Client
+        List<String> clientRcvData = new ArrayList<>();
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
+
+        //
+        while (!connect.isDone()) {
+            ThreadUtils.sleep(100);
+        }
+
+        NetChannel client = (NetChannel) neta.getContext().findChannel(2);
+        NetChannel server = (NetChannel) neta.getContext().findChannel(3);
+        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+
+        // SSL enable
+        Future<?> future1 = server.sendData("Hello Client, this message form server.\n");
+        Future<?> future2 = client.sendData("Hello Server, this message form client.\n");
+        while (!future1.isDone() || !future2.isDone()) {
+            ThreadUtils.sleep(100);
+        }
+        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+
+        // SSL disable
+        // Switch to no encryption, there is keep connect, close SSL
+        SslContext sslServerCtx = server.findPipeContext(SslContext.class);
+        sslServerCtx.closeSSL();
+        SslContext sslClientCtx = client.findPipeContext(SslContext.class);
+        while (sslClientCtx.isActive()) {
+            ThreadUtils.sleep(100);
+        }
+
+        clientRcvData.clear();
+        serverRcvData.clear();
+        client.sendData("Hello Server, this message using encryption.\n");
+        server.sendData("Hello Client, this message using encryption.\n");
+        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+
+        assert clientRcvData.get(0).equals("Hello Client, this message using encryption.");
+        assert serverRcvData.get(0).equals("Hello Server, this message using encryption.");
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void sslModelManualTest_1() throws IOException {
+        int safePort = safePort();
+        SoConfig soConf = crateConfig(128, 4096);
+        soConf.setNetlog(true);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Manual);
+        NetaSocket neta = new NetaSocket(soConf);
+
+        // Server
+        List<String> serverRcvData = new ArrayList<>();
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
+
+        // Client
+        List<String> clientRcvData = new ArrayList<>();
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
+        while (!connect.isDone()) {
+            ThreadUtils.sleep(100);
+        }
+
+        NetChannel client = (NetChannel) neta.getContext().findChannel(2);
+        NetChannel server = (NetChannel) neta.getContext().findChannel(3);
+        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+
+        // SSL disable
+        clientRcvData.clear();
+        serverRcvData.clear();
+        client.sendData("Hello Server, this message no encryption.\n");
+        server.sendData("Hello Client, this message no encryption.\n");
+        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+
+        assert clientRcvData.get(0).equals("Hello Client, this message no encryption.");
+        assert serverRcvData.get(0).equals("Hello Server, this message no encryption.");
+
+        // Switch to no encryption, there is keep connect, close SSL
+        SslContext clientSSL = client.findPipeContext(SslContext.class);
+        SslContext serverSSL = server.findPipeContext(SslContext.class);
+        clientSSL.openSSL();
+        serverSSL.openSSL();
+
+        // SSL enable
+        clientRcvData.clear();
+        serverRcvData.clear();
+        client.sendData("Hello Server, this message using encryption.\n");
+        server.sendData("Hello Client, this message using encryption.\n");
+        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+        assert clientRcvData.get(0).equals("Hello Client, this message using encryption.");
+        assert serverRcvData.get(0).equals("Hello Server, this message using encryption.");
+
+        neta.shutdown();
+    }
 }

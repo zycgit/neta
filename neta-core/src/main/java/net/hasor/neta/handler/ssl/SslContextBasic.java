@@ -87,6 +87,11 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     @Override
+    public boolean isActive() {
+        return this.sslStatus;
+    }
+
+    @Override
     public String getPeerHost() {
         return this.sslEngine.getPeerHost();
     }

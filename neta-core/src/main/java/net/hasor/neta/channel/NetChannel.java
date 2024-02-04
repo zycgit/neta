@@ -32,7 +32,6 @@ import java.nio.channels.NotYetConnectedException;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * A tcp network channel
@@ -421,31 +420,46 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
                 sndByteBuf = this.pipeline.onSndMessage(this.pipeCtx, pipeName, new Object[] { writeData });
             }
 
-            AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
+            ByteBuf merged = ByteBufAllocator.DEFAULT.arrayBuffer();
             for (Object buf : sndByteBuf) {
-                Future<NetChannel> itemFuture = new BasicFuture<>();
-                itemFuture.onFailed(f -> {
-                    future.failed(f.getCause());
-                }).onFinal(f -> {
-                    cnt.decrementAndGet();
-                    if (cnt.get() == 0) {
-                        future.completed(this);
-                    }
-                });
-
                 if (buf instanceof byte[]) {
-                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((byte[]) buf);
-                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+                    merged.writeBytes((byte[]) buf);
                 } else if (buf instanceof ByteBuffer) {
-                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((ByteBuffer) buf);
-                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+                    merged.write((ByteBuffer) buf);
                 } else if (buf instanceof ByteBuf) {
-                    ByteBuf wrap = (ByteBuf) buf;
-                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+                    merged.write((ByteBuf) buf);
+                    ((ByteBuf) buf).markReader();
                 } else {
                     throw new ClassCastException(writeData.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
                 }
             }
+            merged.markWriter();
+            appendSoSndTask(new SoSndData(merged, future, this));
+            //            AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
+            //            for (Object buf : sndByteBuf) {
+            //                Future<NetChannel> itemFuture = new BasicFuture<>();
+            //                itemFuture.onFailed(f -> {
+            //                    future.failed(f.getCause());
+            //                }).onFinal(f -> {
+            //                    cnt.decrementAndGet();
+            //                    if (cnt.get() == 0) {
+            //                        future.completed(this);
+            //                    }
+            //                });
+            //
+            //                if (buf instanceof byte[]) {
+            //                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((byte[]) buf);
+            //                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+            //                } else if (buf instanceof ByteBuffer) {
+            //                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((ByteBuffer) buf);
+            //                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+            //                } else if (buf instanceof ByteBuf) {
+            //                    ByteBuf wrap = (ByteBuf) buf;
+            //                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
+            //                } else {
+            //                    throw new ClassCastException(writeData.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
+            //                }
+            //            }
         } catch (Throwable e) {
             logger.error("snd(" + channelID + ") failed, " + e.getMessage(), e);
             future.failed(e);

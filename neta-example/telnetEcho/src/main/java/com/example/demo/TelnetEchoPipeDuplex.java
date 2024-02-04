@@ -27,7 +27,7 @@ public class TelnetEchoPipeDuplex implements PipeHandler<String, String> {
     private static final String CTRL_C = new String(new byte[] { -17, -65, -67, -17, -65, -67, -17, -65, -67, -17, -65, -67, 6 });
 
     @Override
-    public void onInit(PipeContext context) throws Throwable {
+    public void onInit(PipeContext context) {
         System.out.println("onInit");
     }
 

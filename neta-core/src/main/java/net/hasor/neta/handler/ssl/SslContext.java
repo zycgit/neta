@@ -32,6 +32,9 @@ public interface SslContext {
     /** SSL Client side */
     boolean isClient();
 
+    /** return SSL status Active */
+    boolean isActive();
+
     /**
      * Returns the name of the negotiated application-level protocol.
      * @return the application-level protocol name or {@code null} if the negotiation failed or the client does not have ALPN/NPN extension
