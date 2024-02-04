@@ -440,4 +440,22 @@ public class AbstractPipeTest {
             }
         };
     }
+
+    protected static PipeHandler<Integer, Integer> doCopyAndSkipHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
+        return new PipeHandler<Integer, Integer>() {
+            @Override
+            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<Integer> src, PipeSndQueue<Integer> dst) {
+                dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
+                recordFinish.add(tag + "Skip");
+                return PipeStatus.Skip;
+            }
+
+            @Override
+            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                recordFailed.add(tag + "ErrSkip");
+
+                return PipeStatus.Skip;
+            }
+        };
+    }
 }

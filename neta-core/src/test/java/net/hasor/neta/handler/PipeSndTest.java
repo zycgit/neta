@@ -290,4 +290,65 @@ public class PipeSndTest extends AbstractPipeTest {
         assert channel.readSnd().equals(2);
         assert channel.readSnd().equals(3);
     }
+
+    @Test
+    public void skipTest_1() {
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
+
+        EmbeddedInitializer initializer = (ctx) -> {
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextEncoder("COPY1", pipConf, doCopyHandler("Enc1", encoderFinishCnt, encoderFailedCnt)) //
+                    .nextEncoder("COPY2", pipConf, doCopyHandler("Enc2", encoderFinishCnt, encoderFailedCnt)) //
+                    .nextEncoder("SKIP", pipConf, doCopyAndSkipHandler("Enc3", encoderFinishCnt, encoderFailedCnt)) //
+                    .build();
+        };
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.send(1, 2); // SKIP next copy
+        channel.send(3, 4); // in pipline rcv up
+
+        try {
+            channel.send(5, 6);
+            assert false;
+        } catch (Exception e) {
+            assert e.getMessage().endsWith("available slot is 0, require 2.");
+        }
+
+        assert channel.getPipeStatistical().heapUpOfSnd() == 4;
+        assert channel.getPipeStatistical().heapUpOfSnd("SKIP") == 2;
+        assert channel.getPipeStatistical().heapUpOfSnd("COPY2") == 0;
+        assert channel.getPipeStatistical().heapUpOfSnd("COPY1") == 0;
+        assert channel.getPipeStatistical().heapUpOfSndRoot() == 2;
+        assert channel.readSnd() == null;
+    }
+
+    @Test
+    public void skipTest_2() {
+        List<String> encoderFinishCnt = new ArrayList<>();
+        List<String> encoderFailedCnt = new ArrayList<>();
+
+        EmbeddedInitializer initializer = (ctx) -> {
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextEncoder("COPY1", pipConf, doCopyHandler("Enc1", encoderFinishCnt, encoderFailedCnt)) //
+                    .nextEncoder("COPY2", pipConf, doCopyHandler("Enc2", encoderFinishCnt, encoderFailedCnt)) //
+                    .nextEncoder("SKIP", pipConf, doCopyAndSkipHandler("Enc3", encoderFinishCnt, encoderFailedCnt)) //
+                    .build();
+        };
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.send(1, 2); // SKIP next copy
+
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("Enc3Skip,Enc1DoNext");
+        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
+        assert channel.readSnd() == null;
+    }
 }

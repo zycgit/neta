@@ -40,11 +40,11 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.receive(new Object[] { 1, 2 }); // in "COPY" rcvDown
-        channel.receive(new Object[] { 3, 4 }); // in pipline rcv up
+        channel.receive(1, 2); // in "COPY" rcvDown
+        channel.receive(3, 4); // in pipline rcv up
 
         try {
-            channel.receive(new Object[] { 5, 6 });
+            channel.receive(5, 6);
             assert false;
         } catch (Exception e) {
             assert e.getMessage().endsWith("available slot is 0, require 2.");
@@ -72,10 +72,10 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.receive(new Object[] { 1, 2 });
-        channel.receive(new Object[] { 3 });
-        channel.receive(new Object[] { 4 });
-        channel.receive(new Object[] { 5 });
+        channel.receive(1, 2);
+        channel.receive(3);
+        channel.receive(4);
+        channel.receive(5);
 
         assert channel.getPipeStatistical().heapUpOfRcv() == 0;
         assert channel.getPipeStatistical().heapUpOfRcv("COPY1") == 0;
@@ -91,10 +91,10 @@ public class PipeEndpointTest extends AbstractPipeTest {
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
-        channel.receive(new Object[] { 1, 2 });
-        channel.receive(new Object[] { 3, 4 });
-        channel.receive(new Object[] { 5, 6, 7 });
-        channel.receive(new Object[] { 8, 9, 10 });
+        channel.receive(1, 2);
+        channel.receive(3, 4);
+        channel.receive(5, 6, 7);
+        channel.receive(8, 9, 10);
         assert channel.getRcvSize() == 10;
     }
 
@@ -126,9 +126,9 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.send(new Object[] { 1, 2 }); // in "COPY" rcvDown
+        channel.send(1, 2); // in "COPY" rcvDown
         try {
-            channel.send(new Object[] { 3, 4 });
+            channel.send(3, 4);
             assert false;
         } catch (Exception e) {
             assert e.getMessage().endsWith("available slot is 0, require 2.");
@@ -156,10 +156,10 @@ public class PipeEndpointTest extends AbstractPipeTest {
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.send(new Object[] { 1, 2 });
-        channel.send(new Object[] { 3 });
-        channel.send(new Object[] { 4 });
-        channel.send(new Object[] { 5 });
+        channel.send(1, 2);
+        channel.send(3);
+        channel.send(4);
+        channel.send(5);
 
         assert channel.getPipeStatistical().heapUpOfSnd() == 0;
         assert channel.getPipeStatistical().heapUpOfSnd("COPY1") == 0;
@@ -175,10 +175,10 @@ public class PipeEndpointTest extends AbstractPipeTest {
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
-        channel.send(new Object[] { 1, 2 });
-        channel.send(new Object[] { 3, 4 });
-        channel.send(new Object[] { 5, 6, 7 });
-        channel.send(new Object[] { 8, 9, 10 });
+        channel.send(1, 2);
+        channel.send(3, 4);
+        channel.send(5, 6, 7);
+        channel.send(8, 9, 10);
         assert channel.getSndSize() == 10;
     }
 

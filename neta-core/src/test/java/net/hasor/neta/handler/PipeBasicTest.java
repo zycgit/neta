@@ -17,6 +17,9 @@ package net.hasor.neta.handler;
 import net.hasor.neta.codec.TransparentPipeHandler;
 import org.junit.Test;
 
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
+
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
@@ -32,7 +35,17 @@ public class PipeBasicTest extends AbstractPipeTest {
 
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        System.out.println(channel.pipeline);
 
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        channel.printStackTrace(new PrintStream(out));
+
+        String data = "ChannelID  : 1,          Server(Active)\n"//
+                + "Local Addr :                   embedded\n" //
+                + "Remote Addr:                   embedded\n" //
+                + "┏━━━━━━━━━━━━━━━━━━━━ ↓ 0/500+ (SND) ━┓\n" //
+                + "┃ L1 [↑ 0/500+,       ↓ 0/500+      ] ┃\n"//
+                + "┗━━━━ ↑ 0/500+ (RCV) ━━━━━━━━━━━━━━━━━┛";
+
+        assert out.toString().trim().equals(data);
     }
 }

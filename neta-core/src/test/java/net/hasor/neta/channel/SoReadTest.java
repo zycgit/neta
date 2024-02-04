@@ -216,6 +216,7 @@ public class SoReadTest extends AbstractSoTest {
 
         NetChannel channel = (NetChannel) server.findChannel(2);
         assert channel.getRcvSlotSize() == 0;
+        channel.printStackTrace();
 
         server.shutdown();
     }

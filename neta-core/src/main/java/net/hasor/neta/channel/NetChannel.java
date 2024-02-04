@@ -24,6 +24,7 @@ import net.hasor.neta.bytebuf.ByteBufAdapter;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.IOException;
+import java.io.PrintStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.NotYetConnectedException;
@@ -572,5 +573,20 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
                 throw new SoReadTimeoutException("no data was received with " + waitTimeMs + " milliseconds.");
             }
         }
+    }
+
+    /**
+     * Prints this pipline status and its backtrace to the System.out.
+     */
+    public void printStackTrace() {
+        printStackTrace(System.out);
+    }
+
+    /**
+     * Prints this pipline status and its backtrace to the specified print stream.
+     * @param s {@code PrintStream} to use for output
+     */
+    public void printStackTrace(PrintStream s) {
+        SoUtils.printStackTrace(s, this, this.pipeline);
     }
 }

@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.StringUtils;
+
+import java.io.PrintStream;
 import java.net.SocketAddress;
 
 /**
@@ -21,7 +24,7 @@ import java.net.SocketAddress;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SoUtils {
+public class SoUtils {
 
     public static SoConnectTimeoutException newTimeout(boolean isRcv, long channelID, SoContextImpl context, Throwable e) {
         SocketAddress address = context.getRemoteAddress(channelID);
@@ -29,5 +32,28 @@ class SoUtils {
         SoConnectTimeoutException cause = new SoConnectTimeoutException(errorMsg);
         cause.setStackTrace(e.getStackTrace());
         return cause;
+    }
+
+    /**
+     * Prints this pipline status and its backtrace to the specified print stream.
+     * @param s {@code PrintStream} to use for output
+     */
+    public static void printStackTrace(PrintStream s, SoChannel<?> channel, Pipeline<?> pipeline) {
+        String body = pipeline == null ? "--- There is no Pipeline ---" : pipeline.toString();
+        int len = body.split("\n")[0].length();
+        String ctitle = "ChannelID  : " + channel.getChannelID() + ",";
+        String status = channel.isClient() ? "Client" : "Server";
+        status = status + (channel.isClose() ? "(Closed)" : "(Active)");
+        s.println(StringUtils.rightPad(ctitle, len - status.length(), " ") + status);
+
+        String laddrTitle = "Local Addr :";
+        String laddrValue = channel.getLocalAddr().toString();
+        s.println(StringUtils.rightPad(laddrTitle, len - laddrValue.length(), " ") + laddrValue);
+
+        String raddrTitle = "Remote Addr:";
+        String raddrValue = channel.getRemoteAddr().toString();
+        s.println(StringUtils.rightPad(raddrTitle, len - raddrValue.length(), " ") + raddrValue);
+
+        s.println(body);
     }
 }

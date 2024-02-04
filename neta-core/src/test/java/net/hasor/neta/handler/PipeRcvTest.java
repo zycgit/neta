@@ -291,4 +291,61 @@ public class PipeRcvTest extends AbstractPipeTest {
         assert channel.readRcv().equals(2);
         assert channel.readRcv().equals(3);
     }
+
+    @Test
+    public void skipTest_1() {
+        EmbeddedInitializer initializer = (ctx) -> {
+            List<String> ignore = new ArrayList<>();
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextDecoder("SKIP", pipConf, doCopyAndSkipHandler("Dec1", ignore, ignore)) // rcv +1
+                    .nextDecoder("COPY", pipConf, doCopyHandler("Dec2", ignore, ignore)) // rcv +1
+                    .build();
+        };
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.receive(1, 2); // SKIP next copy
+        channel.receive(3, 4); // in pipline rcv up
+
+        try {
+            channel.receive(5, 6);
+            assert false;
+        } catch (Exception e) {
+            assert e.getMessage().endsWith("available slot is 0, require 2.");
+        }
+
+        assert channel.getPipeStatistical().heapUpOfRcv() == 4;
+        assert channel.getPipeStatistical().heapUpOfRcv("SKIP") == 2;
+        assert channel.getPipeStatistical().heapUpOfRcv("COPY") == 0;
+        assert channel.getPipeStatistical().heapUpOfRcvRoot() == 2;
+        assert channel.readRcv() == null;
+    }
+
+    @Test
+    public void skipTest_2() {
+        List<String> decoderFinishCnt = new ArrayList<>();
+        List<String> decoderFailedCnt = new ArrayList<>();
+
+        EmbeddedInitializer initializer = (ctx) -> {
+            PipeConfig pipConf = new PipeConfig();
+            pipConf.setPipeRcvDownStackSize(2);
+            pipConf.setPipeSndUpStackSize(2);
+            return PipeHelper.embedded(Integer.class, Integer.class, pipConf)//
+                    .nextDecoder("SKIP", pipConf, doCopyAndSkipHandler("Dec1", decoderFinishCnt, decoderFailedCnt)) // rcv +1
+                    .nextDecoder("COPY1", pipConf, doCopyHandler("Dec2", decoderFinishCnt, decoderFailedCnt)) // rcv +1
+                    .nextDecoder("COPY2", pipConf, doCopyHandler("Dec3", decoderFinishCnt, decoderFailedCnt)) // rcv +1
+                    .build();
+        };
+
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        channel.receive(1, 2); // SKIP next copy
+
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("Dec1Skip,Dec3DoNext");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
+        assert channel.readRcv() == null;
+    }
 }

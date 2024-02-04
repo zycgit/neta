@@ -21,6 +21,7 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
 
+import java.io.PrintStream;
 import java.net.SocketAddress;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -433,5 +434,20 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     /** Clear the SndError status. */
     public void clearSndError() {
         this.sndError = null;
+    }
+
+    /**
+     * Prints this pipline status and its backtrace to the System.out.
+     */
+    public void printStackTrace() {
+        printStackTrace(System.out);
+    }
+
+    /**
+     * Prints this pipline status and its backtrace to the specified print stream.
+     * @param s {@code PrintStream} to use for output
+     */
+    public void printStackTrace(PrintStream s) {
+        SoUtils.printStackTrace(s, this, this.pipeline);
     }
 }
