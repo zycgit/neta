@@ -48,7 +48,7 @@ import java.util.Set;
  * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  */
-class SslUtils {
+public class SslUtils {
     private static final Logger   logger               = Logger.getLogger(SslUtils.class);
     public static final  String[] DEFAULT_CIPHER_SUITES;
     public static final  String[] DEFAULT_TLSV13_CIPHER_SUITES;
@@ -56,6 +56,9 @@ class SslUtils {
 
     private static final boolean TLSV1_3_JDK_SUPPORTED;
     private static final boolean TLSV1_3_JDK_DEFAULT_ENABLED;
+
+    private SslUtils() {
+    }
 
     private static SSLContext newInitContext(Provider provider) throws GeneralSecurityException {
         final SSLContext context;

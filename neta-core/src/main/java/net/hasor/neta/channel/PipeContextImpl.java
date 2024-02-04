@@ -102,11 +102,7 @@ public class PipeContextImpl implements PipeContext {
     public Future<?> flush() throws IOException {
         if (this.channel instanceof NetChannel) {
             String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
-            if (StringUtils.isNotBlank(current)) {
-                return ((NetChannel) this.channel).sendData(current);
-            } else {
-                return ((NetChannel) this.channel).flush();
-            }
+            return ((NetChannel) this.channel).flush(current);
         } else {
             throw new UnsupportedOperationException();
         }

@@ -242,7 +242,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      */
     public void receiveTo(String pipeName, Object... object) {
         if (object == null || object.length == 0) {
-            return;
+            object = ArrayUtils.EMPTY_OBJECT_ARRAY;
         }
 
         try {
@@ -348,7 +348,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      */
     public void sendTo(String pipeName, Object... object) {
         if (object == null || object.length == 0) {
-            return;
+            object = ArrayUtils.EMPTY_OBJECT_ARRAY;
         }
 
         try {

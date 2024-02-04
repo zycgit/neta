@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.timer.Timeout;
@@ -379,7 +380,8 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
      * <p>data goes through the application layer network protocol stack</p>
      */
     public Future<?> sendData(Object writeData) {
-        return this.sendData(writeData, null);
+        Objects.requireNonNull(writeData, "the send data is null.");
+        return this.sendOrFlush(writeData, null);
     }
 
     /**
@@ -387,13 +389,38 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
      * <p>data goes through the application layer network protocol stack</p>
      */
     public Future<NetChannel> sendData(Object writeData, String pipeName) {
+        Objects.requireNonNull(writeData, "the send data is null.");
+        return this.sendOrFlush(writeData, pipeName);
+    }
+
+    /** flash */
+    public Future<NetChannel> flush() {
+        return this.sendOrFlush(null, null);
+    }
+
+    /**
+     * sent data to remote, The network IO transfer operation is performed asynchronously.
+     * <p>data goes through the application layer network protocol stack</p>
+     */
+    public Future<?> flush(String pipeName) {
+        return this.sendOrFlush(null, pipeName);
+    }
+
+    private Future<NetChannel> sendOrFlush(Object writeData, String pipeName) {
         Future<NetChannel> future = newFutureForSend();
         if (future.isDone()) {
             return future;
         }
 
         try {
-            Object[] sndByteBuf = this.pipeline.onSndMessage(this.pipeCtx, pipeName, new Object[] { writeData });
+            boolean isFlush = writeData == null;
+            Object[] sndByteBuf;
+            if (isFlush) {
+                sndByteBuf = this.pipeline.onSndMessage(this.pipeCtx, pipeName, ArrayUtils.EMPTY_OBJECT_ARRAY);
+            } else {
+                sndByteBuf = this.pipeline.onSndMessage(this.pipeCtx, pipeName, new Object[] { writeData });
+            }
+
             AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
             for (Object buf : sndByteBuf) {
                 Future<NetChannel> itemFuture = new BasicFuture<>();
@@ -426,30 +453,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
         }
         return future;
-    }
-
-    /** flash */
-    public Future<NetChannel> flush() {
-        Future<NetChannel> future = newFutureForSend();
-        if (future.isDone()) {
-            return future;
-        }
-
-        appendSoSndTask(new SoSndData(SoSndData.EMPTY_DATA, future, this));
-        return future;
-    }
-
-    /**
-     * sent data to remote, The network IO transfer operation is performed asynchronously.
-     * <p>data goes through the application layer network protocol stack</p>
-     */
-    public Future<?> flush(String pipeName) {
-        Future<NetChannel> future = newFutureForSend();
-        if (future.isDone()) {
-            return future;
-        }
-
-        throw new UnsupportedOperationException();
     }
 
     private Future<NetChannel> newFutureForSend() {
