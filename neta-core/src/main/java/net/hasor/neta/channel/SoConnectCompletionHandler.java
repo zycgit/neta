@@ -17,6 +17,7 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
+import java.net.SocketAddress;
 import java.nio.channels.CompletionHandler;
 
 /**
@@ -28,11 +29,13 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
     private static final Logger             logger = Logger.getLogger(SoConnectCompletionHandler.class);
     private final        Pipeline<?>        pipeline;
     private final        NetChannel         channel;
+    private final        SoAsyncChannel     asyncChannel;
     private final        Future<NetChannel> future;
 
-    public SoConnectCompletionHandler(NetChannel channel, Pipeline<?> pipeline, Future<NetChannel> future) {
-        this.pipeline = pipeline;
+    public SoConnectCompletionHandler(NetChannel channel, SoAsyncChannel asyncChannel, Future<NetChannel> future) {
+        this.pipeline = channel.pipeline;
         this.channel = channel;
+        this.asyncChannel = asyncChannel;
         this.future = future;
     }
 
@@ -46,6 +49,10 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
         }
 
         try {
+            SocketAddress localAddress = this.asyncChannel.getLocalAddress();
+            SocketAddress remoteAddress = this.asyncChannel.getRemoteAddress();
+            logger.info("connected(" + channel.getChannelID() + ") L:" + localAddress + " -> R:" + remoteAddress);
+
             this.pipeline.onActive(this.channel.pipeCtx);
             this.channel.rHandler.read();
             this.future.completed(this.channel);

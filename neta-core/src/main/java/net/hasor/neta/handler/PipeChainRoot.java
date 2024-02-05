@@ -360,6 +360,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
             i = depth;
 
             while (i < this.layers.size()) {
+                String pipName = this.layers.get(i).getName();
                 PipeStatus status = this.doLayer(true, pipeContext, i);
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
@@ -372,30 +373,32 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                         if (status == PipeStatus.Back) {
                             if (backTo == -1) {
                                 backTo = i;
-                                this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Back to " + backTo);
+                                this.printLog(true, "pipeline " + pipName + " request Back.");
                             } else {
-                                this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " Back has been set to " + backTo);
+                                String backToName = this.layers.get(backTo).getName();
+                                this.printLog(true, "pipeline " + pipName + " request Back, has been set to " + backToName);
                             }
                         } else if (status == PipeStatus.Skip) {
-                            this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Skip");
                             i++; // if skip then skip next to next.
+                            String skipName = (this.layers.size() >= i) ? this.layers.get(i).getName() : ", the last node to ignore Skip.";
+                            this.printLog(true, "pipeline " + pipName + " request Skip " + skipName);
                         }
 
                         i++;
                         continue;
                     case Again:
                         needRestartLater = true;// restart when finished
-                        this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Again");
+                        this.printLog(true, "pipeline " + pipName + " require Again");
                         i++;
                         continue;
                     case Restart:
                         needRestartLater = true;
-                        this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Restart");
+                        this.printLog(true, "pipeline " + pipName + " require Restart");
                         i++;
                         break;
                     case Exit:
                         pipeFinish = false;
-                        this.printLog(true, "PipeLayer " + i + "/" + this.layers.size() + " require Exit");
+                        this.printLog(true, "pipeline " + pipName + " require Exit");
                         i++;
                         break;
                 }
@@ -518,6 +521,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                     break;
                 }
 
+                String pipName = this.layers.get(i).getName();
                 PipeStatus status = this.doLayer(false, pipeContext, i);
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
@@ -525,29 +529,29 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
                     case Skip:
                     case Back:
                         if (status == PipeStatus.Skip) {
-                            this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Skip");
+                            this.printLog(false, "PipeLayer " + pipName + " require Skip");
                             i--; // if skip then skip next to next.
                         } else if (status == PipeStatus.Back) {
                             if (backTo == -1) {
                                 backTo = i;
-                                this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Back to " + backTo);
+                                this.printLog(false, "PipeLayer " + pipName + " require Back to " + backTo);
                             } else {
-                                this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " Back has been set to " + backTo);
+                                this.printLog(false, "PipeLayer " + pipName + " Back has been set to " + backTo);
                             }
                         }
                         break;
                     case Again:
                         needRestartLater = true;// restart when finished
-                        this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Again");
+                        this.printLog(false, "PipeLayer " + pipName + " require Again");
                         break;
                     case Restart:
                         needRestartLater = true;
                         breakFor = true;
-                        this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Restart");
+                        this.printLog(false, "PipeLayer " + pipName + " require Restart");
                         break;
                     case Exit:
                         breakFor = true;
-                        this.printLog(false, "PipeLayer " + i + "/" + this.layers.size() + " require Exit");
+                        this.printLog(false, "PipeLayer " + pipName + " require Exit");
                         break;
                 }
             }

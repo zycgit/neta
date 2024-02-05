@@ -150,8 +150,8 @@ public class NetaSocket extends AbstractChannelManager {
             channel.pipeline.onInit(channel.pipeCtx);
 
             // connect to
-            asyncChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(channel, channel.pipeline, future));
-            logger.info("connect(" + channel.getChannelID() + ") to  L:" + asyncChannel.getLocalAddress() + " -> R:" + remoteAddr);
+            asyncChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(channel, asyncChannel, future));
+            logger.info("initialize connect(" + channel.getChannelID() + ") to " + remoteAddr);
             return future;
         } catch (Throwable e) {
             this.context.syncUnsafeCloseChannel(channelID, e.getMessage(), e);
