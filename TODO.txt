@@ -29,3 +29,28 @@ https://tomcat.apache.org/native-doc/
 - https://datatracker.ietf.org/doc/html/rfc6066
 - https://halfrost.com/https-extensions/#toc-0
 - https://zhuanlan.zhihu.com/p/477461157?utm_id=0
+
+
+
+   1.  "Message Syntax and Routing" (RFC 7230)
+   2.  "Semantics and Content" [RFC7231]
+   3.  "Conditional Requests" [RFC7232]
+   4.  "Range Requests" [RFC7233]
+   5.  "Caching" [RFC7234]
+   6.  "Authentication" [RFC7235]
+
+
+
+     HTTP-message   = start-line
+                      *( header-field CRLF )
+                      CRLF
+                      [ message-body ]
+
+
+     start-line     = request-line / status-line
+
+     request-line   = method SP request-target SP HTTP-version CRLF
+
+     method         = token （method 区分大小写）
+     SP             = 空格
+     status-code    = 3DIGIT

@@ -525,20 +525,15 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public int read(ByteBuffer dst) {
         int copied = 0;
-        int srcReadableBytes;
         byte[] buf = new byte[4096];
 
-        while (true) {
-            if ((srcReadableBytes = this.readableBytes()) == 0 || dst.remaining() == 0) {
-                break;
-            }
-
-            int len = Math.min(dst.remaining(), Math.min(buf.length, srcReadableBytes));
+        while (this.readableBytes() > 0 && dst.remaining() > 0) {
+            int len = Math.min(dst.remaining(), Math.min(buf.length, this.readableBytes()));
             int readBytes = this.readBytes(buf, 0, len);
             if (readBytes <= 0) {
                 break;
             }
-            dst.put(buf, copied, readBytes);
+            dst.put(buf, 0, readBytes);
             copied += readBytes;
         }
 
