@@ -23,13 +23,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * RCV_UP and RCV_DOWN,SND_UP and SND_DOWN. Is the name of RCV and SND under different endpoints.
  * When the pipeline forms a chain, the rcv event upward propagates,the snd event downward propagates.
- *
  * <p>
- *     When two {@link PipeDuplex} are connected, the endpoint object is shared in the same direction. e.g., RCV_DOWN and RCV_UP.
- *
- *     For convenience, use the DOWN name
+ * When two {@link PipeDuplex} are connected, the endpoint object is shared in the same direction. e.g., RCV_DOWN and RCV_UP.
+ * For convenience, use the DOWN name
  * </p>
- *
  * <pre>
  *                PipeLayer(0)                    PipeLayer (1)
  *         ┏━━━━━━━━━━━━━━━━━━━━━━━━┓       ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -42,9 +39,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *         ┃                        ┃       ┃                        ┃
  *         ┗━━━━━━━━━━━━━━━━━━━━━━━━┛       ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
  * </pre>
- *
- * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
  */
 class PipeInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     private static final Logger                                         logger        = Logger.getLogger(PipeInvocation.class);

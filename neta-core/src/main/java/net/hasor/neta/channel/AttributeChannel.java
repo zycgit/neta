@@ -19,9 +19,8 @@ import java.util.Map;
 
 /**
  * SoChannel abstract implementation, providing only get/set of attributes.
- *
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public abstract class AttributeChannel<T> implements SoChannel<T> {
     private final Map<String, Object> attributes = new HashMap<>();

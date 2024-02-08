@@ -18,8 +18,8 @@ import java.util.concurrent.ThreadFactory;
 
 /**
  * Create a thread factory for io/worker threads.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 @FunctionalInterface
 public interface SoThreadFactory {

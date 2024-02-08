@@ -18,26 +18,30 @@ import java.nio.ByteBuffer;
 
 /**
  * <p>Implementations are responsible to allocate buffers.</p>
- *
  * <p>Interface design reference netty io.netty.buffer.ByteBufAllocator,
  * The ByteBuf implementation is replaced with cobble.bytebuf</p>
- *
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public interface ByteBufAllocator {
     ByteBufAllocator DEFAULT = ByteBufUtil.DEFAULT_ALLOCATOR;
 
-    /** Allocate a {@link ByteBuf}.
-     * If it is a direct or heap buffer depends on the actual implementation. */
+    /**
+     * Allocate a {@link ByteBuf}.
+     * If it is a direct or heap buffer depends on the actual implementation.
+     */
     ByteBuf buffer();
 
-    /** Allocate a {@link ByteBuf} with the given initial capacity.
-     * If it is a direct or heap buffer depends on the actual implementation. */
+    /**
+     * Allocate a {@link ByteBuf} with the given initial capacity.
+     * If it is a direct or heap buffer depends on the actual implementation.
+     */
     ByteBuf buffer(int initialCapacity);
 
-    /** Allocate a {@link ByteBuf} with the given initial capacity and the given maximal capacity.
-     * If it is a direct or heap buffer depends on the actual implementation. */
+    /**
+     * Allocate a {@link ByteBuf} with the given initial capacity and the given maximal capacity.
+     * If it is a direct or heap buffer depends on the actual implementation.
+     */
     ByteBuf buffer(int initialCapacity, int maxCapacity);
 
     /** Returns {@code true} if direct {@link ByteBuf}'s */
@@ -87,8 +91,10 @@ public interface ByteBufAllocator {
      * If it is a direct or heap buffer depends on the actual implementation. */
     ByteBuf pooledBuffer(int maxCapacity, int sliceSize);
 
-    /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity.
-     * If it is a direct or heap buffer depends on the actual implementation. */
+    /**
+     * Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity.
+     * If it is a direct or heap buffer depends on the actual implementation.
+     */
     ByteBuf pooledBuffer(int initialCapacity, int maxCapacity, int sliceSize);
 
     /*** Allocate pooled {@link ByteBuf}. */

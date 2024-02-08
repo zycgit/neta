@@ -18,8 +18,8 @@ import java.net.SocketException;
 
 /**
  * Thrown to indicate that the pipleline's rcv slot is full and cannot accept more data.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class PipeFullException extends SocketException {
     public static final PipeFullException INSTANCE = new PipeFullException();

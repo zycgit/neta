@@ -29,9 +29,9 @@ import java.util.function.BiFunction;
 
 /**
  * source code from io.netty.handler.ssl.JdkAlpnSslUtils.
- * @version : 2023-10-18
  * @author Netty
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-18
  */
 class JdkAlpnSslUtils {
     private static final Logger logger = Logger.getLogger(JdkAlpnSslUtils.class);

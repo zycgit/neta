@@ -20,8 +20,8 @@ import java.nio.channels.AsynchronousSocketChannel;
 
 /**
  * config Socket
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoConfigUtils {
     public static void configListen(SoConfig config, AsynchronousServerSocketChannel channel) throws IOException {

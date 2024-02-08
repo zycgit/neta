@@ -16,8 +16,8 @@
 package net.hasor.neta.bytebuf;
 /**
  * 创建 NioChunk
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 interface NioChunkAllocator {
     NioChunk allocateBuffer(int capacity);

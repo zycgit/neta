@@ -20,8 +20,8 @@ import net.hasor.cobble.logging.Logger;
 import java.util.Locale;
 
 /**
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public class ByteBufUtil {
     private static final Logger           logger = Logger.getLogger(ByteBufUtil.class);

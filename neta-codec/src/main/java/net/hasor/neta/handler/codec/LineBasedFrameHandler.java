@@ -39,7 +39,7 @@ import java.util.List;
  * @version : 2024-01-20
  */
 public class LineBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
-    /** Maximum length of a frame we're willing to decode, Throws an exception when maxLength is exceeded  */
+    /** Maximum length of a frame we're willing to decode, Throws an exception when maxLength is exceeded */
     private final int     maxLength;
     private final boolean stripDelimiter;
 
@@ -52,8 +52,8 @@ public class LineBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
 
     /**
      * Creates a new decoder.
-     * @param maxLength  the maximum length of the decoded frame.
-     *                   A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
+     * @param maxLength the maximum length of the decoded frame.
+     * A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
      */
     public LineBasedFrameHandler(final int maxLength) {
         this(maxLength, true);
@@ -61,9 +61,9 @@ public class LineBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
 
     /**
      * Creates a new decoder.
-     * @param maxLength  the maximum length of the decoded frame.
-     *                   A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
-     * @param stripDelimiter  whether the decoded frame should strip out the delimiter or not
+     * @param maxLength the maximum length of the decoded frame.
+     * A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
+     * @param stripDelimiter whether the decoded frame should strip out the delimiter or not
      */
     public LineBasedFrameHandler(int maxLength, boolean stripDelimiter) {
         this.maxLength = maxLength;

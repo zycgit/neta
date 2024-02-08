@@ -16,8 +16,8 @@
 package net.hasor.neta.handler.ssl;
 /**
  * SSL mode of working
- * @version : 2023-12-19
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-12-19
  */
 enum SslHandshakeStatus {
 

@@ -18,8 +18,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Socket Task
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public abstract class DefaultSoTask implements Runnable {
     public enum SoTaskStatus {

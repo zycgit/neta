@@ -21,8 +21,8 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * send Data context
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoSndContext {
     private final long             channelID;

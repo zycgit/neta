@@ -16,17 +16,15 @@
 package net.hasor.neta.handler;
 /**
  * Gets called if a Throwable was thrown.
- * @version : 2023-10-17
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-17
  * @see PipeDuplex
  * @see PipeHandler
- * */
+ */
 public interface PipeExceptionHolder {
     /**
      * clear the exception state and continue piple execution
-     *
      * <p>You can clear the exception flag with the {@link PipeExceptionHolder#clear()} method, and piple execution will continue normally</p>
-     *
      * <pre>
      *  ... -> onMessage -> onError -> onError(invoker clear) -> onMessage -> ...
      * </pre>

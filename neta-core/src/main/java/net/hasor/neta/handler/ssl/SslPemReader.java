@@ -33,11 +33,10 @@ import java.util.regex.Pattern;
 
 /**
  * Reads a PEM file and converts it into a list of DERs so that they are imported into a {@link KeyStore} easily.
- *
  * Netty's ByteBuf is replaced with cobble.bytebuf
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
  * @author netty
+ * @version : 2023-09-24
  */
 class SslPemReader {
     private static final Pattern CERT_HEADER = Pattern.compile("-+BEGIN\\s[^-\\r\\n]*CERTIFICATE[^-\\r\\n]*-+(?:\\s|\\r|\\n)+");

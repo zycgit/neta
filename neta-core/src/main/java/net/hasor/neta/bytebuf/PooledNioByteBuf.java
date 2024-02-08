@@ -20,8 +20,8 @@ import java.util.LinkedList;
 
 /**
  * 基于 NioChunk 池化的 ByteBuf 接口实现，提供了扩缩容零拷贝实现
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public class PooledNioByteBuf extends AbstractByteBuf {
     protected final LinkedList<NioChunk> buffers = new LinkedList<>();

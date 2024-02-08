@@ -23,8 +23,8 @@ import java.security.KeyStore;
 
 /**
  * SSL 配置
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class SslConfig extends PipeConfig {
     private SslMode                sslMode               = SslMode.Always;

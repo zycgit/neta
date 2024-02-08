@@ -16,8 +16,8 @@
 package net.hasor.neta.channel;
 /**
  * socket Overflow Exception.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class SoOverflowException extends RuntimeException {
     private static final long serialVersionUID = -5484897634319144535L;

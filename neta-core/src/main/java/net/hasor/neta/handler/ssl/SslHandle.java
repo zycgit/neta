@@ -33,8 +33,8 @@ import java.nio.ByteBuffer;
 
 /**
  * Handling the SSL handshake
- * @version : 2023-10-18
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-18
  */
 class SslHandle {
     private static final Logger             logger = Logger.getLogger(SslHandle.class);

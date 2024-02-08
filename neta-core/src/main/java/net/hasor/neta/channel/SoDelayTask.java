@@ -18,8 +18,8 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * delay task
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class SoDelayTask extends DefaultSoTask {
     private final int intervalMillis;

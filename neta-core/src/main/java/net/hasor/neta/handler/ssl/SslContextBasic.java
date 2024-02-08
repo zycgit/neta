@@ -35,8 +35,8 @@ import java.util.Objects;
 
 /**
  * An implementation of the {@link SslContext} interface that provides SSL handshake support
- * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
  */
 public abstract class SslContextBasic implements SslContext {
     private static final Logger        logger = Logger.getLogger(SslContextBasic.class);

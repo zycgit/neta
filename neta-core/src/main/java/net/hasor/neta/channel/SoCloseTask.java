@@ -18,8 +18,8 @@ import net.hasor.cobble.logging.Logger;
 
 /**
  * closing the channel.
- * @version : 2023-10-09
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-09
  */
 class SoCloseTask extends DefaultSoTask {
     private static final Logger        logger = Logger.getLogger(SoCloseTask.class);

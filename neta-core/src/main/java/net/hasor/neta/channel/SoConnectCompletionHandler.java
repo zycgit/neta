@@ -22,8 +22,8 @@ import java.nio.channels.CompletionHandler;
 
 /**
  * Client Connect Handler
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger             logger = Logger.getLogger(SoConnectCompletionHandler.class);

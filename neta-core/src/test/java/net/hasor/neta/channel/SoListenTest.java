@@ -52,6 +52,7 @@ public class SoListenTest extends AbstractSoTest {
         }
 
         server.shutdown();
+        client.close();
     }
 
     @Test

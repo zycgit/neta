@@ -18,8 +18,8 @@ import net.hasor.neta.handler.PipeDuplex;
 
 /**
  * A status for {@link PipeDuplex}
- * @version : 2023-10-18
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-18
  */
 public interface SslContext {
 

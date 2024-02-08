@@ -16,8 +16,8 @@
 package net.hasor.neta.handler.ssl;
 /**
  * SSL mode of working
- * @version : 2023-12-19
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-12-19
  */
 public enum SslMode {
     /**
@@ -26,7 +26,6 @@ public enum SslMode {
     Always,
     /**
      * first work in ssl mode, If ssl is closed, ssl will no longer be used.
-     *
      * ssl can be reactivated by {@link SslContext#openSSL()}
      */
     Once,

@@ -23,9 +23,9 @@ import java.nio.ByteBuffer;
 
 /**
  * Allows to free direct {@link ByteBuffer}s.
- * @version : 2022-11-01
  * @author netty, reference io.netty.util.internal.Cleaner、io.netty.util.internal.PlatformDependent0
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 public abstract class Cleaner {
     protected static final Logger logger = Logger.getLogger(Cleaner.class);

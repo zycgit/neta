@@ -25,8 +25,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * send Handler
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
     private static final Logger          logger = Logger.getLogger(SoSndCompletionHandler.class);

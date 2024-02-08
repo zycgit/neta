@@ -16,8 +16,8 @@
 package net.hasor.neta.channel;
 /**
  * closing the channel.
- * @version : 2023-10-09
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-09
  */
 public class SimpleTask extends DefaultSoTask {
     private final Runnable runnable;

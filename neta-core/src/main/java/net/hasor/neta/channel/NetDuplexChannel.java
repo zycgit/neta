@@ -30,9 +30,7 @@ public interface NetDuplexChannel<T> extends SoChannel<T> {
     /**
      * <p>When shutdownOutput is called remotely, an end of read flag was encountered, which usually means closing the channel.
      * But the remote still has the ability to receive data.</p>
-     *
      * <p>so use {@link #ignoreReadEofFlag()} method, keep the channel state and continue to send data</p>
-     *
      * <p>Once {@link #ignoreReadEofFlag()} is activated, the release of remote connections needs to be managed manually,
      * leading to {@link NetChannel} leakage if not released in time</p>
      */

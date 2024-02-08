@@ -38,8 +38,8 @@ import java.security.Provider;
 
 /**
  * this class copy form Netty io.netty.handler.ssl.BouncyCastlePemReader
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SslPemReaderByBouncyCastle {
     private static final String BC_PROVIDER  = "org.bouncycastle.jce.provider.BouncyCastleProvider";
@@ -95,10 +95,9 @@ class SslPemReaderByBouncyCastle {
 
     /**
      * Generates a new {@link PrivateKey}.
-     *
      * @param keyInputStream an input stream for a PKCS#1 or PKCS#8 private key in PEM format.
      * @param keyPassword the password of the {@code keyFile}.
-     *                    {@code null} if it's not password-protected.
+     * {@code null} if it's not password-protected.
      * @return generated {@link PrivateKey}.
      */
     public static PrivateKey getPrivateKey(InputStream keyInputStream, String keyPassword) {
@@ -121,10 +120,9 @@ class SslPemReaderByBouncyCastle {
 
     /**
      * Generates a new {@link PrivateKey}.
-     *
      * @param keyFile a PKCS#1 or PKCS#8 private key file in PEM format.
      * @param keyPassword the password of the {@code keyFile}.
-     *                    {@code null} if it's not password-protected.
+     * {@code null} if it's not password-protected.
      * @return generated {@link PrivateKey}.
      */
     public static PrivateKey getPrivateKey(File keyFile, String keyPassword) {

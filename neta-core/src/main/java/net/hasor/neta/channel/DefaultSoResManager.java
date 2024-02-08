@@ -25,8 +25,8 @@ import java.util.List;
 
 /**
  * SoResManager implements
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class DefaultSoResManager implements SoResManager, AutoCloseable {
     private final SoConfig         config;

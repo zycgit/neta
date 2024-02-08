@@ -18,18 +18,15 @@ import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * {@link PipeConfig} represents the amount of data stored on these endpoints
- *
  * <li>A {@link ByteBuf} endpoint indicating the number of bytes to store</li>
  * <li>The {@link PipeRcvQueue}/{@link PipeSndQueue} endpoint, which indicates the number of stored objects</li>
  * <li>default value is -1, when set to -1, It means infinite</li>
- *
- *  <p>
- *      A PipeConfig is used for only one protocol layer.
- *      An application may consist of multiple protocol layers stacked together, so Each protocol layer can be configured separately
- *  </p>
- *
- * @version : 2023-09-24
+ * <p>
+ * A PipeConfig is used for only one protocol layer.
+ * An application may consist of multiple protocol layers stacked together, so Each protocol layer can be configured separately
+ * </p>
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  * @see PipeDuplex
  */
 public class PipeConfig {

@@ -16,8 +16,8 @@
 package net.hasor.neta.handler;
 /**
  * A status for {@link PipeDuplex}
- * @version : 2023-10-18
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-18
  */
 public enum PipeStatus {
     /**
@@ -45,9 +45,7 @@ public enum PipeStatus {
 
     /**
      * restart when pipeline finished.
-     *
      * <p>If the pipeline is Interrupt, it will not be restarted</p>
-     *
      * <pre>
      * ╭────────────────────────────────────────────────╮
      * │  ┏━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━┓         ┏━┷━━━━━━━━━━━━┓
@@ -60,9 +58,7 @@ public enum PipeStatus {
 
     /**
      * restarted from the current node after pipeline finished.
-     *
      * <p>If the pipeline is Interrupt, it will not be restarted</p>
-     *
      * <pre>
      *                   ╭─────────────────────────────╮
      *  ┏━━━━━━━━━━━━━━┓ │  ┏━━━━━━━━━━━━━━┓         ┏━┷━━━━━━━━━━━━┓

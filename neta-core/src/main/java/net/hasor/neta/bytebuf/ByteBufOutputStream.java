@@ -26,7 +26,6 @@ import java.util.Objects;
  * This stream implements {@link DataOutput} for your convenience.
  * The endianness of the stream is not always big endian but depends on
  * the endianness of the underlying buffer.
- *
  * Implement copy from netty io.netty.buffer.ByteBufOutputStream,
  * The ByteBuf implementation is replaced with cobble.bytebuf
  * @see ByteBufInputStream

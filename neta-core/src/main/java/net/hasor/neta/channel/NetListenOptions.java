@@ -16,8 +16,8 @@
 package net.hasor.neta.channel;
 /**
  * Listener options.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class NetListenOptions {
     public static final NetListenOptions DEFAULT = new NetListenOptions();

@@ -37,7 +37,6 @@ public abstract class SimpleTrustManagerFactory extends TrustManagerFactory {
      * to delegate its callbacks back to {@link SimpleTrustManagerFactory}.  However, it is impossible to do so,
      * because {@link TrustManagerFactory} requires {@link TrustManagerFactorySpi} at construction time and
      * does not provide a way to access it later.
-     *
      * To work around this issue, we use an ugly hack which uses a {@link ThreadLocal}.
      */
     private static final ThreadLocal<SimpleTrustManagerFactorySpi> CURRENT_SPI = ThreadLocal.withInitial(SimpleTrustManagerFactorySpi::new);
@@ -47,7 +46,8 @@ public abstract class SimpleTrustManagerFactory extends TrustManagerFactory {
         this("");
     }
 
-    /** Creates a new instance.
+    /**
+     * Creates a new instance.
      * @param name the name of this {@link TrustManagerFactory}
      */
     protected SimpleTrustManagerFactory(String name) {

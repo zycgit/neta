@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AsynchronousSocketChannel wrap
- * @version : 2024-01-06
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2024-01-06
  */
 class SoAsyncChannel implements Closeable {
     private final AsynchronousSocketChannel channel;

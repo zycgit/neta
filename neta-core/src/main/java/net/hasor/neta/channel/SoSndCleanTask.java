@@ -20,8 +20,8 @@ import java.util.List;
 
 /**
  * clean task for snd.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoSndCleanTask extends DefaultSoTask {
     private static final Logger          logger = Logger.getLogger(SoSndCleanTask.class);

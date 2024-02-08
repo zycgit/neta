@@ -21,8 +21,8 @@ import java.util.List;
 
 /**
  * Select a protocol that is supported in the TLS NPN/ALPN extension.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public interface SslAppProtocolSelector {
     String selector(SoChannel<?> channel, SSLEngine sslEngine, List<String> protocols);

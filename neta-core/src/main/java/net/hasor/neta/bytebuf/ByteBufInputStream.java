@@ -23,7 +23,6 @@ import java.util.Objects;
  * This stream implements {@link DataInput} for your convenience.
  * The endianness of the stream is not always big endian but depends on
  * the endianness of the underlying buffer.
- *
  * Implement copy from netty io.netty.buffer.ByteBufInputStream,
  * The ByteBuf implementation is replaced with cobble.bytebuf
  * @see ByteBufOutputStream
@@ -52,7 +51,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
      * {@code writerIndex}.
      * @param buffer The buffer which provides the content for this {@link InputStream}.
      * @param releaseOnClose {@code true} means that when {@link #close()} is called then {@link ByteBuf#free()} will
-     *                       be called on {@code buffer}.
+     * be called on {@code buffer}.
      */
     public ByteBufInputStream(ByteBuf buffer, boolean releaseOnClose) {
         Objects.requireNonNull(buffer, "buffer");

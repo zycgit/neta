@@ -18,8 +18,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Application protocol stack
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 @FunctionalInterface
 public interface PipeInitializer {

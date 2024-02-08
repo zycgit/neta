@@ -18,14 +18,14 @@ import java.net.SocketAddress;
 
 /**
  * manage all network NetChannel and NetListen
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public interface SoContext {
     /** return global config. */
     SoConfig getConfig();
 
-    /** default {@link SoResManager}  */
+    /** default {@link SoResManager} */
     SoResManager getResourceManager();
 
     /** get remote address of the channel */

@@ -18,8 +18,8 @@ import java.nio.ByteBuffer;
 
 /**
  * ByteBuffer 的一个包装类。
- * @version : 2022-11-01
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
  */
 class NioChunk {
     private final ByteBuffer byteBuffer;

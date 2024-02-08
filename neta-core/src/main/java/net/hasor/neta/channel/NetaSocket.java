@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * AIO TCP/IP,UDP/IP
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class NetaSocket extends AbstractChannelManager {
     private static final Logger                   logger = Logger.getLogger(NetaSocket.class);
@@ -43,7 +43,6 @@ public class NetaSocket extends AbstractChannelManager {
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     *
      * @param listenPort local port for listen
      * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets
@@ -54,7 +53,6 @@ public class NetaSocket extends AbstractChannelManager {
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     *
      * @param listenAddr local address for listen
      * @param listenPort local port for listen
      * @param pipeline Application layer network protocol
@@ -66,7 +64,6 @@ public class NetaSocket extends AbstractChannelManager {
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     *
      * @param listen local address:port for listen
      * @param pipeline Application layer network protocol
      * @return A listener channel for accept incoming sockets

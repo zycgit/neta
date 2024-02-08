@@ -22,21 +22,19 @@ import java.util.Objects;
 
 /**
  * Application stack builder
- * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
  */
 public interface PipeBuilder<RCV_UP, SND_DOWN> {
 
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
-     *
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param duplexer target duplexer
      * @throws NullPointerException if the specified handler is {@code null}
      */
@@ -46,14 +44,12 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
 
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
-     *
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name duplexer name
      * @param duplexer target duplexer
      * @throws NullPointerException if the specified handler is {@code null}
@@ -64,14 +60,12 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
 
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
-     *
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name duplexer name
      * @param pipeConfig duplexer config
      * @param duplexer target duplexer
@@ -87,7 +81,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param decoder RCV_UP to RCV_DOWN
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
@@ -113,7 +106,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param decoder RCV_UP to RCV_DOWN
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
@@ -130,7 +122,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name pipeLayer name
      * @param pipeConfig pipeLayer config
      * @param decoder RCV_UP to RCV_DOWN
@@ -146,7 +137,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN equal to SND_UP</li>
      * </ul>
-     *
      * @param decoder RCV_UP to RCV_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
@@ -165,7 +155,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name pipeLayer name
      * @param decoder RCV_UP to RCV_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
@@ -180,7 +169,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name pipeLayer name
      * @param pipeConfig pipeLayer config
      * @param decoder RCV_UP to RCV_DOWN
@@ -195,7 +183,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
@@ -214,7 +201,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name pipeLayer name
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
@@ -229,7 +215,6 @@ public interface PipeBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name pipeLayer name
      * @param pipeConfig pipeLayer config
      * @param encoder SND_UP to SND_DOWN

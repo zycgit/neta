@@ -16,8 +16,8 @@
 package net.hasor.neta.handler;
 /**
  * Get protocol stack statistics
- * @version : 2023-12-18
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-12-18
  */
 public interface PipeStatistical {
 

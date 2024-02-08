@@ -17,9 +17,9 @@ package net.hasor.neta.channel;
 import java.net.SocketException;
 
 /**
- *  When {@link SoChannel} is closed.
- * @version : 2023-09-24
+ * When {@link SoChannel} is closed.
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class SoCloseException extends SocketException {
 

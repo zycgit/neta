@@ -23,8 +23,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * AIO Socket basic
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public abstract class AbstractChannelManager {
     private static final Logger          logger = Logger.getLogger(AbstractChannelManager.class);

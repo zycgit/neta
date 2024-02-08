@@ -22,8 +22,8 @@ import java.net.StandardSocketOptions;
 
 /**
  * Socket Config
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoOptions {
     private static final Logger                logger       = Logger.getLogger(SoOptions.class);

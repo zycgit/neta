@@ -27,8 +27,8 @@ import java.nio.ByteBuffer;
 
 /**
  * Encapsulate SSLEngine.
- * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
  */
 class SslEngineWrap {
     private static final Logger                            logger = Logger.getLogger(SslHandle.class);

@@ -30,8 +30,8 @@ import java.util.function.Consumer;
 
 /**
  * SoContext implements
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);

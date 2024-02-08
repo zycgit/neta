@@ -29,8 +29,8 @@ import java.util.concurrent.locks.LockSupport;
 
 /**
  * 内部使用的低延迟任务分发执行器
- * @version : 2023-10-09
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-09
  */
 class SoEventExecutor implements Closeable {
     private static final Logger               logger = Logger.getLogger(SoEventExecutor.class);

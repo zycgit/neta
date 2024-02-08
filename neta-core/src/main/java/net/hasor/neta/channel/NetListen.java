@@ -25,8 +25,8 @@ import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A listener channel for accept incoming sockets and binding them to the protocol stack
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class NetListen extends AttributeChannel<NetListen> {
     private final    long                            channelID;
@@ -79,7 +79,7 @@ public class NetListen extends AttributeChannel<NetListen> {
         return this.lastActiveTime;
     }
 
-    /** The last time for accepted channel.*/
+    /** The last time for accepted channel. */
     public long getLastAcceptTime() {
         return this.lastAcceptTime;
     }
@@ -121,7 +121,7 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     /**
      * Search for NetChannel by id,
-     *  return null if NetChannel is not from this NetListen
+     * return null if NetChannel is not from this NetListen
      */
     public NetChannel findChannel(long channelID) {
         SoChannel<?> channel = this.context.findChannel(channelID);
@@ -139,7 +139,6 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     /**
      * Returns the listener current suspend status.
-     *
      * <p>all new accept socket will be closed when suspend = true.</p>
      */
     public boolean isSuspend() {
@@ -148,7 +147,6 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     /**
      * set suspend is true
-     *
      * <p>all new accept socket will be closed when suspend = true.</p>
      */
     public NetListen suspend() {
@@ -158,7 +156,6 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     /**
      * set suspend is false
-     *
      * <p>all new accept socket will be closed when suspend = true.</p>
      */
     public NetListen resume() {

@@ -32,9 +32,9 @@ import java.util.*;
 /**
  * An {@link SslContext} which uses JDK's SSL/TLS implementation.
  * refer to `io.netty.handler.ssl.JdkSslContext` implementation
- * @version : 2023-10-18
  * @author Netty
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-18
  */
 public class JdkSslContext extends SslContextBasic {
     private static final   Logger      logger   = Logger.getLogger(JdkSslContext.class);

@@ -15,9 +15,9 @@
  */
 package net.hasor.neta.channel;
 /**
- *  When {@link NetChannel#shutdownOutput()} called.
- * @version : 2023-09-24
+ * When {@link NetChannel#shutdownOutput()} called.
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class SoOutputCloseException extends SoCloseException {
 

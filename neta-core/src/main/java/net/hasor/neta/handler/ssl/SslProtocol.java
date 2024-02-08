@@ -16,8 +16,8 @@
 package net.hasor.neta.handler.ssl;
 /**
  * Supported SSL protocols
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public interface SslProtocol {
     /**

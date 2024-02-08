@@ -16,8 +16,8 @@
 package net.hasor.neta.channel;
 /**
  * Handler status
- * @version : 2024-01-07
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2024-01-07
  */
 public enum SoHandlerStatus {
     /** Waiting to be processed or in progress */

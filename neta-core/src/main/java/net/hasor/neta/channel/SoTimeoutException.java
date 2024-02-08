@@ -18,8 +18,8 @@ import java.net.SocketException;
 
 /**
  * Thrown to indicate that there is an error creating or accessing a Socket.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class SoTimeoutException extends SocketException {
 

@@ -20,8 +20,8 @@ import java.net.SocketAddress;
 
 /**
  * Base class for {@link SoChannel} implementations that are used in an embedded fashion.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class EmbeddedSocketAddress extends SocketAddress {
     @Override

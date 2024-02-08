@@ -45,8 +45,8 @@ import java.util.Set;
 
 /**
  * inner utils.
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public class SslUtils {
     private static final Logger   logger               = Logger.getLogger(SslUtils.class);
@@ -146,7 +146,6 @@ public class SslUtils {
 
     /**
      * Generates a new {@link KeyStore}.
-     *
      * @param certChain a X.509 certificate chain
      * @param key a PKCS#8 private key
      * @param passwordChars the password of the {@code keyFile}. {@code null} if it's not password-protected.
@@ -167,7 +166,6 @@ public class SslUtils {
 
     /**
      * Generates a new {@link KeyStore}.
-     *
      * @param jksInputStream a JKS file InputStream
      * @param passwordChars the password of the {@code keyFile}. {@code null} if it's not password-protected.
      * @return generated {@link KeyStore}.

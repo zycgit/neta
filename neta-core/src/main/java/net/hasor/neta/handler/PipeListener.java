@@ -18,8 +18,8 @@ import net.hasor.neta.channel.SoChannel;
 
 /**
  * The message receiving listener at the tail of the pipe.
- * @version : 2023-10-20
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
  */
 interface PipeListener {
     void onReceive(SoChannel<?> channel, Object data);

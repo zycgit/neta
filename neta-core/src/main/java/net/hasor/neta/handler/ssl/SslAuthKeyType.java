@@ -16,8 +16,8 @@
 package net.hasor.neta.handler.ssl;
 /**
  * Certificate File Type
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public enum SslAuthKeyType {
     JKS,

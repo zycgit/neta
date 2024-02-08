@@ -20,8 +20,8 @@ import java.net.SocketAddress;
 
 /**
  * Channel
- * @version : 2023-09-24
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
 public interface SoChannel<T> {
     /** channel id */
@@ -53,10 +53,8 @@ public interface SoChannel<T> {
 
     /**
      * close this channel.
-     *
      * <li>For the Listen channel, listening is turned off.</li>
      * <li>For the Socket channel, will be closed after all data are written.</li>
-     *
      * <p>The {@link #closeNow()} and {@link #close()} methods are valid if they are called first</p>
      */
     Future<T> close();
