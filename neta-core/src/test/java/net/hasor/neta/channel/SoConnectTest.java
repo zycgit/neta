@@ -46,7 +46,7 @@ public class SoConnectTest extends AbstractSoTest {
 
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer();
-        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
+        NetManager neta = new NetManager(crateConfig(2, 32));
         Future<NetChannel> future = neta.connect(safePort, new PipeInitializer() {
             @Override
             public Pipeline<ByteBuf> config(PipeContext ctx) {
@@ -80,7 +80,7 @@ public class SoConnectTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
 
-        NetaSocket neta = new NetaSocket(crateConfig(2, 32));
+        NetManager neta = new NetManager(crateConfig(2, 32));
         Future<NetChannel> future = neta.connect(safePort, new PipeInitializer() {
             @Override
             public Pipeline<ByteBuf> config(PipeContext ctx) {

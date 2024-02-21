@@ -45,9 +45,6 @@ public final class PipeHelper {
         return new PipeHelper().nextTo(terminalConfig);
     }
 
-    //
-    //
-
     private <RCV_UP, SND_DOWN> PipeBuilder<RCV_UP, SND_DOWN> nextTo(PipeConfig pipeConfig) {
         return new PipeStackBuilderImpl<>(pipeConfig, new ArrayList<>());
     }

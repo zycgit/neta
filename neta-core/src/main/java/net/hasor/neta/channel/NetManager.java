@@ -33,11 +33,11 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetaSocket extends AbstractChannelManager {
-    private static final Logger                   logger = Logger.getLogger(NetaSocket.class);
+public class NetManager extends AbstractNetManager {
+    private static final Logger                   logger = Logger.getLogger(NetManager.class);
     protected            AsynchronousChannelGroup channelGroup;
 
-    public NetaSocket(SoConfig config) {
+    public NetManager(SoConfig config) {
         super(config);
     }
 

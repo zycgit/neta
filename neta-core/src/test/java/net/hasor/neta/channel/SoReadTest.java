@@ -41,7 +41,7 @@ public class SoReadTest extends AbstractSoTest {
         AtomicInteger cnt = new AtomicInteger();
 
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 32));
         NetListen listen = server.listen("127.0.0.1", safePort, new PipeInitializer() {
             @Override
             public Pipeline<ByteBuf> config(PipeContext ctx) {
@@ -84,7 +84,7 @@ public class SoReadTest extends AbstractSoTest {
         AtomicInteger cnt = new AtomicInteger();
 
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 32));
         NetListen listen = server.listen("127.0.0.1", safePort, new PipeInitializer() {
             @Override
             public Pipeline<ByteBuf> config(PipeContext ctx) {
@@ -124,7 +124,7 @@ public class SoReadTest extends AbstractSoTest {
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setSoRcvBuf(32);
         soConfig.setNetlog(false);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, new PipeInitializer() {
             @Override
@@ -195,7 +195,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(new SoConfig());
+        NetManager server = new NetManager(new SoConfig());
         NetListen listen = server.listen("127.0.0.1", safePort, context -> builder.build());
 
         // client: send a lot of line
@@ -239,7 +239,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // client send data
@@ -282,7 +282,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(new SoConfig());
+        NetManager server = new NetManager(new SoConfig());
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
@@ -323,7 +323,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = new SoConfig();
         soConfig.setSoReadTimeoutMs(100);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
@@ -362,7 +362,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(new SoConfig());
+        NetManager server = new NetManager(new SoConfig());
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
@@ -408,7 +408,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = new SoConfig();
         soConfig.setSoReadTimeoutMs(100);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // connect to server -> send data -> close
@@ -459,7 +459,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -506,7 +506,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 

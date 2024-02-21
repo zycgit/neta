@@ -96,7 +96,7 @@ public enum PipeStatus {
      * Interrupt pipeline event propagation, and Skip all the following {@link PipeDuplex}
      * <pre>
      *     ┏━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-     * ... ┃ PipeNode (0) ┃ > ┆ PipeNode (1) ┆ > ┆ PipeNode (2) ┆ > ...
+     * ... ┃ PipeNode (0) ┃ > ┆ PipeNode (1) ┆ > ┆ PipeNode (2) ┆ > end
      *     ┗━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
      *           Exit               Skip               Skip
      * </pre>

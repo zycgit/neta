@@ -37,7 +37,7 @@ class SoContextImpl implements SoContext {
     private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
     private final        AtomicLong                 nextID = new AtomicLong(0);
     private final        SoConfig                   config;
-    private final        NetaSocket                 cobble;
+    private final        NetManager                 manager;
     private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
     //
@@ -53,8 +53,8 @@ class SoContextImpl implements SoContext {
     private final        Queue<NetChannel>          channelList;
     private final        Queue<NetListen>           listenList;
 
-    public SoContextImpl(SoConfig config, NetaSocket cobble) {
-        this.cobble = cobble;
+    public SoContextImpl(SoConfig config, NetManager manager) {
+        this.manager = manager;
         this.config = Objects.requireNonNull(config);
         this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
 
@@ -188,15 +188,15 @@ class SoContextImpl implements SoContext {
     }
 
     @Override
-    public NetaSocket getNeta() {
-        return this.cobble;
+    public NetManager getNetManager() {
+        return this.manager;
     }
 
     void foreachListen(Consumer<NetListen> consumer) {
         this.listenList.forEach(consumer);
     }
 
-    /** close all socket, The method {@link #openChannel(SoChannel)} and {@link #closeAll(boolean)} are mutually exclusive */
+    /** close all socket, The method {@link #openChannel(SoChannel, SocketAddress)} and {@link #closeAll(boolean)} are mutually exclusive */
     public void closeAll(boolean now) {
         // mark close is true.
         try {

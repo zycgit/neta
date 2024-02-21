@@ -23,13 +23,13 @@ import net.hasor.neta.channel.PipeContext;
  * SND_DOWN is the temporary storage used to receive the output of the pipeline.
  * When there are multiple PipeLayer layers, the endpoints are linked, e.g, first {@link PipeDuplex} RCV_DOWN -> next {@link PipeDuplex} RCV_UP
  * <pre>
- *         ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓    ┏━━━━━━━━━━━━━━━━━━━━━━━━━┓
- * DATA -> ┃ RCV_UP         RCV_DOWN ┃ -> ┃ RCV_UP         RCV_DOWN ┃  -> ...
- *         ┃                         ┃    ┃                         ┃
- *         ┃      PipeLayer (1)      ┃    ┃      PipeLayer (2)      ┃
- *         ┃                         ┃    ┃                         ┃
- *  ... <- ┃ SND_DOWN         SND_UP ┃ <- ┃ SND_DOWN         SND_UP ┃  <- DATA
- *         ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━━━━━━━━━━━┛
+ *         ┏━━━━━━━━━━━━━━━━━━━━━━━━┓    ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+ * DATA -> ┃ RCV_UP        RCV_DOWN ┃ -> ┃ RCV_UP        RCV_DOWN ┃  -> ...
+ *         ┃                        ┃    ┃                        ┃
+ *         ┃      PipeNode (1)      ┃    ┃      PipeNode (2)      ┃
+ *         ┃                        ┃    ┃                        ┃
+ *  ... <- ┃ SND_DOWN        SND_UP ┃ <- ┃ SND_DOWN        SND_UP ┃  <- DATA
+ *         ┗━━━━━━━━━━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
  * </pre>
  * <p>
  * This design means that during any rcv/snd, upstream and downstream of the pipeline can be operated.

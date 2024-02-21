@@ -28,6 +28,7 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
+@Deprecated
 public class DefaultSoResManager implements SoResManager, AutoCloseable {
     private final SoConfig         config;
     private final ByteBufAllocator bufAllocator;

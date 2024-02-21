@@ -21,6 +21,7 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
+@Deprecated
 class NioChunk {
     private final ByteBuffer byteBuffer;
 

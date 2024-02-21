@@ -19,6 +19,7 @@ package net.hasor.neta.bytebuf;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
+@Deprecated
 interface NioChunkAllocator {
     NioChunk allocateBuffer(int capacity);
 

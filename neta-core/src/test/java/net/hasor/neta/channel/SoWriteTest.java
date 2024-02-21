@@ -37,7 +37,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void serverSayHelloTest_01() throws Exception {
         // server say Hello
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 32));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
         Socket client = new Socket("127.0.0.1", safePort);
 
@@ -62,7 +62,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void serverSayHelloTest_02() throws Exception {
         // server say Hello
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 32));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
             @Override
             public void onActive(PipeContext context) throws Throwable {
@@ -95,7 +95,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void serverEchoTest() throws Exception {
         // server start
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(new SoConfig());
+        NetManager server = new NetManager(new SoConfig());
         NetListen listen = server.listen("127.0.0.1", safePort, new PipeInitializer() {
             @Override
             public Pipeline<ByteBuf> config(PipeContext ctx) {
@@ -155,7 +155,7 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(8, 30);
         soConfig.setSoWriteTimeoutMs(1);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -200,7 +200,7 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(8, 30);
         soConfig.setSoWriteTimeoutMs(1);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -244,7 +244,7 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
-        NetaSocket server = new NetaSocket(soConfig);
+        NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -268,7 +268,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void sendWaitFinishTest_01() throws Exception {
         // server say Hello
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 32));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
         Socket client = new Socket("127.0.0.1", safePort);
 

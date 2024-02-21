@@ -15,8 +15,7 @@
  */
 package net.hasor.neta.channel;
 import java.io.IOException;
-import java.nio.channels.AsynchronousServerSocketChannel;
-import java.nio.channels.AsynchronousSocketChannel;
+import java.nio.channels.NetworkChannel;
 
 /**
  * config Socket
@@ -24,7 +23,7 @@ import java.nio.channels.AsynchronousSocketChannel;
  * @version : 2023-09-24
  */
 class SoConfigUtils {
-    public static void configListen(SoConfig config, AsynchronousServerSocketChannel channel) throws IOException {
+    public static void configListen(SoConfig config, NetworkChannel channel) throws IOException {
         Integer soRcvBuf = config.getSoRcvBuf();
         Integer soSndBuf = config.getSoSndBuf();
         if (soRcvBuf != null) {
@@ -36,7 +35,7 @@ class SoConfigUtils {
         channel.setOption(SoOptions.SO_REUSEADDR, true);
     }
 
-    public static void configSocket(SoConfig config, AsynchronousSocketChannel channel) throws IOException {
+    public static void configSocket(SoConfig config, NetworkChannel channel) throws IOException {
         Integer soRcvBuf = config.getSoRcvBuf();
         Integer soSndBuf = config.getSoSndBuf();
         if (soRcvBuf != null) {

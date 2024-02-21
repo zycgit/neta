@@ -61,7 +61,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // start client and snd data
@@ -116,7 +116,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // start client
@@ -176,7 +176,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // start client
@@ -231,7 +231,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // start client
@@ -265,7 +265,7 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_01() throws Exception {
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
 
         // connect to server
@@ -286,7 +286,7 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_02() throws Exception {
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
 
         // connect to server
@@ -326,7 +326,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -367,7 +367,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -414,7 +414,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 8192));
+        NetManager server = new NetManager(crateConfig(2, 8192));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -466,7 +466,7 @@ public class SoShutdownTest extends AbstractSoTest {
         }).build();
 
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         SoContext context = server.getContext();
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
@@ -493,7 +493,7 @@ public class SoShutdownTest extends AbstractSoTest {
     public void sndRemoteShutdownInputTest_01() throws Exception {
         // start server
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(8, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
 
         // connect to server -> send data -> close
@@ -540,7 +540,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        NetaSocket server = new NetaSocket(crateConfig(2, 30));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // client reading...

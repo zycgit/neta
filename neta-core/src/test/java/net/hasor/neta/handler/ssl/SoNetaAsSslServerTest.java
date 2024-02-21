@@ -16,7 +16,7 @@
 package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
-import net.hasor.neta.channel.NetaSocket;
+import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.SoConfig;
 import org.junit.Test;
 
@@ -41,7 +41,7 @@ public class SoNetaAsSslServerTest extends AbstractSslTest {
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(false);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
-        NetaSocket neta = new NetaSocket(soConf);
+        NetManager neta = new NetManager(soConf);
 
         List<String> rcvMessage = new ArrayList<>();
         neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(rcvMessage)));
