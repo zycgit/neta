@@ -210,41 +210,6 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void writeInt16LE(short n) {
-        this.byteBuf.writeInt16LE(n);
-    }
-
-    @Override
-    public void writeInt24LE(int n) {
-        this.byteBuf.writeInt24LE(n);
-    }
-
-    @Override
-    public void writeInt32LE(int n) {
-        this.byteBuf.writeInt32LE(n);
-    }
-
-    @Override
-    public void writeUInt32LE(long n) {
-        this.byteBuf.writeUInt32LE(n);
-    }
-
-    @Override
-    public void writeInt64LE(long n) {
-        this.byteBuf.writeInt64LE(n);
-    }
-
-    @Override
-    public void writeFloat32LE(float n) {
-        this.byteBuf.writeFloat32LE(n);
-    }
-
-    @Override
-    public void writeFloat64LE(double n) {
-        this.byteBuf.writeFloat64LE(n);
-    }
-
-    @Override
     public int write(ByteBuffer src) {
         return this.byteBuf.write(src);
     }
@@ -305,36 +270,6 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void setInt16LE(int offset, short n) {
-        this.byteBuf.setInt16LE(offset, n);
-    }
-
-    @Override
-    public void setInt24LE(int offset, int n) {
-        this.byteBuf.setInt24LE(offset, n);
-    }
-
-    @Override
-    public void setInt32LE(int offset, int n) {
-        this.byteBuf.setInt32LE(offset, n);
-    }
-
-    @Override
-    public void setInt64LE(int offset, long n) {
-        this.byteBuf.setInt64LE(offset, n);
-    }
-
-    @Override
-    public void setFloat32LE(int offset, float n) {
-        this.byteBuf.setFloat32LE(offset, n);
-    }
-
-    @Override
-    public void setFloat64LE(int offset, double n) {
-        this.byteBuf.setFloat64LE(offset, n);
-    }
-
-    @Override
     public int setString(int offset, String string, Charset charset) {
         return this.byteBuf.setString(offset, string, charset);
     }
@@ -382,36 +317,6 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public double readFloat64() {
         return this.byteBuf.readFloat64();
-    }
-
-    @Override
-    public short readInt16LE() {
-        return this.byteBuf.readInt16LE();
-    }
-
-    @Override
-    public int readInt24LE() {
-        return this.byteBuf.readInt24LE();
-    }
-
-    @Override
-    public int readInt32LE() {
-        return this.byteBuf.readInt32LE();
-    }
-
-    @Override
-    public long readInt64LE() {
-        return this.byteBuf.readInt64LE();
-    }
-
-    @Override
-    public float readFloat32LE() {
-        return this.byteBuf.readFloat32LE();
-    }
-
-    @Override
-    public double readFloat64LE() {
-        return this.byteBuf.readFloat64LE();
     }
 
     @Override
@@ -485,36 +390,6 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public short getInt16LE(int offset) {
-        return this.byteBuf.getInt16LE(offset);
-    }
-
-    @Override
-    public int getInt24LE(int offset) {
-        return this.byteBuf.getInt24LE(offset);
-    }
-
-    @Override
-    public int getInt32LE(int offset) {
-        return this.byteBuf.getInt32LE(offset);
-    }
-
-    @Override
-    public long getInt64LE(int offset) {
-        return this.byteBuf.getInt64LE(offset);
-    }
-
-    @Override
-    public float getFloat32LE(int offset) {
-        return this.byteBuf.getFloat32LE(offset);
-    }
-
-    @Override
-    public double getFloat64LE(int offset) {
-        return this.byteBuf.getFloat64LE(offset);
-    }
-
-    @Override
     public String getString(int offset, int len, Charset charset) {
         return this.byteBuf.getString(offset, len, charset);
     }
@@ -540,21 +415,6 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int readUInt16LE() {
-        return this.byteBuf.readUInt16LE();
-    }
-
-    @Override
-    public int readUInt24LE() {
-        return this.byteBuf.readUInt24LE();
-    }
-
-    @Override
-    public long readUInt32LE() {
-        return this.byteBuf.readUInt32LE();
-    }
-
-    @Override
     public short getUInt8(int offset) {
         return this.byteBuf.getUInt8(offset);
     }
@@ -572,21 +432,6 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public long getUInt32(int offset) {
         return this.byteBuf.getUInt32(offset);
-    }
-
-    @Override
-    public int getUInt16LE(int offset) {
-        return this.byteBuf.getUInt16LE(offset);
-    }
-
-    @Override
-    public int getUInt24LE(int offset) {
-        return this.byteBuf.getUInt24LE(offset);
-    }
-
-    @Override
-    public long getUInt32LE(int offset) {
-        return this.byteBuf.getUInt32LE(offset);
     }
 
     @Override

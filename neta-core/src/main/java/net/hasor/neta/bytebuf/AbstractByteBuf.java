@@ -261,28 +261,13 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public void writeInt16LE(short n) {
-        encodeInt16(this, nextWritable(2), n, false);
+    public void writeFloat32(float n) {
+        this.writeInt32(Float.floatToRawIntBits(n));
     }
 
     @Override
-    public void writeInt24LE(int n) {
-        encodeInt24(this, nextWritable(3), n, false);
-    }
-
-    @Override
-    public void writeInt32LE(int n) {
-        encodeInt32(this, nextWritable(4), n, false);
-    }
-
-    @Override
-    public void writeUInt32LE(long n) {
-        encodeInt32(this, nextWritable(4), n, false);
-    }
-
-    @Override
-    public void writeInt64LE(long n) {
-        encodeInt64(this, nextWritable(8), n, false);
+    public void writeFloat64(double n) {
+        this.writeInt64(Double.doubleToRawLongBits(n));
     }
 
     @Override
@@ -321,23 +306,13 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public void setInt16LE(int offset, short n) {
-        encodeInt16(this, offsetWritable(offset, 2), n, false);
+    public void setFloat32(int offset, float n) {
+        this.setInt32(offset, Float.floatToRawIntBits(n));
     }
 
     @Override
-    public void setInt24LE(int offset, int n) {
-        encodeInt24(this, offsetWritable(offset, 3), n, false);
-    }
-
-    @Override
-    public void setInt32LE(int offset, int n) {
-        encodeInt32(this, offsetWritable(offset, 4), n, false);
-    }
-
-    @Override
-    public void setInt64LE(int offset, long n) {
-        encodeInt64(this, offsetWritable(offset, 8), n, false);
+    public void setFloat64(int offset, double n) {
+        this.setInt64(offset, Double.doubleToRawLongBits(n));
     }
 
     @Override
@@ -372,23 +347,13 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public short readInt16LE() {
-        return dencodeInt16(this, nextReadable(2), false);
+    public float readFloat32() {
+        return Float.intBitsToFloat(readInt32());
     }
 
     @Override
-    public int readInt24LE() {
-        return dencodeInt24(this, nextReadable(3), false);
-    }
-
-    @Override
-    public int readInt32LE() {
-        return dencodeInt32(this, nextReadable(4), false);
-    }
-
-    @Override
-    public long readInt64LE() {
-        return dencodeInt64(this, nextReadable(8), false);
+    public double readFloat64() {
+        return Double.longBitsToDouble(readInt64());
     }
 
     @Override
@@ -433,23 +398,13 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public short getInt16LE(int offset) {
-        return dencodeInt16(this, checkReadable(offset, 2), false);
+    public float getFloat32(int offset) {
+        return Float.intBitsToFloat(getInt32(offset));
     }
 
     @Override
-    public int getInt24LE(int offset) {
-        return dencodeInt24(this, checkReadable(offset, 3), false);
-    }
-
-    @Override
-    public int getInt32LE(int offset) {
-        return dencodeInt32(this, checkReadable(offset, 4), false);
-    }
-
-    @Override
-    public long getInt64LE(int offset) {
-        return dencodeInt64(this, checkReadable(offset, 8), false);
+    public double getFloat64(int offset) {
+        return Double.longBitsToDouble(getInt64(offset));
     }
 
     @Override
@@ -473,21 +428,6 @@ public abstract class AbstractByteBuf implements ByteBuf {
     }
 
     @Override
-    public int readUInt16LE() {
-        return dencodeUInt16(this, nextReadable(2), false);
-    }
-
-    @Override
-    public int readUInt24LE() {
-        return dencodeUInt24(this, nextReadable(3), false);
-    }
-
-    @Override
-    public long readUInt32LE() {
-        return dencodeUInt32(this, nextReadable(4), false);
-    }
-
-    @Override
     public short getUInt8(int offset) {
         return dencodeUInt8(this, checkReadable(offset, 1));
     }
@@ -505,21 +445,6 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public long getUInt32(int offset) {
         return dencodeUInt32(this, checkReadable(offset, 4), isBig());
-    }
-
-    @Override
-    public int getUInt16LE(int offset) {
-        return dencodeUInt16(this, checkReadable(offset, 2), false);
-    }
-
-    @Override
-    public int getUInt24LE(int offset) {
-        return dencodeUInt24(this, checkReadable(offset, 3), false);
-    }
-
-    @Override
-    public long getUInt32LE(int offset) {
-        return dencodeUInt32(this, checkReadable(offset, 4), false);
     }
 
     @Override
