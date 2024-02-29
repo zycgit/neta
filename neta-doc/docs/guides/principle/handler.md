@@ -71,3 +71,13 @@ Pipeline 的组成可以完全由双工器组成也和常规的 Handler 联合�
 通过下面这张图可以充分理解双工器端点之间的关系
 
 ![](../../../static/docs/duplex-endpoints.png)
+
+无论使用的是单工器还是双工器，它们都遵循相同的生命周期：
+
+![](../../../static/docs/handler-lifecycle.png)
+
+- onInit：每个 Socket 链接在建立之初都会触发，此时 Channel 刚刚被创建出来链接建立还在进行中并不一定可以用来发送和接收数据。
+- onActive：当 Channel 可用时触发，在此阶段可以向远程机器发送数据但不能接收数据。如果想构建一个单向只能发送数据的 Channel，这里将会是最后一次安全的机会。
+- onMessage：用于处理接收或发送的网络数据，一般来说就是编写编码器和解码器的地方。
+- onError：当 onMessage 发生错误后会触发它，并且 Pipeline 的当前状态会被设置成异常。如果当前 Handler 没有清除异常标记，在下一个 Handler 执行时候会自动跳过 onMessage 进入 onError 继续传递异常。直到通过 PipeExceptionHolder 清除异常标记后才会回归正常。
+- onClose：Channel 在被正式 close 之前触发。在这个阶段链接被关闭已经无法挽回，不应该做任何发送数据的动作。正确的用法是作为清理程序。
