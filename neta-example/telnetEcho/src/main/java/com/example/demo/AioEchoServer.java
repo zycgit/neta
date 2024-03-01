@@ -24,9 +24,8 @@ import net.hasor.neta.handler.codec.string.StringPipeLayer;
 import java.io.IOException;
 
 /**
- *
- * @version : 2014年7月11日
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2014年7月11日
  */
 public class AioEchoServer {
     public static void main(String[] args) throws IOException {

@@ -16,7 +16,7 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.bytebuf.ByteBufUtil;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.handler.EmbeddedChannel;
 import net.hasor.neta.handler.EmbeddedInitializer;
 import net.hasor.neta.handler.EmbeddedSoContext;
@@ -44,7 +44,7 @@ public class LineBasedFrameHandlerTest {
         channel.receive(ByteBufAllocator.DEFAULT.wrap("\r\n".getBytes()));
 
         ByteBuf rcvDown = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtil.toBytes(rcvDown)).equals("abc\r\n");
+        assert new String(ByteBufUtils.toBytes(rcvDown)).equals("abc\r\n");
     }
 
     @Test
@@ -60,7 +60,7 @@ public class LineBasedFrameHandlerTest {
         channel.receive(ByteBufAllocator.DEFAULT.wrap("abc\r\n123".getBytes()));
 
         ByteBuf rcvDown = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtil.toBytes(rcvDown)).equals("abc\r\n");
+        assert new String(ByteBufUtils.toBytes(rcvDown)).equals("abc\r\n");
     }
 
     @Test
@@ -76,8 +76,8 @@ public class LineBasedFrameHandlerTest {
         channel.receive(ByteBufAllocator.DEFAULT.wrap("\r\n".getBytes()));
 
         ByteBuf dat1 = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtil.toBytes(dat1)).equals("abc\r\n");
+        assert new String(ByteBufUtils.toBytes(dat1)).equals("abc\r\n");
         ByteBuf dat2 = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtil.toBytes(dat2)).equals("123\r\n");
+        assert new String(ByteBufUtils.toBytes(dat2)).equals("123\r\n");
     }
 }
