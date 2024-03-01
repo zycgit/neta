@@ -84,8 +84,8 @@ class NioChunk {
     }
 
     void freeBuffer() {
-        if (ByteBufUtil.CLEANER != null) {
-            ByteBufUtil.CLEANER.freeDirectBuffer(this.byteBuffer);
+        if (ByteBufUtils.CLEANER != null) {
+            ByteBufUtils.CLEANER.freeDirectBuffer(this.byteBuffer);
         }
     }
 }

@@ -25,7 +25,7 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-final class CleanerJava6 extends Cleaner {
+final class BufferCleanerJava6 extends BufferCleaner {
     private static final long   CLEANER_FIELD_OFFSET;
     private static final Method CLEAN_METHOD;
     private static final Field  CLEANER_FIELD;

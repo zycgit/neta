@@ -27,8 +27,8 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public abstract class Cleaner {
-    protected static final Logger logger = Logger.getLogger(Cleaner.class);
+public abstract class BufferCleaner {
+    protected static final Logger logger = Logger.getLogger(BufferCleaner.class);
     protected static final Unsafe UNSAFE;
 
     public static boolean hasUnsafe() {

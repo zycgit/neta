@@ -29,7 +29,7 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * AIO TCP/IP,UDP/IP
+ * AIO TCP/IP
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

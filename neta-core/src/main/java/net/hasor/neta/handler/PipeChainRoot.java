@@ -120,7 +120,7 @@ class PipeChainRoot implements Pipeline<Object>, PipeStatistical {
     private int findDepth(boolean isRcv, String pipeName) {
         if (StringUtils.isNotBlank(pipeName)) {
             for (int i = 0; i < this.layers.size(); i++) {
-                PipeInvocation pipeLayer = this.layers.get(i);
+                PipeInvocation<?, ?, ?, ?> pipeLayer = this.layers.get(i);
                 if (StringUtils.equals(pipeLayer.getName(), pipeName)) {
                     return i;
                 }

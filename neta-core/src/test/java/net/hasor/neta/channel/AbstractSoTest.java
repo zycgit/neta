@@ -18,7 +18,7 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.bytebuf.ByteBufUtil;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.handler.PipeHandler;
 import net.hasor.neta.handler.PipeRcvQueue;
 import net.hasor.neta.handler.PipeSndQueue;
@@ -65,7 +65,7 @@ public class AbstractSoTest {
         config.setSoKeepAlive(true);
         config.setSoKeepIntervalSec(10);
         config.setSoKeepIdleSec(10);
-        config.setBufAllocator(ByteBufUtil.DEFAULT_HEAP_ALLOCATOR);
+        config.setBufAllocator(ByteBufUtils.DEFAULT_HEAP_ALLOCATOR);
         //
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(2);

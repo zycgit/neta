@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import net.hasor.cobble.function.EFunction;
+
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -653,4 +655,73 @@ public interface ByteBuf extends ByteChannel {
     default String readExpectLast(char expect, Charset charset) {
         return readExpectLast(String.valueOf(expect), charset);
     }
+
+    /**
+     * 期待可以对 Buffer 进行读操作。如果缓冲区中有数据可供读，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发读场景下 {@link #waitReadable()} 只能保证一个线程可以读取到数据；若需所有线程都能安全的读需要使用 {@link #waitReadable(EFunction)} 方法
+     */
+    default void waitReadable() throws InterruptedException, IOException {
+        this.waitReadable(1, buf -> buf);
+    }
+
+    /**
+     * 当缓冲区中有数据可供读时，方法会立刻调用 callBack。
+     * 在多线程并发读场景下，读取线程会逐个进入 callBack，期间若没有足够的数据读取会阻塞后续线程
+     */
+    default <T> T waitReadable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        return this.waitReadable(1, callBack);
+    }
+
+    /**
+     * 期待可以读 expect 参数指定大小的数据。如果缓冲区中有数据可供读，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发读场景下 {@link #waitReadable(int)} 只能保证一个线程可以读取到数据；若需所有线程都能安全的读需要使用 {@link #waitReadable(int, EFunction)} 方法
+     */
+    default void waitReadable(int expect) throws InterruptedException, IOException {
+        if (expect <= 0) {
+            throw new IllegalArgumentException("need expect to be gt 0");
+        }
+        this.waitReadable(expect, buf -> buf);
+    }
+
+    /**
+     * 期待可以读 expect 参数指定大小的数据，如果缓冲区中有足够数据可供读，方法会立刻调用 callBack否则会进入线程等待状态。
+     * 在多线程并发读场景下，读取线程会逐个进入 callBack，期间若没有足够的数据读取会阻塞后续线程
+     */
+    <T> T waitReadable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
+
+    /**
+     * 期待可以对 Buffer 进行写操作。如果缓冲区中有数据可供写，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发写场景下 {@link #waitWriteable()} 只能保证一个线程可以写数据；若需所有线程都能安全的写需要使用 {@link #waitWriteable(EFunction)} 方法
+     */
+    default void waitWriteable() throws InterruptedException, IOException {
+        this.waitWriteable(1, buf -> buf);
+    }
+
+    /**
+     * 当缓冲区中可供写时，方法会立刻调用 callBack。
+     * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续写线程
+     */
+    default <T> T waitWriteable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        return this.waitWriteable(1, callBack);
+    }
+
+    /**
+     * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻返回否则会进入线程等待状态。
+     * 在多线程并发写场景下 {@link #waitWriteable(int)} 只能保证一个线程可以写入足够的数据；若需所有线程都能安全的写需要使用 {@link #waitWriteable(int, EFunction)} 方法
+     */
+    default void waitWriteable(int expect) throws InterruptedException, IOException {
+        if (expect <= 0) {
+            throw new IllegalArgumentException("need expect to be gt 0");
+        }
+        this.waitWriteable(expect, buf -> buf);
+    }
+
+    /**
+     * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻调用 callBack否则会进入线程等待状态。
+     * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续线程
+     */
+    <T> T waitWriteable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
+
+    /** 等待读写 IO 锁 */
+    <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException;
 }

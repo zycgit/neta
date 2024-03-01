@@ -17,7 +17,7 @@ package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.bytebuf.ByteBufUtil;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.PipeContext;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.SoOverflowException;
@@ -347,7 +347,7 @@ class SslHandle {
 
         if (oldBuf != null) {
             newBuf.put(oldBuf);
-            ByteBufUtil.CLEANER.freeDirectBuffer(oldBuf);
+            ByteBufUtils.CLEANER.freeDirectBuffer(oldBuf);
         }
 
         return newBuf;

@@ -13,18 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler.ssl;
-import net.hasor.neta.channel.SoChannel;
-
-import javax.net.ssl.SSLEngine;
-import java.util.List;
-
+package net.hasor.neta.bytebuf;
 /**
- * Select a protocol that is supported in the TLS NPN/ALPN extension.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version : 2022-11-01
  */
-@FunctionalInterface
-public interface SslAppProtocolSelector {
-    String selector(SoChannel<?> channel, SSLEngine sslEngine, List<String> protocols);
+public class OutOfMemoryPoolException extends RuntimeException {
+    public OutOfMemoryPoolException(String s) {
+        super(s);
+    }
 }

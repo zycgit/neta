@@ -23,14 +23,14 @@ import java.util.Locale;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class ByteBufUtil {
-    private static final Logger           logger = Logger.getLogger(ByteBufUtil.class);
+public class ByteBufUtils {
+    private static final Logger           logger = Logger.getLogger(ByteBufUtils.class);
     public static final  ByteBufAllocator DEFAULT_ALLOCATOR;
     public static final  ByteBufAllocator DEFAULT_HEAP_ALLOCATOR;
     public static final  ByteBufAllocator DEFAULT_DIRECT_ALLOCATOR;
     public static final  ByteBufAllocator DEFAULT_POOLED_HEAP_ALLOCATOR;
     public static final  ByteBufAllocator DEFAULT_POOLED_DIRECT_ALLOCATOR;
-    public static final  Cleaner          CLEANER;
+    public static final  BufferCleaner    CLEANER;
 
     private static boolean isPooled() {
         return !SystemUtils.isAndroid();
@@ -97,11 +97,14 @@ public class ByteBufUtil {
         }
 
         if (SystemUtils.getJavaVersion() >= 9) {
-            CLEANER = CleanerJava9.isSupported() ? new CleanerJava9() : null;
+            CLEANER = BufferCleanerJava9.isSupported() ? new BufferCleanerJava9() : null;
         } else {
-            CLEANER = CleanerJava6.isSupported() ? new CleanerJava6() : null;
+            CLEANER = BufferCleanerJava6.isSupported() ? new BufferCleanerJava6() : null;
         }
     }
+
+    /** <p>The system default newline character.</p> */
+    static final String NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
 
     public static byte[] toBytes(ByteBuf buf) {
         int available = buf.readableBytes();

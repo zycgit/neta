@@ -24,7 +24,7 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 public interface ByteBufAllocator {
-    ByteBufAllocator DEFAULT = ByteBufUtil.DEFAULT_ALLOCATOR;
+    ByteBufAllocator DEFAULT = ByteBufUtils.DEFAULT_ALLOCATOR;
 
     /**
      * Allocate a {@link ByteBuf}.

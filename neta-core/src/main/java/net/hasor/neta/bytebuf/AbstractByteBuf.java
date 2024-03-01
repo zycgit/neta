@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import net.hasor.cobble.function.EFunction;
+
+import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -33,7 +36,8 @@ public abstract class AbstractByteBuf implements ByteBuf {
     protected       int              writerIndex;
     private final   int              maxCapacity;
     private         boolean          isFree;
-    protected       ByteOrder        byteOrder = ByteOrder.BIG_ENDIAN;
+    protected       ByteOrder        byteOrder        = ByteOrder.BIG_ENDIAN;
+    protected final Object           synchronizedLock = new Object();
 
     protected AbstractByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;
@@ -181,11 +185,30 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public ByteBuf markReader() {
-        if (this.markedReaderIndex != this.readerIndex) {
-            this.markedReaderIndex = this.readerIndex;
-            this.recycleByteBuf();
+        synchronized (this.synchronizedLock) {
+            if (this.markedReaderIndex != this.readerIndex) {
+                this.markedReaderIndex = this.readerIndex;
+                this.recycleByteBuf();
+            }
+
+            // notify all writer threads, to write it
+            this.synchronizedLock.notifyAll();
         }
         return this;
+    }
+
+    @Override
+    public <T> T waitReadable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        synchronized (this.synchronizedLock) {
+            checkFree();
+
+            while (this.readableBytes() < expect) {
+                this.synchronizedLock.wait();
+                checkFree();
+            }
+
+            return callBack.eApply(this);
+        }
     }
 
     @Override
@@ -201,12 +224,31 @@ public abstract class AbstractByteBuf implements ByteBuf {
 
     @Override
     public ByteBuf markWriter() {
-        if (this.markedWriterIndex != this.writerIndex) {
-            int lastMarkedWriter = this.markedWriterIndex;
-            this.markedWriterIndex = this.writerIndex;
-            this.receivedBytes(lastMarkedWriter, this.markedWriterIndex);
+        synchronized (this.synchronizedLock) {
+            if (this.markedWriterIndex != this.writerIndex) {
+                int lastMarkedWriter = this.markedWriterIndex;
+                this.markedWriterIndex = this.writerIndex;
+                this.receivedBytes(lastMarkedWriter, this.markedWriterIndex);
+            }
+
+            // notify all reader threads, to read it
+            this.synchronizedLock.notifyAll();
         }
         return this;
+    }
+
+    @Override
+    public <T> T waitWriteable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
+        synchronized (this.synchronizedLock) {
+            checkFree();
+
+            while (this.writableBytes() < expect) {
+                this.synchronizedLock.wait();
+                checkFree();
+            }
+
+            return callBack.eApply(this);
+        }
     }
 
     @Override
@@ -545,11 +587,22 @@ public abstract class AbstractByteBuf implements ByteBuf {
     @Override
     public void free() {
         this.isFree = true;
+
+        synchronized (this.synchronizedLock) {
+            this.synchronizedLock.notifyAll();
+        }
     }
 
     @Override
     protected void finalize() {
         this.free();
+    }
+
+    @Override
+    public <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException {
+        synchronized (this.synchronizedLock) {
+            return callBack.eApply(this);
+        }
     }
 
     @Override
