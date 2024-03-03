@@ -17,7 +17,6 @@ package net.hasor.neta.bytebuf;
 import net.hasor.cobble.ObjectUtils;
 
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Consumer;
 
 /**
  * A block of memory managed by pooling, using the buddy algorithm.
@@ -25,20 +24,19 @@ import java.util.function.Consumer;
  * @version : 2024-02-15
  */
 class PageChunkPool {
-    private final   int                     memAddress;
-    private final   int                     pageSize;
-    private final   int                     pageCount;
-    private final   int                     capacity;
-    private final   int                     height;
-    private final   PageChunk[]             chunksHeads;
-    protected final byte[]                  chunksMap;
-    private final   ReentrantLock[]         chunksLock;
+    private final   int             memAddress;
+    private final   int             pageSize;
+    private final   int             pageCount;
+    private final   int             capacity;
+    private final   int             height;
+    private final   PageChunk[]     chunksHeads;
+    protected final byte[]          chunksMap;
+    private final   ReentrantLock[] chunksLock;
     //
-    private         Consumer<PageChunkPool> notify;
-    private         Object                  curArena;
-    private         double                  usage;
-    private         int                     used;
-    private         int                     free;
+    private         Object          owner;
+    private         double          usage;
+    private         int             used;
+    private         int             free;
 
     public PageChunkPool(int memAddress, int pageSize, int treeHeight) {
         this.memAddress = memAddress;
@@ -54,22 +52,18 @@ class PageChunkPool {
         }
     }
 
-    public void setNotify(Object curArena, Consumer<PageChunkPool> notify) {
-        this.curArena = curArena;
-        this.notify = notify;
+    public void setOwner(Object owner) {
+        this.owner = owner;
     }
 
-    public Object getCurArena() {
-        return this.curArena;
+    public Object getOwner() {
+        return this.owner;
     }
 
     private void updateUsage(int addon) {
         this.used = this.used + addon;
         this.free = this.pageCount - this.used;
         this.usage = ((double) this.used / (double) this.pageCount) * 100;
-        if (this.notify != null) {
-            this.notify.accept(this);
-        }
     }
 
     public double getUsage() {

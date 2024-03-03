@@ -67,7 +67,7 @@ class BufferArena {
     }
 
     public void offer(PageChunkPool pool) {
-        pool.setNotify(this, this::triggerUsage);
+        pool.setOwner(this);
         this.bufferRing.add(pool);
         triggerUsage(pool);
     }
@@ -78,7 +78,7 @@ class BufferArena {
             return;
         }
 
-        BufferArena arena = (BufferArena) pool.getCurArena();
+        BufferArena arena = (BufferArena) pool.getOwner();
         if (mov < 0) {
             if (arena.prev != null) {
                 arena.bufferRing.remove(pool);
@@ -94,7 +94,7 @@ class BufferArena {
 
     private static int checkUsage(PageChunkPool pool) {
         double usage = pool.getUsage();
-        BufferArena arena = (BufferArena) pool.getCurArena();
+        BufferArena arena = (BufferArena) pool.getOwner();
 
         if (usage < arena.prevValve && arena.prev != null) {
             return -1;  // move to prev
