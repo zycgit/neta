@@ -14,36 +14,27 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReentrantLock;
-
 /**
  * 页面池化管理器
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 class BufferArena {
-    private final BufferPool          bufferPool;
-    private final List<PageChunkPool> pagePool;
-    private final AtomicInteger       pagePoolCur;
-    private final ReentrantLock       poolLock;
+    private final BufferPool                bufferPool;
+    private final BufferRing<PageChunkPool> bufferRing;
     //
-    private       double              prevValve;
-    private       BufferArena         prev;
-    private       double              nextValve;
-    private       BufferArena         next;
+    private       double                    prevValve;
+    private       BufferArena               prev;
+    private       double                    nextValve;
+    private       BufferArena               next;
 
     BufferArena(BufferPool bufferPool) {
         this.bufferPool = bufferPool;
-        this.pagePool = new LinkedList<>();
-        this.pagePoolCur = new AtomicInteger(0);
-        this.poolLock = bufferPool.getPoolLock();
+        this.bufferRing = new BufferRing<>();
     }
 
     public int getChunkCount() {
-        return this.pagePool.size();
+        return this.bufferRing.size();
     }
 
     public void configMove(double prevValve, BufferArena prev, double nextValve, BufferArena next) {
@@ -54,33 +45,30 @@ class BufferArena {
     }
 
     public BufferTarget requestBuffer(int capacity) {
-        int cnt = this.pagePool.size();
+        int cnt = this.bufferRing.size();
         if (cnt == 0) {
             return null;
         }
 
-        try {
-            // find free
-            for (int i = 0; i < cnt; i++) {
-                int idx = this.pagePoolCur.incrementAndGet() % cnt;
-                PageChunkPool chunkPool = this.pagePool.get(idx);
+        // find free
+        for (int i = 0; i < cnt; i++) {
+            PageChunkPool chunkPool = this.bufferRing.next();
+            if (chunkPool != null) {
                 PageChunkSplit pages = chunkPool.requestPages(capacity);
                 if (pages != null) {
                     Buffer memory = this.bufferPool.getMemory(pages.getMemAddress()); // trigger call triggerUsage method.
                     return new BufferTarget(this.bufferPool.getMemPageSize(), pages, memory);
                 }
             }
-
-            // from next BufferArena to request.
-            return null;
-        } finally {
-            this.pagePoolCur.set(this.pagePoolCur.incrementAndGet() % cnt);
         }
+
+        // from next BufferArena to request.
+        return null;
     }
 
     public void offer(PageChunkPool pool) {
         pool.setNotify(this, this::triggerUsage);
-        this.pagePool.add(pool);
+        this.bufferRing.add(pool);
         triggerUsage(pool);
     }
 
@@ -90,22 +78,17 @@ class BufferArena {
             return;
         }
 
-        try {
-            this.poolLock.lock();
-            BufferArena arena = (BufferArena) pool.getCurArena();
-            if (mov < 0) {
-                if (arena.prev != null) {
-                    arena.pagePool.remove(pool);
-                    arena.prev.offer(pool);
-                }
-            } else {
-                if (arena.next != null) {
-                    arena.pagePool.remove(pool);
-                    arena.next.offer(pool);
-                }
+        BufferArena arena = (BufferArena) pool.getCurArena();
+        if (mov < 0) {
+            if (arena.prev != null) {
+                arena.bufferRing.remove(pool);
+                arena.prev.offer(pool);
             }
-        } finally {
-            this.poolLock.unlock();
+        } else {
+            if (arena.next != null) {
+                arena.bufferRing.remove(pool);
+                arena.next.offer(pool);
+            }
         }
     }
 
@@ -124,23 +107,18 @@ class BufferArena {
 
     @Override
     public String toString() {
-        poolLock.lock();
-        try {
-            StringBuilder buf = new StringBuilder();
-            if (this.pagePool.size() == 0) {
-                return "none";
-            }
-
-            for (int i = 0; i < this.pagePool.size(); i++) {
-                if (i > 0) {
-                    buf.append(ByteBufUtils.NEWLINE);
-                }
-                PageChunkPool chunkPool = this.pagePool.get(i);
-                buf.append(chunkPool);
-            }
-            return buf.toString();
-        } finally {
-            poolLock.unlock();
+        StringBuilder buf = new StringBuilder();
+        if (this.bufferRing.size() == 0) {
+            return "none";
         }
+
+        for (int i = 0; i < this.bufferRing.size(); i++) {
+            if (i > 0) {
+                buf.append(ByteBufUtils.NEWLINE);
+            }
+            PageChunkPool chunkPool = this.bufferRing.next(i);
+            buf.append(chunkPool);
+        }
+        return buf.toString();
     }
 }

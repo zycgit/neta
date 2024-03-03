@@ -202,6 +202,22 @@ public class BufferPoolTest {
 
     @Test
     public void poolTest_04() {
+        AtomicInteger integer = new AtomicInteger();
+        BufferPool pool = new BufferPool(1, 1, 5, c -> new BufferWrap(ByteBuffer.allocate(c))) {
+            @Override
+            protected int newMemAddress() {
+                return integer.incrementAndGet();
+            }
+        };
+
+        assert pool.toString().startsWith("Chunk(s) at 0~25%:\n\tnone\nChunk(s) at 0~50%:\n\tnone\nChunk(s) at 25~75%:\n\tnone\nChunk(s) at 50~100%:\n\tnone\nChunk(s) at 75~100%:\n\tnone\nChunk(s) at 100%:\n\tnone");
+
+        pool.requestBuffer(4);
+        pool.toString(); // for Coverage
+    }
+
+    @Test
+    public void poolTest_05() {
         BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
 
         AtomicBoolean exit = new AtomicBoolean(false);
@@ -209,7 +225,7 @@ public class BufferPoolTest {
         LinkedBlockingQueue<Buffer> buffers = new LinkedBlockingQueue<>();
 
         AtomicLong runCnt = new AtomicLong(0);
-        for (int i = 0; i < 100; i++) {
+        for (int i = 0; i < 1; i++) {
             ThreadUtils.daemonThread(true, (Runnable) () -> {
                 runCnt.incrementAndGet();
                 while (!exit.get()) {

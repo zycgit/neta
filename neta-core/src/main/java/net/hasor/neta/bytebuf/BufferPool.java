@@ -97,10 +97,6 @@ class BufferPool {
         }
     }
 
-    public ReentrantLock getPoolLock() {
-        return this.poolLock;
-    }
-
     public Buffer getMemory(int memAddress) {
         Buffer buffer = this.bufferPool.get(memAddress);
         if (buffer != null) {
@@ -116,16 +112,14 @@ class BufferPool {
 
     public BufferTarget requestBuffer(int capacity) {
         ObjectUtils.checkPositive(capacity, "capacity");
-
-        for (BufferArena arena : this.arenaList) {
-            BufferTarget buffer = arena.requestBuffer(capacity);
-            if (buffer != null) {
-                return buffer;
-            }
-        }
-
         try {
             this.poolLock.lock();
+            for (BufferArena arena : this.arenaList) {
+                BufferTarget buffer = arena.requestBuffer(capacity);
+                if (buffer != null) {
+                    return buffer;
+                }
+            }
 
             PageChunkPool pool = newAllocator();
             PageChunkSplit pages = pool.requestPages(capacity);
