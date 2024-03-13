@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.util.concurrent.locks.Lock;
+
 /**
  * 页面池化管理器
  * @author 赵永春 (zyc@hasor.net)
@@ -22,15 +24,16 @@ package net.hasor.neta.bytebuf;
 class BufferArena {
     private final BufferPool                bufferPool;
     private final BufferRing<PageChunkPool> bufferRing;
-    //
     private       double                    prevValve;
     private       BufferArena               prev;
     private       double                    nextValve;
     private       BufferArena               next;
+    private final Lock                      shareLock;
 
-    BufferArena(BufferPool bufferPool) {
+    BufferArena(BufferPool bufferPool, Lock shareLock) {
         this.bufferPool = bufferPool;
         this.bufferRing = new BufferRing<>();
+        this.shareLock = shareLock;
     }
 
     public int getChunkCount() {
@@ -53,21 +56,47 @@ class BufferArena {
         // find free
         for (int i = 0; i < cnt; i++) {
             PageChunkPool chunkPool = this.bufferRing.next();
-            if (chunkPool != null) {
-                PageChunkSplit pages = chunkPool.requestPages(capacity);
-                if (pages != null) {
-                    Buffer memory = this.bufferPool.getMemory(pages.getMemAddress()); // trigger call triggerUsage method.
-                    return new BufferTarget(this.bufferPool.getMemPageSize(), pages, memory);
-                }
+            if (chunkPool == null) {
+                continue;
             }
+
+            PageChunkSplit pages = chunkPool.requestPages(capacity);
+            if (pages == null) {
+                continue;
+            }
+
+            Buffer memory = this.bufferPool.getMemory(pages.getMemAddress()); // trigger call triggerUsage method.
+            return new BufferTarget(this.bufferPool.getMemPageSize(), pages, memory);
         }
 
         // from next BufferArena to request.
         return null;
     }
 
-    public void offer(PageChunkPool pool) {
+    // this method for BufferPool.
+    public void lockOffer(PageChunkPool pool) {
+        try {
+            this.shareLock.lock();
+            this.normalOffer(pool);
+        } finally {
+            this.shareLock.unlock();
+        }
+    }
+
+    private void normalOffer(PageChunkPool pool) {
         pool.setOwner(this);
+        pool.setNotify(cbPool -> {
+            if (checkUsage(cbPool) == 0) {
+                return;
+            }
+
+            try {
+                this.shareLock.lock();
+                this.triggerUsage(cbPool);
+            } finally {
+                this.shareLock.unlock();
+            }
+        });
         this.bufferRing.add(pool);
         triggerUsage(pool);
     }
@@ -82,12 +111,12 @@ class BufferArena {
         if (mov < 0) {
             if (arena.prev != null) {
                 arena.bufferRing.remove(pool);
-                arena.prev.offer(pool);
+                arena.prev.normalOffer(pool);
             }
         } else {
             if (arena.next != null) {
                 arena.bufferRing.remove(pool);
-                arena.next.offer(pool);
+                arena.next.normalOffer(pool);
             }
         }
     }
@@ -116,7 +145,7 @@ class BufferArena {
             if (i > 0) {
                 buf.append(ByteBufUtils.NEWLINE);
             }
-            PageChunkPool chunkPool = this.bufferRing.next(i);
+            PageChunkPool chunkPool = this.bufferRing.find(i);
             buf.append(chunkPool);
         }
         return buf.toString();

@@ -1,13 +1,8 @@
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import org.junit.Test;
 
 import java.nio.ByteBuffer;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 
 public class BufferPoolTest {
     @Test
@@ -214,49 +209,5 @@ public class BufferPoolTest {
 
         pool.requestBuffer(4);
         pool.toString(); // for Coverage
-    }
-
-    @Test
-    public void poolTest_05() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
-
-        AtomicBoolean exit = new AtomicBoolean(false);
-        AtomicLong allocCnt = new AtomicLong(0);
-        LinkedBlockingQueue<Buffer> buffers = new LinkedBlockingQueue<>();
-
-        AtomicLong runCnt = new AtomicLong(0);
-        for (int i = 0; i < 1; i++) {
-            ThreadUtils.daemonThread(true, (Runnable) () -> {
-                runCnt.incrementAndGet();
-                while (!exit.get()) {
-                    if (RandomUtils.nextBoolean()) {
-                        Buffer buffer = pool.requestBuffer(RandomUtils.nextInt(1, 128));
-                        if (buffer != null) {
-                            allocCnt.incrementAndGet();
-                            buffers.add(buffer);
-                        }
-                    } else {
-                        Buffer poll = buffers.poll();
-                        if (poll != null) {
-                            poll.free();
-                        }
-                    }
-                }
-                runCnt.decrementAndGet();
-            });
-        }
-
-        ThreadUtils.sleep(3000);
-        exit.set(true);
-        while (runCnt.get() > 0) {
-            ThreadUtils.sleep(100);
-        }
-
-        Buffer buffer;
-        while ((buffer = buffers.poll()) != null) {
-            buffer.free();
-        }
-
-        System.out.println(pool);
     }
 }

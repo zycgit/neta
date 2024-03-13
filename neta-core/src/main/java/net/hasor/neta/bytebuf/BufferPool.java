@@ -21,6 +21,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -35,7 +36,6 @@ class BufferPool {
     private         long                 memoryChunkSize;
     private final   BufferAllocator      allocator;
     private final   Map<Integer, Buffer> bufferPool;
-    private final   ReentrantLock        poolLock;
     //
     protected final BufferArena          qInit;// 000%~025%
     protected final BufferArena          q000; // 001%~050%
@@ -55,15 +55,15 @@ class BufferPool {
         this.maximumChunkCount = maximumChunkCount;
         this.allocator = allocator;
         this.bufferPool = new ConcurrentHashMap<>();
-        this.poolLock = new ReentrantLock();
+        Lock shareLock = new ReentrantLock(false);
 
         // init Arena
-        this.qInit = new BufferArena(this);
-        this.q000 = new BufferArena(this);
-        this.q025 = new BufferArena(this);
-        this.q050 = new BufferArena(this);
-        this.q075 = new BufferArena(this);
-        this.q100 = new BufferArena(this);
+        this.qInit = new BufferArena(this, shareLock);
+        this.q000 = new BufferArena(this, shareLock);
+        this.q025 = new BufferArena(this, shareLock);
+        this.q050 = new BufferArena(this, shareLock);
+        this.q075 = new BufferArena(this, shareLock);
+        this.q100 = new BufferArena(this, shareLock);
 
         // qInit <---> q000 <---> q025 <---> q050 <---> q075 <---> q100
         this.qInit.configMove(0, null, 25.0, this.q000);
@@ -112,23 +112,18 @@ class BufferPool {
 
     public BufferTarget requestBuffer(int capacity) {
         ObjectUtils.checkPositive(capacity, "capacity");
-        try {
-            this.poolLock.lock();
-            for (BufferArena arena : this.arenaList) {
-                BufferTarget buffer = arena.requestBuffer(capacity);
-                if (buffer != null) {
-                    return buffer;
-                }
+
+        for (BufferArena arena : this.arenaList) {
+            BufferTarget buffer = arena.requestBuffer(capacity);
+            if (buffer != null) {
+                return buffer;
             }
-
-            PageChunkPool pool = newAllocator();
-            PageChunkSplit pages = pool.requestPages(capacity);
-            this.qInit.offer(pool);
-
-            return this.requestBuffer(pages);
-        } finally {
-            this.poolLock.unlock();
         }
+
+        PageChunkPool pool = newAllocator();
+        PageChunkSplit pages = pool.requestPages(capacity);
+        this.qInit.lockOffer(pool);
+        return this.requestBuffer(pages);
     }
 
     protected int newMemAddress() {
@@ -168,28 +163,23 @@ class BufferPool {
 
     @Override
     public String toString() {
-        this.poolLock.lock();
-        try {
-            String NEWLINE = ByteBufUtils.NEWLINE;
-            StringBuilder buf = new StringBuilder()                 //
-                    .append("Chunk(s) at 0~25%:").append(NEWLINE)   //
-                    .append("\t").append(this.qInit).append(NEWLINE)//
-                    .append("Chunk(s) at 0~50%:").append(NEWLINE)   //
-                    .append("\t").append(this.q000).append(NEWLINE) //
-                    .append("Chunk(s) at 25~75%:").append(NEWLINE)  //
-                    .append("\t").append(this.q025).append(NEWLINE) //
-                    .append("Chunk(s) at 50~100%:").append(NEWLINE) //
-                    .append("\t").append(this.q050).append(NEWLINE) //
-                    .append("Chunk(s) at 75~100%:").append(NEWLINE) //
-                    .append("\t").append(this.q075).append(NEWLINE) //
-                    .append("Chunk(s) at 100%:").append(NEWLINE)    //
-                    .append("\t").append(this.q100).append(NEWLINE) //
-                    .append("small subpages:");
-            //            appendPoolSubPages(buf, smallSubpagePools);
-            buf.append(NEWLINE);
-            return buf.toString();
-        } finally {
-            this.poolLock.unlock();
-        }
+        String NEWLINE = ByteBufUtils.NEWLINE;
+        StringBuilder buf = new StringBuilder()                 //
+                .append("Chunk(s) at 0~25%:").append(NEWLINE)   //
+                .append("\t").append(this.qInit).append(NEWLINE)//
+                .append("Chunk(s) at 0~50%:").append(NEWLINE)   //
+                .append("\t").append(this.q000).append(NEWLINE) //
+                .append("Chunk(s) at 25~75%:").append(NEWLINE)  //
+                .append("\t").append(this.q025).append(NEWLINE) //
+                .append("Chunk(s) at 50~100%:").append(NEWLINE) //
+                .append("\t").append(this.q050).append(NEWLINE) //
+                .append("Chunk(s) at 75~100%:").append(NEWLINE) //
+                .append("\t").append(this.q075).append(NEWLINE) //
+                .append("Chunk(s) at 100%:").append(NEWLINE)    //
+                .append("\t").append(this.q100).append(NEWLINE) //
+                .append("small subpages:");
+        //            appendPoolSubPages(buf, smallSubpagePools);
+        buf.append(NEWLINE);
+        return buf.toString();
     }
 }
