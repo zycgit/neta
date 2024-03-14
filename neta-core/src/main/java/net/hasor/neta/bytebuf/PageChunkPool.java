@@ -153,7 +153,7 @@ class PageChunkPool {
         // n =  ?, 2 ^ (n-1) < reqCap < 2 ^ n <<< fmtSize
         // depth = height - log2(n) / pageSize
         int fmtSize = tableSizeFor(capacity, this.capacity) / pageSize;
-        int usingHeight = this.height - log2(fmtSize);
+        int usingHeight = this.height - (fmtSize == 0 ? 0 : log2(fmtSize));
 
         return this.allocFree(this.chunksHeads[usingHeight]);
     }

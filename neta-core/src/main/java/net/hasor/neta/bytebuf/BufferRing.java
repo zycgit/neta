@@ -40,9 +40,7 @@ class BufferRing<T> {
 
     protected <R> R readLock(Function<BufferRing<T>, R> self) {
         while (true) {
-            if (this.writeLock.get()) {
-                Thread.yield();
-            } else {
+            if (!this.writeLock.get()) {
                 try {
                     this.parallelCnt.incrementAndGet();
                     if (this.writeLock.compareAndSet(false, false)) {
@@ -51,8 +49,8 @@ class BufferRing<T> {
                 } finally {
                     this.parallelCnt.decrementAndGet();
                 }
-                Thread.yield();
             }
+            Thread.yield();
         }
     }
 

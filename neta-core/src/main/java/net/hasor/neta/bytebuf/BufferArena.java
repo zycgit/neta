@@ -17,7 +17,7 @@ package net.hasor.neta.bytebuf;
 import java.util.concurrent.locks.Lock;
 
 /**
- * 页面池化管理器
+ * Memory pool PageChunkPool list manage
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */

@@ -17,7 +17,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 
 /**
- * ByteBuffer 接口转换为 Buffer 接口
+ * The {@link ByteBuffer} is convert to a {@link Buffer} interface
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
