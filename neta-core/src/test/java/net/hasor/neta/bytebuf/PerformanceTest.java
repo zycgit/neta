@@ -167,7 +167,7 @@ public class PerformanceTest {
     }
 
     @Test
-    public void performance_BufferPool() {
+    public void performance_BufferPool() throws IOException {
         BufferPool pool = new BufferPool(1, 256, -1, c -> new BufferWrap(ByteBuffer.allocate(c)));
 
         AtomicBoolean exit = new AtomicBoolean(false);
@@ -178,9 +178,9 @@ public class PerformanceTest {
             ThreadUtils.daemonThread(true, (Runnable) () -> {
                 runCnt.incrementAndGet();
 
-                AtomicInteger num = new AtomicInteger();
+                int num = 0;
                 while (!exit.get()) {
-                    Buffer buffer = pool.requestBuffer(randomInt[num.incrementAndGet() % 1024]);
+                    Buffer buffer = pool.requestBuffer(randomInt[num++ % 1024]);
                     if (buffer != null) {
                         allocCnt.incrementAndGet();
                         buffer.free();
@@ -203,11 +203,14 @@ public class PerformanceTest {
             }
         });
 
+        System.in.read();
+
         ThreadUtils.sleep(5000);
         exit.set(true);
         while (runCnt.get() > 0) {
             ThreadUtils.sleep(100);
         }
+
     }
 
     @Test
