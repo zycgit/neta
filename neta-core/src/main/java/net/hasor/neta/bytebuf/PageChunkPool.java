@@ -51,7 +51,7 @@ class PageChunkPool {
         this.chunksMap = new byte[Math.max(1, this.pageCount / 8)];
         this.chunksLock = new ReentrantLock[this.chunksMap.length];
         for (int i = 0; i < this.chunksLock.length; i++) {
-            this.chunksLock[i] = new ReentrantLock();
+            this.chunksLock[i] = new ReentrantLock(false);
         }
     }
 

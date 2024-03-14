@@ -46,10 +46,18 @@ class BufferPool {
     protected final List<BufferArena>    arenaList;
 
     public BufferPool(int pageSize, BufferAllocator allocator) {
-        this(pageSize, -1, 12, allocator);
+        this(pageSize, 0, -1, 12, allocator);
     }
 
-    public BufferPool(int pageSize, int maximumChunkCount, int buddyTreeHeight, BufferAllocator allocator) {
+    public BufferPool(int pageSize, int minimumChunkCount, int maximumChunkCount, BufferAllocator allocator) {
+        this(pageSize, minimumChunkCount, maximumChunkCount, 12, allocator);
+    }
+
+    public BufferPool(int pageSize, int minimumChunkCount, int maximumChunkCount, int buddyTreeHeight, BufferAllocator allocator) {
+        if (maximumChunkCount != -1) {
+            ObjectUtils.assertTrue(maximumChunkCount > 0, "if config maximumChunkCount, greater than 0.");
+            ObjectUtils.assertTrue(minimumChunkCount <= maximumChunkCount, "chunkCount number must minimum <= maximum.");
+        }
         this.pageSize = pageSize;
         this.buddyTreeHeight = buddyTreeHeight;
         this.maximumChunkCount = maximumChunkCount;
@@ -79,6 +87,10 @@ class BufferPool {
         this.arenaList.add(this.q000);
         this.arenaList.add(this.qInit);
         this.arenaList.add(this.q075);
+
+        for (int i = 0; i < minimumChunkCount; i++) {
+            initChunkPool();
+        }
     }
 
     public int getMemPageSize() {
@@ -120,10 +132,14 @@ class BufferPool {
             }
         }
 
-        PageChunkPool pool = newAllocator();
-        PageChunkSplit pages = pool.requestPages(capacity);
-        this.qInit.lockOffer(pool);
+        PageChunkSplit pages = initChunkPool().requestPages(capacity);
         return this.requestBuffer(pages);
+    }
+
+    protected PageChunkPool initChunkPool() {
+        PageChunkPool pool = newAllocator();
+        this.qInit.lockOffer(pool);
+        return pool;
     }
 
     protected int newMemAddress() {

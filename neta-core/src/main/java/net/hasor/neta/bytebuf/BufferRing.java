@@ -15,9 +15,10 @@
  */
 package net.hasor.neta.bytebuf;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.locks.ReadWriteLock;
-import java.util.concurrent.locks.ReentrantReadWriteLock;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * Ring Buffer linked list.
@@ -28,20 +29,55 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 class BufferRing<T> {
     private volatile Node<T>       curNode;
     private final    AtomicInteger size;
-    private final    ReadWriteLock lock;
+    private final    AtomicInteger parallelCnt;
+    private final    AtomicBoolean writeLock;
 
     public BufferRing() {
         this.size = new AtomicInteger();
-        this.lock = new ReentrantReadWriteLock(false);
+        this.parallelCnt = new AtomicInteger();
+        this.writeLock = new AtomicBoolean();
+    }
+
+    protected <R> R readLock(Function<BufferRing<T>, R> self) {
+        while (true) {
+            if (this.writeLock.get()) {
+                Thread.yield();
+            } else {
+                try {
+                    this.parallelCnt.incrementAndGet();
+                    if (this.writeLock.compareAndSet(false, false)) {
+                        return self.apply(this);
+                    }
+                } finally {
+                    this.parallelCnt.decrementAndGet();
+                }
+                Thread.yield();
+            }
+        }
+    }
+
+    protected void writeLock(Consumer<BufferRing<T>> self) {
+        while (true) {
+            if (this.writeLock.compareAndSet(false, true)) {
+                while (this.parallelCnt.get() > 0) {
+                    Thread.yield();
+                }
+
+                try {
+                    self.accept(this);
+                } finally {
+                    this.writeLock.set(false);
+                }
+
+                return;
+            } else {
+                Thread.yield();
+            }
+        }
     }
 
     public int size() {
-        try {
-            this.lock.readLock().lock();
-            return this.size.get();
-        } finally {
-            this.lock.readLock().unlock();
-        }
+        return this.size.get();
     }
 
     private static class Node<T> {
@@ -56,9 +92,7 @@ class BufferRing<T> {
     }
 
     public T find(int skip) {
-        try {
-            this.lock.readLock().lock();
-
+        return this.readLock(self -> {
             final Node<T> curNode = this.curNode;
             if (curNode == null) {
                 return null;
@@ -79,16 +113,11 @@ class BufferRing<T> {
 
                 return visitorData;
             }
-
-        } finally {
-            this.lock.readLock().unlock();
-        }
+        });
     }
 
     public T next() {
-        try {
-            this.lock.readLock().lock();
-
+        return this.readLock(self -> {
             final Node<T> curNode = this.curNode;
             if (curNode == null) {
                 return null;
@@ -107,16 +136,11 @@ class BufferRing<T> {
                 this.curNode = visitorNode;
                 return visitorData;
             }
-
-        } finally {
-            this.lock.readLock().unlock();
-        }
+        });
     }
 
     public void add(T data) {
-        try {
-            this.lock.writeLock().lock();
-
+        this.writeLock(self -> {
             Node<T> node = new Node<>();
             node.data = data;
 
@@ -130,17 +154,14 @@ class BufferRing<T> {
             }
 
             this.size.incrementAndGet();
-        } finally {
-            this.lock.writeLock().unlock();
-        }
+        });
     }
 
     public void remove(T data) {
         if (data == null) {
             return;
         }
-        try {
-            this.lock.writeLock().lock();
+        this.writeLock(self -> {
             this.size.decrementAndGet();
             if (this.size.get() == 0) {
                 final Node<T> curNode = this.curNode;
@@ -169,9 +190,6 @@ class BufferRing<T> {
                     visitorNode = visitorNode.next;
                 }
             } while (visitorNode != curNode);
-
-        } finally {
-            this.lock.writeLock().unlock();
-        }
+        });
     }
 }

@@ -3,6 +3,7 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import org.junit.Test;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Map;
@@ -102,7 +103,7 @@ public class PerformanceTest {
         AtomicLong writePerformance = new AtomicLong(0);
 
         // write thread
-        for (int i = 0; i < 4; i++) {
+        for (int i = 0; i < 1; i++) {
             int finalI = i;
             ThreadUtils.daemonThread(true, (Runnable) () -> {
                 Thread.currentThread().setName("write " + finalI);
@@ -131,7 +132,7 @@ public class PerformanceTest {
         }
 
         // read thread
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 32; i++) {
             int finalI = i;
             ThreadUtils.daemonThread(true, (Runnable) () -> {
                 runCnt.incrementAndGet();
@@ -167,35 +168,25 @@ public class PerformanceTest {
 
     @Test
     public void performance_BufferPool() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, 256, -1, c -> new BufferWrap(ByteBuffer.allocate(c)));
 
         AtomicBoolean exit = new AtomicBoolean(false);
         AtomicLong allocCnt = new AtomicLong(0);
-        Map<String, LinkedList<Buffer>> buffers = new ConcurrentHashMap<>();
 
         AtomicLong runCnt = new AtomicLong(0);
-        for (int i = 0; i < 16; i++) {
+        for (int i = 0; i < 32; i++) {
             ThreadUtils.daemonThread(true, (Runnable) () -> {
-                String tName = Thread.currentThread().getName();
-                LinkedList<Buffer> objects = new LinkedList<>();
-                buffers.put(tName, objects);
                 runCnt.incrementAndGet();
 
                 AtomicInteger num = new AtomicInteger();
                 while (!exit.get()) {
-                    if (randomBoolean[num.incrementAndGet() % 1024]) {
-                        Buffer buffer = pool.requestBuffer(randomInt[num.incrementAndGet() % 1024]);
-                        if (buffer != null) {
-                            allocCnt.incrementAndGet();
-                            objects.add(buffer);
-                        }
-                    } else {
-                        Buffer poll = objects.poll();
-                        if (poll != null) {
-                            poll.free();
-                        }
+                    Buffer buffer = pool.requestBuffer(randomInt[num.incrementAndGet() % 1024]);
+                    if (buffer != null) {
+                        allocCnt.incrementAndGet();
+                        buffer.free();
                     }
                 }
+
                 runCnt.decrementAndGet();
             });
         }
@@ -207,22 +198,60 @@ public class PerformanceTest {
                 ThreadUtils.sleep(1000);
                 long cost = (System.currentTimeMillis() - t);
 
-                int writePerSec = (int) (runCnt.get() / (cost / 1000));
-                int readPerSec = (int) (runCnt.get() / (cost / 1000));
-
-                System.out.println("read :" + readPerSec + "/s, write :" + writePerSec + "/s");
+                int perSec = (int) (allocCnt.get() / (cost / 1000));
+                System.out.println("allocCnt :" + allocCnt.get() + "/s, perSec :" + perSec + "/s");
             }
         });
 
-        ThreadUtils.sleep(3000);
+        ThreadUtils.sleep(5000);
         exit.set(true);
         while (runCnt.get() > 0) {
             ThreadUtils.sleep(100);
         }
+    }
 
-        //        Buffer buffer;
-        //        while ((buffer = buffers.poll()) != null) {
-        //            buffer.free();
-        //        }
+    @Test
+    public void performance_BufferPool_vsNetty() throws IOException {
+        BufferPool pool = new BufferPool(1, 64, -1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+
+        AtomicBoolean exit = new AtomicBoolean(false);
+        AtomicLong allocCnt = new AtomicLong(0);
+
+        AtomicLong runCnt = new AtomicLong(0);
+        for (int i = 0; i < 64; i++) {
+            ThreadUtils.daemonThread(true, (Runnable) () -> {
+                runCnt.incrementAndGet();
+
+                AtomicInteger num = new AtomicInteger();
+                while (!exit.get()) {
+                    Buffer buffer = pool.requestBuffer(randomInt[num.incrementAndGet() % 1024]);
+                    if (buffer != null) {
+                        allocCnt.incrementAndGet();
+                        buffer.free();
+                    }
+                }
+
+                runCnt.decrementAndGet();
+            });
+        }
+
+        // print performance
+        ThreadUtils.daemonThread(true, (Runnable) () -> {
+            long t = System.currentTimeMillis();
+            while (!exit.get()) {
+                ThreadUtils.sleep(1000);
+                long cost = (System.currentTimeMillis() - t);
+
+                int perSec = (int) (allocCnt.get() / (cost / 1000));
+                System.out.println("allocCnt :" + allocCnt.get() + "/s, perSec :" + perSec + "/s");
+            }
+        });
+
+        System.in.read();
+        ThreadUtils.sleep(20000);
+        exit.set(true);
+        while (runCnt.get() > 0) {
+            ThreadUtils.sleep(100);
+        }
     }
 }
