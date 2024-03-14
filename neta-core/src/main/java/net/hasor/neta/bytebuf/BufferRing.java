@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.bytebuf;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -25,22 +26,28 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  * @version : 2022-11-01
  */
 class BufferRing<T> {
-    private       Node<T>       lastNode;
-    private       Node<T>       curNode;
-    private       int           size;
-    private final ReadWriteLock lock;
+    private volatile Node<T>       curNode;
+    private final    AtomicInteger size;
+    private final    ReadWriteLock lock;
 
     public BufferRing() {
+        this.size = new AtomicInteger();
         this.lock = new ReentrantReadWriteLock(false);
     }
 
     public int size() {
-        return this.size;
+        try {
+            this.lock.readLock().lock();
+            return this.size.get();
+        } finally {
+            this.lock.readLock().unlock();
+        }
     }
 
     private static class Node<T> {
-        Node<T> next;
-        T       data;
+        volatile Node<T> next;
+        volatile T       data;
+        volatile boolean hole;
 
         @Override
         public String toString() {
@@ -52,17 +59,25 @@ class BufferRing<T> {
         try {
             this.lock.readLock().lock();
 
-            Node<T> curNode = this.curNode;
+            final Node<T> curNode = this.curNode;
             if (curNode == null) {
                 return null;
-            } else if (curNode == this.lastNode) {
+            } else if (skip <= 0) {
                 return curNode.data;
             } else {
-                Node<T> tmpCurNode = curNode;
-                for (int i = 0; i < skip; i++) {
-                    tmpCurNode = tmpCurNode.next;
-                }
-                return tmpCurNode == null ? null : tmpCurNode.data;
+                int i = skip <= this.size.get() ? skip : (skip % this.size.get());
+                Node<T> visitorNode = curNode;
+                T visitorData;
+
+                do {
+                    visitorNode = visitorNode.next;
+                    visitorData = visitorNode.data;
+                    if (!visitorNode.hole) {
+                        i--;
+                    }
+                } while (i > 0);
+
+                return visitorData;
             }
 
         } finally {
@@ -74,13 +89,23 @@ class BufferRing<T> {
         try {
             this.lock.readLock().lock();
 
-            Node<T> curNode = this.curNode;
+            final Node<T> curNode = this.curNode;
             if (curNode == null) {
                 return null;
             } else {
-                this.lastNode = curNode;
-                this.curNode = curNode.next;
-                return curNode.data;
+                Node<T> visitorNode = curNode;
+                T visitorData;
+
+                do {
+                    visitorNode = visitorNode.next;
+                    visitorData = visitorNode.data;
+                    if (!visitorNode.hole) {
+                        break;
+                    }
+                } while (visitorNode != curNode);
+
+                this.curNode = visitorNode;
+                return visitorData;
             }
 
         } finally {
@@ -97,92 +122,56 @@ class BufferRing<T> {
 
             if (this.curNode == null) {
                 node.next = node;
-                this.lastNode = node;
                 this.curNode = node;
             } else {
                 node.next = this.curNode.next;
                 this.curNode.next = node;
-                this.lastNode = this.curNode;
                 this.curNode = node;
             }
 
-            this.size = this.size + 1;
+            this.size.incrementAndGet();
         } finally {
             this.lock.writeLock().unlock();
         }
     }
 
     public void remove(T data) {
-        if (data == null || this.size == 0) {
+        if (data == null) {
             return;
         }
         try {
             this.lock.writeLock().lock();
-            this.size = this.size - 1;
+            this.size.decrementAndGet();
+            if (this.size.get() == 0) {
+                final Node<T> curNode = this.curNode;
+                this.curNode = null;
+                curNode.next = null;
+                return;
+            }
 
-            Node<T> curNode = this.curNode;
-            Node<T> tmpLastNode = this.lastNode;
-            Node<T> tmpCurNode = this.curNode;
+            final Node<T> curNode = this.curNode;
+            Node<T> visitorNode = curNode;
+
             do {
-                if (Objects.equals(tmpCurNode.data, data)) {
-                    if (tmpCurNode.next == tmpCurNode) {
-                        // A -> A -> A
-                        //      ^
-                        tmpCurNode.next = null;
+                final Node<T> nextNode = visitorNode.next;
+                final T nextData = nextNode.data;
+                if (!nextNode.hole && Objects.equals(nextData, data)) {
+                    visitorNode.next = nextNode.next;
 
-                        this.lastNode = null;
-                        this.curNode = null;
-                    } else if (tmpCurNode.next == tmpLastNode) {
-                        // A -> B -> A      A -> B -> A
-                        // ^            or       ^
-                        tmpLastNode.next = tmpLastNode;
-                        tmpCurNode.next = null;
-
-                        this.lastNode = tmpLastNode;
-                        this.curNode = tmpLastNode;
-                    } else {
-                        if (tmpCurNode == this.lastNode) {
-                            // A -> B -> C
-                            // ^
-                            this.lastNode = tmpCurNode.next;
-                            this.curNode = tmpCurNode.next.next;
-                        } else if (tmpCurNode == this.curNode) {
-                            // A -> B -> C
-                            //      ^
-                            this.curNode = tmpCurNode.next;
-                        }
-
-                        tmpLastNode.next = tmpCurNode.next;
-                        tmpCurNode.next = null;
+                    if (nextNode == curNode) {
+                        this.curNode = visitorNode;
                     }
 
+                    nextNode.next = null;
+                    nextNode.data = null;
                     break;
                 } else {
-                    tmpLastNode = tmpCurNode;
-                    tmpCurNode = tmpCurNode.next;
+                    visitorNode = visitorNode.next;
                 }
-            } while (curNode != tmpCurNode);
+            } while (visitorNode != curNode);
+
         } finally {
             this.lock.writeLock().unlock();
         }
     }
-
-    //    private void remove(Node<T> foundPrev, Node<T> found) {
-    //            Node<T> curNode = this.curNode;
-    //            if (this.lastNode == found) {
-    //                this.lastNode = curNode;
-    //                this.curNode = curNode.next;
-    //            } else if (curNode == found) {
-    //                this.curNode = curNode.next;
-    //            }
-    //
-    //            foundPrev.next = found.next;
-    //            found.next = null;
-    //            this.size = this.size - 1;
-    //
-    //            if (this.size == 0) {
-    //                this.lastNode = null;
-    //                this.curNode = null;
-    //            }
-    //    }
 }

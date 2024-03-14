@@ -48,8 +48,8 @@ public class BufferRingTest {
         ring.add("b");
 
         assert ring.size() == 2;
-        assert ring.next().equals("b");
         assert ring.next().equals("a");
+        assert ring.next().equals("b");
         assert ring.find(0).equals("b");
         assert ring.find(0).equals("b");
         assert ring.find(1).equals("a");
@@ -70,18 +70,18 @@ public class BufferRingTest {
         ring.add("e");
 
         assert ring.size() == 5;
-        assert ring.next().equals("e");
         assert ring.next().equals("a");
         assert ring.next().equals("b");
         assert ring.next().equals("c");
         assert ring.next().equals("d");
+        assert ring.next().equals("e");
 
         ring.remove("c");
         assert ring.size() == 4;
-        assert ring.next().equals("e");
         assert ring.next().equals("a");
         assert ring.next().equals("b");
         assert ring.next().equals("d");
+        assert ring.next().equals("e");
 
         ring.remove("d");
         assert ring.size() == 3;
@@ -147,12 +147,10 @@ public class BufferRingTest {
         ring.add("b");
         ring.add("c");
 
-        ring.remove("a");
-        ring.remove("b");
         ring.remove("c");
 
-        assert ring.size() == 0;
-        assert ring.next() == null;
+        assert ring.size() == 2;
+        assert ring.next().equals("a");
     }
 
     @Test

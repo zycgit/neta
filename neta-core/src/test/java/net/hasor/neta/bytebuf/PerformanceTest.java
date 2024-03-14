@@ -7,7 +7,6 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -31,20 +30,25 @@ public class PerformanceTest {
 
         AtomicBoolean exit = new AtomicBoolean(false);
         AtomicLong allocCnt = new AtomicLong(0);
-        LinkedBlockingQueue<PageChunkSplit> pageLists = new LinkedBlockingQueue<>();
+        Map<String, LinkedList<PageChunkSplit>> cacheMap = new ConcurrentHashMap<>();
 
+        // test case
         for (int i = 0; i < 32; i++) {
             ThreadUtils.daemonThread(true, (Runnable) () -> {
-                AtomicInteger num = new AtomicInteger();
+                AtomicInteger threadCnt = new AtomicInteger();
+                String tName = Thread.currentThread().getName();
+                LinkedList<PageChunkSplit> objects = new LinkedList<>();
+                cacheMap.put(tName, objects);
+
                 while (!exit.get()) {
-                    if (randomBoolean[num.incrementAndGet() % 1024]) {
-                        PageChunkSplit pageList = pool.requestPages(randomInt[num.incrementAndGet() % 1024]);
+                    if (randomBoolean[threadCnt.incrementAndGet() % 1024]) {
+                        PageChunkSplit pageList = pool.requestPages(randomInt[threadCnt.incrementAndGet() % 1024]);
                         if (pageList != null) {
                             allocCnt.incrementAndGet();
-                            pageLists.add(pageList);
+                            objects.add(pageList);
                         }
                     } else {
-                        PageChunkSplit poll = pageLists.poll();
+                        PageChunkSplit poll = objects.poll();
                         if (poll != null) {
                             poll.free();
                         }
@@ -53,6 +57,7 @@ public class PerformanceTest {
             });
         }
 
+        // print performance
         ThreadUtils.daemonThread(true, (Runnable) () -> {
             long t = System.currentTimeMillis();
             while (!exit.get()) {
@@ -60,15 +65,16 @@ public class PerformanceTest {
                 long cost = (System.currentTimeMillis() - t);
 
                 int cntPerSec = (int) (allocCnt.get() / (cost / 1000));
-                System.out.println("alloc :" + allocCnt.get() + ", " + cntPerSec + "/s, hold: " + pageLists.size());
+                System.out.println("alloc :" + allocCnt.get() + ", " + cntPerSec + "/s, hold: " + cacheMap.size());
             }
         });
 
-        ThreadUtils.sleep(5000);
+        // run 5s
+        ThreadUtils.sleep(10000);
         exit.set(true);
     }
 
-    //    @Test
+    @Test
     public void performance_BufferRing() {
         class GroupInt {
             final String group;
@@ -105,8 +111,9 @@ public class PerformanceTest {
                 cache.put(tName, objects);
                 runCnt.incrementAndGet();
 
+                AtomicInteger num = new AtomicInteger();
                 while (!exit.get()) {
-                    if (RandomUtils.nextBoolean()) {
+                    if (randomBoolean[num.incrementAndGet() % 1024]) {
                         GroupInt groupInt = new GroupInt(tName, numbers.incrementAndGet());
                         objects.add(groupInt);
                         ring.add(groupInt);
@@ -150,7 +157,7 @@ public class PerformanceTest {
                 System.out.println("read :" + readPerSec + "/s, write :" + writePerSec + "/s");
             }
         });
-        ThreadUtils.sleep(10000);
+        ThreadUtils.sleep(5000);
         exit.set(true);
 
         while (runCnt.get() > 0) {
@@ -164,21 +171,26 @@ public class PerformanceTest {
 
         AtomicBoolean exit = new AtomicBoolean(false);
         AtomicLong allocCnt = new AtomicLong(0);
-        LinkedBlockingQueue<Buffer> buffers = new LinkedBlockingQueue<>();
+        Map<String, LinkedList<Buffer>> buffers = new ConcurrentHashMap<>();
 
         AtomicLong runCnt = new AtomicLong(0);
-        for (int i = 0; i < 32; i++) {
+        for (int i = 0; i < 16; i++) {
             ThreadUtils.daemonThread(true, (Runnable) () -> {
+                String tName = Thread.currentThread().getName();
+                LinkedList<Buffer> objects = new LinkedList<>();
+                buffers.put(tName, objects);
                 runCnt.incrementAndGet();
+
+                AtomicInteger num = new AtomicInteger();
                 while (!exit.get()) {
-                    if (RandomUtils.nextBoolean()) {
-                        Buffer buffer = pool.requestBuffer(RandomUtils.nextInt(1, 128));
+                    if (randomBoolean[num.incrementAndGet() % 1024]) {
+                        Buffer buffer = pool.requestBuffer(randomInt[num.incrementAndGet() % 1024]);
                         if (buffer != null) {
                             allocCnt.incrementAndGet();
-                            buffers.add(buffer);
+                            objects.add(buffer);
                         }
                     } else {
-                        Buffer poll = buffers.poll();
+                        Buffer poll = objects.poll();
                         if (poll != null) {
                             poll.free();
                         }
@@ -208,11 +220,9 @@ public class PerformanceTest {
             ThreadUtils.sleep(100);
         }
 
-        Buffer buffer;
-        while ((buffer = buffers.poll()) != null) {
-            buffer.free();
-        }
-
-        System.out.println(pool);
+        //        Buffer buffer;
+        //        while ((buffer = buffers.poll()) != null) {
+        //            buffer.free();
+        //        }
     }
 }
