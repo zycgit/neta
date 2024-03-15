@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 package com.example.demo;
-import net.hasor.neta.channel.NetaSocket;
-import net.hasor.neta.channel.PipeInitializer;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.SoConfig;
-import net.hasor.neta.handler.PipeHelper;
+import net.hasor.neta.handler.ProtoHelper;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
-import net.hasor.neta.handler.codec.string.StringPipeLayer;
+import net.hasor.neta.handler.codec.string.StringHandler;
 
 import java.io.IOException;
 
@@ -29,17 +29,19 @@ import java.io.IOException;
  */
 public class AioEchoServer {
     public static void main(String[] args) throws IOException {
-        PipeInitializer initializer = ctx -> {
-            return PipeHelper.builder()
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder()
                     //split according to \r\n, max line is 4K
                     .nextDecoder("max length", new LineBasedFrameHandler(4096, false))
                     // encoder/decoder string
-                    .nextDuplex("string", new StringPipeLayer())
+                    .nextDuplex("string", new StringHandler())
                     // echo any message to client
-                    .nextDecoder("echo", new TelnetEchoPipeDuplex()).build();
+                    .nextDecoder("echo", new TelnetEchoPipeDuplex())
+                    // Build ProtoStack
+                    .build();
         };
 
-        NetaSocket socket = new NetaSocket(new SoConfig());
+        NetManager socket = new NetManager(new SoConfig());
         socket.listen("127.0.0.1", 5567, initializer);
 
         System.in.read();

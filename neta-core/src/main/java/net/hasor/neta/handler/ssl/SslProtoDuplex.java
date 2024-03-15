@@ -25,7 +25,7 @@ import java.util.Objects;
 /**
  * SSL 网络协议层
  */
-public class SslProtoDuplex implements ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
+public class SslProtoDuplex implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
     private final SslConfig config;
 
     public SslProtoDuplex(SslConfig config) {

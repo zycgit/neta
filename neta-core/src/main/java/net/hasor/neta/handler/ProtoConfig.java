@@ -27,7 +27,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * </p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
- * @see ProtoDuplex
+ * @see ProtoDuplexer
  */
 public class ProtoConfig {
     public static final ProtoConfig DEFAULT = new ProtoConfig() {

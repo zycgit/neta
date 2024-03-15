@@ -38,7 +38,7 @@ public class AbstractSslTest {
         LimitFrameProtoHandler limitFrame = new LimitFrameProtoHandler(2);
         return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
                 // limitFrame
-                .nextDuplex("LIMIT", new ProtoDuplexHandler<>(limitFrame, limitFrame))
+                .nextDuplex("LIMIT", new ProtoDuplexerHandler<>(limitFrame, limitFrame))
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String

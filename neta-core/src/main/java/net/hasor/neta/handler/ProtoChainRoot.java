@@ -245,7 +245,6 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             usingRcvDepth = rcvResult.backTo;
         } while (true);
 
-        //
         // do SND, process ProtoResult.Back
         int usingSndDepth = rcvResult.layerDepth;
         ProtoResult sndResult;

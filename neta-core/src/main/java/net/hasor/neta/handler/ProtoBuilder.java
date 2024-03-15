@@ -38,7 +38,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      * @param duplexer target duplexer
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
+    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
         return this.nextDuplex(duplexer.getClass().getSimpleName(), ProtoConfig.DEFAULT, duplexer);
     }
 
@@ -54,7 +54,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      * @param duplexer target duplexer
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
+    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer) {
         return this.nextDuplex(name, ProtoConfig.DEFAULT, duplexer);
     }
 
@@ -71,7 +71,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      * @param duplexer target duplexer
      * @throws NullPointerException if the specified handler is {@code null}
      */
-    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer);
+    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer);
 
     /**
      * using decoder and encoder to combined for duplex.

@@ -17,10 +17,10 @@ package net.hasor.neta.handler;
 import net.hasor.neta.channel.ProtoContext;
 
 /**
- * Used to represent a unidirectional data processor, two {@link ProtoHandler}`s in opposite directions can to {@link ProtoDuplex}
+ * Used to represent a unidirectional data processor, two {@link ProtoHandler}`s in opposite directions can to {@link ProtoDuplexer}
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
- * @see ProtoDuplex
+ * @see ProtoDuplexer
  */
 @FunctionalInterface
 public interface ProtoHandler<IN, OUT> {

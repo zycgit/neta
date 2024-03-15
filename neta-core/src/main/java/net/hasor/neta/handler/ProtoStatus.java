@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.handler;
 /**
- * A status for {@link ProtoDuplex}
+ * A status for {@link ProtoDuplexer}
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
  */
@@ -93,7 +93,7 @@ public enum ProtoStatus {
     Skip,
 
     /**
-     * Interrupt protocol stack event propagation, and Skip all the following {@link ProtoDuplex}
+     * Interrupt protocol stack event propagation, and Skip all the following {@link ProtoDuplexer}
      * <pre>
      *     ┏━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄╮
      * ... ┃ Handler (0) ┃ > ┆ Handler (1) ┆ > ┆ Handler (2) ┆ > end

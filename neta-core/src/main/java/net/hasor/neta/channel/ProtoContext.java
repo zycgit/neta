@@ -37,10 +37,10 @@ public interface ProtoContext {
     /** the SoContext */
     SoContext getSoContext();
 
-    /** Get the attachment for {@link ProtoPrepareContext} */
+    /** Get the attachment for {@link ProtoContext} */
     <T> T context(Class<T> attachment);
 
-    /** bind attachment to {@link ProtoPrepareContext} */
+    /** bind attachment to {@link ProtoContext} */
     <T> T context(Class<T> attachmentType, T attachment);
 
     /** receive buffer full */

@@ -15,7 +15,7 @@
  */
 package com.example.demo;
 import net.hasor.neta.channel.NetChannel;
-import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.handler.*;
 
 /**
@@ -23,21 +23,21 @@ import net.hasor.neta.handler.*;
  * @version : 2014年7月11日
  * @author 赵永春 (zyc@hasor.net)
  */
-public class TelnetEchoPipeDuplex implements PipeHandler<String, String> {
+public class TelnetEchoPipeDuplex implements ProtoHandler<String, String> {
     private static final String CTRL_C = new String(new byte[] { -17, -65, -67, -17, -65, -67, -17, -65, -67, -17, -65, -67, 6 });
 
     @Override
-    public void onInit(PipeContext context) {
+    public void onInit(ProtoContext context) {
         System.out.println("onInit");
     }
 
     @Override
-    public void onActive(PipeContext context) {
+    public void onActive(ProtoContext context) {
         System.out.println("onActive");
     }
 
     @Override
-    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<String> dst) {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<String> dst) {
         NetChannel channel = (NetChannel) context.getChannel();
         while (src.hasMore()) {
             String data = src.takeMessage();
@@ -48,17 +48,17 @@ public class TelnetEchoPipeDuplex implements PipeHandler<String, String> {
             }
         }
 
-        return PipeStatus.Next;
+        return ProtoStatus.Next;
     }
 
     @Override
-    public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+    public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
         System.out.println("onError");
-        return PipeStatus.Next;
+        return ProtoStatus.Next;
     }
 
     @Override
-    public void onClose(PipeContext context) {
+    public void onClose(ProtoContext context) {
         System.out.println("onClose");
     }
 }

@@ -16,7 +16,7 @@
 package net.hasor.neta.handler.codec.string;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.handler.ProtoDuplex;
+import net.hasor.neta.handler.ProtoDuplexer;
 import net.hasor.neta.handler.ProtoRcvQueue;
 import net.hasor.neta.handler.ProtoSndQueue;
 import net.hasor.neta.handler.ProtoStatus;
@@ -35,7 +35,7 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
-public class StringHandler implements ProtoDuplex<ByteBuf, String, String, ByteBuf> {
+public class StringHandler implements ProtoDuplexer<ByteBuf, String, String, ByteBuf> {
     private final StringDecoderHandler stringDecoder;
     private final StringEncoderHandler stringEncoder;
 

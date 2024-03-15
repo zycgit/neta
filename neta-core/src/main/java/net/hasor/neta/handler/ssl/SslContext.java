@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
-import net.hasor.neta.handler.ProtoDuplex;
+import net.hasor.neta.handler.ProtoDuplexer;
 
 /**
- * A status for {@link ProtoDuplex}
+ * A status for {@link ProtoDuplexer}
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
  */

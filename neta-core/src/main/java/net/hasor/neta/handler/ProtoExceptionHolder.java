@@ -18,7 +18,7 @@ package net.hasor.neta.handler;
  * Gets called if a Throwable was thrown.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
- * @see ProtoDuplex
+ * @see ProtoDuplexer
  * @see ProtoHandler
  */
 public interface ProtoExceptionHolder {

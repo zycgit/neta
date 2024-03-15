@@ -400,7 +400,7 @@ public class AbstractStackTest {
         };
     }
 
-    protected static ProtoDuplex<Integer, Integer, Integer, Integer> doProtoLayer(boolean rcvSend, boolean sndSend) {
+    protected static ProtoDuplexer<Integer, Integer, Integer, Integer> doProtoLayer(boolean rcvSend, boolean sndSend) {
         return (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
             if (isRcv) {
                 rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));

@@ -17,11 +17,11 @@ package net.hasor.neta.handler;
 import net.hasor.neta.channel.ProtoContext;
 
 /**
- * {@link ProtoDuplex} is a Duplexer handler, The data flow direction is identified by the isRcv parameter.
+ * {@link ProtoDuplexer} is a Duplexer handler, The data flow direction is identified by the isRcv parameter.
  * A protocol stack has four endpoints: RCV_UP, RCV_DOWN, SND_UP, and SND_DOWN, these endpoints can store some data.
  * Some of these endpoints come from Buffers, e.g, RCV_UP is located low on the stack.
  * SND_DOWN is the temporary storage used to receive the output of the ProtoStack.
- * When there are multiple {@link ProtoDuplex} layers, the endpoints are linked, e.g, first {@link ProtoDuplex} RCV_DOWN -> next {@link ProtoDuplex} RCV_UP
+ * When there are multiple {@link ProtoDuplexer} layers, the endpoints are linked, e.g, first {@link ProtoDuplexer} RCV_DOWN -> next {@link ProtoDuplexer} RCV_UP
  * <pre>
  *         ┏━━━━━━━━━━━━━━━━━━━━━━━━┓    ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
  * DATA -> ┃ RCV_UP        RCV_DOWN ┃ -> ┃ RCV_UP        RCV_DOWN ┃  -> ...
@@ -42,7 +42,7 @@ import net.hasor.neta.channel.ProtoContext;
  * @see ProtoConfig
  */
 @FunctionalInterface
-public interface ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     /**
      * Initialize the protocol stack.
      */

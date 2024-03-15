@@ -59,7 +59,7 @@ public final class ProtoHelper {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoDuplex<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(duplexer, "duplexer is null.");
 
@@ -75,7 +75,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(decoder, "decoder is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
 
-            ProtoDuplexHandler<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> handler = new ProtoDuplexHandler<>(decoder, encoder);
+            ProtoDuplexerHandler<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> handler = new ProtoDuplexerHandler<>(decoder, encoder);
             this.taskAppend.add(chainRoot -> {
                 chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, handler));
             });
@@ -114,7 +114,7 @@ public final class ProtoHelper {
         }
     }
 
-    static class DecoderDuplexWrap<RCV_UP, RCV_DOWN, SND> implements ProtoDuplex<RCV_UP, RCV_DOWN, SND, SND> {
+    static class DecoderDuplexWrap<RCV_UP, RCV_DOWN, SND> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND, SND> {
         private final ProtoHandler<RCV_UP, RCV_DOWN> decoder;
 
         public DecoderDuplexWrap(ProtoHandler<RCV_UP, RCV_DOWN> decoder) {
@@ -156,7 +156,7 @@ public final class ProtoHelper {
         }
     }
 
-    static class EncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplex<RCV, RCV, SND_UP, SND_DOWN> {
+    static class EncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV, RCV, SND_UP, SND_DOWN> {
         private final ProtoHandler<SND_UP, SND_DOWN> encoder;
 
         public EncoderDuplexWrap(ProtoHandler<SND_UP, SND_DOWN> encoder) {

@@ -272,12 +272,12 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
     /** Returns the number of ProtoStack received slots. */
     public int getRcvSlotSize() {
-        return this.protoStack.getRcvSlotSize();
+        return this.protoStack == null ? Integer.MAX_VALUE : this.protoStack.getRcvSlotSize();
     }
 
     /** Returns the number of ProtoStack send slots. */
     public int getSndSlotSize() {
-        return this.protoStack.getSndSlotSize();
+        return this.protoStack == null ? Integer.MAX_VALUE : this.protoStack.getSndSlotSize();
     }
 
     /* Receive data without concurrency */
@@ -303,7 +303,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         try {
             this.protoCtx.flash(ProtoContext.SO_CHANNEL_RETRY_CNT, retryCnt);
 
-            if (this.protoStack.getRcvSlotSize() == 0) {
+            if (this.protoStack != null && this.protoStack.getRcvSlotSize() == 0) {
                 logger.info("rcv(" + this.channelID + ") the ProtoStack slot is full.");
                 this.protoStack.onRcvError(this.protoCtx, null, ProtoFullException.INSTANCE);
                 return;
@@ -311,7 +311,13 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
             //The root Buffer cannot be deallocated
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            Object[] sndBufSet = this.protoStack.onRcvMessage(this.protoCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
+            Object[] sndBufSet;
+            if (this.protoStack != null) {
+                sndBufSet = this.protoStack.onRcvMessage(this.protoCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
+            } else {
+                sndBufSet = new ByteBuf[] { new ByteBufSafe(rcvByteBuf) };
+            }
+
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -335,10 +341,14 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         try {
             //The root Buffer cannot be deallocated
             Object[] sndBufSet;
-            if (isRcv) {
-                sndBufSet = this.protoStack.onRcvError(this.protoCtx, null, e);
+            if (this.protoStack != null) {
+                if (isRcv) {
+                    sndBufSet = this.protoStack.onRcvError(this.protoCtx, null, e);
+                } else {
+                    sndBufSet = this.protoStack.onSndError(this.protoCtx, null, e);
+                }
             } else {
-                sndBufSet = this.protoStack.onSndError(this.protoCtx, null, e);
+                sndBufSet = ArrayUtils.EMPTY_OBJECT_ARRAY;
             }
 
             for (Object sndBuf : sndBufSet) {
@@ -414,10 +424,14 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         try {
             boolean isFlush = writeData == null;
             Object[] sndByteBuf;
-            if (isFlush) {
-                sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, ArrayUtils.EMPTY_OBJECT_ARRAY);
+            if (this.protoStack != null) {
+                if (isFlush) {
+                    sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, ArrayUtils.EMPTY_OBJECT_ARRAY);
+                } else {
+                    sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, new Object[] { writeData });
+                }
             } else {
-                sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, new Object[] { writeData });
+                sndByteBuf = new Object[] { writeData };
             }
 
             ByteBuf merged = ByteBufAllocator.DEFAULT.arrayBuffer();
@@ -478,7 +492,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             return future;
         }
 
-        if (this.protoStack.getSndSlotSize() == 0) {
+        if (this.protoStack != null && this.protoStack.getSndSlotSize() == 0) {
             logger.info("snd(" + this.channelID + ") the ProtoStack slot is full.");
             future.failed(ProtoFullException.INSTANCE);
             return future;

@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * RCV_UP and RCV_DOWN,SND_UP and SND_DOWN. Is the name of RCV and SND under different endpoints.
  * When the {@link ProtoStack} forms a chain, the rcv event upward propagates,the snd event downward propagates.
  * <p>
- * When two {@link ProtoDuplex} are connected, the endpoint object is shared in the same direction. e.g., RCV_DOWN and RCV_UP.
+ * When two {@link ProtoDuplexer} are connected, the endpoint object is shared in the same direction. e.g., RCV_DOWN and RCV_UP.
  * For convenience, use the DOWN name
  * </p>
  * <pre>
@@ -42,18 +42,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-10-20
  */
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    private static final Logger                                          logger        = Logger.getLogger(ProtoInvocation.class);
-    public static final  String                                          RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
-    public static final  String                                          SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
-    private final        String                                          name;
-    private final        ProtoConfig                                     config;
-    private final        AtomicBoolean                                   inited;
+    private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
+    public static final  String                                            RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
+    public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
+    private final        String                                            name;
+    private final        ProtoConfig                                       config;
+    private final        AtomicBoolean                                     inited;
     //
-    private              ProtoQueue<RCV_DOWN>                            rcvDown;
-    private              ProtoQueue<SND_DOWN>                            sndDown;
-    private final        ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
+    private              ProtoQueue<RCV_DOWN>                              rcvDown;
+    private              ProtoQueue<SND_DOWN>                              sndDown;
+    private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
 
-    public ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler) {
+    public ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler) {
         Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(handler, "handler is null.");
 
@@ -63,17 +63,17 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         this.handler = handler;
     }
 
-    /** return this {@link ProtoDuplex} name. */
+    /** return this {@link ProtoDuplexer} name. */
     public String getName() {
         return this.name;
     }
 
-    /** the {@link ProtoDuplex} RCV_DOWN to connect the next {@link ProtoDuplex} RCV_UP. */
+    /** the {@link ProtoDuplexer} RCV_DOWN to connect the next {@link ProtoDuplexer} RCV_UP. */
     public ProtoQueue<RCV_DOWN> getRcvDown() {
         return this.rcvDown;
     }
 
-    /** the {@link ProtoDuplex} SND_DOWN to connect the next {@link ProtoDuplex} SND_UP. */
+    /** the {@link ProtoDuplexer} SND_DOWN to connect the next {@link ProtoDuplexer} SND_UP. */
     public ProtoQueue<SND_DOWN> getSndDown() {
         return this.sndDown;
     }

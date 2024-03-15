@@ -18,7 +18,7 @@ import net.hasor.cobble.ResourcesUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.codec.LimitFrameProtoHandler;
-import net.hasor.neta.handler.ProtoDuplexHandler;
+import net.hasor.neta.handler.ProtoDuplexerHandler;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoHelper;
 
@@ -79,7 +79,7 @@ public class SoSslUtils {
         LimitFrameProtoHandler limitFrame = new LimitFrameProtoHandler(2);
         return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
                 // limitFrame
-                .nextDuplex("LIMIT", new ProtoDuplexHandler<>(limitFrame, limitFrame))
+                .nextDuplex("LIMIT", new ProtoDuplexerHandler<>(limitFrame, limitFrame))
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String

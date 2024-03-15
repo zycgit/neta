@@ -6,9 +6,10 @@ description: dbVisitor 是一个轻量小巧的数据库 ORM 工具，提供对�
 ---
 # 介绍
 
-dbVisitor 是一个轻量小巧的数据库 ORM 工具，提供对象映射、丰富的类型处理、动态SQL、存储过程、 内置分页方言20+、
-支持嵌套事务、多数据源、条件构造器、INSERT 策略、多语句/多结果。并兼容 Spring 及 MyBatis 用法。
-它不依赖任何其它框架，因此可以很方便的和任意一个框架整合在一起使用。
+The Neta project is an effort to provide an asynchronous event-driven network application
+framework and tooling for the rapid development of maintainable high-performance and high-scalability protocol servers and clients.
+
+In other words, Netty is an NIO client server framework that enables quick and easy development of network applications such as protocol servers and clients. It greatly simplifies and streamlines network programming such as TCP and UDP socket server development.
 
 ## 功能特性
 
