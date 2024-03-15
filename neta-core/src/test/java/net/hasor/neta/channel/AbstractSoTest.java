@@ -19,10 +19,10 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.handler.PipeHandler;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.handler.ProtoHandler;
+import net.hasor.neta.handler.ProtoRcvQueue;
+import net.hasor.neta.handler.ProtoSndQueue;
+import net.hasor.neta.handler.ProtoStatus;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -73,20 +73,20 @@ public class AbstractSoTest {
         return config;
     }
 
-    public static PipeHandler counter(AtomicInteger counter) {
-        return new PipeHandler() {
+    public static ProtoHandler counter(AtomicInteger counter) {
+        return new ProtoHandler() {
             @Override
-            public void onActive(PipeContext context) throws Throwable {
+            public void onActive(ProtoContext context) throws Throwable {
                 counter.incrementAndGet();
             }
 
             @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue src, PipeSndQueue dst) throws Throwable {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue src, ProtoSndQueue dst) throws Throwable {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public void onClose(PipeContext context) {
+            public void onClose(ProtoContext context) {
                 counter.decrementAndGet();
             }
         };

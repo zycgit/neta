@@ -28,7 +28,7 @@ public class LimitFrameHandlerTest {
     public void limitFrame_1() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
         EmbeddedInitializer initializer = ctx -> {
-            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", limitFrame).build();
+            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", limitFrame).build();
         };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -66,7 +66,7 @@ public class LimitFrameHandlerTest {
     public void limitFrame_2() {
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
         EmbeddedInitializer initializer = ctx -> {
-            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDuplex(limitFrame, limitFrame).build();
+            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextDuplex(limitFrame, limitFrame).build();
         };
 
         //

@@ -18,11 +18,11 @@ import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.ResourcesUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoContext;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.handler.ProtoRcvQueue;
+import net.hasor.neta.handler.ProtoSndQueue;
+import net.hasor.neta.handler.ProtoStatus;
 
 import javax.net.ssl.*;
 import java.io.IOException;
@@ -41,7 +41,7 @@ import java.util.Objects;
 public abstract class SslContextBasic implements SslContext {
     private static final Logger        logger = Logger.getLogger(SslContextBasic.class);
     protected final      long          channelID;
-    protected final      PipeContext   pipeContext;
+    protected final      ProtoContext  protoCtx;
     protected final      SoContext     soContext;
     private final        boolean       clientMode;
     protected final      boolean       sslLog;
@@ -54,10 +54,10 @@ public abstract class SslContextBasic implements SslContext {
     private final        SslEngineWrap sslEngine;
     private final        SslHandle     sslHandler;
 
-    public SslContextBasic(long channelID, SslConfig config, PipeContext pipeContext, boolean clientMode) throws Exception {
+    public SslContextBasic(long channelID, SslConfig config, ProtoContext protoCtx, boolean clientMode) throws Exception {
         this.channelID = channelID;
-        this.pipeContext = pipeContext;
-        this.soContext = pipeContext.getSoContext();
+        this.protoCtx = protoCtx;
+        this.soContext = protoCtx.getSoContext();
         this.clientMode = clientMode;
         this.sslLog = config.isSsllog();
         this.netLog = this.soContext.getConfig().isNetlog();
@@ -67,7 +67,7 @@ public abstract class SslContextBasic implements SslContext {
         this.sslStatus = this.sslMode != SslMode.Manual;
         this.sslContext = this.createSSLContext();
         this.sslEngine = new SslEngineWrap(channelID, config, () -> this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine()));
-        this.sslHandler = new SslHandle(channelID, pipeContext, this.sslEngine, () -> {
+        this.sslHandler = new SslHandle(channelID, protoCtx, this.sslEngine, () -> {
             this.sslStatus = this.sslMode == SslMode.Always; // auto reset
         });
     }
@@ -184,44 +184,44 @@ public abstract class SslContextBasic implements SslContext {
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws IOException;
 
     /** Receiving SSL data */
-    public PipeStatus handRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public ProtoStatus handRcv(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslStatus) {
             if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
                 if (this.netLog) {
                     logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
                 }
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
 
             if (this.sslHandler.tryHandshake(true, rcvUp, rcvDown, sndUp, sndDown)) {
                 this.sslHandler.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
             }
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         } else {
             rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
             sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         }
     }
 
     /** Sending SSL data */
-    public PipeStatus handSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public ProtoStatus handSnd(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslStatus) {
             if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
                 if (this.netLog) {
                     logger.info("sslSnd(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
                 }
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
 
             if (this.sslHandler.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
                 this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
             }
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         } else {
             rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
             sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         }
     }
 
@@ -235,7 +235,7 @@ public abstract class SslContextBasic implements SslContext {
         if (engine != null && !engine.isOutboundDone()) {
             engine.closeOutbound();
             try {
-                this.pipeContext.flush();
+                this.protoCtx.flush();
             } catch (IOException e) {
                 if (this.sslLog) {
                     logger.error("ssl(" + this.channelID + ") closeSSL, flash close_notify failed, " + e.getMessage(), e);

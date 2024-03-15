@@ -15,11 +15,11 @@
  */
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.PipeHandler;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.handler.ProtoHandler;
+import net.hasor.neta.handler.ProtoRcvQueue;
+import net.hasor.neta.handler.ProtoSndQueue;
+import net.hasor.neta.handler.ProtoStatus;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
@@ -28,9 +28,9 @@ import java.io.UnsupportedEncodingException;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class DelimiterBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
+public class DelimiterBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     @Override
-    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws IOException {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws IOException {
         throw new UnsupportedEncodingException();
     }
 }

@@ -38,23 +38,23 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvLocalShutdownInputTest_01() throws Exception {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> {
-            return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                 @Override
-                public void onActive(PipeContext context) {
+                public void onActive(ProtoContext context) {
                     context.getChannel().shutdownInput();// shutdownInput with accept.
                 }
 
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
                     rcvAnyThing.set(true);
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
 
                 @Override
-                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                     rcvError.set(e instanceof SoInputCloseException);
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
             }).build();
         };
@@ -93,23 +93,23 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvLocalShutdownInputTest_02() throws Exception {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> {
-            return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
                     while (rcvUp.hasMore()) {
                         ByteBuf data = rcvUp.takeMessage();
                         data.skipReadableBytes(data.readableBytes());
                         data.markReader();
                         rcvAnyThing.set(true);
                     }
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
 
                 @Override
-                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                     rcvError.set(e instanceof SoInputCloseException);
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
             }).build();
         };
@@ -153,23 +153,23 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvLocalShutdownInputTest_03() throws Exception {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> {
-            return PipeHelper.builder().nextEncoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
                     while (rcvUp.hasMore()) {
                         ByteBuf data = rcvUp.takeMessage();
                         data.skipReadableBytes(data.readableBytes());
                         data.markReader();
                         rcvAnyThing.set(true);
                     }
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
 
                 @Override
-                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                     rcvError.set(e instanceof SoInputCloseException);
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
             }).build();
         };
@@ -213,18 +213,18 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvLocalShutdownInputTest_04() throws Exception {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> {
-            return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) {
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
                     rcvAnyThing.set(true);
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
 
                 @Override
-                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                     rcvError.set(e instanceof SoInputCloseException);
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
             }).build();
         };
@@ -266,7 +266,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
+        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().build());
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -287,7 +287,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
+        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().build());
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -306,21 +306,21 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndLocalShutdownOutputTest_01() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onActive(PipeContext context) {
+            public void onActive(ProtoContext context) {
                 context.getChannel().shutdownOutput();// shutdownOutput with accept.
             }
 
             @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
                 sndError.set(e instanceof SoOutputCloseException);
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -352,16 +352,16 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndLocalShutdownOutputTest_02() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
                 sndError.set(e instanceof SoOutputCloseException);
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -399,16 +399,16 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndLocalShutdownOutputTest_03() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
                 sndError.set(e instanceof SoOutputCloseException);
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -457,11 +457,11 @@ public class SoShutdownTest extends AbstractSoTest {
     public void sndLocalShutdownOutputTest_04() throws Exception {
         // start server.
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 rcvAnyThing.set(true);
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -494,7 +494,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> PipeHelper.builder().build());
+        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().build());
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -525,16 +525,16 @@ public class SoShutdownTest extends AbstractSoTest {
     @Test
     public void sndRemoteShutdownInputTest_02() throws Exception {
         AtomicBoolean sndError = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 sndError.set(e instanceof SoOutputCloseException);
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 

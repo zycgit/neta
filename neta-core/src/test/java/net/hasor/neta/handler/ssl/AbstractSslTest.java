@@ -17,8 +17,8 @@ package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.codec.LimitFramePipeHandler;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.codec.LimitFrameProtoHandler;
 import net.hasor.neta.handler.*;
 
 import java.nio.charset.StandardCharsets;
@@ -31,16 +31,16 @@ import java.util.List;
  * @version : 2022-11-01
  */
 public class AbstractSslTest {
-    public static EmbeddedInitializer createPipeline(SslConfig sslConf) {
+    public static EmbeddedInitializer createProtoStack(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        return ctx -> PipeHelper.embedded(ByteBuf.class, ByteBuf.class)
+        LimitFrameProtoHandler limitFrame = new LimitFrameProtoHandler(2);
+        return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
                 // limitFrame
-                .nextDuplex("LIMIT", new PipeDuplexHandler<>(limitFrame, limitFrame))
+                .nextDuplex("LIMIT", new ProtoDuplexHandler<>(limitFrame, limitFrame))
                 // SSL
-                .nextDuplex("SSL", new SslPipeLayer(sslConf))
+                .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
@@ -56,10 +56,10 @@ public class AbstractSslTest {
     }
 
     /** Decoding the message: ByteBuf -> String */
-    public static PipeStatus doDecoder1(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
+    public static ProtoStatus doDecoder1(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) {
         List<ByteBuf> bufArray = src.peekMessage(src.queueSize());
         if (bufArray == null || bufArray.size() == 0) {
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         }
 
         List<ByteBuf> temp = new ArrayList<>();
@@ -72,7 +72,7 @@ public class AbstractSslTest {
             }
         }
         if (!hasLine) {
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         }
 
         ByteBuf tmpBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
@@ -100,11 +100,11 @@ public class AbstractSslTest {
         if (line != null) {
             dst.offerMessage(line);
         }
-        return PipeStatus.Next;
+        return ProtoStatus.Next;
     }
 
     /** encoded message: String -> ByteBuf */
-    public static PipeStatus doEncoder1(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<ByteBuf> dst) {
+    public static ProtoStatus doEncoder1(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<ByteBuf> dst) {
         String message;
         do {
             message = src.takeMessage();
@@ -115,7 +115,7 @@ public class AbstractSslTest {
                 }
             }
         } while (message != null);
-        return PipeStatus.Next;
+        return ProtoStatus.Next;
     }
 
     protected Object[] biasedArray(Object[] data) {

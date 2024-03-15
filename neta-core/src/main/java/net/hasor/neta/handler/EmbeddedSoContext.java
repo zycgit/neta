@@ -104,7 +104,7 @@ public class EmbeddedSoContext implements SoContext {
         this.channelMap.remove(channelID);
 
         EmbeddedChannel netChannel = (EmbeddedChannel) channel;
-        netChannel.pipeline.onClose(netChannel.pipeCtx);
+        netChannel.protoStack.onClose(netChannel.protoCtx);
 
         logger.info("channel(" + channelID + ") closed.");
     }

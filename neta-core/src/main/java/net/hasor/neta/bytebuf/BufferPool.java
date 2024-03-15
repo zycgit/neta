@@ -25,7 +25,7 @@ import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
- * 页面池化管理器
+ * Memory pool
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */

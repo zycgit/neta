@@ -44,31 +44,31 @@ public class NetManager extends AbstractNetManager {
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      * @param listenPort local port for listen
-     * @param pipeline Application layer network protocol
+     * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(int listenPort, PipeInitializer pipeline) throws IOException {
-        return this.listen(new InetSocketAddress("0.0.0.0", listenPort), pipeline, null);
+    public synchronized NetListen listen(int listenPort, ProtoInitializer initializer) throws IOException {
+        return this.listen(new InetSocketAddress("0.0.0.0", listenPort), initializer, null);
     }
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      * @param listenAddr local address for listen
      * @param listenPort local port for listen
-     * @param pipeline Application layer network protocol
+     * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(String listenAddr, int listenPort, PipeInitializer pipeline) throws IOException {
-        return this.listen(new InetSocketAddress(listenAddr, listenPort), pipeline, null);
+    public synchronized NetListen listen(String listenAddr, int listenPort, ProtoInitializer initializer) throws IOException {
+        return this.listen(new InetSocketAddress(listenAddr, listenPort), initializer, null);
     }
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
      * @param listen local address:port for listen
-     * @param pipeline Application layer network protocol
+     * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(InetSocketAddress listen, PipeInitializer pipeline, NetListenOptions options) throws IOException {
+    public synchronized NetListen listen(InetSocketAddress listen, ProtoInitializer initializer, NetListenOptions options) throws IOException {
         this.initChannelGroup();
 
         options = options == null ? NetListenOptions.DEFAULT : options;
@@ -78,7 +78,7 @@ public class NetManager extends AbstractNetManager {
 
         long channelID = this.context.nextID();
         long createdTime = System.currentTimeMillis();
-        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, pipeline, this.context, options);
+        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, initializer, this.context, options);
         this.context.openChannel(netListen, listen);
 
         listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
@@ -89,20 +89,20 @@ public class NetManager extends AbstractNetManager {
     /**
      * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param localPort local port
-     * @param pipeline Application layer network protocol
+     * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(int localPort, PipeInitializer pipeline) {
-        return this.connect(new InetSocketAddress(localPort), pipeline);
+    public Future<NetChannel> connect(int localPort, ProtoInitializer initializer) {
+        return this.connect(new InetSocketAddress(localPort), initializer);
     }
 
     /**
      * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
      * @param remoteAddr local address
      * @param localPort local port
-     * @param pipeline Application layer network protocol
+     * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(String remoteAddr, int localPort, PipeInitializer pipeline) {
-        return this.connect(new InetSocketAddress(remoteAddr, localPort), pipeline);
+    public Future<NetChannel> connect(String remoteAddr, int localPort, ProtoInitializer initializer) {
+        return this.connect(new InetSocketAddress(remoteAddr, localPort), initializer);
     }
 
     /**
@@ -110,7 +110,7 @@ public class NetManager extends AbstractNetManager {
      * @param remoteAddr remoteAddr
      * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(InetSocketAddress remoteAddr, PipeInitializer initializer) {
+    public Future<NetChannel> connect(InetSocketAddress remoteAddr, ProtoInitializer initializer) {
         Future<NetChannel> future = new BasicFuture<>();
         long channelID = this.context.nextID();
         SoAsyncChannel asyncChannel = null;
@@ -132,9 +132,9 @@ public class NetManager extends AbstractNetManager {
             SocketAddress localAddr = asyncChannel.getLocalAddress();
             channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
 
-            // init Pipeline
-            PipeContextImpl pipeCtx = new PipeContextImpl(channel, this.context);
-            channel.initChannel(pipeCtx, initializer.config(pipeCtx));
+            // init ProtoStack
+            ProtoContextImpl protoCtx = new ProtoContextImpl(channel, this.context);
+            channel.initChannel(protoCtx, initializer.config(protoCtx));
         } catch (Throwable e) {
             IOUtils.closeQuietly(asyncChannel);
             future.failed(e);
@@ -142,9 +142,9 @@ public class NetManager extends AbstractNetManager {
         }
 
         try {
-            // init pipeline
+            // init ProtoStack
             this.context.openChannel(channel, remoteAddr);
-            channel.pipeline.onInit(channel.pipeCtx);
+            channel.protoStack.onInit(channel.protoCtx);
 
             // connect to
             asyncChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(channel, asyncChannel, future));
@@ -181,8 +181,8 @@ public class NetManager extends AbstractNetManager {
     //     * @param stackFactory Application layer network protocol
     //     * @return A channel for bind sockets
     //     */
-    //    public synchronized NetChannel bind(int bindPort, PipeStackFactory stackFactory) throws IOException {
-    //        return this.bind(new InetSocketAddress(bindPort), stackFactory);
+    //    public synchronized NetChannel bind(int bindPort, ProtoInitializer initializer) throws IOException {
+    //        return this.bind(new InetSocketAddress(bindPort), initializer);
     //    }
     //
     //    /**
@@ -193,8 +193,8 @@ public class NetManager extends AbstractNetManager {
     //     * @param stackFactory Application layer network protocol
     //     * @return A channel for bind sockets
     //     */
-    //    public synchronized NetChannel bind(String bindAddr, int bindPort, PipeStackFactory stackFactory) throws IOException {
-    //        return this.bind(new InetSocketAddress(bindAddr, bindPort), stackFactory);
+    //    public synchronized NetChannel bind(String bindAddr, int bindPort, ProtoInitializer initializer) throws IOException {
+    //        return this.bind(new InetSocketAddress(bindAddr, bindPort), initializer);
     //    }
 
     protected void initChannelGroup() throws IOException {

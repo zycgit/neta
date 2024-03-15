@@ -39,7 +39,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     //
     private final    InetSocketAddress               listen;
     protected final  AsynchronousServerSocketChannel channel;
-    private final    PipeInitializer                 initializer;
+    private final    ProtoInitializer                initializer;
     private final    SoContextImpl                   context;
     private volatile boolean                         suspend;
     //
@@ -47,7 +47,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     protected final  Future<NetListen>               closeFuture;
 
     NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel,//
-            PipeInitializer initializer, SoContextImpl context, NetListenOptions options) {
+            ProtoInitializer initializer, SoContextImpl context, NetListenOptions options) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
@@ -133,7 +133,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     }
 
     @Override
-    public <T> T findPipeContext(Class<T> serviceType) {
+    public <T> T findProtoContext(Class<T> serviceType) {
         throw new UnsupportedOperationException();
     }
 
@@ -171,7 +171,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     }
 
     /** return Application layer network protocol stack to use */
-    PipeInitializer getInitializer() {
+    ProtoInitializer getInitializer() {
         return initializer;
     }
 

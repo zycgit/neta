@@ -286,13 +286,13 @@ class SoContextImpl implements SoContext {
             // clean wQueue
             netChannel.wContext.purge(e);
 
-            // release pipeStack
+            // release ProtoStack
             NetListen forListen = netChannel.getListen();
             if (forListen != null) {
                 forListen.notifyClose(netChannel);
             }
 
-            netChannel.pipeline.onClose(netChannel.pipeCtx);
+            netChannel.protoStack.onClose(netChannel.protoCtx);
             IOUtils.closeQuietly(netChannel.channel);
             IOUtils.closeQuietly(specialExecutor);
             logger.info("channel(" + channelID + ") closed.");

@@ -43,11 +43,11 @@ public class SoSslTest extends AbstractSslTest {
 
         // Server
         List<String> serverRcvData = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)));
 
         // Client
         List<String> clientRcvData = new ArrayList<>();
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)));
 
         //
         while (!connect.isDone()) {
@@ -80,11 +80,11 @@ public class SoSslTest extends AbstractSslTest {
 
         // Server
         List<String> serverRcvData = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)));
 
         // Client
         List<String> clientRcvData = new ArrayList<>();
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)));
 
         //
         while (!connect.isDone()) {
@@ -109,7 +109,7 @@ public class SoSslTest extends AbstractSslTest {
 
         // SSL disable
         // Switch to no encryption, there is keep connect, close SSL
-        SslContext sslContext = client.findPipeContext(SslContext.class);
+        SslContext sslContext = client.findProtoContext(SslContext.class);
         sslContext.closeSSL();
 
         clientRcvData.clear();
@@ -136,11 +136,11 @@ public class SoSslTest extends AbstractSslTest {
 
         // Server
         List<String> serverRcvData = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)));
 
         // Client
         List<String> clientRcvData = new ArrayList<>();
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)));
 
         //
         while (!connect.isDone()) {
@@ -165,9 +165,9 @@ public class SoSslTest extends AbstractSslTest {
 
         // SSL disable
         // Switch to no encryption, there is keep connect, close SSL
-        SslContext sslServerCtx = server.findPipeContext(SslContext.class);
+        SslContext sslServerCtx = server.findProtoContext(SslContext.class);
         sslServerCtx.closeSSL();
-        SslContext sslClientCtx = client.findPipeContext(SslContext.class);
+        SslContext sslClientCtx = client.findProtoContext(SslContext.class);
         while (sslClientCtx.isActive()) {
             ThreadUtils.sleep(100);
         }
@@ -196,11 +196,11 @@ public class SoSslTest extends AbstractSslTest {
 
         // Server
         List<String> serverRcvData = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(serverRcvData)));
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)));
 
         // Client
         List<String> clientRcvData = new ArrayList<>();
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(clientRcvData)));
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)));
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
         }
@@ -222,8 +222,8 @@ public class SoSslTest extends AbstractSslTest {
         assert serverRcvData.get(0).equals("Hello Server, this message no encryption.");
 
         // Switch to no encryption, there is keep connect, close SSL
-        SslContext clientSSL = client.findPipeContext(SslContext.class);
-        SslContext serverSSL = server.findPipeContext(SslContext.class);
+        SslContext clientSSL = client.findProtoContext(SslContext.class);
+        SslContext serverSSL = server.findProtoContext(SslContext.class);
         clientSSL.openSSL();
         serverSSL.openSSL();
 

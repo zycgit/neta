@@ -15,11 +15,11 @@
  */
 package net.hasor.neta.handler.codec.string;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.PipeHandler;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.handler.ProtoHandler;
+import net.hasor.neta.handler.ProtoRcvQueue;
+import net.hasor.neta.handler.ProtoSndQueue;
+import net.hasor.neta.handler.ProtoStatus;
 import net.hasor.neta.handler.codec.DelimiterBasedFrameHandler;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
 
@@ -35,7 +35,7 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
-public class StringDecoderHandler implements PipeHandler<ByteBuf, String> {
+public class StringDecoderHandler implements ProtoHandler<ByteBuf, String> {
     private final Charset charset;
 
     /**
@@ -53,7 +53,7 @@ public class StringDecoderHandler implements PipeHandler<ByteBuf, String> {
     }
 
     @Override
-    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) {
         boolean hasAny = false;
         while (src.hasMore()) {
             ByteBuf byteBuf = src.takeMessage();
@@ -62,6 +62,6 @@ public class StringDecoderHandler implements PipeHandler<ByteBuf, String> {
                 hasAny = true;
             }
         }
-        return hasAny ? PipeStatus.Next : PipeStatus.Exit;
+        return hasAny ? ProtoStatus.Next : ProtoStatus.Exit;
     }
 }

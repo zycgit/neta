@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.handler.PipeHelper;
+import net.hasor.neta.handler.ProtoHelper;
 import org.junit.Test;
 
 import java.io.InputStream;
@@ -33,7 +33,7 @@ public class SoListenTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, context -> PipeHelper.builder().build());
+        NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
 
         Socket client = new Socket("127.0.0.1", safePort);
         InputStream soInput = client.getInputStream();
@@ -59,7 +59,7 @@ public class SoListenTest extends AbstractSoTest {
     public void suspendTest_1() throws Exception {
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, context -> PipeHelper.builder().build());
+        NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
 
         listen.suspend();
         Socket testClient1 = new Socket("127.0.0.1", safePort);
@@ -87,8 +87,8 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void acceptListener_1() throws Exception {
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen1 = server.listen("127.0.0.1", safePort(), context -> PipeHelper.builder().build());
-        NetListen listen2 = server.listen("127.0.0.1", safePort(), context -> PipeHelper.builder().build());
+        NetListen listen1 = server.listen("127.0.0.1", safePort(), context -> ProtoHelper.builder().build());
+        NetListen listen2 = server.listen("127.0.0.1", safePort(), context -> ProtoHelper.builder().build());
         int safePort1 = listen1.getListenPort();
         int safePort2 = listen2.getListenPort();
 
@@ -122,10 +122,10 @@ public class SoListenTest extends AbstractSoTest {
     public void acceptListener_2() throws Exception {
         AtomicInteger atomicListen = new AtomicInteger();
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort(), new PipeInitializer() {
+        NetListen listen = server.listen("127.0.0.1", safePort(), new ProtoInitializer() {
             @Override
-            public Pipeline<ByteBuf> config(PipeContext ctx) {
-                return PipeHelper.builder().nextDecoder(counter(atomicListen)).build();
+            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
+                return ProtoHelper.builder().nextDecoder(counter(atomicListen)).build();
             }
         });
 
@@ -153,7 +153,7 @@ public class SoListenTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, context -> PipeHelper.builder().build());
+        NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
 
         assert listen == server.findListen(safePort);
 

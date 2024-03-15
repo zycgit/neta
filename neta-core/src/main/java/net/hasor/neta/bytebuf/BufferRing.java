@@ -22,7 +22,6 @@ import java.util.function.Function;
 
 /**
  * Ring Buffer linked list.
- *
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */

@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.ssl;
-import net.hasor.neta.handler.PipeConfig;
+import net.hasor.neta.handler.ProtoConfig;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManager;
@@ -26,7 +26,7 @@ import java.security.KeyStore;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SslConfig extends PipeConfig {
+public class SslConfig extends ProtoConfig {
     private SslMode                sslMode               = SslMode.Always;
     private SslProvider            provider              = SslProvider.JSSE;      // default is JDK
     private SslClientAuth          clientAuth            = SslClientAuth.NONE;   //

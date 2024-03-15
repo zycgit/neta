@@ -27,13 +27,13 @@ import java.nio.channels.CompletionHandler;
  */
 class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
     private static final Logger             logger = Logger.getLogger(SoConnectCompletionHandler.class);
-    private final        Pipeline<?>        pipeline;
+    private final        ProtoStack<?>      protoStack;
     private final        NetChannel         channel;
     private final        SoAsyncChannel     asyncChannel;
     private final        Future<NetChannel> future;
 
     public SoConnectCompletionHandler(NetChannel channel, SoAsyncChannel asyncChannel, Future<NetChannel> future) {
-        this.pipeline = channel.pipeline;
+        this.protoStack = channel.protoStack;
         this.channel = channel;
         this.asyncChannel = asyncChannel;
         this.future = future;
@@ -53,7 +53,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
             SocketAddress remoteAddress = this.asyncChannel.getRemoteAddress();
             logger.info("connected(" + channel.getChannelID() + ") L:" + localAddress + " -> R:" + remoteAddress);
 
-            this.pipeline.onActive(this.channel.pipeCtx);
+            this.protoStack.onActive(this.channel.protoCtx);
             this.channel.rHandler.read();
             this.future.completed(this.channel);
         } catch (Throwable e) {

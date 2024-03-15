@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.channel.Pipeline;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoStack;
 
 /**
  * Application protocol stack
@@ -24,5 +24,5 @@ import net.hasor.neta.channel.Pipeline;
  */
 @FunctionalInterface
 public interface EmbeddedInitializer {
-    Pipeline<?> config(PipeContext ctx);
+    ProtoStack<?> config(ProtoContext ctx);
 }

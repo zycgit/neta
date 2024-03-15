@@ -45,10 +45,10 @@ public class SslAlpnTest extends AbstractSslTest {
         });
 
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
-        SslContext serverSSL = server.findPipeContext(SslContext.class);
-        SslContext clientSSL = client.findPipeContext(SslContext.class);
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
+        SslContext serverSSL = server.findProtoContext(SslContext.class);
+        SslContext clientSSL = client.findProtoContext(SslContext.class);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 

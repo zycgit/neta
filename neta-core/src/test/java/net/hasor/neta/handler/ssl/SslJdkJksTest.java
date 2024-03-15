@@ -39,8 +39,8 @@ public class SslJdkJksTest extends AbstractSslTest {
     public void sslHandshakeTest_1() {
         SslConfig sslConf = sslConfig(SslMode.Always);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -56,8 +56,8 @@ public class SslJdkJksTest extends AbstractSslTest {
     public void sslHandshakeDisorderTest_1() {
         SslConfig sslConf = sslConfig(SslMode.Once);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -70,8 +70,8 @@ public class SslJdkJksTest extends AbstractSslTest {
         client.readRcvArray();
         server.readRcvArray();
 
-        SslContext serverSSL = server.findPipeContext(SslContext.class);
-        SslContext clientSSL = client.findPipeContext(SslContext.class);
+        SslContext serverSSL = server.findProtoContext(SslContext.class);
+        SslContext clientSSL = client.findProtoContext(SslContext.class);
         serverSSL.openSSL();
         clientSSL.openSSL();
 
@@ -88,8 +88,8 @@ public class SslJdkJksTest extends AbstractSslTest {
     public void sslModelAlwaysTest_1() {
         SslConfig sslConf = sslConfig(SslMode.Always);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -101,7 +101,7 @@ public class SslJdkJksTest extends AbstractSslTest {
         assert server.readRcv().equals("Hello Server, this message using encryption.");
 
         // Switch to no encryption, there is keep connect, close SSL
-        SslContext sslContext = client.findPipeContext(SslContext.class);
+        SslContext sslContext = client.findProtoContext(SslContext.class);
         sslContext.closeSSL();
         transfer(transfer, 500, 10);
 
@@ -117,8 +117,8 @@ public class SslJdkJksTest extends AbstractSslTest {
     public void sslModelOnceTest_1() {
         SslConfig sslConf = sslConfig(SslMode.Once);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -130,7 +130,7 @@ public class SslJdkJksTest extends AbstractSslTest {
         assert server.readRcv().equals("Hello Server, this message using encryption.");
 
         // Switch to no encryption, there is keep connect, close SSL
-        SslContext clientSSL = client.findPipeContext(SslContext.class);
+        SslContext clientSSL = client.findProtoContext(SslContext.class);
         clientSSL.closeSSL();
         transfer(transfer, 500, 10);
 
@@ -146,8 +146,8 @@ public class SslJdkJksTest extends AbstractSslTest {
     public void sslModelOnceTest_2() {
         SslConfig sslConf = sslConfig(SslMode.Once);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -159,7 +159,7 @@ public class SslJdkJksTest extends AbstractSslTest {
         assert server.readRcv().equals("Hello Server, this message using encryption.");
 
         // Switch to no encryption, there is keep connect, close SSL
-        SslContext serverSSL = server.findPipeContext(SslContext.class);
+        SslContext serverSSL = server.findProtoContext(SslContext.class);
         serverSSL.closeSSL();
         transfer(transfer, 500, 10);
 
@@ -175,8 +175,8 @@ public class SslJdkJksTest extends AbstractSslTest {
     public void sslModelManualTest_1() {
         SslConfig sslConf = sslConfig(SslMode.Manual);
         EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createPipeline(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createPipeline(sslConf), context);
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
@@ -188,8 +188,8 @@ public class SslJdkJksTest extends AbstractSslTest {
         assert server.readRcv().equals("Hello Server, this message no encryption.");
 
         // Switch to no encryption, there is keep connect, close SSL
-        SslContext clientSSL = client.findPipeContext(SslContext.class);
-        SslContext serverSSL = server.findPipeContext(SslContext.class);
+        SslContext clientSSL = client.findProtoContext(SslContext.class);
+        SslContext serverSSL = server.findProtoContext(SslContext.class);
         clientSSL.openSSL();
         serverSSL.openSSL();
         transfer(transfer, 500, 10);

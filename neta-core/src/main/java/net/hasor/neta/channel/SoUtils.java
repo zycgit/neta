@@ -35,11 +35,11 @@ public class SoUtils {
     }
 
     /**
-     * Prints this pipline status and its backtrace to the specified print stream.
-     * @param s {@code PrintStream} to use for output
+     * Prints this {@link ProtoStack} status and its backtrace to the specified print stream.
+     * @param s {@link PrintStream} to use for output
      */
-    public static void printStackTrace(PrintStream s, SoChannel<?> channel, Pipeline<?> pipeline) {
-        String body = pipeline == null ? "--- There is no Pipeline ---" : pipeline.toString();
+    public static void printStackTrace(PrintStream s, SoChannel<?> channel, ProtoStack<?> protoStack) {
+        String body = protoStack == null ? "--- There is no ProtoStack ---" : protoStack.toString();
         int len = body.split("\n")[0].length();
         String ctitle = "ChannelID  : " + channel.getChannelID() + ",";
         String status = channel.isClient() ? "Client" : "Server";

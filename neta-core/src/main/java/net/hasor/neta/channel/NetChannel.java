@@ -58,8 +58,8 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     protected final      SoSndCompletionHandler wHandler;
     private final        AtomicBoolean          wStatus;
     //
-    protected            PipeContextImpl        pipeCtx;
-    protected            Pipeline<ByteBuf>      pipeline;
+    protected            ProtoContextImpl       protoCtx;
+    protected            ProtoStack<ByteBuf>    protoStack;
     //
     private final        boolean                netLog;
     protected final      AtomicBoolean          closeStatus;
@@ -88,9 +88,9 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         this.wStatus = new AtomicBoolean(false);
     }
 
-    protected void initChannel(PipeContextImpl pipeContext, Pipeline<ByteBuf> pipeline) {
-        this.pipeCtx = pipeContext;
-        this.pipeline = Objects.requireNonNull(pipeline, "pipeline is null.");
+    protected void initChannel(ProtoContextImpl protoCtx, ProtoStack<ByteBuf> protoStack) {
+        this.protoCtx = protoCtx;
+        this.protoStack = Objects.requireNonNull(protoStack, "ProtoStack is null.");
     }
 
     @Override
@@ -195,8 +195,8 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     }
 
     @Override
-    public <T> T findPipeContext(Class<T> serviceType) {
-        return this.pipeCtx.context(serviceType);
+    public <T> T findProtoContext(Class<T> serviceType) {
+        return this.protoCtx.context(serviceType);
     }
 
     /** Returns the {@link NetListen} that accepts this channel */
@@ -270,14 +270,14 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         return sndBuf.capacity() - sndBuf.writableBytes();
     }
 
-    /** Returns the number of pipeline received slots. */
+    /** Returns the number of ProtoStack received slots. */
     public int getRcvSlotSize() {
-        return this.pipeline.getRcvSlotSize();
+        return this.protoStack.getRcvSlotSize();
     }
 
-    /** Returns the number of pipeline send slots. */
+    /** Returns the number of ProtoStack send slots. */
     public int getSndSlotSize() {
-        return this.pipeline.getSndSlotSize();
+        return this.protoStack.getSndSlotSize();
     }
 
     /* Receive data without concurrency */
@@ -301,17 +301,17 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         }
 
         try {
-            this.pipeCtx.flash(PipeContext.SO_CHANNEL_RETRY_CNT, retryCnt);
+            this.protoCtx.flash(ProtoContext.SO_CHANNEL_RETRY_CNT, retryCnt);
 
-            if (this.pipeline.getRcvSlotSize() == 0) {
-                logger.info("rcv(" + this.channelID + ") the pipeline slot is full.");
-                this.pipeline.onRcvError(this.pipeCtx, null, PipeFullException.INSTANCE);
+            if (this.protoStack.getRcvSlotSize() == 0) {
+                logger.info("rcv(" + this.channelID + ") the ProtoStack slot is full.");
+                this.protoStack.onRcvError(this.protoCtx, null, ProtoFullException.INSTANCE);
                 return;
             }
 
             //The root Buffer cannot be deallocated
             ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            Object[] sndBufSet = this.pipeline.onRcvMessage(this.pipeCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
+            Object[] sndBufSet = this.protoStack.onRcvMessage(this.protoCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
                 if (buf.hasReadable()) {
@@ -319,14 +319,14 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
                 }
             }
         } catch (Throwable e) {
-            // It is not executed unless the exception is thrown in PipeReceiveListener.onError(...)
-            String msg = "invoker pipeline failed: " + e.getMessage();
+            // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
+            String msg = "invoker ProtoStack failed: " + e.getMessage();
             logger.error("rcv(" + this.channelID + ") " + msg, e);
 
             this.closeStatus.set(true);
             this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
         } finally {
-            this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+            this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
     }
 
@@ -336,9 +336,9 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             //The root Buffer cannot be deallocated
             Object[] sndBufSet;
             if (isRcv) {
-                sndBufSet = this.pipeline.onRcvError(this.pipeCtx, null, e);
+                sndBufSet = this.protoStack.onRcvError(this.protoCtx, null, e);
             } else {
-                sndBufSet = this.pipeline.onSndError(this.pipeCtx, null, e);
+                sndBufSet = this.protoStack.onSndError(this.protoCtx, null, e);
             }
 
             for (Object sndBuf : sndBufSet) {
@@ -348,14 +348,14 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
                 }
             }
         } catch (Throwable ee) {
-            // It is not executed unless the exception is thrown in PipeReceiveListener.onError(...)
-            String msg = "invoker pipeline failed: " + ee.getMessage();
+            // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
+            String msg = "invoker ProtoStack failed: " + ee.getMessage();
             logger.error("rcv(" + this.channelID + ") " + msg, ee);
 
             this.closeStatus.set(true);
             this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
         } finally {
-            this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+            this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
     }
 
@@ -387,9 +387,9 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>
      */
-    public Future<NetChannel> sendData(Object writeData, String pipeName) {
+    public Future<NetChannel> sendData(Object writeData, String stackName) {
         Objects.requireNonNull(writeData, "the send data is null.");
-        return this.sendOrFlush(writeData, pipeName);
+        return this.sendOrFlush(writeData, stackName);
     }
 
     /** flash */
@@ -401,11 +401,11 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>
      */
-    public Future<?> flush(String pipeName) {
-        return this.sendOrFlush(null, pipeName);
+    public Future<?> flush(String stackName) {
+        return this.sendOrFlush(null, stackName);
     }
 
-    private Future<NetChannel> sendOrFlush(Object writeData, String pipeName) {
+    private Future<NetChannel> sendOrFlush(Object writeData, String stackName) {
         Future<NetChannel> future = newFutureForSend();
         if (future.isDone()) {
             return future;
@@ -415,9 +415,9 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             boolean isFlush = writeData == null;
             Object[] sndByteBuf;
             if (isFlush) {
-                sndByteBuf = this.pipeline.onSndMessage(this.pipeCtx, pipeName, ArrayUtils.EMPTY_OBJECT_ARRAY);
+                sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, ArrayUtils.EMPTY_OBJECT_ARRAY);
             } else {
-                sndByteBuf = this.pipeline.onSndMessage(this.pipeCtx, pipeName, new Object[] { writeData });
+                sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, new Object[] { writeData });
             }
 
             ByteBuf merged = ByteBufAllocator.DEFAULT.arrayBuffer();
@@ -464,7 +464,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             logger.error("snd(" + channelID + ") failed, " + e.getMessage(), e);
             future.failed(e);
         } finally {
-            this.pipeCtx.clearFlash(); // Cleanup must be performed because there are times when PipeChainRoot is not used
+            this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
         return future;
     }
@@ -478,9 +478,9 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             return future;
         }
 
-        if (this.pipeline.getSndSlotSize() == 0) {
-            logger.info("snd(" + this.channelID + ") the pipeline slot is full.");
-            future.failed(PipeFullException.INSTANCE);
+        if (this.protoStack.getSndSlotSize() == 0) {
+            logger.info("snd(" + this.channelID + ") the ProtoStack slot is full.");
+            future.failed(ProtoFullException.INSTANCE);
             return future;
         }
 
@@ -604,6 +604,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
      * @param s {@code PrintStream} to use for output
      */
     public void printStackTrace(PrintStream s) {
-        SoUtils.printStackTrace(s, this, this.pipeline);
+        SoUtils.printStackTrace(s, this, this.protoStack);
     }
 }

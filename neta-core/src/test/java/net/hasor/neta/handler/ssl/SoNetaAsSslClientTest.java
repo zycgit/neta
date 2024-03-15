@@ -63,7 +63,7 @@ public class SoNetaAsSslClientTest extends AbstractSslTest {
         soConf.setNetlog(true);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
         NetManager neta = new NetManager(soConf);
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf));
+        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf));
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
         }

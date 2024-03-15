@@ -47,19 +47,19 @@ public class SoConnectTest extends AbstractSoTest {
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer();
         NetManager neta = new NetManager(crateConfig(2, 32));
-        Future<NetChannel> future = neta.connect(safePort, new PipeInitializer() {
+        Future<NetChannel> future = neta.connect(safePort, new ProtoInitializer() {
             @Override
-            public Pipeline<ByteBuf> config(PipeContext ctx) {
-                return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
+                return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                     @Override
-                    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws Throwable {
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
                         while (src.hasMore()) {
                             ByteBuf data = src.takeMessage();
                             buf.write(data);
                             data.markReader();
                             buf.markWriter();
                         }
-                        return PipeStatus.Next;
+                        return ProtoStatus.Next;
                     }
                 }).build();
             }
@@ -81,10 +81,10 @@ public class SoConnectTest extends AbstractSoTest {
         int safePort = safePort();
 
         NetManager neta = new NetManager(crateConfig(2, 32));
-        Future<NetChannel> future = neta.connect(safePort, new PipeInitializer() {
+        Future<NetChannel> future = neta.connect(safePort, new ProtoInitializer() {
             @Override
-            public Pipeline<ByteBuf> config(PipeContext ctx) {
-                return PipeHelper.builder().build();
+            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
+                return ProtoHelper.builder().build();
             }
         });
         neta.shutdown();

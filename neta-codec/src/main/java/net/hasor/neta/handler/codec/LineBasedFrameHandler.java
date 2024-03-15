@@ -16,11 +16,11 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.PipeContext;
-import net.hasor.neta.handler.PipeHandler;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
-import net.hasor.neta.handler.PipeStatus;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.handler.ProtoHandler;
+import net.hasor.neta.handler.ProtoRcvQueue;
+import net.hasor.neta.handler.ProtoSndQueue;
+import net.hasor.neta.handler.ProtoStatus;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -38,7 +38,7 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class LineBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
+public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     /** Maximum length of a frame we're willing to decode, Throws an exception when maxLength is exceeded */
     private final int     maxLength;
     private final boolean stripDelimiter;
@@ -71,9 +71,9 @@ public class LineBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
     }
 
     @Override
-    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
         if (!src.hasMore()) {
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         }
 
         List<ByteBuf> peekArray = src.peekMessage(src.queueSize());
@@ -86,10 +86,10 @@ public class LineBasedFrameHandler implements PipeHandler<ByteBuf, ByteBuf> {
             }
         }
 
-        return PipeStatus.Next;
+        return ProtoStatus.Next;
     }
 
-    private ByteBuf expectLine(PipeContext context, PipeRcvQueue<ByteBuf> src, List<ByteBuf> peekArray) {
+    private ByteBuf expectLine(ProtoContext context, ProtoRcvQueue<ByteBuf> src, List<ByteBuf> peekArray) {
         List<ByteBuf> temp = new ArrayList<>();
         boolean hasLine = false;
         int consumedBytes = 0;

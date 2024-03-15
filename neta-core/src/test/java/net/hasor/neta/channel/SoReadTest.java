@@ -42,18 +42,18 @@ public class SoReadTest extends AbstractSoTest {
 
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, new PipeInitializer() {
+        NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
             @Override
-            public Pipeline<ByteBuf> config(PipeContext ctx) {
-                return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
+                return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                     @Override
-                    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws Throwable {
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
                         NetChannel netChannel = ((NetChannel) context.getChannel());
                         while (src.hasMore()) {
                             netChannel.sendData(src.takeMessage()); // echo
                             cnt.incrementAndGet();// packet ++
                         }
-                        return PipeStatus.Next;
+                        return ProtoStatus.Next;
                     }
                 }).build();
             }
@@ -85,17 +85,17 @@ public class SoReadTest extends AbstractSoTest {
 
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, new PipeInitializer() {
+        NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
             @Override
-            public Pipeline<ByteBuf> config(PipeContext ctx) {
-                return PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
+                return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                     @Override
-                    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) throws Throwable {
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
                         while (src.hasMore()) {
                             src.takeMessage();
                             cnt.incrementAndGet();// packet ++
                         }
-                        return PipeStatus.Next;
+                        return ProtoStatus.Next;
                     }
                 }).build();
             }
@@ -126,10 +126,10 @@ public class SoReadTest extends AbstractSoTest {
         soConfig.setNetlog(false);
         NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, new PipeInitializer() {
+        NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
             @Override
-            public Pipeline<ByteBuf> config(PipeContext ctx) {
-                return PipeHelper.builder().build();// <-- stacking without handling
+            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
+                return ProtoHelper.builder().build();// <-- stacking without handling
             }
         });
 
@@ -161,11 +161,11 @@ public class SoReadTest extends AbstractSoTest {
     @Test
     public void rcvBackPressedTest_02() throws Exception {
         AtomicBoolean rcvErr = new AtomicBoolean(false);
-        PipeConfig pipeConfig = new PipeConfig();
-        pipeConfig.setPipeRcvDownStackSize(3);
+        ProtoConfig protoConf = new ProtoConfig();
+        protoConf.setRcvDownSlotSize(3);
 
-        PipeBuilder<String, ByteBuf> builder = PipeHelper.builder(pipeConfig)//
-                .nextDecoder("L1", pipeConfig, (PipeHandler<ByteBuf, String>) (context, rcvUp, rcvDown) -> {
+        ProtoBuilder<String, ByteBuf> builder = ProtoHelper.builder(protoConf)//
+                .nextDecoder("L1", protoConf, (ProtoHandler<ByteBuf, String>) (context, rcvUp, rcvDown) -> {
                     while (rcvUp.hasMore() && rcvDown.hasSlot()) {
                         ByteBuf byteBuf = rcvUp.peekMessage();
                         while (byteBuf.hasLine()) {
@@ -177,19 +177,19 @@ public class SoReadTest extends AbstractSoTest {
                         }
                     }
                     // gen message to L2
-                    return PipeStatus.Next;
-                }).nextDecoder("L2", pipeConfig, (PipeHandler<String, String>) (context, rcvUp, rcvDown) -> {
-                    return PipeStatus.Next; //No data consumption
-                }).nextDecoder(new PipeHandler<String, String>() {
+                    return ProtoStatus.Next;
+                }).nextDecoder("L2", protoConf, (ProtoHandler<String, String>) (context, rcvUp, rcvDown) -> {
+                    return ProtoStatus.Next; //No data consumption
+                }).nextDecoder(new ProtoHandler<String, String>() {
                     @Override
-                    public PipeStatus onMessage(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<String> dst) {
-                        return PipeStatus.Next;
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<String> dst) {
+                        return ProtoStatus.Next;
                     }
 
                     @Override
-                    public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
-                        rcvErr.set(e instanceof PipeFullException);
-                        return PipeStatus.Next;
+                    public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                        rcvErr.set(e instanceof ProtoFullException);
+                        return ProtoStatus.Next;
                     }
                 });
 
@@ -225,7 +225,7 @@ public class SoReadTest extends AbstractSoTest {
     public void rcvCounterTest() throws Exception {
         // eval dm5
         MessageDigest serverDigest = MessageDigest.getInstance("MD5");
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder((PipeHandler<ByteBuf, ByteBuf>) (context, src, dst) -> {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder((ProtoHandler<ByteBuf, ByteBuf>) (context, src, dst) -> {
             while (src.hasMore()) {
                 ByteBuf data = src.takeMessage();
                 int len = data.readableBytes();
@@ -234,7 +234,7 @@ public class SoReadTest extends AbstractSoTest {
                 data.markReader();
                 serverDigest.digest(bytes);
             }
-            return PipeStatus.Next;
+            return ProtoStatus.Next;
         }).build();
 
         // start server
@@ -265,18 +265,18 @@ public class SoReadTest extends AbstractSoTest {
     @Test
     public void rcvReadTimeoutTest_01() throws Exception {
         AtomicLong rcvErrTime = new AtomicLong(0);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context1, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context1, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -304,18 +304,18 @@ public class SoReadTest extends AbstractSoTest {
     @Test
     public void rcvReadTimeoutTest_02() throws Exception {
         AtomicLong rcvErrTime = new AtomicLong(0);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context1, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context1, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -345,18 +345,18 @@ public class SoReadTest extends AbstractSoTest {
     @Test
     public void waitReceiveTest_01() throws Exception {
         AtomicLong rcvErrTime = new AtomicLong(0);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context1, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context1, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -389,18 +389,18 @@ public class SoReadTest extends AbstractSoTest {
     @Test
     public void waitReceiveTest_02() throws Exception {
         AtomicLong rcvErrTime = new AtomicLong(0);
-        PipeInitializer initializer = ctx -> PipeHelper.builder().nextDecoder(new PipeHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public PipeStatus onMessage(PipeContext context1, PipeRcvQueue<ByteBuf> src, PipeSndQueue<ByteBuf> dst) {
-                return PipeStatus.Next;
+            public ProtoStatus onMessage(ProtoContext context1, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                return ProtoStatus.Next;
             }
 
             @Override
-            public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 if (e instanceof SoReadTimeoutException) {
                     rcvErrTime.set(System.currentTimeMillis());
                 }
-                return PipeStatus.Next;
+                return ProtoStatus.Next;
             }
         }).build();
 
@@ -435,22 +435,22 @@ public class SoReadTest extends AbstractSoTest {
     @Test
     public void rcvThrowTest_01() throws Exception {
         AtomicBoolean rcvErr1 = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> {
-            return PipeHelper.builder().nextDecoder("L1", new PipeHandler<ByteBuf, String>() {
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) throws Throwable {
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) throws Throwable {
                     throw new IllegalStateException("L1 Throw");
                 }
-            }).nextDecoder(new PipeHandler<String, String>() {
+            }).nextDecoder(new ProtoHandler<String, String>() {
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<String> dst) throws Throwable {
-                    return PipeStatus.Next;
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<String> dst) throws Throwable {
+                    return ProtoStatus.Next;
                 }
 
                 @Override
-                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) throws Throwable {
+                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
                     rcvErr1.set(e.getMessage().equals("L1 Throw")); //exception is handled
-                    return PipeStatus.Next;
+                    return ProtoStatus.Next;
                 }
             }).build();
         };
@@ -482,20 +482,20 @@ public class SoReadTest extends AbstractSoTest {
     @Test
     public void rcvThrowTest_02() throws Exception {
         AtomicBoolean rcvErr1 = new AtomicBoolean(false);
-        PipeInitializer initializer = ctx -> {
-            return PipeHelper.builder().nextDecoder("L1", new PipeHandler<ByteBuf, String>() {
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<ByteBuf> src, PipeSndQueue<String> dst) {
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) {
                     throw new IllegalStateException("L1 Throw");
                 }
-            }).nextDecoder(new PipeHandler<String, String>() {
+            }).nextDecoder(new ProtoHandler<String, String>() {
                 @Override
-                public PipeStatus onMessage(PipeContext context, PipeRcvQueue<String> src, PipeSndQueue<String> dst) {
-                    return PipeStatus.Next;
+                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<String> dst) {
+                    return ProtoStatus.Next;
                 }
 
                 @Override
-                public PipeStatus onError(PipeContext context, Throwable e, PipeExceptionHolder eh) {
+                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                     rcvErr1.set(e.getMessage().equals("L1 Throw"));
                     throw new IllegalArgumentException(); //Additional exceptions,Cause connection closure.
                 }

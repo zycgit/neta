@@ -40,18 +40,18 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     private static final SocketAddress           LOCAL_ADDRESS  = new EmbeddedSocketAddress();
     private static final SocketAddress           REMOTE_ADDRESS = new EmbeddedSocketAddress();
     //
-    private final        PipeQueue<Object>       rcvDown;
+    private final        ProtoQueue<Object>      rcvDown;
     private              Throwable               rcvError;
-    private final        PipeQueue<Object>       sndDown;
+    private final        ProtoQueue<Object>      sndDown;
     private              Throwable               sndError;
-    protected final      PipeContext             pipeCtx;
-    protected final      Pipeline<?>             pipeline;
+    protected final      ProtoContext            protoCtx;
+    protected final      ProtoStack<?>           protoStack;
     //
     private final        AtomicBoolean           closeStatus;
     private final        Future<EmbeddedChannel> closeFuture;
 
-    private static class EmbeddedPipeContextImpl extends PipeContextImpl {
-        protected EmbeddedPipeContextImpl(EmbeddedChannel channel, SoContext soContext) {
+    private static class EmbeddedProtoContextImpl extends ProtoContextImpl {
+        protected EmbeddedProtoContextImpl(EmbeddedChannel channel, SoContext soContext) {
             super(channel, soContext);
         }
 
@@ -59,7 +59,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         public Future<?> sendData(Object writeData) {
             EmbeddedChannel channel = (EmbeddedChannel) getChannel();
 
-            String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
+            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
                 channel.send(current, writeData);
             } else {
@@ -72,7 +72,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         public Future<?> flush() {
             EmbeddedChannel channel = (EmbeddedChannel) getChannel();
 
-            String current = this.flash(PipeContext.CURRENT_PIPE_STACK_NAME);
+            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
                 channel.send(current, ArrayUtils.EMPTY_OBJECT_ARRAY);
             } else {
@@ -91,14 +91,14 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
         try {
             context.openChannel(this);
-            this.pipeCtx = new EmbeddedPipeContextImpl(this, context);
-            this.pipeline = initializer.config(this.pipeCtx);
-            this.pipeline.onInit(this.pipeCtx);
-            this.rcvDown = new PipeQueue<>(-1);
-            this.sndDown = new PipeQueue<>(-1);
+            this.protoCtx = new EmbeddedProtoContextImpl(this, context);
+            this.protoStack = initializer.config(this.protoCtx);
+            this.protoStack.onInit(this.protoCtx);
+            this.rcvDown = new ProtoQueue<>(-1);
+            this.sndDown = new ProtoQueue<>(-1);
 
-            PipeChainRoot chainRoot = (PipeChainRoot) this.pipeline;
-            chainRoot.bindListener(new PipeListener() {
+            ProtoChainRoot chainRoot = (ProtoChainRoot) this.protoStack;
+            chainRoot.bindListener(new ProtoListener() {
                 @Override
                 public void onReceive(SoChannel<?> channel, Object data) {
                     rcvDown.offerMessage(data);
@@ -115,7 +115,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
                 }
             });
 
-            this.pipeline.onActive(this.pipeCtx);
+            this.protoStack.onActive(this.protoCtx);
         } catch (Throwable e) {
             throw ExceptionUtils.toRuntime(e);
         }
@@ -170,8 +170,8 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     @Override
-    public <T> T findPipeContext(Class<T> serviceType) {
-        return this.pipeCtx.context(serviceType);
+    public <T> T findProtoContext(Class<T> serviceType) {
+        return this.protoCtx.context(serviceType);
     }
 
     @Override
@@ -223,8 +223,8 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** Get protocol stack statistics */
-    public PipeStatistical getPipeStatistical() {
-        return (PipeStatistical) this.pipeline;
+    public ProtoStatistical getStatistical() {
+        return (ProtoStatistical) this.protoStack;
     }
 
     /**
@@ -237,10 +237,10 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
     /**
      * Write messages to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
-     * @param pipeName specific protocol layer
+     * @param stackName specific protocol layer
      * @param object the messages to be written
      */
-    public void receiveTo(String pipeName, Object... object) {
+    public void receiveTo(String stackName, Object... object) {
         if (object == null || object.length == 0) {
             object = ArrayUtils.EMPTY_OBJECT_ARRAY;
         }
@@ -248,7 +248,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         try {
             Objects.requireNonNull(object, "object is null.");
             this.lastActiveTime = System.currentTimeMillis();
-            Object[] sndDownObj = this.pipeline.onRcvMessage(this.pipeCtx, pipeName, object);
+            Object[] sndDownObj = this.protoStack.onRcvMessage(this.protoCtx, stackName, object);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
@@ -271,14 +271,14 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      * Write error to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void receiveError(String pipeName, Throwable e) {
+    public void receiveError(String stackName, Throwable e) {
         if (e == null) {
             return;
         }
 
         try {
             this.lastActiveTime = System.currentTimeMillis();
-            Object[] sndDownObj = this.pipeline.onRcvError(this.pipeCtx, pipeName, e);
+            Object[] sndDownObj = this.protoStack.onRcvError(this.protoCtx, stackName, e);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
@@ -343,17 +343,17 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
     /**
      * Write messages to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
-     * @param pipeName specific protocol layer
+     * @param stackName specific protocol layer
      * @param object the messages to be written
      */
-    public void sendTo(String pipeName, Object... object) {
+    public void sendTo(String stackName, Object... object) {
         if (object == null || object.length == 0) {
             object = ArrayUtils.EMPTY_OBJECT_ARRAY;
         }
 
         try {
             Objects.requireNonNull(object, "object is null.");
-            Object[] sndDownObj = this.pipeline.onSndMessage(this.pipeCtx, pipeName, object);
+            Object[] sndDownObj = this.protoStack.onSndMessage(this.protoCtx, stackName, object);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
@@ -376,14 +376,14 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      * Write error to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void sendError(String pipeName, Throwable e) {
+    public void sendError(String stackName, Throwable e) {
         if (e == null) {
             return;
         }
 
         try {
             Objects.requireNonNull(e);
-            Object[] sndDownObj = this.pipeline.onSndError(this.pipeCtx, pipeName, e);
+            Object[] sndDownObj = this.protoStack.onSndError(this.protoCtx, stackName, e);
             if (sndDownObj.length != 0) {
                 this.sndDown.offerMessage(sndDownObj);
                 this.sndDown.sndSubmit();
@@ -448,6 +448,6 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      * @param s {@code PrintStream} to use for output
      */
     public void printStackTrace(PrintStream s) {
-        SoUtils.printStackTrace(s, this, this.pipeline);
+        SoUtils.printStackTrace(s, this, this.protoStack);
     }
 }

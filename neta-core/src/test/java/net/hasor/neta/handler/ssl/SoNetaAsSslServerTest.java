@@ -44,7 +44,7 @@ public class SoNetaAsSslServerTest extends AbstractSslTest {
         NetManager neta = new NetManager(soConf);
 
         List<String> rcvMessage = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketPipeline(sslConf, new MyRcvToListPipeHandler(rcvMessage)));
+        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage)));
 
         // client
         AtomicBoolean writeFinish = new AtomicBoolean();

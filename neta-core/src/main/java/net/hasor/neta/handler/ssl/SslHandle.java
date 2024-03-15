@@ -18,11 +18,11 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.channel.PipeContext;
+import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.SoOverflowException;
-import net.hasor.neta.handler.PipeRcvQueue;
-import net.hasor.neta.handler.PipeSndQueue;
+import net.hasor.neta.handler.ProtoRcvQueue;
+import net.hasor.neta.handler.ProtoSndQueue;
 
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
@@ -43,7 +43,7 @@ class SslHandle {
     private final        long               channelID;
     private final        SslConfig          config;
     private final        SoContext          context;
-    private final        PipeContext        pipeContext;
+    private final        ProtoContext       protoCtx;
     private final        SslEngineWrap      engine;
     private final        ByteBufAllocator   bufAllocator;
     private final        boolean            sslLog;
@@ -55,11 +55,11 @@ class SslHandle {
     private              ByteBuffer         outNetData;
     private              ByteBuffer         outAppData;
 
-    public SslHandle(long channelID, PipeContext context, SslEngineWrap engine, Runnable closeCallBack) {
+    public SslHandle(long channelID, ProtoContext protoCtx, SslEngineWrap engine, Runnable closeCallBack) {
         this.channelID = channelID;
         this.config = engine.getConfig();
-        this.context = context.getSoContext();
-        this.pipeContext = context;
+        this.context = protoCtx.getSoContext();
+        this.protoCtx = protoCtx;
         this.engine = engine;
         this.bufAllocator = this.context.getResourceManager().getByteBufAllocator();
         this.sslLog = config.isSsllog();
@@ -72,7 +72,7 @@ class SslHandle {
         return this.channelID;
     }
 
-    private int queueToBuffer(PipeRcvQueue<ByteBuf> src, ByteBuffer dst) {
+    private int queueToBuffer(ProtoRcvQueue<ByteBuf> src, ByteBuffer dst) {
         int total = 0;
         while (src.hasMore()) {
             ByteBuf data = src.peekMessage();
@@ -87,7 +87,7 @@ class SslHandle {
         return total;
     }
 
-    private int bufferToQueue(ByteBuffer src, PipeSndQueue<ByteBuf> dst) {
+    private int bufferToQueue(ByteBuffer src, ProtoSndQueue<ByteBuf> dst) {
         int length = src.limit();
         if (length > 0) {
             ByteBuf byteBuf = this.bufAllocator.buffer(length);
@@ -104,7 +104,7 @@ class SslHandle {
     //
     // --------------------------------------------------------------------------------------------
 
-    public boolean tryHandshake(boolean isRcv, PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public boolean tryHandshake(boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.handshake == SslHandshakeStatus.Finish) {
             return true; // The handshake has been successful, and the SSL data decryption/encryption is processed
         }
@@ -141,7 +141,7 @@ class SslHandle {
     }
 
     /** The handshake phase is handled by rcv/snd in a unified manner */
-    private void doHandshake(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    private void doHandshake(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         HandshakeStatus hs = this.engine.getHandshakeStatus();
         while (hs != HandshakeStatus.FINISHED && hs != HandshakeStatus.NOT_HANDSHAKING) {
             SSLEngineResult result;
@@ -196,7 +196,7 @@ class SslHandle {
     }
 
     /** Failure from which there is no recovery will close the Socket */
-    private void handleClose(PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    private void handleClose(ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         // Release all resources such as internal buffers that SSLEngine is managing.
         this.engine.closeOutbound();
         this.engine.closeInbound();
@@ -215,7 +215,7 @@ class SslHandle {
     }
 
     /** The Unwrap operation is responsible for processing the received network data */
-    private SSLEngineResult handshakeUnwrap(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown) throws IOException {
+    private SSLEngineResult handshakeUnwrap(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) throws IOException {
         // rcvUp to inNetData.
         int rcvTotal = this.queueToBuffer(rcvUp, this.inNetData);
         this.inNetData.flip();
@@ -259,7 +259,7 @@ class SslHandle {
     }
 
     /** n the handshake, the Wrap operation is responsible for sending network data */
-    private SSLEngineResult handshakeWrap(PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    private SSLEngineResult handshakeWrap(ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         // read data to outAppData
         int dataTotal = this.queueToBuffer(sndUp, this.outAppData);
         this.outAppData.flip();
@@ -372,7 +372,7 @@ class SslHandle {
     // --------------------------------------------------------------------------------------------
 
     /** After the handshake, receive data */
-    public void handlerRcv(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public void handlerRcv(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         // rcvUp to inNetData.
         int rcvTotal = this.queueToBuffer(rcvUp, this.inNetData);
 
@@ -416,7 +416,7 @@ class SslHandle {
     }
 
     /** After the handshake, the data sent is processed */
-    public void handlerSnd(PipeRcvQueue<ByteBuf> rcvUp, PipeSndQueue<ByteBuf> rcvDown, PipeRcvQueue<ByteBuf> sndUp, PipeSndQueue<ByteBuf> sndDown) throws IOException {
+    public void handlerSnd(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         // read data to outAppData
         int sndTotal = this.queueToBuffer(sndUp, this.outAppData);
 

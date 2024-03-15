@@ -20,7 +20,7 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.handler.EmbeddedChannel;
 import net.hasor.neta.handler.EmbeddedInitializer;
 import net.hasor.neta.handler.EmbeddedSoContext;
-import net.hasor.neta.handler.PipeHelper;
+import net.hasor.neta.handler.ProtoHelper;
 import org.junit.Test;
 
 /**
@@ -32,7 +32,7 @@ public class LineBasedFrameHandlerTest {
     public void lineBasedFrame_1() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
         EmbeddedInitializer initializer = ctx -> {
-            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
+            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
         };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -51,7 +51,7 @@ public class LineBasedFrameHandlerTest {
     public void lineBasedFrame_2() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
         EmbeddedInitializer initializer = ctx -> {
-            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
+            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
         };
 
         EmbeddedSoContext context = new EmbeddedSoContext();
@@ -67,7 +67,7 @@ public class LineBasedFrameHandlerTest {
     public void lineBasedFrame_3() {
         LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
         EmbeddedInitializer initializer = ctx -> {
-            return PipeHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
+            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
         };
 
         EmbeddedSoContext context = new EmbeddedSoContext();

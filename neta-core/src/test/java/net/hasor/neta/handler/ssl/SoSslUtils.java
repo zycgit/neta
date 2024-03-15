@@ -16,11 +16,11 @@
 package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.ResourcesUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.PipeInitializer;
-import net.hasor.neta.codec.LimitFramePipeHandler;
-import net.hasor.neta.handler.PipeDuplexHandler;
-import net.hasor.neta.handler.PipeHandler;
-import net.hasor.neta.handler.PipeHelper;
+import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.codec.LimitFrameProtoHandler;
+import net.hasor.neta.handler.ProtoDuplexHandler;
+import net.hasor.neta.handler.ProtoHandler;
+import net.hasor.neta.handler.ProtoHelper;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -59,29 +59,29 @@ public class SoSslUtils {
         return sslConfig;
     }
 
-    public static PipeInitializer sslSocketPipeline(SslConfig sslConf) {
+    public static ProtoInitializer sslSocketProtoStack(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> PipeHelper.builder()
+        return ctx -> ProtoHelper.builder()
                 // SSL
-                .nextDuplex("SSL", new SslPipeLayer(sslConf))
+                .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
                 .build();
     }
 
-    public static PipeInitializer sslSocketPipeline(SslConfig sslConf, PipeHandler<String, String> last) {
+    public static ProtoInitializer sslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        LimitFramePipeHandler limitFrame = new LimitFramePipeHandler(2);
-        return ctx -> PipeHelper.embedded(ByteBuf.class, ByteBuf.class)
+        LimitFrameProtoHandler limitFrame = new LimitFrameProtoHandler(2);
+        return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
                 // limitFrame
-                .nextDuplex("LIMIT", new PipeDuplexHandler<>(limitFrame, limitFrame))
+                .nextDuplex("LIMIT", new ProtoDuplexHandler<>(limitFrame, limitFrame))
                 // SSL
-                .nextDuplex("SSL", new SslPipeLayer(sslConf))
+                .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack

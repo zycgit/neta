@@ -167,7 +167,7 @@ public class PerformanceTest {
 
     @Test
     public void performance_BufferPool() {
-        BufferPool pool = new BufferPool(2, 128, -1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, 128, -1, c -> new BufferWrap(ByteBuffer.allocate(c)));
 
         AtomicBoolean exit = new AtomicBoolean(false);
         AtomicLong allocCnt = new AtomicLong(0);
@@ -202,7 +202,7 @@ public class PerformanceTest {
             }
         });
 
-        ThreadUtils.sleep(10000);
+        ThreadUtils.sleep(2000);
         exit.set(true);
         while (runCnt.get() > 0) {
             ThreadUtils.sleep(100);

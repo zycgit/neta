@@ -102,16 +102,16 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
         NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
 
-        PipeContextImpl pipeCtx = new PipeContextImpl(channel, context);
-        Pipeline<ByteBuf> pipeline = this.forListen.getInitializer().config(pipeCtx);
-        channel.initChannel(pipeCtx, pipeline);
+        ProtoContextImpl protoCtx = new ProtoContextImpl(channel, context);
+        ProtoStack<ByteBuf> stack = this.forListen.getInitializer().config(protoCtx);
+        channel.initChannel(protoCtx, stack);
 
-        // init and pipe
+        // init and trigger ProtoStack
         try {
             logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
             context.openChannel(channel, remoteAddr);
-            channel.pipeline.onInit(channel.pipeCtx);
-            channel.pipeline.onActive(pipeCtx);
+            channel.protoStack.onInit(channel.protoCtx);
+            channel.protoStack.onActive(protoCtx);
             rHandler.read();
 
             this.forListen.notifyAccept(channel);

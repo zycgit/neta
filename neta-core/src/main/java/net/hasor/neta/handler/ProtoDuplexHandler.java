@@ -1,0 +1,69 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.handler;
+import net.hasor.neta.channel.ProtoContext;
+
+/**
+ * Used to represent a unidirectional data processor, two {@link ProtoDuplexHandler}`s in opposite directions can to {@link ProtoDuplex}
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-17
+ * @see ProtoDuplex
+ */
+public class ProtoDuplexHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements ProtoDuplex<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+    private final ProtoHandler<RCV_UP, RCV_DOWN> decoder;
+    private final ProtoHandler<SND_UP, SND_DOWN> encoder;
+
+    public ProtoDuplexHandler(ProtoHandler<RCV_UP, RCV_DOWN> decoder, ProtoHandler<SND_UP, SND_DOWN> encoder) {
+        this.decoder = decoder;
+        this.encoder = encoder;
+    }
+
+    @Override
+    public void onInit(ProtoContext context) throws Throwable {
+        this.decoder.onInit(context);
+        this.encoder.onInit(context);
+    }
+
+    @Override
+    public void onActive(ProtoContext context) throws Throwable {
+        this.decoder.onActive(context);
+        this.encoder.onActive(context);
+    }
+
+    @Override
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<RCV_UP> rcvUp, ProtoSndQueue<RCV_DOWN> rcvDown, ProtoRcvQueue<SND_UP> sndUp, ProtoSndQueue<SND_DOWN> sndDown) throws Throwable {
+        if (isRcv) {
+            return this.decoder.onMessage(context, rcvUp, rcvDown);
+        } else {
+            return this.encoder.onMessage(context, sndUp, sndDown);
+        }
+    }
+
+    @Override
+    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        if (isRcv) {
+            return this.decoder.onError(context, e, eh);
+        } else {
+            return this.encoder.onError(context, e, eh);
+        }
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        this.decoder.onClose(context);
+        this.encoder.onClose(context);
+    }
+}
