@@ -48,14 +48,14 @@ class SoSndData {
      * packet has any data.
      */
     public boolean hasReadable() {
-        return this.data.hasReadable();
+        return this.data.readableBytes() > 0;
     }
 
     /**
      * copy packet data to {@link ByteBuf}
      */
     public int transferTo(ByteBuf dst) {
-        int len = this.data.read(dst);
+        int len = this.data.readBuffer(dst);
         this.data.markReader();
         dst.markWriter();
         return len;

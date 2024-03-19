@@ -48,12 +48,12 @@ public class ByteChannelTest {
         byteBuf.flush();
 
         ByteBuffer array1 = ByteBuffer.allocate(2);
-        assert byteBuf.read(array1) == 2;
+        assert byteBuf.readBuffer(array1) == 2;
         assert array1.get(0) == 1;
         assert array1.get(1) == 2;
 
         ByteBuffer array2 = ByteBuffer.allocate(10);
-        assert byteBuf.read(array2) == 6;
+        assert byteBuf.readBuffer(array2) == 6;
         assert array2.get(0) == 3;
         assert array2.get(1) == 4;
         assert array2.get(2) == 5;

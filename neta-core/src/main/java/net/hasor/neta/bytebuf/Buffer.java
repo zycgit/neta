@@ -21,7 +21,7 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-interface Buffer {
+public interface Buffer {
     /** Queries if this buffer is Available(read or write) or not. */
     boolean isAvailable();
 
@@ -32,13 +32,19 @@ interface Buffer {
 
     void put(int index, byte b);
 
-    void get(int index, byte[] dst, int dstOffset, int length);
+    void get(int index, byte[] dst, int dstOffset, int dstLen);
 
-    void put(int index, byte[] src, int srcOffset, int length);
+    void put(int index, byte[] src, int srcOffset, int srcLen);
 
-    void get(int index, ByteBuffer dst, int dstOffset, int length);
+    void get(int index, ByteBuffer dst, int dstOffset, int dstLen);
 
-    void put(int index, ByteBuffer src, int srcOffset, int length);
+    void put(int index, ByteBuffer src, int srcOffset, int srcLen);
 
     void free();
+
+    /**
+     * Tells whether or not this byte buffer is direct.
+     * @return  <tt>true</tt> if, and only if, this buffer is direct
+     */
+    boolean isDirect();
 }

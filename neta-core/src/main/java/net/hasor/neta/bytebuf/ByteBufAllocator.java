@@ -51,9 +51,6 @@ public interface ByteBufAllocator {
     boolean isDirect();
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
-    ByteBuf arrayBuffer();
-
-    /** Allocate a {@link ByteBuf}, with the bytes array. */
     ByteBuf wrap(byte[] bytes);
 
     /** Allocate a {@link ByteBuf}, with the ByteBuffer. */
@@ -63,7 +60,13 @@ public interface ByteBufAllocator {
     ByteBuf arrayBuffer(int capacity);
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
-    ByteBuf arrayBuffer(int initialCapacity, int maxCapacity);
+    ByteBuf recycleBuffer(int capacity);
+
+    /** Allocate a {@link ByteBuf}, with the bytes array. */
+    ByteBuf recycleHeapBuffer(int capacity);
+
+    /** Allocate a {@link ByteBuf}, with the bytes array. */
+    ByteBuf recycleDirectBuffer(int capacity);
 
     /** Allocate a heap {@link ByteBuf}. */
     ByteBuf heapBuffer();

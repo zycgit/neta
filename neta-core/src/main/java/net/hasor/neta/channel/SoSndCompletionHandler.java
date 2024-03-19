@@ -105,7 +105,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             // continue send data.
             this.writeData();
 
-        } else if (this.sndBuffer.hasReadable()) {
+        } else if (this.sndBuffer.readableBytes() > 0) {
 
             // continue send data.
             this.copyData();
@@ -122,7 +122,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     // copy data from sndBuf to swapBuf
     private void copyData() {
         this.swapBuffer.clear();
-        this.sndBuffer.read(this.swapBuffer);
+        this.sndBuffer.readBuffer(this.swapBuffer);
         this.sndBuffer.markReader();
         this.swapBuffer.flip();
     }

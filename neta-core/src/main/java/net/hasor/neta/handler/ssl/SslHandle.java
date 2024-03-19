@@ -76,9 +76,9 @@ class SslHandle {
         int total = 0;
         while (src.hasMore()) {
             ByteBuf data = src.peekMessage();
-            total += data.read(dst);
+            total += data.readBuffer(dst);
             data.markReader();
-            if (data.hasReadable()) {
+            if (data.readableBytes() > 0) {
                 break;
             } else {
                 src.skipMessage(1);

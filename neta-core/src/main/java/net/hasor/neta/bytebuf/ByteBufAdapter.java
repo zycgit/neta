@@ -52,8 +52,8 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public byte[] array() {
-        return this.byteBuf.array();
+    public byte[] asByteArray() {
+        return this.byteBuf.asByteArray();
     }
 
     @Override
@@ -107,23 +107,13 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public boolean hasReadable() {
-        return this.byteBuf.hasReadable();
-    }
-
-    @Override
     public int writableBytes() {
         return this.byteBuf.writableBytes();
     }
 
     @Override
-    public int writedBytes() {
-        return this.byteBuf.writedBytes();
-    }
-
-    @Override
-    public boolean hasWritable() {
-        return this.byteBuf.hasWritable();
+    public int writtenBytes() {
+        return this.byteBuf.writtenBytes();
     }
 
     @Override
@@ -167,13 +157,13 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void writeBytes(byte[] b) {
-        this.byteBuf.writeBytes(b);
+    public void writeBytes(byte[] src) {
+        this.byteBuf.writeBytes(src);
     }
 
     @Override
-    public void writeBytes(byte[] b, int off, int len) {
-        this.byteBuf.writeBytes(b, off, len);
+    public int writeBytes(byte[] src, int off, int len) {
+        return 0;
     }
 
     @Override
@@ -212,12 +202,17 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int write(ByteBuffer src) {
-        return this.byteBuf.write(src);
+    public int writeBuffer(ByteBuffer src, int off, int len) {
+        return 0;
     }
 
     @Override
-    public int write(ByteBuf src) {
+    public int writeBuffer(ByteBuf src, int off, int len) {
+        return 0;
+    }
+
+    @Override
+    public int write(ByteBuffer src) {
         return this.byteBuf.write(src);
     }
 
@@ -232,13 +227,13 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void setBytes(int offset, byte[] b) {
-        this.byteBuf.setBytes(offset, b);
+    public void setBytes(int offset, byte[] src) {
+        this.byteBuf.setBytes(offset, src);
     }
 
     @Override
-    public void setBytes(int offset, byte[] b, int off, int len) {
-        this.byteBuf.setBytes(offset, b, off, len);
+    public void setBytes(int offset, byte[] src, int srcOffset, int srcLen) {
+        this.byteBuf.setBytes(offset, src, srcOffset, srcLen);
     }
 
     @Override
@@ -272,6 +267,16 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public int setBuffer(int offset, ByteBuffer src, int srcOffset, int srcLen) {
+        return 0;
+    }
+
+    @Override
+    public int setBuffer(int offset, ByteBuf src, int srcOffset, int srcLen) {
+        return 0;
+    }
+
+    @Override
     public int setString(int offset, String string, Charset charset) {
         return this.byteBuf.setString(offset, string, charset);
     }
@@ -282,13 +287,13 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int readBytes(byte[] b) {
-        return this.byteBuf.readBytes(b);
+    public int readBytes(byte[] dst) {
+        return this.byteBuf.readBytes(dst);
     }
 
     @Override
-    public int readBytes(byte[] b, int off, int len) {
-        return this.byteBuf.readBytes(b, off, len);
+    public int readBytes(byte[] dst, int off, int len) {
+        return this.byteBuf.readBytes(dst, off, len);
     }
 
     @Override
@@ -322,19 +327,29 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int read(ByteBuffer dst) {
-        return this.byteBuf.read(dst);
+    public int readBuffer(ByteBuffer dst) {
+        return this.byteBuf.readBuffer(dst);
     }
 
     @Override
-    public int read(ByteBuf dst) {
-        return this.byteBuf.read(dst);
+    public int readBuffer(ByteBuffer dst, int off, int len) {
+        return 0;
     }
 
     @Override
-    public int read(ByteBuf dst, int len) {
-        return this.byteBuf.read(dst, len);
+    public int readBuffer(ByteBuf dst) {
+        return this.byteBuf.readBuffer(dst);
     }
+
+    @Override
+    public int readBuffer(ByteBuf dst, int off, int len) {
+        return 0;
+    }
+
+    //    @Override
+    //    public int readBuffer(ByteBuf dst, int len) {
+    //        return this.byteBuf.readBuffer(dst, len);
+    //    }
 
     //    @Override
     //    public int read(ByteBuf dest, int off, int len) {
@@ -352,13 +367,13 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int getBytes(int offset, byte[] b) {
-        return this.byteBuf.getBytes(offset, b);
+    public int getBytes(int offset, byte[] dst) {
+        return this.byteBuf.getBytes(offset, dst);
     }
 
     @Override
-    public int getBytes(int offset, byte[] b, int off, int len) {
-        return this.byteBuf.getBytes(offset, b, off, len);
+    public int getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
+        return this.byteBuf.getBytes(offset, dst, dstOffset, dstLen);
     }
 
     @Override
@@ -389,6 +404,16 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public double getFloat64(int offset) {
         return this.byteBuf.getFloat64(offset);
+    }
+
+    @Override
+    public int getBuffer(int offset, ByteBuffer dst, int dstOffset, int dstLen) {
+        return 0;
+    }
+
+    @Override
+    public int getBuffer(int offset, ByteBuf dst, int dstOffset, int dstLen) {
+        return 0;
     }
 
     @Override
@@ -507,16 +532,6 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void waitReadable(int expect) throws InterruptedException, IOException {
-        this.byteBuf.waitReadable(expect);
-    }
-
-    @Override
-    public <T> T waitReadable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        return null;
-    }
-
-    @Override
     public void waitWriteable() throws InterruptedException, IOException {
         this.byteBuf.waitWriteable();
     }
@@ -527,17 +542,12 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void waitWriteable(int expect) throws InterruptedException, IOException {
-        this.byteBuf.waitWriteable(expect);
-    }
-
-    @Override
-    public <T> T waitWriteable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        return this.byteBuf.waitWriteable(expect, callBack);
-    }
-
-    @Override
     public <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException {
         return this.byteBuf.waitLock(callBack);
+    }
+
+    @Override
+    public int read(ByteBuffer dst) {
+        return 0;
     }
 }

@@ -35,6 +35,15 @@ public class BufferWrap implements Buffer {
         return this.available;
     }
 
+    /**
+     * Tells whether or not this byte buffer is direct.
+     * @return  <tt>true</tt> if, and only if, this buffer is direct
+     */
+    @Override
+    public boolean isDirect() {
+        return this.buffer.isDirect();
+    }
+
     @Override
     public int capacity() {
         return this.buffer.capacity();
@@ -51,28 +60,28 @@ public class BufferWrap implements Buffer {
     }
 
     @Override
-    public void get(int index, byte[] dst, int dstOffset, int length) {
+    public void get(int index, byte[] dst, int dstOffset, int dstLen) {
         this.buffer.clear().position(index);
-        this.buffer.get(dst, dstOffset, length);
+        this.buffer.get(dst, dstOffset, dstLen);
     }
 
     @Override
-    public void put(int index, byte[] src, int srcOffset, int length) {
+    public void put(int index, byte[] src, int srcOffset, int srcLen) {
         this.buffer.clear().position(index);
-        this.buffer.put(src, srcOffset, length);
+        this.buffer.put(src, srcOffset, srcLen);
     }
 
     @Override
-    public void get(int index, ByteBuffer dst, int dstOffset, int length) {
-        this.buffer.clear().limit(index + length).position(index);
+    public void get(int index, ByteBuffer dst, int dstOffset, int dstLen) {
+        this.buffer.clear().limit(index + dstLen).position(index);
         ByteBuffer dup = (ByteBuffer) dst.duplicate().position(dstOffset);
         dup.put(this.buffer);
     }
 
     @Override
-    public void put(int index, ByteBuffer src, int srcOffset, int length) {
+    public void put(int index, ByteBuffer src, int srcOffset, int srcLen) {
         this.buffer.clear().position(index);
-        this.buffer.put((ByteBuffer) src.duplicate().limit(srcOffset + length).position(srcOffset));
+        this.buffer.put((ByteBuffer) src.duplicate().limit(srcOffset + srcLen).position(srcOffset));
     }
 
     @Override

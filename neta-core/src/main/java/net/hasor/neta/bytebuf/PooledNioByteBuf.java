@@ -23,6 +23,7 @@ import java.util.LinkedList;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
+@Deprecated
 public class PooledNioByteBuf extends AbstractByteBuf {
     protected final LinkedList<NioChunk> buffers = new LinkedList<>();
     private         int                  capacity;
@@ -68,7 +69,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected void _putBytes(int offset, byte[] b, int off, int len) {
+    protected int _putBytes(int offset, byte[] src, int srcOffset, int srcLen) {
         checkFree();
 
         int startBuf = checkOrCreate(offset / this.sliceSize);
@@ -79,13 +80,25 @@ public class PooledNioByteBuf extends AbstractByteBuf {
             NioChunk buffer = this.buffers.get(startBuf);
 
             buffer.clearPosition(baseOffset);
-            buffer.put(b, off, Math.min(len, debris));
+            buffer.put(src, srcOffset, Math.min(srcLen, debris));
 
-            off = off + debris;
-            len = len - debris;
+            srcOffset = srcOffset + debris;
+            srcLen = srcLen - debris;
             baseOffset = 0;
             checkOrCreate(++startBuf);
-        } while (len > 0);
+        } while (srcLen > 0);
+
+        return 0;
+    }
+
+    @Override
+    protected int _putBytes(int offset, ByteBuffer src, int srcOffset, int srcLen) {
+        return 0;
+    }
+
+    @Override
+    protected int _putBytes(int offset, ByteBuf src, int srcOffset, int srcLen) {
+        return 0;
     }
 
     @Override
@@ -103,7 +116,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _getBytes(int offset, byte[] b, int off, int len) {
+    protected int _getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
         checkFree();
 
         int startBuf = offset / this.sliceSize;
@@ -112,7 +125,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
         int readBytes = 0;
         do {
             int debris = this.sliceSize - baseOffset;
-            int thisRead = Math.min(debris, len);
+            int thisRead = Math.min(debris, dstLen);
             if (startBuf > this.buffers.size()) {
                 break;
             }
@@ -121,19 +134,33 @@ public class PooledNioByteBuf extends AbstractByteBuf {
 
             buffer.clearLimit(this.sliceSize);
             buffer.position(baseOffset);
-            buffer.get(b, off, thisRead);
+            buffer.get(dst, dstOffset, thisRead);
 
-            off += debris;
-            len -= debris;
+            dstOffset += debris;
+            dstLen -= debris;
             baseOffset = 0;
             startBuf++;
 
             readBytes += thisRead;
-        } while (len > 0);
+        } while (dstLen > 0);
         return readBytes;
     }
 
     @Override
+    protected int _getBytes(int offset, ByteBuffer dst, int dstOffset, int dstLen) {
+        return 0;
+    }
+
+    @Override
+    protected int _getBytes(int offset, ByteBuf dst, int dstOffset, int dstLen) {
+        return 0;
+    }
+
+    @Override
+    protected void _free() {
+
+    }
+
     protected void extendByteBuf(int targetCapacity) {
         checkFree();
 
@@ -154,7 +181,6 @@ public class PooledNioByteBuf extends AbstractByteBuf {
         return this.chunkAllocator.allocateBuffer(capacity);
     }
 
-    @Override
     protected void recycleByteBuf() {
         checkFree();
 
@@ -184,7 +210,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    public byte[] array() {
+    public byte[] asByteArray() {
         byte[] array = new byte[this.buffers.size() * this.sliceSize];
         int off = 0;
         for (NioChunk chunk : this.buffers) {

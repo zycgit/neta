@@ -63,6 +63,11 @@ class BufferTarget implements Buffer {
     }
 
     @Override
+    public boolean isDirect() {
+        return this.memory.isDirect();
+    }
+
+    @Override
     public boolean isAvailable() {
         return this.pages.isAvailable();
     }
@@ -150,26 +155,26 @@ class BufferTarget implements Buffer {
     }
 
     @Override
-    public void get(int index, byte[] dst, int dstOffset, int length) {
-        checkOffset(index, length, false);
-        this.memory.get(this.offset + index, dst, dstOffset, length);
+    public void get(int index, byte[] dst, int dstOffset, int dstLen) {
+        checkOffset(index, dstLen, false);
+        this.memory.get(this.offset + index, dst, dstOffset, dstLen);
     }
 
     @Override
-    public void put(int index, byte[] src, int dstOffset, int length) {
-        checkOffset(index, length, true);
-        this.memory.put(this.offset + index, src, dstOffset, length);
+    public void put(int index, byte[] src, int dstOffset, int srcLen) {
+        checkOffset(index, srcLen, true);
+        this.memory.put(this.offset + index, src, dstOffset, srcLen);
     }
 
     @Override
-    public void get(int index, ByteBuffer dst, int dstOffset, int length) {
-        checkOffset(index, length, false);
-        this.memory.get(this.offset + index, dst, dstOffset, length);
+    public void get(int index, ByteBuffer dst, int dstOffset, int dstLen) {
+        checkOffset(index, dstLen, false);
+        this.memory.get(this.offset + index, dst, dstOffset, dstLen);
     }
 
     @Override
-    public void put(int index, ByteBuffer src, int srcOffset, int length) {
-        checkOffset(index, length, true);
-        this.memory.put(this.offset + index, src, srcOffset, length);
+    public void put(int index, ByteBuffer src, int srcOffset, int srcLen) {
+        checkOffset(index, srcLen, true);
+        this.memory.put(this.offset + index, src, srcOffset, srcLen);
     }
 }

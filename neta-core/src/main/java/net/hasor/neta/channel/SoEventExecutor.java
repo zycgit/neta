@@ -47,7 +47,7 @@ class SoEventExecutor implements Closeable {
         this.workerThreads = new Thread[taskThreads];
 
         if (this.runTag.compareAndSet(false, true)) {
-            ThreadFactory workerThreadFactory = soThreadFactory.newFactory(classLoader, "Cobble[" + ctxName + "]-AIO-Workers-%s");
+            ThreadFactory workerThreadFactory = soThreadFactory.newFactory(classLoader, "Neta[" + ctxName + "]-Workers-%s");
             for (int i = 0; i < taskThreads; i++) {
                 this.workerThreads[i] = workerThreadFactory.newThread(this::doWork);
                 this.workerThreads[i].start();

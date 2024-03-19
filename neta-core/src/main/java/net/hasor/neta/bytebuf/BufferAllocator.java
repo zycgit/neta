@@ -19,6 +19,6 @@ package net.hasor.neta.bytebuf;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-interface BufferAllocator {
+public interface BufferAllocator {
     Buffer allocateBuffer(int capacity);
 }

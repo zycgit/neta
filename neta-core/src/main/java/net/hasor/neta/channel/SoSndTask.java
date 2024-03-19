@@ -69,7 +69,7 @@ class SoSndTask extends DefaultSoTask {
         // copy data from wQueue to sndBuf
         ByteBuf sndBuf = this.wHandler.getSndBuffer();
         List<SoSndData> afterFinish = fillByteBuf(sndBuf);
-        if (!sndBuf.hasReadable() && this.wContext.peekData() == null) {
+        if (sndBuf.readableBytes() <= 0 && this.wContext.peekData() == null) {
             if (!afterFinish.isEmpty()) {
                 SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, afterFinish, 0, null);
                 this.context.submitSoTask(this.channelID, cleanTask, this);

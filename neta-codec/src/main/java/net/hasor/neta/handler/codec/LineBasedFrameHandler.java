@@ -119,7 +119,7 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             ByteBuf buf = temp.get(i);
 
             if (i != lastIndex) {
-                buf.read(tmpBuf);
+                buf.readBuffer(tmpBuf);
                 buf.markReader();
                 src.skipMessage(1);
             } else {
@@ -139,10 +139,10 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                     }
                 }
 
-                buf.read(tmpBuf, readLen);
+                buf.readBuffer(tmpBuf, readLen);
                 buf.skipReadableBytes(skipLen);
                 buf.markReader();
-                if (!buf.hasReadable()) {
+                if (buf.readableBytes() <= 0) {
                     src.skipMessage(1);
                 }
             }

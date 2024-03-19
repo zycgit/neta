@@ -197,15 +197,15 @@ public class AdapterByteBufTest {
 
     @Test
     public void extendTest01() throws NoSuchAlgorithmException {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer(256, 512));
-        byte[] array1 = byteBuf.array();
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer(512));
+        byte[] array1 = byteBuf.asByteArray();
 
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
-        assert array1 == byteBuf.array();
+        assert array1 == byteBuf.asByteArray();
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
-        assert array1 != byteBuf.array();
+        assert array1 != byteBuf.asByteArray();
 
-        byte[] data = byteBuf.array();
+        byte[] data = byteBuf.asByteArray();
         byte[] dataSub = new byte[array1.length];
         System.arraycopy(data, 0, dataSub, 0, array1.length);
 
@@ -216,9 +216,9 @@ public class AdapterByteBufTest {
 
     @Test
     public void freeTest01() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         byteBuf.free();
-        assert byteBuf.array() == null;
+        assert byteBuf.asByteArray() == null;
 
         try {
             byteBuf.writeByte((byte) 5);
@@ -230,15 +230,15 @@ public class AdapterByteBufTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        ByteBuf byteBuf1 = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf1 = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         byteBuf1.writeBytes(RandomUtils.nextBytes(byteBuf1.capacity()));
 
         ByteBuf byteBuf2 = byteBuf1.copy();
 
-        assert byteBuf1.array() != byteBuf2.array();
+        assert byteBuf1.asByteArray() != byteBuf2.asByteArray();
 
-        String hash1 = MD5.encodeMD5(byteBuf1.array());
-        String hash2 = MD5.encodeMD5(byteBuf2.array());
+        String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
+        String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
         assert hash1.equals(hash2);
     }
 
@@ -255,7 +255,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void intObjectTest01() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
 
         byteBuf.writeInt16((short) 30047);
         byteBuf.writeInt24(15793921);
@@ -288,7 +288,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void intLEObjectTest01() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
 
         byteBuf.writeInt16((short) 30047);
@@ -323,7 +323,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void floatObjectTest01() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
 
         byteBuf.writeFloat32(999999.999999f);
         byteBuf.writeFloat64(123456789123456789.123456789123456789123456789123456789d);
@@ -335,7 +335,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void floatObjectTest02() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         byteBuf.skipWritableBytes(40);
 
         byteBuf.setFloat32(0, 999999.999999f);
@@ -348,7 +348,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void floatLEObjectTest01() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
 
         byteBuf.writeFloat32(999999.999999f);
@@ -361,7 +361,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void floatLEObjectTest02() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
         byteBuf.skipWritableBytes(40);
 
@@ -375,7 +375,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void uIntObjectTest01() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
 
         byteBuf.writeByte((byte) -1);
         byteBuf.writeInt16((short) -1);
@@ -403,7 +403,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void uIntObjectTest02() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
 
         byteBuf.writeInt16((short) 36848);
@@ -426,7 +426,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void stringTest01() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
 
         byteBuf.writeString("hello\n", StandardCharsets.UTF_8);
         byteBuf.writeString("word\n", StandardCharsets.UTF_8);
@@ -442,12 +442,12 @@ public class AdapterByteBufTest {
     @Test
     public void readBufTest1() {
         byte[] cacheData = RandomUtils.nextBytes(100);
-        ByteBuf srcBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf srcBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         srcBuf.writeBytes(cacheData);
         srcBuf.markWriter();
 
-        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
-        srcBuf.read(dstBuf, 5);
+        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.buffer(1024);
+        srcBuf.readBuffer(dstBuf, 5);
         dstBuf.markWriter();
 
         assert srcBuf.readableBytes() == 95;
@@ -457,12 +457,12 @@ public class AdapterByteBufTest {
     @Test
     public void readBufTest2() throws NoSuchAlgorithmException {
         byte[] cacheData = RandomUtils.nextBytes(8192);
-        ByteBuf srcBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.arrayBuffer());
+        ByteBuf srcBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.buffer(1024));
         srcBuf.writeBytes(cacheData);
         srcBuf.markWriter();
 
-        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
-        srcBuf.read(dstBuf, 5000);
+        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.buffer(1024);
+        srcBuf.readBuffer(dstBuf, 5000);
         dstBuf.markWriter();
 
         assert srcBuf.readableBytes() == 8192 - 5000;
@@ -478,7 +478,7 @@ public class AdapterByteBufTest {
         srcBuf.readBytes(array2);
         String array2Hash = MD5.encodeMD5(array2);
 
-        byte[] array3 = dstBuf.array();
+        byte[] array3 = dstBuf.asByteArray();
         String array3Hash = MD5.encodeMD5(array3);
 
         assert array1Hash.equals(array2Hash);

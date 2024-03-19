@@ -152,7 +152,7 @@ class BufferPool {
         }
     }
 
-    protected PageChunkPool newAllocator() {
+    protected synchronized PageChunkPool newAllocator() {
         if (this.maximumChunkCount > 0 && this.bufferPool.size() >= this.maximumChunkCount) {
             throw new OutOfMemoryPoolException("OutOfMemory the BufferPool maximum chunks " + this.maximumChunkCount + ", current is " + this.bufferPool.size());
         }

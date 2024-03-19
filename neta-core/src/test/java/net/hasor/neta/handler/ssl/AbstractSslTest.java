@@ -81,14 +81,14 @@ public class AbstractSslTest {
             ByteBuf buf = temp.get(i);
 
             if (i != lastIndex) {
-                buf.read(tmpBuf);
+                buf.readBuffer(tmpBuf);
                 buf.markReader();
                 src.skipMessage(1);
             } else {
                 int expect = buf.expect('\n', StandardCharsets.US_ASCII);
-                buf.read(tmpBuf, expect + 1);
+                buf.readBuffer(tmpBuf, expect + 1);
                 buf.markReader();
-                if (!buf.hasReadable()) {
+                if (buf.readableBytes() <= 0) {
                     src.skipMessage(1);
                 }
             }

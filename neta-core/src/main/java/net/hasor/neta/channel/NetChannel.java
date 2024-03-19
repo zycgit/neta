@@ -320,7 +320,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
-                if (buf.hasReadable()) {
+                if (buf.readableBytes() > 0) {
                     appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
                 }
             }
@@ -353,7 +353,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
             for (Object sndBuf : sndBufSet) {
                 ByteBuf buf = (ByteBuf) sndBuf;
-                if (buf.hasReadable()) {
+                if (buf.readableBytes() > 0) {
                     appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
                 }
             }
@@ -434,14 +434,14 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
                 sndByteBuf = new Object[] { writeData };
             }
 
-            ByteBuf merged = ByteBufAllocator.DEFAULT.arrayBuffer();
+            ByteBuf merged = ByteBufAllocator.DEFAULT.buffer();
             for (Object buf : sndByteBuf) {
                 if (buf instanceof byte[]) {
                     merged.writeBytes((byte[]) buf);
                 } else if (buf instanceof ByteBuffer) {
-                    merged.write((ByteBuffer) buf);
+                    merged.writeBuffer((ByteBuffer) buf);
                 } else if (buf instanceof ByteBuf) {
-                    merged.write((ByteBuf) buf);
+                    merged.writeBuffer((ByteBuf) buf);
                     ((ByteBuf) buf).markReader();
                 } else {
                     throw new ClassCastException(writeData.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");

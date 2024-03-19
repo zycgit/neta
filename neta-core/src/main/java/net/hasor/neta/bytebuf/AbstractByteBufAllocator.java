@@ -22,8 +22,11 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
-    protected final int               initialCapacityByDefault;
-    protected final int               sliceSizeByDefault;
+    protected final int             initialCapacityByDefault;
+    protected final int             sliceSizeByDefault;
+    protected final BufferAllocator heapBufferAllocator   = cap -> new BufferWrap(ByteBuffer.allocate(cap));
+    protected final BufferAllocator directBufferAllocator = cap -> new BufferWrap(ByteBuffer.allocateDirect(cap));
+
     protected final NioChunkAllocator heapNioChunkAllocator   = new NioChunkAllocator() {
         public NioChunk allocateBuffer(int capacity) {
             return new NioChunk(ByteBuffer.allocate(capacity));
@@ -60,28 +63,28 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     }
 
     @Override
-    public ByteBuf arrayBuffer() {
-        return this.arrayBuffer(this.initialCapacityByDefault, Integer.MAX_VALUE);
-    }
-
-    @Override
     public ByteBuf wrap(byte[] bytes) {
-        return new ArrayByteBuf(this, bytes, bytes.length);
+        return new WrapArrayByteBuf(this, bytes);
     }
 
     @Override
     public ByteBuf wrap(ByteBuffer javaBuffer) {
-        return new SliceNioByteBuf(this, javaBuffer);
+        return null;//TODO new SliceByteBuf(this, new BufferWrap(javaBuffer));
     }
 
     @Override
     public ByteBuf arrayBuffer(int capacity) {
-        return this.arrayBuffer(capacity, capacity);
+        return new WrapArrayByteBuf(this, capacity);
     }
 
     @Override
-    public ByteBuf arrayBuffer(int initialCapacity, int maxCapacity) {
-        return new ArrayByteBuf(this, initialCapacity, maxCapacity);
+    public ByteBuf recycleHeapBuffer(int capacity) {
+        return new RecycleArrayByteBuf(this, capacity);
+    }
+
+    @Override
+    public ByteBuf recycleDirectBuffer(int capacity) {
+        return new RecycleSliceByteBuf(this, ByteBuffer.allocateDirect(capacity));
     }
 
     @Override
@@ -96,7 +99,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf heapBuffer(int initialCapacity, int maxCapacity) {
-        return new SliceNioByteBuf(this, initialCapacity, maxCapacity, this.heapNioChunkAllocator);
+        return null;// TODO new SliceByteBuf(this, initialCapacity, maxCapacity, this.heapNioChunkAllocator);
     }
 
     @Override
@@ -111,7 +114,7 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf directBuffer(int initialCapacity, int maxCapacity) {
-        return new SliceNioByteBuf(this, initialCapacity, maxCapacity, this.directNioChunkAllocator);
+        return null;// TODO new SliceByteBuf(this, initialCapacity, maxCapacity, this.directNioChunkAllocator);
     }
 
     @Override

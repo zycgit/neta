@@ -53,7 +53,7 @@ public class SyncByteBufTest {
     @Test
     public void producerAndConsumer_01() throws InterruptedException {
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);
-        ByteBuf result = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf result = ByteBufAllocator.DEFAULT.buffer();
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
 
@@ -107,7 +107,7 @@ public class SyncByteBufTest {
     @Test
     public void producerAndConsumer_02() throws InterruptedException {
         ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);
-        ByteBuf result = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf result = ByteBufAllocator.DEFAULT.buffer();
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
 
@@ -177,7 +177,7 @@ public class SyncByteBufTest {
         List<Thread> resultThread = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             resultThread.add(ThreadUtils.daemonThread(true, (Runnable) () -> {
-                ByteBuf dst = ByteBufAllocator.DEFAULT.arrayBuffer();
+                ByteBuf dst = ByteBufAllocator.DEFAULT.buffer();
                 result.add(dst);
                 try {
                     consumer(stop, buf, dst, 100);
@@ -211,7 +211,7 @@ public class SyncByteBufTest {
         Map<Byte, Integer> ori = new HashMap<>();
         Map<Byte, Integer> dst = new HashMap<>();
 
-        for (byte dat : buf.array()) {
+        for (byte dat : buf.asByteArray()) {
             if (dat == 0) {
                 continue; // 0 是 buffer 中尚未使用的字节
             }
@@ -219,7 +219,7 @@ public class SyncByteBufTest {
         }
 
         for (ByteBuf tmp : result) {
-            for (byte dat : tmp.array()) {
+            for (byte dat : tmp.asByteArray()) {
                 if (dat == 0) {
                     continue; // 0 是 buffer 中尚未使用的字节
                 }

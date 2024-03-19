@@ -728,13 +728,13 @@ public class PooledHeapByteBufTest {
     @Test
     public void extendTest01() throws NoSuchAlgorithmException {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(256, 512, 64);
-        byte[] array1 = byteBuf.array();
+        byte[] array1 = byteBuf.asByteArray();
 
         byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
-        array1 = byteBuf.array();
-        assert array1 != byteBuf.array();
+        array1 = byteBuf.asByteArray();
+        assert array1 != byteBuf.asByteArray();
 
-        byte[] data = byteBuf.array();
+        byte[] data = byteBuf.asByteArray();
         byte[] dataSub = new byte[array1.length];
         System.arraycopy(data, 0, dataSub, 0, array1.length);
 
@@ -779,10 +779,10 @@ public class PooledHeapByteBufTest {
 
         ByteBuf byteBuf2 = byteBuf1.copy();
 
-        assert byteBuf1.array() != byteBuf2.array();
+        assert byteBuf1.asByteArray() != byteBuf2.asByteArray();
 
-        String hash1 = MD5.encodeMD5(byteBuf1.array());
-        String hash2 = MD5.encodeMD5(byteBuf2.array());
+        String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
+        String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
         assert hash1.equals(hash2);
     }
 
@@ -888,7 +888,7 @@ public class PooledHeapByteBufTest {
         srcBuf.markWriter();
 
         ByteBuf dstBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer();
-        srcBuf.read(dstBuf, 5);
+        srcBuf.readBuffer(dstBuf, 5);
         dstBuf.markWriter();
 
         assert srcBuf.readableBytes() == 95;
@@ -903,7 +903,7 @@ public class PooledHeapByteBufTest {
         srcBuf.markWriter();
 
         ByteBuf dstBuf = ByteBufAllocator.DEFAULT.heapBuffer(5000);
-        srcBuf.read(dstBuf, 5000);
+        srcBuf.readBuffer(dstBuf, 5000);
         dstBuf.markWriter();
 
         assert srcBuf.readableBytes() == 8192 - 5000;
@@ -919,7 +919,7 @@ public class PooledHeapByteBufTest {
         srcBuf.readBytes(array2);
         String array2Hash = MD5.encodeMD5(array2);
 
-        byte[] array3 = dstBuf.array();
+        byte[] array3 = dstBuf.asByteArray();
         String array3Hash = MD5.encodeMD5(array3);
 
         assert array1Hash.equals(array2Hash);

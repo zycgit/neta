@@ -36,6 +36,11 @@ public class PooledHeapByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     @Override
+    public ByteBuf recycleBuffer(int capacity) {
+        return recycleHeapBuffer(capacity);
+    }
+
+    @Override
     public ByteBuf buffer(int initialCapacity, int maxCapacity) {
         return this.pooledHeapBuffer(initialCapacity, maxCapacity);
     }

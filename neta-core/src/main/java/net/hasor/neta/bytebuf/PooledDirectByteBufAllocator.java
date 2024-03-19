@@ -36,6 +36,11 @@ public class PooledDirectByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     @Override
+    public ByteBuf recycleBuffer(int capacity) {
+        return recycleDirectBuffer(capacity);
+    }
+
+    @Override
     public ByteBuf buffer(int initialCapacity, int maxCapacity) {
         return this.pooledDirectBuffer(initialCapacity, maxCapacity);
     }

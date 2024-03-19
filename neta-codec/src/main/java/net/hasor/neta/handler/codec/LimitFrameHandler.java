@@ -76,7 +76,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                 break;
             }
 
-            while (srcBuf.hasReadable() && dst.hasSlot()) {
+            while (srcBuf.readableBytes() > 0 && dst.hasSlot()) {
                 if (dstBuf == null) {
                     dstBuf = this.bufAllocator.pooledBuffer();
                 }
@@ -89,7 +89,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                 }
             }
 
-            if (!srcBuf.hasReadable()) {
+            if (srcBuf.readableBytes() <= 0) {
                 src.skipMessage(1);
             }
         }
@@ -104,7 +104,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
     private int fillLimitFrame(ByteBuf src, ByteBuf dst) {
         int wlen = Math.min(src.readableBytes(), this.maxLength - dst.writerIndex());
-        int len = src.read(dst, wlen);
+        int len = src.readBuffer(dst, wlen);
 
         src.markReader();
         return len;

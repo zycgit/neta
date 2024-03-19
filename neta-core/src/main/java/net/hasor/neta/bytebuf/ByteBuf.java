@@ -20,16 +20,24 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.ByteChannel;
+import java.nio.channels.ReadableByteChannel;
+import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 
 /**
- * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * <pre>
+ * +----------+-------------+------------+-------------+----------+
+ * | ancient  | discardable | readable   | overlayable | writable |
+ * +------------------------+------------+-------------+----------+
+ * |          |             |            |             |          |
+ * 0   ≤   marked  ≤  readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
+ *      readerIndex                writerIndex
+ *
+ * </pre>
  */
 public interface ByteBuf extends ByteChannel {
-    /**
-     * Returns the {@link ByteBufAllocator} which created this buffer.
-     */
+    /** Returns the {@link ByteBufAllocator} which created this buffer. */
     ByteBufAllocator alloc();
 
     /** Returns the {@code readerIndex} of this buffer. */
@@ -42,7 +50,7 @@ public interface ByteBuf extends ByteChannel {
     int capacity();
 
     /** ByteBuf 的字节数组形态 */
-    byte[] array();
+    byte[] asByteArray();
 
     /** ByteBuf 是否为堆外方式 */
     boolean isDirect();
@@ -54,7 +62,10 @@ public interface ByteBuf extends ByteChannel {
     //    ByteBuf asReadOnly();
 
     /** 返回 ByteBuffer 形态，PooledNioByteBuf 不支持该方法 */
-    ByteBuffer asByteBuffer();
+    @Deprecated
+    default ByteBuffer asByteBuffer() {
+        throw new UnsupportedOperationException();
+    }
 
     /** 字节序 */
     ByteOrder order();
@@ -80,31 +91,21 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * Returns the number of read bytes which is equal to
-     * {@code (readIndex - readMark)}.
+     * {@code (readerIndex - markedReaderIndex)}.
      */
     int readBytes();
 
-    /** 可以进行读 */
-    default boolean hasReadable() {
-        return readableBytes() > 0;
-    }
-
     /**
      * Returns the number of writable bytes which is equal to
-     * {@code (maxCapacity - (writerIndex - readMark))}.
+     * {@code (maxCapacity - (writerIndex - markedReaderIndex))}.
      */
     int writableBytes();
 
     /**
-     * Returns the number of writed bytes which is equal to
-     * {@code (writerIndex - writerMark)}.
+     * Returns the number of Written bytes which is equal to
+     * {@code (writerIndex - markedWriterIndex)}.
      */
-    int writedBytes();
-
-    /** 可以进行写入 */
-    default boolean hasWritable() {
-        return writableBytes() > 0;
-    }
+    int writtenBytes();
 
     /**
      * Marks the current {@code readerIndex} in this buffer.
@@ -157,18 +158,18 @@ public interface ByteBuf extends ByteChannel {
     void writeByte(byte n);
 
     /**
-     * 数据写入，写入后 writerIndex 会增加 b.length。
-     * 如果 writerIndex + b.length > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 数据写入，写入后 writerIndex 会增加 src.length。
+     * 如果 writerIndex + src.length > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
-    default void writeBytes(byte[] b) {
-        this.writeBytes(b, 0, b.length);
+    default void writeBytes(byte[] src) {
+        this.writeBytes(src, 0, src.length);
     }
 
     /**
      * 数据写入，写入后 writerIndex 会增加 len。
      * 如果 writerIndex + len > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
-    void writeBytes(byte[] b, int off, int len);
+    int writeBytes(byte[] src, int off, int len);
 
     /**
      * 写入 2 字节的 sort（大端字节序），写入后 writerIndex 会 + 2。
@@ -212,11 +213,25 @@ public interface ByteBuf extends ByteChannel {
      */
     void writeFloat64(double n);
 
-    /** use copy form src ByteBuffer */
-    int write(ByteBuffer src);
+    default int writeBuffer(ByteBuffer src) {
+        return this.writeBuffer(src, 0, src.remaining());
+    }
 
-    /** use copy form src ByteBuffer */
-    int write(ByteBuf src);
+    default int writeBuffer(ByteBuffer src, int len) {
+        return this.writeBuffer(src, 0, len);
+    }
+
+    int writeBuffer(ByteBuffer src, int off, int len);
+
+    default int writeBuffer(ByteBuf src) {
+        return this.writeBuffer(src, 0, src.readableBytes());
+    }
+
+    default int writeBuffer(ByteBuf src, int len) {
+        return this.writeBuffer(src, 0, len);
+    }
+
+    int writeBuffer(ByteBuf src, int off, int len);
 
     /**
      * 字符串会以 str.getBytes(charset) 方式转换为字节数组并写入缓存。返回值是写入的字节数。
@@ -239,16 +254,16 @@ public interface ByteBuf extends ByteChannel {
     void setByte(int offset, byte n);
 
     /**
-     * 在 offset 偏移量的位置上向后覆盖方式写入 b 数组的数据，该方法不会更新 writerIndex 值。
-     * 参数 offset + b.length 必须要小于 writerIndex，否则会引发 {@link IndexOutOfBoundsException} 异常
+     * 在 offset 偏移量的位置上向后覆盖方式写入 src 数组的数据，该方法不会更新 writerIndex 值。
+     * 参数 offset + src.length 必须要小于 writerIndex，否则会引发 {@link IndexOutOfBoundsException} 异常
      */
-    void setBytes(int offset, byte[] b);
+    void setBytes(int offset, byte[] src);
 
     /**
-     * 在 offset 偏移量的位置上向后覆盖方式写入 b 数组的数据，该方法不会更新 writerIndex 值。
-     * 参数 offset + len 必须要小于 writerIndex，否则会引发 {@link IndexOutOfBoundsException} 异常
+     * 在 offset 偏移量的位置上向后覆盖方式写入 src 数组的数据，该方法不会更新 writerIndex 值。
+     * 参数 offset + srcLen 必须要小于 writerIndex，否则会引发 {@link IndexOutOfBoundsException} 异常
      */
-    void setBytes(int offset, byte[] b, int off, int len);
+    void setBytes(int offset, byte[] src, int srcOffset, int srcLen);
 
     /**
      * 在 offset 偏移量的位置上向后覆盖方式写入 2 字节长度的 sort（大端字节序），该方法不会更新 writerIndex 值。
@@ -286,6 +301,18 @@ public interface ByteBuf extends ByteChannel {
      */
     void setFloat64(int offset, double n);
 
+    default int setBuffer(int offset, ByteBuffer src) {
+        return this.setBuffer(offset, src, 0, src.remaining());
+    }
+
+    int setBuffer(int offset, ByteBuffer src, int srcOffset, int srcLen);
+
+    default int setBuffer(int offset, ByteBuf src) {
+        return this.setBuffer(offset, src, 0, src.readableBytes());
+    }
+
+    int setBuffer(int offset, ByteBuf src, int srcOffset, int srcLen);
+
     /**
      * 在 offset 偏移量的位置上向后覆盖方式写入字符串，字符串会通过 str.getBytes(charset) 方式转换为字节数组，该方法不会更新 writerIndex 值。返回值是写入了多少个字节。
      * 参数 offset + [string 字节数组长度] 必须要小于 writerIndex，否则会引发 {@link IndexOutOfBoundsException} 异常
@@ -306,13 +333,13 @@ public interface ByteBuf extends ByteChannel {
      */
     byte readByte();
 
-    /** 读取一定数量的字节，并将它们存储到缓冲区数组 b 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1。 */
-    default int readBytes(byte[] b) {
-        return this.readBytes(b, 0, b.length);
+    /** 读取一定数量的字节，并将它们存储到缓冲区数组 dst 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1。 */
+    default int readBytes(byte[] dst) {
+        return this.readBytes(dst, 0, dst.length);
     }
 
-    /** 读取 len 数量的字节，并将它们存储到 off 位置开始的缓冲区数组 b 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1。 */
-    int readBytes(byte[] b, int off, int len);
+    /** 读取 len 数量的字节，并将它们存储到 off 位置开始的缓冲区数组 dst 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1。 */
+    int readBytes(byte[] dst, int off, int len);
 
     /**
      * 读取 2 字节的 short（大端字节序），读取后 readerIndex 会增加 2。
@@ -351,23 +378,30 @@ public interface ByteBuf extends ByteChannel {
     double readFloat64();
 
     /** use copy to dst */
-    int read(ByteBuffer dst);
-
-    /** use copy to dst */
-    default int read(ByteBuf dst) {
-        return this.read(dst, -1);
+    default int readBuffer(ByteBuffer dst) {
+        return this.readBuffer(dst, 0, Math.min(dst.remaining(), this.readableBytes()));
     }
 
-    /**
-     * use copy to dst
-     * @param dst dst ByteBuf
-     * @param len max copy Size
-     * @return return real copy size.
-     */
-    int read(ByteBuf dst, int len);
+    /** use copy to dst */
+    default int readBuffer(ByteBuffer dst, int len) {
+        return this.readBuffer(dst, 0, len);
+    }
 
-    //    /** 读取 len 数量的字节，并将它们存储到 off 位置开始的缓冲区数组 b 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1。 */
-    //    int read(ByteBuf dst, int off, int len);
+    /** use copy to dst */
+    int readBuffer(ByteBuffer dst, int off, int len);
+
+    /** use copy to dst */
+    default int readBuffer(ByteBuf dst) {
+        return this.readBuffer(dst, 0, Math.min(dst.writableBytes(), this.readableBytes()));
+    }
+
+    /** use copy to dst */
+    default int readBuffer(ByteBuf dst, int len) {
+        return this.readBuffer(dst, 0, len);
+    }
+
+    /** use copy to dst */
+    int readBuffer(ByteBuf dst, int off, int len);
 
     /**
      * 读取 len 字节并将其构造成 String，读取后 readerIndex 会增加 len。
@@ -393,13 +427,13 @@ public interface ByteBuf extends ByteChannel {
      */
     byte getByte(int offset);
 
-    /** 从 offset 偏移量的位置上开始读取一定数量的字节，并将它们存储到缓冲区数组 b 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1 */
-    default int getBytes(int offset, byte[] b) {
-        return getBytes(offset, b, 0, b.length);
+    /** 从 offset 偏移量的位置上开始读取一定数量的字节，并将它们存储到缓冲区数组 dst 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1 */
+    default int getBytes(int offset, byte[] dst) {
+        return getBytes(offset, dst, 0, dst.length);
     }
 
-    /** 从 offset 偏移量的位置上开始读取 len 数量的字节，并将它们存储到 off 位置开始的缓冲区数组 b 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1 */
-    int getBytes(int offset, byte[] b, int off, int len);
+    /** 从 offset 偏移量的位置上开始读取 dstLen 数量的字节，并将它们存储到 dstOffset 位置开始的缓冲区数组 dst 中。实际读取的字节数以整数形式返回。如果读取到末尾或者没有可读的数据将会返回 -1 */
+    int getBytes(int offset, byte[] dst, int dstOffset, int dstLen);
 
     /**
      * 读取 2 字节的 short（大端字节序），该方法不会更新 readerIndex 值。
@@ -436,6 +470,22 @@ public interface ByteBuf extends ByteChannel {
      * 若 offset + 8 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     double getFloat64(int offset);
+
+    /** use copy to dst */
+    default int getBuffer(int offset, ByteBuffer dst) {
+        return this.getBuffer(offset, dst, 0, Math.min(dst.remaining(), this.readableBytes()));
+    }
+
+    /** use copy to dst */
+    int getBuffer(int offset, ByteBuffer dst, int dstOffset, int dstLen);
+
+    /** use copy to dst */
+    default int getBuffer(int offset, ByteBuf dst) {
+        return this.getBuffer(offset, dst, 0, Math.min(dst.writableBytes(), this.readableBytes()));
+    }
+
+    /** use copy to dst */
+    int getBuffer(int offset, ByteBuf dst, int dstOffset, int dstLen);
 
     /**
      * 从 offset 开始读取 len 个字节，并构造一个 String，该方法不会更新 readerIndex 值。
@@ -661,67 +711,39 @@ public interface ByteBuf extends ByteChannel {
      * 在多线程并发读场景下 {@link #waitReadable()} 只能保证一个线程可以读取到数据；若需所有线程都能安全的读需要使用 {@link #waitReadable(EFunction)} 方法
      */
     default void waitReadable() throws InterruptedException, IOException {
-        this.waitReadable(1, buf -> buf);
+        this.waitReadable(buf -> buf);
     }
 
     /**
      * 当缓冲区中有数据可供读时，方法会立刻调用 callBack。
      * 在多线程并发读场景下，读取线程会逐个进入 callBack，期间若没有足够的数据读取会阻塞后续线程
      */
-    default <T> T waitReadable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        return this.waitReadable(1, callBack);
-    }
-
-    /**
-     * 期待可以读 expect 参数指定大小的数据。如果缓冲区中有数据可供读，方法会立刻返回否则会进入线程等待状态。
-     * 在多线程并发读场景下 {@link #waitReadable(int)} 只能保证一个线程可以读取到数据；若需所有线程都能安全的读需要使用 {@link #waitReadable(int, EFunction)} 方法
-     */
-    default void waitReadable(int expect) throws InterruptedException, IOException {
-        if (expect <= 0) {
-            throw new IllegalArgumentException("need expect to be gt 0");
-        }
-        this.waitReadable(expect, buf -> buf);
-    }
-
-    /**
-     * 期待可以读 expect 参数指定大小的数据，如果缓冲区中有足够数据可供读，方法会立刻调用 callBack否则会进入线程等待状态。
-     * 在多线程并发读场景下，读取线程会逐个进入 callBack，期间若没有足够的数据读取会阻塞后续线程
-     */
-    <T> T waitReadable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
+    <T> T waitReadable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
 
     /**
      * 期待可以对 Buffer 进行写操作。如果缓冲区中有数据可供写，方法会立刻返回否则会进入线程等待状态。
      * 在多线程并发写场景下 {@link #waitWriteable()} 只能保证一个线程可以写数据；若需所有线程都能安全的写需要使用 {@link #waitWriteable(EFunction)} 方法
      */
     default void waitWriteable() throws InterruptedException, IOException {
-        this.waitWriteable(1, buf -> buf);
+        this.waitWriteable(buf -> buf);
     }
 
     /**
      * 当缓冲区中可供写时，方法会立刻调用 callBack。
      * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续写线程
      */
-    default <T> T waitWriteable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        return this.waitWriteable(1, callBack);
-    }
-
-    /**
-     * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻返回否则会进入线程等待状态。
-     * 在多线程并发写场景下 {@link #waitWriteable(int)} 只能保证一个线程可以写入足够的数据；若需所有线程都能安全的写需要使用 {@link #waitWriteable(int, EFunction)} 方法
-     */
-    default void waitWriteable(int expect) throws InterruptedException, IOException {
-        if (expect <= 0) {
-            throw new IllegalArgumentException("need expect to be gt 0");
-        }
-        this.waitWriteable(expect, buf -> buf);
-    }
-
-    /**
-     * 期待可以写 expect 参数指定大小的数据。如果缓冲区中有足够的空间可供写，方法会立刻调用 callBack否则会进入线程等待状态。
-     * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续线程
-     */
-    <T> T waitWriteable(int expect, EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
+    <T> T waitWriteable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
 
     /** 等待读写 IO 锁 */
     <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException;
+
+    /** use copy to dst, implements {@link ReadableByteChannel} */
+    default int read(ByteBuffer dst) {
+        return this.readBuffer(dst, 0, Math.min(dst.remaining(), this.readableBytes()));
+    }
+
+    /** use copy from src, implements {@link WritableByteChannel} */
+    default int write(ByteBuffer src) {
+        return this.writeBuffer(src, 0, src.remaining());
+    }
 }
