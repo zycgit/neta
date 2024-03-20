@@ -72,12 +72,11 @@ public class RecycleArrayByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _putBytes(int offset, ByteBuffer src, int srcOffset, int srcLen) {
+    protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        src.position(src.position() + srcOffset);
         srcLen = Math.min(src.remaining(), srcLen);
 
         if ((offsetSize + srcLen) <= capacity) {
@@ -93,12 +92,11 @@ public class RecycleArrayByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _putBytes(int offset, ByteBuf src, int srcOffset, int srcLen) {
+    protected int _putBytes(int offset, ByteBuf src, int srcLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        src.skipReadableBytes(srcOffset);
         srcLen = Math.min(src.readableBytes(), srcLen);
 
         if ((offsetSize + srcLen) <= capacity) {
@@ -141,12 +139,11 @@ public class RecycleArrayByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _getBytes(int offset, ByteBuffer dst, int dstOffset, int dstLen) {
+    protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        dst.position(dst.position() + dstOffset);
 
         if ((offsetSize + dstLen) < capacity) {
             dst.put(this.data, offsetSize, dstLen);
@@ -161,12 +158,11 @@ public class RecycleArrayByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _getBytes(int offset, ByteBuf dst, int dstOffset, int dstLen) {
+    protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        dst.skipWritableBytes(dstOffset);
 
         if ((offsetSize + dstLen) < capacity) {
             dst.writeBytes(this.data, offsetSize, dstLen);
@@ -212,10 +208,10 @@ public class RecycleArrayByteBuf extends AbstractByteBuf {
         this._getBytes(this.markedReaderIndex, copyArray, 0, copyArray.length);
         RecycleArrayByteBuf byteBuf = new RecycleArrayByteBuf(this.alloc, copyArray);
 
-        byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.writerIndex = this.writerIndex;
-        byteBuf.markedReaderIndex = this.markedReaderIndex;
+        byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.readerIndex = this.readerIndex;
+        byteBuf.markedReaderIndex = this.markedReaderIndex;
         return byteBuf;
     }
 

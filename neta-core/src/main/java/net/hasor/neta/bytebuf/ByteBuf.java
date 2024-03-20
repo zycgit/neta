@@ -20,10 +20,12 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.channels.ByteChannel;
+import java.nio.channels.Channel;
 import java.nio.channels.ReadableByteChannel;
 import java.nio.channels.WritableByteChannel;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
+import java.util.Objects;
 
 /**
  * <pre>
@@ -33,10 +35,28 @@ import java.nio.charset.StandardCharsets;
  * |          |             |            |             |          |
  * 0   ≤   marked  ≤  readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
  *      readerIndex                writerIndex
- *
  * </pre>
  */
 public interface ByteBuf extends ByteChannel {
+
+    static ByteBuf wrap(byte[] bytes) {
+        return wrap(bytes, false);
+    }
+
+    static ByteBuf wrap(byte[] bytes, boolean asWrite) {
+        Objects.requireNonNull(bytes, "bytes is null.");
+        return new WrapArrayBuffer(bytes, asWrite);
+    }
+
+    static ByteBuf wrap(ByteBuffer buffer) {
+        return wrap(buffer, false);
+    }
+
+    static ByteBuf wrap(ByteBuffer buffer, boolean asWrite) {
+        Objects.requireNonNull(buffer, "buffer is null.");
+        return new WrapByteBuffer(buffer, asWrite);
+    }
+
     /** Returns the {@link ByteBufAllocator} which created this buffer. */
     ByteBufAllocator alloc();
 
@@ -214,24 +234,16 @@ public interface ByteBuf extends ByteChannel {
     void writeFloat64(double n);
 
     default int writeBuffer(ByteBuffer src) {
-        return this.writeBuffer(src, 0, src.remaining());
+        return this.writeBuffer(src, src.remaining());
     }
 
-    default int writeBuffer(ByteBuffer src, int len) {
-        return this.writeBuffer(src, 0, len);
-    }
-
-    int writeBuffer(ByteBuffer src, int off, int len);
+    int writeBuffer(ByteBuffer src, int len);
 
     default int writeBuffer(ByteBuf src) {
-        return this.writeBuffer(src, 0, src.readableBytes());
+        return this.writeBuffer(src, src.readableBytes());
     }
 
-    default int writeBuffer(ByteBuf src, int len) {
-        return this.writeBuffer(src, 0, len);
-    }
-
-    int writeBuffer(ByteBuf src, int off, int len);
+    int writeBuffer(ByteBuf src, int len);
 
     /**
      * 字符串会以 str.getBytes(charset) 方式转换为字节数组并写入缓存。返回值是写入的字节数。
@@ -302,16 +314,16 @@ public interface ByteBuf extends ByteChannel {
     void setFloat64(int offset, double n);
 
     default int setBuffer(int offset, ByteBuffer src) {
-        return this.setBuffer(offset, src, 0, src.remaining());
+        return this.setBuffer(offset, src, src.remaining());
     }
 
-    int setBuffer(int offset, ByteBuffer src, int srcOffset, int srcLen);
+    int setBuffer(int offset, ByteBuffer src, int srcLen);
 
     default int setBuffer(int offset, ByteBuf src) {
-        return this.setBuffer(offset, src, 0, src.readableBytes());
+        return this.setBuffer(offset, src, src.readableBytes());
     }
 
-    int setBuffer(int offset, ByteBuf src, int srcOffset, int srcLen);
+    int setBuffer(int offset, ByteBuf src, int srcLen);
 
     /**
      * 在 offset 偏移量的位置上向后覆盖方式写入字符串，字符串会通过 str.getBytes(charset) 方式转换为字节数组，该方法不会更新 writerIndex 值。返回值是写入了多少个字节。
@@ -379,29 +391,19 @@ public interface ByteBuf extends ByteChannel {
 
     /** use copy to dst */
     default int readBuffer(ByteBuffer dst) {
-        return this.readBuffer(dst, 0, Math.min(dst.remaining(), this.readableBytes()));
+        return this.readBuffer(dst, Math.min(dst.remaining(), this.readableBytes()));
     }
 
     /** use copy to dst */
-    default int readBuffer(ByteBuffer dst, int len) {
-        return this.readBuffer(dst, 0, len);
-    }
-
-    /** use copy to dst */
-    int readBuffer(ByteBuffer dst, int off, int len);
+    int readBuffer(ByteBuffer dst, int len);
 
     /** use copy to dst */
     default int readBuffer(ByteBuf dst) {
-        return this.readBuffer(dst, 0, Math.min(dst.writableBytes(), this.readableBytes()));
+        return this.readBuffer(dst, Math.min(dst.writableBytes(), this.readableBytes()));
     }
 
     /** use copy to dst */
-    default int readBuffer(ByteBuf dst, int len) {
-        return this.readBuffer(dst, 0, len);
-    }
-
-    /** use copy to dst */
-    int readBuffer(ByteBuf dst, int off, int len);
+    int readBuffer(ByteBuf dst, int len);
 
     /**
      * 读取 len 字节并将其构造成 String，读取后 readerIndex 会增加 len。
@@ -473,19 +475,19 @@ public interface ByteBuf extends ByteChannel {
 
     /** use copy to dst */
     default int getBuffer(int offset, ByteBuffer dst) {
-        return this.getBuffer(offset, dst, 0, Math.min(dst.remaining(), this.readableBytes()));
+        return this.getBuffer(offset, dst, Math.min(dst.remaining(), this.readableBytes()));
     }
 
     /** use copy to dst */
-    int getBuffer(int offset, ByteBuffer dst, int dstOffset, int dstLen);
+    int getBuffer(int offset, ByteBuffer dst, int dstLen);
 
     /** use copy to dst */
     default int getBuffer(int offset, ByteBuf dst) {
-        return this.getBuffer(offset, dst, 0, Math.min(dst.writableBytes(), this.readableBytes()));
+        return this.getBuffer(offset, dst, Math.min(dst.writableBytes(), this.readableBytes()));
     }
 
     /** use copy to dst */
-    int getBuffer(int offset, ByteBuf dst, int dstOffset, int dstLen);
+    int getBuffer(int offset, ByteBuf dst, int dstLen);
 
     /**
      * 从 offset 开始读取 len 个字节，并构造一个 String，该方法不会更新 readerIndex 值。
@@ -737,13 +739,21 @@ public interface ByteBuf extends ByteChannel {
     /** 等待读写 IO 锁 */
     <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException;
 
-    /** use copy to dst, implements {@link ReadableByteChannel} */
+    /** implements {@link ReadableByteChannel} */
+    @Override
     default int read(ByteBuffer dst) {
-        return this.readBuffer(dst, 0, Math.min(dst.remaining(), this.readableBytes()));
+        return this.readBuffer(dst, Math.min(dst.remaining(), this.readableBytes()));
     }
 
-    /** use copy from src, implements {@link WritableByteChannel} */
+    /** implements {@link WritableByteChannel} */
+    @Override
     default int write(ByteBuffer src) {
-        return this.writeBuffer(src, 0, src.remaining());
+        return this.writeBuffer(src, src.remaining());
+    }
+
+    /** implements {@link Channel} */
+    @Override
+    default boolean isOpen() {
+        return this.isFree();
     }
 }

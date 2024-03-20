@@ -64,17 +64,16 @@ public class RecycleSliceByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _putBytes(int offset, ByteBuffer src, int srcOffset, int srcLen) {
+    protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        src.position(src.position() + srcOffset);
         srcLen = Math.min(src.remaining(), srcLen);
 
         if ((offsetSize + srcLen) <= capacity) {
             this.target.clear().position(offsetSize);
-            this.target.put((ByteBuffer) src.duplicate().limit(srcOffset + srcLen));
+            this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
             src.position(src.position() + srcLen);
             return srcLen;
         } else {
@@ -96,17 +95,16 @@ public class RecycleSliceByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _putBytes(int offset, ByteBuf src, int srcOffset, int srcLen) {
+    protected int _putBytes(int offset, ByteBuf src, int srcLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        src.skipReadableBytes(srcOffset);
         srcLen = Math.min(src.readableBytes(), srcLen);
 
         if ((offsetSize + srcLen) <= capacity) {
             this.target.clear();
-            src.readBuffer(this.target, offsetSize, srcLen);
+            src.readBuffer(this.target, srcLen);
             return srcLen;
         } else {
             int partA = capacity - offsetSize;
@@ -152,12 +150,11 @@ public class RecycleSliceByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _getBytes(int offset, ByteBuffer dst, int dstOffset, int dstLen) {
+    protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        dst.position(dst.position() + dstOffset);
 
         if ((offsetSize + dstLen) < capacity) {
             this.target.clear().position(offsetSize).limit(dstLen);
@@ -175,24 +172,23 @@ public class RecycleSliceByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _getBytes(int offset, ByteBuf dst, int dstOffset, int dstLen) {
+    protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
         checkFree();
 
         int capacity = this.getMaxCapacity();
         int offsetSize = offsetSize(offset, this.getMaxCapacity());
-        dst.skipWritableBytes(dstOffset);
 
         if ((offsetSize + dstLen) < capacity) {
             this.target.clear();
-            dst.writeBuffer(this.target, offsetSize, dstLen);
+            dst.writeBuffer(this.target, dstLen);
             return dstLen;
         } else {
             int partA = capacity - offsetSize;
             int partB = dstLen - partA;
+            this.target.clear().position(offsetSize);
+            dst.writeBuffer(this.target, partA);
             this.target.clear();
-            dst.writeBuffer(this.target, offsetSize, partA);
-            this.target.clear();
-            dst.writeBuffer(this.target, 0, partB);
+            dst.writeBuffer(this.target, partB);
             return partA + partB;
         }
     }
@@ -234,13 +230,13 @@ public class RecycleSliceByteBuf extends AbstractByteBuf {
             copyBuffer = ByteBuffer.allocate(this.getMaxCapacity());
         }
 
-        this._getBytes(this.markedReaderIndex, copyBuffer, 0, copyBuffer.capacity());
+        this._getBytes(this.markedReaderIndex, copyBuffer, copyBuffer.capacity());
         RecycleSliceByteBuf byteBuf = new RecycleSliceByteBuf(this.alloc, copyBuffer);
 
-        byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.writerIndex = this.writerIndex;
-        byteBuf.markedReaderIndex = this.markedReaderIndex;
+        byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.readerIndex = this.readerIndex;
+        byteBuf.markedReaderIndex = this.markedReaderIndex;
         return byteBuf;
     }
 

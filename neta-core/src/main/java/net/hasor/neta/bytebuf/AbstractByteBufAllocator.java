@@ -58,23 +58,26 @@ public abstract class AbstractByteBufAllocator implements ByteBufAllocator {
     }
 
     @Override
-    public ByteBuf buffer(int initialCapacity) {
-        return this.buffer(initialCapacity, initialCapacity);
+    public ByteBuf buffer(int capacity) {
+        return this.buffer(capacity, capacity);
     }
 
     @Override
+    @Deprecated
     public ByteBuf wrap(byte[] bytes) {
-        return new WrapArrayByteBuf(this, bytes);
+        return ByteBuf.wrap(bytes);
     }
 
     @Override
-    public ByteBuf wrap(ByteBuffer javaBuffer) {
-        return null;//TODO new SliceByteBuf(this, new BufferWrap(javaBuffer));
+    @Deprecated
+    public ByteBuf wrap(ByteBuffer buffer) {
+        return new WrapByteBuffer(buffer, false);
     }
 
+    @Deprecated
     @Override
     public ByteBuf arrayBuffer(int capacity) {
-        return new WrapArrayByteBuf(this, capacity);
+        return ByteBuf.wrap(new byte[capacity]);
     }
 
     @Override

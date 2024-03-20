@@ -51,12 +51,15 @@ public interface ByteBufAllocator {
     boolean isDirect();
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
+    @Deprecated
     ByteBuf wrap(byte[] bytes);
 
     /** Allocate a {@link ByteBuf}, with the ByteBuffer. */
+    @Deprecated
     ByteBuf wrap(ByteBuffer javaBuffer);
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
+    @Deprecated
     ByteBuf arrayBuffer(int capacity);
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */

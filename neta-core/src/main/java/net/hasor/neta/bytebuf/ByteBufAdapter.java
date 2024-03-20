@@ -92,6 +92,11 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public void close() throws IOException {
+        this.byteBuf.close();
+    }
+
+    @Override
     public boolean isFree() {
         return this.byteBuf.isFree();
     }
@@ -132,6 +137,11 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public void clear() {
+        this.byteBuf.clear();
+    }
+
+    @Override
     public ByteBuf resetReader() {
         return this.byteBuf.resetReader();
     }
@@ -163,7 +173,7 @@ public class ByteBufAdapter implements ByteBuf {
 
     @Override
     public int writeBytes(byte[] src, int off, int len) {
-        return 0;
+        return this.byteBuf.writeBytes(src, off, len);
     }
 
     @Override
@@ -202,18 +212,23 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int writeBuffer(ByteBuffer src, int off, int len) {
-        return 0;
+    public int writeBuffer(ByteBuffer src) {
+        return this.byteBuf.writeBuffer(src);
     }
 
     @Override
-    public int writeBuffer(ByteBuf src, int off, int len) {
-        return 0;
+    public int writeBuffer(ByteBuffer src, int len) {
+        return this.byteBuf.writeBuffer(src, len);
     }
 
     @Override
-    public int write(ByteBuffer src) {
-        return this.byteBuf.write(src);
+    public int writeBuffer(ByteBuf src) {
+        return this.byteBuf.writeBuffer(src);
+    }
+
+    @Override
+    public int writeBuffer(ByteBuf src, int len) {
+        return this.byteBuf.writeBuffer(src, len);
     }
 
     @Override
@@ -267,13 +282,23 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int setBuffer(int offset, ByteBuffer src, int srcOffset, int srcLen) {
-        return 0;
+    public int setBuffer(int offset, ByteBuffer src) {
+        return this.byteBuf.setBuffer(offset, src);
     }
 
     @Override
-    public int setBuffer(int offset, ByteBuf src, int srcOffset, int srcLen) {
-        return 0;
+    public int setBuffer(int offset, ByteBuffer src, int srcLen) {
+        return this.byteBuf.setBuffer(offset, src, srcLen);
+    }
+
+    @Override
+    public int setBuffer(int offset, ByteBuf src) {
+        return this.byteBuf.setBuffer(offset, src);
+    }
+
+    @Override
+    public int setBuffer(int offset, ByteBuf src, int srcLen) {
+        return this.byteBuf.setBuffer(offset, src, srcLen);
     }
 
     @Override
@@ -332,8 +357,8 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int readBuffer(ByteBuffer dst, int off, int len) {
-        return 0;
+    public int readBuffer(ByteBuffer dst, int len) {
+        return this.byteBuf.readBuffer(dst, len);
     }
 
     @Override
@@ -342,19 +367,9 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int readBuffer(ByteBuf dst, int off, int len) {
-        return 0;
+    public int readBuffer(ByteBuf dst, int len) {
+        return this.byteBuf.readBuffer(dst, len);
     }
-
-    //    @Override
-    //    public int readBuffer(ByteBuf dst, int len) {
-    //        return this.byteBuf.readBuffer(dst, len);
-    //    }
-
-    //    @Override
-    //    public int read(ByteBuf dest, int off, int len) {
-    //        return this.byteBuf.read(dest, off, len);
-    //    }
 
     @Override
     public String readString(int len, Charset charset) {
@@ -407,13 +422,23 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public int getBuffer(int offset, ByteBuffer dst, int dstOffset, int dstLen) {
-        return 0;
+    public int getBuffer(int offset, ByteBuffer dst) {
+        return this.byteBuf.getBuffer(offset, dst);
     }
 
     @Override
-    public int getBuffer(int offset, ByteBuf dst, int dstOffset, int dstLen) {
-        return 0;
+    public int getBuffer(int offset, ByteBuffer dst, int dstLen) {
+        return this.byteBuf.getBuffer(offset, dst, dstLen);
+    }
+
+    @Override
+    public int getBuffer(int offset, ByteBuf dst) {
+        return this.byteBuf.getBuffer(offset, dst);
+    }
+
+    @Override
+    public int getBuffer(int offset, ByteBuf dst, int dstLen) {
+        return this.byteBuf.getBuffer(offset, dst, dstLen);
     }
 
     @Override
@@ -467,6 +492,16 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public int expectLine() {
+        return this.byteBuf.expectLine();
+    }
+
+    @Override
+    public boolean hasLine() {
+        return this.byteBuf.hasLine();
+    }
+
+    @Override
     public String readLine() {
         return this.byteBuf.readLine();
     }
@@ -512,16 +547,6 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public boolean isOpen() {
-        return this.byteBuf.isOpen();
-    }
-
-    @Override
-    public void close() throws IOException {
-        this.byteBuf.close();
-    }
-
-    @Override
     public void waitReadable() throws InterruptedException, IOException {
         this.byteBuf.waitReadable();
     }
@@ -548,6 +573,16 @@ public class ByteBufAdapter implements ByteBuf {
 
     @Override
     public int read(ByteBuffer dst) {
-        return 0;
+        return this.byteBuf.read(dst);
+    }
+
+    @Override
+    public int write(ByteBuffer src) {
+        return this.byteBuf.write(src);
+    }
+
+    @Override
+    public boolean isOpen() {
+        return this.byteBuf.isOpen();
     }
 }

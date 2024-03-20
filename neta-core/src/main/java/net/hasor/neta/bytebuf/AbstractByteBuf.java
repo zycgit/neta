@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.function.EFunction;
 
 import java.io.IOException;
@@ -107,17 +108,17 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     protected abstract int _putBytes(int offset, byte[] src, int srcOffset, int srcLen);
 
-    protected abstract int _putBytes(int offset, ByteBuffer src, int srcOffset, int srcLen);
+    protected abstract int _putBytes(int offset, ByteBuffer src, int srcLen);
 
-    protected abstract int _putBytes(int offset, ByteBuf src, int srcOffset, int srcLen);
+    protected abstract int _putBytes(int offset, ByteBuf src, int srcLen);
 
     protected abstract byte _getByte(int offset);
 
     protected abstract int _getBytes(int offset, byte[] dst, int dstOffset, int dstLen);
 
-    protected abstract int _getBytes(int offset, ByteBuffer dst, int dstOffset, int dstLen);
+    protected abstract int _getBytes(int offset, ByteBuffer dst, int dstLen);
 
-    protected abstract int _getBytes(int offset, ByteBuf dst, int dstOffset, int dstLen);
+    protected abstract int _getBytes(int offset, ByteBuf dst, int dstLen);
 
     protected abstract void _free();
 
@@ -155,7 +156,7 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     /** move readerIndex and returns the readerIndex before changed. */
     protected int nextReadable(int readableBytes) {
         if ((this.readerIndex + readableBytes) > this.markedWriterIndex) {
-            throw new IndexOutOfBoundsException(String.format("read out of range. length: %d (expected: range(0, %d))", readableBytes, this.readableBytes()));
+            throw new IndexOutOfBoundsException(String.format("read out of range. length: %d (expected: 0 ~ %d)", readableBytes, this.readableBytes()));
         }
 
         int oriReadIndex = this.readerIndex;
@@ -164,18 +165,20 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     }
 
     protected int offsetWritable(int offset, int writableBytes) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
         int offerWritableBytes = this.maxCapacity - (this.markedWriterIndex - this.markedReaderIndex);
         if (writableBytes > offerWritableBytes) {
-            throw new IndexOutOfBoundsException(String.format("write out of range. index: %d, length: %d (expected: range(0, %d))", offset, writableBytes, offerWritableBytes));
+            throw new IndexOutOfBoundsException(String.format("write out of range. index: %d, length: %d (expected: 0 ~ %d)", offset, writableBytes, offerWritableBytes));
         }
 
         return this.markedWriterIndex + offset;
     }
 
     protected int offsetReadable(int offset, int readableBytes) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
         if ((this.readerIndex + offset + readableBytes) > this.markedWriterIndex) {
             int expectLimit = this.markedWriterIndex - this.readerIndex;
-            throw new IndexOutOfBoundsException(String.format("read out of range. index: %d, length: %d (expected: range(0, %d))", offset, readableBytes, expectLimit));
+            throw new IndexOutOfBoundsException(String.format("read out of range. index: %d, length: %d (expected: 0 ~ %d)", offset, readableBytes, expectLimit));
         }
 
         return this.readerIndex + offset;
@@ -320,70 +323,100 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     }
 
     @Override
-    public int writeBuffer(ByteBuffer src, int off, int len) {
+    public int writeBuffer(ByteBuffer src, int len) {
+        ObjectUtils.checkPositiveOrZero(len, "len");
+
         int minLen = Math.min(len, this.writableBytes());
-        return this._putBytes(nextWritable(minLen), src, off, minLen);
+        return this._putBytes(nextWritable(minLen), src, minLen);
     }
 
     @Override
-    public int writeBuffer(ByteBuf src, int off, int len) {
+    public int writeBuffer(ByteBuf src, int len) {
+        ObjectUtils.checkPositiveOrZero(len, "len");
+
         int minLen = Math.min(len, this.writableBytes());
-        return this._putBytes(nextWritable(minLen), src, off, minLen);
+        return this._putBytes(nextWritable(minLen), src, minLen);
     }
 
     @Override
     public void setByte(int offset, byte n) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         this._putByte(offsetWritable(offset, 1), n);
     }
 
     @Override
     public void setBytes(int offset, byte[] src) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         this._putBytes(offsetWritable(offset, src.length), src, 0, src.length);
     }
 
     @Override
     public void setBytes(int offset, byte[] src, int srcOffset, int srcLen) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(srcOffset, "srcOffset");
+        ObjectUtils.checkPositiveOrZero(srcLen, "srcLen");
+
         this._putBytes(offsetWritable(offset, srcLen), src, srcOffset, srcLen);
     }
 
     @Override
     public void setInt16(int offset, short n) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         encodeInt16(this, offsetWritable(offset, 2), n, isBig());
     }
 
     @Override
     public void setInt24(int offset, int n) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         encodeInt24(this, offsetWritable(offset, 3), n, isBig());
     }
 
     @Override
     public void setInt32(int offset, int n) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         encodeInt32(this, offsetWritable(offset, 4), n, isBig());
     }
 
     @Override
     public void setInt64(int offset, long n) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         encodeInt64(this, offsetWritable(offset, 8), n, isBig());
     }
 
     @Override
     public void setFloat32(int offset, float n) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         this.setInt32(offset, Float.floatToRawIntBits(n));
     }
 
     @Override
     public void setFloat64(int offset, double n) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         this.setInt64(offset, Double.doubleToRawLongBits(n));
     }
 
     @Override
-    public int setBuffer(int offset, ByteBuffer src, int srcOffset, int srcLen) {
-        return this._putBytes(offsetWritable(offset, srcLen), src, srcOffset, srcLen);
+    public int setBuffer(int offset, ByteBuffer src, int srcLen) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(srcLen, "srcLen");
+
+        return this._putBytes(offsetWritable(offset, srcLen), src, srcLen);
     }
 
     @Override
-    public int setBuffer(int offset, ByteBuf src, int srcOffset, int srcLen) {
-        return this._putBytes(offsetWritable(offset, srcLen), src, srcOffset, srcLen);
+    public int setBuffer(int offset, ByteBuf src, int srcLen) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(srcLen, "srcLen");
+
+        return this._putBytes(offsetWritable(offset, srcLen), src, srcLen);
     }
 
     @Override
@@ -393,6 +426,9 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public int readBytes(byte[] dst, int off, int len) {
+        ObjectUtils.checkPositiveOrZero(off, "off");
+        ObjectUtils.checkPositiveOrZero(len, "len");
+
         int minLen = Math.min(len, this.readableBytes());
         return this._getBytes(nextReadable(minLen), dst, off, minLen);
     }
@@ -428,65 +464,93 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     }
 
     @Override
-    public int readBuffer(ByteBuffer dst, int off, int len) {
+    public int readBuffer(ByteBuffer dst, int len) {
+        ObjectUtils.checkPositiveOrZero(len, "len");
+
         int minLen = Math.min(len, this.readableBytes());
-        return this._getBytes(nextReadable(minLen), dst, off, minLen);
+        return this._getBytes(nextReadable(minLen), dst, minLen);
     }
 
     @Override
-    public int readBuffer(ByteBuf dst, int off, int len) {
+    public int readBuffer(ByteBuf dst, int len) {
+        ObjectUtils.checkPositiveOrZero(len, "len");
+
         int minLen = Math.min(len, this.readableBytes());
-        return this._getBytes(nextReadable(minLen), dst, off, minLen);
+        return this._getBytes(nextReadable(minLen), dst, minLen);
     }
 
     @Override
     public byte getByte(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return this._getByte(offsetReadable(offset, 1));
     }
 
     @Override
     public int getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(dstOffset, "dstOffset");
+        ObjectUtils.checkPositiveOrZero(dstLen, "dstLen");
+
         return this._getBytes(offsetReadable(offset, dstLen), dst, dstOffset, dstLen);
     }
 
     @Override
     public short getInt16(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return dencodeInt16(this, offsetReadable(offset, 2), isBig());
     }
 
     @Override
     public int getInt24(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return dencodeInt24(this, offsetReadable(offset, 3), isBig());
     }
 
     @Override
     public int getInt32(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return dencodeInt32(this, offsetReadable(offset, 4), isBig());
     }
 
     @Override
     public long getInt64(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return dencodeInt64(this, offsetReadable(offset, 8), isBig());
     }
 
     @Override
     public float getFloat32(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return Float.intBitsToFloat(getInt32(offset));
     }
 
     @Override
     public double getFloat64(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return Double.longBitsToDouble(getInt64(offset));
     }
 
     @Override
-    public int getBuffer(int offset, ByteBuffer dst, int dstOffset, int dstLen) {
-        return this._getBytes(offsetReadable(offset, dstLen), dst, dstOffset, dstLen);
+    public int getBuffer(int offset, ByteBuffer dst, int dstLen) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(dstLen, "dstLen");
+
+        return this._getBytes(offsetReadable(offset, dstLen), dst, dstLen);
     }
 
     @Override
-    public int getBuffer(int offset, ByteBuf dst, int dstOffset, int dstLen) {
-        return this._getBytes(offsetReadable(offset, dstLen), dst, dstOffset, dstLen);
+    public int getBuffer(int offset, ByteBuf dst, int dstLen) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(dstLen, "dstLen");
+
+        return this._getBytes(offsetReadable(offset, dstLen), dst, dstLen);
     }
 
     @Override
@@ -511,27 +575,30 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public short getUInt8(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return dencodeUInt8(this, offsetReadable(offset, 1));
     }
 
     @Override
     public int getUInt16(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return dencodeUInt16(this, offsetReadable(offset, 2), isBig());
     }
 
     @Override
     public int getUInt24(int offset) {
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
+
         return dencodeUInt24(this, offsetReadable(offset, 3), isBig());
     }
 
     @Override
     public long getUInt32(int offset) {
-        return dencodeUInt32(this, offsetReadable(offset, 4), isBig());
-    }
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-    @Override
-    public boolean isOpen() {
-        return this.isFree();
+        return dencodeUInt32(this, offsetReadable(offset, 4), isBig());
     }
 
     @Override

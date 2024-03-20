@@ -10,13 +10,28 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 
 public class RecycleArrayByteBufTest {
-
     @Test
     public void basicTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(111);
         assert byteBuf.capacity() == 111;
         assert !byteBuf.isDirect();
         assert byteBuf.toString().startsWith("RecycleArrayByteBuf[rMark=");
+    }
+
+    @Test
+    public void basicTest02() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        byteBuf.markReader();
+
+        byteBuf.resetReader();
+        assert byteBuf.readableBytes() == 0;
     }
 
     @Test
@@ -503,7 +518,8 @@ public class RecycleArrayByteBufTest {
         assert alloc3.limit() == 4;
         assert alloc3.position() == 0;
         assert alloc3.remaining() == 4;
-        assert byteBuf.readBuffer(alloc3, 1, 2) == 2;
+        alloc3.position(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
         assert alloc3.limit() == 4;
         assert alloc3.position() == 3;
         assert alloc3.remaining() == 1;
@@ -578,7 +594,8 @@ public class RecycleArrayByteBufTest {
         assert alloc3.limit() == 4;
         assert alloc3.position() == 0;
         assert alloc3.remaining() == 4;
-        assert byteBuf.readBuffer(alloc3, 1, 2) == 2;
+        alloc3.position(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
         assert alloc3.limit() == 4;
         assert alloc3.position() == 3;
         assert alloc3.remaining() == 1;
@@ -763,7 +780,8 @@ public class RecycleArrayByteBufTest {
         ByteBuf alloc3 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
-        assert byteBuf.readBuffer(alloc3, 1, 2) == 2;
+        alloc3.skipWritableBytes(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 1;
         alloc3.markWriter();
@@ -837,7 +855,8 @@ public class RecycleArrayByteBufTest {
         ByteBuf alloc3 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
-        assert byteBuf.readBuffer(alloc3, 1, 2) == 2;
+        alloc3.skipWritableBytes(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 1;
         alloc3.markWriter();
@@ -878,20 +897,6 @@ public class RecycleArrayByteBufTest {
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
         RecycleArrayByteBuf byteBuf1 = (RecycleArrayByteBuf) ByteBufAllocator.DEFAULT.recycleHeapBuffer(12);
-        byteBuf1.writeBytes(RandomUtils.nextBytes(byteBuf1.capacity()));
-
-        RecycleArrayByteBuf byteBuf2 = byteBuf1.copy();
-
-        assert byteBuf1.data != byteBuf2.data;
-
-        String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
-        String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
-        assert hash1.equals(hash2);
-    }
-
-    @Test
-    public void copyTest02() throws NoSuchAlgorithmException {
-        RecycleArrayByteBuf byteBuf1 = (RecycleArrayByteBuf) ByteBufAllocator.DEFAULT.recycleHeapBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
 
         RecycleArrayByteBuf byteBuf2 = byteBuf1.copy();
@@ -905,7 +910,7 @@ public class RecycleArrayByteBufTest {
     }
 
     @Test
-    public void copyTest03() {
+    public void copyTest02() {
         RecycleArrayByteBuf byteBuf1 = (RecycleArrayByteBuf) ByteBufAllocator.DEFAULT.recycleHeapBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf1.markWriter();
@@ -938,7 +943,7 @@ public class RecycleArrayByteBufTest {
             byteBuf.getByte(0);
             assert false;
         } catch (IndexOutOfBoundsException e) {
-            assert e.getMessage().startsWith("read out of range. index: 0, length: 1 (expected: range(0, 0))");
+            assert e.getMessage().startsWith("read out of range. index: 0, length: 1 (expected: 0 ~ 0)");
         }
 
         try {
@@ -947,7 +952,7 @@ public class RecycleArrayByteBufTest {
             byteBuf.getByte(0);
             assert false;
         } catch (IndexOutOfBoundsException e) {
-            assert e.getMessage().startsWith("read out of range. index: 0, length: 1 (expected: range(0, 0))");
+            assert e.getMessage().startsWith("read out of range. index: 0, length: 1 (expected: 0 ~ 0)");
         }
     }
 
@@ -960,7 +965,7 @@ public class RecycleArrayByteBufTest {
             byteBuf.readInt64();
             assert false;
         } catch (IndexOutOfBoundsException e) {
-            assert e.getMessage().startsWith("read out of range. length: 8 (expected: range(0, 4))");
+            assert e.getMessage().startsWith("read out of range. length: 8 (expected: 0 ~ 4)");
         }
     }
 
