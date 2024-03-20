@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.nio.ByteBuffer;
+
 /**
  * 基于 堆外内存的 ByteBuf 接口实现。
  * @author 赵永春 (zyc@hasor.net)
@@ -21,8 +23,13 @@ package net.hasor.neta.bytebuf;
  */
 public class DirectByteBufAllocator extends AbstractByteBufAllocator {
     /** Create new instance */
-    protected DirectByteBufAllocator(int initialCapacityByDefault, int sliceSizeByDefault) {
-        super(initialCapacityByDefault, sliceSizeByDefault);
+    protected DirectByteBufAllocator(int initialCapacityByDefault, int sliceSizeByDefault, int recycleSizeByDefault) {
+        super(initialCapacityByDefault, sliceSizeByDefault, recycleSizeByDefault);
+    }
+
+    @Override
+    public ByteBuffer jvmBuffer(int capacity) {
+        return ByteBuffer.allocateDirect(capacity);
     }
 
     @Override
@@ -36,17 +43,12 @@ public class DirectByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     @Override
-    public ByteBuf recycleBuffer(int capacity) {
-        return recycleDirectBuffer(capacity);
+    public ByteBuf buffer(int initCapacity, int maxCapacity) {
+        return this.directBuffer(initCapacity, maxCapacity);
     }
 
     @Override
-    public ByteBuf buffer(int initialCapacity, int maxCapacity) {
-        return this.directBuffer(initialCapacity, maxCapacity);
-    }
-
-    @Override
-    public ByteBuf pooledBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
-        return this.pooledDirectBuffer(initialCapacity, maxCapacity, sliceSize);
+    public ByteBuf pooledBuffer(int initCapacity, int maxCapacity, int sliceSize) {
+        return this.pooledDirectBuffer(initCapacity, maxCapacity, sliceSize);
     }
 }

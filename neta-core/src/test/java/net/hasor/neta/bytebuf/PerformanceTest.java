@@ -167,7 +167,7 @@ public class PerformanceTest {
 
     @Test
     public void performance_BufferPool() {
-        BufferPool pool = new BufferPool(1, 128, -1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, 128, -1, ByteBuffer::allocate);
 
         AtomicBoolean exit = new AtomicBoolean(false);
         AtomicLong allocCnt = new AtomicLong(0);

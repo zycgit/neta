@@ -284,7 +284,10 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public int writeBytes(byte[] src, int off, int len) {
-        return this._putBytes(nextWritable(len), src, off, len);
+        ObjectUtils.checkPositiveOrZero(len, "len");
+
+        int minLen = Math.min(len, this.writableBytes());
+        return this._putBytes(nextWritable(minLen), src, off, minLen);
     }
 
     @Override
@@ -606,6 +609,15 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         synchronized (this.synchronizedLock) {
             return callBack.eApply(this);
         }
+    }
+
+    @Override
+    public byte[] asByteArray() {
+        checkFree();
+
+        byte[] copyArray = new byte[this.markedWriterIndex - this.markedReaderIndex];
+        this._getBytes(this.markedReaderIndex, copyArray, 0, copyArray.length);
+        return copyArray;
     }
 
     @Override

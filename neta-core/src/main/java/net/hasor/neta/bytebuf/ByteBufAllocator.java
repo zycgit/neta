@@ -23,7 +23,7 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public interface ByteBufAllocator {
+public interface ByteBufAllocator extends BufferAllocator {
     ByteBufAllocator DEFAULT = ByteBufUtils.DEFAULT_ALLOCATOR;
 
     /**
@@ -36,13 +36,13 @@ public interface ByteBufAllocator {
      * Allocate a {@link ByteBuf} with the given initial capacity.
      * If it is a direct or heap buffer depends on the actual implementation.
      */
-    ByteBuf buffer(int initialCapacity);
+    ByteBuf buffer(int initCapacity);
 
     /**
      * Allocate a {@link ByteBuf} with the given initial capacity and the given maximal capacity.
      * If it is a direct or heap buffer depends on the actual implementation.
      */
-    ByteBuf buffer(int initialCapacity, int maxCapacity);
+    ByteBuf buffer(int initCapacity, int maxCapacity);
 
     /** Returns {@code true} if direct {@link ByteBuf}'s */
     boolean isPooled();
@@ -78,7 +78,7 @@ public interface ByteBufAllocator {
     ByteBuf heapBuffer(int capacity);
 
     /** Allocate a heap {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
-    ByteBuf heapBuffer(int initialCapacity, int maxCapacity);
+    ByteBuf heapBuffer(int initCapacity, int maxCapacity);
 
     /** Allocate a direct {@link ByteBuf}. */
     ByteBuf directBuffer();
@@ -87,7 +87,7 @@ public interface ByteBufAllocator {
     ByteBuf directBuffer(int capacity);
 
     /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
-    ByteBuf directBuffer(int initialCapacity, int maxCapacity);
+    ByteBuf directBuffer(int initCapacity, int maxCapacity);
 
     /*** Allocate pooled {@link ByteBuf}.
      * If it is a direct or heap buffer depends on the actual implementation. */
@@ -101,7 +101,7 @@ public interface ByteBufAllocator {
      * Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity.
      * If it is a direct or heap buffer depends on the actual implementation.
      */
-    ByteBuf pooledBuffer(int initialCapacity, int maxCapacity, int sliceSize);
+    ByteBuf pooledBuffer(int initCapacity, int maxCapacity, int sliceSize);
 
     /*** Allocate pooled {@link ByteBuf}. */
     ByteBuf pooledHeapBuffer();
@@ -110,7 +110,7 @@ public interface ByteBufAllocator {
     ByteBuf pooledHeapBuffer(int maxCapacity, int sliceSize);
 
     /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
-    ByteBuf pooledHeapBuffer(int initialCapacity, int maxCapacity, int sliceSize);
+    ByteBuf pooledHeapBuffer(int initCapacity, int maxCapacity, int sliceSize);
 
     /*** Allocate pooled {@link ByteBuf}. */
     ByteBuf pooledDirectBuffer();
@@ -119,7 +119,7 @@ public interface ByteBufAllocator {
     ByteBuf pooledDirectBuffer(int maxCapacity, int sliceSize);
 
     /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
-    ByteBuf pooledDirectBuffer(int initialCapacity, int maxCapacity, int sliceSize);
+    ByteBuf pooledDirectBuffer(int initCapacity, int maxCapacity, int sliceSize);
 
     //    /*** Allocate pooled {@link ByteBuf}. */
     //    ByteBuf mappedBuffer();

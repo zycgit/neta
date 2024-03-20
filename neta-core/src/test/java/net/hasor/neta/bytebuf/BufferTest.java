@@ -6,7 +6,7 @@ import java.nio.ByteBuffer;
 public class BufferTest {
     @Test
     public void basicTest_01() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList1 = allocator.requestPages(4);
@@ -24,7 +24,7 @@ public class BufferTest {
     public void putgetByteTest_01() {
         byte[] bytes = new byte[4096];
 
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.wrap(bytes)));
+        BufferPool pool = new BufferPool(1, c -> ByteBuffer.wrap(bytes));
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit pageList1 = allocator.requestPages(4);
         PageChunkSplit pageList2 = allocator.requestPages(4);
@@ -97,7 +97,7 @@ public class BufferTest {
     public void putBytesTest_01() {
         byte[] bytes = new byte[4096];
 
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.wrap(bytes)));
+        BufferPool pool = new BufferPool(1, c -> ByteBuffer.wrap(bytes));
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(8);
@@ -146,7 +146,7 @@ public class BufferTest {
     public void putBytesTest_02() {
         byte[] bytes = new byte[4096];
 
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.wrap(bytes)));
+        BufferPool pool = new BufferPool(1, c -> ByteBuffer.wrap(bytes));
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit keep = allocator.requestPages(8);
@@ -194,7 +194,7 @@ public class BufferTest {
 
     @Test
     public void putBytesTest_03() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
@@ -217,7 +217,7 @@ public class BufferTest {
 
     @Test
     public void getBytesTest_01() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit pageList = allocator.requestPages(16);
         BufferTarget buffer = pool.requestBuffer(pageList);
@@ -272,7 +272,7 @@ public class BufferTest {
 
     @Test
     public void getBytesTest_02() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit keep = allocator.requestPages(8);
         PageChunkSplit pageList = allocator.requestPages(16);
@@ -328,7 +328,7 @@ public class BufferTest {
 
     @Test
     public void getBytesTest_03() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
@@ -353,7 +353,7 @@ public class BufferTest {
     public void putByteBufferTest_01() {
         byte[] bytes = new byte[4096];
 
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.wrap(bytes)));
+        BufferPool pool = new BufferPool(1, c -> ByteBuffer.wrap(bytes));
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(8);
@@ -410,7 +410,7 @@ public class BufferTest {
     public void putByteBufferTest_02() {
         byte[] bytes = new byte[4096];
 
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.wrap(bytes)));
+        BufferPool pool = new BufferPool(1, c -> ByteBuffer.wrap(bytes));
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit keep = allocator.requestPages(8);
         PageChunkSplit pageList = allocator.requestPages(8);
@@ -465,7 +465,7 @@ public class BufferTest {
 
     @Test
     public void putByteBufferTest_03() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
@@ -492,7 +492,7 @@ public class BufferTest {
 
     @Test
     public void getByteBufferTest_01() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit pageList = allocator.requestPages(16);
         BufferTarget buffer = pool.requestBuffer(pageList);
@@ -547,7 +547,7 @@ public class BufferTest {
 
     @Test
     public void getByteBufferTest_02() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit keep = allocator.requestPages(8);
         PageChunkSplit pageList = allocator.requestPages(16);
@@ -603,7 +603,7 @@ public class BufferTest {
 
     @Test
     public void getByteBufferTest_03() {
-        BufferPool pool = new BufferPool(1, c -> new BufferWrap(ByteBuffer.allocate(c)));
+        BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);

@@ -8,7 +8,7 @@ public class BufferPoolTest {
     @Test
     public void poolTest_01() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, c -> new BufferWrap(ByteBuffer.allocate(c))) {
+        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();
@@ -130,7 +130,7 @@ public class BufferPoolTest {
     @Test
     public void poolTest_02() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, c -> new BufferWrap(ByteBuffer.allocate(c))) {
+        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();
@@ -175,7 +175,7 @@ public class BufferPoolTest {
     @Test
     public void poolTest_03() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, c -> new BufferWrap(ByteBuffer.allocate(c))) {
+        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();
@@ -198,7 +198,7 @@ public class BufferPoolTest {
     @Test
     public void poolTest_04() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, c -> new BufferWrap(ByteBuffer.allocate(c))) {
+        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();

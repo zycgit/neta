@@ -7,7 +7,7 @@ import java.nio.charset.StandardCharsets;
 public class ObjectByteBufTest {
     @Test
     public void intObjectTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
 
         byteBuf.writeInt16((short) 30047);
         byteBuf.writeInt24(15793921);
@@ -23,7 +23,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void intObjectTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(40);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.skipWritableBytes(40);
 
         byteBuf.setInt16(0, (short) 30047);
@@ -40,7 +40,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void intLEObjectTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
 
         byteBuf.writeInt16((short) 30047);
@@ -57,7 +57,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void intLEObjectTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer(40);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
         byteBuf.skipWritableBytes(40);
 
@@ -75,7 +75,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void floatObjectTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
 
         byteBuf.writeFloat32(999999.999999f);
         byteBuf.writeFloat64(123456789123456789.123456789123456789123456789123456789d);
@@ -87,7 +87,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void floatObjectTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.skipWritableBytes(40);
 
         byteBuf.setFloat32(0, 999999.999999f);
@@ -100,7 +100,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void floatLEObjectTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
 
         byteBuf.writeFloat32(999999.999999f);
@@ -113,7 +113,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void floatLEObjectTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
         byteBuf.skipWritableBytes(40);
 
@@ -127,7 +127,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void uIntObjectTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
 
         byteBuf.writeByte((byte) -1);
         byteBuf.writeInt16((short) -1);
@@ -155,7 +155,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void uIntObjectTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
         byteBuf.order(ByteOrder.LITTLE_ENDIAN);
 
         byteBuf.writeInt16((short) 36848);
@@ -178,7 +178,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void stringTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
 
         byteBuf.writeString("hello\n", StandardCharsets.UTF_8);
         byteBuf.writeString("word\n", StandardCharsets.UTF_8);
@@ -193,7 +193,7 @@ public class ObjectByteBufTest {
 
     @Test
     public void stringTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledHeapBuffer(128, 3);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer();
 
         byteBuf.writeString("hello\n", StandardCharsets.UTF_8);
         byteBuf.writeString("word\n", StandardCharsets.UTF_8);

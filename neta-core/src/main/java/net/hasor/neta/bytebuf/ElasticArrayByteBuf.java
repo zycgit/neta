@@ -14,44 +14,77 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import net.hasor.cobble.NumberUtils;
+
 import java.nio.ByteBuffer;
 
 /**
- * <pre>
- * +-------------+------------+-------------+----------+
- * | discardable | readable   | overlayable | writable |
- * +-------------+------------+-------------+----------+
- * |             |            |             |          |
- * 0   ≤   readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
- *                      writerIndex
- * </pre>
+ * 数组自动扩缩容 {@link ByteBuf} 实现
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-class WrapArrayBuffer extends AbstractByteBuf {
-    protected final byte[] target;
+public class ElasticArrayByteBuf extends AbstractByteBuf {
+    protected byte[] target;
+    protected int    initSize;
+    protected int    extensionSize;
 
-    WrapArrayBuffer(byte[] initData, boolean asWrite) {
-        super(null, initData.length);
+    ElasticArrayByteBuf(int initCapacity, int maxCapacity, int extensionSize) {
+        this(initCapacity, maxCapacity, extensionSize, new byte[initCapacity]);
+    }
+
+    ElasticArrayByteBuf(int initCapacity, int maxCapacity, int extensionSize, byte[] initData) {
+        super(null, maxCapacity);
+        this.initSize = initCapacity;
+        this.extensionSize = extensionSize;
         this.target = initData;
-        if (!asWrite) {
-            this.writerIndex = initData.length;
-            this.markedWriterIndex = initData.length;
-        }
     }
 
     @Override
     public ByteBuf markReader() {
         synchronized (this.synchronizedLock) {
+            if (this.markedReaderIndex != this.readerIndex) {
+                this.markedReaderIndex = this.readerIndex;
+                this.recycle();
+            }
+
             // notify all writer threads, to write it
             this.synchronizedLock.notifyAll();
         }
         return this;
     }
 
+    private void checkExtension(int offset, int len) {
+        int cap = capacity();
+        if ((offset + len) > cap) {
+            int rate = (len / this.extensionSize) + 1;
+            int newSize = cap + (rate * this.extensionSize);
+            newSize = NumberUtils.between(newSize, this.extensionSize, this.getMaxCapacity());
+
+            byte[] extension = new byte[newSize];
+            System.arraycopy(this.target, 0, extension, 0, cap);
+            this.target = extension;
+        }
+    }
+
+    private void recycle() {
+        int recyclePos = this.markedReaderIndex;
+        int validSize = this.target.length - recyclePos;
+        int newSize = NumberUtils.between(validSize, this.extensionSize, this.getMaxCapacity());
+
+        byte[] recycle = new byte[newSize];
+        System.arraycopy(this.target, recyclePos, recycle, 0, validSize);
+
+        this.target = recycle;
+        this.writerIndex = this.writerIndex - recyclePos;
+        this.markedWriterIndex = this.markedWriterIndex - recyclePos;
+        this.readerIndex = this.readerIndex - recyclePos;
+        this.markedReaderIndex = 0;
+    }
+
     @Override
     protected void _putByte(int offset, byte b) {
         checkFree();
+        checkExtension(offset, 1);
 
         this.target[offset] = b;
     }
@@ -59,6 +92,7 @@ class WrapArrayBuffer extends AbstractByteBuf {
     @Override
     protected int _putBytes(int offset, byte[] src, int srcOffset, int srcLen) {
         checkFree();
+        checkExtension(offset, srcLen);
 
         System.arraycopy(src, srcOffset, this.target, offset, srcLen);
         return srcLen;
@@ -69,6 +103,8 @@ class WrapArrayBuffer extends AbstractByteBuf {
         checkFree();
 
         srcLen = Math.min(src.remaining(), srcLen);
+        checkExtension(offset, srcLen);
+
         src.get(this.target, offset, srcLen);
         return srcLen;
     }
@@ -78,6 +114,8 @@ class WrapArrayBuffer extends AbstractByteBuf {
         checkFree();
 
         srcLen = Math.min(src.readableBytes(), srcLen);
+        checkExtension(offset, srcLen);
+
         src.readBytes(this.target, offset, srcLen);
         return srcLen;
     }
@@ -115,12 +153,12 @@ class WrapArrayBuffer extends AbstractByteBuf {
 
     @Override
     protected void _free() {
-
+        this.target = null;
     }
 
     @Override
     public int capacity() {
-        return this.getMaxCapacity();
+        return this.target.length;
     }
 
     @Override
@@ -129,11 +167,11 @@ class WrapArrayBuffer extends AbstractByteBuf {
     }
 
     @Override
-    public WrapArrayBuffer copy() {
+    public ElasticArrayByteBuf copy() {
         checkFree();
 
         byte[] copyArray = this.target.clone();
-        WrapArrayBuffer byteBuf = new WrapArrayBuffer(copyArray, true);
+        ElasticArrayByteBuf byteBuf = new ElasticArrayByteBuf(this.initSize, this.getMaxCapacity(), this.extensionSize, copyArray);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
@@ -144,6 +182,6 @@ class WrapArrayBuffer extends AbstractByteBuf {
 
     @Override
     protected String getSimpleName() {
-        return "WrapArrayBuffer";
+        return "ElasticArrayByteBuf";
     }
 }

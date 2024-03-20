@@ -167,8 +167,8 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
-    public void writeBytes(byte[] src) {
-        this.byteBuf.writeBytes(src);
+    public int writeBytes(byte[] src) {
+        return this.byteBuf.writeBytes(src);
     }
 
     @Override

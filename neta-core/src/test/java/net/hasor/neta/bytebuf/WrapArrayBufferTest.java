@@ -34,6 +34,29 @@ public class WrapArrayBufferTest {
     }
 
     @Test
+    public void basicTest03() {
+        byte[] cacheData = RandomUtils.nextBytes(8192);
+        ByteBuf byteBuf = ByteBuf.wrap(new byte[1024], true);
+        assert byteBuf.writeBytes(cacheData) == 1024;
+    }
+
+    @Test
+    public void basicTest04() {
+        ByteBuf byteBuf = ByteBuf.wrap(new byte[4], true);
+        ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
+        data.flip();
+
+        assert data.position() == 0;
+        assert data.limit() == 0;
+        assert data.capacity() == 4;
+        assert byteBuf.writeBuffer(data) == 0;
+        byteBuf.markWriter();
+        assert data.position() == 0;
+        assert data.limit() == 0;
+        assert data.capacity() == 4;
+    }
+
+    @Test
     public void writeByte_1_1() {
         ByteBuf byteBuf = ByteBuf.wrap(new byte[4], true);
 
@@ -350,7 +373,12 @@ public class WrapArrayBufferTest {
         ByteBuf byteBuf = ByteBuf.wrap(new byte[111], true);
         byteBuf.free();
 
-        assert byteBuf.asByteArray().length == 111;
+        try {
+            byteBuf.asByteArray();
+            assert false;
+        } catch (IllegalStateException e) {
+            assert e.getMessage().equals("has been released.");
+        }
 
         try {
             byteBuf.writeByte((byte) 5);
@@ -365,8 +393,8 @@ public class WrapArrayBufferTest {
         WrapArrayBuffer byteBuf1 = (WrapArrayBuffer) ByteBuf.wrap(new byte[] { 1, 2, 3, 4 });
         WrapArrayBuffer byteBuf2 = byteBuf1.copy();
 
-        assert byteBuf1.data != byteBuf2.data;
-        assert byteBuf1.data.length == byteBuf2.data.length;
+        assert byteBuf1.target != byteBuf2.target;
+        assert byteBuf1.target.length == byteBuf2.target.length;
 
         String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
         String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
@@ -427,34 +455,6 @@ public class WrapArrayBufferTest {
         } catch (IndexOutOfBoundsException e) {
             assert e.getMessage().startsWith("read out of range. length: 8 (expected: 0 ~ 4)");
         }
-    }
-
-    @Test
-    public void errorTest04() {
-        try {
-            byte[] cacheData = RandomUtils.nextBytes(8192);
-            ByteBuf byteBuf = ByteBuf.wrap(new byte[1024], true);
-            byteBuf.writeBytes(cacheData);
-            assert false;
-        } catch (BufferOverflowException e) {
-            assert true;
-        }
-    }
-
-    @Test
-    public void errorTest05() {
-        ByteBuf byteBuf = ByteBuf.wrap(new byte[4], true);
-        ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
-        data.flip();
-
-        assert data.position() == 0;
-        assert data.limit() == 0;
-        assert data.capacity() == 4;
-        assert byteBuf.writeBuffer(data) == 0;
-        byteBuf.markWriter();
-        assert data.position() == 0;
-        assert data.limit() == 0;
-        assert data.capacity() == 4;
     }
 
     @Test

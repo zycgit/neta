@@ -14,44 +14,78 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import net.hasor.cobble.NumberUtils;
+
 import java.nio.ByteBuffer;
 
 /**
- * <pre>
- * +-------------+------------+-------------+----------+
- * | discardable | readable   | overlayable | writable |
- * +-------------+------------+-------------+----------+
- * |             |            |             |          |
- * 0   ≤   readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
- *                      writerIndex
- * </pre>
+ * 基于 {@link ByteBuffer} 的自动扩缩容 {@link ByteBuf} 实现
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-class WrapByteBuffer extends AbstractByteBuf {
+public class ElasticByteBuffer extends AbstractByteBuf {
     protected ByteBuffer target;
+    protected int        initSize;
+    protected int        extensionSize;
 
-    WrapByteBuffer(ByteBuffer initData, boolean asWrite) {
-        super(null, initData.limit());
+    ElasticByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize) {
+        this(alloc, initCapacity, maxCapacity, extensionSize, alloc.jvmBuffer(initCapacity));
+    }
+
+    ElasticByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize, ByteBuffer initData) {
+        super(alloc, maxCapacity);
+        this.initSize = initCapacity;
+        this.extensionSize = extensionSize;
         this.target = initData;
-        if (!asWrite) {
-            this.writerIndex = initData.limit();
-            this.markedWriterIndex = initData.limit();
-        }
     }
 
     @Override
     public ByteBuf markReader() {
         synchronized (this.synchronizedLock) {
+            if (this.markedReaderIndex != this.readerIndex) {
+                this.markedReaderIndex = this.readerIndex;
+                this.recycle();
+            }
+
             // notify all writer threads, to write it
             this.synchronizedLock.notifyAll();
         }
         return this;
     }
 
+    private void checkExtension(int offset, int len) {
+        int cap = capacity();
+        if ((offset + len) > cap) {
+            int rate = (len / this.extensionSize) + 1;
+            int newSize = cap + (rate * this.extensionSize);
+            newSize = NumberUtils.between(newSize, this.extensionSize, this.getMaxCapacity());
+
+            ByteBuffer extension = this.alloc.jvmBuffer(newSize);
+            extension.put((ByteBuffer) this.target.clear());
+            this.target = extension;
+        }
+    }
+
+    private void recycle() {
+        int recyclePos = this.markedReaderIndex;
+        int validSize = this.target.capacity() - recyclePos;
+        int newSize = NumberUtils.between(validSize, this.extensionSize, this.getMaxCapacity());
+
+        ByteBuffer recycle = this.alloc.jvmBuffer(newSize);
+        this.target.clear().position(this.markedReaderIndex);
+        recycle.put(this.target);
+
+        this.target = recycle;
+        this.writerIndex = this.writerIndex - recyclePos;
+        this.markedWriterIndex = this.markedWriterIndex - recyclePos;
+        this.readerIndex = this.readerIndex - recyclePos;
+        this.markedReaderIndex = 0;
+    }
+
     @Override
     protected void _putByte(int offset, byte b) {
         checkFree();
+        checkExtension(offset, 1);
 
         this.target.clear();
         this.target.put(offset, b);
@@ -60,6 +94,7 @@ class WrapByteBuffer extends AbstractByteBuf {
     @Override
     protected int _putBytes(int offset, byte[] src, int srcOffset, int srcLen) {
         checkFree();
+        checkExtension(offset, srcLen);
 
         this.target.clear().position(offset);
         this.target.put(src, srcOffset, srcLen);
@@ -70,9 +105,10 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
         checkFree();
 
-        this.target.clear().position(offset);
         srcLen = Math.min(src.remaining(), srcLen);
+        checkExtension(offset, srcLen);
 
+        this.target.clear().position(offset);
         this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
         src.position(src.position() + srcLen);
         return srcLen;
@@ -82,9 +118,10 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _putBytes(int offset, ByteBuf src, int srcLen) {
         checkFree();
 
-        this.target.clear().position(offset);
         srcLen = Math.min(src.readableBytes(), srcLen);
+        checkExtension(offset, srcLen);
 
+        this.target.clear().position(offset);
         src.readBuffer(this.target, srcLen);
         return srcLen;
     }
@@ -137,7 +174,7 @@ class WrapByteBuffer extends AbstractByteBuf {
 
     @Override
     public int capacity() {
-        return this.getMaxCapacity();
+        return this.target.capacity();
     }
 
     @Override
@@ -146,19 +183,13 @@ class WrapByteBuffer extends AbstractByteBuf {
     }
 
     @Override
-    public WrapByteBuffer copy() {
+    public ElasticByteBuffer copy() {
         checkFree();
 
-        ByteBuffer copyBuffer;
-        if (this.target.isDirect()) {
-            copyBuffer = ByteBuffer.allocateDirect(this.getMaxCapacity());
-        } else {
-            copyBuffer = ByteBuffer.allocate(this.getMaxCapacity());
-        }
-
+        ByteBuffer copyBuffer = this.alloc.jvmBuffer(this.target.capacity());
         this.target.clear();
         copyBuffer.put(this.target);
-        WrapByteBuffer byteBuf = new WrapByteBuffer(copyBuffer, true);
+        ElasticByteBuffer byteBuf = new ElasticByteBuffer(this.alloc, this.initSize, this.getMaxCapacity(), this.extensionSize, copyBuffer);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
@@ -169,6 +200,6 @@ class WrapByteBuffer extends AbstractByteBuf {
 
     @Override
     protected String getSimpleName() {
-        return "WrapByteBuffer";
+        return "ElasticByteBuffer";
     }
 }

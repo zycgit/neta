@@ -9,18 +9,18 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 
-public class RecycleArrayByteBufTest {
+public class ElasticByteBufferTest {
     @Test
     public void basicTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(111);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(111);
         assert byteBuf.capacity() == 111;
-        assert !byteBuf.isDirect();
-        assert byteBuf.toString().startsWith("RecycleArrayByteBuf[rMark=");
+        assert byteBuf.isDirect();
+        assert byteBuf.toString().startsWith("ElasticByteBuffer[rMark=");
     }
 
     @Test
     public void basicTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
 
@@ -37,13 +37,13 @@ public class RecycleArrayByteBufTest {
     @Test
     public void basicTest03() {
         byte[] cacheData = RandomUtils.nextBytes(8192);
-        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(1024);
+        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.directBuffer(1024);
         assert srcBuf.writeBytes(cacheData) == 1024;
     }
 
     @Test
     public void basicTest04() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
         data.flip();
 
@@ -58,8 +58,40 @@ public class RecycleArrayByteBufTest {
     }
 
     @Test
+    public void basicTest05() {
+        ElasticByteBuffer byteBuf = new ElasticByteBuffer(ByteBufUtils.DEFAULT_ALLOCATOR, 4, 10, 5);
+
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+        assert byteBuf.capacity() == 4;
+        assert byteBuf.getMaxCapacity() == 10;
+
+        byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
+        assert byteBuf.capacity() == 9;
+        assert byteBuf.getMaxCapacity() == 10;
+
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        assert byteBuf.capacity() == 9;
+        byteBuf.markReader();
+        assert byteBuf.capacity() == 5;
+        assert byteBuf.getMaxCapacity() == 10;
+
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
+        byteBuf.markReader();
+        assert byteBuf.capacity() == 5;
+        assert byteBuf.getMaxCapacity() == 10;
+    }
+
+    @Test
     public void writeByte_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -102,7 +134,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeByte_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -149,7 +181,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBytes_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
 
@@ -190,7 +222,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBytes_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -236,7 +268,7 @@ public class RecycleArrayByteBufTest {
     @Test
     public void writeBytes_2_1() {
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         byteBuf.markWriter();
@@ -269,7 +301,7 @@ public class RecycleArrayByteBufTest {
     @Test
     public void writeBytes_2_2() {
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -305,7 +337,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBytes_3_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
 
         assert byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 }, 1, 2) == 2;
         byteBuf.markWriter();
@@ -333,7 +365,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBytes_3_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -366,7 +398,7 @@ public class RecycleArrayByteBufTest {
     @Test
     public void writeBytes_4_1() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -395,7 +427,7 @@ public class RecycleArrayByteBufTest {
     @Test
     public void writeBytes_4_2() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -427,7 +459,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuffer_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
 
         assert data.position() == 0;
@@ -458,7 +490,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuffer_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -493,7 +525,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuffer_2_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
@@ -564,7 +596,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuffer_2_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -640,7 +672,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuffer_3_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
@@ -657,7 +689,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuffer_3_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -679,7 +711,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuf_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         ByteBuf data = ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4 });
 
         assert data.readableBytes() == 4;
@@ -714,7 +746,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuf_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -754,11 +786,11 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuf_2_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.writeBuffer(ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
-        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.directBuffer(4);
         assert alloc1.readableBytes() == 0;
         assert alloc1.writableBytes() == 4;
         assert byteBuf.getBuffer(0, alloc1) == 4;
@@ -791,7 +823,7 @@ public class RecycleArrayByteBufTest {
         assert byteBuf.asByteArray()[2] == 3;
         assert byteBuf.asByteArray()[3] == 4;
 
-        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.directBuffer(4);
         assert byteBuf.readBuffer(alloc2) == 4;
         alloc2.markWriter();
         assert alloc2.asByteArray()[0] == 1;
@@ -800,7 +832,7 @@ public class RecycleArrayByteBufTest {
         assert alloc2.asByteArray()[3] == 4;
 
         byteBuf.resetReader();
-        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.directBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
         alloc3.skipWritableBytes(1);
@@ -824,7 +856,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeBuf_2_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -833,7 +865,7 @@ public class RecycleArrayByteBufTest {
         byteBuf.writeBuffer(ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
-        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.directBuffer(4);
         assert alloc1.readableBytes() == 0;
         assert alloc1.writableBytes() == 4;
         assert byteBuf.getBuffer(0, alloc1) == 4;
@@ -866,7 +898,7 @@ public class RecycleArrayByteBufTest {
         assert byteBuf.asByteArray()[2] == 3;
         assert byteBuf.asByteArray()[3] == 4;
 
-        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.directBuffer(4);
         assert byteBuf.readBuffer(alloc2) == 4;
         alloc2.markWriter();
         assert alloc2.asByteArray()[0] == 1;
@@ -875,7 +907,7 @@ public class RecycleArrayByteBufTest {
         assert alloc2.asByteArray()[3] == 4;
 
         byteBuf.resetReader();
-        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.directBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
         alloc3.skipWritableBytes(1);
@@ -899,11 +931,11 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void freeTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(111);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(111);
         byteBuf.free();
 
         try {
-            assert byteBuf.asByteArray() == null;
+            byteBuf.asByteArray();
             assert false;
         } catch (IllegalStateException e) {
             assert e.getMessage().equals("has been released.");
@@ -919,13 +951,13 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        RecycleArrayByteBuf byteBuf1 = (RecycleArrayByteBuf) ByteBufAllocator.DEFAULT.recycleHeapBuffer(12);
+        ElasticByteBuffer byteBuf1 = (ElasticByteBuffer) ByteBufAllocator.DEFAULT.directBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
 
-        RecycleArrayByteBuf byteBuf2 = byteBuf1.copy();
+        ElasticByteBuffer byteBuf2 = byteBuf1.copy();
 
         assert byteBuf1.target != byteBuf2.target;
-        assert byteBuf1.target.length == byteBuf2.target.length;
+        assert byteBuf1.target.capacity() == byteBuf2.target.capacity();
 
         String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
         String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
@@ -934,14 +966,14 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void copyTest02() {
-        RecycleArrayByteBuf byteBuf1 = (RecycleArrayByteBuf) ByteBufAllocator.DEFAULT.recycleHeapBuffer(12);
+        ElasticByteBuffer byteBuf1 = (ElasticByteBuffer) ByteBufAllocator.DEFAULT.directBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf1.markWriter();
 
         assert byteBuf1.readByte() == 1;
         assert byteBuf1.readByte() == 2;
 
-        RecycleArrayByteBuf byteBuf2 = byteBuf1.copy();
+        ElasticByteBuffer byteBuf2 = byteBuf1.copy();
         assert byteBuf2.readByte() == 3;
         assert byteBuf2.readByte() == 4;
 
@@ -952,7 +984,7 @@ public class RecycleArrayByteBufTest {
     @Test
     public void errorTest01() {
         try {
-            ByteBufAllocator.DEFAULT.recycleHeapBuffer(-1);
+            ByteBufAllocator.DEFAULT.directBuffer(-1);
             assert false;
         } catch (IllegalArgumentException e) {
             assert e.getMessage().equals("capacity: -1 (expected: >= 0)");
@@ -962,7 +994,7 @@ public class RecycleArrayByteBufTest {
     @Test
     public void errorTest02() {
         try {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
             byteBuf.getByte(0);
             assert false;
         } catch (IndexOutOfBoundsException e) {
@@ -970,7 +1002,7 @@ public class RecycleArrayByteBufTest {
         }
 
         try {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
             byteBuf.writeByte((byte) 1);
             byteBuf.getByte(0);
             assert false;
@@ -982,7 +1014,7 @@ public class RecycleArrayByteBufTest {
     @Test
     public void errorTest03() {
         try {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(4);
             byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
             byteBuf.markWriter();
             byteBuf.readInt64();
@@ -996,7 +1028,7 @@ public class RecycleArrayByteBufTest {
     public void writeStringTest01() {
         byte[] date = "aaa\nbbb\nccc\n".getBytes(StandardCharsets.US_ASCII);
 
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(1024);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1024);
         byteBuf.writeBytes(date);
         byteBuf.markWriter();
 
@@ -1011,7 +1043,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeStringTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(1024);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(1024);
 
         byteBuf.writeBytes("abc1\r\n".getBytes());
         byteBuf.markWriter();
@@ -1038,7 +1070,7 @@ public class RecycleArrayByteBufTest {
 
     @Test
     public void writeStringTest03() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(10);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.directBuffer(10);
 
         byteBuf.writeBytes("1234\r\n".getBytes());
         byteBuf.markWriter();

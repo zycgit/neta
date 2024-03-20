@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.nio.ByteBuffer;
+
 /**
  * 基于 堆内存的 ByteBuf 接口实现。
  * @author 赵永春 (zyc@hasor.net)
@@ -21,8 +23,13 @@ package net.hasor.neta.bytebuf;
  */
 public class HeapByteBufAllocator extends AbstractByteBufAllocator {
     /** Create new instance */
-    protected HeapByteBufAllocator(int initialCapacityByDefault, int sliceSizeByDefault) {
-        super(initialCapacityByDefault, sliceSizeByDefault);
+    protected HeapByteBufAllocator(int initialCapacityByDefault, int sliceSizeByDefault, int recycleSizeByDefault) {
+        super(initialCapacityByDefault, sliceSizeByDefault, recycleSizeByDefault);
+    }
+
+    @Override
+    public ByteBuffer jvmBuffer(int capacity) {
+        return ByteBuffer.allocate(capacity);
     }
 
     @Override
@@ -36,17 +43,12 @@ public class HeapByteBufAllocator extends AbstractByteBufAllocator {
     }
 
     @Override
-    public ByteBuf recycleBuffer(int capacity) {
-        return recycleHeapBuffer(capacity);
+    public ByteBuf buffer(int initCapacity, int maxCapacity) {
+        return this.heapBuffer(initCapacity, maxCapacity);
     }
 
     @Override
-    public ByteBuf buffer(int initialCapacity, int maxCapacity) {
-        return this.heapBuffer(initialCapacity, maxCapacity);
-    }
-
-    @Override
-    public ByteBuf pooledBuffer(int initialCapacity, int maxCapacity, int sliceSize) {
-        return this.pooledHeapBuffer(initialCapacity, maxCapacity, sliceSize);
+    public ByteBuf pooledBuffer(int initCapacity, int maxCapacity, int sliceSize) {
+        return this.pooledHeapBuffer(initCapacity, maxCapacity, sliceSize);
     }
 }

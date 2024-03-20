@@ -181,8 +181,8 @@ public interface ByteBuf extends ByteChannel {
      * 数据写入，写入后 writerIndex 会增加 src.length。
      * 如果 writerIndex + src.length > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
-    default void writeBytes(byte[] src) {
-        this.writeBytes(src, 0, src.length);
+    default int writeBytes(byte[] src) {
+        return this.writeBytes(src, 0, src.length);
     }
 
     /**

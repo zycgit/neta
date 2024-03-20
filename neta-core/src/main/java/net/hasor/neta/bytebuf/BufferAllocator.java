@@ -14,11 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.nio.ByteBuffer;
+
 /**
  * 分配内存
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 public interface BufferAllocator {
-    Buffer allocateBuffer(int capacity);
+    ByteBuffer jvmBuffer(int capacity);
 }

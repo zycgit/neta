@@ -159,7 +159,7 @@ class BufferPool {
 
         int memAddress = this.newMemAddress();
         PageChunkPool pool = new PageChunkPool(memAddress, this.pageSize, this.buddyTreeHeight);
-        Buffer buffer = this.allocator.allocateBuffer(pool.getCapacity());
+        Buffer buffer = new BufferWrap(this.allocator.jvmBuffer(pool.getCapacity()));
 
         this.bufferPool.put(memAddress, buffer);
         this.memoryChunkSize = this.memoryChunkSize + buffer.capacity();

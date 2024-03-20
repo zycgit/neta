@@ -21,12 +21,41 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version :  2022-11-01
  */
-public class RecycleSliceByteBuf extends AbstractByteBuf {
+class RecycleByteBuffer extends AbstractByteBuf {
     protected final ByteBuffer target;
 
-    RecycleSliceByteBuf(ByteBufAllocator alloc, ByteBuffer initData) {
+    RecycleByteBuffer(ByteBufAllocator alloc, int capacity) {
+        super(alloc, capacity);
+        this.target = alloc.jvmBuffer(capacity);
+    }
+
+    private RecycleByteBuffer(ByteBufAllocator alloc, ByteBuffer initData) {
         super(alloc, initData.capacity());
         this.target = initData;
+    }
+
+    @Override
+    public ByteBuf markReader() {
+        synchronized (this.synchronizedLock) {
+            if (this.markedReaderIndex != this.readerIndex) {
+                this.markedReaderIndex = this.readerIndex;
+                this.updateIndex();
+            }
+
+            // notify all writer threads, to write it
+            this.synchronizedLock.notifyAll();
+        }
+        return this;
+    }
+
+    private void updateIndex() {
+        int capacity = this.target.capacity();
+        if (this.markedReaderIndex >= capacity) {
+            this.markedReaderIndex = this.markedReaderIndex - capacity;
+            this.markedWriterIndex = this.markedWriterIndex - capacity;
+            this.readerIndex = this.readerIndex - capacity;
+            this.writerIndex = this.writerIndex - capacity;
+        }
     }
 
     private static int offsetSize(int offset, int capacity) {
@@ -211,27 +240,13 @@ public class RecycleSliceByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    public byte[] asByteArray() {
+    public RecycleByteBuffer copy() {
         checkFree();
 
-        byte[] copyArray = new byte[this.markedWriterIndex - this.markedReaderIndex];
-        this._getBytes(this.markedReaderIndex, copyArray, 0, copyArray.length);
-        return copyArray;
-    }
-
-    @Override
-    public RecycleSliceByteBuf copy() {
-        checkFree();
-
-        ByteBuffer copyBuffer;
-        if (this.isDirect()) {
-            copyBuffer = ByteBuffer.allocateDirect(this.getMaxCapacity());
-        } else {
-            copyBuffer = ByteBuffer.allocate(this.getMaxCapacity());
-        }
-
+        int capacity = this.getMaxCapacity();
+        ByteBuffer copyBuffer = this.alloc.jvmBuffer(capacity);
         this._getBytes(this.markedReaderIndex, copyBuffer, copyBuffer.capacity());
-        RecycleSliceByteBuf byteBuf = new RecycleSliceByteBuf(this.alloc, copyBuffer);
+        RecycleByteBuffer byteBuf = new RecycleByteBuffer(this.alloc, copyBuffer);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
@@ -242,6 +257,6 @@ public class RecycleSliceByteBuf extends AbstractByteBuf {
 
     @Override
     protected String getSimpleName() {
-        return "RecycleSliceByteBuf";
+        return "RecycleByteBuffer";
     }
 }

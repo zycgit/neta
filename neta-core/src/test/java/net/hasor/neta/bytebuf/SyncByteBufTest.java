@@ -52,8 +52,8 @@ public class SyncByteBufTest {
 
     @Test
     public void producerAndConsumer_01() throws InterruptedException {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);
-        ByteBuf result = ByteBufAllocator.DEFAULT.buffer();
+        ByteBuf buf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(2048);
+        ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
 
@@ -74,7 +74,7 @@ public class SyncByteBufTest {
             }
         });
 
-        int totalSec = 5000;
+        int totalSec = 3000;
         long s = System.currentTimeMillis();
         while (true) {
             long cost = System.currentTimeMillis() - s;
@@ -106,8 +106,8 @@ public class SyncByteBufTest {
 
     @Test
     public void producerAndConsumer_02() throws InterruptedException {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);
-        ByteBuf result = ByteBufAllocator.DEFAULT.buffer();
+        ByteBuf buf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(2048);
+        ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
 
@@ -136,7 +136,7 @@ public class SyncByteBufTest {
             }
         });
 
-        int totalSec = 5000;
+        int totalSec = 3000;
         long s = System.currentTimeMillis();
         while (true) {
             long cost = System.currentTimeMillis() - s;
@@ -170,14 +170,14 @@ public class SyncByteBufTest {
     public void producerAndConsumer_03() throws InterruptedException {
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
-        ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer(2048);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(2048);
 
         // 创建 10个线程来消费者1000个数字
         List<ByteBuf> result = new ArrayList<>();
         List<Thread> resultThread = new ArrayList<>();
         for (int i = 0; i < 10; i++) {
             resultThread.add(ThreadUtils.daemonThread(true, (Runnable) () -> {
-                ByteBuf dst = ByteBufAllocator.DEFAULT.buffer();
+                ByteBuf dst = ByteBufAllocator.DEFAULT.heapBuffer();
                 result.add(dst);
                 try {
                     consumer(stop, buf, dst, 100);
