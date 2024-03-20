@@ -45,7 +45,7 @@ public class SoConnectTest extends AbstractSoTest {
         });
 
         //
-        ByteBuf buf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
         NetManager neta = new NetManager(crateConfig(2, 32));
         Future<NetChannel> future = neta.connect(safePort, new ProtoInitializer() {
             @Override
@@ -55,7 +55,7 @@ public class SoConnectTest extends AbstractSoTest {
                     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
                         while (src.hasMore()) {
                             ByteBuf data = src.takeMessage();
-                            buf.write(data);
+                            buf.writeBuffer(data);
                             data.markReader();
                             buf.markWriter();
                         }

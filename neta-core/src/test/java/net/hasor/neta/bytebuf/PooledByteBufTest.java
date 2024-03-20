@@ -11,7 +11,7 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Random;
 
-public class PooledDirectByteBufTest {
+public class PooledByteBufTest {
     @Test
     public void writeByteTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
@@ -742,7 +742,7 @@ public class PooledDirectByteBufTest {
 
     @Test
     public void freeTest01() {
-        PooledNioByteBuf byteBuf = (PooledNioByteBuf) ByteBufAllocator.DEFAULT.pooledDirectBuffer();
+        PooledByteBuf byteBuf = (PooledByteBuf) ByteBufAllocator.DEFAULT.pooledDirectBuffer();
         byteBuf.free();
         assert byteBuf.buffers.isEmpty();
 

@@ -75,7 +75,7 @@ public class AbstractSslTest {
             return ProtoStatus.Next;
         }
 
-        ByteBuf tmpBuf = ByteBufAllocator.DEFAULT.arrayBuffer();
+        ByteBuf tmpBuf = ByteBufAllocator.DEFAULT.buffer();
         int lastIndex = temp.size() - 1;
         for (int i = 0; i < temp.size(); i++) {
             ByteBuf buf = temp.get(i);

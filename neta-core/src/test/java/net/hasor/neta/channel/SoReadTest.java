@@ -172,7 +172,7 @@ public class SoReadTest extends AbstractSoTest {
                             rcvDown.offerMessage(byteBuf.readLine());
                         }
                         byteBuf.markReader();
-                        if (!byteBuf.hasReadable()) {
+                        if (byteBuf.readableBytes() <= 0) {
                             rcvUp.skipMessage(1);
                         }
                     }

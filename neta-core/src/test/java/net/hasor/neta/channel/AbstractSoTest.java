@@ -65,7 +65,7 @@ public class AbstractSoTest {
         config.setSoKeepAlive(true);
         config.setSoKeepIntervalSec(10);
         config.setSoKeepIdleSec(10);
-        config.setBufAllocator(ByteBufUtils.DEFAULT_HEAP_ALLOCATOR);
+        config.setBufAllocator(ByteBufUtils.DEFAULT_ALLOCATOR);
         //
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(2);

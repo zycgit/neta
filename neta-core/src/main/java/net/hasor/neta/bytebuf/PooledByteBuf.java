@@ -19,18 +19,16 @@ import java.nio.ByteBuffer;
 import java.util.LinkedList;
 
 /**
- * 基于 NioChunk 池化的 ByteBuf 接口实现，提供了扩缩容零拷贝实现
+ * 基于 {@link Buffer} 池化的 {@link ByteBuf} 接口实现
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-@Deprecated
-public class PooledNioByteBuf extends AbstractByteBuf {
-    protected final LinkedList<NioChunk> buffers = new LinkedList<>();
-    private         int                  capacity;
-    private final   int                  sliceSize;
-    private final   NioChunkAllocator    chunkAllocator;
+public class PooledByteBuf extends AbstractByteBuf {
+    protected final LinkedList<Buffer> buffers = new LinkedList<>();
+    protected       int                capacity;
+    protected final int                sliceSize;
 
-    protected PooledNioByteBuf(ByteBufAllocator alloc, int capacity, int maxCapacity, int sliceSize, NioChunkAllocator chunkAllocator) {
+    protected PooledByteBuf(ByteBufAllocator alloc, int capacity, int maxCapacity, int sliceSize, BufferPool chunkAllocator) {
         super(alloc, maxCapacity);
         if (capacity < 0 || maxCapacity > 0) {
             if (!(0 < capacity && capacity <= maxCapacity)) {
@@ -40,7 +38,6 @@ public class PooledNioByteBuf extends AbstractByteBuf {
 
         this.capacity = capacity;
         this.sliceSize = sliceSize;
-        this.chunkAllocator = chunkAllocator;
 
         int sliceCnt = (int) Math.ceil((capacity) / (double) sliceSize);
         for (int i = 0; i <= sliceCnt; i++) {
@@ -92,12 +89,12 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _putBytes(int offset, ByteBuffer src, int srcOffset, int srcLen) {
+    protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
         return 0;
     }
 
     @Override
-    protected int _putBytes(int offset, ByteBuf src, int srcOffset, int srcLen) {
+    protected int _putBytes(int offset, ByteBuf src, int srcLen) {
         return 0;
     }
 
@@ -147,18 +144,21 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    protected int _getBytes(int offset, ByteBuffer dst, int dstOffset, int dstLen) {
+    protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
         return 0;
     }
 
     @Override
-    protected int _getBytes(int offset, ByteBuf dst, int dstOffset, int dstLen) {
+    protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
         return 0;
     }
 
     @Override
     protected void _free() {
-
+        for (Buffer chunk : this.buffers) {
+            chunk.free();
+        }
+        this.buffers.clear();
     }
 
     protected void extendByteBuf(int targetCapacity) {
@@ -210,28 +210,15 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    public byte[] asByteArray() {
-        byte[] array = new byte[this.buffers.size() * this.sliceSize];
-        int off = 0;
-        for (NioChunk chunk : this.buffers) {
-            chunk.clearLimit(this.sliceSize);
-            chunk.position(0);
-            chunk.get(array, off, this.sliceSize);
-            off += this.sliceSize;
-        }
-        return array;
-    }
-
-    @Override
     public boolean isDirect() {
         return this.chunkAllocator.isDirect();
     }
 
     @Override
-    public PooledNioByteBuf copy() {
+    public PooledByteBuf copy() {
         checkFree();
 
-        PooledNioByteBuf copy = new PooledNioByteBuf(this.alloc, this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
+        PooledByteBuf copy = new PooledByteBuf(this.alloc, this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
         copy.markedReaderIndex = this.markedReaderIndex;
         copy.markedWriterIndex = this.markedWriterIndex;
         copy.readerIndex = this.readerIndex;
@@ -251,20 +238,7 @@ public class PooledNioByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    public void free() {
-        if (this.isFree()) {
-            return;
-        }
-
-        for (NioChunk chunk : this.buffers) {
-            chunk.freeBuffer();
-        }
-        this.buffers.clear();
-        super.free();
-    }
-
-    @Override
     protected String getSimpleName() {
-        return "PooledNioByteBuf";
+        return "PooledByteBuf";
     }
 }

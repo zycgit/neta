@@ -17,6 +17,7 @@ package net.hasor.neta.bytebuf;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.Locale;
 
 /**
@@ -26,10 +27,10 @@ import java.util.Locale;
 public class ByteBufUtils {
     private static final Logger           logger = Logger.getLogger(ByteBufUtils.class);
     public static final  ByteBufAllocator DEFAULT_ALLOCATOR;
-    public static final  ByteBufAllocator DEFAULT_HEAP_ALLOCATOR;
-    public static final  ByteBufAllocator DEFAULT_DIRECT_ALLOCATOR;
-    public static final  ByteBufAllocator DEFAULT_POOLED_HEAP_ALLOCATOR;
-    public static final  ByteBufAllocator DEFAULT_POOLED_DIRECT_ALLOCATOR;
+    public static final  ByteBufAllocator POOLED_HEAP_ALLOCATOR;
+    public static final  ByteBufAllocator POOLED_DIRECT_ALLOCATOR;
+    public static final  ByteBufAllocator UNPOOLED_HEAP_ALLOCATOR;
+    public static final  ByteBufAllocator UNPOOLED_DIRECT_ALLOCATOR;
     public static final  BufferCleaner    CLEANER;
 
     private static boolean isPooled() {
@@ -50,15 +51,54 @@ public class ByteBufUtils {
         String memType = SystemUtils.getSystemProperty("neta.bytebuf.mem", isDirect() ? "direct" : "heap");
         String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(16 * 1024));
         String initialSize = SystemUtils.getSystemProperty("neta.bytebuf.initialSize", String.valueOf(4 * 1024));
-        String recycleSize = SystemUtils.getSystemProperty("neta.bytebuf.recycleSize", String.valueOf(1024));
 
         int sliceSizeByDefault = Integer.parseInt(sliceSize);
         int initialCapacityByDefault = Integer.parseInt(initialSize);
-        int recycleSizeByDefault = Integer.parseInt(recycleSize);
-        DEFAULT_HEAP_ALLOCATOR = new HeapByteBufAllocator(initialCapacityByDefault, sliceSizeByDefault, recycleSizeByDefault);
-        DEFAULT_POOLED_HEAP_ALLOCATOR = new PooledHeapByteBufAllocator(initialCapacityByDefault, sliceSizeByDefault, recycleSizeByDefault);
-        DEFAULT_DIRECT_ALLOCATOR = new DirectByteBufAllocator(initialCapacityByDefault, sliceSizeByDefault, recycleSizeByDefault);
-        DEFAULT_POOLED_DIRECT_ALLOCATOR = new PooledDirectByteBufAllocator(initialCapacityByDefault, sliceSizeByDefault, recycleSizeByDefault);
+
+        UNPOOLED_HEAP_ALLOCATOR = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
+            @Override
+            public boolean isDirect() {
+                return false;
+            }
+
+            @Override
+            public ByteBuffer jvmBuffer(int capacity) {
+                return ByteBuffer.allocate(capacity);
+            }
+        };
+        POOLED_HEAP_ALLOCATOR = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
+            @Override
+            public boolean isDirect() {
+                return false;
+            }
+
+            @Override
+            public ByteBuffer jvmBuffer(int capacity) {
+                return ByteBuffer.allocate(capacity);
+            }
+        };
+        UNPOOLED_DIRECT_ALLOCATOR = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
+            @Override
+            public boolean isDirect() {
+                return true;
+            }
+
+            @Override
+            public ByteBuffer jvmBuffer(int capacity) {
+                return ByteBuffer.allocateDirect(capacity);
+            }
+        };
+        POOLED_DIRECT_ALLOCATOR = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
+            @Override
+            public boolean isDirect() {
+                return true;
+            }
+
+            @Override
+            public ByteBuffer jvmBuffer(int capacity) {
+                return ByteBuffer.allocateDirect(capacity);
+            }
+        };
 
         allocType = allocType.toLowerCase(Locale.US).trim();
         memType = memType.toLowerCase(Locale.US).trim();
@@ -66,35 +106,35 @@ public class ByteBufUtils {
         if ("unpooled".equals(allocType)) {
             if ("heap".equals(memType)) {
                 logger.debug("-Dneta.bytebuf.type: unpooled -Dneta.bytebuf.mem: heap");
-                DEFAULT_ALLOCATOR = DEFAULT_HEAP_ALLOCATOR;
+                DEFAULT_ALLOCATOR = UNPOOLED_HEAP_ALLOCATOR;
             } else if ("direct".equals(memType)) {
                 logger.debug("-Dneta.bytebuf.type: unpooled -Dneta.bytebuf.mem: direct");
-                DEFAULT_ALLOCATOR = DEFAULT_DIRECT_ALLOCATOR;
+                DEFAULT_ALLOCATOR = UNPOOLED_DIRECT_ALLOCATOR;
             } else {
                 logger.debug(String.format("-Dneta.bytebuf.type: unpooled -Dneta.bytebuf.mem: heap (unknown: %s)", memType));
-                DEFAULT_ALLOCATOR = DEFAULT_HEAP_ALLOCATOR;
+                DEFAULT_ALLOCATOR = UNPOOLED_HEAP_ALLOCATOR;
             }
         } else if ("pooled".equals(allocType)) {
             if ("heap".equals(memType)) {
                 logger.debug("-Dneta.bytebuf.type: pooled -Dneta.bytebuf.mem: heap");
-                DEFAULT_ALLOCATOR = DEFAULT_POOLED_HEAP_ALLOCATOR;
+                DEFAULT_ALLOCATOR = POOLED_HEAP_ALLOCATOR;
             } else if ("direct".equals(memType)) {
                 logger.debug("-Dneta.bytebuf.type: pooled -Dneta.bytebuf.mem: direct");
-                DEFAULT_ALLOCATOR = DEFAULT_POOLED_DIRECT_ALLOCATOR;
+                DEFAULT_ALLOCATOR = POOLED_DIRECT_ALLOCATOR;
             } else {
                 logger.debug(String.format("-Dneta.bytebuf.type: pooled -Dneta.bytebuf.mem: heap (unknown: %s)", memType));
-                DEFAULT_ALLOCATOR = DEFAULT_POOLED_HEAP_ALLOCATOR;
+                DEFAULT_ALLOCATOR = POOLED_HEAP_ALLOCATOR;
             }
         } else {
             if ("heap".equals(memType)) {
                 logger.debug(String.format("-Dneta.bytebuf.type: pooled (unknown: %s) -Dneta.bytebuf.mem: heap", allocType));
-                DEFAULT_ALLOCATOR = DEFAULT_HEAP_ALLOCATOR;
+                DEFAULT_ALLOCATOR = UNPOOLED_HEAP_ALLOCATOR;
             } else if ("direct".equals(memType)) {
                 logger.debug(String.format("-Dneta.bytebuf.type: pooled (unknown: %s) -Dneta.bytebuf.mem: direct", allocType));
-                DEFAULT_ALLOCATOR = DEFAULT_DIRECT_ALLOCATOR;
+                DEFAULT_ALLOCATOR = UNPOOLED_DIRECT_ALLOCATOR;
             } else {
                 logger.debug(String.format("-Dneta.bytebuf.type: pooled (unknown: %s) -Dneta.bytebuf.mem: heap (unknown: %s)", allocType, memType));
-                DEFAULT_ALLOCATOR = DEFAULT_HEAP_ALLOCATOR;
+                DEFAULT_ALLOCATOR = UNPOOLED_HEAP_ALLOCATOR;
             }
         }
 

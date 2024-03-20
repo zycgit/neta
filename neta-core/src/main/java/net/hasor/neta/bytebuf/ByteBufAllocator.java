@@ -44,9 +44,6 @@ public interface ByteBufAllocator extends BufferAllocator {
      */
     ByteBuf buffer(int initCapacity, int maxCapacity);
 
-    /** Returns {@code true} if direct {@link ByteBuf}'s */
-    boolean isPooled();
-
     /** Returns {@code true} if pooled {@link ByteBuf}'s */
     boolean isDirect();
 
@@ -95,31 +92,11 @@ public interface ByteBufAllocator extends BufferAllocator {
 
     /*** Allocate pooled {@link ByteBuf} with the given maximal capacity.
      * If it is a direct or heap buffer depends on the actual implementation. */
-    ByteBuf pooledBuffer(int maxCapacity, int sliceSize);
+    ByteBuf pooledBuffer(int capacity);
 
-    /**
-     * Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity.
-     * If it is a direct or heap buffer depends on the actual implementation.
-     */
-    ByteBuf pooledBuffer(int initCapacity, int maxCapacity, int sliceSize);
-
-    /*** Allocate pooled {@link ByteBuf}. */
-    ByteBuf pooledHeapBuffer();
-
-    /*** Allocate pooled {@link ByteBuf} with the given maximal capacity. */
-    ByteBuf pooledHeapBuffer(int maxCapacity, int sliceSize);
-
-    /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
-    ByteBuf pooledHeapBuffer(int initCapacity, int maxCapacity, int sliceSize);
-
-    /*** Allocate pooled {@link ByteBuf}. */
-    ByteBuf pooledDirectBuffer();
-
-    /*** Allocate pooled {@link ByteBuf} with the given maximal capacity. */
-    ByteBuf pooledDirectBuffer(int maxCapacity, int sliceSize);
-
-    /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
-    ByteBuf pooledDirectBuffer(int initCapacity, int maxCapacity, int sliceSize);
+    /*** Allocate pooled {@link ByteBuf} with the given maximal capacity.
+     * If it is a direct or heap buffer depends on the actual implementation. */
+    ByteBuf pooledBuffer(int initCapacity, int maxCapacity);
 
     //    /*** Allocate pooled {@link ByteBuf}. */
     //    ByteBuf mappedBuffer();
