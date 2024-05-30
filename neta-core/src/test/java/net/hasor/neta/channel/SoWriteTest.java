@@ -18,7 +18,6 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.handler.*;
 import org.junit.Test;
 
@@ -66,7 +65,7 @@ public class SoWriteTest extends AbstractSoTest {
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public void onActive(ProtoContext context) throws Throwable {
-                context.sendData(ByteBufAllocator.DEFAULT.wrap("Hello this message form server.\n".getBytes()));
+                context.sendData(ByteBuf.wrap("Hello this message form server.\n".getBytes()));
             }
 
             @Override

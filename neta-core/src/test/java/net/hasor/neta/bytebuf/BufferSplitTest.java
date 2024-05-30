@@ -10,7 +10,7 @@ public class BufferSplitTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget pat1 = pool.requestBuffer(pageList);
+        BufferTarget pat1 = (BufferTarget) pool.requestBuffer(pageList);
         pat1.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
         assert pat1.capacity() == 16;
 
@@ -59,7 +59,7 @@ public class BufferSplitTest {
         PageChunkSplit keep = allocator.requestPages(16);
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget pat1 = pool.requestBuffer(pageList);
+        BufferTarget pat1 = (BufferTarget) pool.requestBuffer(pageList);
         pat1.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
         assert pat1.capacity() == 16;
 
@@ -107,7 +107,7 @@ public class BufferSplitTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
 
         BufferTarget pat1 = buffer;
@@ -151,7 +151,7 @@ public class BufferSplitTest {
         PageChunkSplit keep = allocator.requestPages(16);
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
 
         BufferTarget pat1 = buffer;
@@ -194,7 +194,7 @@ public class BufferSplitTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         BufferTarget pat1 = buffer;
         BufferTarget pat2 = pat1.split(3);
         BufferTarget pat3 = pat1.split(3);
@@ -236,7 +236,7 @@ public class BufferSplitTest {
         PageChunkSplit keep = allocator.requestPages(16);
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         BufferTarget pat1 = buffer;
         BufferTarget pat2 = pat1.split(3);
         BufferTarget pat3 = pat1.split(3);
@@ -278,7 +278,7 @@ public class BufferSplitTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         BufferTarget pat1 = buffer;
         BufferTarget pat2 = pat1.split(3);
         BufferTarget pat3 = pat1.split(3);
@@ -317,7 +317,7 @@ public class BufferSplitTest {
         PageChunkSplit keep = allocator.requestPages(16);
 
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         BufferTarget pat1 = buffer;
         BufferTarget pat2 = pat1.split(3);
         BufferTarget pat3 = pat1.split(3);
@@ -355,7 +355,7 @@ public class BufferSplitTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         BufferTarget pat1 = buffer.split(0);
         BufferTarget pat3 = buffer.split(0);
         BufferTarget pat4 = buffer.split(0);
@@ -376,7 +376,7 @@ public class BufferSplitTest {
         PageChunkSplit keep = allocator.requestPages(16);
 
         PageChunkSplit pageList = allocator.requestPages(4);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         BufferTarget pat1 = buffer.split(0);
         BufferTarget pat3 = buffer.split(0);
         BufferTarget pat4 = buffer.split(0);
@@ -396,7 +396,7 @@ public class BufferSplitTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
         BufferTarget pat1 = buffer.split(0);
         BufferTarget pat2 = buffer.split(0);
         BufferTarget pat3 = buffer.split(0);

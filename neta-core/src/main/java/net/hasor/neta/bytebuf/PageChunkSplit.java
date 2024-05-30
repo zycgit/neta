@@ -57,6 +57,11 @@ class PageChunkSplit implements PageRange {
         return this.toPage;
     }
 
+    @Override
+    public int getPageSize() {
+        return this.chunkPool.getPageSize();
+    }
+
     /** The capacity of this Pages, that is, the maximum number of page. */
     public int capacity() {
         return this.capacity;

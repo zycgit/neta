@@ -55,4 +55,9 @@ class PageChunk implements PageRange {
     public int getToPage() {
         return this.toPage;
     }
+
+    @Override
+    public int getPageSize() {
+        return this.ownerPool.getPageSize();
+    }
 }

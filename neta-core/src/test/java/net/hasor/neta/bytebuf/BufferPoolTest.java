@@ -16,8 +16,9 @@ public class BufferPoolTest {
         };
 
         assert pool.getMemPageSize() == 1;
-        assert pool.getMemCapacity() == 32;
-        assert pool.getMemChunkSize() == 0;
+        assert pool.getMemMaxCapacity() == 32;
+        assert pool.getMemChunkSize() == 32;
+        assert pool.getMemCapacity() == 0;
 
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -26,10 +27,10 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer1 = pool.requestBuffer(4);
+        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(4);
         assert buffer1.capacity() == 4;
         assert pool.getMemPageSize() == 1;
-        assert pool.getMemCapacity() == 32;
+        assert pool.getMemMaxCapacity() == 32;
         assert pool.getMemChunkSize() == 32;
         assert pool.qInit.getChunkCount() == 1;
         assert pool.q000.getChunkCount() == 0;
@@ -38,10 +39,10 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer2 = pool.requestBuffer(8);
+        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(8);
         assert buffer2.capacity() == 8;
         assert pool.getMemPageSize() == 1;
-        assert pool.getMemCapacity() == 32;
+        assert pool.getMemMaxCapacity() == 32;
         assert pool.getMemChunkSize() == 32;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 1;
@@ -50,10 +51,10 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer3 = pool.requestBuffer(8);
+        BufferTarget buffer3 = (BufferTarget) pool.requestBuffer(8);
         assert buffer3.capacity() == 8;
         assert pool.getMemPageSize() == 1;
-        assert pool.getMemCapacity() == 32;
+        assert pool.getMemMaxCapacity() == 32;
         assert pool.getMemChunkSize() == 32;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -62,10 +63,10 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer4 = pool.requestBuffer(8);
+        BufferTarget buffer4 = (BufferTarget) pool.requestBuffer(8);
         assert buffer4.capacity() == 8;
         assert pool.getMemPageSize() == 1;
-        assert pool.getMemCapacity() == 32;
+        assert pool.getMemMaxCapacity() == 32;
         assert pool.getMemChunkSize() == 32;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -74,10 +75,10 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer5 = pool.requestBuffer(4);
+        BufferTarget buffer5 = (BufferTarget) pool.requestBuffer(4);
         assert buffer5.capacity() == 4;
         assert pool.getMemPageSize() == 1;
-        assert pool.getMemCapacity() == 32;
+        assert pool.getMemMaxCapacity() == 32;
         assert pool.getMemChunkSize() == 32;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -137,7 +138,7 @@ public class BufferPoolTest {
             }
         };
 
-        BufferTarget buffer1 = pool.requestBuffer(16);
+        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(16);
         assert buffer1.capacity() == 16;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -146,7 +147,7 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer2 = pool.requestBuffer(16);
+        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(16);
         assert buffer2.capacity() == 16;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -188,7 +189,7 @@ public class BufferPoolTest {
         pool.requestBuffer(8);
 
         try {
-            BufferTarget buffer5 = pool.requestBuffer(3);
+            BufferTarget buffer5 = (BufferTarget) pool.requestBuffer(3);
             assert false;
         } catch (Exception e) {
             assert e.getMessage().equals("OutOfMemory the BufferPool maximum chunks 1, current is 1");

@@ -58,6 +58,19 @@ class BufferTarget implements Buffer {
     }
 
     @Override
+    public ByteBuffer getTarget() {
+        if (!this.pages.isAvailable()) {
+            throw new IllegalStateException("buffer is not Available.");
+        }
+        return this.memory.getTarget();
+    }
+
+    @Override
+    public int getOffset() {
+        return this.offset;
+    }
+
+    @Override
     public void free() {
         this.pages.free();
     }
@@ -70,6 +83,11 @@ class BufferTarget implements Buffer {
     @Override
     public boolean isAvailable() {
         return this.pages.isAvailable();
+    }
+
+    /** The pageSize of this buffer. */
+    public int getPageSize() {
+        return this.pages.getPageSize();
     }
 
     /** Queries if this buffer is read-only or not. */
@@ -167,9 +185,21 @@ class BufferTarget implements Buffer {
     }
 
     @Override
+    public void get(int index, ByteBuffer dst, int dstLen) {
+        checkOffset(index, dstLen, false);
+        this.memory.get(this.offset + index, dst, dstLen);
+    }
+
+    @Override
     public void get(int index, ByteBuffer dst, int dstOffset, int dstLen) {
         checkOffset(index, dstLen, false);
         this.memory.get(this.offset + index, dst, dstOffset, dstLen);
+    }
+
+    @Override
+    public void put(int index, ByteBuffer src, int srcLen) {
+        checkOffset(index, srcLen, true);
+        this.memory.put(this.offset + index, src, srcLen);
     }
 
     @Override

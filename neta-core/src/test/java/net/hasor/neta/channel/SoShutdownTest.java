@@ -19,7 +19,6 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.handler.*;
 import org.junit.Test;
 
@@ -341,7 +340,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // send data well be error.
         byte[] sendData = "Hello".getBytes();
-        Future<?> future = channel.sendData(ByteBufAllocator.DEFAULT.wrap(sendData));
+        Future<?> future = channel.sendData(ByteBuf.wrap(sendData));
         future.await();
         assert future.getCause() == SoOutputCloseException.INSTANCE;
         assert !sndError.get();//the output channel is closed at accept
@@ -388,7 +387,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         //
         byte[] sendData = "Hello".getBytes();
-        Future<?> future = channel.sendData(ByteBufAllocator.DEFAULT.wrap(sendData));
+        Future<?> future = channel.sendData(ByteBuf.wrap(sendData));
         future.await();
         assert future.getCause() == SoOutputCloseException.INSTANCE;
         assert !sndError.get();//the output channel is closed at accept
@@ -430,7 +429,7 @@ public class SoShutdownTest extends AbstractSoTest {
         AtomicBoolean sending = new AtomicBoolean(false);
         ThreadUtils.daemonThread(true, (Callable) () -> {
             while (!channel.isClose() && !channel.isShutdownOutput()) {
-                channel.sendData(ByteBufAllocator.DEFAULT.wrap(RandomUtils.nextBytes(1024)));
+                channel.sendData(ByteBuf.wrap(RandomUtils.nextBytes(1024)));
                 sending.set(true);
             }
         });

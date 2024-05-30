@@ -14,227 +14,214 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
-import java.util.LinkedList;
 
 /**
- * 基于 {@link Buffer} 池化的 {@link ByteBuf} 接口实现
+ * 基于 {@link Buffer} 池化的的窗口 {@link ByteBuf} 实现，同时如果容量不足它会自动扩缩容
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 public class PooledByteBuf extends AbstractByteBuf {
-    protected final LinkedList<Buffer> buffers = new LinkedList<>();
-    protected       int                capacity;
-    protected final int                sliceSize;
+    protected     Buffer target;
+    private final int    initSize;
+    private final int    defaultPageSize;
+    private final int    extensionSize;
 
-    protected PooledByteBuf(ByteBufAllocator alloc, int capacity, int maxCapacity, int sliceSize, BufferPool chunkAllocator) {
+    PooledByteBuf(ByteBufAllocator alloc, int maxCapacity, int extensionSize, int defaultPageSize, Buffer target) {
         super(alloc, maxCapacity);
-        if (capacity < 0 || maxCapacity > 0) {
-            if (!(0 < capacity && capacity <= maxCapacity)) {
-                throw new IllegalArgumentException("0 > capacity > maxCapacity ( gt 0 or eq -1)");
-            }
-        }
-
-        this.capacity = capacity;
-        this.sliceSize = sliceSize;
-
-        int sliceCnt = (int) Math.ceil((capacity) / (double) sliceSize);
-        for (int i = 0; i <= sliceCnt; i++) {
-            this.buffers.add(this.extendByteBuffer(sliceSize));
-        }
+        this.target = target;
+        this.initSize = target.capacity();
+        this.defaultPageSize = defaultPageSize;
+        this.extensionSize = extensionSize;
     }
 
-    private int checkOrCreate(int startBuf) {
-        if (this.buffers.size() <= startBuf) {
-            for (int i = this.buffers.size(); i <= startBuf; i++) {
-                this.buffers.add(this.extendByteBuffer(this.sliceSize));
+    @Override
+    public ByteBuf markReader() {
+        synchronized (this.synchronizedLock) {
+            if (this.markedReaderIndex != this.readerIndex) {
+                this.markedReaderIndex = this.readerIndex;
+                this.recycle();
+            }
+
+            // notify all writer threads, to write it
+            this.synchronizedLock.notifyAll();
+        }
+        return this;
+    }
+
+    private void recycle() {
+        Buffer toFreeTarget = null;
+        try {
+            int requestSize = this.writerIndex - this.markedReaderIndex;
+            Buffer extTarget = BufferPoolUtils.requestBuffer(evalSize(requestSize), this.defaultPageSize, this.alloc);
+            toFreeTarget = extTarget;// when try failed, free requestBuffer.
+
+            if (requestSize > 0) {
+                ByteBuffer targetBuf = extTarget.getTarget().duplicate();
+                targetBuf.clear().position(extTarget.getOffset());
+                this.target.get(this.markedReaderIndex, targetBuf, requestSize);
+            }
+            toFreeTarget = this.target;
+            this.target = extTarget;
+
+            int recyclePos = this.markedReaderIndex;
+            this.writerIndex = this.writerIndex - recyclePos;
+            this.markedWriterIndex = this.markedWriterIndex - recyclePos;
+            this.readerIndex = this.readerIndex - recyclePos;
+            this.markedReaderIndex = 0;
+        } finally {
+            if (toFreeTarget != null) {
+                toFreeTarget.free();
             }
         }
 
-        return startBuf;
+    }
+
+    private int evalSize(int requestSize) {
+        int maxCap = this.getMaxCapacity();
+        int newSize;
+        if (requestSize == 0) {
+            return this.initSize;
+        } else if ((requestSize % this.extensionSize) > 0) {
+            int rate = (requestSize / this.extensionSize) + 1;
+            newSize = Math.min(rate * this.extensionSize, maxCap);
+        } else {
+            newSize = Math.min(requestSize + this.extensionSize, maxCap);
+        }
+        return Math.min(newSize, maxCap);
+    }
+
+    private void checkExtension(int offset, int len) {
+        int requestSize = offset + len;
+        if (requestSize > this.capacity()) {
+            Buffer toFreeTarget = null;
+            try {
+                Buffer extTarget = BufferPoolUtils.requestBuffer(evalSize(requestSize), this.defaultPageSize, this.alloc);
+                toFreeTarget = extTarget;// when try failed, free requestBuffer.
+
+                ByteBuffer targetBuf = extTarget.getTarget().duplicate();
+                targetBuf.clear().position(extTarget.getOffset());
+                this.target.get(0, targetBuf, this.target.capacity());
+                toFreeTarget = this.target;
+                this.target = extTarget;
+            } finally {
+                if (toFreeTarget != null) {
+                    toFreeTarget.free();
+                }
+            }
+        }
     }
 
     @Override
     protected void _putByte(int offset, byte b) {
         checkFree();
+        checkExtension(offset, 1);
 
-        int startBuf = checkOrCreate(offset / this.sliceSize);
-        int baseOffset = offset % this.sliceSize;
-
-        this.buffers.get(startBuf).put(baseOffset, b);
+        this.target.put(offset, b);
     }
 
     @Override
     protected int _putBytes(int offset, byte[] src, int srcOffset, int srcLen) {
         checkFree();
+        checkExtension(offset, srcLen);
 
-        int startBuf = checkOrCreate(offset / this.sliceSize);
-        int baseOffset = offset % this.sliceSize;
-
-        do {
-            int debris = this.sliceSize - baseOffset;
-            NioChunk buffer = this.buffers.get(startBuf);
-
-            buffer.clearPosition(baseOffset);
-            buffer.put(src, srcOffset, Math.min(srcLen, debris));
-
-            srcOffset = srcOffset + debris;
-            srcLen = srcLen - debris;
-            baseOffset = 0;
-            checkOrCreate(++startBuf);
-        } while (srcLen > 0);
-
-        return 0;
+        this.target.put(offset, src, srcOffset, srcLen);
+        return srcLen;
     }
 
     @Override
     protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
-        return 0;
+        checkFree();
+
+        srcLen = Math.min(src.remaining(), srcLen);
+        checkExtension(offset, srcLen);
+
+        this.target.put(offset, src, srcLen);
+        return srcLen;
     }
 
     @Override
     protected int _putBytes(int offset, ByteBuf src, int srcLen) {
-        return 0;
+        checkFree();
+
+        srcLen = Math.min(src.readableBytes(), srcLen);
+        checkExtension(offset, srcLen);
+
+        ByteBuffer tarBuf = this.target.getTarget().duplicate();
+        int tarOffset = this.target.getOffset() + offset;
+
+        tarBuf.clear().position(tarOffset);
+        return src.readBuffer(tarBuf, srcLen);
     }
 
     @Override
     protected byte _getByte(int offset) {
         checkFree();
 
-        int startBuf = offset / this.sliceSize;
-        int baseOffset = offset % this.sliceSize;
-
-        if (startBuf > this.buffers.size()) {
-            return 0;
-        }
-
-        return this.buffers.get(startBuf).get(baseOffset);
+        return this.target.get(offset);
     }
 
     @Override
     protected int _getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
         checkFree();
 
-        int startBuf = offset / this.sliceSize;
-        int baseOffset = offset % this.sliceSize;
+        this.target.get(offset, dst, dstOffset, dstLen);
+        return dstLen;
 
-        int readBytes = 0;
-        do {
-            int debris = this.sliceSize - baseOffset;
-            int thisRead = Math.min(debris, dstLen);
-            if (startBuf > this.buffers.size()) {
-                break;
-            }
-
-            NioChunk buffer = this.buffers.get(startBuf);
-
-            buffer.clearLimit(this.sliceSize);
-            buffer.position(baseOffset);
-            buffer.get(dst, dstOffset, thisRead);
-
-            dstOffset += debris;
-            dstLen -= debris;
-            baseOffset = 0;
-            startBuf++;
-
-            readBytes += thisRead;
-        } while (dstLen > 0);
-        return readBytes;
     }
 
     @Override
     protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
-        return 0;
+        checkFree();
+
+        this.target.get(offset, dst, dstLen);
+        return dstLen;
     }
 
     @Override
     protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
-        return 0;
+        checkFree();
+
+        ByteBuffer targetBuf = this.target.getTarget().duplicate();
+        int tarOffset = this.target.getOffset() + offset;
+
+        targetBuf.clear().position(tarOffset);
+        dst.writeBuffer(targetBuf, dstLen);
+        return dstLen;
     }
 
     @Override
     protected void _free() {
-        for (Buffer chunk : this.buffers) {
-            chunk.free();
+        if (this.target != null) {
+            this.target.free();
         }
-        this.buffers.clear();
-    }
-
-    protected void extendByteBuf(int targetCapacity) {
-        checkFree();
-
-        if (this.getMaxCapacity() > 0 && targetCapacity > this.getMaxCapacity()) {
-            throw new BufferOverflowException();
-        }
-
-        int sliceCnt = (int) Math.ceil((this.capacity) / (double) this.sliceSize) - this.buffers.size();
-
-        for (int i = 0; i < sliceCnt; i++) {
-            this.buffers.add(this.extendByteBuffer(this.sliceSize));
-        }
-
-        this.capacity = this.buffers.size() * this.sliceSize;
-    }
-
-    protected NioChunk extendByteBuffer(int capacity) {
-        return this.chunkAllocator.allocateBuffer(capacity);
-    }
-
-    protected void recycleByteBuf() {
-        checkFree();
-
-        int startBuf = this.markedReaderIndex / this.sliceSize;
-
-        if (startBuf > 0) {
-            for (int i = 0; i < startBuf; i++) {
-                this.buffers.remove(0).freeBuffer();
-            }
-        }
-
-        if (this.buffers.isEmpty()) {
-            this.buffers.add(this.extendByteBuffer(this.sliceSize));
-        }
-
-        int cut = startBuf * this.sliceSize;
-        this.markedReaderIndex -= cut;
-        this.markedWriterIndex -= cut;
-        this.readerIndex -= cut;
-        this.writerIndex -= cut;
-        this.capacity = this.buffers.size() * this.sliceSize;
     }
 
     @Override
     public int capacity() {
-        return this.capacity;
+        return this.target.capacity();
     }
 
     @Override
     public boolean isDirect() {
-        return this.chunkAllocator.isDirect();
+        return this.target.isDirect();
     }
 
     @Override
     public PooledByteBuf copy() {
         checkFree();
 
-        PooledByteBuf copy = new PooledByteBuf(this.alloc, this.capacity(), this.getMaxCapacity(), this.sliceSize, this.chunkAllocator);
-        copy.markedReaderIndex = this.markedReaderIndex;
-        copy.markedWriterIndex = this.markedWriterIndex;
-        copy.readerIndex = this.readerIndex;
-        copy.writerIndex = this.writerIndex;
+        Buffer target = BufferPoolUtils.requestBuffer(this.target.capacity(), this.defaultPageSize, this.alloc);
+        ByteBuffer targetBuf = target.getTarget().duplicate();
+        targetBuf.clear().position(target.getOffset());
+        this._getBytes(this.markedReaderIndex, targetBuf, target.capacity());
+        PooledByteBuf byteBuf = new PooledByteBuf(this.alloc, this.getMaxCapacity(), this.extensionSize, this.defaultPageSize, target);
 
-        for (int i = 0; i < this.buffers.size(); i++) {
-            NioChunk form = this.buffers.get(i);
-            NioChunk to = copy.buffers.get(i);
-            form.deepCopy(to);
-        }
-        return copy;
-    }
-
-    @Override
-    public ByteBuffer asByteBuffer() {
-        throw new UnsupportedOperationException();
+        byteBuf.writerIndex = this.writerIndex;
+        byteBuf.markedWriterIndex = this.markedWriterIndex;
+        byteBuf.readerIndex = this.readerIndex;
+        byteBuf.markedReaderIndex = this.markedReaderIndex;
+        return byteBuf;
     }
 
     @Override

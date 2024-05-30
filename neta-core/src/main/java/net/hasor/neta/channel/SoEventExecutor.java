@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * 内部使用的低延迟任务分发执行器
+ * Low-latency task Dispatcher
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  */
@@ -66,7 +66,7 @@ class SoEventExecutor implements Closeable {
                 if (!thread.isInterrupted()) {
                     thread.interrupt();
                 }
-                if (thread.getState() == Thread.State.WAITING) {
+                if (thread.getState() == Thread.State.TIMED_WAITING || thread.getState() == Thread.State.WAITING) {
                     LockSupport.unpark(thread);
                 }
 
@@ -131,7 +131,7 @@ class SoEventExecutor implements Closeable {
 
     private void wakeUp() {
         for (Thread workerThread : this.workerThreads) {
-            if (workerThread.getState() == Thread.State.WAITING) {
+            if (workerThread.getState() == Thread.State.TIMED_WAITING || workerThread.getState() == Thread.State.WAITING) {
                 LockSupport.unpark(workerThread);
                 break;
             }

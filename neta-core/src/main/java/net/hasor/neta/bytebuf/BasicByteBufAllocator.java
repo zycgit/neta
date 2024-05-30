@@ -16,8 +16,6 @@
 package net.hasor.neta.bytebuf;
 import net.hasor.cobble.ObjectUtils;
 
-import java.nio.ByteBuffer;
-
 /**
  * readMark <= readIndex <= writerMark <= writerIndex <= capacity
  * @author 赵永春 (zyc@hasor.net)
@@ -27,12 +25,14 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     protected final boolean defaultUsingPooled;
     protected final int     initCapacityByDefault;
     protected final int     sliceSizeByDefault;
+    protected final int     defaultPoolPageSize;
 
     /** Create new instance */
-    protected BasicByteBufAllocator(boolean defaultUsingPooled, int initialCapacityByDefault, int sliceSizeByDefault) {
+    protected BasicByteBufAllocator(boolean defaultUsingPooled, int initialCapacityByDefault, int sliceSizeByDefault, int defaultPoolPageSize) {
         this.defaultUsingPooled = defaultUsingPooled;
         this.initCapacityByDefault = initialCapacityByDefault;
         this.sliceSizeByDefault = sliceSizeByDefault;
+        this.defaultPoolPageSize = defaultPoolPageSize;
     }
 
     @Override
@@ -59,46 +59,28 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     }
 
     @Override
-    @Deprecated
-    public ByteBuf wrap(byte[] bytes) {
-        return ByteBuf.wrap(bytes);
-    }
-
-    @Override
-    @Deprecated
-    public ByteBuf wrap(ByteBuffer buffer) {
-        return new WrapByteBuffer(buffer, false);
-    }
-
-    @Deprecated
-    @Override
-    public ByteBuf arrayBuffer(int capacity) {
-        return ByteBuf.wrap(new byte[capacity]);
-    }
-
-    @Override
-    public ByteBuf recycleBuffer(int capacity) {
+    public ByteBuf ringBuffer(int capacity) {
         ObjectUtils.checkPositiveOrZero(capacity, "capacity");
         return this.recycleBufferByAllocator(this, capacity);
     }
 
     @Override
-    public ByteBuf recycleHeapBuffer(int capacity) {
+    public ByteBuf ringHeapBuffer(int capacity) {
         ObjectUtils.checkPositiveOrZero(capacity, "capacity");
         return this.recycleBufferByAllocator(ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR, capacity);
     }
 
     @Override
-    public ByteBuf recycleDirectBuffer(int capacity) {
+    public ByteBuf ringDirectBuffer(int capacity) {
         ObjectUtils.checkPositiveOrZero(capacity, "capacity");
         return this.recycleBufferByAllocator(ByteBufUtils.UNPOOLED_DIRECT_ALLOCATOR, capacity);
     }
 
     private ByteBuf recycleBufferByAllocator(ByteBufAllocator alloc, int capacity) {
         if (alloc.isDirect()) {
-            return new RecycleByteBuffer(alloc, capacity);
+            return new RingByteBuffer(alloc, capacity);
         } else {
-            return new RecycleArrayByteBuf(alloc, capacity);
+            return new RingArrayByteBuf(alloc, capacity);
         }
     }
 
@@ -140,9 +122,9 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     private ByteBuf bufferByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
         if (alloc.isDirect()) {
-            return new ElasticByteBuffer(alloc, initCapacity, maxCapacity, this.sliceSizeByDefault);
+            return new AutoByteBuffer(alloc, initCapacity, maxCapacity, this.sliceSizeByDefault);
         } else {
-            return new ElasticArrayByteBuf(initCapacity, maxCapacity, this.sliceSizeByDefault);
+            return new AutoArrayByteBuf(initCapacity, maxCapacity, this.sliceSizeByDefault);
         }
     }
 
@@ -165,6 +147,8 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     }
 
     private ByteBuf pooledByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
-        return new PooledByteBuf(alloc, initCapacity, maxCapacity, this.sliceSizeByDefault, new BufferPool(4096, this));
+        int fmtMaxCap = PageChunkPool.tableSizeFor(maxCapacity, Integer.MAX_VALUE);
+        Buffer target = BufferPoolUtils.requestBuffer(initCapacity, this.defaultPoolPageSize, alloc);
+        return new PooledByteBuf(alloc, fmtMaxCap, this.sliceSizeByDefault, this.defaultPoolPageSize, target);
     }
 }

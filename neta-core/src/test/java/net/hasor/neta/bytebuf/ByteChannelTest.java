@@ -7,7 +7,7 @@ import java.nio.ByteBuffer;
 public class ByteChannelTest {
     @Test
     public void writeByteTest01() throws IOException {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 20, 30 });
         ByteBuffer array = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });

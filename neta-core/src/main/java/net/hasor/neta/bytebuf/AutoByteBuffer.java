@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.NumberUtils;
-
 import java.nio.ByteBuffer;
 
 /**
@@ -23,16 +21,16 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class ElasticByteBuffer extends AbstractByteBuf {
-    protected ByteBuffer target;
-    protected int        initSize;
-    protected int        extensionSize;
+public class AutoByteBuffer extends AbstractByteBuf {
+    protected     ByteBuffer target;
+    private final int        initSize;
+    private final int        extensionSize;
 
-    ElasticByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize) {
+    AutoByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize) {
         this(alloc, initCapacity, maxCapacity, extensionSize, alloc.jvmBuffer(initCapacity));
     }
 
-    ElasticByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize, ByteBuffer initData) {
+    AutoByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize, ByteBuffer initData) {
         super(alloc, maxCapacity);
         this.initSize = initCapacity;
         this.extensionSize = extensionSize;
@@ -53,33 +51,40 @@ public class ElasticByteBuffer extends AbstractByteBuf {
         return this;
     }
 
-    private void checkExtension(int offset, int len) {
-        int cap = capacity();
-        if ((offset + len) > cap) {
-            int rate = (len / this.extensionSize) + 1;
-            int newSize = cap + (rate * this.extensionSize);
-            newSize = NumberUtils.between(newSize, this.extensionSize, this.getMaxCapacity());
-
-            ByteBuffer extension = this.alloc.jvmBuffer(newSize);
-            extension.put((ByteBuffer) this.target.clear());
-            this.target = extension;
-        }
-    }
-
     private void recycle() {
-        int recyclePos = this.markedReaderIndex;
-        int validSize = this.target.capacity() - recyclePos;
-        int newSize = NumberUtils.between(validSize, this.extensionSize, this.getMaxCapacity());
-
-        ByteBuffer recycle = this.alloc.jvmBuffer(newSize);
-        this.target.clear().position(this.markedReaderIndex);
+        int requestSize = this.writerIndex - this.markedReaderIndex;
+        ByteBuffer recycle = this.alloc.jvmBuffer(evalSize(requestSize));
+        this.target.clear().position(this.markedReaderIndex).limit(this.markedReaderIndex + requestSize);
         recycle.put(this.target);
 
+        int recyclePos = this.markedReaderIndex;
         this.target = recycle;
         this.writerIndex = this.writerIndex - recyclePos;
         this.markedWriterIndex = this.markedWriterIndex - recyclePos;
         this.readerIndex = this.readerIndex - recyclePos;
         this.markedReaderIndex = 0;
+    }
+
+    private int evalSize(int requestSize) {
+        int maxCap = this.getMaxCapacity();
+        int newSize;
+        if ((requestSize % this.extensionSize) > 0) {
+            int rate = (requestSize / this.extensionSize) + 1;
+            newSize = Math.min(rate * this.extensionSize, maxCap);
+        } else {
+            newSize = Math.min(requestSize + this.extensionSize, maxCap);
+        }
+        return Math.min(newSize, maxCap);
+    }
+
+    private void checkExtension(int offset, int len) {
+        int currentCap = this.capacity();
+        int requestSize = offset + len;
+        if (requestSize > currentCap) {
+            ByteBuffer extension = this.alloc.jvmBuffer(evalSize(requestSize));
+            extension.put((ByteBuffer) this.target.clear());
+            this.target = extension;
+        }
     }
 
     @Override
@@ -183,13 +188,13 @@ public class ElasticByteBuffer extends AbstractByteBuf {
     }
 
     @Override
-    public ElasticByteBuffer copy() {
+    public AutoByteBuffer copy() {
         checkFree();
 
         ByteBuffer copyBuffer = this.alloc.jvmBuffer(this.target.capacity());
         this.target.clear();
         copyBuffer.put(this.target);
-        ElasticByteBuffer byteBuf = new ElasticByteBuffer(this.alloc, this.initSize, this.getMaxCapacity(), this.extensionSize, copyBuffer);
+        AutoByteBuffer byteBuf = new AutoByteBuffer(this.alloc, this.initSize, this.getMaxCapacity(), this.extensionSize, copyBuffer);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
@@ -200,6 +205,6 @@ public class ElasticByteBuffer extends AbstractByteBuf {
 
     @Override
     protected String getSimpleName() {
-        return "ElasticByteBuffer";
+        return "AutoByteBuffer";
     }
 }

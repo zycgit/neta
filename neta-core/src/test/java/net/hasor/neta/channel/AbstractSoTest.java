@@ -17,7 +17,7 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoRcvQueue;
@@ -133,7 +133,7 @@ public class AbstractSoTest {
     public static Thread whiteHole(NetChannel channel) {
         return ThreadUtils.daemonThread(true, (Callable) () -> {
             while (!channel.isClose() && !channel.isShutdownOutput()) {
-                channel.sendData(ByteBufAllocator.DEFAULT.wrap(RandomUtils.nextBytes(32)));
+                channel.sendData(ByteBuf.wrap(RandomUtils.nextBytes(32)));
                 Thread.sleep(50);
             }
         });

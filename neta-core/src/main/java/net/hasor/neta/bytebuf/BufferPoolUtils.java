@@ -14,21 +14,27 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+
 /**
- * The allocated Pages
+ * Memory pool utils
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-interface PageRange {
-    /** The memory address used to mark memory blocks */
-    int getMemAddress();
+class BufferPoolUtils {
+    private static final Map<BufferAllocator, BufferPool> poolMap = new ConcurrentHashMap<>();
 
-    /** The allocated start page */
-    int getFromPage();
+    public static Buffer requestBuffer(int capacity, int pageSize, BufferAllocator allocator) {
+        BufferPool pool = poolMap.computeIfAbsent(allocator, bufferAllocator -> {
+            return new BufferPool(pageSize, allocator);
+        });
 
-    /** The allocated eof page */
-    int getToPage();
+        if (capacity > pool.getMemChunkSize()) {
+            return new BufferWrap(allocator.jvmBuffer(capacity));
+        } else {
+            return pool.requestBuffer(capacity);
+        }
+    }
 
-    /** The pageSize of this buffer. */
-    int getPageSize();
 }

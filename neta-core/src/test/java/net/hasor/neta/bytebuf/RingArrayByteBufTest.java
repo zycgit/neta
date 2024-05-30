@@ -9,18 +9,18 @@ import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 
-public class ElasticArrayByteBufTest {
+public class RingArrayByteBufTest {
     @Test
     public void basicTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(111);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(111);
         assert byteBuf.capacity() == 111;
         assert !byteBuf.isDirect();
-        assert byteBuf.toString().startsWith("ElasticArrayByteBuf[rMark=");
+        assert byteBuf.toString().startsWith("RingArrayByteBuf[rMark=");
     }
 
     @Test
     public void basicTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
 
@@ -37,13 +37,13 @@ public class ElasticArrayByteBufTest {
     @Test
     public void basicTest03() {
         byte[] cacheData = RandomUtils.nextBytes(8192);
-        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.heapBuffer(1024);
+        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(1024);
         assert srcBuf.writeBytes(cacheData) == 1024;
     }
 
     @Test
     public void basicTest04() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
         data.flip();
 
@@ -58,40 +58,8 @@ public class ElasticArrayByteBufTest {
     }
 
     @Test
-    public void basicTest05() {
-        ElasticArrayByteBuf byteBuf = new ElasticArrayByteBuf(4, 10, 5);
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
-        assert byteBuf.capacity() == 4;
-        assert byteBuf.getMaxCapacity() == 10;
-
-        byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
-        assert byteBuf.capacity() == 9;
-        assert byteBuf.getMaxCapacity() == 10;
-
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 1;
-        assert byteBuf.readByte() == 2;
-        assert byteBuf.readByte() == 3;
-        assert byteBuf.readByte() == 4;
-        assert byteBuf.capacity() == 9;
-        byteBuf.markReader();
-        assert byteBuf.capacity() == 5;
-        assert byteBuf.getMaxCapacity() == 10;
-
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
-        byteBuf.markReader();
-        assert byteBuf.capacity() == 5;
-        assert byteBuf.getMaxCapacity() == 10;
-    }
-
-    @Test
     public void writeByte_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -134,7 +102,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeByte_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -181,7 +149,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBytes_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
 
@@ -222,7 +190,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBytes_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -268,7 +236,7 @@ public class ElasticArrayByteBufTest {
     @Test
     public void writeBytes_2_1() {
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         byteBuf.markWriter();
@@ -301,7 +269,7 @@ public class ElasticArrayByteBufTest {
     @Test
     public void writeBytes_2_2() {
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -337,7 +305,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBytes_3_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
 
         assert byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 }, 1, 2) == 2;
         byteBuf.markWriter();
@@ -365,7 +333,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBytes_3_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -398,7 +366,7 @@ public class ElasticArrayByteBufTest {
     @Test
     public void writeBytes_4_1() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -427,7 +395,7 @@ public class ElasticArrayByteBufTest {
     @Test
     public void writeBytes_4_2() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -459,7 +427,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuffer_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
 
         assert data.position() == 0;
@@ -490,7 +458,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuffer_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -525,7 +493,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuffer_2_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
@@ -596,7 +564,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuffer_2_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -672,7 +640,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuffer_3_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
@@ -689,7 +657,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuffer_3_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -711,8 +679,8 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuf_1_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
-        ByteBuf data = ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4 });
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
+        ByteBuf data = ByteBuf.wrap(new byte[] { 1, 2, 3, 4 });
 
         assert data.readableBytes() == 4;
         assert data.writableBytes() == 0;
@@ -746,13 +714,13 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuf_1_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
         byteBuf.markReader();
 
-        ByteBuf data = ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4 });
+        ByteBuf data = ByteBuf.wrap(new byte[] { 1, 2, 3, 4 });
 
         assert data.readableBytes() == 4;
         assert data.writableBytes() == 0;
@@ -786,11 +754,11 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuf_2_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
-        byteBuf.writeBuffer(ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4 }));
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
+        byteBuf.writeBuffer(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
-        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert alloc1.readableBytes() == 0;
         assert alloc1.writableBytes() == 4;
         assert byteBuf.getBuffer(0, alloc1) == 4;
@@ -823,7 +791,7 @@ public class ElasticArrayByteBufTest {
         assert byteBuf.asByteArray()[2] == 3;
         assert byteBuf.asByteArray()[3] == 4;
 
-        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert byteBuf.readBuffer(alloc2) == 4;
         alloc2.markWriter();
         assert alloc2.asByteArray()[0] == 1;
@@ -832,7 +800,7 @@ public class ElasticArrayByteBufTest {
         assert alloc2.asByteArray()[3] == 4;
 
         byteBuf.resetReader();
-        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
         alloc3.skipWritableBytes(1);
@@ -856,16 +824,16 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeBuf_2_2() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
         byteBuf.markReader();
 
-        byteBuf.writeBuffer(ByteBufAllocator.DEFAULT.wrap(new byte[] { 1, 2, 3, 4 }));
+        byteBuf.writeBuffer(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
-        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert alloc1.readableBytes() == 0;
         assert alloc1.writableBytes() == 4;
         assert byteBuf.getBuffer(0, alloc1) == 4;
@@ -898,7 +866,7 @@ public class ElasticArrayByteBufTest {
         assert byteBuf.asByteArray()[2] == 3;
         assert byteBuf.asByteArray()[3] == 4;
 
-        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert byteBuf.readBuffer(alloc2) == 4;
         alloc2.markWriter();
         assert alloc2.asByteArray()[0] == 1;
@@ -907,7 +875,7 @@ public class ElasticArrayByteBufTest {
         assert alloc2.asByteArray()[3] == 4;
 
         byteBuf.resetReader();
-        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.heapBuffer(4);
+        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
         alloc3.skipWritableBytes(1);
@@ -931,11 +899,11 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void freeTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(111);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(111);
         byteBuf.free();
 
         try {
-            byteBuf.asByteArray();
+            assert byteBuf.asByteArray() == null;
             assert false;
         } catch (IllegalStateException e) {
             assert e.getMessage().equals("has been released.");
@@ -951,10 +919,10 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        ElasticArrayByteBuf byteBuf1 = (ElasticArrayByteBuf) ByteBufAllocator.DEFAULT.heapBuffer(12);
+        RingArrayByteBuf byteBuf1 = (RingArrayByteBuf) ByteBufAllocator.DEFAULT.ringHeapBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
 
-        ElasticArrayByteBuf byteBuf2 = byteBuf1.copy();
+        RingArrayByteBuf byteBuf2 = byteBuf1.copy();
 
         assert byteBuf1.target != byteBuf2.target;
         assert byteBuf1.target.length == byteBuf2.target.length;
@@ -966,14 +934,14 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void copyTest02() {
-        ElasticArrayByteBuf byteBuf1 = (ElasticArrayByteBuf) ByteBufAllocator.DEFAULT.heapBuffer(12);
+        RingArrayByteBuf byteBuf1 = (RingArrayByteBuf) ByteBufAllocator.DEFAULT.ringHeapBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf1.markWriter();
 
         assert byteBuf1.readByte() == 1;
         assert byteBuf1.readByte() == 2;
 
-        ElasticArrayByteBuf byteBuf2 = byteBuf1.copy();
+        RingArrayByteBuf byteBuf2 = byteBuf1.copy();
         assert byteBuf2.readByte() == 3;
         assert byteBuf2.readByte() == 4;
 
@@ -984,7 +952,7 @@ public class ElasticArrayByteBufTest {
     @Test
     public void errorTest01() {
         try {
-            ByteBufAllocator.DEFAULT.heapBuffer(-1);
+            ByteBufAllocator.DEFAULT.ringHeapBuffer(-1);
             assert false;
         } catch (IllegalArgumentException e) {
             assert e.getMessage().equals("capacity: -1 (expected: >= 0)");
@@ -994,7 +962,7 @@ public class ElasticArrayByteBufTest {
     @Test
     public void errorTest02() {
         try {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
             byteBuf.getByte(0);
             assert false;
         } catch (IndexOutOfBoundsException e) {
@@ -1002,7 +970,7 @@ public class ElasticArrayByteBufTest {
         }
 
         try {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
             byteBuf.writeByte((byte) 1);
             byteBuf.getByte(0);
             assert false;
@@ -1014,7 +982,7 @@ public class ElasticArrayByteBufTest {
     @Test
     public void errorTest03() {
         try {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(4);
+            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
             byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
             byteBuf.markWriter();
             byteBuf.readInt64();
@@ -1028,7 +996,7 @@ public class ElasticArrayByteBufTest {
     public void writeStringTest01() {
         byte[] date = "aaa\nbbb\nccc\n".getBytes(StandardCharsets.US_ASCII);
 
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(1024);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(1024);
         byteBuf.writeBytes(date);
         byteBuf.markWriter();
 
@@ -1043,7 +1011,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeStringTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(1024);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(1024);
 
         byteBuf.writeBytes("abc1\r\n".getBytes());
         byteBuf.markWriter();
@@ -1070,7 +1038,7 @@ public class ElasticArrayByteBufTest {
 
     @Test
     public void writeStringTest03() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(10);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringHeapBuffer(10);
 
         byteBuf.writeBytes("1234\r\n".getBytes());
         byteBuf.markWriter();

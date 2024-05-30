@@ -156,7 +156,7 @@ public class AdapterByteBufTest {
 
     @Test
     public void writeBytesTest03() {
-        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.recycleHeapBuffer(4));
+        ByteBuf byteBuf = new ByteBufAdapter(ByteBufAllocator.DEFAULT.ringHeapBuffer(4));
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();

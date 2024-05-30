@@ -17,7 +17,6 @@ package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.codec.Base64;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -74,7 +73,7 @@ class SslPemReader {
                 break;
             }
 
-            certs.add(ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64)));
+            certs.add(ByteBuf.wrap(Base64.base64DecodeToArray(base64)));
 
             start = m.end();
             m.usePattern(CERT_HEADER);
@@ -112,7 +111,7 @@ class SslPemReader {
             throw keyNotFoundException();// Key is incomplete.
         }
 
-        return ByteBufAllocator.DEFAULT.wrap(Base64.base64DecodeToArray(base64));
+        return ByteBuf.wrap(Base64.base64DecodeToArray(base64));
     }
 
     private static KeyException keyNotFoundException() {

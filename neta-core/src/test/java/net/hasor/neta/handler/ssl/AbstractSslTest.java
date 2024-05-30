@@ -111,7 +111,7 @@ public class AbstractSslTest {
             if (message != null) {
                 byte[] bytes = message.getBytes();
                 if (bytes.length > 0) {
-                    dst.offerMessage(ByteBufAllocator.DEFAULT.wrap(bytes));
+                    dst.offerMessage(ByteBuf.wrap(bytes));
                 }
             }
         } while (message != null);

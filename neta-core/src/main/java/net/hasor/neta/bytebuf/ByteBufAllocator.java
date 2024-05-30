@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import java.nio.ByteBuffer;
-
 /**
  * <p>Implementations are responsible to allocate buffers.</p>
  * <p>Interface design reference netty io.netty.buffer.ByteBufAllocator,
@@ -48,25 +46,13 @@ public interface ByteBufAllocator extends BufferAllocator {
     boolean isDirect();
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
-    @Deprecated
-    ByteBuf wrap(byte[] bytes);
-
-    /** Allocate a {@link ByteBuf}, with the ByteBuffer. */
-    @Deprecated
-    ByteBuf wrap(ByteBuffer javaBuffer);
+    ByteBuf ringBuffer(int capacity);
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
-    @Deprecated
-    ByteBuf arrayBuffer(int capacity);
+    ByteBuf ringHeapBuffer(int capacity);
 
     /** Allocate a {@link ByteBuf}, with the bytes array. */
-    ByteBuf recycleBuffer(int capacity);
-
-    /** Allocate a {@link ByteBuf}, with the bytes array. */
-    ByteBuf recycleHeapBuffer(int capacity);
-
-    /** Allocate a {@link ByteBuf}, with the bytes array. */
-    ByteBuf recycleDirectBuffer(int capacity);
+    ByteBuf ringDirectBuffer(int capacity);
 
     /** Allocate a heap {@link ByteBuf}. */
     ByteBuf heapBuffer();
@@ -92,7 +78,7 @@ public interface ByteBufAllocator extends BufferAllocator {
 
     /*** Allocate pooled {@link ByteBuf} with the given maximal capacity.
      * If it is a direct or heap buffer depends on the actual implementation. */
-    ByteBuf pooledBuffer(int capacity);
+    ByteBuf pooledBuffer(int initCapacity);
 
     /*** Allocate pooled {@link ByteBuf} with the given maximal capacity.
      * If it is a direct or heap buffer depends on the actual implementation. */

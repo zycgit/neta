@@ -52,7 +52,7 @@ public class SyncByteBufTest {
 
     @Test
     public void producerAndConsumer_01() throws InterruptedException {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(2048);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.ringHeapBuffer(2048);
         ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
@@ -106,7 +106,7 @@ public class SyncByteBufTest {
 
     @Test
     public void producerAndConsumer_02() throws InterruptedException {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(2048);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.ringHeapBuffer(2048);
         ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
@@ -170,7 +170,7 @@ public class SyncByteBufTest {
     public void producerAndConsumer_03() throws InterruptedException {
         AtomicBoolean stop = new AtomicBoolean(false);
         AtomicBoolean ass = new AtomicBoolean(true);
-        ByteBuf buf = ByteBufAllocator.DEFAULT.recycleHeapBuffer(2048);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.ringHeapBuffer(2048);
 
         // 创建 10个线程来消费者1000个数字
         List<ByteBuf> result = new ArrayList<>();

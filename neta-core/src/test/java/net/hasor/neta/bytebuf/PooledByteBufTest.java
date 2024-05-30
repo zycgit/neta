@@ -1,178 +1,99 @@
 package net.hasor.neta.bytebuf;
 import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.codec.MD5;
 import org.junit.Test;
 
 import java.nio.BufferOverflowException;
+import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Random;
 
 public class PooledByteBufTest {
-    @Test
-    public void writeByteTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
+    static ByteBufAllocator allocator;
 
-        byteBuf.writeByte((byte) 1);
-        byteBuf.writeByte((byte) 2);
-        byteBuf.writeByte((byte) 3);
-        byteBuf.writeByte((byte) 4);
+    static {
+        String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(4 * 1024));
+        String initialSize = SystemUtils.getSystemProperty("neta.bytebuf.initialSize", String.valueOf(4 * 1024));
 
-        // not markIndex yet
-        try {
-            byteBuf.writeByte((byte) 5);
-            assert false;
-        } catch (BufferOverflowException e) {
-            assert true;
-        }
-        try {
-            byteBuf.readByte();
-            assert false;
-        } catch (IndexOutOfBoundsException e) {
-            assert true;
-        }
+        int sliceSizeByDefault = Integer.parseInt(sliceSize);
+        int initialCapacityByDefault = Integer.parseInt(initialSize);
+        int poolPageSizeByDefault = 2;
+        allocator = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault, poolPageSizeByDefault) {
+            @Override
+            public boolean isDirect() {
+                return false;
+            }
 
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 1;
-        assert byteBuf.readByte() == 2;
-        assert byteBuf.readByte() == 3;
-        assert byteBuf.readByte() == 4;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 5);
-        byteBuf.writeByte((byte) 6);
-        byteBuf.writeByte((byte) 7);
-        byteBuf.writeByte((byte) 8);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
+            @Override
+            public ByteBuffer jvmBuffer(int capacity) {
+                return ByteBuffer.allocate(capacity);
+            }
+        };
     }
 
     @Test
-    public void writeByteTest01_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
-
-        byteBuf.writeByte((byte) 1);
-        byteBuf.writeByte((byte) 2);
-        byteBuf.writeByte((byte) 3);
-        byteBuf.writeByte((byte) 4);
-
-        // not markIndex yet
-        try {
-            byteBuf.writeByte((byte) 5);
-            assert false;
-        } catch (BufferOverflowException e) {
-            assert true;
-        }
-        try {
-            byteBuf.readByte();
-            assert false;
-        } catch (IndexOutOfBoundsException e) {
-            assert true;
-        }
-
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 1;
-        assert byteBuf.readByte() == 2;
-        assert byteBuf.readByte() == 3;
-        assert byteBuf.readByte() == 4;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 5);
-        byteBuf.writeByte((byte) 6);
-        byteBuf.writeByte((byte) 7);
-        byteBuf.writeByte((byte) 8);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
+    public void basicTest00() {
+        ByteBuf byteBuf = allocator.pooledBuffer(111);
+        assert byteBuf.capacity() == 128;
+        assert !byteBuf.isDirect();
     }
 
     @Test
-    public void writeByteTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
-
-        byteBuf.writeByte((byte) 1);
-        byteBuf.writeByte((byte) 2);
-        byteBuf.writeByte((byte) 3);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 1;
-        assert byteBuf.readByte() == 2;
-        assert byteBuf.readByte() == 3;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 4);
-        byteBuf.writeByte((byte) 5);
-        byteBuf.writeByte((byte) 6);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 4;
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 7);
-        byteBuf.writeByte((byte) 8);
-        byteBuf.writeByte((byte) 9);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
-        assert byteBuf.readByte() == 9;
-        byteBuf.markReader();
+    public void basicTest01() {
+        ByteBuf byteBuf = allocator.pooledBuffer(111);
+        assert byteBuf.capacity() == 128;
+        assert byteBuf.toString().startsWith("PooledByteBuf[rMark=");
     }
 
     @Test
-    public void writeByteTest02_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
-
-        byteBuf.writeByte((byte) 1);
-        byteBuf.writeByte((byte) 2);
-        byteBuf.writeByte((byte) 3);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 1;
-        assert byteBuf.readByte() == 2;
-        assert byteBuf.readByte() == 3;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 4);
-        byteBuf.writeByte((byte) 5);
-        byteBuf.writeByte((byte) 6);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 4;
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 7);
-        byteBuf.writeByte((byte) 8);
-        byteBuf.writeByte((byte) 9);
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
-        assert byteBuf.readByte() == 9;
-        byteBuf.markReader();
-    }
-
-    @Test
-    public void writeBytesTest01() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
-
+    public void basicTest02() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        byteBuf.markReader();
+
+        byteBuf.resetReader();
+        assert byteBuf.readableBytes() == 0;
+    }
+
+    @Test
+    public void basicTest03() {
+        byte[] cacheData = RandomUtils.nextBytes(8192);
+        ByteBuf srcBuf = allocator.pooledBuffer(1024);
+        assert srcBuf.writeBytes(cacheData) == 1024;
+    }
+
+    @Test
+    public void basicTest04() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
+        data.flip();
+
+        assert data.position() == 0;
+        assert data.limit() == 0;
+        assert data.capacity() == 4;
+        assert byteBuf.writeBuffer(data) == 0;
+        byteBuf.markWriter();
+        assert data.position() == 0;
+        assert data.limit() == 0;
+        assert data.capacity() == 4;
+    }
+
+    @Test
+    public void writeByte_1_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+
+        byteBuf.writeByte((byte) 1);
+        byteBuf.writeByte((byte) 2);
+        byteBuf.writeByte((byte) 3);
+        byteBuf.writeByte((byte) 4);
 
         // not markIndex yet
         try {
@@ -190,28 +111,74 @@ public class PooledByteBufTest {
 
         byteBuf.markWriter();
 
-        byte[] arrayRead = new byte[6];
-        byteBuf.readBytes(arrayRead);
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
         byteBuf.markReader();
-        assert arrayRead[0] == 1;
-        assert arrayRead[1] == 2;
-        assert arrayRead[2] == 3;
-        assert arrayRead[3] == 4;
 
-        byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
+        byteBuf.writeByte((byte) 5);
+        byteBuf.writeByte((byte) 6);
+        byteBuf.writeByte((byte) 7);
+        byteBuf.writeByte((byte) 8);
         byteBuf.markWriter();
 
-        byteBuf.readBytes(arrayRead);
-        byteBuf.markReader();
-        assert arrayRead[0] == 5;
-        assert arrayRead[1] == 6;
-        assert arrayRead[2] == 7;
-        assert arrayRead[3] == 8;
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
     }
 
     @Test
-    public void writeBytesTest01_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
+    public void writeByte_1_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
+
+        byteBuf.writeByte((byte) 1);
+        byteBuf.writeByte((byte) 2);
+        byteBuf.writeByte((byte) 3);
+        byteBuf.writeByte((byte) 4);
+
+        // not markIndex yet
+        try {
+            byteBuf.writeByte((byte) 5);
+            assert false;
+        } catch (BufferOverflowException e) {
+            assert true;
+        }
+        try {
+            byteBuf.readByte();
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert true;
+        }
+
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        byteBuf.markReader();
+
+        byteBuf.writeByte((byte) 5);
+        byteBuf.writeByte((byte) 6);
+        byteBuf.writeByte((byte) 7);
+        byteBuf.writeByte((byte) 8);
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
+    }
+
+    @Test
+    public void writeBytes_1_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
 
@@ -251,9 +218,54 @@ public class PooledByteBufTest {
     }
 
     @Test
-    public void writeBytesTest02() {
+    public void writeBytes_1_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
+
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+
+        // not markIndex yet
+        try {
+            byteBuf.writeByte((byte) 5);
+            assert false;
+        } catch (BufferOverflowException e) {
+            assert true;
+        }
+        try {
+            byteBuf.readByte();
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert true;
+        }
+
+        byteBuf.markWriter();
+
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
+        byteBuf.readBytes(arrayRead);
+        byteBuf.markReader();
+        assert arrayRead[0] == 1;
+        assert arrayRead[1] == 2;
+        assert arrayRead[2] == 3;
+        assert arrayRead[3] == 4;
+
+        byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
+        byteBuf.markWriter();
+
+        byteBuf.readBytes(arrayRead);
+        byteBuf.markReader();
+        assert arrayRead[0] == 5;
+        assert arrayRead[1] == 6;
+        assert arrayRead[2] == 7;
+        assert arrayRead[3] == 8;
+    }
+
+    @Test
+    public void writeBytes_2_1() {
+        byte[] arrayRead = new byte[6];
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         byteBuf.markWriter();
@@ -284,9 +296,13 @@ public class PooledByteBufTest {
     }
 
     @Test
-    public void writeBytesTest02_1() {
+    public void writeBytes_2_2() {
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         byteBuf.markWriter();
@@ -317,185 +333,69 @@ public class PooledByteBufTest {
     }
 
     @Test
-    public void writeBytesTest03() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
-        byte[] arrayRead = new byte[4];
+    public void writeBytes_3_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
 
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+        assert byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 }, 1, 2) == 2;
         byteBuf.markWriter();
 
-        assert byteBuf.readBytes(arrayRead) == 4;
-        byteBuf.markReader();
-        assert arrayRead[0] == 1;
-        assert arrayRead[1] == 2;
-        assert arrayRead[2] == 3;
-        assert arrayRead[3] == 4;
-
-        byteBuf.writeBytes(new byte[] { 5, 6 });
-        byteBuf.markWriter();
-
-        assert byteBuf.readBytes(arrayRead) == 2;
-        assert arrayRead[0] == 5;
-        assert arrayRead[1] == 6;
-    }
-
-    @Test
-    public void writeBytesTest03_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
-        byte[] arrayRead = new byte[4];
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
-        byteBuf.markWriter();
-
-        assert byteBuf.readBytes(arrayRead) == 4;
-        byteBuf.markReader();
-        assert arrayRead[0] == 1;
-        assert arrayRead[1] == 2;
-        assert arrayRead[2] == 3;
-        assert arrayRead[3] == 4;
-
-        byteBuf.writeBytes(new byte[] { 5, 6 });
-        byteBuf.markWriter();
-
-        assert byteBuf.readBytes(arrayRead) == 2;
-        assert arrayRead[0] == 5;
-        assert arrayRead[1] == 6;
-    }
-
-    @Test
-    public void writeBytesTest04() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
-        byte[] array = new byte[2];
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
-        byteBuf.markWriter();
-
-        assert byteBuf.readBytes(array) == 2;
-        byteBuf.markReader();
-        assert array[0] == 1;
-        assert array[1] == 2;
-
-        assert byteBuf.readBytes(array) == 2;
-        byteBuf.markReader();
-        assert array[0] == 3;
-        assert array[1] == 4;
-
-        //
-
-        byteBuf.writeBytes(new byte[] { 5, 6 });
-        byteBuf.markWriter();
-
-        byte[] array2 = new byte[4];
-        assert byteBuf.readBytes(array2) == 2;
-        byteBuf.markReader();
-        assert array2[0] == 5;
-        assert array2[1] == 6;
-    }
-
-    @Test
-    public void writeBytesTest04_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
-        byte[] array = new byte[2];
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
-        byteBuf.markWriter();
-
-        assert byteBuf.readBytes(array) == 2;
-        byteBuf.markReader();
-        assert array[0] == 1;
-        assert array[1] == 2;
-
-        assert byteBuf.readBytes(array) == 2;
-        byteBuf.markReader();
-        assert array[0] == 3;
-        assert array[1] == 4;
-
-        //
-
-        byteBuf.writeBytes(new byte[] { 5, 6 });
-        byteBuf.markWriter();
-
-        byte[] array2 = new byte[4];
-        assert byteBuf.readBytes(array2) == 2;
-        byteBuf.markReader();
-        assert array2[0] == 5;
-        assert array2[1] == 6;
-    }
-
-    @Test
-    public void writeBytesTest05() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
-        byteBuf.markWriter();
-
-        assert byteBuf.readByte() == 1;
-        byteBuf.markReader();
         assert byteBuf.readByte() == 2;
         byteBuf.markReader();
         assert byteBuf.readByte() == 3;
-        byteBuf.markReader();
-        assert byteBuf.readByte() == 4;
-        byteBuf.markReader();
 
-        byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
+        assert byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 }, 1, 2) == 2;
         byteBuf.markWriter();
 
-        assert byteBuf.readByte() == 5;
         assert byteBuf.readByte() == 6;
         assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
         byteBuf.markReader();
 
-        byteBuf.writeBytes(new byte[] { 9, 0, 1, 2 });
+        assert byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, 1, 4) == 4;
         byteBuf.markWriter();
 
-        assert byteBuf.readByte() == 9;
-        assert byteBuf.readByte() == 0;
-        assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        assert byteBuf.readByte() == 5;
         byteBuf.markReader();
     }
 
     @Test
-    public void writeBytesTest05_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
+    public void writeBytes_3_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
 
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+        assert byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 }, 1, 2) == 2;
         byteBuf.markWriter();
 
-        assert byteBuf.readByte() == 1;
-        byteBuf.markReader();
         assert byteBuf.readByte() == 2;
         byteBuf.markReader();
         assert byteBuf.readByte() == 3;
-        byteBuf.markReader();
-        assert byteBuf.readByte() == 4;
-        byteBuf.markReader();
 
-        byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
+        assert byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 }, 1, 2) == 2;
         byteBuf.markWriter();
 
-        assert byteBuf.readByte() == 5;
         assert byteBuf.readByte() == 6;
         assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
         byteBuf.markReader();
 
-        byteBuf.writeBytes(new byte[] { 9, 0, 1, 2 });
+        assert byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, 1, 4) == 4;
         byteBuf.markWriter();
 
-        assert byteBuf.readByte() == 9;
-        assert byteBuf.readByte() == 0;
-        assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        assert byteBuf.readByte() == 5;
         byteBuf.markReader();
     }
 
     @Test
-    public void writeBytesTest06() {
+    public void writeBytes_4_1() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 4);
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -522,9 +422,13 @@ public class PooledByteBufTest {
     }
 
     @Test
-    public void writeBytesTest06_1() {
+    public void writeBytes_4_2() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(4, 2);
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -551,200 +455,497 @@ public class PooledByteBufTest {
     }
 
     @Test
-    public void writeBytesTest07() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(10, 10);
+    public void writeBuffer_1_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
 
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+        assert data.position() == 0;
+        assert data.limit() == 4;
+        assert data.capacity() == 4;
+        byteBuf.writeBuffer(data);
         byteBuf.markWriter();
+        assert data.position() == 4;
+        assert data.limit() == 4;
+        assert data.capacity() == 4;
+
+        assert byteBuf.getByte(0) == 1;
+        assert byteBuf.getByte(1) == 2;
+        assert byteBuf.getByte(2) == 3;
+        assert byteBuf.getByte(3) == 4;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
 
         assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
-        assert byteBuf.readByte() == 9;
-        byteBuf.markReader();
-
-        byteBuf.write(ByteBuffer.wrap(new byte[] { 10, 11, 12 }));
-        byteBuf.markWriter();
-
-        byteBuf.write(ByteBuffer.wrap(new byte[] { 13, 14, 15 }));
-        byteBuf.markWriter();
-
-        assert byteBuf.getByte(0) == 10;
-        assert byteBuf.getByte(1) == 11;
-        assert byteBuf.getByte(2) == 12;
-        assert byteBuf.getByte(3) == 13;
-        assert byteBuf.getByte(4) == 14;
-        assert byteBuf.getByte(5) == 15;
-
-        assert byteBuf.readByte() == 10;
-        assert byteBuf.readByte() == 11;
-        assert byteBuf.readByte() == 12;
-        assert byteBuf.readByte() == 13;
-        assert byteBuf.readByte() == 14;
-        assert byteBuf.readByte() == 15;
-        byteBuf.markReader();
+        byteBuf.resetReader();
     }
 
     @Test
-    public void writeBytesTest07_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(10, 2);
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+    public void writeBuffer_1_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
+
+        ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
+        assert data.position() == 0;
+        assert data.limit() == 4;
+        assert data.capacity() == 4;
+        byteBuf.writeBuffer(data);
+        byteBuf.markWriter();
+        assert data.position() == 4;
+        assert data.limit() == 4;
+        assert data.capacity() == 4;
+
+        assert byteBuf.getByte(0) == 1;
+        assert byteBuf.getByte(1) == 2;
+        assert byteBuf.getByte(2) == 3;
+        assert byteBuf.getByte(3) == 4;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
 
         assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
-        assert byteBuf.readByte() == 9;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 10);
-        byteBuf.writeByte((byte) 11);
-        byteBuf.writeByte((byte) 12);
-        byteBuf.markWriter();
-
-        byteBuf.writeByte((byte) 13);
-        byteBuf.writeByte((byte) 14);
-        byteBuf.writeByte((byte) 15);
-        byteBuf.markWriter();
-
-        assert byteBuf.getByte(0) == 10;
-        assert byteBuf.getByte(1) == 11;
-        assert byteBuf.getByte(2) == 12;
-        assert byteBuf.getByte(3) == 13;
-        assert byteBuf.getByte(4) == 14;
-        assert byteBuf.getByte(5) == 15;
-
-        assert byteBuf.readByte() == 10;
-        assert byteBuf.readByte() == 11;
-        assert byteBuf.readByte() == 12;
-        assert byteBuf.readByte() == 13;
-        assert byteBuf.readByte() == 14;
-        assert byteBuf.readByte() == 15;
-        byteBuf.markReader();
+        byteBuf.resetReader();
     }
 
     @Test
-    public void writeBytesTest08() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(10, 10);
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+    public void writeBuffer_2_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
+
+        ByteBuffer alloc1 = ByteBuffer.allocate(4);
+        assert alloc1.limit() == 4;
+        assert alloc1.position() == 0;
+        assert byteBuf.getBuffer(0, alloc1) == 4;
+        assert alloc1.limit() == 4;
+        assert alloc1.position() == 4;
+
+        assert alloc1.array()[0] == 1;
+        assert alloc1.array()[1] == 2;
+        assert alloc1.array()[2] == 3;
+        assert alloc1.array()[3] == 4;
+
+        try {
+            alloc1.get();
+            assert false;
+        } catch (BufferUnderflowException e) {
+            assert true;
+        }
+        assert alloc1.remaining() == 0;
+        alloc1.flip();
+        assert alloc1.remaining() == 4;
+        assert alloc1.get() == 1;
+        assert alloc1.get() == 2;
+        assert alloc1.get() == 3;
+        assert alloc1.get() == 4;
+        assert alloc1.remaining() == 0;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
+
+        ByteBuffer alloc2 = ByteBuffer.allocate(4);
+        assert byteBuf.readBuffer(alloc2) == 4;
+        assert alloc2.array()[0] == 1;
+        assert alloc2.array()[1] == 2;
+        assert alloc2.array()[2] == 3;
+        assert alloc2.array()[3] == 4;
+
+        byteBuf.resetReader();
+        ByteBuffer alloc3 = ByteBuffer.allocate(4);
+        assert alloc3.limit() == 4;
+        assert alloc3.position() == 0;
+        assert alloc3.remaining() == 4;
+        alloc3.position(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
+        assert alloc3.limit() == 4;
+        assert alloc3.position() == 3;
+        assert alloc3.remaining() == 1;
+        alloc3.flip();
+        assert alloc3.limit() == 3;
+        assert alloc3.position() == 0;
+        assert alloc3.remaining() == 3;
+
+        assert alloc3.get() == 0;
+        assert alloc3.get() == 1;
+        assert alloc3.get() == 2;
+        try {
+            alloc3.get();
+            assert false;
+        } catch (BufferUnderflowException e) {
+            assert true;
+        }
+    }
+
+    @Test
+    public void writeBuffer_2_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
+
+        byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
+        byteBuf.markWriter();
+
+        ByteBuffer alloc1 = ByteBuffer.allocate(4);
+        assert alloc1.limit() == 4;
+        assert alloc1.position() == 0;
+        assert byteBuf.getBuffer(0, alloc1) == 4;
+        assert alloc1.limit() == 4;
+        assert alloc1.position() == 4;
+
+        assert alloc1.array()[0] == 1;
+        assert alloc1.array()[1] == 2;
+        assert alloc1.array()[2] == 3;
+        assert alloc1.array()[3] == 4;
+
+        try {
+            alloc1.get();
+            assert false;
+        } catch (BufferUnderflowException e) {
+            assert true;
+        }
+        assert alloc1.remaining() == 0;
+        alloc1.flip();
+        assert alloc1.remaining() == 4;
+        assert alloc1.get() == 1;
+        assert alloc1.get() == 2;
+        assert alloc1.get() == 3;
+        assert alloc1.get() == 4;
+        assert alloc1.remaining() == 0;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
+
+        ByteBuffer alloc2 = ByteBuffer.allocate(4);
+        assert byteBuf.readBuffer(alloc2) == 4;
+        assert alloc2.array()[0] == 1;
+        assert alloc2.array()[1] == 2;
+        assert alloc2.array()[2] == 3;
+        assert alloc2.array()[3] == 4;
+
+        byteBuf.resetReader();
+        ByteBuffer alloc3 = ByteBuffer.allocate(4);
+        assert alloc3.limit() == 4;
+        assert alloc3.position() == 0;
+        assert alloc3.remaining() == 4;
+        alloc3.position(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
+        assert alloc3.limit() == 4;
+        assert alloc3.position() == 3;
+        assert alloc3.remaining() == 1;
+        alloc3.flip();
+        assert alloc3.limit() == 3;
+        assert alloc3.position() == 0;
+        assert alloc3.remaining() == 3;
+
+        assert alloc3.get() == 0;
+        assert alloc3.get() == 1;
+        assert alloc3.get() == 2;
+        try {
+            alloc3.get();
+            assert false;
+        } catch (BufferUnderflowException e) {
+            assert true;
+        }
+    }
+
+    @Test
+    public void writeBuffer_3_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
+        byteBuf.markWriter();
+
+        ByteBuffer alloc1 = ByteBuffer.allocate(4);
+        assert byteBuf.readableBytes() == 4;
+        assert byteBuf.getBuffer(0, alloc1) == 4;
+        assert byteBuf.readableBytes() == 4;
+
+        ByteBuffer alloc2 = ByteBuffer.allocate(4);
+        assert byteBuf.readableBytes() == 4;
+        assert byteBuf.readBuffer(alloc2) == 4;
+        assert byteBuf.readableBytes() == 0;
+    }
+
+    @Test
+    public void writeBuffer_3_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
+
+        byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
+        byteBuf.markWriter();
+
+        ByteBuffer alloc1 = ByteBuffer.allocate(4);
+        assert byteBuf.readableBytes() == 4;
+        assert byteBuf.getBuffer(0, alloc1) == 4;
+        assert byteBuf.readableBytes() == 4;
+
+        ByteBuffer alloc2 = ByteBuffer.allocate(4);
+        assert byteBuf.readableBytes() == 4;
+        assert byteBuf.readBuffer(alloc2) == 4;
+        assert byteBuf.readableBytes() == 0;
+    }
+
+    @Test
+    public void writeBuf_1_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf data = defaultWrap(new byte[] { 1, 2, 3, 4 });
+
+        assert data.readableBytes() == 4;
+        assert data.writableBytes() == 0;
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == 4;
+        byteBuf.writeBuffer(data);
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == 0;
+        byteBuf.markWriter();
+        assert data.readableBytes() == 0;
+        assert data.writableBytes() == 0;
+        assert byteBuf.readableBytes() == 4;
+        assert byteBuf.writableBytes() == 0;
+
+        assert byteBuf.getByte(0) == 1;
+        assert byteBuf.getByte(1) == 2;
+        assert byteBuf.getByte(2) == 3;
+        assert byteBuf.getByte(3) == 4;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
 
         assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
-        assert byteBuf.readByte() == 9;
-        byteBuf.markReader();
-
-        byteBuf.writeByte((byte) 10);
-        byteBuf.writeByte((byte) 11);
-        byteBuf.writeByte((byte) 12);
-        byteBuf.markWriter();
-
-        byteBuf.writeByte((byte) 13);
-        byteBuf.writeByte((byte) 14);
-        byteBuf.writeByte((byte) 15);
-        byteBuf.markWriter();
-
-        assert byteBuf.getByte(0) == 10;
-        assert byteBuf.getByte(1) == 11;
-        assert byteBuf.getByte(2) == 12;
-        assert byteBuf.getByte(3) == 13;
-        assert byteBuf.getByte(4) == 14;
-        assert byteBuf.getByte(5) == 15;
-
-        assert byteBuf.readByte() == 10;
-        assert byteBuf.readByte() == 11;
-        assert byteBuf.readByte() == 12;
-        assert byteBuf.readByte() == 13;
-        assert byteBuf.readByte() == 14;
-        assert byteBuf.readByte() == 15;
-        byteBuf.markReader();
+        byteBuf.resetReader();
     }
 
     @Test
-    public void writeBytesTest08_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(10, 2);
-
-        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9 });
+    public void writeBuf_1_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
+
+        ByteBuf data = defaultWrap(new byte[] { 1, 2, 3, 4 });
+
+        assert data.readableBytes() == 4;
+        assert data.writableBytes() == 0;
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == 4;
+        byteBuf.writeBuffer(data);
+        assert byteBuf.readableBytes() == 0;
+        assert byteBuf.writableBytes() == 0;
+        byteBuf.markWriter();
+        assert data.readableBytes() == 0;
+        assert data.writableBytes() == 0;
+        assert byteBuf.readableBytes() == 4;
+        assert byteBuf.writableBytes() == 0;
+
+        assert byteBuf.getByte(0) == 1;
+        assert byteBuf.getByte(1) == 2;
+        assert byteBuf.getByte(2) == 3;
+        assert byteBuf.getByte(3) == 4;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
 
         assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
-        assert byteBuf.readByte() == 5;
-        assert byteBuf.readByte() == 6;
-        assert byteBuf.readByte() == 7;
-        assert byteBuf.readByte() == 8;
-        assert byteBuf.readByte() == 9;
-        byteBuf.markReader();
+        byteBuf.resetReader();
+    }
 
-        byteBuf.writeByte((byte) 10);
-        byteBuf.writeByte((byte) 11);
-        byteBuf.writeByte((byte) 12);
-        byteBuf.markWriter();
-
-        byteBuf.writeByte((byte) 13);
-        byteBuf.writeByte((byte) 14);
-        byteBuf.writeByte((byte) 15);
-        byteBuf.markWriter();
-
-        assert byteBuf.getByte(0) == 10;
-        assert byteBuf.getByte(1) == 11;
-        assert byteBuf.getByte(2) == 12;
-        assert byteBuf.getByte(3) == 13;
-        assert byteBuf.getByte(4) == 14;
-        assert byteBuf.getByte(5) == 15;
-
-        assert byteBuf.readByte() == 10;
-        assert byteBuf.readByte() == 11;
-        assert byteBuf.readByte() == 12;
-        assert byteBuf.readByte() == 13;
-        assert byteBuf.readByte() == 14;
-        assert byteBuf.readByte() == 15;
-        byteBuf.markReader();
+    public static ByteBuf defaultWrap(byte[] data) {
+        return ByteBuf.wrap(data);
     }
 
     @Test
-    public void extendTest01() throws NoSuchAlgorithmException {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(256, 512, 64);
-        byte[] array1 = byteBuf.asByteArray();
+    public void writeBuf_2_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
 
-        byteBuf.writeBytes(RandomUtils.nextBytes(array1.length));
-        array1 = byteBuf.asByteArray();
-        assert array1 != byteBuf.asByteArray();
+        byteBuf.writeBuffer(defaultWrap(new byte[] { 1, 2, 3, 4 }));
+        byteBuf.markWriter();
 
-        byte[] data = byteBuf.asByteArray();
-        byte[] dataSub = new byte[array1.length];
-        System.arraycopy(data, 0, dataSub, 0, array1.length);
+        ByteBuf alloc1 = allocator.pooledBuffer(4);
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 4;
+        assert byteBuf.getBuffer(0, alloc1) == 4;
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 0;
+        alloc1.markWriter();
+        assert alloc1.readableBytes() == 4;
+        assert alloc1.writableBytes() == 0;
 
-        String hash1 = MD5.encodeMD5(array1);
-        String hash2 = MD5.encodeMD5(dataSub);
-        assert hash1.equals(hash2);
+        assert alloc1.readByte() == 1;
+        assert alloc1.readByte() == 2;
+        assert alloc1.readByte() == 3;
+        assert alloc1.readByte() == 4;
+
+        try {
+            alloc1.readByte();
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert true;
+        }
+
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 0;
+        alloc1.markReader();
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 4;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
+
+        ByteBuf alloc2 = allocator.pooledBuffer(4);
+        assert byteBuf.readBuffer(alloc2) == 4;
+        alloc2.markWriter();
+        assert alloc2.asByteArray()[0] == 1;
+        assert alloc2.asByteArray()[1] == 2;
+        assert alloc2.asByteArray()[2] == 3;
+        assert alloc2.asByteArray()[3] == 4;
+
+        byteBuf.resetReader();
+        ByteBuf alloc3 = allocator.pooledBuffer(4);
+        assert alloc3.readableBytes() == 0;
+        assert alloc3.writableBytes() == 4;
+        alloc3.skipWritableBytes(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
+        assert alloc3.readableBytes() == 0;
+        assert alloc3.writableBytes() == 1;
+        alloc3.markWriter();
+        assert alloc3.readableBytes() == 3;
+        assert alloc3.writableBytes() == 1;
+
+        assert alloc3.readByte() == 0;
+        assert alloc3.readByte() == 1;
+        assert alloc3.readByte() == 2;
+        try {
+            alloc3.readByte();
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert true;
+        }
+    }
+
+    @Test
+    public void writeBuf_2_2() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        byteBuf.skipWritableBytes(2);
+        byteBuf.markWriter();
+        byteBuf.skipReadableBytes(2);
+        byteBuf.markReader();
+
+        byteBuf.writeBuffer(defaultWrap(new byte[] { 1, 2, 3, 4 }));
+        byteBuf.markWriter();
+
+        ByteBuf alloc1 = allocator.pooledBuffer(4);
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 4;
+        assert byteBuf.getBuffer(0, alloc1) == 4;
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 0;
+        alloc1.markWriter();
+        assert alloc1.readableBytes() == 4;
+        assert alloc1.writableBytes() == 0;
+
+        assert alloc1.readByte() == 1;
+        assert alloc1.readByte() == 2;
+        assert alloc1.readByte() == 3;
+        assert alloc1.readByte() == 4;
+
+        try {
+            alloc1.readByte();
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert true;
+        }
+
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 0;
+        alloc1.markReader();
+        assert alloc1.readableBytes() == 0;
+        assert alloc1.writableBytes() == 4;
+
+        assert byteBuf.asByteArray()[0] == 1;
+        assert byteBuf.asByteArray()[1] == 2;
+        assert byteBuf.asByteArray()[2] == 3;
+        assert byteBuf.asByteArray()[3] == 4;
+
+        ByteBuf alloc2 = allocator.pooledBuffer(4);
+        assert byteBuf.readBuffer(alloc2) == 4;
+        alloc2.markWriter();
+        assert alloc2.asByteArray()[0] == 1;
+        assert alloc2.asByteArray()[1] == 2;
+        assert alloc2.asByteArray()[2] == 3;
+        assert alloc2.asByteArray()[3] == 4;
+
+        byteBuf.resetReader();
+        ByteBuf alloc3 = allocator.pooledBuffer(4);
+        assert alloc3.readableBytes() == 0;
+        assert alloc3.writableBytes() == 4;
+        alloc3.skipWritableBytes(1);
+        assert byteBuf.readBuffer(alloc3, 2) == 2;
+        assert alloc3.readableBytes() == 0;
+        assert alloc3.writableBytes() == 1;
+        alloc3.markWriter();
+        assert alloc3.readableBytes() == 3;
+        assert alloc3.writableBytes() == 1;
+
+        assert alloc3.readByte() == 0;
+        assert alloc3.readByte() == 1;
+        assert alloc3.readByte() == 2;
+        try {
+            alloc3.readByte();
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert true;
+        }
     }
 
     @Test
     public void freeTest01() {
-        PooledByteBuf byteBuf = (PooledByteBuf) ByteBufAllocator.DEFAULT.pooledDirectBuffer();
+        ByteBuf byteBuf = allocator.pooledBuffer(111);
         byteBuf.free();
-        assert byteBuf.buffers.isEmpty();
+
+        try {
+            assert byteBuf.asByteArray() == null;
+            assert false;
+        } catch (IllegalStateException e) {
+            assert e.getMessage().equals("has been released.");
+        }
 
         try {
             byteBuf.writeByte((byte) 5);
@@ -755,28 +956,14 @@ public class PooledByteBufTest {
     }
 
     @Test
-    public void freeTest02() {
-        byte[] result = new byte[10 * 1024 * 1024];
-        Random RANDOM = new Random(System.currentTimeMillis());
-        RANDOM.nextBytes(result);
-
-        List<Object> list = new LinkedList<>();
-        for (int i = 0; i < 500; i++) {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer();
-            byteBuf.writeBytes(result);
-            byteBuf.free();
-            list.add(byteBuf);
-        }
-    }
-
-    @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        ByteBuf byteBuf1 = ByteBufAllocator.DEFAULT.pooledDirectBuffer();
-        byteBuf1.writeBytes(RandomUtils.nextBytes(byteBuf1.capacity()));
+        PooledByteBuf byteBuf1 = (PooledByteBuf) allocator.pooledBuffer(12);
+        byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
 
-        ByteBuf byteBuf2 = byteBuf1.copy();
+        PooledByteBuf byteBuf2 = byteBuf1.copy();
 
-        assert byteBuf1.asByteArray() != byteBuf2.asByteArray();
+        assert byteBuf1.target != byteBuf2.target;
+        assert byteBuf1.target.capacity() == byteBuf2.target.capacity();
 
         String hash1 = MD5.encodeMD5(byteBuf1.asByteArray());
         String hash2 = MD5.encodeMD5(byteBuf2.asByteArray());
@@ -784,23 +971,62 @@ public class PooledByteBufTest {
     }
 
     @Test
+    public void copyTest02() {
+        PooledByteBuf byteBuf1 = (PooledByteBuf) allocator.pooledBuffer(12);
+        byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
+        byteBuf1.markWriter();
+
+        assert byteBuf1.readByte() == 1;
+        assert byteBuf1.readByte() == 2;
+
+        PooledByteBuf byteBuf2 = byteBuf1.copy();
+        assert byteBuf2.readByte() == 3;
+        assert byteBuf2.readByte() == 4;
+
+        assert byteBuf1.readByte() == 3;
+        assert byteBuf1.readByte() == 4;
+    }
+
+    @Test
     public void errorTest01() {
         try {
-            ByteBufAllocator.DEFAULT.pooledDirectBuffer(-1, 123, 64);
+            allocator.pooledBuffer(-1);
             assert false;
         } catch (IllegalArgumentException e) {
-            assert e.getMessage().equals("0 > capacity > maxCapacity ( gt 0 or eq -1)");
+            assert e.getMessage().equals("capacity: -1 (expected: >= 0)");
         }
     }
 
     @Test
     public void errorTest02() {
         try {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer();
+            ByteBuf byteBuf = allocator.pooledBuffer(4);
             byteBuf.getByte(0);
             assert false;
         } catch (IndexOutOfBoundsException e) {
-            assert e.getMessage().startsWith("read data(1) out of range. readMark(0) <= offset(0) <= writerMark(0)");
+            assert e.getMessage().startsWith("read out of range. index: 0, length: 1 (expected: 0 ~ 0)");
+        }
+
+        try {
+            ByteBuf byteBuf = allocator.pooledBuffer(4);
+            byteBuf.writeByte((byte) 1);
+            byteBuf.getByte(0);
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert e.getMessage().startsWith("read out of range. index: 0, length: 1 (expected: 0 ~ 0)");
+        }
+    }
+
+    @Test
+    public void errorTest03() {
+        try {
+            ByteBuf byteBuf = allocator.pooledBuffer(4);
+            byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+            byteBuf.markWriter();
+            byteBuf.readInt64();
+            assert false;
+        } catch (IndexOutOfBoundsException e) {
+            assert e.getMessage().startsWith("read out of range. length: 8 (expected: 0 ~ 4)");
         }
     }
 
@@ -808,7 +1034,7 @@ public class PooledByteBufTest {
     public void writeStringTest01() {
         byte[] date = "aaa\nbbb\nccc\n".getBytes(StandardCharsets.US_ASCII);
 
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer();
+        ByteBuf byteBuf = allocator.pooledBuffer(1024);
         byteBuf.writeBytes(date);
         byteBuf.markWriter();
 
@@ -823,7 +1049,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeStringTest02() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledDirectBuffer(16, 4);
+        ByteBuf byteBuf = allocator.pooledBuffer(1024);
 
         byteBuf.writeBytes("abc1\r\n".getBytes());
         byteBuf.markWriter();
@@ -850,7 +1076,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeStringTest03() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.heapBuffer(10, 10);
+        ByteBuf byteBuf = allocator.pooledBuffer(10);
 
         byteBuf.writeBytes("1234\r\n".getBytes());
         byteBuf.markWriter();
@@ -878,48 +1104,40 @@ public class PooledByteBufTest {
     }
 
     @Test
-    public void readBufTest1() {
-        byte[] cacheData = RandomUtils.nextBytes(100);
-        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.pooledBuffer();
-        srcBuf.writeBytes(cacheData);
-        srcBuf.markWriter();
+    public void pooledWriteBytes_1() {
+        ByteBuf byteBuf = allocator.pooledBuffer(4, 10);
 
-        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.pooledBuffer();
-        srcBuf.readBuffer(dstBuf, 5);
-        dstBuf.markWriter();
+        byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
+        byteBuf.markWriter();
+        assert byteBuf.capacity() == 4;
+        byteBuf.writeBytes(new byte[] { 5, 6, 7, 8 });
+        byteBuf.markWriter();
+        assert byteBuf.capacity() == 16; // the buddy algorithm
 
-        assert srcBuf.readableBytes() == 95;
-        assert dstBuf.readableBytes() == 5;
+        assert byteBuf.readByte() == 1;
+        assert byteBuf.readByte() == 2;
+        assert byteBuf.readByte() == 3;
+        assert byteBuf.readByte() == 4;
+        assert byteBuf.readByte() == 5;
+        assert byteBuf.readByte() == 6;
+        assert byteBuf.readByte() == 7;
+        assert byteBuf.readByte() == 8;
+        byteBuf.markReader();
+
+        byteBuf.writeBytes(new byte[] { 10, 11, 12, 13, 14 });
+        byteBuf.writeBytes(new byte[] { 15, 16, 17, 18, 19 });
+        byteBuf.markWriter();
+
+        byteBuf.writeBytes(new byte[] { 7, 8 });
+        byteBuf.markWriter();
+
+        assert byteBuf.readByte() == 10;
+        byteBuf.markReader();
     }
 
     @Test
-    public void readBufTest2() throws NoSuchAlgorithmException {
-        byte[] cacheData = RandomUtils.nextBytes(8192);
-        ByteBuf srcBuf = ByteBufAllocator.DEFAULT.pooledBuffer();
-        srcBuf.writeBytes(cacheData);
-        srcBuf.markWriter();
+    public void pooledConfig_1() {
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledBuffer(4);
 
-        ByteBuf dstBuf = ByteBufAllocator.DEFAULT.heapBuffer(5000);
-        srcBuf.readBuffer(dstBuf, 5000);
-        dstBuf.markWriter();
-
-        assert srcBuf.readableBytes() == 8192 - 5000;
-        assert dstBuf.readableBytes() == 5000;
-
-        //
-        byte[] array1 = new byte[5000];
-        System.arraycopy(cacheData, 0, array1, 0, 5000);
-        String array1Hash = MD5.encodeMD5(array1);
-
-        byte[] array2 = new byte[5000];
-        srcBuf.resetReader();
-        srcBuf.readBytes(array2);
-        String array2Hash = MD5.encodeMD5(array2);
-
-        byte[] array3 = dstBuf.asByteArray();
-        String array3Hash = MD5.encodeMD5(array3);
-
-        assert array1Hash.equals(array2Hash);
-        assert array2Hash.equals(array3Hash);
     }
 }

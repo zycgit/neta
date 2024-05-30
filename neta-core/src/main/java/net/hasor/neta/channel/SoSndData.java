@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
  * data packet
@@ -24,7 +23,7 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @version : 2023-09-24
  */
 class SoSndData {
-    public static final ByteBuf            EMPTY_DATA = ByteBufAllocator.DEFAULT.arrayBuffer(0);
+    public static final ByteBuf            EMPTY_DATA = ByteBuf.wrap(new byte[0]);
     private final       long               dataSize;
     private final       ByteBuf            data;
     private final       Future<NetChannel> future;

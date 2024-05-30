@@ -28,6 +28,12 @@ public interface Buffer {
     /** The capacity of this buffer, that is, the maximum number of bytes it can contain. */
     int capacity();
 
+    /** target Memory {@link ByteBuffer} */
+    ByteBuffer getTarget();
+
+    /** target Memory write/reader start position */
+    int getOffset();
+
     byte get(int index);
 
     void put(int index, byte b);
@@ -36,7 +42,11 @@ public interface Buffer {
 
     void put(int index, byte[] src, int srcOffset, int srcLen);
 
+    void get(int index, ByteBuffer dst, int dstLen);
+
     void get(int index, ByteBuffer dst, int dstOffset, int dstLen);
+
+    void put(int index, ByteBuffer src, int srcLen);
 
     void put(int index, ByteBuffer src, int srcOffset, int srcLen);
 

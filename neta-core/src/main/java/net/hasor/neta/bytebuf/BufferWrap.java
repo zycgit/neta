@@ -48,6 +48,16 @@ public class BufferWrap implements Buffer {
     public int capacity() {
         return this.buffer.capacity();
     }
+ 
+    @Override
+    public ByteBuffer getTarget() {
+        return this.buffer;
+    }
+
+    @Override
+    public int getOffset() {
+        return 0;
+    }
 
     @Override
     public byte get(int index) {
@@ -61,27 +71,72 @@ public class BufferWrap implements Buffer {
 
     @Override
     public void get(int index, byte[] dst, int dstOffset, int dstLen) {
-        this.buffer.clear().position(index);
-        this.buffer.get(dst, dstOffset, dstLen);
+        ByteBuffer dupBuf = this.buffer.duplicate();
+        clearAndPosition(dupBuf, index);
+        dupBuf.get(dst, dstOffset, dstLen);
     }
 
     @Override
     public void put(int index, byte[] src, int srcOffset, int srcLen) {
-        this.buffer.clear().position(index);
-        this.buffer.put(src, srcOffset, srcLen);
+        ByteBuffer dupBuf = this.buffer.duplicate();
+        clearAndPosition(dupBuf, index);
+        dupBuf.put(src, srcOffset, srcLen);
+    }
+
+    @Override
+    public void get(int index, ByteBuffer dst, int dstLen) {
+        ByteBuffer dupBuf = this.buffer.duplicate();
+        clearAndPosition(dupBuf, index);
+        dupBuf.limit(index + dstLen);
+        dst.put(dupBuf);
     }
 
     @Override
     public void get(int index, ByteBuffer dst, int dstOffset, int dstLen) {
-        this.buffer.clear().limit(index + dstLen).position(index);
+        ByteBuffer dupBuf = this.buffer.duplicate();
+        clearAndPosition(dupBuf, index);
+        dupBuf.limit(index + dstLen);
         ByteBuffer dup = (ByteBuffer) dst.duplicate().position(dstOffset);
-        dup.put(this.buffer);
+        dup.put(dupBuf);
+
+        int newPos = dstOffset + dstLen;
+        if (newPos > dst.position()) {
+            dst.position(newPos);
+        }
+    }
+
+    @Override
+    public void put(int index, ByteBuffer src, int srcLen) {
+        int newPos = src.position() + srcLen;
+        if (newPos > src.limit()) {
+            throw new IllegalArgumentException("(src.position + srcLen) > limit: (" + newPos + " > " + src.limit() + ")");
+        }
+
+        ByteBuffer dupBuf = this.buffer.duplicate();
+        clearAndPosition(dupBuf, index);
+
+        dupBuf.put((ByteBuffer) src.duplicate().limit(newPos));
+        src.position(newPos);
     }
 
     @Override
     public void put(int index, ByteBuffer src, int srcOffset, int srcLen) {
-        this.buffer.clear().position(index);
-        this.buffer.put((ByteBuffer) src.duplicate().limit(srcOffset + srcLen).position(srcOffset));
+        int newPos = srcOffset + srcLen;
+        if (newPos > src.limit()) {
+            throw new IllegalArgumentException("(srcOffset + srcLen) > limit: (" + newPos + " > " + src.limit() + ")");
+        }
+
+        ByteBuffer dupBuf = this.buffer.duplicate();
+        clearAndPosition(dupBuf, index);
+
+        int limit = srcOffset + srcLen;
+        ByteBuffer dupSrc = clearAndPosition(src.duplicate(), srcOffset);
+        dupSrc.limit(limit);
+        dupBuf.put(dupSrc);
+
+        if (limit > src.position()) {
+            src.position(limit);
+        }
     }
 
     @Override
@@ -90,5 +145,14 @@ public class BufferWrap implements Buffer {
         if (ByteBufUtils.CLEANER != null) {
             ByteBufUtils.CLEANER.freeDirectBuffer(this.buffer);
         }
+    }
+
+    private static ByteBuffer clearAndPosition(ByteBuffer buffer, int index) {
+        if (index == 0) {
+            buffer.clear();
+        } else {
+            buffer.clear().position(index);
+        }
+        return buffer;
     }
 }

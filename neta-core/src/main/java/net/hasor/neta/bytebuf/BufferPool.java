@@ -33,7 +33,8 @@ class BufferPool {
     private final   int                  pageSize;
     private final   int                  buddyTreeHeight;
     private final   int                  maximumChunkCount;
-    private         long                 memoryChunkSize;
+    private final   int                  memoryChunkSize;
+    private         long                 memoryCapacity;
     private final   BufferAllocator      allocator;
     private final   Map<Integer, Buffer> bufferPool;
     //
@@ -61,6 +62,7 @@ class BufferPool {
         this.pageSize = pageSize;
         this.buddyTreeHeight = buddyTreeHeight;
         this.maximumChunkCount = maximumChunkCount;
+        this.memoryChunkSize = (int) Math.pow(2, buddyTreeHeight);
         this.allocator = allocator;
         this.bufferPool = new ConcurrentHashMap<>();
         Lock shareLock = new ReentrantLock(false);
@@ -102,6 +104,10 @@ class BufferPool {
     }
 
     public long getMemCapacity() {
+        return this.memoryCapacity;
+    }
+
+    public long getMemMaxCapacity() {
         if (this.maximumChunkCount == -1) {
             return Long.MAX_VALUE;
         } else {
@@ -117,13 +123,16 @@ class BufferPool {
         throw new IllegalStateException("Invalid memory block. The memory block may have been freed.");
     }
 
-    protected BufferTarget requestBuffer(PageChunkSplit pages) {
+    protected Buffer requestBuffer(PageChunkSplit pages) {
         Buffer memory = this.getMemory(pages.getMemAddress());
         return new BufferTarget(this.getMemPageSize(), pages, memory);
     }
 
-    public BufferTarget requestBuffer(int capacity) {
+    public Buffer requestBuffer(int capacity) {
         ObjectUtils.checkPositive(capacity, "capacity");
+        if (capacity > this.memoryChunkSize) {
+
+        }
 
         for (BufferArena arena : this.arenaList) {
             BufferTarget buffer = arena.requestBuffer(capacity);
@@ -162,7 +171,7 @@ class BufferPool {
         Buffer buffer = new BufferWrap(this.allocator.jvmBuffer(pool.getCapacity()));
 
         this.bufferPool.put(memAddress, buffer);
-        this.memoryChunkSize = this.memoryChunkSize + buffer.capacity();
+        this.memoryCapacity = this.memoryCapacity + buffer.capacity();
         return pool;
     }
 

@@ -304,7 +304,7 @@ public class WrapArrayBufferTest {
     public void writeBuf_2_1() {
         ByteBuf byteBuf = ByteBuf.wrap(new byte[] { 1, 2, 3, 4 });
 
-        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc1 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert alloc1.readableBytes() == 0;
         assert alloc1.writableBytes() == 4;
         assert byteBuf.getBuffer(0, alloc1) == 4;
@@ -337,7 +337,7 @@ public class WrapArrayBufferTest {
         assert byteBuf.asByteArray()[2] == 3;
         assert byteBuf.asByteArray()[3] == 4;
 
-        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc2 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert byteBuf.readBuffer(alloc2) == 4;
         alloc2.markWriter();
         assert alloc2.asByteArray()[0] == 1;
@@ -346,7 +346,7 @@ public class WrapArrayBufferTest {
         assert alloc2.asByteArray()[3] == 4;
 
         byteBuf.resetReader();
-        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.recycleHeapBuffer(4);
+        ByteBuf alloc3 = ByteBufAllocator.DEFAULT.ringHeapBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
         alloc3.skipWritableBytes(1);

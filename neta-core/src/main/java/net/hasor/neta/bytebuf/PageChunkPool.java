@@ -129,7 +129,7 @@ class PageChunkPool {
     }
 
     /** Returns a power of two size for the given target capacity. */
-    private static int tableSizeFor(int cap, int maximumSize) {
+    static int tableSizeFor(int cap, int maximumSize) {
         int n = cap - 1;
         n |= n >>> 1;
         n |= n >>> 2;

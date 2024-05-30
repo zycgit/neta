@@ -10,12 +10,12 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList1 = allocator.requestPages(4);
-        BufferTarget buffer1 = pool.requestBuffer(pageList1);
+        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(pageList1);
         assert pageList1.capacity() == 4;
         assert buffer1.capacity() == 4;
 
         PageChunkSplit pageList2 = allocator.requestPages(8);
-        BufferTarget buffer2 = pool.requestBuffer(pageList2);
+        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(pageList2);
         assert pageList2.capacity() == 8;
         assert buffer2.capacity() == 8;
     }
@@ -28,8 +28,8 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit pageList1 = allocator.requestPages(4);
         PageChunkSplit pageList2 = allocator.requestPages(4);
-        BufferTarget buffer1 = pool.requestBuffer(pageList1);
-        BufferTarget buffer2 = pool.requestBuffer(pageList2);
+        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(pageList1);
+        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(pageList2);
 
         buffer1.put(0, (byte) 1);
         assert buffer1.get(0) == 1;
@@ -101,7 +101,7 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(8);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }, 0, 8);
         assert bytes[0] == 1;
@@ -151,7 +151,7 @@ public class BufferTest {
 
         PageChunkSplit keep = allocator.requestPages(8);
         PageChunkSplit pageList = allocator.requestPages(8);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 }, 0, 8);
         assert bytes[8] == 1;
@@ -198,7 +198,7 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         try {
             buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }, 1, 8);
@@ -220,7 +220,7 @@ public class BufferTest {
         BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
 
@@ -276,7 +276,7 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit keep = allocator.requestPages(8);
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
 
@@ -332,7 +332,7 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         try {
             buffer.get(0, new byte[8], 0, 8);
@@ -357,10 +357,9 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(8);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         ByteBuffer wrap1 = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
-        wrap1.flip();
         buffer.put(0, wrap1, 0, 8);
         assert bytes[0] == 1;
         assert bytes[1] == 2;
@@ -373,7 +372,6 @@ public class BufferTest {
         assert bytes[8] == 0;
 
         ByteBuffer wrap2 = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
-        wrap2.flip();
         buffer.put(0, wrap2, 1, 8);
         assert bytes[0] == 2;
         assert bytes[1] == 3;
@@ -386,7 +384,6 @@ public class BufferTest {
         assert bytes[8] == 0;
 
         ByteBuffer wrap3 = ByteBuffer.wrap(new byte[] { 10, 11, 12, 13, 14, 15, 16, 17 });
-        wrap3.flip();
         buffer.put(3, wrap3, 1, 2);
         assert bytes[0] == 2;
         assert bytes[1] == 3;
@@ -399,7 +396,6 @@ public class BufferTest {
         assert bytes[8] == 0;
 
         ByteBuffer wrap4 = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5 });
-        wrap4.flip();
         buffer.put(6, wrap4, 1, 2);
         assert bytes[6] == 2;
         assert bytes[7] == 3;
@@ -414,10 +410,9 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit keep = allocator.requestPages(8);
         PageChunkSplit pageList = allocator.requestPages(8);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         ByteBuffer wrap1 = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
-        wrap1.flip();
         buffer.put(0, wrap1, 0, 8);
         assert bytes[8] == 1;
         assert bytes[9] == 2;
@@ -430,7 +425,6 @@ public class BufferTest {
         assert bytes[16] == 0;
 
         ByteBuffer wrap2 = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12 });
-        wrap2.flip();
         buffer.put(0, wrap2, 1, 8);
         assert bytes[8] == 2;
         assert bytes[9] == 3;
@@ -443,7 +437,6 @@ public class BufferTest {
         assert bytes[16] == 0;
 
         ByteBuffer wrap3 = ByteBuffer.wrap(new byte[] { 10, 11, 12, 13, 14, 15, 16, 17 });
-        wrap3.flip();
         buffer.put(3, wrap3, 1, 2);
         assert bytes[8] == 2;
         assert bytes[9] == 3;
@@ -456,7 +449,6 @@ public class BufferTest {
         assert bytes[16] == 0;
 
         ByteBuffer wrap4 = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5 });
-        wrap4.flip();
         buffer.put(6, wrap4, 1, 2);
         assert bytes[14] == 2;
         assert bytes[15] == 3;
@@ -469,7 +461,7 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         try {
             ByteBuffer wrap = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
@@ -495,7 +487,7 @@ public class BufferTest {
         BufferPool pool = new BufferPool(1, ByteBuffer::allocate);
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
 
@@ -551,7 +543,7 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
         PageChunkSplit keep = allocator.requestPages(8);
         PageChunkSplit pageList = allocator.requestPages(16);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         buffer.put(0, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16 }, 0, 16);
 
@@ -607,7 +599,7 @@ public class BufferTest {
         PageChunkPool allocator = pool.newAllocator();
 
         PageChunkSplit pageList = allocator.requestPages(4);
-        BufferTarget buffer = pool.requestBuffer(pageList);
+        BufferTarget buffer = (BufferTarget) pool.requestBuffer(pageList);
 
         try {
             buffer.get(0, new byte[8], 0, 8);

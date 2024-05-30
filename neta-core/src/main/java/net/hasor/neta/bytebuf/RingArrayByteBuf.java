@@ -19,21 +19,21 @@ import net.hasor.cobble.ObjectUtils;
 import java.nio.ByteBuffer;
 
 /**
- * 基于字节数组的窗口 {@link ByteBuf} 实现
+ * 基于字节数组的环形 {@link ByteBuf} 实现
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-class RecycleArrayByteBuf extends AbstractByteBuf {
+class RingArrayByteBuf extends AbstractByteBuf {
     protected final byte[] target;
 
-    RecycleArrayByteBuf(ByteBufAllocator alloc, byte[] initData) {
+    RingArrayByteBuf(ByteBufAllocator alloc, byte[] initData) {
         super(alloc, initData.length);
         this.target = initData;
         this.writerIndex = initData.length;
         this.markedWriterIndex = initData.length;
     }
 
-    RecycleArrayByteBuf(ByteBufAllocator alloc, int capacity) {
+    RingArrayByteBuf(ByteBufAllocator alloc, int capacity) {
         super(alloc, ObjectUtils.checkPositiveOrZero(capacity, "capacity"));
         this.target = new byte[capacity];
         this.writerIndex = 0;
@@ -64,15 +64,11 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
         }
     }
 
-    private static int offsetSize(int offset, int capacity) {
-        return offset % capacity;
-    }
-
     @Override
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int offsetSize = offset % this.getMaxCapacity();
         this.target[offsetSize] = b;
     }
 
@@ -80,18 +76,24 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     protected int _putBytes(int offset, byte[] src, int srcOffset, int srcLen) {
         checkFree();
 
-        int capacity = this.getMaxCapacity();
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int maxCap = this.getMaxCapacity();
+        int offsetSize = offset % maxCap;
 
-        if ((offsetSize + srcLen) < capacity) {
+        if ((offsetSize + srcLen) < maxCap) {
             System.arraycopy(src, srcOffset, this.target, offsetSize, srcLen);
             return srcLen;
         } else {
-            int partA = capacity - offsetSize;
+            int partA = maxCap - offsetSize;
             int partB = srcLen - partA;
+
             System.arraycopy(src, srcOffset, this.target, offsetSize, partA);
-            System.arraycopy(src, srcOffset + partA, this.target, 0, partB);
-            return partA + partB;
+
+            if (partB > 0) {
+                System.arraycopy(src, srcOffset + partA, this.target, 0, partB);
+                return partA + partB;
+            } else {
+                return partA;
+            }
         }
     }
 
@@ -99,19 +101,25 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
         checkFree();
 
-        int capacity = this.getMaxCapacity();
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int maxCap = this.getMaxCapacity();
+        int offsetSize = offset % maxCap;
         srcLen = Math.min(src.remaining(), srcLen);
 
-        if ((offsetSize + srcLen) <= capacity) {
+        if ((offsetSize + srcLen) <= maxCap) {
             src.get(this.target, offsetSize, srcLen);
             return srcLen;
         } else {
-            int partA = capacity - offsetSize;
+            int partA = maxCap - offsetSize;
             int partB = srcLen - partA;
+
             src.get(this.target, offsetSize, partA);
-            src.get(this.target, 0, partB);
-            return partA + partB;
+
+            if (partB > 0) {
+                src.get(this.target, 0, partB);
+                return partA + partB;
+            } else {
+                return partA;
+            }
         }
     }
 
@@ -119,19 +127,25 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     protected int _putBytes(int offset, ByteBuf src, int srcLen) {
         checkFree();
 
-        int capacity = this.getMaxCapacity();
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int maxCap = this.getMaxCapacity();
+        int offsetSize = offset % maxCap;
         srcLen = Math.min(src.readableBytes(), srcLen);
 
-        if ((offsetSize + srcLen) <= capacity) {
+        if ((offsetSize + srcLen) <= maxCap) {
             src.readBytes(this.target, offsetSize, srcLen);
             return srcLen;
         } else {
-            int partA = capacity - offsetSize;
+            int partA = maxCap - offsetSize;
             int partB = srcLen - partA;
+
             src.readBytes(this.target, offsetSize, partA);
-            src.readBytes(this.target, 0, partB);
-            return partA + partB;
+
+            if (partB > 0) {
+                src.readBytes(this.target, 0, partB);
+                return partA + partB;
+            } else {
+                return partA;
+            }
         }
     }
 
@@ -139,7 +153,7 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int offsetSize = offset % this.getMaxCapacity();
         return this.target[offsetSize];
     }
 
@@ -147,18 +161,24 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     protected int _getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
         checkFree();
 
-        int capacity = this.getMaxCapacity();
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int maxCap = this.getMaxCapacity();
+        int offsetSize = offset % maxCap;
 
-        if ((offsetSize + dstLen) < capacity) {
+        if ((offsetSize + dstLen) < maxCap) {
             System.arraycopy(this.target, offsetSize, dst, dstOffset, dstLen);
             return dstLen;
         } else {
-            int partA = capacity - offsetSize;
+            int partA = maxCap - offsetSize;
             int partB = dstLen - partA;
+
             System.arraycopy(this.target, offsetSize, dst, dstOffset, partA);
-            System.arraycopy(this.target, 0, dst, dstOffset + partA, partB);
-            return partA + partB;
+
+            if (partB > 0) {
+                System.arraycopy(this.target, 0, dst, dstOffset + partA, partB);
+                return partA + partB;
+            } else {
+                return partA;
+            }
         }
     }
 
@@ -166,18 +186,24 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
         checkFree();
 
-        int capacity = this.getMaxCapacity();
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int maxCap = this.getMaxCapacity();
+        int offsetSize = offset % maxCap;
 
-        if ((offsetSize + dstLen) < capacity) {
+        if ((offsetSize + dstLen) < maxCap) {
             dst.put(this.target, offsetSize, dstLen);
             return dstLen;
         } else {
-            int partA = capacity - offsetSize;
+            int partA = maxCap - offsetSize;
             int partB = dstLen - partA;
+
             dst.put(this.target, offsetSize, partA);
-            dst.put(this.target, 0, partB);
-            return partA + partB;
+
+            if (partB > 0) {
+                dst.put(this.target, 0, partB);
+                return partA + partB;
+            } else {
+                return partA;
+            }
         }
     }
 
@@ -185,18 +211,23 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
         checkFree();
 
-        int capacity = this.getMaxCapacity();
-        int offsetSize = offsetSize(offset, this.getMaxCapacity());
+        int maxCap = this.getMaxCapacity();
+        int offsetSize = offset % maxCap;
 
-        if ((offsetSize + dstLen) < capacity) {
+        if ((offsetSize + dstLen) < maxCap) {
             dst.writeBytes(this.target, offsetSize, dstLen);
             return dstLen;
         } else {
-            int partA = capacity - offsetSize;
+            int partA = maxCap - offsetSize;
             int partB = dstLen - partA;
+
             dst.writeBytes(this.target, offsetSize, partA);
-            dst.writeBytes(this.target, 0, partB);
-            return partA + partB;
+            if (partB > 0) {
+                dst.writeBytes(this.target, 0, partB);
+                return partA + partB;
+            } else {
+                return partA;
+            }
         }
     }
 
@@ -216,12 +247,12 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
     }
 
     @Override
-    public RecycleArrayByteBuf copy() {
+    public RingArrayByteBuf copy() {
         checkFree();
 
         byte[] copyArray = new byte[this.getMaxCapacity()];
         this._getBytes(this.markedReaderIndex, copyArray, 0, copyArray.length);
-        RecycleArrayByteBuf byteBuf = new RecycleArrayByteBuf(this.alloc, copyArray);
+        RingArrayByteBuf byteBuf = new RingArrayByteBuf(this.alloc, copyArray);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
@@ -232,6 +263,6 @@ class RecycleArrayByteBuf extends AbstractByteBuf {
 
     @Override
     protected String getSimpleName() {
-        return "RecycleArrayByteBuf";
+        return "RingArrayByteBuf";
     }
 }
