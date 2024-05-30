@@ -48,7 +48,7 @@ public class BufferWrap implements Buffer {
     public int capacity() {
         return this.buffer.capacity();
     }
- 
+
     @Override
     public ByteBuffer getTarget() {
         return this.buffer;

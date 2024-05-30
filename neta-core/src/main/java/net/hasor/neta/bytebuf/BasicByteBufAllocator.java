@@ -25,14 +25,12 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     protected final boolean defaultUsingPooled;
     protected final int     initCapacityByDefault;
     protected final int     sliceSizeByDefault;
-    protected final int     defaultPoolPageSize;
 
     /** Create new instance */
-    protected BasicByteBufAllocator(boolean defaultUsingPooled, int initialCapacityByDefault, int sliceSizeByDefault, int defaultPoolPageSize) {
+    protected BasicByteBufAllocator(boolean defaultUsingPooled, int initialCapacityByDefault, int sliceSizeByDefault) {
         this.defaultUsingPooled = defaultUsingPooled;
         this.initCapacityByDefault = initialCapacityByDefault;
         this.sliceSizeByDefault = sliceSizeByDefault;
-        this.defaultPoolPageSize = defaultPoolPageSize;
     }
 
     @Override
@@ -148,7 +146,8 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     private ByteBuf pooledByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
         int fmtMaxCap = PageChunkPool.tableSizeFor(maxCapacity, Integer.MAX_VALUE);
-        Buffer target = BufferPoolUtils.requestBuffer(initCapacity, this.defaultPoolPageSize, alloc);
-        return new PooledByteBuf(alloc, fmtMaxCap, this.sliceSizeByDefault, this.defaultPoolPageSize, target);
+        BufferPool pool = BufferPoolUtils.getPool(fmtMaxCap, alloc);
+        Buffer target = pool.requestBuffer(initCapacity, this);
+        return new PooledByteBuf(alloc, fmtMaxCap, this.sliceSizeByDefault, target, pool);
     }
 }

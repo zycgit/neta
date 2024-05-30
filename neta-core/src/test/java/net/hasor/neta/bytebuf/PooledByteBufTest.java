@@ -1,6 +1,5 @@
 package net.hasor.neta.bytebuf;
 import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.codec.MD5;
 import org.junit.Test;
 
@@ -11,45 +10,37 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 
 public class PooledByteBufTest {
-    static ByteBufAllocator allocator;
+    private static BufferPool POOL = new BufferPool(2);
 
-    static {
-        String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(4 * 1024));
-        String initialSize = SystemUtils.getSystemProperty("neta.bytebuf.initialSize", String.valueOf(4 * 1024));
+    private ByteBuf pooledBuffer(int initCapacity) {
+        int fmtMaxCap = PageChunkPool.tableSizeFor(initCapacity, Integer.MAX_VALUE);
+        Buffer target = POOL.requestBuffer(initCapacity, ByteBufAllocator.DEFAULT);
+        return new PooledByteBuf(ByteBufAllocator.DEFAULT, fmtMaxCap, 4096, target, POOL);
+    }
 
-        int sliceSizeByDefault = Integer.parseInt(sliceSize);
-        int initialCapacityByDefault = Integer.parseInt(initialSize);
-        int poolPageSizeByDefault = 2;
-        allocator = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault, poolPageSizeByDefault) {
-            @Override
-            public boolean isDirect() {
-                return false;
-            }
-
-            @Override
-            public ByteBuffer jvmBuffer(int capacity) {
-                return ByteBuffer.allocate(capacity);
-            }
-        };
+    private ByteBuf pooledBuffer(int initCapacity, int maxCapacity) {
+        int fmtMaxCap = PageChunkPool.tableSizeFor(maxCapacity, Integer.MAX_VALUE);
+        Buffer target = POOL.requestBuffer(initCapacity, ByteBufAllocator.DEFAULT);
+        return new PooledByteBuf(ByteBufAllocator.DEFAULT, fmtMaxCap, 4096, target, POOL);
     }
 
     @Test
     public void basicTest00() {
-        ByteBuf byteBuf = allocator.pooledBuffer(111);
+        ByteBuf byteBuf = this.pooledBuffer(111);
         assert byteBuf.capacity() == 128;
         assert !byteBuf.isDirect();
     }
 
     @Test
     public void basicTest01() {
-        ByteBuf byteBuf = allocator.pooledBuffer(111);
+        ByteBuf byteBuf = this.pooledBuffer(111);
         assert byteBuf.capacity() == 128;
         assert byteBuf.toString().startsWith("PooledByteBuf[rMark=");
     }
 
     @Test
     public void basicTest02() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
 
@@ -66,13 +57,13 @@ public class PooledByteBufTest {
     @Test
     public void basicTest03() {
         byte[] cacheData = RandomUtils.nextBytes(8192);
-        ByteBuf srcBuf = allocator.pooledBuffer(1024);
+        ByteBuf srcBuf = this.pooledBuffer(1024);
         assert srcBuf.writeBytes(cacheData) == 1024;
     }
 
     @Test
     public void basicTest04() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
         data.flip();
 
@@ -88,7 +79,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeByte_1_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
 
         byteBuf.writeByte((byte) 1);
         byteBuf.writeByte((byte) 2);
@@ -131,7 +122,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeByte_1_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -178,7 +169,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBytes_1_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
 
@@ -219,7 +210,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBytes_1_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -265,7 +256,7 @@ public class PooledByteBufTest {
     @Test
     public void writeBytes_2_1() {
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3 });
         byteBuf.markWriter();
@@ -298,7 +289,7 @@ public class PooledByteBufTest {
     @Test
     public void writeBytes_2_2() {
         byte[] arrayRead = new byte[6];
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -334,7 +325,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBytes_3_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
 
         assert byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 }, 1, 2) == 2;
         byteBuf.markWriter();
@@ -362,7 +353,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBytes_3_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -395,7 +386,7 @@ public class PooledByteBufTest {
     @Test
     public void writeBytes_4_1() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -424,7 +415,7 @@ public class PooledByteBufTest {
     @Test
     public void writeBytes_4_2() {
         byte[] array = new byte[4];
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -456,7 +447,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuffer_1_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         ByteBuffer data = ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 });
 
         assert data.position() == 0;
@@ -487,7 +478,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuffer_1_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -522,7 +513,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuffer_2_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
@@ -593,7 +584,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuffer_2_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -669,7 +660,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuffer_3_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.writeBuffer(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
@@ -686,7 +677,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuffer_3_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -708,7 +699,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuf_1_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         ByteBuf data = defaultWrap(new byte[] { 1, 2, 3, 4 });
 
         assert data.readableBytes() == 4;
@@ -743,7 +734,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuf_1_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -787,7 +778,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuf_2_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -796,7 +787,7 @@ public class PooledByteBufTest {
         byteBuf.writeBuffer(defaultWrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
-        ByteBuf alloc1 = allocator.pooledBuffer(4);
+        ByteBuf alloc1 = this.pooledBuffer(4);
         assert alloc1.readableBytes() == 0;
         assert alloc1.writableBytes() == 4;
         assert byteBuf.getBuffer(0, alloc1) == 4;
@@ -829,7 +820,7 @@ public class PooledByteBufTest {
         assert byteBuf.asByteArray()[2] == 3;
         assert byteBuf.asByteArray()[3] == 4;
 
-        ByteBuf alloc2 = allocator.pooledBuffer(4);
+        ByteBuf alloc2 = this.pooledBuffer(4);
         assert byteBuf.readBuffer(alloc2) == 4;
         alloc2.markWriter();
         assert alloc2.asByteArray()[0] == 1;
@@ -838,7 +829,7 @@ public class PooledByteBufTest {
         assert alloc2.asByteArray()[3] == 4;
 
         byteBuf.resetReader();
-        ByteBuf alloc3 = allocator.pooledBuffer(4);
+        ByteBuf alloc3 = this.pooledBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
         alloc3.skipWritableBytes(1);
@@ -862,7 +853,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeBuf_2_2() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4);
+        ByteBuf byteBuf = this.pooledBuffer(4);
         byteBuf.skipWritableBytes(2);
         byteBuf.markWriter();
         byteBuf.skipReadableBytes(2);
@@ -871,7 +862,7 @@ public class PooledByteBufTest {
         byteBuf.writeBuffer(defaultWrap(new byte[] { 1, 2, 3, 4 }));
         byteBuf.markWriter();
 
-        ByteBuf alloc1 = allocator.pooledBuffer(4);
+        ByteBuf alloc1 = this.pooledBuffer(4);
         assert alloc1.readableBytes() == 0;
         assert alloc1.writableBytes() == 4;
         assert byteBuf.getBuffer(0, alloc1) == 4;
@@ -904,7 +895,7 @@ public class PooledByteBufTest {
         assert byteBuf.asByteArray()[2] == 3;
         assert byteBuf.asByteArray()[3] == 4;
 
-        ByteBuf alloc2 = allocator.pooledBuffer(4);
+        ByteBuf alloc2 = this.pooledBuffer(4);
         assert byteBuf.readBuffer(alloc2) == 4;
         alloc2.markWriter();
         assert alloc2.asByteArray()[0] == 1;
@@ -913,7 +904,7 @@ public class PooledByteBufTest {
         assert alloc2.asByteArray()[3] == 4;
 
         byteBuf.resetReader();
-        ByteBuf alloc3 = allocator.pooledBuffer(4);
+        ByteBuf alloc3 = this.pooledBuffer(4);
         assert alloc3.readableBytes() == 0;
         assert alloc3.writableBytes() == 4;
         alloc3.skipWritableBytes(1);
@@ -937,7 +928,7 @@ public class PooledByteBufTest {
 
     @Test
     public void freeTest01() {
-        ByteBuf byteBuf = allocator.pooledBuffer(111);
+        ByteBuf byteBuf = this.pooledBuffer(111);
         byteBuf.free();
 
         try {
@@ -957,7 +948,7 @@ public class PooledByteBufTest {
 
     @Test
     public void copyTest01() throws NoSuchAlgorithmException {
-        PooledByteBuf byteBuf1 = (PooledByteBuf) allocator.pooledBuffer(12);
+        PooledByteBuf byteBuf1 = (PooledByteBuf) this.pooledBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
 
         PooledByteBuf byteBuf2 = byteBuf1.copy();
@@ -972,7 +963,7 @@ public class PooledByteBufTest {
 
     @Test
     public void copyTest02() {
-        PooledByteBuf byteBuf1 = (PooledByteBuf) allocator.pooledBuffer(12);
+        PooledByteBuf byteBuf1 = (PooledByteBuf) this.pooledBuffer(12);
         byteBuf1.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf1.markWriter();
 
@@ -990,17 +981,17 @@ public class PooledByteBufTest {
     @Test
     public void errorTest01() {
         try {
-            allocator.pooledBuffer(-1);
+            this.pooledBuffer(-1);
             assert false;
         } catch (IllegalArgumentException e) {
-            assert e.getMessage().equals("capacity: -1 (expected: >= 0)");
+            assert e.getMessage().equals("capacity: -1 (expected: > 0)");
         }
     }
 
     @Test
     public void errorTest02() {
         try {
-            ByteBuf byteBuf = allocator.pooledBuffer(4);
+            ByteBuf byteBuf = this.pooledBuffer(4);
             byteBuf.getByte(0);
             assert false;
         } catch (IndexOutOfBoundsException e) {
@@ -1008,7 +999,7 @@ public class PooledByteBufTest {
         }
 
         try {
-            ByteBuf byteBuf = allocator.pooledBuffer(4);
+            ByteBuf byteBuf = this.pooledBuffer(4);
             byteBuf.writeByte((byte) 1);
             byteBuf.getByte(0);
             assert false;
@@ -1020,7 +1011,7 @@ public class PooledByteBufTest {
     @Test
     public void errorTest03() {
         try {
-            ByteBuf byteBuf = allocator.pooledBuffer(4);
+            ByteBuf byteBuf = this.pooledBuffer(4);
             byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
             byteBuf.markWriter();
             byteBuf.readInt64();
@@ -1034,7 +1025,7 @@ public class PooledByteBufTest {
     public void writeStringTest01() {
         byte[] date = "aaa\nbbb\nccc\n".getBytes(StandardCharsets.US_ASCII);
 
-        ByteBuf byteBuf = allocator.pooledBuffer(1024);
+        ByteBuf byteBuf = this.pooledBuffer(1024);
         byteBuf.writeBytes(date);
         byteBuf.markWriter();
 
@@ -1049,7 +1040,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeStringTest02() {
-        ByteBuf byteBuf = allocator.pooledBuffer(1024);
+        ByteBuf byteBuf = this.pooledBuffer(1024);
 
         byteBuf.writeBytes("abc1\r\n".getBytes());
         byteBuf.markWriter();
@@ -1076,7 +1067,7 @@ public class PooledByteBufTest {
 
     @Test
     public void writeStringTest03() {
-        ByteBuf byteBuf = allocator.pooledBuffer(10);
+        ByteBuf byteBuf = this.pooledBuffer(10);
 
         byteBuf.writeBytes("1234\r\n".getBytes());
         byteBuf.markWriter();
@@ -1105,7 +1096,7 @@ public class PooledByteBufTest {
 
     @Test
     public void pooledWriteBytes_1() {
-        ByteBuf byteBuf = allocator.pooledBuffer(4, 10);
+        ByteBuf byteBuf = this.pooledBuffer(4, 10);
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         byteBuf.markWriter();
@@ -1133,11 +1124,5 @@ public class PooledByteBufTest {
 
         assert byteBuf.readByte() == 10;
         byteBuf.markReader();
-    }
-
-    @Test
-    public void pooledConfig_1() {
-        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.pooledBuffer(4);
-
     }
 }

@@ -51,13 +51,11 @@ public class ByteBufUtils {
         String memType = SystemUtils.getSystemProperty("neta.bytebuf.mem", isDirect() ? "direct" : "heap");
         String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(4 * 1024));
         String initialSize = SystemUtils.getSystemProperty("neta.bytebuf.initialSize", String.valueOf(4 * 1024));
-        String poolPageSize = SystemUtils.getSystemProperty("neta.bytebuf.poolPageSize", String.valueOf(4 * 1024));
 
         int sliceSizeByDefault = Integer.parseInt(sliceSize);
         int initialCapacityByDefault = Integer.parseInt(initialSize);
-        int poolPageSizeByDefault = Integer.parseInt(poolPageSize);
 
-        UNPOOLED_HEAP_ALLOCATOR = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault, poolPageSizeByDefault) {
+        UNPOOLED_HEAP_ALLOCATOR = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
             @Override
             public boolean isDirect() {
                 return false;
@@ -68,7 +66,7 @@ public class ByteBufUtils {
                 return ByteBuffer.allocate(capacity);
             }
         };
-        POOLED_HEAP_ALLOCATOR = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault, poolPageSizeByDefault) {
+        POOLED_HEAP_ALLOCATOR = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
             @Override
             public boolean isDirect() {
                 return false;
@@ -79,7 +77,7 @@ public class ByteBufUtils {
                 return ByteBuffer.allocate(capacity);
             }
         };
-        UNPOOLED_DIRECT_ALLOCATOR = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault, poolPageSizeByDefault) {
+        UNPOOLED_DIRECT_ALLOCATOR = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
             @Override
             public boolean isDirect() {
                 return true;
@@ -90,7 +88,7 @@ public class ByteBufUtils {
                 return ByteBuffer.allocateDirect(capacity);
             }
         };
-        POOLED_DIRECT_ALLOCATOR = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault, poolPageSizeByDefault) {
+        POOLED_DIRECT_ALLOCATOR = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
             @Override
             public boolean isDirect() {
                 return true;

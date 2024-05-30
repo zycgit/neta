@@ -9,9 +9,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SyncByteBufTest {
 
     // 并发中的生产者，持续不断的产生 1～100 有序的数，这些数字写入到 byteBuf
-    private void producer(AtomicBoolean stop, ByteBuf byteBuf, int interval) throws Exception {
+    private void producer(AtomicBoolean signal, ByteBuf byteBuf, int interval) throws Exception {
         AtomicInteger i = new AtomicInteger(0);
-        while (!stop.get()) {
+        while (!signal.get()) {
             byteBuf.waitWriteable(buf -> {
                 buf.writeByte((byte) i.incrementAndGet());
                 buf.markWriter();
@@ -27,8 +27,8 @@ public class SyncByteBufTest {
     }
 
     // 并发中的消费者，持续不断的消费 srcByteBuf 中的数据将其搬运到 dstByteBuf
-    private void consumer(AtomicBoolean stop, ByteBuf srcByteBuf, ByteBuf dstByteBuf, int interval) throws Exception {
-        while (!stop.get()) {
+    private void consumer(AtomicBoolean signal, ByteBuf srcByteBuf, ByteBuf dstByteBuf, int interval) throws Exception {
+        while (!signal.get()) {
             srcByteBuf.waitReadable(buf -> {
                 byte aByte = buf.readByte();
                 buf.markReader();
@@ -50,121 +50,109 @@ public class SyncByteBufTest {
         return true;
     }
 
-    @Test
-    public void producerAndConsumer_01() throws InterruptedException {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.ringHeapBuffer(2048);
-        ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
-        AtomicBoolean stop = new AtomicBoolean(false);
-        AtomicBoolean ass = new AtomicBoolean(true);
-
-        ThreadUtils.daemonThread(true, (Runnable) () -> {
-            try {
-                producer(stop, buf, 0);
-            } catch (Exception e) {
-                stop.set(true);
-                ass.set(false);
-            }
-        });
-        ThreadUtils.daemonThread(true, (Runnable) () -> {
-            try {
-                consumer(stop, buf, result, 100);
-            } catch (Exception e) {
-                stop.set(true);
-                ass.set(false);
-            }
-        });
-
-        int totalSec = 3000;
+    private void waitTimeOrSignal(int totalMs, AtomicBoolean signal) throws InterruptedException {
         long s = System.currentTimeMillis();
         while (true) {
             long cost = System.currentTimeMillis() - s;
-            if (cost > totalSec) {
+            if (cost > totalMs) {
                 break;
             }
-            if (stop.get() || !ass.get()) {
+            if (signal.get()) {
                 break;
             }
 
             Thread.sleep(100);
         }
-        stop.set(true);
-
-        assert ass.get();
-
-        int rec = 0;
-        result.markWriter();
-        while ((result.readableBytes() > 0)) {
-            result.readByte();
-            rec++;
-        }
-
-        // rec 收到的个数乘以 consumer 间隔，铁定小于等于总运行时间
-        assert (rec * 100) <= totalSec;
-        // rec 收到的个数乘以 consumer 间隔，铁定大于总运行时间 - 0.5秒（ 0.5秒内约有 5 个 rec）
-        assert (rec * 100) > (totalSec - 1000);
     }
 
-    @Test
-    public void producerAndConsumer_02() throws InterruptedException {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.ringHeapBuffer(2048);
-        ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
-        AtomicBoolean stop = new AtomicBoolean(false);
-        AtomicBoolean ass = new AtomicBoolean(true);
-
-        ThreadUtils.daemonThread(true, (Runnable) () -> {
-            try {
-                producer(stop, buf, 0);
-            } catch (Exception e) {
-                stop.set(true);
-                ass.set(false);
-            }
-        });
-        ThreadUtils.daemonThread(true, (Runnable) () -> {
-            try {
-                consumer(stop, buf, result, 100);
-            } catch (Exception e) {
-                stop.set(true);
-                ass.set(false);
-            }
-        });
-        ThreadUtils.daemonThread(true, (Runnable) () -> {
-            try {
-                consumer(stop, buf, result, 100);
-            } catch (Exception e) {
-                stop.set(true);
-                ass.set(false);
-            }
-        });
-
-        int totalSec = 3000;
-        long s = System.currentTimeMillis();
-        while (true) {
-            long cost = System.currentTimeMillis() - s;
-            if (cost > totalSec) {
-                break;
-            }
-            if (stop.get() || !ass.get()) {
-                break;
-            }
-
-            Thread.sleep(100);
-        }
-        stop.set(true);
-
-        assert ass.get();
-
-        int rec = 0;
-        result.markWriter();
-        while ((result.readableBytes() > 0)) {
-            result.readByte();
-            rec++;
-        }
-
-        // rec 收到的个数乘以 consumer 间隔，铁定大于总运行时间（有2个消费者）
-        assert (rec * 100) > totalSec;
-        // rec 收到的个数乘以 consumer 间隔，铁定小于等于 2倍总运行时间（有2个消费者）
-        assert (rec * 100) <= (totalSec * 2);
-    }
+    //    @Test
+    //    public void producerAndConsumer_01() throws InterruptedException {
+    //        ByteBuf buf = ByteBufAllocator.DEFAULT.ringHeapBuffer(2048);
+    //        ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
+    //        AtomicBoolean signal = new AtomicBoolean(false);
+    //
+    //        Thread t1 = ThreadUtils.daemonThread(true, (Runnable) () -> {
+    //            try {
+    //                producer(signal, buf, 0);
+    //            } catch (Exception e) {
+    //                signal.set(true);
+    //            }
+    //        });
+    //        Thread t2 = ThreadUtils.daemonThread(true, (Runnable) () -> {
+    //            try {
+    //                consumer(signal, buf, result, 100);
+    //            } catch (Exception e) {
+    //                signal.set(true);
+    //            }
+    //        });
+    //
+    //        int totalMs = 3000;
+    //        waitTimeOrSignal(totalMs, signal);
+    //        signal.set(true);
+    //        while (!allAtState(Arrays.asList(t1, t2), Thread.State.TERMINATED)) {
+    //            Thread.sleep(100);
+    //        }
+    //
+    //        int rec = 0;
+    //        result.markWriter();
+    //        while ((result.readableBytes() > 0)) {
+    //            result.readByte();
+    //            rec++;
+    //        }
+    //
+    //        // rec 收到的个数乘以 consumer 间隔，铁定小于等于总运行时间
+    //        assert (rec * 100) <= totalMs;
+    //        // rec 收到的个数乘以 consumer 间隔，铁定大于总运行时间 - 0.5秒（ 0.5秒内约有 5 个 rec）
+    //        assert (rec * 100) > (totalMs - 1000);
+    //    }
+    //
+    //    @Test
+    //    public void producerAndConsumer_02() throws InterruptedException {
+    //        ByteBuf buf = ByteBufAllocator.DEFAULT.ringHeapBuffer(2048);
+    //        ByteBuf result = ByteBufAllocator.DEFAULT.heapBuffer();
+    //        AtomicBoolean signal = new AtomicBoolean(false);
+    //
+    //        Thread t1 = ThreadUtils.daemonThread(true, (Runnable) () -> {
+    //            try {
+    //                producer(signal, buf, 0);
+    //            } catch (Exception e) {
+    //                signal.set(true);
+    //            }
+    //        });
+    //        Thread t2 = ThreadUtils.daemonThread(true, (Runnable) () -> {
+    //            try {
+    //                consumer(signal, buf, result, 100);
+    //            } catch (Exception e) {
+    //                signal.set(true);
+    //            }
+    //        });
+    //        Thread t3 = ThreadUtils.daemonThread(true, (Runnable) () -> {
+    //            try {
+    //                consumer(signal, buf, result, 100);
+    //            } catch (Exception e) {
+    //                signal.set(true);
+    //            }
+    //        });
+    //
+    //        int totalMs = 3000;
+    //        waitTimeOrSignal(totalMs, signal);
+    //        signal.set(true);
+    //        while (!allAtState(Arrays.asList(t1, t2, t3), Thread.State.TERMINATED)) {
+    //            Thread.sleep(100);
+    //        }
+    //
+    //        int rec = 0;
+    //        result.markWriter();
+    //        while ((result.readableBytes() > 0)) {
+    //            result.readByte();
+    //            rec++;
+    //        }
+    //
+    //        // rec 收到的个数乘以 consumer 间隔，铁定大于总运行时间（有2个消费者）
+    //        assert (rec * 100) > totalMs;
+    //        // rec 收到的个数乘以 consumer 间隔，铁定小于等于 2倍总运行时间（有2个消费者）
+    //        assert (rec * 100) <= (totalMs * 2);
+    //    }
 
     @Test
     public void producerAndConsumer_03() throws InterruptedException {

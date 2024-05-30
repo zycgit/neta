@@ -35,7 +35,6 @@ class BufferPool {
     private final   int                  maximumChunkCount;
     private final   int                  memoryChunkSize;
     private         long                 memoryCapacity;
-    private final   BufferAllocator      allocator;
     private final   Map<Integer, Buffer> bufferPool;
     //
     protected final BufferArena          qInit;// 000%~025%
@@ -46,24 +45,22 @@ class BufferPool {
     protected final BufferArena          q100; // 100%~MAX
     protected final List<BufferArena>    arenaList;
 
-    public BufferPool(int pageSize, BufferAllocator allocator) {
-        this(pageSize, 0, -1, 12, allocator);
+    public BufferPool(int pageSize) {
+        this(pageSize, -1, 12);
     }
 
-    public BufferPool(int pageSize, int minimumChunkCount, int maximumChunkCount, BufferAllocator allocator) {
-        this(pageSize, minimumChunkCount, maximumChunkCount, 12, allocator);
+    public BufferPool(int pageSize, int maximumChunkCount) {
+        this(pageSize, maximumChunkCount, 12);
     }
 
-    public BufferPool(int pageSize, int minimumChunkCount, int maximumChunkCount, int buddyTreeHeight, BufferAllocator allocator) {
+    public BufferPool(int pageSize, int maximumChunkCount, int buddyTreeHeight) {
         if (maximumChunkCount != -1) {
             ObjectUtils.assertTrue(maximumChunkCount > 0, "if config maximumChunkCount, greater than 0.");
-            ObjectUtils.assertTrue(minimumChunkCount <= maximumChunkCount, "chunkCount number must minimum <= maximum.");
         }
         this.pageSize = pageSize;
         this.buddyTreeHeight = buddyTreeHeight;
         this.maximumChunkCount = maximumChunkCount;
         this.memoryChunkSize = (int) Math.pow(2, buddyTreeHeight);
-        this.allocator = allocator;
         this.bufferPool = new ConcurrentHashMap<>();
         Lock shareLock = new ReentrantLock(false);
 
@@ -89,10 +86,6 @@ class BufferPool {
         this.arenaList.add(this.q000);
         this.arenaList.add(this.qInit);
         this.arenaList.add(this.q075);
-
-        for (int i = 0; i < minimumChunkCount; i++) {
-            initChunkPool();
-        }
     }
 
     public int getMemPageSize() {
@@ -100,7 +93,7 @@ class BufferPool {
     }
 
     public long getMemChunkSize() {
-        return this.memoryChunkSize;
+        return this.pageSize * this.memoryChunkSize;
     }
 
     public long getMemCapacity() {
@@ -109,9 +102,9 @@ class BufferPool {
 
     public long getMemMaxCapacity() {
         if (this.maximumChunkCount == -1) {
-            return Long.MAX_VALUE;
+            return -1;
         } else {
-            return (long) this.maximumChunkCount * (long) this.pageSize * (long) Math.pow(2, this.buddyTreeHeight);
+            return (long) this.maximumChunkCount * this.getMemChunkSize();
         }
     }
 
@@ -128,10 +121,10 @@ class BufferPool {
         return new BufferTarget(this.getMemPageSize(), pages, memory);
     }
 
-    public Buffer requestBuffer(int capacity) {
+    public Buffer requestBuffer(int capacity, BufferAllocator alloc) {
         ObjectUtils.checkPositive(capacity, "capacity");
         if (capacity > this.memoryChunkSize) {
-
+            return new BufferWrap(alloc.jvmBuffer(capacity));
         }
 
         for (BufferArena arena : this.arenaList) {
@@ -141,12 +134,12 @@ class BufferPool {
             }
         }
 
-        PageChunkSplit pages = initChunkPool().requestPages(capacity);
+        PageChunkSplit pages = initChunkPool(alloc).requestPages(capacity);
         return this.requestBuffer(pages);
     }
 
-    protected PageChunkPool initChunkPool() {
-        PageChunkPool pool = newAllocator();
+    protected PageChunkPool initChunkPool(BufferAllocator alloc) {
+        PageChunkPool pool = newAllocator(alloc);
         this.qInit.lockOffer(pool);
         return pool;
     }
@@ -161,14 +154,14 @@ class BufferPool {
         }
     }
 
-    protected synchronized PageChunkPool newAllocator() {
+    protected synchronized PageChunkPool newAllocator(BufferAllocator alloc) {
         if (this.maximumChunkCount > 0 && this.bufferPool.size() >= this.maximumChunkCount) {
             throw new OutOfMemoryPoolException("OutOfMemory the BufferPool maximum chunks " + this.maximumChunkCount + ", current is " + this.bufferPool.size());
         }
 
         int memAddress = this.newMemAddress();
         PageChunkPool pool = new PageChunkPool(memAddress, this.pageSize, this.buddyTreeHeight);
-        Buffer buffer = new BufferWrap(this.allocator.jvmBuffer(pool.getCapacity()));
+        Buffer buffer = new BufferWrap(alloc.jvmBuffer(pool.getCapacity()));
 
         this.bufferPool.put(memAddress, buffer);
         this.memoryCapacity = this.memoryCapacity + buffer.capacity();

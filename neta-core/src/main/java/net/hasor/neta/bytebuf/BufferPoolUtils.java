@@ -14,27 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
  * Memory pool utils
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 class BufferPoolUtils {
-    private static final Map<BufferAllocator, BufferPool> poolMap = new ConcurrentHashMap<>();
+    private static final ThreadLocal<BufferPool> cachePool = ThreadLocal.withInitial(() -> new BufferPool(64, 10, 12));
+    private static final BufferPool              pool      = new BufferPool(4096);
 
-    public static Buffer requestBuffer(int capacity, int pageSize, BufferAllocator allocator) {
-        BufferPool pool = poolMap.computeIfAbsent(allocator, bufferAllocator -> {
-            return new BufferPool(pageSize, allocator);
-        });
+    public static BufferPool getPool(int reqSize, BufferAllocator a) {
+        //        if (reqSize > cachePool.get().getMemChunkSize()) {
+        //
+        //        }
 
-        if (capacity > pool.getMemChunkSize()) {
-            return new BufferWrap(allocator.jvmBuffer(capacity));
-        } else {
-            return pool.requestBuffer(capacity);
-        }
+        return pool;//.computeIfAbsent(a, bufferAllocator -> new BufferPool(4096));
     }
-
 }

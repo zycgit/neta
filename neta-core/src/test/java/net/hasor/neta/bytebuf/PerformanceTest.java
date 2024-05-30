@@ -167,7 +167,10 @@ public class PerformanceTest {
 
     @Test
     public void performance_BufferPool() {
-        BufferPool pool = new BufferPool(1, 128, -1, ByteBuffer::allocate);
+        BufferPool pool = new BufferPool(1, -1);
+        for (int i = 0; i < 128; i++) {
+            pool.initChunkPool(ByteBuffer::allocate);
+        }
 
         AtomicBoolean exit = new AtomicBoolean(false);
         AtomicLong allocCnt = new AtomicLong(0);
@@ -179,7 +182,7 @@ public class PerformanceTest {
 
                 int num = 0;
                 while (!exit.get()) {
-                    Buffer buffer = pool.requestBuffer(randomInt[num++ % 1024]);
+                    Buffer buffer = pool.requestBuffer(randomInt[num++ % 1024], ByteBuffer::allocate);
                     if (buffer != null) {
                         allocCnt.incrementAndGet();
                         buffer.free();

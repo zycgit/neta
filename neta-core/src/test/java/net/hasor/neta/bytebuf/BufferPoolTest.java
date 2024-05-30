@@ -8,7 +8,7 @@ public class BufferPoolTest {
     @Test
     public void poolTest_01() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
+        BufferPool pool = new BufferPool(1, 1, 5) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();
@@ -27,7 +27,7 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(4);
+        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(4, ByteBuffer::allocate);
         assert buffer1.capacity() == 4;
         assert pool.getMemPageSize() == 1;
         assert pool.getMemMaxCapacity() == 32;
@@ -39,7 +39,7 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(8);
+        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(8, ByteBuffer::allocate);
         assert buffer2.capacity() == 8;
         assert pool.getMemPageSize() == 1;
         assert pool.getMemMaxCapacity() == 32;
@@ -51,7 +51,7 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer3 = (BufferTarget) pool.requestBuffer(8);
+        BufferTarget buffer3 = (BufferTarget) pool.requestBuffer(8, ByteBuffer::allocate);
         assert buffer3.capacity() == 8;
         assert pool.getMemPageSize() == 1;
         assert pool.getMemMaxCapacity() == 32;
@@ -63,7 +63,7 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer4 = (BufferTarget) pool.requestBuffer(8);
+        BufferTarget buffer4 = (BufferTarget) pool.requestBuffer(8, ByteBuffer::allocate);
         assert buffer4.capacity() == 8;
         assert pool.getMemPageSize() == 1;
         assert pool.getMemMaxCapacity() == 32;
@@ -75,7 +75,7 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer5 = (BufferTarget) pool.requestBuffer(4);
+        BufferTarget buffer5 = (BufferTarget) pool.requestBuffer(4, ByteBuffer::allocate);
         assert buffer5.capacity() == 4;
         assert pool.getMemPageSize() == 1;
         assert pool.getMemMaxCapacity() == 32;
@@ -131,14 +131,14 @@ public class BufferPoolTest {
     @Test
     public void poolTest_02() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
+        BufferPool pool = new BufferPool(1, 1, 5) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();
             }
         };
 
-        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(16);
+        BufferTarget buffer1 = (BufferTarget) pool.requestBuffer(16, ByteBuffer::allocate);
         assert buffer1.capacity() == 16;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -147,7 +147,7 @@ public class BufferPoolTest {
         assert pool.q075.getChunkCount() == 0;
         assert pool.q100.getChunkCount() == 0;
 
-        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(16);
+        BufferTarget buffer2 = (BufferTarget) pool.requestBuffer(16, ByteBuffer::allocate);
         assert buffer2.capacity() == 16;
         assert pool.qInit.getChunkCount() == 0;
         assert pool.q000.getChunkCount() == 0;
@@ -176,20 +176,20 @@ public class BufferPoolTest {
     @Test
     public void poolTest_03() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
+        BufferPool pool = new BufferPool(1, 1, 5) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();
             }
         };
 
-        pool.requestBuffer(1);
-        pool.requestBuffer(4);
-        pool.requestBuffer(16);
-        pool.requestBuffer(8);
+        pool.requestBuffer(1, ByteBuffer::allocate);
+        pool.requestBuffer(4, ByteBuffer::allocate);
+        pool.requestBuffer(16, ByteBuffer::allocate);
+        pool.requestBuffer(8, ByteBuffer::allocate);
 
         try {
-            BufferTarget buffer5 = (BufferTarget) pool.requestBuffer(3);
+            BufferTarget buffer5 = (BufferTarget) pool.requestBuffer(3, ByteBuffer::allocate);
             assert false;
         } catch (Exception e) {
             assert e.getMessage().equals("OutOfMemory the BufferPool maximum chunks 1, current is 1");
@@ -199,7 +199,7 @@ public class BufferPoolTest {
     @Test
     public void poolTest_04() {
         AtomicInteger integer = new AtomicInteger();
-        BufferPool pool = new BufferPool(1, 0, 1, 5, ByteBuffer::allocate) {
+        BufferPool pool = new BufferPool(1, 1, 5) {
             @Override
             protected int newMemAddress() {
                 return integer.incrementAndGet();
@@ -208,7 +208,7 @@ public class BufferPoolTest {
 
         assert pool.toString().startsWith("Chunk(s) at 0~25%:\n\tnone\nChunk(s) at 0~50%:\n\tnone\nChunk(s) at 25~75%:\n\tnone\nChunk(s) at 50~100%:\n\tnone\nChunk(s) at 75~100%:\n\tnone\nChunk(s) at 100%:\n\tnone");
 
-        pool.requestBuffer(4);
+        pool.requestBuffer(4, ByteBuffer::allocate);
         pool.toString(); // for Coverage
     }
 }

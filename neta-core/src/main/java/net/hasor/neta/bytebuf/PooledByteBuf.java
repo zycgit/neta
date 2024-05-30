@@ -22,16 +22,16 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 public class PooledByteBuf extends AbstractByteBuf {
-    protected     Buffer target;
-    private final int    initSize;
-    private final int    defaultPageSize;
-    private final int    extensionSize;
+    protected     Buffer     target;
+    private final BufferPool pool;
+    private final int        initSize;
+    private final int        extensionSize;
 
-    PooledByteBuf(ByteBufAllocator alloc, int maxCapacity, int extensionSize, int defaultPageSize, Buffer target) {
+    PooledByteBuf(ByteBufAllocator alloc, int maxCapacity, int extensionSize, Buffer target, BufferPool pool) {
         super(alloc, maxCapacity);
         this.target = target;
+        this.pool = pool;
         this.initSize = target.capacity();
-        this.defaultPageSize = defaultPageSize;
         this.extensionSize = extensionSize;
     }
 
@@ -53,7 +53,7 @@ public class PooledByteBuf extends AbstractByteBuf {
         Buffer toFreeTarget = null;
         try {
             int requestSize = this.writerIndex - this.markedReaderIndex;
-            Buffer extTarget = BufferPoolUtils.requestBuffer(evalSize(requestSize), this.defaultPageSize, this.alloc);
+            Buffer extTarget = this.pool.requestBuffer(evalSize(requestSize), this.alloc);
             toFreeTarget = extTarget;// when try failed, free requestBuffer.
 
             if (requestSize > 0) {
@@ -96,7 +96,7 @@ public class PooledByteBuf extends AbstractByteBuf {
         if (requestSize > this.capacity()) {
             Buffer toFreeTarget = null;
             try {
-                Buffer extTarget = BufferPoolUtils.requestBuffer(evalSize(requestSize), this.defaultPageSize, this.alloc);
+                Buffer extTarget = this.pool.requestBuffer(evalSize(requestSize), this.alloc);
                 toFreeTarget = extTarget;// when try failed, free requestBuffer.
 
                 ByteBuffer targetBuf = extTarget.getTarget().duplicate();
@@ -211,11 +211,11 @@ public class PooledByteBuf extends AbstractByteBuf {
     public PooledByteBuf copy() {
         checkFree();
 
-        Buffer target = BufferPoolUtils.requestBuffer(this.target.capacity(), this.defaultPageSize, this.alloc);
+        Buffer target = this.pool.requestBuffer(this.target.capacity(), this.alloc);
         ByteBuffer targetBuf = target.getTarget().duplicate();
         targetBuf.clear().position(target.getOffset());
         this._getBytes(this.markedReaderIndex, targetBuf, target.capacity());
-        PooledByteBuf byteBuf = new PooledByteBuf(this.alloc, this.getMaxCapacity(), this.extensionSize, this.defaultPageSize, target);
+        PooledByteBuf byteBuf = new PooledByteBuf(this.alloc, this.getMaxCapacity(), this.extensionSize, target, this.pool);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
