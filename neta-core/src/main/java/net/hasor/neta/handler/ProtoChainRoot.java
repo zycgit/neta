@@ -192,6 +192,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     @Override
     public synchronized Object[] onRcvMessage(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
         try {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
+
             if (this.layers.isEmpty()) {
                 return this.triggerRcvWithEmpty(protoCtx, rcvData);
             }
@@ -209,6 +212,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     public synchronized Object[] onRcvError(ProtoContext protoCtx, String stackName, Throwable rcvError) throws Throwable {
         try {
             protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG, rcvError);
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
+
             if (this.layers.isEmpty()) {
                 return this.triggerRcvWithEmpty(protoCtx, EMPTY);
             }
@@ -422,6 +428,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     @Override
     public synchronized Object[] onSndMessage(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
         try {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
+
             if (this.layers.isEmpty()) {
                 return sndData;
             }
@@ -439,6 +448,8 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     public synchronized Object[] onSndError(ProtoContext protoCtx, String stackName, Throwable sndError) throws Throwable {
         try {
             protoCtx.flash(ProtoInvocation.SND_ERROR_TAG, sndError);
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
 
             if (this.layers.isEmpty()) {
                 this.triggerSend(protoCtx);

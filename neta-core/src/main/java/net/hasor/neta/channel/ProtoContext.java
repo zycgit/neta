@@ -24,6 +24,8 @@ import java.io.IOException;
  * @version : 2023-09-24
  */
 public interface ProtoContext {
+    String CURRENT_PROTO_IN_RCV      = ProtoContext.class.getName() + "_CURRENT_PROTO_IN_RCV";
+    String CURRENT_PROTO_IN_SND      = ProtoContext.class.getName() + "_CURRENT_PROTO_IN_SND";
     String CURRENT_PROTO_STACK_NAME  = ProtoContext.class.getName() + "_CURRENT_PROTO_STACK_NAME";
     String CURRENT_PROTO_STACK_DEPTH = ProtoContext.class.getName() + "_CURRENT_PROTO_STACK_DEPTH";
 
@@ -57,4 +59,10 @@ public interface ProtoContext {
 
     /** Refresh the protocol stack, the event propagates backward from the current protocol layer */
     Future<?> flush() throws IOException;
+
+    /** Returns the pipeline mode is receive */
+    boolean isRcv();
+
+    /** Returns the pipeline mode is sent */
+    boolean isSnd();
 }

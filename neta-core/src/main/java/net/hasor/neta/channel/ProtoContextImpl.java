@@ -107,4 +107,16 @@ public class ProtoContextImpl implements ProtoContext {
             throw new UnsupportedOperationException();
         }
     }
+
+    @Override
+    public boolean isRcv() {
+        Object flash = this.flash(ProtoContext.CURRENT_PROTO_IN_RCV);
+        return flash != null && (boolean) flash;
+    }
+
+    @Override
+    public boolean isSnd() {
+        Object flash = this.flash(ProtoContext.CURRENT_PROTO_IN_SND);
+        return flash != null && (boolean) flash;
+    }
 }
