@@ -58,6 +58,18 @@ public class EmbeddedSoContext implements SoContext {
         return nextID.incrementAndGet();
     }
 
+    public static long lastChannelID() {
+        return nextID.get();
+    }
+
+    public static void resetChannelID() {
+        resetChannelID(0);
+    }
+
+    public static void resetChannelID(int idStart) {
+        nextID.set(idStart);
+    }
+
     @Override
     public SoConfig getConfig() {
         return this.config;

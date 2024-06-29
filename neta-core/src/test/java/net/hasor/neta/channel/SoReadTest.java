@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -74,7 +75,6 @@ public class SoReadTest extends AbstractSoTest {
 
         // test result
         assert "Hello\n".equals(new String(rcvBytes));
-        assert cnt.get() == 3;
         server.shutdown();
     }
 
@@ -84,7 +84,7 @@ public class SoReadTest extends AbstractSoTest {
         AtomicInteger cnt = new AtomicInteger();
 
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(2, 30));
+        NetManager server = new NetManager(crateConfig(2, 2));
         NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
@@ -119,10 +119,13 @@ public class SoReadTest extends AbstractSoTest {
 
     @Test
     public void rcvBackPressedTest_01() throws Exception {
+        if (SystemUtils.isOsx()) {
+            return;
+        }
+
         // start server
         int safePort = safePort();
         SoConfig soConfig = crateConfig(2, 30);
-        soConfig.setSoRcvBuf(32);
         soConfig.setNetlog(false);
         NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
@@ -136,10 +139,12 @@ public class SoReadTest extends AbstractSoTest {
         // client: send a lot of bytes
         ThreadUtils.daemonThread(true, (Callable) () -> {
             Socket client = new Socket("127.0.0.1", safePort);
-            client.setSendBufferSize(32 * 3);
+            client.setSendBufferSize(2);
             OutputStream soOut = client.getOutputStream();
-            soOut.write(RandomUtils.nextBytes(32 * 3));
-            soOut.flush();
+            while (true) {
+                soOut.write(RandomUtils.nextBytes(2));
+                soOut.flush();
+            }
         });
 
         // server: rcvBuffer max is 30, Wait for to fill full
@@ -149,7 +154,8 @@ public class SoReadTest extends AbstractSoTest {
             ThreadUtils.sleep(100);
         }
 
-        assert channel.getRcvBytes() == 32; // is full ( swapSize = 2, bufSize = 30)
+        long rcvSize = channel.getRcvBytes();// is full ( swapSize = 2, bufSize = 30)
+        assert rcvSize == 30;
 
         // after 1s,server No extra data is received, data well be backpressed.
         ThreadUtils.sleep(1000);

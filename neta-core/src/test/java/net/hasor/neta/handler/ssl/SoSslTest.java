@@ -120,6 +120,8 @@ public class SoSslTest extends AbstractSslTest {
             ThreadUtils.sleep(100);
         }
 
+        System.out.println(clientRcvData.get(0));
+        System.out.println(serverRcvData.get(0));
         assert clientRcvData.get(0).equals("Hello Client, this message using encryption.");
         assert serverRcvData.get(0).equals("Hello Server, this message using encryption.");
 

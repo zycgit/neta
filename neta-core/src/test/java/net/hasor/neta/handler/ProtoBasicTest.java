@@ -33,6 +33,7 @@ public class ProtoBasicTest extends AbstractStackTest {
                     .build();
         };
 
+        EmbeddedSoContext.resetChannelID(0);
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
 
@@ -40,12 +41,19 @@ public class ProtoBasicTest extends AbstractStackTest {
         channel.printStackTrace(new PrintStream(out));
 
         String data = "ChannelID  : 1,          Server(Active)\n" + //
-                "Local Addr :                   embedded\n" +       //
-                "Remote Addr:                   embedded\n" +       //
-                "┏━━━━━━━━━━━━━━━━━━━━ ↓ 0/500+ (SND) ━┓\n" +       //
-                "┃ L1 [↑ 0/500+,       ↓ 0/500+      ] ┃\n" +       //
-                "┗━━━━ ↑ 0/500+ (RCV) ━━━━━━━━━━━━━━━━━┛";
+                "Local Addr :                   embedded\n" + //
+                "Remote Addr:                   embedded\n" + //
+                "┏━━━━━━━━━━━━━━━━━━━━ ↓ 0/500+ (SND) ━┓\n" + //
+                "┃ L1 [↑ 0/500+,       ↓ 0/500+      ] ┃\n" + //
+                "┗━━━━ ↑ 0/500+ (RCV) ━━━━━━━━━━━━━━━━━┛\n";
 
-        assert out.toString().trim().equals(data);
+        if (!out.toString().trim().equals(data.trim())) {
+            System.out.println(out.toString().trim());
+            System.out.println("--");
+            System.out.println(data.trim());
+            assert false;
+        } else {
+            assert true;
+        }
     }
 }
