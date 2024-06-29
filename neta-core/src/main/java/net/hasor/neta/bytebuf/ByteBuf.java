@@ -39,6 +39,8 @@ import java.util.Objects;
  */
 public interface ByteBuf extends ByteChannel {
 
+    ByteBuf EMPTY = ByteBuf.wrap(new byte[0]);
+
     static ByteBuf wrap(byte[] bytes) {
         return wrap(bytes, false);
     }
@@ -80,12 +82,6 @@ public interface ByteBuf extends ByteChannel {
 
     //    /** 返回只读模式的 ByteBuf。只读模式的 如果底层 */
     //    ByteBuf asReadOnly();
-
-    /** 返回 ByteBuffer 形态，PooledNioByteBuf 不支持该方法 */
-    @Deprecated
-    default ByteBuffer asByteBuffer() {
-        throw new UnsupportedOperationException();
-    }
 
     /** 字节序 */
     ByteOrder order();

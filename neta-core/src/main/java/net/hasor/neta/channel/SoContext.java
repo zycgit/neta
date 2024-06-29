@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+
 import java.net.SocketAddress;
 
 /**
@@ -25,8 +27,8 @@ public interface SoContext {
     /** return global config. */
     SoConfig getConfig();
 
-    /** default {@link SoResManager} */
-    SoResManager getResourceManager();
+    /** default {@link ByteBufAllocator} */
+    ByteBufAllocator getByteBufAllocator();
 
     /** get remote address of the channel */
     SocketAddress getRemoteAddress(long channelID);

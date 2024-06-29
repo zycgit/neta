@@ -53,8 +53,14 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
             SocketAddress remoteAddress = this.asyncChannel.getRemoteAddress();
             logger.info("connected(" + channel.getChannelID() + ") L:" + localAddress + " -> R:" + remoteAddress);
 
-            this.protoStack.onActive(this.channel.protoCtx);
-            this.channel.rHandler.read();
+            if (!this.channel.isClose()) {
+                this.protoStack.onActive(this.channel.protoCtx);
+            }
+
+            if (!this.channel.isShutdownInput()) {
+                this.channel.rHandler.read();
+            }
+
             this.future.completed(this.channel);
         } catch (Throwable e) {
             logger.error("ERROR: Connect finish, but onActive failed.");

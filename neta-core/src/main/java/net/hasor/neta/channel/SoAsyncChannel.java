@@ -16,6 +16,7 @@
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 
 import java.io.Closeable;
 import java.io.IOException;
@@ -23,8 +24,6 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -35,27 +34,25 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 class SoAsyncChannel implements Closeable {
     private final AsynchronousSocketChannel channel;
-    private final List<ByteBuf>             resources;
     //
     private final Integer                   rTimeoutMs;
     private final Integer                   wTimeoutMs;
     private final AtomicBoolean             shutdownInputSignal;
     private final AtomicBoolean             shutdownOutputSignal;
+    private final ByteBufAllocator          allocator;
     private final ByteBuffer                rcvSwapBuffer;
     //
     private       boolean                   ignoreReadEofFlag;
 
-    public SoAsyncChannel(AsynchronousSocketChannel channel, SoConfig soConfig) {
+    public SoAsyncChannel(AsynchronousSocketChannel channel, ByteBufAllocator allocator, SoConfig soConfig) {
         this.channel = channel;
-        this.resources = new ArrayList<>();
         this.rTimeoutMs = soConfig.getSoReadTimeoutMs();
         this.wTimeoutMs = soConfig.getSoWriteTimeoutMs();
         this.shutdownInputSignal = new AtomicBoolean(false);
         this.shutdownOutputSignal = new AtomicBoolean(false);
 
-        ByteBufAllocator bufAllocator = soConfig.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : soConfig.getBufAllocator();
-        this.rcvSwapBuffer = this.newByteBuf(bufAllocator, soConfig.getRcvSwapBuf()).asByteBuffer();
-
+        this.allocator = allocator;
+        this.rcvSwapBuffer = allocator.jvmBuffer(soConfig.getSoRcvBuf());
         this.ignoreReadEofFlag = false;
     }
 
@@ -129,17 +126,26 @@ class SoAsyncChannel implements Closeable {
         this.shutdownOutputSignal.set(true);
         this.channel.close();
 
-        while (!this.resources.isEmpty()) {
-            ByteBuf byteBuf = this.resources.get(0);
-            this.resources.remove(0);
-            byteBuf.free();
+        if (ByteBufUtils.CLEANER != null) {
+            ByteBufUtils.CLEANER.freeDirectBuffer(this.rcvSwapBuffer);
         }
-
     }
 
-    /** Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data. */
-    public ByteBuffer getRcvBuffer() {
-        return this.rcvSwapBuffer;
+    /** pull data from {@link ByteBuffer} type to new {@link ByteBuf}. */
+    public ByteBuf pullSwapBuffer(int pullSize) {
+        if (pullSize <= 0) {
+            return ByteBuf.EMPTY;
+        }
+
+        this.rcvSwapBuffer.flip();
+        if (!this.rcvSwapBuffer.hasRemaining()) {
+            return ByteBuf.EMPTY;
+        }
+
+        ByteBuf byteBuf = this.allocator.buffer(pullSize);
+        byteBuf.writeBuffer(this.rcvSwapBuffer);
+        byteBuf.markWriter();
+        return byteBuf;
     }
 
     /** Reads a sequence of bytes from this channel into the given buffer. */
@@ -171,25 +177,5 @@ class SoAsyncChannel implements Closeable {
 
     public void connect(InetSocketAddress remoteAddr, SoContextImpl context, SoConnectCompletionHandler handler) {
         this.channel.connect(remoteAddr, context, handler);
-    }
-
-    private ByteBuf newByteBuf(ByteBufAllocator bufAllocator, int capacity) {
-        ByteBuf byteBuf;
-        if (bufAllocator.isDirect()) {
-            if (capacity < 0) {
-                byteBuf = bufAllocator.directBuffer();
-            } else {
-                byteBuf = bufAllocator.directBuffer(capacity);
-            }
-        } else {
-            if (capacity < 0) {
-                byteBuf = bufAllocator.heapBuffer();
-            } else {
-                byteBuf = bufAllocator.heapBuffer(capacity);
-            }
-        }
-
-        this.resources.add(byteBuf);
-        return byteBuf;
     }
 }

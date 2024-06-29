@@ -66,6 +66,10 @@ class SoSndContext {
         } while (data != null);
     }
 
+    public boolean hasData() {
+        return !this.wQueue.isEmpty();
+    }
+
     /**
      * peek data form wQueue
      */
@@ -96,4 +100,5 @@ class SoSndContext {
     public Future<?> submitTask(DefaultSoTask task, Object context) {
         return this.context.submitSoTask(this.channelID, task, context);
     }
+
 }

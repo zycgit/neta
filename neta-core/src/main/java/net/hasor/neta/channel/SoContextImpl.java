@@ -20,6 +20,8 @@ import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.net.SocketAddress;
 import java.util.*;
@@ -38,6 +40,7 @@ class SoContextImpl implements SoContext {
     private final        AtomicLong                 nextID = new AtomicLong(0);
     private final        SoConfig                   config;
     private final        NetManager                 manager;
+    private final        ByteBufAllocator           allocator;
     private final        ClassLoader                useClassLoader;
     private final        SoThreadFactory            useSoThreadFactory;
     //
@@ -45,7 +48,6 @@ class SoContextImpl implements SoContext {
     private final        ExecutorService            ioExecutor;
     private final        SoEventExecutor            defaultTaskExecutor;
     private final        Map<Long, SoEventExecutor> specialTaskExecutor;
-    private final        SoResManager               bufferManager;
     //
     private volatile     boolean                    closeStatus;
     private final        ReentrantReadWriteLock     closeSyncLock;
@@ -55,6 +57,7 @@ class SoContextImpl implements SoContext {
 
     public SoContextImpl(SoConfig config, NetManager manager) {
         this.manager = manager;
+        this.allocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : config.getBufAllocator();
         this.config = Objects.requireNonNull(config);
         this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
 
@@ -86,7 +89,6 @@ class SoContextImpl implements SoContext {
         this.specialTaskExecutor = new ConcurrentHashMap<>();
 
         //
-        this.bufferManager = new DefaultSoResManager(this.config);
         this.closeStatus = false;
         this.closeSyncLock = new ReentrantReadWriteLock(true);
         this.channelMap = new ConcurrentHashMap<>();
@@ -104,8 +106,8 @@ class SoContextImpl implements SoContext {
     }
 
     @Override
-    public SoResManager getResourceManager() {
-        return this.bufferManager;
+    public ByteBufAllocator getByteBufAllocator() {
+        return this.allocator;
     }
 
     public int getConnectTimeoutMs() {
@@ -309,12 +311,11 @@ class SoContextImpl implements SoContext {
     }
 
     /** receiving new data */
-    public void notifyChannelRcv(long channelID, int dataSize, int retryCnt) {
+    public void notifyChannelRcv(long channelID, ByteBuf rcvBytes) {
         SoChannel<?> channel = this.channelMap.get(channelID);
         if (channel != null) {
             if (channel.isClient() || channel.isServer()) {
-                NetChannel netChannel = (NetChannel) channel;
-                netChannel.notifyRcv(dataSize, retryCnt);
+                ((NetChannel) channel).notifyRcv(rcvBytes);
             } else {
                 throw new UnsupportedOperationException(); // Can't happen
             }

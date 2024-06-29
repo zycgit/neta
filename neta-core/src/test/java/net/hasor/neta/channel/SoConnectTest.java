@@ -46,7 +46,7 @@ public class SoConnectTest extends AbstractSoTest {
 
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
-        NetManager neta = new NetManager(crateConfig(2, 32));
+        NetManager neta = new NetManager(crateConfig(2, 30));
         Future<NetChannel> future = neta.connect(safePort, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
@@ -80,7 +80,7 @@ public class SoConnectTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
 
-        NetManager neta = new NetManager(crateConfig(2, 32));
+        NetManager neta = new NetManager(crateConfig(2, 30));
         Future<NetChannel> future = neta.connect(safePort, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {

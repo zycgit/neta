@@ -26,7 +26,6 @@ import java.io.IOException;
 public interface ProtoContext {
     String CURRENT_PROTO_STACK_NAME  = ProtoContext.class.getName() + "_CURRENT_PROTO_STACK_NAME";
     String CURRENT_PROTO_STACK_DEPTH = ProtoContext.class.getName() + "_CURRENT_PROTO_STACK_DEPTH";
-    String SO_CHANNEL_RETRY_CNT      = ProtoContext.class.getName() + "SO_CHANNEL_RETRY_CNT";
 
     /** global config */
     SoConfig getConfig();
@@ -42,16 +41,6 @@ public interface ProtoContext {
 
     /** bind attachment to {@link ProtoContext} */
     <T> T context(Class<T> attachmentType, T attachment);
-
-    /** receive buffer full */
-    default boolean isRcvFull() {
-        Object retryCnt = flash(SO_CHANNEL_RETRY_CNT);
-        if (retryCnt == null) {
-            return false;
-        } else {
-            return (int) retryCnt > 0;
-        }
-    }
 
     /** Get flash for current ProtoStack event. */
     <T> T flash(String key);

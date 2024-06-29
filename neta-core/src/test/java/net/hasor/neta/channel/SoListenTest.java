@@ -32,7 +32,7 @@ public class SoListenTest extends AbstractSoTest {
     public void acceptTest_1() throws Exception {
         // start server
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
 
         Socket client = new Socket("127.0.0.1", safePort);
@@ -58,7 +58,7 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void suspendTest_1() throws Exception {
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
 
         listen.suspend();
@@ -121,7 +121,7 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void acceptListener_2() throws Exception {
         AtomicInteger atomicListen = new AtomicInteger();
-        NetManager server = new NetManager(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort(), new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
@@ -152,7 +152,7 @@ public class SoListenTest extends AbstractSoTest {
     public void foundTest_1() throws Exception {
         // start server
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
 
         assert listen == server.findListen(safePort);

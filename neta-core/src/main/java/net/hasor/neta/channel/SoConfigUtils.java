@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.logging.Logger;
+
 import java.io.IOException;
 import java.nio.channels.NetworkChannel;
 
@@ -23,14 +25,24 @@ import java.nio.channels.NetworkChannel;
  * @version : 2023-09-24
  */
 class SoConfigUtils {
+    private static final Logger logger = Logger.getLogger(NetManager.class);
+
     public static void configListen(SoConfig config, NetworkChannel channel) throws IOException {
         Integer soRcvBuf = config.getSoRcvBuf();
         Integer soSndBuf = config.getSoSndBuf();
         if (soRcvBuf != null) {
-            channel.setOption(SoOptions.SO_RCVBUF, soRcvBuf);
+            try {
+                channel.setOption(SoOptions.SO_RCVBUF, soRcvBuf);
+            } catch (UnsupportedOperationException e) {
+                logger.warn("the platform does not support SO_RCVBUF");
+            }
         }
         if (soSndBuf != null) {
-            channel.setOption(SoOptions.SO_SNDBUF, soSndBuf);
+            try {
+                channel.setOption(SoOptions.SO_SNDBUF, soSndBuf);
+            } catch (UnsupportedOperationException e) {
+                logger.warn("the platform does not support SO_SNDBUF");
+            }
         }
         channel.setOption(SoOptions.SO_REUSEADDR, true);
     }
@@ -39,10 +51,18 @@ class SoConfigUtils {
         Integer soRcvBuf = config.getSoRcvBuf();
         Integer soSndBuf = config.getSoSndBuf();
         if (soRcvBuf != null) {
-            channel.setOption(SoOptions.SO_RCVBUF, soRcvBuf);
+            try {
+                channel.setOption(SoOptions.SO_RCVBUF, soRcvBuf);
+            } catch (UnsupportedOperationException e) {
+                logger.warn("the platform does not support SO_RCVBUF");
+            }
         }
         if (soSndBuf != null) {
-            channel.setOption(SoOptions.SO_SNDBUF, soSndBuf);
+            try {
+                channel.setOption(SoOptions.SO_SNDBUF, soSndBuf);
+            } catch (UnsupportedOperationException e) {
+                logger.warn("the platform does not support SO_SNDBUF");
+            }
         }
 
         if (Boolean.TRUE.equals(config.getSoKeepAlive())) {

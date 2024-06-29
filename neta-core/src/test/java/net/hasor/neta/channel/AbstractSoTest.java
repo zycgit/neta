@@ -54,11 +54,10 @@ public class AbstractSoTest {
         throw new SocketException("No ports are available");
     }
 
-    public static SoConfig crateConfig(int swapSize, int bufSize) {
+    public static SoConfig crateConfig(int sndSize, int rcvSize) {
         SoConfig config = new SoConfig();
         config.setNetlog(true);
-        config.setSwapBuf(swapSize, swapSize);
-        config.setLocalBuf(bufSize, bufSize);
+        config.setSoBufSize(rcvSize, sndSize);
 
         config.setSoReadTimeoutMs(1000);
         config.setSoWriteTimeoutMs(1000);

@@ -16,12 +16,12 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * send Handler
@@ -29,47 +29,43 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version : 2023-09-24
  */
 class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
-    private static final Logger          logger = Logger.getLogger(SoSndCompletionHandler.class);
-    private final        long            channelID;
-    private final        long            createdTime;
-    private volatile     SoHandlerStatus status;
-    private final        AtomicLong      counterBytes;
-    private volatile     int             lastSndSize;
+    private static final Logger                           logger = Logger.getLogger(SoSndCompletionHandler.class);
+    private final        long                             channelID;
+    private final        long                             createdTime;
+    private final        AtomicReference<SoHandlerStatus> status;
+    private final        AtomicLong                       counterBytes;
     //
-    private final        SoAsyncChannel  channel;
-    private final        SoContextImpl   context;
-    private final        ByteBuffer      swapBuffer;
-    private final        ByteBuf         sndBuffer;
+    private final        SoAsyncChannel                   channel;
+    private final        SoSndContext                     sndContext;
+    private final        SoContextImpl                    context;
+    private final        ByteBuffer                       sndSwapBuf;
 
-    private List<SoSndData> afterWorking;
-
-    public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext wContext) {
+    public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext sndContext) {
         this.channelID = channelID;
         this.createdTime = createdTime;
-        this.status = SoHandlerStatus.IDLE;
+        this.status = new AtomicReference<>(SoHandlerStatus.IDLE);
         this.counterBytes = new AtomicLong();
 
         this.channel = channel;
-        this.context = wContext.getContext();
+        this.sndContext = sndContext;
+        this.context = sndContext.getContext();
 
-        SoResManager rm = this.context.getResourceManager();
-        this.swapBuffer = rm.newSwapSndBuf();
-        this.sndBuffer = rm.newLocalSndBuf();
+        ByteBufAllocator allocator = this.context.getByteBufAllocator();
+        SoConfig soConfig = this.context.getConfig();
+        this.sndSwapBuf = allocator.jvmBuffer(soConfig.getSoSndBuf() != null ? soConfig.getSoSndBuf() : (16 * 1024));
     }
 
-    /** Java AIO cannot use {@link ByteBuffer}, so use {@link ByteBuffer} for swap data. */
-    public ByteBuffer getSwapBuffer() {
-        return this.swapBuffer;
+    public boolean tryLock() {
+        return this.status.compareAndSet(SoHandlerStatus.IDLE, SoHandlerStatus.PENDING);
     }
 
-    /** Enhanced {@link ByteBuffer}. */
-    public ByteBuf getSndBuffer() {
-        return this.sndBuffer;
+    public void freeLock() {
+        this.status.set(SoHandlerStatus.IDLE);
     }
 
     /** Returns this Handler status. */
     public SoHandlerStatus getStatus() {
-        return this.status;
+        return this.status.get();
     }
 
     /** Gets the number of bytes that have been sent. */
@@ -77,71 +73,63 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         return this.counterBytes.get();
     }
 
-    public void prepare(List<SoSndData> afterWorking) {
-        this.status = SoHandlerStatus.PENDING;
-        this.lastSndSize = 0;
-        this.afterWorking = afterWorking;
-        this.copyData();
-        this.status = SoHandlerStatus.WAITING;
+    public void doWrite(Runnable finishCallBack) {
+        if (this.sndContext.isEmpty()) {
+            finishCallBack.run();
+            return;
+        }
+
+        this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+            this.copyData();
+            this.writeData();
+        });
     }
 
-    private Future<?> submitTask(DefaultSoTask task) {
-        return this.context.submitSoTask(this.channelID, task, this);
+    private void copyData() {
+        // copy data from sndBuf to swapBuf
+        SoSndData sndData = this.sndContext.peekData();
+        this.sndSwapBuf.clear();
+        sndData.transferTo(this.sndSwapBuf);
+        this.sndSwapBuf.flip();
+
+        // when sndData finish, use async task to completed.
+        if (!sndData.hasReadable()) {
+            this.sndContext.popData();
+            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+                sndData.completed();
+            });
+        }
+    }
+
+    private void writeData() {
+        try {
+            this.status.set(SoHandlerStatus.WAITING);
+            if (!this.channel.write(this.sndSwapBuf, this.context, this)) {
+                this.status.set(SoHandlerStatus.IDLE);
+            }
+        } catch (Throwable e) {
+            handleException(e);
+        }
     }
 
     @Override
     public void completed(Integer result, SoContextImpl context) {
-        this.status = SoHandlerStatus.PENDING;
+        this.status.set(SoHandlerStatus.PENDING);
 
         if (logger.isDebugEnabled()) {
             logger.debug("snd(" + this.channelID + ") size:" + result);
         }
 
-        this.lastSndSize += result;
         this.counterBytes.addAndGet(result);
 
-        if (this.swapBuffer.hasRemaining()) {
-
-            // continue send data.
-            this.writeData();
-
-        } else if (this.sndBuffer.readableBytes() > 0) {
-
-            // continue send data.
+        if (this.sndSwapBuf.hasRemaining()) {
+            this.writeData(); // continue send data.
+        } else if (this.sndContext.hasData()) {
             this.copyData();
             this.writeData();
         } else {
-
-            SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.lastSndSize);
-            submitTask(cleanTask).onFinal(f -> {
-                this.status = SoHandlerStatus.IDLE;
-            });
+            this.status.set(SoHandlerStatus.IDLE);
         }
-    }
-
-    // copy data from sndBuf to swapBuf
-    private void copyData() {
-        this.swapBuffer.clear();
-        this.sndBuffer.readBuffer(this.swapBuffer);
-        this.sndBuffer.markReader();
-        this.swapBuffer.flip();
-    }
-
-    private void writeData() {
-        this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-            try {
-                this.status = SoHandlerStatus.WAITING;
-                boolean res = this.channel.write(this.swapBuffer, this.context, this);
-                if (!res) {
-                    SoSndCleanTask cleanTask = new SoSndCleanTask(this.channelID, this.afterWorking, this.lastSndSize, SoOutputCloseException.INSTANCE);
-                    submitTask(cleanTask).onFinal(ff -> {
-                        this.status = SoHandlerStatus.IDLE;
-                    });
-                }
-            } catch (Throwable e) {
-                handleException(e);
-            }
-        });
     }
 
     @Override
@@ -176,7 +164,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
         } else if (e instanceof ClosedChannelException) {
             if (this.channel.isShutdownOutput()) {
                 this.context.notifySndChannelError(this.channelID, SoOutputCloseException.INSTANCE);
-                this.status = SoHandlerStatus.IDLE;
+                this.status.set(SoHandlerStatus.IDLE);
                 return;
             } else {
                 finalMsg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
@@ -198,8 +186,18 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
         this.context.notifySndChannelError(this.channelID, finalErr);
         this.context.asyncUnsafeCloseChannel(this.channelID, finalMsg, finalErr);
-        submitTask(new SoSndCleanTask(this.channelID, this.afterWorking, this.lastSndSize, e)).onFinal(f -> {
-            this.status = SoHandlerStatus.IDLE;
-        });
+
+        while (!this.sndContext.isEmpty()) {
+            SoSndData sndData = this.sndContext.popData();
+            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+                sndData.failed(e);
+            });
+        }
+
+        this.status.set(SoHandlerStatus.IDLE);
+    }
+
+    private Future<?> submitTask(DefaultSoTask task) {
+        return this.context.submitSoTask(this.channelID, task, this);
     }
 }

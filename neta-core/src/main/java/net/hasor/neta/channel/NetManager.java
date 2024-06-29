@@ -81,7 +81,7 @@ public class NetManager extends AbstractNetManager {
         NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, initializer, this.context, options);
         this.context.openChannel(netListen, listen);
 
-        listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel));
+        listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel, this.context));
         logger.info("listen at " + listen);
         return netListen;
     }
@@ -120,8 +120,8 @@ public class NetManager extends AbstractNetManager {
             // aio Channel
             this.initChannelGroup();
             AsynchronousSocketChannel aioChannel = AsynchronousSocketChannel.open(this.channelGroup);
-            SoConfigUtils.configSocket(this.context.getConfig(), aioChannel);
-            asyncChannel = new SoAsyncChannel(aioChannel, this.config);
+            SoConfigUtils.configSocket(this.config, aioChannel);
+            asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator(), this.config);
 
             // init NetChannel
             long createdTime = System.currentTimeMillis();

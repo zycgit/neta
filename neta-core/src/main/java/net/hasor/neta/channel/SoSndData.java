@@ -15,7 +15,10 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
+
+import java.nio.ByteBuffer;
 
 /**
  * data packet
@@ -23,17 +26,31 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2023-09-24
  */
 class SoSndData {
-    public static final ByteBuf            EMPTY_DATA = ByteBuf.wrap(new byte[0]);
-    private final       long               dataSize;
-    private final       ByteBuf            data;
-    private final       Future<NetChannel> future;
-    private final       NetChannel         result;
+    private final long               dataSize;
+    private final ByteBuf[]          data;
+    private final Future<NetChannel> future;
+    private final NetChannel         result;
+    private       int                readIdx;
+    private       int                readIndexBytes;
 
-    public SoSndData(ByteBuf data, Future<NetChannel> future, NetChannel result) {
-        this.dataSize = data.readableBytes();
+    public SoSndData(ByteBuf[] data, Future<NetChannel> future, NetChannel result) {
+        this(dataSize(data), data, future, result);
+    }
+
+    public SoSndData(long sendSize, ByteBuf[] data, Future<NetChannel> future, NetChannel result) {
+        this.dataSize = sendSize;
         this.data = data;
         this.future = future;
         this.result = result;
+        this.readIdx = 0;
+    }
+
+    private static long dataSize(ByteBuf[] bufArray) {
+        long size = 0;
+        for (ByteBuf buf : bufArray) {
+            size += buf.readableBytes();
+        }
+        return size;
     }
 
     /**
@@ -47,16 +64,32 @@ class SoSndData {
      * packet has any data.
      */
     public boolean hasReadable() {
-        return this.data.readableBytes() > 0;
+        return this.readIdx < this.data.length;
+    }
+
+    public long readableBytes() {
+        return this.dataSize - this.readIndexBytes;
     }
 
     /**
      * copy packet data to {@link ByteBuf}
      */
-    public int transferTo(ByteBuf dst) {
-        int len = this.data.readBuffer(dst);
-        this.data.markReader();
-        dst.markWriter();
+    public int transferTo(ByteBuffer dst) {
+        if (!this.hasReadable()) {
+            return 0;
+        }
+
+        int len = 0;
+        do {
+            ByteBuf srcBuf = this.data[this.readIdx];
+            len += srcBuf.readBuffer(dst);
+            srcBuf.markReader();
+            if (srcBuf.readableBytes() == 0) {
+                this.readIdx++;
+            }
+        } while (this.hasReadable() && dst.hasRemaining());
+
+        this.readIndexBytes += len;
         return len;
     }
 
@@ -64,20 +97,26 @@ class SoSndData {
      * completed callback.
      */
     public void completed() {
-        if (this.data != EMPTY_DATA) {
-            this.data.free();
+        try {
+            this.future.completed(this.result);
+        } finally {
+            for (ByteBuf buf : this.data) {
+                IOUtils.closeQuietly(buf);
+            }
         }
-        this.future.completed(this.result);
     }
 
     /**
      * failed callback.
      */
     public void failed(Throwable e) {
-        if (this.data != EMPTY_DATA) {
-            this.data.free();
+        try {
+            this.future.failed(e);
+        } finally {
+            for (ByteBuf buf : this.data) {
+                IOUtils.closeQuietly(buf);
+            }
         }
-        this.future.failed(e);
     }
 
     @Override

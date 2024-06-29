@@ -14,15 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
-import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.NotYetConnectedException;
 import java.nio.channels.ShutdownChannelGroupException;
 import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * received Handler
@@ -30,35 +31,28 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version : 2023-09-24
  */
 class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
-    private static final Logger          logger = Logger.getLogger(SoRcvCompletionHandler.class);
-    private final        long            channelID;
-    private final        long            createdTime;
-    private volatile     SoHandlerStatus status;
-    private final        AtomicLong      counterBytes;
+    private static final Logger                           logger = Logger.getLogger(SoRcvCompletionHandler.class);
+    private final        long                             channelID;
+    private final        long                             createdTime;
+    private final        AtomicReference<SoHandlerStatus> status;
+    private final        AtomicLong                       counterBytes;
     //
-    private final        SoAsyncChannel  channel;
-    private final        SoContextImpl   context;
-    private final        ByteBuf         rcvBuffer;
+    private final        SoAsyncChannel                   channel;
+    private final        SoContextImpl                    context;
 
     public SoRcvCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoContextImpl context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
-        this.status = SoHandlerStatus.IDLE;
+        this.status = new AtomicReference<>(SoHandlerStatus.IDLE);
         this.counterBytes = new AtomicLong();
 
         this.channel = channel;
         this.context = context;
-        this.rcvBuffer = context.getResourceManager().newLocalRcvBuf();
-    }
-
-    /** Enhanced {@link ByteBuffer}. */
-    public ByteBuf getRcvBuffer() {
-        return this.rcvBuffer;
     }
 
     /** Returns this Handler status. */
     public SoHandlerStatus getStatus() {
-        return this.status;
+        return this.status.get();
     }
 
     /** Gets the number of bytes that have been received. */
@@ -68,7 +62,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
     @Override
     public void completed(Integer result, SoContextImpl context) {
-        this.status = SoHandlerStatus.PENDING;
+        this.status.set(SoHandlerStatus.PENDING);
 
         if (result > 0) {
             this.counterBytes.addAndGet(result);
@@ -77,29 +71,20 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
             }
 
             // copy buffer form swap to rcv
-            SoRcvCopyTask copyTask = new SoRcvCopyTask(this.channelID, this.channel, context, getRcvBuffer());
-            this.context.submitSoTask(this.channelID, copyTask, this).onCompleted(f -> {
-                this.read();
-            }).onFailed(f -> {
-                Throwable e = f.getCause();
-                String errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
+            ByteBuf rcvBytes = this.channel.pullSwapBuffer(result);
+            this.context.notifyChannelRcv(this.channelID, rcvBytes);
 
-                context.notifyRcvChannelError(this.channelID, e);
-                context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
-                this.status = SoHandlerStatus.IDLE;
-            });
-
+            this.read();
         } else if (result == 0) {
             if (logger.isDebugEnabled()) {
                 logger.debug("rcv(" + this.channelID + ") empty");
             }
 
-            // rcv continue
+            this.context.notifyChannelRcv(this.channelID, ByteBuf.EMPTY);
             this.read();
-
         } else {
 
-            this.status = SoHandlerStatus.IDLE;
+            this.status.set(SoHandlerStatus.IDLE);
 
             if (this.channel.isShutdownInput()) {
                 // for ShutdownInput local
@@ -121,15 +106,15 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     public void read() {
-        this.status = SoHandlerStatus.WAITING;
+        this.status.set(SoHandlerStatus.WAITING);
         if (!this.channel.read(this.context, this)) {
-            this.status = SoHandlerStatus.IDLE;
+            this.status.set(SoHandlerStatus.IDLE);
         }
     }
 
     @Override
     public void failed(Throwable e, SoContextImpl context) {
-        this.status = SoHandlerStatus.PENDING;
+        this.status.set(SoHandlerStatus.PENDING);
 
         if (e instanceof NotYetConnectedException) {
             long costTimeMs = System.currentTimeMillis() - this.createdTime;
@@ -143,7 +128,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
                 context.notifyRcvChannelError(this.channelID, cause);
                 context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
-                this.status = SoHandlerStatus.IDLE;
+                this.status.set(SoHandlerStatus.IDLE);
             }
             return;
         }
@@ -162,6 +147,10 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
 
         context.notifyRcvChannelError(this.channelID, e);
         context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
-        this.status = SoHandlerStatus.IDLE;
+        this.status.set(SoHandlerStatus.IDLE);
+    }
+
+    private Future<?> submitTask(DefaultSoTask task) {
+        return this.context.submitSoTask(this.channelID, task, this);
     }
 }

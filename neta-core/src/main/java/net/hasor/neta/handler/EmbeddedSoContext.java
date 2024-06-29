@@ -15,7 +15,11 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.SoChannel;
+import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.SoContext;
 
 import java.net.SocketAddress;
 import java.util.Map;
@@ -31,7 +35,7 @@ public class EmbeddedSoContext implements SoContext {
     private static final Logger                  logger = Logger.getLogger(EmbeddedSoContext.class);
     private static final AtomicLong              nextID = new AtomicLong();
     private final        SoConfig                config;
-    private final        SoResManager            defaultRm;
+    private final        ByteBufAllocator        allocator;
     private final        Map<Long, SoChannel<?>> channelMap;
 
     public EmbeddedSoContext() {
@@ -40,8 +44,8 @@ public class EmbeddedSoContext implements SoContext {
 
     public EmbeddedSoContext(SoConfig config) {
         this.config = config;
+        this.allocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : config.getBufAllocator();
         this.channelMap = new ConcurrentHashMap<>();
-        this.defaultRm = new DefaultSoResManager(this.config);
     }
 
     protected static SoConfig newSoConfig() {
@@ -60,8 +64,8 @@ public class EmbeddedSoContext implements SoContext {
     }
 
     @Override
-    public SoResManager getResourceManager() {
-        return this.defaultRm;
+    public ByteBufAllocator getByteBufAllocator() {
+        return this.allocator;
     }
 
     @Override

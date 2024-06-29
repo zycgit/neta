@@ -36,7 +36,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void serverSayHelloTest_01() throws Exception {
         // server say Hello
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().build());
         Socket client = new Socket("127.0.0.1", safePort);
 
@@ -61,7 +61,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void serverSayHelloTest_02() throws Exception {
         // server say Hello
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public void onActive(ProtoContext context) throws Throwable {
@@ -226,6 +226,7 @@ public class SoWriteTest extends AbstractSoTest {
         AtomicBoolean sndErr1 = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
             return ProtoHelper.builder().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
+
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                     throw new IllegalStateException("L1 Throw");
@@ -257,7 +258,7 @@ public class SoWriteTest extends AbstractSoTest {
         NetChannel channel = (NetChannel) context.findChannel(2);
         ThreadUtils.sleep(500);
 
-        assert channel.isClose();
+        assert channel == null || channel.isClose();
         assert sndErr1.get();
 
         server.shutdown();

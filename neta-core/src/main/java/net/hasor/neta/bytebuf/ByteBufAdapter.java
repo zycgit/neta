@@ -72,11 +72,6 @@ public class ByteBufAdapter implements ByteBuf {
     //    }
 
     @Override
-    public ByteBuffer asByteBuffer() {
-        return this.byteBuf.asByteBuffer();
-    }
-
-    @Override
     public ByteOrder order() {
         return this.byteBuf.order();
     }

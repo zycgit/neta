@@ -84,7 +84,7 @@ public class SoReadTest extends AbstractSoTest {
         AtomicInteger cnt = new AtomicInteger();
 
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(2, 32));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
@@ -148,12 +148,12 @@ public class SoReadTest extends AbstractSoTest {
         while (channel.getRcvBytes() < 30) {
             ThreadUtils.sleep(100);
         }
+
         assert channel.getRcvBytes() == 32; // is full ( swapSize = 2, bufSize = 30)
 
         // after 1s,server No extra data is received, data well be backpressed.
         ThreadUtils.sleep(1000);
         assert channel.getRcvBytes() == 32;
-        assert channel.getRcvBufferUsed() == 30;
 
         server.shutdown();
     }
@@ -239,7 +239,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
-        NetManager server = new NetManager(crateConfig(8, 30));
+        NetManager server = new NetManager(crateConfig(2, 30));
         NetListen listen = server.listen("127.0.0.1", safePort, initializer);
 
         // client send data

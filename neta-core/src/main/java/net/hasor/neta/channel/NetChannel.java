@@ -21,8 +21,6 @@ import net.hasor.cobble.concurrent.timer.Timeout;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAdapter;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -56,7 +54,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     //
     protected final      SoRcvCompletionHandler rHandler;
     protected final      SoSndCompletionHandler wHandler;
-    private final        AtomicBoolean          wStatus;
     //
     protected            ProtoContextImpl       protoCtx;
     protected            ProtoStack<ByteBuf>    protoStack;
@@ -85,7 +82,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
         this.rHandler = rHandler;
         this.wHandler = wHandler;
-        this.wStatus = new AtomicBoolean(false);
     }
 
     protected void initChannel(ProtoContextImpl protoCtx, ProtoStack<ByteBuf> protoStack) {
@@ -215,11 +211,11 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             if (this.channel.isOpen()) {
                 SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
                 this.context.submitSoTask(this.channelID, task, this).onCompleted(f -> {
-                    closeFuture.completed(this);
+                    this.closeFuture.completed(this);
                 }).onFailed(f -> {
-                    closeFuture.failed(f.getCause());
+                    this.closeFuture.failed(f.getCause());
                 }).onCancel(f -> {
-                    closeFuture.cancel();
+                    this.closeFuture.cancel();
                 });
             } else {
                 this.closeFuture.completed(this);
@@ -248,28 +244,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         return this.wHandler.getCounterBytes();
     }
 
-    /** Returns the received buffer size. */
-    public int getRcvBufferSize() {
-        return this.rHandler.getRcvBuffer().capacity();
-    }
-
-    /** Returns the send buffer size. */
-    public int getSndBufferSize() {
-        return this.wHandler.getSndBuffer().capacity();
-    }
-
-    /** Returns the size of the received buffer used. */
-    public int getRcvBufferUsed() {
-        ByteBuf rcvBuf = this.rHandler.getRcvBuffer();
-        return rcvBuf.capacity() - rcvBuf.writableBytes();
-    }
-
-    /** Returns the size of the send buffer used. */
-    public int getSndBufferUsed() {
-        ByteBuf sndBuf = this.wHandler.getSndBuffer();
-        return sndBuf.capacity() - sndBuf.writableBytes();
-    }
-
     /** Returns the number of ProtoStack received slots. */
     public int getRcvSlotSize() {
         return this.protoStack == null ? Integer.MAX_VALUE : this.protoStack.getRcvSlotSize();
@@ -281,48 +255,28 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     }
 
     /* Receive data without concurrency */
-    synchronized final void notifyRcv(int dataSize, int retryCnt) {
+    synchronized final void notifyRcv(ByteBuf rcvBytes) {
+        int dataSize = rcvBytes.readableBytes();
         if (this.netLog) {
-            String retryMsg = (retryCnt > 0) ? (", retryCnt is " + retryCnt) : "";
-            logger.info("rcv(" + this.channelID + ") the receive " + dataSize + " bytes" + retryMsg);
+            logger.info("rcv(" + this.channelID + ") the receive " + dataSize + " bytes");
         }
 
-        if (retryCnt == 0) {
-            this.lastRcvTime = System.currentTimeMillis();
-            this.lastNotifyRcvRetryTime = 0;
-            synchronized (this.readTimeoutSyncObj) {
-                this.readTimeoutSyncObj.notifyAll();
-            }
-        }
-
-        if (retryCnt > 3 && (this.lastNotifyRcvRetryTime + 3000) < System.currentTimeMillis()) {
-            logger.info("rcv(" + this.channelID + ") the receive buffer is full, ");
-            this.lastNotifyRcvRetryTime = System.currentTimeMillis();
+        this.lastRcvTime = System.currentTimeMillis();
+        this.lastNotifyRcvRetryTime = 0;
+        synchronized (this.readTimeoutSyncObj) {
+            this.readTimeoutSyncObj.notifyAll();
         }
 
         try {
-            this.protoCtx.flash(ProtoContext.SO_CHANNEL_RETRY_CNT, retryCnt);
-
-            if (this.protoStack != null && this.protoStack.getRcvSlotSize() == 0) {
+            if (this.protoStack.getRcvSlotSize() == 0) {
                 logger.info("rcv(" + this.channelID + ") the ProtoStack slot is full.");
                 this.protoStack.onRcvError(this.protoCtx, null, ProtoFullException.INSTANCE);
                 return;
             }
 
-            //The root Buffer cannot be deallocated
-            ByteBuf rcvByteBuf = this.rHandler.getRcvBuffer();
-            Object[] sndBufSet;
-            if (this.protoStack != null) {
-                sndBufSet = this.protoStack.onRcvMessage(this.protoCtx, null, new ByteBuf[] { new ByteBufSafe(rcvByteBuf) });
-            } else {
-                sndBufSet = new ByteBuf[] { new ByteBufSafe(rcvByteBuf) };
-            }
-
-            for (Object sndBuf : sndBufSet) {
-                ByteBuf buf = (ByteBuf) sndBuf;
-                if (buf.readableBytes() > 0) {
-                    appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
-                }
+            Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, new ByteBuf[] { rcvBytes });
+            if (dataArray != null && dataArray.length > 0) {
+                appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
             }
         } catch (Throwable e) {
             // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
@@ -339,24 +293,10 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     /* Receive error */
     synchronized final void notifyError(boolean isRcv, Throwable e) {
         try {
-            //The root Buffer cannot be deallocated
-            Object[] sndBufSet;
-            if (this.protoStack != null) {
-                if (isRcv) {
-                    sndBufSet = this.protoStack.onRcvError(this.protoCtx, null, e);
-                } else {
-                    sndBufSet = this.protoStack.onSndError(this.protoCtx, null, e);
-                }
-            } else {
-                sndBufSet = ArrayUtils.EMPTY_OBJECT_ARRAY;
-            }
-
-            for (Object sndBuf : sndBufSet) {
-                ByteBuf buf = (ByteBuf) sndBuf;
-                if (buf.readableBytes() > 0) {
-                    appendSoSndTask(new SoSndData(buf, new BasicFuture<>(), this));
-                }
-            }
+            Object[] dataArray = isRcv ?//
+                    this.protoStack.onRcvError(this.protoCtx, null, e) ://
+                    this.protoStack.onSndError(this.protoCtx, null, e);
+            appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
         } catch (Throwable ee) {
             // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
             String msg = "invoker ProtoStack failed: " + ee.getMessage();
@@ -366,21 +306,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
         } finally {
             this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
-        }
-    }
-
-    @Deprecated
-    private static class ByteBufSafe extends ByteBufAdapter {
-        public ByteBufSafe(ByteBuf byteBuf) {
-            super(byteBuf);
-        }
-
-        @Override
-        public void free() {
-        }
-
-        @Override
-        public void close() {
         }
     }
 
@@ -422,65 +347,52 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         }
 
         try {
-            boolean isFlush = writeData == null;
-            Object[] sndByteBuf;
-            if (this.protoStack != null) {
-                if (isFlush) {
-                    sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, ArrayUtils.EMPTY_OBJECT_ARRAY);
-                } else {
-                    sndByteBuf = this.protoStack.onSndMessage(this.protoCtx, stackName, new Object[] { writeData });
-                }
-            } else {
-                sndByteBuf = new Object[] { writeData };
+            Object[] dataArray;
+            synchronized (this) {
+                boolean isFlush = writeData == null;
+                dataArray = isFlush ?//
+                        this.protoStack.onSndMessage(this.protoCtx, stackName, ArrayUtils.EMPTY_OBJECT_ARRAY) ://
+                        this.protoStack.onSndMessage(this.protoCtx, stackName, new Object[] { writeData });
             }
-
-            ByteBuf merged = ByteBufAllocator.DEFAULT.buffer();
-            for (Object buf : sndByteBuf) {
-                if (buf instanceof byte[]) {
-                    merged.writeBytes((byte[]) buf);
-                } else if (buf instanceof ByteBuffer) {
-                    merged.writeBuffer((ByteBuffer) buf);
-                } else if (buf instanceof ByteBuf) {
-                    merged.writeBuffer((ByteBuf) buf);
-                    ((ByteBuf) buf).markReader();
-                } else {
-                    throw new ClassCastException(writeData.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
-                }
-            }
-            merged.markWriter();
-            appendSoSndTask(new SoSndData(merged, future, this));
-            //            AtomicInteger cnt = new AtomicInteger(sndByteBuf.length);
-            //            for (Object buf : sndByteBuf) {
-            //                Future<NetChannel> itemFuture = new BasicFuture<>();
-            //                itemFuture.onFailed(f -> {
-            //                    future.failed(f.getCause());
-            //                }).onFinal(f -> {
-            //                    cnt.decrementAndGet();
-            //                    if (cnt.get() == 0) {
-            //                        future.completed(this);
-            //                    }
-            //                });
-            //
-            //                if (buf instanceof byte[]) {
-            //                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((byte[]) buf);
-            //                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
-            //                } else if (buf instanceof ByteBuffer) {
-            //                    ByteBuf wrap = ByteBufAllocator.DEFAULT.wrap((ByteBuffer) buf);
-            //                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
-            //                } else if (buf instanceof ByteBuf) {
-            //                    ByteBuf wrap = (ByteBuf) buf;
-            //                    appendSoSndTask(new SoSndData(wrap, itemFuture, this));
-            //                } else {
-            //                    throw new ClassCastException(writeData.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
-            //                }
-            //            }
+            appendSoSndTask(toSoSndData(future, dataArray));
         } catch (Throwable e) {
-            logger.error("snd(" + channelID + ") failed, " + e.getMessage(), e);
+            logger.error("snd(" + this.channelID + ") failed, " + e.getMessage(), e);
             future.failed(e);
         } finally {
             this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
         return future;
+    }
+
+    private SoSndData toSoSndData(Future<NetChannel> future, Object[] dataArray) {
+        if (dataArray.length == 0) {
+            return new SoSndData(0, new ByteBuf[0], future, this);
+        }
+
+        int sendSize = 0;
+        ByteBuf[] wrap = new ByteBuf[dataArray.length];
+        for (int i = 0; i < dataArray.length; i++) {
+            Object buf = dataArray[i];
+            if (buf instanceof byte[]) {
+                wrap[i] = ByteBuf.wrap((byte[]) buf);
+                sendSize = sendSize + ((byte[]) buf).length;
+            } else if (buf instanceof ByteBuffer) {
+                wrap[i] = ByteBuf.wrap((ByteBuffer) buf);
+                sendSize = sendSize + ((ByteBuffer) buf).remaining();
+            } else if (buf instanceof ByteBuf) {
+                ByteBuf tmpBuf = (ByteBuf) buf;
+                sendSize = sendSize + ((ByteBuf) buf).readableBytes();
+
+                wrap[i] = this.context.getByteBufAllocator().buffer(tmpBuf.readableBytes());
+                wrap[i].writeBuffer(tmpBuf);
+                wrap[i].markWriter();
+                tmpBuf.markReader();
+            } else {
+                throw new ClassCastException(dataArray.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
+            }
+        }
+
+        return new SoSndData(sendSize, wrap, future, this);
     }
 
     private Future<NetChannel> newFutureForSend() {
@@ -492,7 +404,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             return future;
         }
 
-        if (this.protoStack != null && this.protoStack.getSndSlotSize() == 0) {
+        if (this.protoStack.getSndSlotSize() == 0) {
             logger.info("snd(" + this.channelID + ") the ProtoStack slot is full.");
             future.failed(ProtoFullException.INSTANCE);
             return future;
@@ -512,27 +424,22 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             logger.info("snd(" + this.channelID + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
         }
 
-        synchronized (this.wStatus) {
+        synchronized (this.wContext) {
             this.wContext.offer(wTask);
 
-            if (this.wStatus.compareAndSet(false, true)) {
-                SoSndTask sendTask = new SoSndTask(this.channelID, this.channel, this.wHandler, this.wContext);
-                this.wContext.submitTask(sendTask, this).onCompleted(f -> {
-                    checkOrSend(sendTask);
-                });
+            if (this.wHandler.tryLock()) {
+                this.wHandler.doWrite(this::checkOrSend);
             }
         }
     }
 
-    private void checkOrSend(SoSndTask sendTask) {
-        synchronized (this.wStatus) {
-            this.lastSndTime = System.currentTimeMillis();
+    private void checkOrSend() {
+        this.lastSndTime = System.currentTimeMillis();
+        synchronized (this.wContext) {
             if (this.wContext.isEmpty()) {
-                this.wStatus.compareAndSet(true, false);
+                this.wHandler.freeLock();
             } else {
-                this.wContext.submitTask(sendTask, this).onCompleted(f -> {
-                    checkOrSend(sendTask);
-                });
+                this.wHandler.doWrite(this::checkOrSend);
             }
         }
     }

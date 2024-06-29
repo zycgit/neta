@@ -34,13 +34,13 @@ public interface ProtoStack<OUT> {
     int getSndSlotSize();
 
     /**
-     * when init.
+     * when init, before onActive
      * @param protoCtx protoCtx
      */
     void onInit(ProtoContext protoCtx) throws Throwable;
 
     /**
-     * when connected.
+     * when connected, before any rcv/snd
      * @param protoCtx protoCtx
      */
     void onActive(ProtoContext protoCtx) throws Throwable;

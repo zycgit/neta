@@ -24,71 +24,30 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 public class SoConfig {
     // buffers
     private ByteBufAllocator bufAllocator;
-    private int              rcvSwapBuf        = 16 * 1024;// socket 接收缓冲区大小,对应 SO_RCVBUF 参数
-    private int              sndSwapBuf        = 16 * 1024;// socket 发送缓冲区大小,对应 SO_SNDBUF 参数
-    private int              rcvLocalBuf       = 16 * 1024;// 本地读取缓冲区，从网络上收到的数据会先进入 swap 缓冲区，然后将其移动到 rcvLocal 在交给应用程序处理。
-    private int              sndLocalBuf       = 16 * 1024;// 本地发送缓冲区，程序发送的数据需要先放入 rcvLocal 然后将其移动到 swap 缓冲区进行发送。
     // so configs
-    private Integer          soRcvBuf          = null;     // SO_RCVBUF: The size of the socket send buffer
-    private Integer          soSndBuf          = null;     // SO_SNDBUF: The size of the socket receive buffer
-    private Boolean          soKeepAlive       = null;     // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
-    private Integer          soKeepIdleSec     = null;     // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
-    private Integer          soKeepIntervalSec = null;     // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
-    private Integer          soKeepCount       = null;     // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
-    private Integer          soReadTimeoutMs   = -1;       // socket read timeout
-    private Integer          soWriteTimeoutMs  = -1;       // socket write timeout
+    private Integer          soRcvBuf          = 16 * 1024; // SO_RCVBUF: The size of the socket receive buffer
+    private Integer          soSndBuf          = null;      // SO_SNDBUF: The size of the socket send buffer
+    private Boolean          soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
+    private Integer          soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
+    private Integer          soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
+    private Integer          soKeepCount       = null;      // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
+    private Integer          soReadTimeoutMs   = -1;        // socket read timeout
+    private Integer          soWriteTimeoutMs  = -1;        // socket write timeout
     //    SO_LINGER
     // timeout
-    private int              retryIntervalMs   = 50;       // cobble.net 内部任务延迟调度的延迟间隔
-    private int              connectTimeoutMs  = 10 * 1000;// 建立连接超时时间
+    private int              retryIntervalMs   = 50;        // cobble.net 内部任务延迟调度的延迟间隔
+    private int              connectTimeoutMs  = 10 * 1000; // 建立连接超时时间
     // threads
-    private SoThreadFactory  threadFactory;                // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private ClassLoader      classLoader;                  // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private int              ioThreads;                    // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
-    private int              taskThreads;                  // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
+    private SoThreadFactory  threadFactory;                 // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
+    private ClassLoader      classLoader;                   // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
+    private int              ioThreads;                     // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
+    private int              taskThreads;                   // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
     // other
     private boolean          netlog            = false;    // 打印网络日志
 
-    public void setSwapBuf(int rcvSwapBuf, int sndSwapBuf) {
-        this.rcvSwapBuf = rcvSwapBuf;
-        this.sndSwapBuf = sndSwapBuf;
-    }
-
-    public void setLocalBuf(int rcvLocalBuf, int sndLocalBuf) {
-        this.rcvLocalBuf = rcvLocalBuf;
-        this.sndLocalBuf = sndLocalBuf;
-    }
-
-    public int getRcvSwapBuf() {
-        return this.rcvSwapBuf;
-    }
-
-    public void setRcvSwapBuf(int rcvSwapBuf) {
-        this.rcvSwapBuf = rcvSwapBuf;
-    }
-
-    public int getSndSwapBuf() {
-        return this.sndSwapBuf;
-    }
-
-    public void setSndSwapBuf(int sndSwapBuf) {
-        this.sndSwapBuf = sndSwapBuf;
-    }
-
-    public int getRcvLocalBuf() {
-        return this.rcvLocalBuf;
-    }
-
-    public void setRcvLocalBuf(int rcvLocalBuf) {
-        this.rcvLocalBuf = rcvLocalBuf;
-    }
-
-    public int getSndLocalBuf() {
-        return this.sndLocalBuf;
-    }
-
-    public void setSndLocalBuf(int sndLocalBuf) {
-        this.sndLocalBuf = sndLocalBuf;
+    public void setSoBufSize(int soRcvBuf, int soSndBuf) {
+        this.soRcvBuf = soRcvBuf;
+        this.soSndBuf = soSndBuf;
     }
 
     public Integer getSoRcvBuf() {
