@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.handler.codec.string;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoRcvQueue;
@@ -54,7 +53,7 @@ public class StringEncoderHandler implements ProtoHandler<String, ByteBuf> {
         while (src.hasMore()) {
             String string = src.takeMessage();
             if (string != null) {
-                dst.offerMessage(ByteBufAllocator.DEFAULT.wrap(string.getBytes(this.charset)));
+                dst.offerMessage(ByteBuf.wrap(string.getBytes(this.charset)));
                 hasAny = true;
             }
         }

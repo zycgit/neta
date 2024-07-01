@@ -40,8 +40,9 @@ import java.util.List;
  */
 public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     /** Maximum length of a frame we're willing to decode, Throws an exception when maxLength is exceeded */
-    private final int     maxLength;
-    private final boolean stripDelimiter;
+    private final int              maxLength;
+    private final boolean          stripDelimiter;
+    private       ByteBufAllocator bufAllocator;
 
     /**
      * Creates a new decoder. the maximum length is Integer.MAX_VALUE
@@ -71,21 +72,23 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
-        if (!src.hasMore()) {
-            return ProtoStatus.Next;
-        }
+    public void onInit(ProtoContext context) {
+        this.bufAllocator = context.getSoContext().getByteBufAllocator();
+    }
 
-        List<ByteBuf> peekArray = src.peekMessage(src.queueSize());
-        while (src.hasMore()) {
-            ByteBuf line = expectLine(context, src, peekArray);
-            if (line != null) {
-                dst.offerMessage(line);
-            } else {
-                break;
+    @Override
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+        if (src.hasMore()) {
+            List<ByteBuf> peekArray = src.peekMessage(src.queueSize());
+            while (src.hasMore()) {
+                ByteBuf line = expectLine(context, src, peekArray);
+                if (line != null) {
+                    dst.offerMessage(line);
+                } else {
+                    break;
+                }
             }
         }
-
         return ProtoStatus.Next;
     }
 
@@ -111,8 +114,7 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             }
         }
 
-        ByteBufAllocator allocator = context.getSoContext().getResourceManager().getByteBufAllocator();
-        ByteBuf tmpBuf = allocator.buffer(consumedBytes);
+        ByteBuf tmpBuf = this.bufAllocator.buffer(consumedBytes);
 
         int lastIndex = temp.size() - 1;
         for (int i = 0; i < temp.size(); i++) {
