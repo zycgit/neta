@@ -14,16 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec;
-import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.handler.ProtoHandler;
-import net.hasor.neta.handler.ProtoRcvQueue;
-import net.hasor.neta.handler.ProtoSndQueue;
-import net.hasor.neta.handler.ProtoStatus;
-
-import java.util.List;
 
 /**
  * in {@link ByteBuf} is split into multiple or merge {@link ByteBuf} using a fixed length
@@ -46,82 +37,12 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
-public class FixedLengthFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
-    private final int              fixedLength;
-    private       ByteBufAllocator bufAllocator;
-
+public class FixedLengthFrameHandler extends LimitFrameHandler {
     /**
      * Creates a new decoder.
      * @param fixedLength the minimum/maximum length of the decoded frame.
      */
     public FixedLengthFrameHandler(int fixedLength) {
-        this.fixedLength = fixedLength;
-    }
-
-    @Override
-    public void onInit(ProtoContext context) {
-        this.bufAllocator = context.getSoContext().getByteBufAllocator();
-    }
-
-    @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
-        if (src.hasMore() && dst.hasSlot()) {
-            boolean hasSlot = true;
-            List<ByteBuf> peekAll = src.peekMessage(src.queueSize());
-            ByteBuf dstBuf = null;
-
-            int offerDataSize = 0;
-            for (ByteBuf buf : peekAll) {
-                while (buf.readableBytes() > 0 && hasSlot) {
-                    if (dstBuf == null) {
-                        dstBuf = this.bufAllocator.buffer(this.fixedLength);
-                    }
-
-                    int read = this.fillLimitFrame(buf, dstBuf);
-                    if (dstBuf.writerIndex() == this.fixedLength) {
-                        dstBuf.markWriter();
-                        dst.offerMessage(dstBuf);
-                        offerDataSize += dstBuf.readableBytes();
-                        hasSlot = dst.hasSlot();
-                        dstBuf = null;
-                    }
-                }
-            }
-
-            // flash last
-            IOUtils.closeQuietly(dstBuf);
-            if (offerDataSize < this.fixedLength) {
-                for (ByteBuf buf : peekAll) {
-                    buf.resetReader();
-                }
-            } else {
-                for (ByteBuf buf : peekAll) {
-                    buf.resetReader();
-                    int bufSize = buf.readableBytes();
-                    if (bufSize < offerDataSize) {
-                        offerDataSize -= bufSize;
-                        buf.skipReadableBytes(bufSize);
-                        buf.markReader();
-                        src.skipMessage(1);
-                    } else if (bufSize > offerDataSize) {
-                        buf.skipReadableBytes(offerDataSize);
-                        buf.markReader();
-                        break;
-                    } else {
-                        buf.skipReadableBytes(offerDataSize);
-                        buf.markReader();
-                        src.skipMessage(1);
-                        break;
-                    }
-                }
-            }
-        }
-
-        return ProtoStatus.Next;
-    }
-
-    private int fillLimitFrame(ByteBuf src, ByteBuf dst) {
-        int wlen = Math.min(src.readableBytes(), this.fixedLength - dst.writerIndex());
-        return src.readBuffer(dst, wlen);
+        super(fixedLength, fixedLength);
     }
 }

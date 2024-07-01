@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec;
+import net.hasor.cobble.ObjectUtils;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
@@ -22,81 +24,161 @@ import net.hasor.neta.handler.ProtoRcvQueue;
 import net.hasor.neta.handler.ProtoSndQueue;
 import net.hasor.neta.handler.ProtoStatus;
 
-import java.util.Objects;
+import java.util.List;
 
 /**
- * in {@link ByteBuf} is split into multiple {@link ByteBuf} using a fixed length
+ * in {@link ByteBuf} is split into multiple or merge {@link ByteBuf} using a fixed length
  * <pre>
  * <b>Case 1</b>
+ * <b>minLength</b>   = <b>5</b>
  * <b>maxLength</b>   = <b>10</b>
- * BEFORE (25 bytes)    AFTER (25 bytes)
+ * BEFORE (26 bytes)    AFTER (26 bytes)
  * +----------+        +----------+----------+---------+
- * | 25 bytes | -----> | 10 bytes | 10 bytes | 5 bytes |
+ * | 26 bytes | -----> | 10 bytes | 10 bytes | 6 bytes |
  * +----------+        +----------+----------+---------+
  * </pre>
  * <pre>
  * <b>Case 2</b>
+ * <b>minLength</b>   = <b>10</b>
  * <b>maxLength</b>   = <b>10</b>
- * BEFORE (14 bytes)                     AFTER (14 bytes)
- * +------------------------------+      +------------+-----------+
- * | 3 bytes | 10 bytes | 1 bytes | ---> | (10 bytes) | (4 bytes) |
- * +------------------------------+      +------------+-----------+
+ * BEFORE (26 bytes)    AFTER (20 bytes)
+ * +----------+        +----------+----------+
+ * | 26 bytes | -----> | 10 bytes | 10 bytes |
+ * +----------+        +----------+----------+
+ * </pre>
+ * <pre>
+ * <b>Case 3</b>
+ * <b>minLength</b>   = <b>1</b>
+ * <b>maxLength</b>   = <b>10</b>
+ * BEFORE (16 bytes)                     AFTER (16 bytes)
+ * +------------------------------+      +----------+---------+
+ * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes | 6 bytes |
+ * +------------------------------+      +----------+---------+
+ * </pre>
+ * <pre>
+ * <b>Case 4</b>
+ * <b>minLength</b>   = <b>5</b>
+ * <b>maxLength</b>   = <b>10</b>
+ * BEFORE (16 bytes)                     AFTER (15 bytes)
+ * +------------------------------+      +----------+---------+
+ * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes | 5 bytes |
+ * +------------------------------+      +----------+---------+
+ * </pre>
+ * <pre>
+ * <b>Case 5</b>
+ * <b>minLength</b>   = <b>10</b>
+ * <b>maxLength</b>   = <b>10</b>
+ * BEFORE (16 bytes)                     AFTER (15 bytes)
+ * +------------------------------+      +----------+
+ * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes |
+ * +------------------------------+      +----------+
+ * </pre>
+ * <pre>
+ * <b>Case 6</b>
+ * <b>minLength</b>   = <b>4</b>
+ * <b>maxLength</b>   = <b>10</b>
+ * BEFORE (16 bytes)              AFTER (14 bytes)
+ * +---+---+---+---+---+---+      +---------+---------+---------+
+ * | 2 | 2 | 2 | 4 | 4 | 2 | ---> | 4 bytes | 6 bytes | 4 bytes |
+ * +---+---+---+---+---+---+      +---------+---------+---------+
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
 public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
+    private final int              minLength;
     private final int              maxLength;
-    private final ByteBufAllocator bufAllocator;
+    private       ByteBufAllocator bufAllocator;
 
     /**
      * Creates a new decoder.
-     * @param maxLength the maximum length of the decoded frame.
+     * @param fixedLength the minimum/maximum length of the decoded frame.
      */
-    public LimitFrameHandler(final int maxLength) {
-        this(maxLength, ByteBufAllocator.DEFAULT);
+    public LimitFrameHandler(int fixedLength) {
+        this(fixedLength, fixedLength);
     }
 
     /**
      * Creates a new decoder.
+     * @param minLength the minimum length of the decoded frame.
      * @param maxLength the maximum length of the decoded frame.
      */
-    public LimitFrameHandler(final int maxLength, ByteBufAllocator bufAllocator) {
+    public LimitFrameHandler(int minLength, int maxLength) {
+        this.minLength = ObjectUtils.checkPositive(minLength, "minLength");
         this.maxLength = maxLength;
-        this.bufAllocator = Objects.requireNonNull(bufAllocator);
+
+        if (this.minLength > this.maxLength) {
+            throw new IllegalArgumentException("maxLength: " + maxLength + " (expected: >= " + this.minLength + ")");
+        }
+    }
+
+    @Override
+    public void onInit(ProtoContext context) {
+        this.bufAllocator = context.getSoContext().getByteBufAllocator();
     }
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf dstBuf = null;
+        if (src.hasMore() && dst.hasSlot()) {
+            boolean hasSlot = true;
+            List<ByteBuf> peekAll = src.peekMessage(src.queueSize());
+            ByteBuf dstBuf = null;
 
-        while (src.hasMore() && dst.hasSlot()) {
-            ByteBuf srcBuf = src.peekMessage();
-            if (srcBuf == null) {
-                break;
+            int offerDataSize = 0;
+            for (ByteBuf buf : peekAll) {
+                while (buf.readableBytes() > 0 && hasSlot) {
+                    if (dstBuf == null) {
+                        dstBuf = this.bufAllocator.buffer(this.minLength, this.maxLength);
+                    }
+
+                    int read = this.fillLimitFrame(buf, dstBuf);
+                    if (dstBuf.writerIndex() == this.maxLength) {
+                        dstBuf.markWriter();
+                        dst.offerMessage(dstBuf);
+                        offerDataSize += dstBuf.readableBytes();
+                        hasSlot = dst.hasSlot();
+                        dstBuf = null;
+                    }
+                }
             }
 
-            while (srcBuf.readableBytes() > 0 && dst.hasSlot()) {
-                if (dstBuf == null) {
-                    dstBuf = this.bufAllocator.pooledBuffer();
-                }
-
-                int read = fillLimitFrame(srcBuf, dstBuf);
-                if (dstBuf.writerIndex() == this.maxLength) {
+            // flash last (minLength)
+            if (dstBuf != null) {
+                if (dstBuf.writerIndex() >= this.minLength && hasSlot) {
                     dstBuf.markWriter();
                     dst.offerMessage(dstBuf);
+                    offerDataSize += dstBuf.readableBytes();
                     dstBuf = null;
                 }
+                IOUtils.closeQuietly(dstBuf);
             }
 
-            if (srcBuf.readableBytes() <= 0) {
-                src.skipMessage(1);
+            // flash last
+            if (offerDataSize < this.minLength) {
+                for (ByteBuf buf : peekAll) {
+                    buf.resetReader();
+                }
+            } else {
+                for (ByteBuf buf : peekAll) {
+                    buf.resetReader();
+                    int bufSize = buf.readableBytes();
+                    if (bufSize < offerDataSize) {
+                        offerDataSize -= bufSize;
+                        buf.skipReadableBytes(bufSize);
+                        buf.markReader();
+                        src.skipMessage(1);
+                    } else if (bufSize > offerDataSize) {
+                        buf.skipReadableBytes(offerDataSize);
+                        buf.markReader();
+                        break;
+                    } else {
+                        buf.skipReadableBytes(offerDataSize);
+                        buf.markReader();
+                        src.skipMessage(1);
+                        break;
+                    }
+                }
             }
-        }
-
-        if (dstBuf != null) {
-            dstBuf.markWriter();
-            dst.offerMessage(dstBuf);
         }
 
         return ProtoStatus.Next;
@@ -104,9 +186,6 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
     private int fillLimitFrame(ByteBuf src, ByteBuf dst) {
         int wlen = Math.min(src.readableBytes(), this.maxLength - dst.writerIndex());
-        int len = src.readBuffer(dst, wlen);
-
-        src.markReader();
-        return len;
+        return src.readBuffer(dst, wlen);
     }
 }
