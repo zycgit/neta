@@ -54,7 +54,7 @@ public interface ProtoRcvQueue<T> {
      */
     default T takeMessage() {
         List<T> msg = this.takeMessage(1);
-        return msg == null || msg.size() == 0 ? null : msg.get(0);
+        return msg == null || msg.isEmpty() ? null : msg.get(0);
     }
 
     /**
@@ -68,7 +68,7 @@ public interface ProtoRcvQueue<T> {
      */
     default T peekMessage() {
         List<T> msg = this.peekMessage(1);
-        return msg == null || msg.size() == 0 ? null : msg.get(0);
+        return msg == null || msg.isEmpty() ? null : msg.get(0);
     }
 
     /**

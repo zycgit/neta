@@ -64,7 +64,7 @@ public class EmbeddedTransfer {
      * @param copyPacket use turn parameter to determine number messages to send.
      */
     public void transferToClient(int copyPacket) {
-        copyPacket = Math.min(this.server.getSndSize(), copyPacket);
+        copyPacket = Math.min(this.server.getSndQueueSize(), copyPacket);
 
         if (this.server.isClose()) {
             return;
@@ -95,7 +95,7 @@ public class EmbeddedTransfer {
      * @param copyPacket use turn parameter to determine number messages to send.
      */
     public void transferToServer(int copyPacket) {
-        copyPacket = Math.min(this.client.getSndSize(), copyPacket);
+        copyPacket = Math.min(this.client.getSndQueueSize(), copyPacket);
 
         if (this.client.isClose()) {
             return;

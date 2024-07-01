@@ -41,15 +41,6 @@ class WrapByteBuffer extends AbstractByteBuf {
     }
 
     @Override
-    public ByteBuf markReader() {
-        synchronized (this.synchronizedLock) {
-            // notify all writer threads, to write it
-            this.synchronizedLock.notifyAll();
-        }
-        return this;
-    }
-
-    @Override
     protected void _putByte(int offset, byte b) {
         checkFree();
 

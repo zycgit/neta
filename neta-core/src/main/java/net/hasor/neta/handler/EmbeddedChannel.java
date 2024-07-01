@@ -314,7 +314,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** read messages limit from the RCV_DOWN of this {@link SoChannel}. */
-    public int getRcvSize() {
+    public int getRcvQueueSize() {
         return this.rcvDown.queueSize();
     }
 
@@ -417,7 +417,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     /** read messages limit from the SND_DOWN of this {@link SoChannel}. */
-    public int getSndSize() {
+    public int getSndQueueSize() {
         return this.sndDown.queueSize();
     }
 

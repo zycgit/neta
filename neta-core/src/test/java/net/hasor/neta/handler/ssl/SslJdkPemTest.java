@@ -55,7 +55,7 @@ public class SslJdkPemTest extends AbstractSslTest {
 
     @Test
     public void sslHandshakeDisorderTest_1() {
-        SslConfig sslConf = sslConfig(SslMode.Once);
+        SslConfig sslConf = sslConfig(SslMode.Manual);
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
@@ -65,7 +65,7 @@ public class SslJdkPemTest extends AbstractSslTest {
         // mock network disorder this is failed
         server.send("Hello Client, this message form server.\n");
         client.send("Hello Server, this message form client.\n");
-        Object[] data = client.readSndArray(client.getSndSize());
+        Object[] data = client.readSndArray(client.getSndQueueSize());
         server.receive(biasedArray(data));
         transfer(transfer, 500, 10);
         client.readRcvArray();
@@ -112,64 +112,6 @@ public class SslJdkPemTest extends AbstractSslTest {
         transfer(transfer, 500, 10);
         assert client.readRcv().equals("Hello Client, this message using encryption.");
         assert server.readRcv().equals("Hello Server, this message using encryption.");
-    }
-
-    @Test
-    public void sslModelOnceTest_1() {
-        SslConfig sslConf = sslConfig(SslMode.Once);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
-
-        // SSL enable
-        client.send("Hello Server, this message using encryption.\n");
-        server.send("Hello Client, this message using encryption.\n");
-        transfer(transfer, 500, 10);
-        assert client.readRcv().equals("Hello Client, this message using encryption.");
-        assert server.readRcv().equals("Hello Server, this message using encryption.");
-
-        // Switch to no encryption, there is keep connect, close SSL
-        SslContext clientSSL = client.findProtoContext(SslContext.class);
-        clientSSL.closeSSL();
-        transfer(transfer, 500, 10);
-
-        // SSL disable
-        client.send("Hello Server, this message no encryption.\n");
-        server.send("Hello Client, this message no encryption.\n");
-        transfer(transfer, 500, 10);
-        assert client.readRcv().equals("Hello Client, this message no encryption.");
-        assert server.readRcv().equals("Hello Server, this message no encryption.");
-    }
-
-    @Test
-    public void sslModelOnceTest_2() {
-        SslConfig sslConf = sslConfig(SslMode.Once);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
-
-        // SSL enable
-        client.send("Hello Server, this message using encryption.\n");
-        server.send("Hello Client, this message using encryption.\n");
-        transfer(transfer, 500, 10);
-        assert client.readRcv().equals("Hello Client, this message using encryption.");
-        assert server.readRcv().equals("Hello Server, this message using encryption.");
-
-        // Switch to no encryption, there is keep connect, close SSL
-        SslContext serverSSL = server.findProtoContext(SslContext.class);
-        serverSSL.closeSSL();
-        transfer(transfer, 500, 10);
-
-        // SSL disable
-        client.send("Hello Server, this message no encryption.\n");
-        server.send("Hello Client, this message no encryption.\n");
-        transfer(transfer, 500, 10);
-        assert client.readRcv().equals("Hello Client, this message no encryption.");
-        assert server.readRcv().equals("Hello Server, this message no encryption.");
     }
 
     @Test

@@ -64,7 +64,7 @@ public abstract class SslContextBasic implements SslContext {
 
         this.sslConfig = config;
         this.sslMode = config.getSslMode();
-        this.sslStatus = this.sslMode != SslMode.Manual;
+        this.sslStatus = this.sslMode == SslMode.Always;
         this.sslContext = this.createSSLContext();
         this.sslEngine = new SslEngineWrap(channelID, config, () -> this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine()));
         this.sslHandler = new SslHandle(channelID, protoCtx, this.sslEngine, () -> {

@@ -63,6 +63,12 @@ public class WrapByteBufferTest {
     }
 
     @Test
+    public void basicTest05() {
+        ByteBuf wrap = ByteBuf.wrap(ByteBuffer.wrap(new byte[2]));
+        assert wrap.readableBytes() == 2;
+    }
+
+    @Test
     public void writeByte_1_1() {
         ByteBuf byteBuf = ByteBuf.wrap(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }), true);
 

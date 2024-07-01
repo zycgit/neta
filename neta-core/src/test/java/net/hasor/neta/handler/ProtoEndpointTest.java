@@ -81,7 +81,7 @@ public class ProtoEndpointTest extends AbstractStackTest {
         assert channel.getStatistical().heapUpOfRcv("COPY1") == 0;
         assert channel.getStatistical().heapUpOfRcv("COPY2") == 0;
         assert channel.getStatistical().heapUpOfRcvRoot() == 0;
-        assert channel.getRcvSize() == 5;
+        assert channel.getRcvQueueSize() == 5;
     }
 
     @Test
@@ -95,7 +95,7 @@ public class ProtoEndpointTest extends AbstractStackTest {
         channel.receive(3, 4);
         channel.receive(5, 6, 7);
         channel.receive(8, 9, 10);
-        assert channel.getRcvSize() == 10;
+        assert channel.getRcvQueueSize() == 10;
     }
 
     @Test
@@ -165,7 +165,7 @@ public class ProtoEndpointTest extends AbstractStackTest {
         assert channel.getStatistical().heapUpOfSnd("COPY1") == 0;
         assert channel.getStatistical().heapUpOfSnd("COPY2") == 0;
         assert channel.getStatistical().heapUpOfSndRoot() == 0;
-        assert channel.getSndSize() == 5;
+        assert channel.getSndQueueSize() == 5;
     }
 
     @Test
@@ -179,7 +179,7 @@ public class ProtoEndpointTest extends AbstractStackTest {
         channel.send(3, 4);
         channel.send(5, 6, 7);
         channel.send(8, 9, 10);
-        assert channel.getSndSize() == 10;
+        assert channel.getSndQueueSize() == 10;
     }
 
     @Test
