@@ -28,15 +28,17 @@ public class WrapByteBufferTest {
     @Test
     public void basicTest02() {
         ByteBuf byteBuf = ByteBuf.wrap(ByteBuffer.wrap(new byte[] { 1, 2, 3, 4 }));
+        assert byteBuf.readableBytes() == 4;
 
         assert byteBuf.readByte() == 1;
         assert byteBuf.readByte() == 2;
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
         byteBuf.markReader();
+        assert byteBuf.readableBytes() == 0;
 
         byteBuf.resetReader();
-        assert byteBuf.readableBytes() == 4;
+        assert byteBuf.readableBytes() == 0;
     }
 
     @Test

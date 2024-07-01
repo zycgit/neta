@@ -41,6 +41,11 @@ class WrapArrayBuffer extends AbstractByteBuf {
     }
 
     @Override
+    public int writableBytes() {
+        return this.getMaxCapacity() - this.writerIndex;
+    }
+
+    @Override
     protected void _putByte(int offset, byte b) {
         checkFree();
 
