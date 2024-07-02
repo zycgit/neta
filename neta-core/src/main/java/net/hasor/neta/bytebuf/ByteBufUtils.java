@@ -18,7 +18,6 @@ import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.Locale;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -47,7 +46,7 @@ public class ByteBufUtils {
 
     // ensure DEFAULT
     static {
-        String allocType = SystemUtils.getSystemProperty("neta.bytebuf.type", isPooled() ? "pooled" : "unpooled");
+        String allocType = "unpooled";// TODO pooled has Bug, SystemUtils.getSystemProperty("neta.bytebuf.type", isPooled() ? "pooled" : "unpooled");
         String memType = SystemUtils.getSystemProperty("neta.bytebuf.mem", isDirect() ? "direct" : "heap");
         String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(4 * 1024));
         String initialSize = SystemUtils.getSystemProperty("neta.bytebuf.initialSize", String.valueOf(4 * 1024));
@@ -100,8 +99,8 @@ public class ByteBufUtils {
             }
         };
 
-        allocType = allocType.toLowerCase(Locale.US).trim();
-        memType = memType.toLowerCase(Locale.US).trim();
+        allocType = allocType.toLowerCase().trim();
+        memType = memType.toLowerCase().trim();
 
         if ("unpooled".equals(allocType)) {
             if ("heap".equals(memType)) {

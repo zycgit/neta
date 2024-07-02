@@ -16,8 +16,8 @@ import java.util.concurrent.TimeUnit;
 @Warmup(iterations = 3)
 @Measurement(iterations = 5)
 public class PerformanceTest {
-    static boolean[] randomBoolean = new boolean[1024];
-    static int[]     randomInt     = new int[1024];
+    static boolean[] randomBoolean = new boolean[1000];
+    static int[]     randomInt     = new int[1000];
 
     static {
         for (int i = 0; i < randomBoolean.length; i++) {
@@ -28,6 +28,7 @@ public class PerformanceTest {
         }
     }
 
+    @Threads(16)
     @Benchmark
     public void requestNetaBuffer() {
         for (int i = 0; i < randomInt.length; i++) {
@@ -36,6 +37,7 @@ public class PerformanceTest {
         }
     }
 
+    @Threads(16)
     @Benchmark
     public void requestNettaBuffer() {
         for (int i = 0; i < randomInt.length; i++) {
