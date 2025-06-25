@@ -28,17 +28,33 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-class WrapArrayBuffer extends AbstractByteBuf {
-    protected final byte[] target;
+final class WrapArrayBuffer extends AbstractByteBuf {
+    static RecycleHandler<WrapArrayBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapArrayBuffer>() {
+        public WrapArrayBuffer create() {
+            return new WrapArrayBuffer();
+        }
 
-    WrapArrayBuffer(byte[] initData, boolean asWrite) {
-        super(null, initData.length);
+        @Override
+        public void free(WrapArrayBuffer tar) {
+            RecycleObjectPool.free(WrapArrayBuffer.class, tar);
+        }
+    };
+
+    void initBuffer(byte[] initData, boolean asWrite) {
+        super.initByteBuf(null, initData.length);
         this.target = initData;
         if (!asWrite) {
             this.writerIndex = initData.length;
             this.markedWriterIndex = initData.length;
         }
     }
+
+    private WrapArrayBuffer() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    protected byte[] target;
 
     @Override
     public int writableBytes() {
@@ -111,7 +127,8 @@ class WrapArrayBuffer extends AbstractByteBuf {
 
     @Override
     protected void _free() {
-
+        this.target = null;
+        RECYCLE_HANDLER.free(this);
     }
 
     @Override
@@ -129,7 +146,8 @@ class WrapArrayBuffer extends AbstractByteBuf {
         checkFree();
 
         byte[] copyArray = this.target.clone();
-        WrapArrayBuffer byteBuf = new WrapArrayBuffer(copyArray, true);
+        WrapArrayBuffer byteBuf = RecycleObjectPool.get(WrapArrayBuffer.class, WrapArrayBuffer.RECYCLE_HANDLER);
+        byteBuf.initBuffer(copyArray, true);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;

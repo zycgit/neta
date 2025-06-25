@@ -15,9 +15,7 @@
  */
 package net.hasor.neta.bytebuf;
 import net.hasor.cobble.ObjectUtils;
-import net.hasor.cobble.function.EFunction;
 
-import java.io.IOException;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -38,20 +36,40 @@ import static net.hasor.neta.bytebuf.Bits.*;
  * @version : 2022-11-01
  */
 public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
-    protected final ByteBufAllocator alloc;
-    protected       int              markedReaderIndex;
-    protected       int              markedWriterIndex;
-    protected       int              readerIndex;
-    protected       int              writerIndex;
-    private final   int              maxCapacity;
-    private         boolean          isFree;
-    protected       ByteOrder        byteOrder        = ByteOrder.BIG_ENDIAN;
-    protected final Object           synchronizedLock = new Object();
+    protected        ByteBufAllocator alloc;
+    protected        int              markedReaderIndex;
+    protected        int              markedWriterIndex;
+    protected        int              readerIndex;
+    protected        int              writerIndex;
+    private          int              maxCapacity;
+    private volatile boolean          isFree;
+    protected        ByteOrder        byteOrder = ByteOrder.BIG_ENDIAN;
 
+    protected void initByteBuf(ByteBufAllocator alloc, int maxCapacity) {
+        this.alloc = alloc;
+        this.maxCapacity = maxCapacity == -1 ? Integer.MAX_VALUE : maxCapacity;
+        this.markedReaderIndex = 0;
+        this.markedWriterIndex = 0;
+        this.readerIndex = 0;
+        this.writerIndex = 0;
+        this.isFree = false;
+        this.byteOrder = ByteOrder.BIG_ENDIAN;
+    }
+
+    @Deprecated
+    protected AbstractByteBuf() {
+    }
+
+    @Deprecated
     protected AbstractByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;
         this.maxCapacity = maxCapacity == -1 ? Integer.MAX_VALUE : maxCapacity;
+        this.markedReaderIndex = 0;
+        this.markedWriterIndex = 0;
+        this.readerIndex = 0;
+        this.writerIndex = 0;
         this.isFree = false;
+        this.byteOrder = ByteOrder.BIG_ENDIAN;
     }
 
     @Override
@@ -76,12 +94,12 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public void free() {
+        if (this.isFree) {
+            throw new IllegalStateException("has been released.");
+        }
+
         this.isFree = true;
         this._free();
-
-        synchronized (this.synchronizedLock) {
-            this.synchronizedLock.notifyAll();
-        }
     }
 
     @Override
@@ -198,29 +216,10 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public ByteBuf markReader() {
-        synchronized (this.synchronizedLock) {
-            if (this.markedReaderIndex != this.readerIndex) {
-                this.markedReaderIndex = this.readerIndex;
-            }
-
-            // notify all writer threads, to write it
-            this.synchronizedLock.notifyAll();
+        if (this.markedReaderIndex != this.readerIndex) {
+            this.markedReaderIndex = this.readerIndex;
         }
         return this;
-    }
-
-    @Override
-    public <T> T waitReadable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        synchronized (this.synchronizedLock) {
-            checkFree();
-
-            while (this.readableBytes() <= 0) {
-                this.synchronizedLock.wait();
-                checkFree();
-            }
-
-            return callBack.eApply(this);
-        }
     }
 
     @Override
@@ -236,29 +235,10 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public ByteBuf markWriter() {
-        synchronized (this.synchronizedLock) {
-            if (this.markedWriterIndex != this.writerIndex) {
-                this.markedWriterIndex = this.writerIndex;
-            }
-
-            // notify all reader threads, to read it
-            this.synchronizedLock.notifyAll();
+        if (this.markedWriterIndex != this.writerIndex) {
+            this.markedWriterIndex = this.writerIndex;
         }
         return this;
-    }
-
-    @Override
-    public <T> T waitWriteable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        synchronized (this.synchronizedLock) {
-            checkFree();
-
-            while (this.writableBytes() <= 0) {
-                this.synchronizedLock.wait();
-                checkFree();
-            }
-
-            return callBack.eApply(this);
-        }
     }
 
     @Override
@@ -602,13 +582,6 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
         return dencodeUInt32(this, offsetReadable(offset, 4), isBig());
-    }
-
-    @Override
-    public <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException {
-        synchronized (this.synchronizedLock) {
-            return callBack.eApply(this);
-        }
     }
 
     @Override

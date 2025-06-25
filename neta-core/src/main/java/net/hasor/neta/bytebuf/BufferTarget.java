@@ -23,15 +23,18 @@ import java.nio.ReadOnlyBufferException;
  * @version : 2022-11-01
  */
 class BufferTarget implements Buffer {
-    private final Buffer         memory;
-    private final PageChunkSplit pages;
-    private final int            pageSize;
-    private       boolean        readOnly;
-    private       int            offset;
-    private final int            limit;
-    private       int            capacity;
+    static RecycleHandler<BufferTarget> RECYCLE_HANDLER = new RecycleHandler<BufferTarget>() {
+        public BufferTarget create() {
+            return new BufferTarget();
+        }
 
-    public BufferTarget(int pageSize, PageChunkSplit pages, Buffer memory) {
+        @Override
+        public void free(BufferTarget tar) {
+            RecycleObjectPool.free(BufferTarget.class, tar);
+        }
+    };
+
+    void initBuffer(int pageSize, PageChunkSplit pages, Buffer memory) {
         this.memory = memory;
         this.pages = pages;
         this.pageSize = pageSize;
@@ -42,7 +45,7 @@ class BufferTarget implements Buffer {
         this.capacity = this.limit - this.offset + 1;
     }
 
-    BufferTarget(int pageSize, PageChunkSplit pages, Buffer memory, int offset, int limit, int capacity) {
+    void initBuffer(int pageSize, PageChunkSplit pages, Buffer memory, int offset, int limit, int capacity) {
         this.memory = memory;
         this.pages = pages;
         this.pageSize = pageSize;
@@ -51,6 +54,19 @@ class BufferTarget implements Buffer {
         this.limit = limit;
         this.capacity = capacity;
     }
+
+    private BufferTarget() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    private Buffer         memory;
+    private PageChunkSplit pages;
+    private int            pageSize;
+    private boolean        readOnly;
+    private int            offset;
+    private int            limit;
+    private int            capacity;
 
     @Override
     public int capacity() {
@@ -73,6 +89,7 @@ class BufferTarget implements Buffer {
     @Override
     public void free() {
         this.pages.free();
+        RECYCLE_HANDLER.free(this);
     }
 
     @Override
@@ -135,7 +152,8 @@ class BufferTarget implements Buffer {
 
         // build new Buffer
         PageChunkSplit dupPages = this.pages.duplicate();
-        BufferTarget splitBuffer = new BufferTarget(this.pageSize, dupPages, this.memory, this.offset, newOffset, newCapacity);
+        BufferTarget splitBuffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
+        splitBuffer.initBuffer(this.pageSize, dupPages, this.memory, this.offset, newOffset, newCapacity);
 
         // update self
         this.offset = newOffset + 1;

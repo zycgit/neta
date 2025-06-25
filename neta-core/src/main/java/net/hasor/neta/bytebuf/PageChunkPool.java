@@ -16,6 +16,7 @@
 package net.hasor.neta.bytebuf;
 import net.hasor.cobble.ObjectUtils;
 
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 
@@ -165,7 +166,9 @@ class PageChunkPool {
                 if (tryLock(look, true)) {
                     try {
                         this.used(look);
-                        return new PageChunkSplit(this, look.getFromPage(), look.getToPage());
+                        PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.class, PageChunkSplit.RECYCLE_HANDLER);
+                        chunk.initPageChunk(this, look.getFromPage(), look.getToPage(), new AtomicInteger(1));
+                        return chunk;
                     } finally {
                         this.unLock(look);
                     }
@@ -325,5 +328,4 @@ class PageChunkPool {
                 ", used:" + this.used + "/" + this.pageCount + //
                 ", pageSize:" + this.pageSize + ")";
     }
-    //public static String binary(byte bytes) { return HexUtils.bytes2bit(new byte[] { bytes }); }
 }

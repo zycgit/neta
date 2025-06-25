@@ -21,32 +21,37 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class AutoArrayByteBuf extends AbstractByteBuf {
-    protected     byte[] target;
-    private final int    initSize;
-    private final int    extensionSize;
+final class AutoArrayByteBuf extends AbstractByteBuf {
+    static RecycleHandler<AutoArrayByteBuf> RECYCLE_HANDLER = new RecycleHandler<AutoArrayByteBuf>() {
+        public AutoArrayByteBuf create() {
+            return new AutoArrayByteBuf();
+        }
 
-    AutoArrayByteBuf(int initCapacity, int maxCapacity, int extensionSize) {
-        this(initCapacity, maxCapacity, extensionSize, new byte[initCapacity]);
-    }
+        @Override
+        public void free(AutoArrayByteBuf tar) {
+            RecycleObjectPool.free(AutoArrayByteBuf.class, tar);
+        }
+    };
 
-    AutoArrayByteBuf(int initCapacity, int maxCapacity, int extensionSize, byte[] initData) {
-        super(null, maxCapacity);
-        this.initSize = initCapacity;
+    void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, byte[] initData) {
+        super.initByteBuf(alloc, maxCapacity);
         this.extensionSize = Math.min(extensionSize, maxCapacity);
         this.target = initData;
     }
 
+    private AutoArrayByteBuf() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    protected byte[] target;
+    private   int    extensionSize;
+
     @Override
     public ByteBuf markReader() {
-        synchronized (this.synchronizedLock) {
-            if (this.markedReaderIndex != this.readerIndex) {
-                this.markedReaderIndex = this.readerIndex;
-                this.recycle();
-            }
-
-            // notify all writer threads, to write it
-            this.synchronizedLock.notifyAll();
+        if (this.markedReaderIndex != this.readerIndex) {
+            this.markedReaderIndex = this.readerIndex;
+            this.recycle();
         }
         return this;
     }
@@ -159,6 +164,7 @@ public class AutoArrayByteBuf extends AbstractByteBuf {
     @Override
     protected void _free() {
         this.target = null;
+        RECYCLE_HANDLER.free(this);
     }
 
     @Override
@@ -176,7 +182,8 @@ public class AutoArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         byte[] copyArray = this.target.clone();
-        AutoArrayByteBuf byteBuf = new AutoArrayByteBuf(this.initSize, this.getMaxCapacity(), this.extensionSize, copyArray);
+        AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.class, AutoArrayByteBuf.RECYCLE_HANDLER);
+        byteBuf.initBuffer(this.alloc, this.getMaxCapacity(), this.extensionSize, copyArray);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;

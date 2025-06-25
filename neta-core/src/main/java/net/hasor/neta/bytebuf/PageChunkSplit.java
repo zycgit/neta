@@ -22,18 +22,18 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2024-02-15
  */
 class PageChunkSplit implements PageRange {
-    private final int           fromPage;
-    private final int           toPage;
-    private final int           capacity;
-    private final PageChunkPool chunkPool;
-    private final AtomicInteger refCount;
-    private       boolean       available;
+    static RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
+        public PageChunkSplit create() {
+            return new PageChunkSplit();
+        }
 
-    public PageChunkSplit(PageChunkPool chunkPool, int fromPage, int toPage) {
-        this(chunkPool, fromPage, toPage, new AtomicInteger(1));
-    }
+        @Override
+        public void free(PageChunkSplit tar) {
+            RecycleObjectPool.free(PageChunkSplit.class, tar);
+        }
+    };
 
-    PageChunkSplit(PageChunkPool chunkPool, int fromPage, int toPage, AtomicInteger refCount) {
+    void initPageChunk(PageChunkPool chunkPool, int fromPage, int toPage, AtomicInteger refCount) {
         this.chunkPool = chunkPool;
         this.fromPage = fromPage;
         this.toPage = toPage;
@@ -41,6 +41,18 @@ class PageChunkSplit implements PageRange {
         this.refCount = refCount;
         this.available = true;
     }
+
+    private PageChunkSplit() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    private int           fromPage;
+    private int           toPage;
+    private int           capacity;
+    private PageChunkPool chunkPool;
+    private AtomicInteger refCount;
+    private boolean       available;
 
     @Override
     public int getMemAddress() {
@@ -85,6 +97,9 @@ class PageChunkSplit implements PageRange {
             this.refCount.decrementAndGet();
             if (refCount.get() <= 0) {
                 this.chunkPool.free(this);
+                this.chunkPool = null;
+                this.refCount = null;
+                RECYCLE_HANDLER.free(this);
             }
         }
     }
@@ -98,6 +113,9 @@ class PageChunkSplit implements PageRange {
      */
     public PageChunkSplit duplicate() {
         this.refCount.incrementAndGet();
-        return new PageChunkSplit(this.chunkPool, this.fromPage, this.toPage, this.refCount);
+
+        PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.class, PageChunkSplit.RECYCLE_HANDLER);
+        chunk.initPageChunk(this.chunkPool, this.fromPage, this.toPage, this.refCount);
+        return chunk;
     }
 }

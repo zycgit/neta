@@ -21,32 +21,43 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class AutoByteBuffer extends AbstractByteBuf {
-    protected     ByteBuffer target;
-    private final int        initSize;
-    private final int        extensionSize;
+final class AutoByteBuffer extends AbstractByteBuf {
+    static RecycleHandler<AutoByteBuffer> RECYCLE_HANDLER = new RecycleHandler<AutoByteBuffer>() {
+        public AutoByteBuffer create() {
+            return new AutoByteBuffer();
+        }
 
-    AutoByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize) {
-        this(alloc, initCapacity, maxCapacity, extensionSize, alloc.jvmBuffer(initCapacity));
+        @Override
+        public void free(AutoByteBuffer tar) {
+            RecycleObjectPool.free(AutoByteBuffer.class, tar);
+        }
+    };
+
+    void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, ByteBuffer initData) {
+        super.initByteBuf(alloc, maxCapacity);
+        this.extensionSize = extensionSize;
+        this.target = initData;
     }
 
-    AutoByteBuffer(ByteBufAllocator alloc, int initCapacity, int maxCapacity, int extensionSize, ByteBuffer initData) {
+    private AutoByteBuffer() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    protected ByteBuffer target;
+    private   int        extensionSize;
+
+    AutoByteBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, ByteBuffer initData) {
         super(alloc, maxCapacity);
-        this.initSize = initCapacity;
         this.extensionSize = extensionSize;
         this.target = initData;
     }
 
     @Override
     public ByteBuf markReader() {
-        synchronized (this.synchronizedLock) {
-            if (this.markedReaderIndex != this.readerIndex) {
-                this.markedReaderIndex = this.readerIndex;
-                this.recycle();
-            }
-
-            // notify all writer threads, to write it
-            this.synchronizedLock.notifyAll();
+        if (this.markedReaderIndex != this.readerIndex) {
+            this.markedReaderIndex = this.readerIndex;
+            this.recycle();
         }
         return this;
     }
@@ -174,6 +185,7 @@ public class AutoByteBuffer extends AbstractByteBuf {
             }
         } finally {
             this.target = null;
+            RECYCLE_HANDLER.free(this);
         }
     }
 
@@ -194,8 +206,9 @@ public class AutoByteBuffer extends AbstractByteBuf {
         ByteBuffer copyBuffer = this.alloc.jvmBuffer(this.target.capacity());
         this.target.clear();
         copyBuffer.put(this.target);
-        AutoByteBuffer byteBuf = new AutoByteBuffer(this.alloc, this.initSize, this.getMaxCapacity(), this.extensionSize, copyBuffer);
 
+        AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.class, AutoByteBuffer.RECYCLE_HANDLER);
+        byteBuf.initBuffer(this.alloc, this.getMaxCapacity(), this.extensionSize, copyBuffer);
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.readerIndex = this.readerIndex;

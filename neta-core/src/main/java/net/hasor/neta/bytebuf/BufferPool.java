@@ -17,8 +17,6 @@ package net.hasor.neta.bytebuf;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.RandomUtils;
 
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.Lock;
@@ -43,7 +41,7 @@ class BufferPool {
     protected final BufferArena          q050; // 050%~100%
     protected final BufferArena          q075; // 075%~100%
     protected final BufferArena          q100; // 100%~MAX
-    protected final List<BufferArena>    arenaList;
+    protected final BufferArena[]        arenaList;
 
     public BufferPool(int pageSize) {
         this(pageSize, -1, 12);
@@ -80,12 +78,7 @@ class BufferPool {
         this.q075.configMove(75.0, this.q050, 100.0, this.q100);
         this.q100.configMove(100.0, this.q075, 100.0, null);
 
-        this.arenaList = new ArrayList<>();
-        this.arenaList.add(this.q050);
-        this.arenaList.add(this.q025);
-        this.arenaList.add(this.q000);
-        this.arenaList.add(this.qInit);
-        this.arenaList.add(this.q075);
+        this.arenaList = new BufferArena[] { this.q050, this.q025, this.q000, this.qInit, this.q075 };
     }
 
     public int getMemPageSize() {
@@ -93,7 +86,7 @@ class BufferPool {
     }
 
     public long getMemChunkSize() {
-        return this.pageSize * this.memoryChunkSize;
+        return (long) this.pageSize * (long) this.memoryChunkSize;
     }
 
     public long getMemCapacity() {
@@ -118,13 +111,17 @@ class BufferPool {
 
     protected Buffer requestBuffer(PageChunkSplit pages) {
         Buffer memory = this.getMemory(pages.getMemAddress());
-        return new BufferTarget(this.getMemPageSize(), pages, memory);
+        BufferTarget buffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
+        buffer.initBuffer(this.getMemPageSize(), pages, memory);
+        return buffer;
     }
 
     public Buffer requestBuffer(int capacity, BufferAllocator alloc) {
         ObjectUtils.checkPositive(capacity, "capacity");
         if (capacity > this.memoryChunkSize) {
-            return new BufferWrap(alloc.jvmBuffer(capacity));
+            BufferWrap buffer = RecycleObjectPool.get(BufferWrap.class, BufferWrap.RECYCLE_HANDLER);
+            buffer.initBuffer(alloc.jvmBuffer(capacity));
+            return buffer;
         }
 
         for (BufferArena arena : this.arenaList) {
@@ -161,7 +158,8 @@ class BufferPool {
 
         int memAddress = this.newMemAddress();
         PageChunkPool pool = new PageChunkPool(memAddress, this.pageSize, this.buddyTreeHeight);
-        Buffer buffer = new BufferWrap(alloc.jvmBuffer(pool.getCapacity()));
+        BufferWrap buffer = RecycleObjectPool.get(BufferWrap.class, BufferWrap.RECYCLE_HANDLER);
+        buffer.initBuffer(alloc.jvmBuffer(pool.getCapacity()));
 
         this.bufferPool.put(memAddress, buffer);
         this.memoryCapacity = this.memoryCapacity + buffer.capacity();

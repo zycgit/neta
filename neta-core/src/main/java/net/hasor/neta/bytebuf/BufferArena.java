@@ -66,7 +66,9 @@ class BufferArena {
             }
 
             Buffer memory = this.bufferPool.getMemory(pages.getMemAddress()); // trigger call triggerUsage method.
-            return new BufferTarget(this.bufferPool.getMemPageSize(), pages, memory);
+            BufferTarget buffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
+            buffer.initBuffer(this.bufferPool.getMemPageSize(), pages, memory);
+            return buffer;
         }
 
         // from next BufferArena to request.

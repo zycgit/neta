@@ -15,13 +15,19 @@ public class PooledByteBufTest {
     private ByteBuf pooledBuffer(int initCapacity) {
         int fmtMaxCap = PageChunkPool.tableSizeFor(initCapacity, Integer.MAX_VALUE);
         Buffer target = POOL.requestBuffer(initCapacity, ByteBufAllocator.DEFAULT);
-        return new PooledByteBuf(ByteBufAllocator.DEFAULT, fmtMaxCap, 4096, target, POOL);
+
+        PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.class, PooledByteBuf.RECYCLE_HANDLER);
+        byteBuf.initBuffer(ByteBufAllocator.DEFAULT, fmtMaxCap, 4096, target, POOL);
+        return byteBuf;
     }
 
     private ByteBuf pooledBuffer(int initCapacity, int maxCapacity) {
         int fmtMaxCap = PageChunkPool.tableSizeFor(maxCapacity, Integer.MAX_VALUE);
         Buffer target = POOL.requestBuffer(initCapacity, ByteBufAllocator.DEFAULT);
-        return new PooledByteBuf(ByteBufAllocator.DEFAULT, fmtMaxCap, 4096, target, POOL);
+
+        PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.class, PooledByteBuf.RECYCLE_HANDLER);
+        byteBuf.initBuffer(ByteBufAllocator.DEFAULT, fmtMaxCap, 4096, target, POOL);
+        return byteBuf;
     }
 
     @Test

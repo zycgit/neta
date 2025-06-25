@@ -21,29 +21,40 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version :  2022-11-01
  */
-class RingByteBuffer extends AbstractByteBuf {
-    protected final ByteBuffer target;
+final class RingByteBuffer extends AbstractByteBuf {
+    static RecycleHandler<RingByteBuffer> RECYCLE_HANDLER = new RecycleHandler<RingByteBuffer>() {
+        public RingByteBuffer create() {
+            return new RingByteBuffer();
+        }
 
-    RingByteBuffer(ByteBufAllocator alloc, int capacity) {
-        super(alloc, capacity);
+        @Override
+        public void free(RingByteBuffer tar) {
+            RecycleObjectPool.free(RingByteBuffer.class, tar);
+        }
+    };
+
+    void initBuffer(ByteBufAllocator alloc, int capacity) {
+        super.initByteBuf(alloc, capacity);
         this.target = alloc.jvmBuffer(capacity);
     }
 
-    private RingByteBuffer(ByteBufAllocator alloc, ByteBuffer initData) {
-        super(alloc, initData.capacity());
+    void initBuffer(ByteBufAllocator alloc, ByteBuffer initData) {
+        super.initByteBuf(alloc, initData.capacity());
         this.target = initData;
     }
 
+    private RingByteBuffer() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    protected ByteBuffer target;
+
     @Override
     public ByteBuf markReader() {
-        synchronized (this.synchronizedLock) {
-            if (this.markedReaderIndex != this.readerIndex) {
-                this.markedReaderIndex = this.readerIndex;
-                this.updateIndex();
-            }
-
-            // notify all writer threads, to write it
-            this.synchronizedLock.notifyAll();
+        if (this.markedReaderIndex != this.readerIndex) {
+            this.markedReaderIndex = this.readerIndex;
+            this.updateIndex();
         }
         return this;
     }
@@ -255,6 +266,8 @@ class RingByteBuffer extends AbstractByteBuf {
         if (ByteBufUtils.CLEANER != null) {
             ByteBufUtils.CLEANER.freeDirectBuffer(this.target);
         }
+        this.target = null;
+        RECYCLE_HANDLER.free(this);
     }
 
     @Override
@@ -274,7 +287,8 @@ class RingByteBuffer extends AbstractByteBuf {
         int capacity = this.getMaxCapacity();
         ByteBuffer copyBuffer = this.alloc.jvmBuffer(capacity);
         this._getBytes(this.markedReaderIndex, copyBuffer, copyBuffer.capacity());
-        RingByteBuffer byteBuf = new RingByteBuffer(this.alloc, copyBuffer);
+        RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.class, RingByteBuffer.RECYCLE_HANDLER);
+        byteBuf.initBuffer(this.alloc, copyBuffer);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;

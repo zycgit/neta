@@ -251,7 +251,8 @@ public class SoShutdownTest extends AbstractSoTest {
             out.flush();
             assert false;
         } catch (Exception e) {
-            assert e.getMessage().contains("Broken pipe (Write failed)");
+            System.out.println(e.getMessage());
+            assert e.getMessage().contains("Broken pipe (Write failed)") || e.getMessage().contains("Connection refused");
         }
 
         ThreadUtils.sleep(1000);

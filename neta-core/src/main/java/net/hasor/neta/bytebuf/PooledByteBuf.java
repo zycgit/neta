@@ -21,30 +21,41 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class PooledByteBuf extends AbstractByteBuf {
-    protected     Buffer     target;
-    private final BufferPool pool;
-    private final int        initSize;
-    private final int        extensionSize;
+final class PooledByteBuf extends AbstractByteBuf {
+    static RecycleHandler<PooledByteBuf> RECYCLE_HANDLER = new RecycleHandler<PooledByteBuf>() {
+        public PooledByteBuf create() {
+            return new PooledByteBuf();
+        }
 
-    PooledByteBuf(ByteBufAllocator alloc, int maxCapacity, int extensionSize, Buffer target, BufferPool pool) {
-        super(alloc, maxCapacity);
+        @Override
+        public void free(PooledByteBuf tar) {
+            RecycleObjectPool.free(PooledByteBuf.class, tar);
+        }
+    };
+
+    void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, Buffer target, BufferPool pool) {
+        super.initByteBuf(alloc, maxCapacity);
         this.target = target;
         this.pool = pool;
         this.initSize = target.capacity();
         this.extensionSize = extensionSize;
     }
 
+    private PooledByteBuf() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    protected Buffer     target;
+    private   BufferPool pool;
+    private   int        initSize;
+    private   int        extensionSize;
+
     @Override
     public ByteBuf markReader() {
-        synchronized (this.synchronizedLock) {
-            if (this.markedReaderIndex != this.readerIndex) {
-                this.markedReaderIndex = this.readerIndex;
-                this.recycle();
-            }
-
-            // notify all writer threads, to write it
-            this.synchronizedLock.notifyAll();
+        if (this.markedReaderIndex != this.readerIndex) {
+            this.markedReaderIndex = this.readerIndex;
+            this.recycle();
         }
         return this;
     }
@@ -74,7 +85,6 @@ public class PooledByteBuf extends AbstractByteBuf {
                 toFreeTarget.free();
             }
         }
-
     }
 
     private int evalSize(int requestSize) {
@@ -195,6 +205,9 @@ public class PooledByteBuf extends AbstractByteBuf {
         if (this.target != null) {
             this.target.free();
         }
+        this.target = null;
+        this.pool = null;
+        RECYCLE_HANDLER.free(this);
     }
 
     @Override
@@ -215,7 +228,9 @@ public class PooledByteBuf extends AbstractByteBuf {
         ByteBuffer targetBuf = target.getTarget().duplicate();
         targetBuf.clear().position(target.getOffset());
         this._getBytes(this.markedReaderIndex, targetBuf, target.capacity());
-        PooledByteBuf byteBuf = new PooledByteBuf(this.alloc, this.getMaxCapacity(), this.extensionSize, target, this.pool);
+
+        PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.class, PooledByteBuf.RECYCLE_HANDLER);
+        byteBuf.initBuffer(this.alloc, this.getMaxCapacity(), this.extensionSize, target, this.pool);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;

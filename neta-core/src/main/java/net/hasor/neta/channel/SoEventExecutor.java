@@ -63,14 +63,15 @@ class SoEventExecutor implements Closeable {
             int terminated = 0;
 
             for (Thread thread : this.workerThreads) {
+                Thread.State ts = thread.getState();
                 if (!thread.isInterrupted()) {
                     thread.interrupt();
                 }
-                if (thread.getState() == Thread.State.TIMED_WAITING || thread.getState() == Thread.State.WAITING) {
+                if (ts == Thread.State.TIMED_WAITING || ts == Thread.State.WAITING) {
                     LockSupport.unpark(thread);
                 }
 
-                if (thread.getState() == Thread.State.TERMINATED) {
+                if (ts == Thread.State.TERMINATED) {
                     terminated++;
                 }
             }
@@ -131,7 +132,8 @@ class SoEventExecutor implements Closeable {
 
     private void wakeUp() {
         for (Thread workerThread : this.workerThreads) {
-            if (workerThread.getState() == Thread.State.TIMED_WAITING || workerThread.getState() == Thread.State.WAITING) {
+            Thread.State ts = workerThread.getState();
+            if (ts == Thread.State.TIMED_WAITING || ts == Thread.State.WAITING) {
                 LockSupport.unpark(workerThread);
                 break;
             }

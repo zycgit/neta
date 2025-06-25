@@ -59,26 +59,30 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     @Override
     public ByteBuf ringBuffer(int capacity) {
         ObjectUtils.checkPositiveOrZero(capacity, "capacity");
-        return this.recycleBufferByAllocator(this, capacity);
+        return this.ringByAllocator(this, capacity);
     }
 
     @Override
     public ByteBuf ringHeapBuffer(int capacity) {
         ObjectUtils.checkPositiveOrZero(capacity, "capacity");
-        return this.recycleBufferByAllocator(ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR, capacity);
+        return this.ringByAllocator(ByteBufUtils.UNPOOLED_HEAP_ALLOCATOR, capacity);
     }
 
     @Override
     public ByteBuf ringDirectBuffer(int capacity) {
         ObjectUtils.checkPositiveOrZero(capacity, "capacity");
-        return this.recycleBufferByAllocator(ByteBufUtils.UNPOOLED_DIRECT_ALLOCATOR, capacity);
+        return this.ringByAllocator(ByteBufUtils.UNPOOLED_DIRECT_ALLOCATOR, capacity);
     }
 
-    private ByteBuf recycleBufferByAllocator(ByteBufAllocator alloc, int capacity) {
+    private ByteBuf ringByAllocator(ByteBufAllocator alloc, int capacity) {
         if (alloc.isDirect()) {
-            return new RingByteBuffer(alloc, capacity);
+            RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.class, RingByteBuffer.RECYCLE_HANDLER);
+            byteBuf.initBuffer(alloc, capacity);
+            return byteBuf;
         } else {
-            return new RingArrayByteBuf(alloc, capacity);
+            RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.class, RingArrayByteBuf.RECYCLE_HANDLER);
+            byteBuf.initBuffer(alloc, capacity);
+            return byteBuf;
         }
     }
 
@@ -120,9 +124,13 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     private ByteBuf bufferByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
         if (alloc.isDirect()) {
-            return new AutoByteBuffer(alloc, initCapacity, maxCapacity, this.sliceSizeByDefault);
+            AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.class, AutoByteBuffer.RECYCLE_HANDLER);
+            byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, alloc.jvmBuffer(initCapacity));
+            return byteBuf;
         } else {
-            return new AutoArrayByteBuf(initCapacity, maxCapacity, this.sliceSizeByDefault);
+            AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.class, AutoArrayByteBuf.RECYCLE_HANDLER);
+            byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, new byte[initCapacity]);
+            return byteBuf;
         }
     }
 
@@ -148,6 +156,9 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
         int fmtMaxCap = PageChunkPool.tableSizeFor(maxCapacity, Integer.MAX_VALUE);
         BufferPool pool = BufferPoolUtils.getPool(fmtMaxCap, alloc);
         Buffer target = pool.requestBuffer(initCapacity, this);
-        return new PooledByteBuf(alloc, fmtMaxCap, this.sliceSizeByDefault, target, pool);
+
+        PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.class, PooledByteBuf.RECYCLE_HANDLER);
+        byteBuf.initBuffer(alloc, fmtMaxCap, this.sliceSizeByDefault, target, pool);
+        return byteBuf;
     }
 }

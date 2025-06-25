@@ -21,14 +21,30 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class BufferWrap implements Buffer {
-    private final ByteBuffer buffer;
-    public        boolean    available;
+class BufferWrap implements Buffer {
+    static RecycleHandler<BufferWrap> RECYCLE_HANDLER = new RecycleHandler<BufferWrap>() {
+        public BufferWrap create() {
+            return new BufferWrap();
+        }
 
-    public BufferWrap(ByteBuffer buffer) {
+        @Override
+        public void free(BufferWrap tar) {
+            RecycleObjectPool.free(BufferWrap.class, tar);
+        }
+    };
+
+    void initBuffer(ByteBuffer buffer) {
         this.buffer = buffer;
         this.available = true;
     }
+
+    private BufferWrap() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    private ByteBuffer buffer;
+    private boolean    available;
 
     @Override
     public boolean isAvailable() {
@@ -145,6 +161,8 @@ public class BufferWrap implements Buffer {
         if (ByteBufUtils.CLEANER != null) {
             ByteBufUtils.CLEANER.freeDirectBuffer(this.buffer);
         }
+        this.buffer = null;
+        RECYCLE_HANDLER.free(this);
     }
 
     private static ByteBuffer clearAndPosition(ByteBuffer buffer, int index) {

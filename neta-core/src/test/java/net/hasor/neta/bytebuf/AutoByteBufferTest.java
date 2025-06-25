@@ -59,7 +59,8 @@ public class AutoByteBufferTest {
 
     @Test
     public void basicTest05() {
-        AutoByteBuffer byteBuf = new AutoByteBuffer(ByteBufUtils.DEFAULT_ALLOCATOR, 4, 10, 5);
+        AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.class, AutoByteBuffer.RECYCLE_HANDLER);
+        byteBuf.initBuffer(ByteBufUtils.DEFAULT_ALLOCATOR, 10, 5, ByteBufUtils.DEFAULT_ALLOCATOR.jvmBuffer(4));
 
         byteBuf.writeBytes(new byte[] { 1, 2, 3, 4 });
         assert byteBuf.capacity() == 4;

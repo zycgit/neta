@@ -29,16 +29,32 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 class WrapByteBuffer extends AbstractByteBuf {
-    protected ByteBuffer target;
+    static RecycleHandler<WrapByteBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapByteBuffer>() {
+        public WrapByteBuffer create() {
+            return new WrapByteBuffer();
+        }
 
-    WrapByteBuffer(ByteBuffer initData, boolean asWrite) {
-        super(null, initData.limit());
+        @Override
+        public void free(WrapByteBuffer tar) {
+            RecycleObjectPool.free(WrapByteBuffer.class, tar);
+        }
+    };
+
+    void initBuffer(ByteBuffer initData, boolean asWrite) {
+        super.initByteBuf(null, initData.limit());
         this.target = initData;
         if (!asWrite) {
             this.writerIndex = initData.limit();
             this.markedWriterIndex = initData.limit();
         }
     }
+
+    private WrapByteBuffer() {
+    }
+
+    // ------------------------------------------------------------------------
+
+    protected ByteBuffer target;
 
     @Override
     public int writableBytes() {
@@ -128,6 +144,7 @@ class WrapByteBuffer extends AbstractByteBuf {
             }
         } finally {
             this.target = null;
+            RECYCLE_HANDLER.free(this);
         }
     }
 
@@ -154,7 +171,8 @@ class WrapByteBuffer extends AbstractByteBuf {
 
         this.target.clear();
         copyBuffer.put(this.target);
-        WrapByteBuffer byteBuf = new WrapByteBuffer(copyBuffer, true);
+        WrapByteBuffer byteBuf = RecycleObjectPool.get(WrapByteBuffer.class, WrapByteBuffer.RECYCLE_HANDLER);
+        byteBuf.initBuffer(copyBuffer, true);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;

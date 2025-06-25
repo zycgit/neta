@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.function.EFunction;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -47,7 +45,9 @@ public interface ByteBuf extends ByteChannel {
 
     static ByteBuf wrap(byte[] bytes, boolean asWrite) {
         Objects.requireNonNull(bytes, "bytes is null.");
-        return new WrapArrayBuffer(bytes, asWrite);
+        WrapArrayBuffer buf = RecycleObjectPool.get(WrapArrayBuffer.class, WrapArrayBuffer.RECYCLE_HANDLER);
+        buf.initBuffer(bytes, asWrite);
+        return buf;
     }
 
     static ByteBuf wrap(ByteBuffer buffer) {
@@ -56,7 +56,9 @@ public interface ByteBuf extends ByteChannel {
 
     static ByteBuf wrap(ByteBuffer buffer, boolean asWrite) {
         Objects.requireNonNull(buffer, "buffer is null.");
-        return new WrapByteBuffer(buffer, asWrite);
+        WrapByteBuffer buf = RecycleObjectPool.get(WrapByteBuffer.class, WrapByteBuffer.RECYCLE_HANDLER);
+        buf.initBuffer(buffer, asWrite);
+        return buf;
     }
 
     /** Returns the {@link ByteBufAllocator} which created this buffer. */
@@ -703,37 +705,6 @@ public interface ByteBuf extends ByteChannel {
     default String readExpectLast(char expect, Charset charset) {
         return readExpectLast(String.valueOf(expect), charset);
     }
-
-    /**
-     * 期待可以对 Buffer 进行读操作。如果缓冲区中有数据可供读，方法会立刻返回否则会进入线程等待状态。
-     * 在多线程并发读场景下 {@link #waitReadable()} 只能保证一个线程可以读取到数据；若需所有线程都能安全的读需要使用 {@link #waitReadable(EFunction)} 方法
-     */
-    default void waitReadable() throws InterruptedException, IOException {
-        this.waitReadable(buf -> buf);
-    }
-
-    /**
-     * 当缓冲区中有数据可供读时，方法会立刻调用 callBack。
-     * 在多线程并发读场景下，读取线程会逐个进入 callBack，期间若没有足够的数据读取会阻塞后续线程
-     */
-    <T> T waitReadable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
-
-    /**
-     * 期待可以对 Buffer 进行写操作。如果缓冲区中有数据可供写，方法会立刻返回否则会进入线程等待状态。
-     * 在多线程并发写场景下 {@link #waitWriteable()} 只能保证一个线程可以写数据；若需所有线程都能安全的写需要使用 {@link #waitWriteable(EFunction)} 方法
-     */
-    default void waitWriteable() throws InterruptedException, IOException {
-        this.waitWriteable(buf -> buf);
-    }
-
-    /**
-     * 当缓冲区中可供写时，方法会立刻调用 callBack。
-     * 在多线程并发写场景下，写线程会逐个进入 callBack，期间若没有足够的空间进行写入则会阻塞后续写线程
-     */
-    <T> T waitWriteable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException;
-
-    /** 等待读写 IO 锁 */
-    <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException;
 
     /** implements {@link ReadableByteChannel} */
     @Override

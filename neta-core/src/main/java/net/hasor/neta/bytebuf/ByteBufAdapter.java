@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.function.EFunction;
-
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -539,31 +537,6 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public String readExpectLast(char expect, Charset charset) {
         return this.byteBuf.readExpectLast(expect, charset);
-    }
-
-    @Override
-    public void waitReadable() throws InterruptedException, IOException {
-        this.byteBuf.waitReadable();
-    }
-
-    @Override
-    public <T> T waitReadable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        return this.byteBuf.waitReadable(callBack);
-    }
-
-    @Override
-    public void waitWriteable() throws InterruptedException, IOException {
-        this.byteBuf.waitWriteable();
-    }
-
-    @Override
-    public <T> T waitWriteable(EFunction<ByteBuf, T, IOException> callBack) throws InterruptedException, IOException {
-        return this.byteBuf.waitWriteable(callBack);
-    }
-
-    @Override
-    public <T> T waitLock(EFunction<ByteBuf, T, IOException> callBack) throws IOException {
-        return this.byteBuf.waitLock(callBack);
     }
 
     @Override

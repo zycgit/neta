@@ -206,6 +206,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // client: send a lot of line
         ThreadUtils.daemonThread(true, (Callable) () -> {
+            ThreadUtils.sleep(300);// make sure after listen.waitAnyAccept();
             Socket client = new Socket("127.0.0.1", safePort);
             OutputStream soOut = client.getOutputStream();
             for (int i = 0; i < 10; i++) {
