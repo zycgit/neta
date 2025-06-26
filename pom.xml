@@ -4,7 +4,7 @@
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.hasor</groupId>
     <artifactId>neta-parent</artifactId>
-    <version>1.0.5</version>
+    <version>1.0.6-SNAPSHOT</version>
     <packaging>pom</packaging>
 
     <!-- Project Info -->
@@ -35,7 +35,7 @@
         <connection>scm:git:git@git.oschina.net:zycgit/neta.git</connection>
         <developerConnection>scm:git:git@git.oschina.net:zycgit/neta.git</developerConnection>
         <url>git@git.oschina.net:zycgit/neta.git</url>
-        <tag>v1.0.5</tag>
+        <tag>HEAD</tag>
     </scm>
 
     <developers>
