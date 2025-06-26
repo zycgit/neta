@@ -4,7 +4,7 @@
     <parent>
         <groupId>net.hasor</groupId>
         <artifactId>neta-parent</artifactId>
-        <version>1.0.5-SNAPSHOT</version>
+        <version>1.0.5</version>
     </parent>
 
     <artifactId>neta-all</artifactId>
@@ -222,9 +222,9 @@
                         <phase>package</phase>
                         <configuration>
                             <target>
-                                <delete dir="${basedir}/target/src"/>
-                                <delete file="${basedir}/target/original-${project.artifactId}-${project.version}.jar"/>
-                                <delete file="${basedir}/target/original-${project.artifactId}-${project.version}-sources.jar"/>
+                                <delete dir="${basedir}/target/src" />
+                                <delete file="${basedir}/target/original-${project.artifactId}-${project.version}.jar" />
+                                <delete file="${basedir}/target/original-${project.artifactId}-${project.version}-sources.jar" />
                             </target>
                         </configuration>
                         <goals>
