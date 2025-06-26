@@ -8,11 +8,20 @@
     <version>1.0.5-SNAPSHOT</version>
     <packaging>pom</packaging>
 
-    <!-- 项目信息 -->
+    <!-- Project Info -->
     <name>Neta Parent</name>
     <description>Java AIO Network utils</description>
     <url>https://www.hasor.net/</url>
     <inceptionYear>2022</inceptionYear>
+
+    <!-- 配置属性 -->
+    <properties>
+        <downloadSources>true</downloadSources>
+        <downloadJavadocs>true</downloadJavadocs>
+        <jacoco.version>0.8.5</jacoco.version>
+        <!--<maven.test.skip>true</maven.test.skip>-->
+        <!--<skipTests>true</skipTests>-->
+    </properties>
 
     <!-- 授权协议 -->
     <licenses>
@@ -30,7 +39,6 @@
         <tag>HEAD</tag>
     </scm>
 
-    <!-- 开发者 -->
     <developers>
         <developer>
             <name>赵永春(Mr.Zhao)</name>
@@ -59,20 +67,18 @@
             <dependency>
                 <groupId>net.hasor</groupId>
                 <artifactId>cobble-all</artifactId>
-                <version>4.6.2</version>
+                <version>4.7.0</version>
+            </dependency>
+
+            <!-- for Test -->
+            <dependency>
+                <groupId>junit</groupId>
+                <artifactId>junit</artifactId>
+                <version>4.13.2</version>
+                <scope>test</scope>
             </dependency>
         </dependencies>
     </dependencyManagement>
-
-    <!-- 公共依赖 -->
-    <dependencies>
-        <dependency>
-            <groupId>junit</groupId>
-            <artifactId>junit</artifactId>
-            <version>4.13.2</version>
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
 
     <!-- 构建描述 -->
     <build>
@@ -136,11 +142,31 @@
                     <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
+            <!-- eclipse 插件 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-eclipse-plugin</artifactId>
+                <version>2.10</version>
+                <configuration>
+                    <workspace>${basedir}</workspace>
+                    <downloadSources>${downloadSources}</downloadSources>
+                    <downloadJavadocs>${downloadJavadocs}</downloadJavadocs>
+                </configuration>
+            </plugin>
+            <!-- Test 失败继续 -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <version>2.7</version>
+                <configuration>
+                    <testFailureIgnore>true</testFailureIgnore>
+                </configuration>
+            </plugin>
             <!-- 覆盖率 -->
             <plugin>
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
-                <version>0.8.5</version>
+                <version>${jacoco.version}</version>
                 <executions>
                     <execution>
                         <goals>
@@ -187,15 +213,14 @@
                             </execution>
                         </executions>
                     </plugin>
+                    <!-- publishing -->
                     <plugin>
-                        <groupId>org.sonatype.plugins</groupId>
-                        <artifactId>nexus-staging-maven-plugin</artifactId>
-                        <version>1.6.13</version>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.5.0</version>
                         <extensions>true</extensions>
                         <configuration>
-                            <serverId>ossrh</serverId>
-                            <nexusUrl>https://oss.sonatype.org/</nexusUrl>
-                            <autoReleaseAfterClose>false</autoReleaseAfterClose>
+                            <publishingServerId>central</publishingServerId>
                         </configuration>
                     </plugin>
                     <plugin>
@@ -206,7 +231,7 @@
                             <autoVersionSubmodules>true</autoVersionSubmodules>
                             <useReleaseProfile>false</useReleaseProfile>
                             <releaseProfiles>release</releaseProfiles>
-                            <tagNameFormat>Release.Neta-@{project.version}</tagNameFormat>
+                            <tagNameFormat>v@{project.version}</tagNameFormat>
                             <goals>deploy</goals>
                         </configuration>
                     </plugin>
