@@ -12,7 +12,7 @@ import java.util.concurrent.TimeUnit;
 @Fork(1)
 @State(Scope.Thread)
 @OutputTimeUnit(TimeUnit.MILLISECONDS)
-@BenchmarkMode(Mode.AverageTime)
+@BenchmarkMode(Mode.All)
 @Warmup(iterations = 3)
 @Measurement(iterations = 5)
 public class PerformanceTest {
@@ -24,26 +24,22 @@ public class PerformanceTest {
             randomBoolean[i] = RandomUtils.nextBoolean();
         }
         for (int i = 0; i < randomBoolean.length; i++) {
-            randomInt[i] = RandomUtils.nextInt(1, 128);
+            randomInt[i] = RandomUtils.nextInt(8 * 1024, 8 * 1024 * 4);
         }
     }
 
     @Threads(16)
     @Benchmark
     public void requestNetaBuffer() {
-        for (int i = 0; i < randomInt.length; i++) {
-            ByteBuf buf = net.hasor.neta.bytebuf.ByteBufAllocator.DEFAULT.pooledBuffer(randomInt[i]);
-            IOUtils.closeQuietly(buf);
-        }
+        ByteBuf buf = ByteBufAllocator.DEFAULT.pooledBuffer(77);
+        IOUtils.closeQuietly(buf);
     }
 
     @Threads(16)
     @Benchmark
-    public void requestNettaBuffer() {
-        for (int i = 0; i < randomInt.length; i++) {
-            io.netty.buffer.ByteBuf buffer = io.netty.buffer.ByteBufAllocator.DEFAULT.heapBuffer(randomInt[i]);
-            buffer.release();
-        }
+    public void requestNettyBuffer() {
+        io.netty.buffer.ByteBuf buffer = io.netty.buffer.ByteBufAllocator.DEFAULT.heapBuffer(77);
+        buffer.release();
     }
 
     public static void main(String[] args) throws RunnerException {
