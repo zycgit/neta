@@ -368,7 +368,6 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
                     case Next:
-                    case Skip:
                     case Back:
                         // only the complete ProtoStack will fire triggerRcv
                         callFinish = (i == this.layers.size() - 1);
@@ -381,10 +380,6 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                                 String backToName = this.layers.get(backTo).getName();
                                 this.printLog(true, "stack '" + stackName + "' request Back, has been set to '" + backToName + "'");
                             }
-                        } else if (status == ProtoStatus.Skip) {
-                            i++; // if skip then skip next to next.
-                            String skipName = (this.layers.size() >= i) ? this.layers.get(i).getName() : ", the last node to ignore Skip.";
-                            this.printLog(true, "stack '" + stackName + "' request Skip '" + skipName + "'");
                         }
 
                         i++;
@@ -399,7 +394,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                         this.printLog(true, "stack '" + stackName + "' require Restart");
                         i++;
                         break;
-                    case Exit:
+                    case Skip:
                         callFinish = false;
                         this.printLog(true, "stack '" + stackName + "' require Exit");
                         i++;
@@ -534,12 +529,8 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
                     case Next:
-                    case Skip:
                     case Back:
-                        if (status == ProtoStatus.Skip) {
-                            this.printLog(false, "stack '" + stackName + "' require Skip");
-                            i--; // if skip then skip next to next.
-                        } else if (status == ProtoStatus.Back) {
+                        if (status == ProtoStatus.Back) {
                             if (backTo == -1) {
                                 backTo = i;
                                 this.printLog(false, "stack '" + stackName + "' require Back to '" + backTo + "'");
@@ -557,7 +548,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                         breakFor = true;
                         this.printLog(false, "stack '" + stackName + "' require Restart");
                         break;
-                    case Exit:
+                    case Skip:
                         breakFor = true;
                         this.printLog(false, "stack '" + stackName + "' require Exit");
                         break;

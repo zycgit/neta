@@ -27,7 +27,7 @@ public class AbstractStackTest {
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
 
-                return ProtoStatus.Exit;
+                return ProtoStatus.Skip;
             }
 
             @Override
@@ -209,7 +209,7 @@ public class AbstractStackTest {
             @Override
             public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 recordFailed.add(tag + "ErrExit");
-                return ProtoStatus.Exit;
+                return ProtoStatus.Skip;
             }
         };
     }
@@ -437,24 +437,6 @@ public class AbstractStackTest {
                 recordFailed.add(tag + "ErrNext");
 
                 return ProtoStatus.Next;
-            }
-        };
-    }
-
-    protected static ProtoHandler<Integer, Integer> doCopyAndSkipHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-                recordFinish.add(tag + "Skip");
-                return ProtoStatus.Skip;
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrSkip");
-
-                return ProtoStatus.Skip;
             }
         };
     }

@@ -180,22 +180,20 @@ class BufferPool {
     @Override
     public String toString() {
         String NEWLINE = ByteBufUtils.NEWLINE;
-        StringBuilder buf = new StringBuilder()                 //
-                .append("Chunk(s) at 0~25%:").append(NEWLINE)   //
-                .append("\t").append(this.qInit).append(NEWLINE)//
-                .append("Chunk(s) at 0~50%:").append(NEWLINE)   //
-                .append("\t").append(this.q000).append(NEWLINE) //
-                .append("Chunk(s) at 25~75%:").append(NEWLINE)  //
-                .append("\t").append(this.q025).append(NEWLINE) //
-                .append("Chunk(s) at 50~100%:").append(NEWLINE) //
-                .append("\t").append(this.q050).append(NEWLINE) //
-                .append("Chunk(s) at 75~100%:").append(NEWLINE) //
-                .append("\t").append(this.q075).append(NEWLINE) //
-                .append("Chunk(s) at 100%:").append(NEWLINE)    //
-                .append("\t").append(this.q100).append(NEWLINE) //
-                .append("small subpages:");
-        //            appendPoolSubPages(buf, smallSubpagePools);
-        buf.append(NEWLINE);
-        return buf.toString();
+        return "Chunk(s) at 0~25%:" + NEWLINE      //
+                + "\t" + this.qInit + NEWLINE      //
+                + "Chunk(s) at 0~50%:" + NEWLINE   //
+                + "\t" + this.q000 + NEWLINE       //
+                + "Chunk(s) at 25~75%:" + NEWLINE  //
+                + "\t" + this.q025 + NEWLINE       //
+                + "Chunk(s) at 50~100%:" + NEWLINE //
+                + "\t" + this.q050 + NEWLINE       //
+                + "Chunk(s) at 75~100%:" + NEWLINE //
+                + "\t" + this.q075 + NEWLINE       //
+                + "Chunk(s) at 100%:" + NEWLINE    //
+                + "\t" + this.q100 + NEWLINE       //
+                + "small subpages:"
+                //            appendPoolSubPages(buf, smallSubpagePools);
+                + NEWLINE;
     }
 }

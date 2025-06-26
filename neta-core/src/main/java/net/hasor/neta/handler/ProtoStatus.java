@@ -82,17 +82,6 @@ public enum ProtoStatus {
     Restart,
 
     /**
-     * Execution continues by skipping the next node of the protocol stack.
-     * <pre>
-     *     ┏━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┏━━━━━━━━━━━━━┓
-     * ... ┃ Handler (0) ┃ > ┆ Handler (1) ┆ > ┃ Handler (2) ┃ > ...
-     *     ┗━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ┗━━━━━━━━━━━━━┛
-     *          Skip            (skipped)           Next
-     * </pre>
-     */
-    Skip,
-
-    /**
      * Interrupt protocol stack event propagation, and Skip all the following {@link ProtoDuplexer}
      * <pre>
      *     ┏━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄╮
@@ -101,7 +90,7 @@ public enum ProtoStatus {
      *          Exit              Skip              Skip
      * </pre>
      */
-    Exit,
+    Skip,
 
     /**
      * Interrupt protocol stack event propagation, and throw Error
