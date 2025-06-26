@@ -45,14 +45,15 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     private       ByteBufAllocator bufAllocator;
 
     /**
-     * Creates a new decoder. the maximum length is Integer.MAX_VALUE
+     * Creates a new decoder/encoder.
+     * the maximum length is Integer.MAX_VALUE
      */
     public LineBasedFrameHandler() {
         this(Integer.MAX_VALUE, true);
     }
 
     /**
-     * Creates a new decoder.
+     * Creates a new decoder/encoder.
      * @param maxLength the maximum length of the decoded frame.
      * A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
      */
@@ -61,7 +62,7 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     }
 
     /**
-     * Creates a new decoder.
+     * Creates a new decoder/encoder.
      * @param maxLength the maximum length of the decoded frame.
      * A {@link TooLongFrameException} is thrown if the length of the frame exceeds this value.
      * @param stripDelimiter whether the decoded frame should strip out the delimiter or not

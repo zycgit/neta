@@ -91,7 +91,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     private       ByteBufAllocator bufAllocator;
 
     /**
-     * Creates a new decoder.
+     * Creates a new decoder/encoder.
      * @param fixedLength the minimum/maximum length of the decoded frame.
      */
     public LimitFrameHandler(int fixedLength) {
@@ -99,7 +99,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     }
 
     /**
-     * Creates a new decoder.
+     * Creates a new decoder/encoder.
      * @param minLength the minimum length of the decoded frame.
      * @param maxLength the maximum length of the decoded frame.
      */
@@ -131,7 +131,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                         dstBuf = this.bufAllocator.buffer(this.minLength, this.maxLength);
                     }
 
-                    int read = this.fillLimitFrame(buf, dstBuf);
+                    int read = copy(buf, dstBuf, this.maxLength);
                     if (dstBuf.writerIndex() == this.maxLength) {
                         dstBuf.markWriter();
                         dst.offerMessage(dstBuf);
@@ -184,8 +184,8 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
         return ProtoStatus.Next;
     }
 
-    private int fillLimitFrame(ByteBuf src, ByteBuf dst) {
-        int wlen = Math.min(src.readableBytes(), this.maxLength - dst.writerIndex());
+    int copy(ByteBuf src, ByteBuf dst, int maxLength) {
+        int wlen = Math.min(src.readableBytes(), maxLength - dst.writerIndex());
         return src.readBuffer(dst, wlen);
     }
 }

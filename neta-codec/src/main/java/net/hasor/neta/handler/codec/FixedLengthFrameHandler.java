@@ -39,7 +39,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 public class FixedLengthFrameHandler extends LimitFrameHandler {
     /**
-     * Creates a new decoder.
+     * Creates a new decoder/encoder.
      * @param fixedLength the minimum/maximum length of the decoded frame.
      */
     public FixedLengthFrameHandler(int fixedLength) {

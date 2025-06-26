@@ -57,6 +57,6 @@ public class StringEncoderHandler implements ProtoHandler<String, ByteBuf> {
                 hasAny = true;
             }
         }
-        return hasAny ? ProtoStatus.Next : ProtoStatus.Exit;
+        return hasAny ? ProtoStatus.Next : ProtoStatus.Skip;
     }
 }
