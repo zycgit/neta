@@ -178,8 +178,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             }
 
             if (status == ProtoStatus.Retry && netLog) {
-                String msgTag = isRcv ? "rcv" : "snd";
-                logger.info(msgTag + "(" + this.channelID + ") Stack " + i + "/" + this.layers.size() + " doRetry");
+                this.printLog(isRcv, "Stack " + i + "/" + this.layers.size() + " doRetry");
             }
         } while (status == ProtoStatus.Retry);
         return status;
