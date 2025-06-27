@@ -5,7 +5,7 @@
     <parent>
         <groupId>net.hasor</groupId>
         <artifactId>neta-example-parent</artifactId>
-        <version>1.0.0</version>
+        <version>1.0.6-SNAPSHOT</version>
     </parent>
 
     <artifactId>neta-example-telnetEcho</artifactId>

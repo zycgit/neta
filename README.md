@@ -21,18 +21,17 @@ Net ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  �
 ## Duplex Model
 
 ```text
-           PipeLayer(0)                PipeLayer (1)
-      ┏━━━━━━━━━━━━━━━━━━━━━┓     ┏━━━━━━━━━━━━━━━━━━━━━┓
-Net → ┃ RCV_UP     RCV_DOWN ┃ <=> ┃ RCV_UP     RCV_DOWN ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-      ┃                     ┃     ┃                     ┃   ┆ Application ┆
-Net → ┃ SND_DOWN     SND_UP ┃ <=> ┃ SND_DOWN     SND_UP ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
-      ┗━━━━━━━━━━━━━━━━━━━━━┛     ┗━━━━━━━━━━━━━━━━━━━━━┛
+           PipeLayer(0)              PipeLayer (1)
+      ┏━━━━━━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━━━━━━┓
+Net → ┃ RCV_UP     RCV_DOWN ┃ → ┃ RCV_UP     RCV_DOWN ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+      ┃                     ┃   ┃                     ┃   ┆ Application ┆
+Net ← ┃ SND_DOWN     SND_UP ┃ ← ┃ SND_DOWN     SND_UP ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+      ┗━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━┛
 ```
 
 ## 能力
 
-- 支持 Pipeline
-  - 提供 Next、Retry、Again、Restart、Exit、Interrupt 共 6 种流转控制方式
+- 支持 Pipeline 多种流转控制方式
 - 支持 单向 Socket 通信
   - shutdownOutput 单方面永久关闭输出通道
   - shutdownInput 单方面永久关闭输入通道

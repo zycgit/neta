@@ -32,9 +32,9 @@
 
     <!-- SCM -->
     <scm>
-        <connection>scm:git:git@git.oschina.net:zycgit/neta.git</connection>
-        <developerConnection>scm:git:git@git.oschina.net:zycgit/neta.git</developerConnection>
-        <url>git@git.oschina.net:zycgit/neta.git</url>
+        <connection>scm:git:git@gitee.com:zycgit/neta.git</connection>
+        <developerConnection>scm:git:git@gitee.com:zycgit/neta.git</developerConnection>
+        <url>https://gitee.com/zycgit/neta</url>
         <tag>HEAD</tag>
     </scm>
 
@@ -189,6 +189,13 @@
 
     <!-- 使用“-P release”启用下面配置 -->
     <profiles>
+        <profile>
+            <id>dev</id>
+            <modules>
+                <module>neta-example</module>
+                <module>performance</module>
+            </modules>
+        </profile>
         <profile>
             <id>release</id>
             <properties>

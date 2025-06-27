@@ -76,21 +76,15 @@ public ProtoStack onMessage(PipeContext context,
 ![](../../../static/docs/ps_act_restart.png)
 
 **Skip 行为**
-- 继续执行但是跳过下一个 Handler。
+- 中断事件传播，并跳过所有 Handler直达末尾。
 
 ![](../../../static/docs/ps_act_skip.png)
 
-**Exit 行为**
-- 中断事件传播，并跳过所有 Handler直达末尾。
+如果在上行事件传播过程中使用 Skip 行为，那么在进入下行处理的时候会从 Skip 处开始向下传播而非 ProtoStack 的顶部。
 
-![](../../../static/docs/ps_act_exit.png)
+![](../../../static/docs/ps_act_skip_bounds.png)
 
-如果在上行事件传播过程中使用 Exit 行为，那么在进入下行处理的时候会从 Exit 处开始向下传播而非 ProtoStack 的顶部。
-
-![](../../../static/docs/ps_act_exit_bounds.png)
-
-
-对于上行消息 Exit 意味着，结束上行传播阶段进入下行传播阶段。而下行传播阶段会从 Exit 位置开始。
+对于上行消息 Skip 意味着，结束上行传播阶段进入下行传播阶段。而下行传播阶段会从 Skip 位置开始。
 
 **Interrupt 行为**
 - 中断管道事件传播并抛出错误。
