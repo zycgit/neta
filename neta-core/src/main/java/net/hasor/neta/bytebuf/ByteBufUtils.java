@@ -18,6 +18,7 @@ import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
 
 import java.nio.ByteBuffer;
+import java.util.List;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -152,5 +153,47 @@ public class ByteBufUtils {
         byte[] bytes = new byte[available];
         buf.readBytes(bytes);
         return bytes;
+    }
+
+    public static int readableBytes(List<ByteBuf> buffers) {
+        int readableBytes = 0;
+        for (ByteBuf peek : buffers) {
+            readableBytes += peek.readableBytes();
+        }
+        return readableBytes;
+    }
+
+    public static boolean readableBytes(List<ByteBuf> buffers, int readLength) {
+        return readableBytes(buffers, 0, readLength);
+    }
+
+    public static boolean readableBytes(List<ByteBuf> buffers, int formIdx, int readLength) {
+        long readableBytes = 0;
+        for (int i = formIdx; i < buffers.size(); i++) {
+            ByteBuf buf = buffers.get(i);
+            readableBytes += buf.readableBytes();
+            if (readableBytes >= readLength) {
+                return true;
+            }
+        }
+        return readableBytes >= readLength;
+    }
+
+    public static void resetReader(List<ByteBuf> buffers) {
+        if (buffers == null) {
+            return;
+        }
+        for (ByteBuf peek : buffers) {
+            peek.resetReader();
+        }
+    }
+
+    public static void resetWriter(List<ByteBuf> buffers) {
+        if (buffers == null) {
+            return;
+        }
+        for (ByteBuf peek : buffers) {
+            peek.resetWriter();
+        }
     }
 }

@@ -16,7 +16,7 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoRcvQueue;
@@ -70,13 +70,12 @@ import java.util.List;
  * @version : 2025-06-26
  */
 public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
-    private final ByteOrder        byteOrder;
-    private final int              lengthFieldOffset;
-    private final int              lengthFieldLength;
-    private final int              initialBytesToStrip;
-    private final int              lengthAdjustment;
-    private final int              frameMaxSize;
-    private       ByteBufAllocator bufAllocator;
+    private final ByteOrder byteOrder;
+    private final int       lengthFieldOffset;
+    private final int       lengthFieldLength;
+    private final int       initialBytesToStrip;
+    private final int       lengthAdjustment;
+    private final int       frameMaxSize;
 
     /**
      * Creates a new decoder.
@@ -140,22 +139,17 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
     }
 
     @Override
-    public void onInit(ProtoContext context) {
-        this.bufAllocator = context.getSoContext().getByteBufAllocator();
-    }
-
-    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws IOException {
         // test min len
         int minLength = this.lengthFieldOffset + Math.max(this.lengthFieldLength, this.initialBytesToStrip - this.lengthFieldOffset);
         List<ByteBuf> peekAll = src.peekMessage(src.queueSize());
-        if (!testMinLen(peekAll, minLength)) {
+        if (!ByteBufUtils.readableBytes(peekAll, minLength)) {
             return ProtoStatus.Next;
         }
 
         // decode
         if (src.hasMore() && dst.hasSlot()) {
-            ByteBuf haderBuf = this.bufAllocator.buffer(minLength);
+            ByteBuf haderBuf = context.byteBufAllocator().buffer(minLength);
             int offerDataSize = 0;
 
             for (int i = 0; i < peekAll.size(); i++) {
@@ -173,30 +167,38 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
                 // readLength
                 long fieldLength = this.readFrameLength(haderBuf, this.lengthFieldOffset, this.lengthFieldLength, this.byteOrder) + this.lengthAdjustment;
                 if (fieldLength < 0) {
+                    haderBuf.free();
                     throw new BadFrameException("frame length less than 0, " + fieldLength);
                 }
                 if (fieldLength > this.frameMaxSize) {
+                    haderBuf.free();
                     throw new TooLongFrameException("frame length " + fieldLength + ", max limit " + this.frameMaxSize);
                 }
 
                 // test readMore
-                if (!readMore(i, fieldLength, peekAll)) {
-                    this.resetBuffers(peekAll);
+                if (!ByteBufUtils.readableBytes(peekAll, i, (int) fieldLength)) {
+                    ByteBufUtils.resetReader(peekAll);
+                    haderBuf.free();
                     return ProtoStatus.Next;
                 } else {
                     int len = haderBuf.readableBytes() - this.initialBytesToStrip + (int) fieldLength;
-                    ByteBuf byteBuf = this.bufAllocator.buffer(len <= 0 ? 1 : len);
+                    ByteBuf byteBuf = context.byteBufAllocator().buffer(len <= 0 ? 1 : len);
 
                     offerDataSize += this.readFrame(i, peekAll, haderBuf, byteBuf, this.initialBytesToStrip, (int) fieldLength);
                     dst.offerMessage(byteBuf);
 
                     this.flashRead(src, offerDataSize, peekAll);
+                    haderBuf.free();
                     return ProtoStatus.Retry;
                 }
             }
+
+            if (haderBuf != null) {
+                haderBuf.free();
+            }
         }
 
-        this.resetBuffers(peekAll);
+        ByteBufUtils.resetReader(peekAll);
         return ProtoStatus.Next;
     }
 
@@ -244,35 +246,6 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
                 break;
             }
         }
-    }
-
-    private boolean testMinLen(List<ByteBuf> buffers, int minimumLength) {
-        int minReadableBytes = 0;
-        for (ByteBuf peek : buffers) {
-            minReadableBytes += peek.readableBytes();
-            if (minReadableBytes >= minimumLength) {
-                break;
-            }
-        }
-        return minReadableBytes >= minimumLength;
-    }
-
-    private void resetBuffers(List<ByteBuf> peekAll) {
-        for (ByteBuf peek : peekAll) {
-            peek.resetReader();
-        }
-    }
-
-    private boolean readMore(int formIdx, long readLength, List<ByteBuf> peekAll) {
-        long readableBytes = 0;
-        for (int i = formIdx; i < peekAll.size(); i++) {
-            ByteBuf buf = peekAll.get(i);
-            readableBytes += buf.readableBytes();
-            if (readableBytes >= readLength) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /**

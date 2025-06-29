@@ -56,22 +56,6 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         this.byteOrder = ByteOrder.BIG_ENDIAN;
     }
 
-    @Deprecated
-    protected AbstractByteBuf() {
-    }
-
-    @Deprecated
-    protected AbstractByteBuf(ByteBufAllocator alloc, int maxCapacity) {
-        this.alloc = alloc;
-        this.maxCapacity = maxCapacity == -1 ? Integer.MAX_VALUE : maxCapacity;
-        this.markedReaderIndex = 0;
-        this.markedWriterIndex = 0;
-        this.readerIndex = 0;
-        this.writerIndex = 0;
-        this.isFree = false;
-        this.byteOrder = ByteOrder.BIG_ENDIAN;
-    }
-
     @Override
     public ByteBufAllocator alloc() {
         return this.alloc;

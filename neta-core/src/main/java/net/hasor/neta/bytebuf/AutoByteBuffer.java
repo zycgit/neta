@@ -47,12 +47,6 @@ final class AutoByteBuffer extends AbstractByteBuf {
     protected ByteBuffer target;
     private   int        extensionSize;
 
-    AutoByteBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, ByteBuffer initData) {
-        super(alloc, maxCapacity);
-        this.extensionSize = extensionSize;
-        this.target = initData;
-    }
-
     @Override
     public ByteBuf markReader() {
         if (this.markedReaderIndex != this.readerIndex) {

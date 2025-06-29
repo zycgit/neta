@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.IOException;
 
@@ -59,6 +60,9 @@ public interface ProtoContext {
 
     /** Refresh the protocol stack, the event propagates backward from the current protocol layer */
     Future<?> flush() throws IOException;
+
+    /** return ByteBufAllocator from SoContext. */
+    ByteBufAllocator byteBufAllocator();
 
     /** Returns the pipeline mode is receive */
     boolean isRcv();

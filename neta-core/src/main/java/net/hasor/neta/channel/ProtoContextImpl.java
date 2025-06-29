@@ -16,6 +16,7 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.IOException;
 import java.util.HashMap;
@@ -106,6 +107,11 @@ public class ProtoContextImpl implements ProtoContext {
         } else {
             throw new UnsupportedOperationException();
         }
+    }
+
+    @Override
+    public ByteBufAllocator byteBufAllocator() {
+        return this.soContext.getByteBufAllocator();
     }
 
     @Override

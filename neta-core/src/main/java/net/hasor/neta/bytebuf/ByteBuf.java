@@ -139,9 +139,11 @@ public interface ByteBuf extends ByteChannel {
      */
     ByteBuf markWriter();
 
-    /** same as markWriter() */
+    /** same as markWriter() and markReader() */
     default ByteBuf flush() throws IOException {
-        return markWriter();
+        this.markWriter();
+        this.markReader();
+        return this;
     }
 
     /** reset the markWriter, and skip all readable data */

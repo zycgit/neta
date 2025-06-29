@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoRcvQueue;
@@ -40,9 +39,8 @@ import java.util.List;
  */
 public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     /** Maximum length of a frame we're willing to decode, Throws an exception when maxLength is exceeded */
-    private final int              maxLength;
-    private final boolean          stripDelimiter;
-    private       ByteBufAllocator bufAllocator;
+    private final int     maxLength;
+    private final boolean stripDelimiter;
 
     /**
      * Creates a new decoder/encoder.
@@ -73,16 +71,11 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     }
 
     @Override
-    public void onInit(ProtoContext context) {
-        this.bufAllocator = context.getSoContext().getByteBufAllocator();
-    }
-
-    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
         if (src.hasMore()) {
             List<ByteBuf> peekArray = src.peekMessage(src.queueSize());
             while (src.hasMore()) {
-                ByteBuf line = expectLine(context, src, peekArray);
+                ByteBuf line = this.expectLine(context, src, peekArray);
                 if (line != null) {
                     dst.offerMessage(line);
                 } else {
@@ -93,7 +86,7 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
         return ProtoStatus.Next;
     }
 
-    private ByteBuf expectLine(ProtoContext context, ProtoRcvQueue<ByteBuf> src, List<ByteBuf> peekArray) {
+    private ByteBuf expectLine(ProtoContext ctx, ProtoRcvQueue<ByteBuf> src, List<ByteBuf> peekArray) {
         List<ByteBuf> temp = new ArrayList<>();
         boolean hasLine = false;
         int consumedBytes = 0;
@@ -115,7 +108,7 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             }
         }
 
-        ByteBuf tmpBuf = this.bufAllocator.buffer(consumedBytes);
+        ByteBuf tmpBuf = ctx.byteBufAllocator().buffer(consumedBytes);
 
         int lastIndex = temp.size() - 1;
         for (int i = 0; i < temp.size(); i++) {

@@ -17,7 +17,6 @@ package net.hasor.neta.handler.codec;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoRcvQueue;
@@ -78,17 +77,16 @@ import java.util.List;
  * <b>minLength</b>   = <b>4</b>
  * <b>maxLength</b>   = <b>10</b>
  * BEFORE (16 bytes)              AFTER (14 bytes)
- * +---+---+---+---+---+---+      +---------+---------+---------+
- * | 2 | 2 | 2 | 4 | 4 | 2 | ---> | 4 bytes | 6 bytes | 4 bytes |
- * +---+---+---+---+---+---+      +---------+---------+---------+
+ * +---+---+---+---+---+---+      +---+---+---+
+ * | 2 | 2 | 2 | 4 | 4 | 2 | ---> | 4 | 6 | 4 |
+ * +---+---+---+---+---+---+      +---+---+---+
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */
 public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
-    private final int              minLength;
-    private final int              maxLength;
-    private       ByteBufAllocator bufAllocator;
+    private final int minLength;
+    private final int maxLength;
 
     /**
      * Creates a new decoder/encoder.
@@ -113,11 +111,6 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     }
 
     @Override
-    public void onInit(ProtoContext context) {
-        this.bufAllocator = context.getSoContext().getByteBufAllocator();
-    }
-
-    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
         if (src.hasMore() && dst.hasSlot()) {
             boolean hasSlot = true;
@@ -128,7 +121,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
             for (ByteBuf buf : peekAll) {
                 while (buf.readableBytes() > 0 && hasSlot) {
                     if (dstBuf == null) {
-                        dstBuf = this.bufAllocator.buffer(this.minLength, this.maxLength);
+                        dstBuf = context.byteBufAllocator().buffer(this.minLength, this.maxLength);
                     }
 
                     int read = copy(buf, dstBuf, this.maxLength);
