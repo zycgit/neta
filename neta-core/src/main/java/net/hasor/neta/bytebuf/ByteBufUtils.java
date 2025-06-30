@@ -17,6 +17,7 @@ package net.hasor.neta.bytebuf;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.List;
 
@@ -194,6 +195,15 @@ public class ByteBufUtils {
         }
         for (ByteBuf peek : buffers) {
             peek.resetWriter();
+        }
+    }
+
+    public static void flush(ByteBuf... buffers) throws IOException {
+        if (buffers == null) {
+            return;
+        }
+        for (ByteBuf peek : buffers) {
+            peek.flush();
         }
     }
 }

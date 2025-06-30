@@ -177,6 +177,13 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                 throw ctxError != null ? ctxError : new InterruptedException("Interrupted by " + layer.getName());
             }
 
+            if (status == ProtoStatus.Close) {
+                protoCtx.getChannel().close();
+                String errorTag = isRcv ? ProtoInvocation.RCV_ERROR_TAG : ProtoInvocation.SND_ERROR_TAG;
+                Throwable ctxError = protoCtx.flash(errorTag);
+                throw ctxError != null ? ctxError : new InterruptedException("Interrupted by " + layer.getName());
+            }
+
             if (status == ProtoStatus.Retry && netLog) {
                 this.printLog(isRcv, "Stack " + i + "/" + this.layers.size() + " doRetry");
             }

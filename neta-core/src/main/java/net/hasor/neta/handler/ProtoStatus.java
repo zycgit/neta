@@ -102,4 +102,15 @@ public enum ProtoStatus {
      * </pre>
      */
     Interrupt,
+
+    /**
+     * Interrupt protocol stack event propagation, and close socket channel.
+     * <pre>
+     *     ┏━━━━━━━━━━━━━┓
+     * ... ┃ Handler (0) ┃ > interrupt and close socket.
+     *     ┗━━━━━━━━━━━━━┛
+     *         Close
+     * </pre>
+     */
+    Close,
 }
