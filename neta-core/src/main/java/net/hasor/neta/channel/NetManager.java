@@ -19,6 +19,7 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.tcp.TcpAsyncChannelWrap;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -96,13 +97,13 @@ public class NetManager extends AbstractNetManager {
     }
 
     /**
-     * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
-     * @param remoteAddr local address
-     * @param localPort local port
+     * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
+     * @param remoteAddr remote address
+     * @param remotePort remote port
      * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(String remoteAddr, int localPort, ProtoInitializer initializer) {
-        return this.connect(new InetSocketAddress(remoteAddr, localPort), initializer);
+    public Future<NetChannel> connect(String remoteAddr, int remotePort, ProtoInitializer initializer) {
+        return this.connect(new InetSocketAddress(remoteAddr, remotePort), initializer);
     }
 
     /**
@@ -119,8 +120,8 @@ public class NetManager extends AbstractNetManager {
         try {
             // aio Channel
             this.initChannelGroup();
-            AsynchronousSocketChannel aioChannel = AsynchronousSocketChannel.open(this.channelGroup);
-            SoConfigUtils.configSocket(this.config, aioChannel);
+            AsyncChannelWrap aioChannel = new TcpAsyncChannelWrap(AsynchronousSocketChannel.open(this.channelGroup));
+            SoConfigUtils.configSocket(this.config, aioChannel.getTargetChannel());
             asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator(), this.config);
 
             // init NetChannel
@@ -173,29 +174,6 @@ public class NetManager extends AbstractNetManager {
 
         return found.get();
     }
-
-    //    /**
-    //     * using UDP/IP on the port and bind Application layer network protocol to the channels.
-    //     *
-    //     * @param bindPort local port for bind
-    //     * @param stackFactory Application layer network protocol
-    //     * @return A channel for bind sockets
-    //     */
-    //    public synchronized NetChannel bind(int bindPort, ProtoInitializer initializer) throws IOException {
-    //        return this.bind(new InetSocketAddress(bindPort), initializer);
-    //    }
-    //
-    //    /**
-    //     * using UDP/IP on the port and bind Application layer network protocol to the channels.
-    //     *
-    //     * @param bindAddr local address for listen
-    //     * @param bindPort local port for bind
-    //     * @param stackFactory Application layer network protocol
-    //     * @return A channel for bind sockets
-    //     */
-    //    public synchronized NetChannel bind(String bindAddr, int bindPort, ProtoInitializer initializer) throws IOException {
-    //        return this.bind(new InetSocketAddress(bindAddr, bindPort), initializer);
-    //    }
 
     protected void initChannelGroup() throws IOException {
         if (this.shutdown.get()) {

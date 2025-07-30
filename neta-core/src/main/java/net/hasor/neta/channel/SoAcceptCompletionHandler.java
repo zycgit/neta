@@ -18,6 +18,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.tcp.TcpAsyncChannelWrap;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -100,7 +101,8 @@ class SoAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketC
         context.specialConfig(channelID, remoteAddr);
 
         SoSndContext wContext = new SoSndContext(channelID, createdTime, context);
-        SoAsyncChannel asyncChannel = new SoAsyncChannel(result, context.getByteBufAllocator(), context.getConfig());
+        TcpAsyncChannelWrap channelWrap = new TcpAsyncChannelWrap(result);
+        SoAsyncChannel asyncChannel = new SoAsyncChannel(channelWrap, context.getByteBufAllocator(), context.getConfig());
         SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, context);
         SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
         NetChannel channel = new NetChannel(channelID, createdTime, this.forListen, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);

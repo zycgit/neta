@@ -62,6 +62,7 @@ public class SoNetaAsSslServerTest extends AbstractSslTest {
             }
         });
 
+        ThreadUtils.sleep(500);
         while (!writeFinish.get()) {
             ThreadUtils.sleep(100);
         }

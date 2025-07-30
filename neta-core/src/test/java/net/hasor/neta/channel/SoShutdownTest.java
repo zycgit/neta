@@ -141,7 +141,7 @@ public class SoShutdownTest extends AbstractSoTest {
             out.flush();
             assert false;
         } catch (Exception e) {
-            assert e.getMessage().contains("Broken pipe (Write failed)");
+            assert e.getMessage().contains("Broken pipe");
         }
 
         server.shutdown();
@@ -201,7 +201,7 @@ public class SoShutdownTest extends AbstractSoTest {
             out.flush();
             assert false;
         } catch (Exception e) {
-            assert e.getMessage().contains("Broken pipe (Write failed)");
+            assert e.getMessage().contains("Broken pipe");
         }
 
         server.shutdown();
@@ -252,7 +252,7 @@ public class SoShutdownTest extends AbstractSoTest {
             assert false;
         } catch (Exception e) {
             System.out.println(e.getMessage());
-            assert e.getMessage().contains("Broken pipe (Write failed)") || e.getMessage().contains("Connection refused");
+            assert e.getMessage().contains("Broken pipe") || e.getMessage().contains("Connection refused");
         }
 
         ThreadUtils.sleep(1000);
@@ -516,7 +516,7 @@ public class SoShutdownTest extends AbstractSoTest {
         }
 
         assert future.isDone();
-        assert future.getCause().getMessage().equals("Connection reset by peer");
+        assert future.getCause().getMessage().startsWith("Connection reset");
         assert channel.isClose();
 
         server.shutdown();

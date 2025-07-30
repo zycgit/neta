@@ -33,18 +33,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2024-01-06
  */
 class SoAsyncChannel implements Closeable {
-    private final AsynchronousSocketChannel channel;
+    private final AsyncChannelWrap channel;
     //
-    private final Integer                   rTimeoutMs;
-    private final Integer                   wTimeoutMs;
-    private final AtomicBoolean             shutdownInputSignal;
-    private final AtomicBoolean             shutdownOutputSignal;
-    private final ByteBufAllocator          allocator;
-    private final ByteBuffer                rcvSwapBuffer;
+    private final Integer          rTimeoutMs;
+    private final Integer          wTimeoutMs;
+    private final AtomicBoolean    shutdownInputSignal;
+    private final AtomicBoolean    shutdownOutputSignal;
+    private final ByteBufAllocator allocator;
+    private final ByteBuffer       rcvSwapBuffer;
     //
-    private       boolean                   ignoreReadEofFlag;
+    private       boolean          ignoreReadEofFlag;
 
-    public SoAsyncChannel(AsynchronousSocketChannel channel, ByteBufAllocator allocator, SoConfig soConfig) {
+    SoAsyncChannel(AsyncChannelWrap channel, ByteBufAllocator allocator, SoConfig soConfig) {
         this.channel = channel;
         this.rTimeoutMs = soConfig.getSoReadTimeoutMs();
         this.wTimeoutMs = soConfig.getSoWriteTimeoutMs();
@@ -73,7 +73,9 @@ class SoAsyncChannel implements Closeable {
         }
 
         try {
-            this.channel.shutdownInput();
+            if (this.channel.supportShutdownInput()) {
+                this.channel.shutdownInput();
+            }
         } finally {
             this.shutdownInputSignal.set(true);
         }
@@ -92,7 +94,9 @@ class SoAsyncChannel implements Closeable {
         }
 
         try {
-            this.channel.shutdownOutput();
+            if (this.channel.supportShutdownOutput()) {
+                this.channel.shutdownOutput();
+            }
         } finally {
             this.shutdownOutputSignal.set(true);
         }
@@ -155,7 +159,11 @@ class SoAsyncChannel implements Closeable {
         }
 
         this.rcvSwapBuffer.clear();
-        this.channel.read(this.rcvSwapBuffer, context, rHandler);
+        if (this.rTimeoutMs != null && this.rTimeoutMs > 0) {
+            this.channel.read(this.rcvSwapBuffer, this.rTimeoutMs, TimeUnit.MILLISECONDS, context, rHandler);
+        } else {
+            this.channel.read(this.rcvSwapBuffer, context, rHandler);
+        }
 
         return true;
     }
@@ -175,7 +183,7 @@ class SoAsyncChannel implements Closeable {
         return true;
     }
 
-    public void connect(InetSocketAddress remoteAddr, SoContextImpl context, SoConnectCompletionHandler handler) {
+    public void connect(InetSocketAddress remoteAddr, SoContextImpl context, SoConnectCompletionHandler handler) throws IOException {
         this.channel.connect(remoteAddr, context, handler);
     }
 }
