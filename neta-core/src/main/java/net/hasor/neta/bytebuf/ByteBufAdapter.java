@@ -20,7 +20,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 
 /**
- * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * readMark &lt;= readIndex &lt;= writerMark &lt;= writerIndex &lt;= capacity
  */
 public class ByteBufAdapter implements ByteBuf {
     protected final ByteBuf byteBuf;

@@ -17,7 +17,7 @@ package net.hasor.neta.bytebuf;
 /**
  * <p>Implementations are responsible to allocate buffers.</p>
  * <p>Interface design reference netty io.netty.buffer.ByteBufAllocator,
- * The ByteBuf implementation is replaced with cobble.bytebuf</p>
+ * The ByteBuf implementation is replaced with ByteBuf</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */

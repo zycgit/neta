@@ -21,15 +21,15 @@ import net.hasor.neta.channel.ProtoContext;
  * A protocol stack has four endpoints: RCV_UP, RCV_DOWN, SND_UP, and SND_DOWN, these endpoints can store some data.
  * Some of these endpoints come from Buffers, e.g, RCV_UP is located low on the stack.
  * SND_DOWN is the temporary storage used to receive the output of the ProtoStack.
- * When there are multiple {@link ProtoDuplexer} layers, the endpoints are linked, e.g, first {@link ProtoDuplexer} RCV_DOWN -> next {@link ProtoDuplexer} RCV_UP
+ * When there are multiple {@link ProtoDuplexer} layers, the endpoints are linked, e.g, first {@link ProtoDuplexer} RCV_DOWN → next {@link ProtoDuplexer} RCV_UP
  * <pre>
- *         ┏━━━━━━━━━━━━━━━━━━━━━━━━┓    ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
- * DATA -> ┃ RCV_UP        RCV_DOWN ┃ -> ┃ RCV_UP        RCV_DOWN ┃  -> ...
- *         ┃                        ┃    ┃                        ┃
- *         ┃   Protocol Stack (1)   ┃    ┃   Protocol Stack (2)   ┃
- *         ┃                        ┃    ┃                        ┃
- *  ... <- ┃ SND_DOWN        SND_UP ┃ <- ┃ SND_DOWN        SND_UP ┃  <- DATA
- *         ┗━━━━━━━━━━━━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
+ *        ┏━━━━━━━━━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
+ * DATA → ┃ RCV_UP        RCV_DOWN ┃ → ┃ RCV_UP        RCV_DOWN ┃  → ...
+ *        ┃                        ┃   ┃                        ┃
+ *        ┃   Protocol Stack (1)   ┃   ┃   Protocol Stack (2)   ┃
+ *        ┃                        ┃   ┃                        ┃
+ *  ... ← ┃ SND_DOWN        SND_UP ┃ ← ┃ SND_DOWN        SND_UP ┃  ← DATA
+ *        ┗━━━━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
  * </pre>
  *
  * <p>

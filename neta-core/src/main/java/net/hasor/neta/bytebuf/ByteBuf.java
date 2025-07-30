@@ -173,13 +173,13 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 写入 1 字节的 byte，写入后 writerIndex 会 + 1。
-     * 如果 writerIndex + 1 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 1 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeByte(byte n);
 
     /**
      * 数据写入，写入后 writerIndex 会增加 src.length。
-     * 如果 writerIndex + src.length > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + src.length &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     default int writeBytes(byte[] src) {
         return this.writeBytes(src, 0, src.length);
@@ -187,49 +187,49 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 数据写入，写入后 writerIndex 会增加 len。
-     * 如果 writerIndex + len > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + len &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     int writeBytes(byte[] src, int off, int len);
 
     /**
      * 写入 2 字节的 sort（大端字节序），写入后 writerIndex 会 + 2。
-     * 如果 writerIndex + 2 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 2 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeInt16(short n);
 
     /**
      * 写入 3 字节的 int（大端字节序），写入后 writerIndex 会 + 3。
-     * 如果 writerIndex + 3 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 3 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeInt24(int n);
 
     /**
      * 写入 4 字节的 int（大端字节序），写入后 writerIndex 会 + 4。
-     * 如果 writerIndex + 4 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 4 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeInt32(int n);
 
     /**
      * 写入 4 字节的无符号 int（大端字节序），写入后 writerIndex 会 + 4。
-     * 如果 writerIndex + 4 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 4 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeUInt32(long n);
 
     /**
      * 写入 8 字节的 long（大端字节序），写入后 writerIndex 会 + 8。
-     * 如果 writerIndex + 8 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 8 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeInt64(long n);
 
     /**
      * 写入 4 字节的 float（大端字节序），写入后 writerIndex 会 + 4。
-     * 如果 writerIndex + 4 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 4 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeFloat32(float n);
 
     /**
      * 写入 8 字节的 double（大端字节序），写入后 writerIndex 会 + 8。
-     * 如果 writerIndex + 8 > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + 8 &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     void writeFloat64(double n);
 
@@ -247,7 +247,7 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 字符串会以 str.getBytes(charset) 方式转换为字节数组并写入缓存。返回值是写入的字节数。
-     * 如果 writerIndex + [string 字节数组长度] > capacity 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 writerIndex + [string 字节数组长度] &gt; capacity 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     default int writeString(String string, Charset charset) {
         if (string != null && !string.equals("")) {
@@ -341,7 +341,7 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 读取 1 字节。
-     * 如果 readableBytes() < 1 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 1 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     byte readByte();
 
@@ -355,37 +355,37 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 读取 2 字节的 short（大端字节序），读取后 readerIndex 会增加 2。
-     * 如果 readableBytes() < 2 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 2 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     short readInt16();
 
     /**
      * 读取 3 字节的 int（大端字节序），读取后 readerIndex 会增加 3。
-     * 如果 readableBytes() < 3 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 3 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     int readInt24();
 
     /**
      * 读取 4 字节的 int（大端字节序），读取后 readerIndex 会增加 4。
-     * 如果 readableBytes() < 4 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 4 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     int readInt32();
 
     /**
      * 读取 8 字节的 long（大端字节序），读取后 readerIndex 会增加 8。
-     * 如果 readableBytes() < 8 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 8 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     long readInt64();
 
     /**
      * 读取 4 字节的 float（大端字节序），读取后 readerIndex 会增加 4。
-     * 如果 readableBytes() < 4 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 4 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     float readFloat32();
 
     /**
      * 读取 8 字节的 double（大端字节序），读取后 readerIndex 会增加 8。
-     * 如果 readableBytes() < 8 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 8 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     double readFloat64();
 
@@ -407,7 +407,7 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 读取 len 字节并将其构造成 String，读取后 readerIndex 会增加 len。
-     * 如果 readableBytes() < len 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; len 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     default String readString(int len, Charset charset) {
         if (len == 0) {
@@ -425,7 +425,7 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 从 offset 偏移量的位置上开始读取 1 字节。
-     * 若 offset + 1 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 1 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     byte getByte(int offset);
 
@@ -439,37 +439,37 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 读取 2 字节的 short（大端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 2 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 2 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     short getInt16(int offset);
 
     /**
      * 读取 3 字节的 int（大端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 3 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 3 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     int getInt24(int offset);
 
     /**
      * 读取 4 字节的 int（大端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 4 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 4 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     int getInt32(int offset);
 
     /**
      * 读取 8 字节的 long（大端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 8 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 8 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     long getInt64(int offset);
 
     /**
      * 读取 4 字节的 float（大端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 4 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 4 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     float getFloat32(int offset);
 
     /**
      * 读取 8 字节的 double（大端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 8 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 8 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     double getFloat64(int offset);
 
@@ -491,7 +491,7 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 从 offset 开始读取 len 个字节，并构造一个 String，该方法不会更新 readerIndex 值。
-     * 若 offset + len > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + len &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     default String getString(int offset, int len, Charset charset) {
         if (len == 0) {
@@ -509,49 +509,49 @@ public interface ByteBuf extends ByteChannel {
 
     /**
      * 读取 1 字节的 byte 返回 0～255 之间的一个数（大端字节序），读取后 readerIndex 会增加 1。
-     * 如果 readableBytes() < 1 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 1 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     short readUInt8();
 
     /**
      * 读取 2 字节的 无符号 sort（大端字节序），读取后 readerIndex 会增加 2。
-     * 如果 readableBytes() < 2 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 2 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     int readUInt16();
 
     /**
      * 读取 3 字节的 无符号 int（大端字节序），读取后 readerIndex 会增加 3。
-     * 如果 readableBytes() < 3 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 3 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     int readUInt24();
 
     /**
      * 读取 4 字节的 无符号 int（大端字节序），读取后 readerIndex 会增加 4。
-     * 如果 readableBytes() < 4 则会引发 {@link IndexOutOfBoundsException} 异常
+     * 如果 readableBytes() &lt; 4 则会引发 {@link IndexOutOfBoundsException} 异常
      */
     long readUInt32();
 
     /**
      * 读取 1 字节的 byte 返回 0～255 之间的一个数（小端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 1 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 1 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     short getUInt8(int offset);
 
     /**
      * 读取 2 字节的 无符号 sort（小端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 2 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 2 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     int getUInt16(int offset);
 
     /**
      * 读取 3 字节的 无符号 int（小端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 3 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 3 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     int getUInt24(int offset);
 
     /**
      * 读取 4 字节的 无符号 int（小端字节序），该方法不会更新 readerIndex 值。
-     * 若 offset + 4 > readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
+     * 若 offset + 4 &gt; readableBytes() 那么将会引发 {@link IndexOutOfBoundsException} 异常
      */
     long getUInt32(int offset);
 

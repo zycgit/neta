@@ -17,7 +17,7 @@ package net.hasor.neta.bytebuf;
 import net.hasor.cobble.ObjectUtils;
 
 /**
- * readMark <= readIndex <= writerMark <= writerIndex <= capacity
+ * readMark &lt;= readIndex &lt;= writerMark &lt;= writerIndex &lt;= capacity
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */

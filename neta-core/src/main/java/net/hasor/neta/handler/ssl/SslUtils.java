@@ -149,7 +149,6 @@ public class SslUtils {
      * @param certChain a X.509 certificate chain
      * @param key a PKCS#8 private key
      * @param passwordChars the password of the {@code keyFile}. {@code null} if it's not password-protected.
-     * @return generated {@link KeyStore}.
      */
     public static void loadKeyStore(KeyStore keyStore, X509Certificate[] certChain, PrivateKey key, char[] passwordChars) throws GeneralSecurityException, IOException {
         Objects.requireNonNull(certChain, "required certChain");
