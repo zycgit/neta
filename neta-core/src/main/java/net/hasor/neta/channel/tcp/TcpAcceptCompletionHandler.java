@@ -16,10 +16,7 @@
 package net.hasor.neta.channel.tcp;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.NetListen;
-import net.hasor.neta.channel.SoCloseException;
-import net.hasor.neta.channel.SoContext;
-import net.hasor.neta.channel.SoContextService;
+import net.hasor.neta.channel.*;
 
 import java.nio.channels.AsynchronousCloseException;
 import java.nio.channels.AsynchronousServerSocketChannel;
@@ -60,6 +57,8 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
 
         try {
             long channelId = ((SoContextService) attachment).nextID();
+
+            SoConfigUtils.configSocket(attachment.getConfig(), result);
             attachment.initChannel(this.forListen, new TcpAsyncChannel(channelId, result));
         } catch (Throwable e) {
             IOUtils.closeQuietly(result);

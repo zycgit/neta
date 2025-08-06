@@ -14,19 +14,38 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.neta.channel.AsyncChannelWrap;
+import net.hasor.neta.channel.AsyncChannel;
+import net.hasor.neta.channel.SoReadTimeoutException;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.*;
+import java.nio.channels.CompletionHandler;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class UdpAsyncChannelWrap implements AsyncChannelWrap {
+public class UdpAsyncChannel implements AsyncChannel {
+    private final long            channelID;
     private final DatagramChannel channel;
+    private final ExecutorService ioExecutor;
+    private final Selector        selector;
 
-    public UdpAsyncChannelWrap(DatagramChannel channel) {
+    public UdpAsyncChannel(long channelID, DatagramChannel channel, ExecutorService ioExecutor) throws IOException {
+        this.channelID = channelID;
         this.channel = channel;
+        this.ioExecutor = ioExecutor;
+
+        this.selector = Selector.open();
+        this.channel.configureBlocking(false);
+        this.channel.register(this.selector, SelectionKey.OP_READ);
+    }
+
+    @Override
+    public long getChannelID() {
+        return this.channelID;
     }
 
     @Override
@@ -40,7 +59,7 @@ public class UdpAsyncChannelWrap implements AsyncChannelWrap {
     }
 
     @Override
-    public NetworkChannel getTargetChannel() {
+    public Object getTarget() {
         return this.channel;
     }
 
@@ -80,33 +99,52 @@ public class UdpAsyncChannelWrap implements AsyncChannelWrap {
 
     @Override
     public <A> void read(ByteBuffer dst, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        // TODO this.channel.read(dst, attachment, handler);
+        this.ioExecutor.execute(() -> asyncReadToBuffer(dst, attachment, handler, -1));
     }
 
     @Override
     public <A> void read(ByteBuffer dst, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        // TODO this.channel.read(dst, attachment, handler);
+        this.ioExecutor.execute(() -> asyncReadToBuffer(dst, attachment, handler, unit.toMillis(timeout)));
+    }
+
+    private <A> void asyncReadToBuffer(ByteBuffer dst, A attachment, CompletionHandler<Integer, ? super A> handler, long timeoutMs) {
+        try {
+            long startTime = System.currentTimeMillis();
+            if (timeoutMs > 0) {
+                long remainingTimeout = timeoutMs - (System.currentTimeMillis() - startTime);
+                if (remainingTimeout <= 0) {
+                    handler.failed(new SoReadTimeoutException("socket read timeout"), attachment);
+                    return;
+                }
+                this.selector.select(remainingTimeout);
+            } else {
+                this.selector.select();
+            }
+
+            int pos = dst.position();
+            SocketAddress remoteADdr = this.channel.receive(dst);
+            int bytesRead = dst.position() - pos;
+            if (bytesRead >= 0) {
+                handler.completed(bytesRead, attachment);
+            } else {
+                handler.failed(new IOException("channel closed"), attachment);
+            }
+        } catch (IOException e) {
+            handler.failed(e, attachment);
+        }
     }
 
     @Override
     public <A> void write(ByteBuffer src, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        // TODO this.channel.write(src, attachment, handler);
+        throw new UnsupportedOperationException();
     }
 
     @Override
     public <A> void write(ByteBuffer src, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        // TODO this.channel.write(src, timeout, unit, attachment, handler);
+        throw new UnsupportedOperationException();
     }
 
     //
-
-    @Override
-    public NetworkChannel bind(SocketAddress local) throws IOException {
-        Selector selector = Selector.open();
-        this.channel.configureBlocking(false);
-        this.channel.register(selector, SelectionKey.OP_READ);
-        return this.channel.bind(local);
-    }
 
     @Override
     public <A> void connect(SocketAddress remote, A attachment, CompletionHandler<Void, ? super A> handler) throws IOException {

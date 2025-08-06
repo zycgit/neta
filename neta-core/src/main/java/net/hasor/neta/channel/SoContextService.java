@@ -154,6 +154,10 @@ public class SoContextService implements SoContext {
 
     /** new channel, The method {@link #openChannel(SoChannel, SocketAddress)} and {@link #closeAll(boolean)} are mutually exclusive */
     public void openChannel(SoChannel<?> channel, SocketAddress remoteAddress) {
+        if (this.channelMap.containsKey(channel.getChannelID())) {
+            throw new IllegalStateException("channelID already exists.");
+        }
+
         try {
             this.closeSyncLock.readLock().lock();
 
@@ -202,11 +206,6 @@ public class SoContextService implements SoContext {
         SocketAddress remoteAddr = realChannel.getRemoteAddress();
         if (!this.acceptChannel(remoteAddr)) {
             throw new SoRejectException("reject incoming socket.");
-        }
-
-        // config channel
-        if (realChannel.getTarget() instanceof NetworkChannel) {
-            SoConfigUtils.configSocket(this.getConfig(), (NetworkChannel) realChannel.getTarget());
         }
 
         // open channel

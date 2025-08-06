@@ -296,7 +296,9 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
             Object[] dataArray = isRcv ?//
                     this.protoStack.onRcvError(this.protoCtx, null, e) ://
                     this.protoStack.onSndError(this.protoCtx, null, e);
-            appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
+            if (dataArray != null && dataArray.length > 0) {
+                appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
+            }
         } catch (Throwable ee) {
             // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
             String msg = "invoker ProtoStack failed: " + ee.getMessage();

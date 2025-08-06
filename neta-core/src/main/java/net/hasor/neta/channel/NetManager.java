@@ -21,6 +21,7 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.tcp.TcpAsyncChannel;
 import net.hasor.neta.channel.tcp.TcpAsyncServerChannel;
+import net.hasor.neta.channel.udp.UdpAsyncServerChannel;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -41,27 +42,27 @@ public class NetManager extends AbstractNetManager {
         super(config);
     }
 
-    //    /**
-    //     * using UDP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-    //     * @param listen local address:port for listen
-    //     * @param initializer Application layer network protocol
-    //     * @return A listener channel for accept incoming sockets
-    //     */
-    //    public synchronized NetListen bind(InetSocketAddress listen, ProtoInitializer initializer, NetListenOptions options) throws IOException {
-    //        this.initChannelGroup();
-    //
-    //        options = options == null ? new NetListenOptions() : options;
-    //        AsyncServerChannel channel = UdpAsyncServerChannel.createChannel(this.config, this.channelGroup);
-    //
-    //        long channelID = this.context.nextID();
-    //        long createdTime = System.currentTimeMillis();
-    //        NetListen netListen = new NetListen(channelID, createdTime, listen, channel, initializer, this.context, options);
-    //        this.context.openChannel(netListen, listen);
-    //
-    //        channel.bind(netListen, this.context);
-    //        logger.info("bind at " + listen);
-    //        return netListen;
-    //    }
+    /**
+     * using UDP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
+     * @param listen local address:port for listen
+     * @param initializer Application layer network protocol
+     * @return A listener channel for accept incoming sockets
+     */
+    public synchronized NetListen bind(InetSocketAddress listen, ProtoInitializer initializer, NetListenOptions options) throws IOException {
+        this.initChannelGroup();
+
+        options = options == null ? new NetListenOptions() : options;
+        AsyncServerChannel channel = UdpAsyncServerChannel.openChannel(this.context.nextID(), this.config);
+
+        long channelID = this.context.nextID();
+        long createdTime = System.currentTimeMillis();
+        NetListen netListen = new NetListen(channelID, createdTime, listen, channel, initializer, this.context, options);
+        this.context.openChannel(netListen, listen);
+
+        channel.bind(netListen, this.context);
+        logger.info("bind at " + listen);
+        return netListen;
+    }
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
