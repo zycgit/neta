@@ -43,7 +43,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     private final        NetListen              forListen;
     protected final      SoAsyncChannel         channel;
     protected final      SoSndContext           wContext;
-    protected final      SoContextImpl          context;
+    protected final      SoContextService       context;
     private final        SocketAddress          localAddr;
     private final        SocketAddress          remoteAddr;
     private final        long                   createdTime;
@@ -55,14 +55,14 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     protected final      SoRcvCompletionHandler rHandler;
     protected final      SoSndCompletionHandler wHandler;
     //
-    protected            ProtoContextImpl       protoCtx;
+    protected            ProtoContextService    protoCtx;
     protected            ProtoStack<ByteBuf>    protoStack;
     //
     private final        boolean                netLog;
     protected final      AtomicBoolean          closeStatus;
     protected final      Future<NetChannel>     closeFuture;
 
-    NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
+    public NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
             SoAsyncChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
         this.channelID = channelID;
         this.forListen = forListen;
@@ -84,7 +84,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         this.wHandler = wHandler;
     }
 
-    protected void initChannel(ProtoContextImpl protoCtx, ProtoStack<ByteBuf> protoStack) {
+    protected void initChannel(ProtoContextService protoCtx, ProtoStack<ByteBuf> protoStack) {
         this.protoCtx = protoCtx;
         this.protoStack = Objects.requireNonNull(protoStack, "ProtoStack is null.");
     }

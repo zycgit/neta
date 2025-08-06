@@ -23,7 +23,9 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
+import java.io.IOException;
 import java.net.SocketAddress;
+import java.nio.channels.NetworkChannel;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -35,8 +37,8 @@ import java.util.function.Consumer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoContextImpl implements SoContext {
-    private static final Logger                     logger = Logger.getLogger(SoContextImpl.class);
+public class SoContextService implements SoContext {
+    private static final Logger                     logger = Logger.getLogger(SoContextService.class);
     private final        AtomicLong                 nextID = new AtomicLong(0);
     private final        SoConfig                   config;
     private final        NetManager                 manager;
@@ -55,11 +57,11 @@ class SoContextImpl implements SoContext {
     private final        Queue<NetChannel>          channelList;
     private final        Queue<NetListen>           listenList;
 
-    public SoContextImpl(SoConfig config, NetManager manager) {
+    SoContextService(SoConfig config, NetManager manager) {
         this.manager = manager;
         this.allocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : config.getBufAllocator();
         this.config = Objects.requireNonNull(config);
-        this.useClassLoader = this.config.getClassLoader() == null ? SoContextImpl.class.getClassLoader() : this.config.getClassLoader();
+        this.useClassLoader = this.config.getClassLoader() == null ? SoContextService.class.getClassLoader() : this.config.getClassLoader();
 
         if (config.getThreadFactory() == null) {
             this.useSoThreadFactory = (loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true);
@@ -187,6 +189,66 @@ class SoContextImpl implements SoContext {
     @Override
     public SoChannel<?> findChannel(long channelID) {
         return this.channelMap.get(channelID);
+    }
+
+    @Override
+    public SoChannel<?> initChannel(NetListen forListen, AsyncChannel realChannel) throws IOException {
+        if (this.findChannel(realChannel.getChannelID()) != null) {
+            throw new IllegalStateException("channelID already exists.");
+        }
+
+        // accept
+        SocketAddress localAddr = realChannel.getLocalAddress();
+        SocketAddress remoteAddr = realChannel.getRemoteAddress();
+        if (!this.acceptChannel(remoteAddr)) {
+            throw new SoRejectException("reject incoming socket.");
+        }
+
+        // config channel
+        if (realChannel.getTarget() instanceof NetworkChannel) {
+            SoConfigUtils.configSocket(this.getConfig(), (NetworkChannel) realChannel.getTarget());
+        }
+
+        // open channel
+        long channelID = realChannel.getChannelID();
+        long createdTime = System.currentTimeMillis();
+        this.specialConfig(channelID, remoteAddr);
+
+        SoSndContext wContext = new SoSndContext(channelID, createdTime, this);
+        SoAsyncChannel asyncChannel = new SoAsyncChannel(realChannel, this.getByteBufAllocator(), this.getConfig());
+        SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, this);
+        SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
+        NetChannel channel = new NetChannel(channelID, createdTime, forListen, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
+
+        ProtoContextService protoCtx = new ProtoContextService(channel, this);
+        ProtoStack<ByteBuf> stack = forListen.getInitializer().config(protoCtx);
+        channel.initChannel(protoCtx, stack);
+
+        // init and trigger ProtoStack
+        try {
+            logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
+            this.openChannel(channel, remoteAddr);
+            channel.protoStack.onInit(channel.protoCtx);
+
+            if (!channel.isClose()) {
+                channel.protoStack.onActive(protoCtx);
+            }
+
+            if (!channel.isShutdownInput()) {
+                this.submitSoTask(channelID, new SoDelayTask(0), this).onFinal(f -> {
+                    rHandler.read();
+                });
+            }
+
+            if (!channel.isClose()) {
+                forListen.notifyAccept(channel);
+            }
+
+            return channel;
+        } catch (Throwable e) {
+            this.syncUnsafeCloseChannel(channelID, e.getMessage(), e);
+            throw e instanceof IOException ? (IOException) e : new IOException(e);
+        }
     }
 
     @Override

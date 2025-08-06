@@ -30,7 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
+class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextService> {
     private static final Logger                           logger = Logger.getLogger(SoRcvCompletionHandler.class);
     private final        long                             channelID;
     private final        long                             createdTime;
@@ -38,9 +38,9 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     private final        AtomicLong                       counterBytes;
     //
     private final        SoAsyncChannel                   channel;
-    private final        SoContextImpl                    context;
+    private final        SoContextService                 context;
 
-    public SoRcvCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoContextImpl context) {
+    public SoRcvCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoContextService context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.status = new AtomicReference<>(SoHandlerStatus.IDLE);
@@ -61,7 +61,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     @Override
-    public void completed(Integer result, SoContextImpl context) {
+    public void completed(Integer result, SoContextService context) {
         this.status.set(SoHandlerStatus.PENDING);
 
         if (result > 0) {
@@ -113,7 +113,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     @Override
-    public void failed(Throwable e, SoContextImpl context) {
+    public void failed(Throwable e, SoContextService context) {
         this.status.set(SoHandlerStatus.PENDING);
 
         if (e instanceof NotYetConnectedException) {

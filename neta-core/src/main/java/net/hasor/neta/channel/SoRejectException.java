@@ -14,23 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.net.SocketException;
+
 /**
- * Listener options.
+ * Exception thrown when a connection attempt is rejected, such as when the server port is not open.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetListenOptions {
-    private boolean suspend;
+public class SoRejectException extends SocketException {
 
-    public NetListenOptions() {
-        this.suspend = false;
-    }
-
-    public boolean isSuspend() {
-        return this.suspend;
-    }
-
-    public void setSuspend(boolean suspend) {
-        this.suspend = suspend;
+    public SoRejectException(String s) {
+        super(s);
     }
 }

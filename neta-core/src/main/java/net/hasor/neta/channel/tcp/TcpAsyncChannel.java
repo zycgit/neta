@@ -14,21 +14,39 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.neta.channel.AsyncChannelWrap;
+import net.hasor.neta.channel.AsyncChannel;
+import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.SoConfigUtils;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.NetworkChannel;
 import java.util.concurrent.TimeUnit;
 
-public class TcpAsyncChannelWrap implements AsyncChannelWrap {
+/**
+ * TCP implementation of asynchronous client channel.
+ * Provides TCP-specific implementation for establishing connections and performing I/O operations asynchronously.
+ * Wraps Java NIO's AsynchronousSocketChannel for actual network operations.
+ *
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
+ */
+public class TcpAsyncChannel implements AsyncChannel {
     private final AsynchronousSocketChannel channel;
+    private final long                      channelID;
 
-    public TcpAsyncChannelWrap(AsynchronousSocketChannel channel) {
+    public TcpAsyncChannel(long channelId, AsynchronousSocketChannel channel) {
         this.channel = channel;
+        this.channelID = channelId;
+    }
+
+    @Override
+    public long getChannelID() {
+        return this.channelID;
     }
 
     @Override
@@ -42,11 +60,9 @@ public class TcpAsyncChannelWrap implements AsyncChannelWrap {
     }
 
     @Override
-    public NetworkChannel getTargetChannel() {
+    public NetworkChannel getTarget() {
         return this.channel;
     }
-
-    //
 
     @Override
     public boolean isOpen() {
@@ -78,8 +94,6 @@ public class TcpAsyncChannelWrap implements AsyncChannelWrap {
         this.channel.close();
     }
 
-    //
-
     @Override
     public <A> void read(ByteBuffer dst, A attachment, CompletionHandler<Integer, ? super A> handler) {
         this.channel.read(dst, attachment, handler);
@@ -100,15 +114,14 @@ public class TcpAsyncChannelWrap implements AsyncChannelWrap {
         this.channel.write(src, timeout, unit, attachment, handler);
     }
 
-    //
-
-    @Override
-    public NetworkChannel bind(SocketAddress local) throws IOException {
-        throw new UnsupportedOperationException("TCP Unsupported.");
-    }
-
     @Override
     public <A> void connect(SocketAddress remote, A attachment, CompletionHandler<Void, ? super A> handler) {
         this.channel.connect(remote, attachment, handler);
+    }
+
+    public static AsyncChannel openChannel(long channelId, SoConfig config, AsynchronousChannelGroup channelGroup) throws IOException {
+        AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(channelGroup);
+        SoConfigUtils.configSocket(config, channel);
+        return new TcpAsyncChannel(channelId, channel);
     }
 }

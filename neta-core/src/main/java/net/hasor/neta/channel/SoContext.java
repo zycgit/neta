@@ -16,6 +16,7 @@
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
+import java.io.IOException;
 import java.net.SocketAddress;
 
 /**
@@ -38,6 +39,8 @@ public interface SoContext {
 
     /** find SoChannel by id */
     SoChannel<?> findChannel(long channelID);
+
+    SoChannel<?> initChannel(NetListen forListen, AsyncChannel realChannel) throws IOException;
 
     /** get {@link NetManager} */
     NetManager getNetManager();

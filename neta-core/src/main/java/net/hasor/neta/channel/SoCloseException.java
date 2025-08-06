@@ -27,4 +27,8 @@ public class SoCloseException extends SocketException {
 
     public SoCloseException() {
     }
+
+    public SoCloseException(String s) {
+        super(s);
+    }
 }

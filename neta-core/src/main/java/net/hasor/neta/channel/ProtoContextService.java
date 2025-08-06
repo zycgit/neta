@@ -27,13 +27,13 @@ import java.util.Map;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class ProtoContextImpl implements ProtoContext {
+public class ProtoContextService implements ProtoContext {
     private final NetDuplexChannel<?>   channel;
     private final SoContext             soContext;
     private final Map<Class<?>, Object> contextData;
     private final Map<String, Object>   flash;
 
-    protected ProtoContextImpl(NetDuplexChannel<?> channel, SoContext soContext) {
+    protected ProtoContextService(NetDuplexChannel<?> channel, SoContext soContext) {
         this.channel = channel;
         this.soContext = soContext;
         this.contextData = new HashMap<>();

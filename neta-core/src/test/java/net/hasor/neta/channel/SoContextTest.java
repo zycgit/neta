@@ -33,7 +33,7 @@ public class SoContextTest {
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(2);
         config.setTaskThreads(2);
-        SoContextImpl context = new SoContextImpl(config, null);
+        SoContextService context = new SoContextService(config, null);
 
         int round = 5000;
         boolean result = true;

@@ -25,7 +25,7 @@ import java.nio.channels.CompletionHandler;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImpl> {
+class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextService> {
     private static final Logger             logger = Logger.getLogger(SoConnectCompletionHandler.class);
     private final        ProtoStack<?>      protoStack;
     private final        NetChannel         channel;
@@ -40,7 +40,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
     }
 
     @Override
-    public void completed(Void result, SoContextImpl context) {
+    public void completed(Void result, SoContextService context) {
         // when close then exit.
         if (context.isClose()) {
             logger.error("ERROR: Connect Failed, context is closed.");
@@ -70,7 +70,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextImp
     }
 
     @Override
-    public void failed(Throwable e, SoContextImpl context) {
+    public void failed(Throwable e, SoContextService context) {
         this.future.failed(e);
     }
 }

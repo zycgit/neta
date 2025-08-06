@@ -13,24 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.channel.udp;
+import org.junit.Test;
+
+import java.util.concurrent.ExecutionException;
+
 /**
- * Listener options.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version : 2022-11-01
  */
-public class NetListenOptions {
-    private boolean suspend;
-
-    public NetListenOptions() {
-        this.suspend = false;
-    }
-
-    public boolean isSuspend() {
-        return this.suspend;
-    }
-
-    public void setSuspend(boolean suspend) {
-        this.suspend = suspend;
+public class SoUdpReadTest {
+    @Test
+    public void udpRead_Test() {
+        //        UdpAsyncChannel channel;
     }
 }

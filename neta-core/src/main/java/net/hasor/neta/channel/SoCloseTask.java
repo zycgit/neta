@@ -22,14 +22,14 @@ import net.hasor.cobble.logging.Logger;
  * @version : 2023-10-09
  */
 class SoCloseTask extends DefaultSoTask {
-    private static final Logger        logger = Logger.getLogger(SoCloseTask.class);
-    private final        long          channelID;
-    private final        SoContextImpl context;
-    private final        boolean       forceNow;
+    private static final Logger           logger = Logger.getLogger(SoCloseTask.class);
+    private final        long             channelID;
+    private final        SoContextService context;
+    private final        boolean          forceNow;
     //
-    private              boolean       printLog;
+    private              boolean          printLog;
 
-    public SoCloseTask(long channelID, SoContextImpl context, boolean forceNow) {
+    public SoCloseTask(long channelID, SoContextService context, boolean forceNow) {
         this.channelID = channelID;
         this.context = context;
         this.forceNow = forceNow;

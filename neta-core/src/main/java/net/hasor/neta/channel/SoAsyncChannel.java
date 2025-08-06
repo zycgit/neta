@@ -33,7 +33,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2024-01-06
  */
 class SoAsyncChannel implements Closeable {
-    private final AsyncChannelWrap channel;
+    private final AsyncChannel     channel;
     //
     private final Integer          rTimeoutMs;
     private final Integer          wTimeoutMs;
@@ -44,7 +44,7 @@ class SoAsyncChannel implements Closeable {
     //
     private       boolean          ignoreReadEofFlag;
 
-    SoAsyncChannel(AsyncChannelWrap channel, ByteBufAllocator allocator, SoConfig soConfig) {
+    SoAsyncChannel(AsyncChannel channel, ByteBufAllocator allocator, SoConfig soConfig) {
         this.channel = channel;
         this.rTimeoutMs = soConfig.getSoReadTimeoutMs();
         this.wTimeoutMs = soConfig.getSoWriteTimeoutMs();
@@ -153,7 +153,7 @@ class SoAsyncChannel implements Closeable {
     }
 
     /** Reads a sequence of bytes from this channel into the given buffer. */
-    public boolean read(SoContextImpl context, SoRcvCompletionHandler rHandler) {
+    public boolean read(SoContextService context, SoRcvCompletionHandler rHandler) {
         if (this.shutdownInputSignal.get()) {
             return false;
         }
@@ -169,7 +169,7 @@ class SoAsyncChannel implements Closeable {
     }
 
     /** Writes a sequence of bytes to this channel from the given buffer. */
-    public boolean write(ByteBuffer swapBuf, SoContextImpl context, SoSndCompletionHandler wHandler) {
+    public boolean write(ByteBuffer swapBuf, SoContextService context, SoSndCompletionHandler wHandler) {
         if (this.shutdownOutputSignal.get()) {
             return false;
         }
@@ -183,7 +183,7 @@ class SoAsyncChannel implements Closeable {
         return true;
     }
 
-    public void connect(InetSocketAddress remoteAddr, SoContextImpl context, SoConnectCompletionHandler handler) throws IOException {
+    public void connect(InetSocketAddress remoteAddr, SoContextService context, SoConnectCompletionHandler handler) throws IOException {
         this.channel.connect(remoteAddr, context, handler);
     }
 }

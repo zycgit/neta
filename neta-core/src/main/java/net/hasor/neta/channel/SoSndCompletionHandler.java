@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl> {
+class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextService> {
     private static final Logger                           logger = Logger.getLogger(SoSndCompletionHandler.class);
     private final        long                             channelID;
     private final        long                             createdTime;
@@ -37,7 +37,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     //
     private final        SoAsyncChannel                   channel;
     private final        SoSndContext                     sndContext;
-    private final        SoContextImpl                    context;
+    private final        SoContextService                 context;
     private final        ByteBuffer                       sndSwapBuf;
 
     public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext sndContext) {
@@ -113,7 +113,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     @Override
-    public void completed(Integer result, SoContextImpl context) {
+    public void completed(Integer result, SoContextService context) {
         this.status.set(SoHandlerStatus.PENDING);
 
         if (logger.isDebugEnabled()) {
@@ -133,7 +133,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextImpl
     }
 
     @Override
-    public void failed(Throwable e, SoContextImpl context) {
+    public void failed(Throwable e, SoContextService context) {
         this.handleException(e);
     }
 

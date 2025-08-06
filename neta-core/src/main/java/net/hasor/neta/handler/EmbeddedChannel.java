@@ -50,7 +50,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     private final        AtomicBoolean           closeStatus;
     private final        Future<EmbeddedChannel> closeFuture;
 
-    private static class EmbeddedProtoContextImpl extends ProtoContextImpl {
+    private static class EmbeddedProtoContextImpl extends ProtoContextService {
         protected EmbeddedProtoContextImpl(EmbeddedChannel channel, SoContext soContext) {
             super(channel, soContext);
         }

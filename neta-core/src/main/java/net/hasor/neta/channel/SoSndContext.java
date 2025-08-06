@@ -27,10 +27,10 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 class SoSndContext {
     private final long             channelID;
     private final long             createdTime;
-    private final SoContextImpl    context;
+    private final SoContextService context;
     private final Queue<SoSndData> wQueue;
 
-    public SoSndContext(long channelID, long createdTime, SoContextImpl context) {
+    public SoSndContext(long channelID, long createdTime, SoContextService context) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.context = context;
@@ -88,9 +88,9 @@ class SoSndContext {
     }
 
     /**
-     * return {@link SoContextImpl}
+     * return {@link SoContextService}
      */
-    public SoContextImpl getContext() {
+    public SoContextService getContext() {
         return this.context;
     }
 

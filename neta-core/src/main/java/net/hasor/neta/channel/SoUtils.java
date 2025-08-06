@@ -26,7 +26,7 @@ import java.net.SocketAddress;
  */
 public class SoUtils {
 
-    public static SoConnectTimeoutException newTimeout(boolean isRcv, long channelID, SoContextImpl context, Throwable e) {
+    public static SoConnectTimeoutException newTimeout(boolean isRcv, long channelID, SoContextService context, Throwable e) {
         SocketAddress address = context.getRemoteAddress(channelID);
         String errorMsg = (isRcv ? "rcv(" : "snd(") + channelID + ") Connection timed out: " + address;
         SoConnectTimeoutException cause = new SoConnectTimeoutException(errorMsg);

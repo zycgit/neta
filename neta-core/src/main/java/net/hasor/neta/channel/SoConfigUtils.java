@@ -24,7 +24,7 @@ import java.nio.channels.NetworkChannel;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoConfigUtils {
+public class SoConfigUtils {
     private static final Logger logger = Logger.getLogger(NetManager.class);
 
     public static void configListen(SoConfig config, NetworkChannel channel) throws IOException {

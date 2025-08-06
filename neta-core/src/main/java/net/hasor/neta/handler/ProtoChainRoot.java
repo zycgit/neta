@@ -18,7 +18,7 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoContextImpl;
+import net.hasor.neta.channel.ProtoContextService;
 import net.hasor.neta.channel.ProtoStack;
 
 import java.util.ArrayList;
@@ -210,7 +210,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             this.offerMessage(true, useRcvUp, rcvData);
             return this.onRcvLife(protoCtx, depth);
         } finally {
-            ((ProtoContextImpl) protoCtx).clearFlash();
+            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
@@ -228,7 +228,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             int depth = this.findDepth(true, stackName);
             return this.onRcvLife(protoCtx, depth);
         } finally {
-            ((ProtoContextImpl) protoCtx).clearFlash();
+            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
@@ -441,7 +441,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             this.offerMessage(false, useSndUp, sndData);
             return this.doSndLife(protoCtx, depth);
         } finally {
-            ((ProtoContextImpl) protoCtx).clearFlash();
+            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
@@ -460,7 +460,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             int depth = this.findDepth(false, stackName);
             return this.doSndLife(protoCtx, depth);
         } finally {
-            ((ProtoContextImpl) protoCtx).clearFlash();
+            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 

@@ -19,14 +19,13 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.tcp.TcpAsyncChannelWrap;
+import net.hasor.neta.channel.tcp.TcpAsyncChannel;
+import net.hasor.neta.channel.tcp.TcpAsyncServerChannel;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
-import java.nio.channels.AsynchronousServerSocketChannel;
-import java.nio.channels.AsynchronousSocketChannel;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -42,15 +41,27 @@ public class NetManager extends AbstractNetManager {
         super(config);
     }
 
-    /**
-     * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     * @param listenPort local port for listen
-     * @param initializer Application layer network protocol
-     * @return A listener channel for accept incoming sockets
-     */
-    public synchronized NetListen listen(int listenPort, ProtoInitializer initializer) throws IOException {
-        return this.listen(new InetSocketAddress("0.0.0.0", listenPort), initializer, null);
-    }
+    //    /**
+    //     * using UDP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
+    //     * @param listen local address:port for listen
+    //     * @param initializer Application layer network protocol
+    //     * @return A listener channel for accept incoming sockets
+    //     */
+    //    public synchronized NetListen bind(InetSocketAddress listen, ProtoInitializer initializer, NetListenOptions options) throws IOException {
+    //        this.initChannelGroup();
+    //
+    //        options = options == null ? new NetListenOptions() : options;
+    //        AsyncServerChannel channel = UdpAsyncServerChannel.createChannel(this.config, this.channelGroup);
+    //
+    //        long channelID = this.context.nextID();
+    //        long createdTime = System.currentTimeMillis();
+    //        NetListen netListen = new NetListen(channelID, createdTime, listen, channel, initializer, this.context, options);
+    //        this.context.openChannel(netListen, listen);
+    //
+    //        channel.bind(netListen, this.context);
+    //        logger.info("bind at " + listen);
+    //        return netListen;
+    //    }
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
@@ -65,35 +76,24 @@ public class NetManager extends AbstractNetManager {
 
     /**
      * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     * @param listen local address:port for listen
+     * @param listenAddr local address:port for listenAddr
      * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(InetSocketAddress listen, ProtoInitializer initializer, NetListenOptions options) throws IOException {
+    public synchronized NetListen listen(InetSocketAddress listenAddr, ProtoInitializer initializer, NetListenOptions options) throws IOException {
         this.initChannelGroup();
 
-        options = options == null ? NetListenOptions.DEFAULT : options;
-        AsynchronousServerSocketChannel listenChannel = AsynchronousServerSocketChannel.open(this.channelGroup);
-        SoConfigUtils.configListen(this.context.getConfig(), listenChannel);
-        listenChannel.bind(listen, 0);
+        options = options == null ? new NetListenOptions() : options;
+        AsyncServerChannel socket = TcpAsyncServerChannel.openChannel(this.context.nextID(), this.config, this.channelGroup);
 
-        long channelID = this.context.nextID();
+        long channelID = socket.getChannelID();
         long createdTime = System.currentTimeMillis();
-        NetListen netListen = new NetListen(channelID, createdTime, listen, listenChannel, initializer, this.context, options);
-        this.context.openChannel(netListen, listen);
+        NetListen listen = new NetListen(channelID, createdTime, listenAddr, socket, initializer, this.context, options);
+        this.context.openChannel(listen, listenAddr);
 
-        listenChannel.accept(this.context, new SoAcceptCompletionHandler(netListen, listenChannel, this.context));
-        logger.info("listen at " + listen);
-        return netListen;
-    }
-
-    /**
-     * using TCP/IP connect to local port, and bind Application layer network protocol on this channel.
-     * @param localPort local port
-     * @param initializer Application layer network protocol
-     */
-    public Future<NetChannel> connect(int localPort, ProtoInitializer initializer) {
-        return this.connect(new InetSocketAddress(localPort), initializer);
+        socket.bind(listen, this.context);
+        logger.info("listenAddr at " + listenAddr);
+        return listen;
     }
 
     /**
@@ -113,19 +113,18 @@ public class NetManager extends AbstractNetManager {
      */
     public Future<NetChannel> connect(InetSocketAddress remoteAddr, ProtoInitializer initializer) {
         Future<NetChannel> future = new BasicFuture<>();
-        long channelID = this.context.nextID();
         SoAsyncChannel asyncChannel = null;
         NetChannel channel;
 
         try {
             // aio Channel
             this.initChannelGroup();
-            AsyncChannelWrap aioChannel = new TcpAsyncChannelWrap(AsynchronousSocketChannel.open(this.channelGroup));
-            SoConfigUtils.configSocket(this.config, aioChannel.getTargetChannel());
+            long channelID = this.context.nextID();
+            long createdTime = System.currentTimeMillis();
+            AsyncChannel aioChannel = TcpAsyncChannel.openChannel(channelID, this.config, this.channelGroup);
             asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator(), this.config);
 
             // init NetChannel
-            long createdTime = System.currentTimeMillis();
             SoSndContext wContext = new SoSndContext(channelID, createdTime, this.context);
             SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, this.context);
             SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
@@ -134,7 +133,7 @@ public class NetManager extends AbstractNetManager {
             channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
 
             // init ProtoStack
-            ProtoContextImpl protoCtx = new ProtoContextImpl(channel, this.context);
+            ProtoContextService protoCtx = new ProtoContextService(channel, this.context);
             channel.initChannel(protoCtx, initializer.config(protoCtx));
         } catch (Throwable e) {
             IOUtils.closeQuietly(asyncChannel);
@@ -152,7 +151,7 @@ public class NetManager extends AbstractNetManager {
             logger.info("initialize connect(" + channel.getChannelID() + ") to " + remoteAddr);
             return future;
         } catch (Throwable e) {
-            this.context.syncUnsafeCloseChannel(channelID, e.getMessage(), e);
+            this.context.syncUnsafeCloseChannel(channel.getChannelID(), e.getMessage(), e);
             future.failed(e);
             return future;
         }

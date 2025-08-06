@@ -19,7 +19,6 @@ import net.hasor.cobble.concurrent.future.Future;
 
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousServerSocketChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -29,25 +28,25 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version : 2023-09-24
  */
 public class NetListen extends AttributeChannel<NetListen> {
-    private final    long                            channelID;
-    private final    long                            createdTime;
-    private          long                            lastActiveTime;
-    private          long                            lastAcceptTime;
-    private final    AtomicLong                      acceptCount;
-    private final    Object                          acceptLock;
-    private final    Object                          closeLock;
+    private final    long               channelID;
+    private final    long               createdTime;
+    private          long               lastActiveTime;
+    private          long               lastAcceptTime;
+    private final    AtomicLong         acceptCount;
+    private final    Object             acceptLock;
+    private final    Object             closeLock;
     //
-    private final    InetSocketAddress               listen;
-    protected final  AsynchronousServerSocketChannel channel;
-    private final    ProtoInitializer                initializer;
-    private final    SoContextImpl                   context;
-    private volatile boolean                         suspend;
+    private final    InetSocketAddress  listen;
+    protected final  AsyncServerChannel channel;
+    private final    ProtoInitializer   initializer;
+    private final    SoContextService   context;
+    private volatile boolean            suspend;
     //
-    protected final  AtomicBoolean                   closeStatus;
-    protected final  Future<NetListen>               closeFuture;
+    protected final  AtomicBoolean      closeStatus;
+    protected final  Future<NetListen>  closeFuture;
 
-    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsynchronousServerSocketChannel channel,//
-            ProtoInitializer initializer, SoContextImpl context, NetListenOptions options) {
+    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsyncServerChannel channel,//
+            ProtoInitializer initializer, SoContextService context, NetListenOptions options) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
@@ -172,7 +171,7 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     /** return Application layer network protocol stack to use */
     ProtoInitializer getInitializer() {
-        return initializer;
+        return this.initializer;
     }
 
     @Override
