@@ -14,10 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.AsyncServerChannel;
+import net.hasor.neta.channel.NetListen;
+import net.hasor.neta.channel.SoContext;
 
 import java.io.IOException;
-import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.NetworkChannel;
 
@@ -27,13 +28,13 @@ import java.nio.channels.NetworkChannel;
  * Wraps Java NIO's AsynchronousServerSocketChannel for actual network operations.
  *
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version 2025-08-06
  */
-public class TcpAsyncServerChannel implements AsyncServerChannel {
+class TcpAsyncServerChannel implements AsyncServerChannel {
     private final AsynchronousServerSocketChannel channel;
     private final long                            channelID;
 
-    public TcpAsyncServerChannel(long channelId, AsynchronousServerSocketChannel channel) {
+    TcpAsyncServerChannel(long channelId, AsynchronousServerSocketChannel channel) {
         this.channel = channel;
         this.channelID = channelId;
     }
@@ -62,11 +63,5 @@ public class TcpAsyncServerChannel implements AsyncServerChannel {
     public void bind(NetListen listen, SoContext context) throws IOException {
         this.channel.bind(listen.getLocalAddr(), 0);
         this.channel.accept(context, new TcpAcceptCompletionHandler(listen, this.channel));
-    }
-
-    public static AsyncServerChannel openChannel(long channelId, SoConfig config, AsynchronousChannelGroup channelGroup) throws IOException {
-        AsynchronousServerSocketChannel channel = AsynchronousServerSocketChannel.open(channelGroup);
-        SoConfigUtils.configListen(config, channel);
-        return new TcpAsyncServerChannel(channelId, channel);
     }
 }

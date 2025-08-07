@@ -19,6 +19,7 @@ import net.hasor.neta.handler.ProtoHelper;
 import org.junit.Test;
 
 import java.io.InputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -32,8 +33,9 @@ public class SoListenTest extends AbstractSoTest {
     public void acceptTest_1() throws Exception {
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(2, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
+        NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), NetOptions.TCP());
 
         Socket client = new Socket("127.0.0.1", safePort);
         InputStream soInput = client.getInputStream();
@@ -58,8 +60,10 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void suspendTest_1() throws Exception {
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+
         NetManager server = new NetManager(crateConfig(2, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
+        NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), NetOptions.TCP());
 
         listen.suspend();
         Socket testClient1 = new Socket("127.0.0.1", safePort);
@@ -87,8 +91,8 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void acceptListener_1() throws Exception {
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen1 = server.listen("127.0.0.1", safePort(), context -> ProtoHelper.builder().build());
-        NetListen listen2 = server.listen("127.0.0.1", safePort(), context -> ProtoHelper.builder().build());
+        NetListen listen1 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), NetOptions.TCP());
+        NetListen listen2 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), NetOptions.TCP());
         int safePort1 = listen1.getListenPort();
         int safePort2 = listen2.getListenPort();
 
@@ -122,12 +126,12 @@ public class SoListenTest extends AbstractSoTest {
     public void acceptListener_2() throws Exception {
         AtomicInteger atomicListen = new AtomicInteger();
         NetManager server = new NetManager(crateConfig(2, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort(), new ProtoInitializer() {
+        NetListen listen = server.listen(new InetSocketAddress("127.0.0.1", safePort()), new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
                 return ProtoHelper.builder().nextDecoder(counter(atomicListen)).build();
             }
-        });
+        }, NetOptions.TCP());
 
         assert atomicListen.get() == 0;
         assert listen.getChannelCount() == 0;
@@ -152,8 +156,9 @@ public class SoListenTest extends AbstractSoTest {
     public void foundTest_1() throws Exception {
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(2, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, context -> ProtoHelper.builder().build());
+        NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), NetOptions.TCP());
 
         assert listen == server.findListen(safePort);
 

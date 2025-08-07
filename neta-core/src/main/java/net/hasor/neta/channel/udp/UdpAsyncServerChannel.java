@@ -14,18 +14,37 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.AsyncServerChannel;
+import net.hasor.neta.channel.NetListen;
+import net.hasor.neta.channel.SoContext;
+import net.hasor.neta.channel.SoContextService;
 
 import java.io.IOException;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.NetworkChannel;
 import java.util.concurrent.ExecutorService;
 
-public class UdpAsyncServerChannel implements AsyncServerChannel {
+/**
+ * An implementation of the {@link AsyncServerChannel} interface for UDP communication.
+ * This class provides asynchronous accept operations over a UDP channel,
+ * using a non-blocking {@link DatagramChannel} and a dedicated I/O executor service.
+ * <p>
+ * The UdpAsyncServerChannel supports accepting incoming connections with a specified timeout.
+ * Upon accepting a connection, it creates a new {@link UdpAsyncChannel} for the accepted socket,
+ * and binds it to the provided {@link SoContext}.
+ * <p>
+ * The I/O operations for the accepted channels are performed by the provided I/O executor service.
+ *
+ * @see java.nio.channels.DatagramChannel
+ * @see java.util.concurrent.ExecutorService
+ * @author 赵永春 (zyc@hasor.net)
+ * @version 2025-08-06
+ */
+class UdpAsyncServerChannel implements AsyncServerChannel {
     private final long            channelID;
     private final DatagramChannel channel;
 
-    public UdpAsyncServerChannel(long channelID, DatagramChannel channel) {
+    UdpAsyncServerChannel(long channelID, DatagramChannel channel) {
         this.channelID = channelID;
         this.channel = channel;
     }
@@ -57,11 +76,5 @@ public class UdpAsyncServerChannel implements AsyncServerChannel {
         long channelId = ((SoContextService) context).nextID();
         ExecutorService executor = ((SoContextService) context).getIoExecutor();
         context.initChannel(listen, new UdpAsyncChannel(channelId, this.channel, executor));
-    }
-
-    public static AsyncServerChannel openChannel(long channelId, SoConfig config) throws IOException {
-        DatagramChannel channel = DatagramChannel.open();
-        SoConfigUtils.configListen(config, channel);
-        return new UdpAsyncServerChannel(channelId, channel);
     }
 }

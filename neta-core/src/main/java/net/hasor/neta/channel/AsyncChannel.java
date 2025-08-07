@@ -26,7 +26,7 @@ import java.util.concurrent.TimeUnit;
  * Represents a bidirectional communication channel that can perform operations asynchronously.
  * Extends Closeable to ensure proper resource cleanup.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version 2025-08-06
  */
 public interface AsyncChannel extends Closeable {
     /**

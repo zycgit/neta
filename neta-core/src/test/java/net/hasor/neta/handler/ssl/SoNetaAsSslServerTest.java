@@ -17,12 +17,14 @@ package net.hasor.neta.handler.ssl;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.NetOptions;
 import net.hasor.neta.channel.SoConfig;
 import org.junit.Test;
 
 import javax.net.ssl.SSLSocket;
 import javax.net.ssl.SSLSocketFactory;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -38,13 +40,14 @@ public class SoNetaAsSslServerTest extends AbstractSslTest {
     @Test
     public void netaAsSslServerTest_01() throws Exception {
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         SoConfig soConf = crateConfig(128, 4096);
         soConf.setNetlog(false);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
         NetManager neta = new NetManager(soConf);
 
         List<String> rcvMessage = new ArrayList<>();
-        neta.listen("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage)));
+        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage)), NetOptions.TCP());
 
         // client
         AtomicBoolean writeFinish = new AtomicBoolean();

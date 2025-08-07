@@ -23,6 +23,7 @@ import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 
@@ -35,6 +36,7 @@ public class SoConnectTest extends AbstractSoTest {
     public void connectToTest_01() throws Exception {
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         ServerSocket server = new ServerSocket(safePort);
         ThreadUtils.daemonThread(true, (Callable) () -> {
             Socket remote = server.accept();
@@ -47,7 +49,7 @@ public class SoConnectTest extends AbstractSoTest {
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
         NetManager neta = new NetManager(crateConfig(2, 30));
-        Future<NetChannel> future = neta.connect("127.0.0.1", safePort, new ProtoInitializer() {
+        Future<NetChannel> future = neta.connect(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
                 return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
@@ -63,7 +65,7 @@ public class SoConnectTest extends AbstractSoTest {
                     }
                 }).build();
             }
-        });
+        }, NetOptions.TCP());
 
         NetChannel remote = future.get();
         while (!remote.isClose()) {
@@ -79,14 +81,15 @@ public class SoConnectTest extends AbstractSoTest {
     public void connectToTest_02() throws Exception {
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
 
         NetManager neta = new NetManager(crateConfig(2, 30));
-        Future<NetChannel> future = neta.connect("127.0.0.1", safePort, new ProtoInitializer() {
+        Future<NetChannel> future = neta.connect(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
                 return ProtoHelper.builder().build();
             }
-        });
+        }, NetOptions.TCP());
         neta.shutdown();
 
         ServerSocket server = new ServerSocket(safePort);

@@ -27,13 +27,30 @@ import java.nio.channels.Selector;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
-public class UdpAsyncChannel implements AsyncChannel {
+/**
+ * An implementation of the {@link AsyncChannel} interface for UDP communication.
+ * This class provides asynchronous read and write operations over a UDP channel,
+ * using a non-blocking {@link DatagramChannel} and a dedicated I/O executor service.
+ * <p>
+ * The UdpAsyncChannel supports reading data into a {@link ByteBuffer} with or without
+ * a specified timeout. It does not support writing data, as well as connecting to a remote
+ * address, which are unsupported operations for this type of channel.
+ * <p>
+ * Upon creation, the channel is registered with a selector for reading, and all I/O operations
+ * are performed by the provided I/O executor service.
+ *
+ * @see java.nio.channels.DatagramChannel
+ * @see java.util.concurrent.ExecutorService
+ * @author 赵永春 (zyc@hasor.net)
+ * @version 2025-08-06
+ */
+class UdpAsyncChannel implements AsyncChannel {
     private final long            channelID;
     private final DatagramChannel channel;
     private final ExecutorService ioExecutor;
     private final Selector        selector;
 
-    public UdpAsyncChannel(long channelID, DatagramChannel channel, ExecutorService ioExecutor) throws IOException {
+    UdpAsyncChannel(long channelID, DatagramChannel channel, ExecutorService ioExecutor) throws IOException {
         this.channelID = channelID;
         this.channel = channel;
         this.ioExecutor = ioExecutor;

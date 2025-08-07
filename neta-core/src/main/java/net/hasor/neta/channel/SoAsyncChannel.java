@@ -183,7 +183,7 @@ class SoAsyncChannel implements Closeable {
         return true;
     }
 
-    public void connect(InetSocketAddress remoteAddr, SoContextService context, SoConnectCompletionHandler handler) throws IOException {
+    public void connect(SocketAddress remoteAddr, SoContextService context, SoConnectCompletionHandler handler) throws IOException {
         this.channel.connect(remoteAddr, context, handler);
     }
 }

@@ -19,11 +19,16 @@ package net.hasor.neta.channel;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetListenOptions {
-    private boolean suspend;
+public class NetOptions {
+    private final String  protocol;
+    private       boolean suspend;
 
-    public NetListenOptions() {
-        this.suspend = false;
+    protected NetOptions(String protocol) {
+        this.protocol = protocol;
+    }
+
+    public String getProtocol() {
+        return this.protocol;
     }
 
     public boolean isSuspend() {
@@ -32,5 +37,15 @@ public class NetListenOptions {
 
     public void setSuspend(boolean suspend) {
         this.suspend = suspend;
+    }
+
+    //
+
+    public static NetOptions TCP() {
+        return new NetOptions("tcp");
+    }
+
+    public static NetOptions UDP() {
+        return new NetOptions("udp");
     }
 }

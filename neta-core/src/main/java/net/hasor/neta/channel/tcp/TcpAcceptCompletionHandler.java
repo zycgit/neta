@@ -24,9 +24,9 @@ import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.CompletionHandler;
 
 /**
- * Socket Accept Handler
+ * TCP Accept Handler
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version 2025-08-06
  */
 class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocketChannel, SoContext> {
     private static final Logger                          logger = Logger.getLogger(TcpAcceptCompletionHandler.class);

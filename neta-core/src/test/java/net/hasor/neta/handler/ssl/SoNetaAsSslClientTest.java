@@ -19,6 +19,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.NetOptions;
 import net.hasor.neta.channel.SoConfig;
 import org.junit.Test;
 
@@ -27,6 +28,7 @@ import javax.net.ssl.SSLServerSocketFactory;
 import javax.net.ssl.SSLSocket;
 import java.io.BufferedReader;
 import java.io.InputStreamReader;
+import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,6 +45,7 @@ public class SoNetaAsSslClientTest extends AbstractSslTest {
     public void netaAsSslClientTest_01() throws Exception {
         // SSL Server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         SSLServerSocketFactory sslFactory = SoSslUtils.sslContext().getServerSocketFactory();
         SSLServerSocket serverSocket = (SSLServerSocket) sslFactory.createServerSocket(safePort);
         AtomicBoolean readFinish = new AtomicBoolean();
@@ -63,7 +66,7 @@ public class SoNetaAsSslClientTest extends AbstractSslTest {
         soConf.setNetlog(true);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
         NetManager neta = new NetManager(soConf);
-        Future<NetChannel> connect = neta.connect("127.0.0.1", safePort, SoSslUtils.sslSocketProtoStack(sslConf));
+        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf), NetOptions.TCP());
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
         }

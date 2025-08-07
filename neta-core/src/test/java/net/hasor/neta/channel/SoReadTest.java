@@ -24,6 +24,7 @@ import org.junit.Test;
 
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.security.MessageDigest;
 import java.util.concurrent.TimeUnit;
@@ -42,8 +43,9 @@ public class SoReadTest extends AbstractSoTest {
         AtomicInteger cnt = new AtomicInteger();
 
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
+        NetListen listen = server.listen(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
                 return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
@@ -58,7 +60,7 @@ public class SoReadTest extends AbstractSoTest {
                     }
                 }).build();
             }
-        });
+        }, NetOptions.TCP());
 
         // client: send data to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -84,8 +86,9 @@ public class SoReadTest extends AbstractSoTest {
         AtomicInteger cnt = new AtomicInteger();
 
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(2, 2));
-        NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
+        NetListen listen = server.listen(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
                 return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
@@ -99,7 +102,7 @@ public class SoReadTest extends AbstractSoTest {
                     }
                 }).build();
             }
-        });
+        }, NetOptions.TCP());
 
         // client: send data to server
         ThreadUtils.daemonThread(true, (Callable) () -> {
@@ -125,16 +128,17 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
         NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, new ProtoInitializer() {
+        NetListen listen = server.listen(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
                 return ProtoHelper.builder().build();// <-- stacking without handling
             }
-        });
+        }, NetOptions.TCP());
 
         // client: send a lot of bytes
         ThreadUtils.daemonThread(true, (Callable) () -> {
@@ -201,8 +205,9 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(new SoConfig());
-        NetListen listen = server.listen("127.0.0.1", safePort, context -> builder.build());
+        NetListen listen = server.listen(address, context -> builder.build(), NetOptions.TCP());
 
         // client: send a lot of line
         ThreadUtils.daemonThread(true, (Callable) () -> {
@@ -246,8 +251,9 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(2, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // client send data
         MessageDigest clientDigest = MessageDigest.getInstance("MD5");
@@ -289,8 +295,9 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(new SoConfig());
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -328,10 +335,11 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         SoConfig soConfig = new SoConfig();
         soConfig.setSoReadTimeoutMs(100);
         NetManager server = new NetManager(soConfig);
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -369,8 +377,9 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(new SoConfig());
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -413,10 +422,11 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         SoConfig soConfig = new SoConfig();
         soConfig.setSoReadTimeoutMs(100);
         NetManager server = new NetManager(soConfig);
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -464,11 +474,12 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
         NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // client: send a lot of pack
         Socket client = new Socket("127.0.0.1", safePort);
@@ -511,11 +522,12 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         SoConfig soConfig = crateConfig(2, 30);
         soConfig.setNetlog(false);
         NetManager server = new NetManager(soConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // client: send a lot of pack
         Socket client = new Socket("127.0.0.1", safePort);

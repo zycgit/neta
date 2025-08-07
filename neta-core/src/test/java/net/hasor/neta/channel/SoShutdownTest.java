@@ -23,6 +23,7 @@ import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 import java.io.OutputStream;
+import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -60,8 +61,9 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // start client and snd data
         ThreadUtils.daemonThread(true, (Callable) () -> {
@@ -115,8 +117,9 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // start client
         Socket client = new Socket("127.0.0.1", safePort);
@@ -175,8 +178,9 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // start client
         Socket client = new Socket("127.0.0.1", safePort);
@@ -230,8 +234,9 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // start client
         Socket client = new Socket("127.0.0.1", safePort);
@@ -265,8 +270,9 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_01() throws Exception {
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().build());
+        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), NetOptions.TCP());
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -286,8 +292,9 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvRemoteShutdownOutputTest_02() throws Exception {
         // start server
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().build());
+        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), NetOptions.TCP());
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -326,9 +333,10 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // connect to server.
         Socket client = new Socket("127.0.0.1", safePort);
@@ -367,9 +375,10 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // connect to server.
         Socket client = new Socket("127.0.0.1", safePort);
@@ -414,9 +423,10 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(2, 8192));
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // client reading...
         Socket client = new Socket("127.0.0.1", safePort);
@@ -466,9 +476,10 @@ public class SoShutdownTest extends AbstractSoTest {
         }).build();
 
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(8, 30));
         SoContext context = server.getContext();
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // connect to server.
         Socket client = new Socket("127.0.0.1", safePort);
@@ -494,7 +505,8 @@ public class SoShutdownTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         NetManager server = new NetManager(crateConfig(8, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, ctx -> ProtoHelper.builder().build());
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), NetOptions.TCP());
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -540,8 +552,9 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(crateConfig(2, 30));
-        NetListen listen = server.listen("127.0.0.1", safePort, initializer);
+        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
 
         // client reading...
         Socket client = new Socket("127.0.0.1", safePort);

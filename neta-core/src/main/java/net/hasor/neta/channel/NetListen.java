@@ -17,7 +17,6 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
@@ -36,7 +35,8 @@ public class NetListen extends AttributeChannel<NetListen> {
     private final    Object             acceptLock;
     private final    Object             closeLock;
     //
-    private final    InetSocketAddress  listen;
+    private final    SocketAddress      listenAddr;
+    private final    int                listenPort;
     protected final  AsyncServerChannel channel;
     private final    ProtoInitializer   initializer;
     private final    SoContextService   context;
@@ -45,15 +45,16 @@ public class NetListen extends AttributeChannel<NetListen> {
     protected final  AtomicBoolean      closeStatus;
     protected final  Future<NetListen>  closeFuture;
 
-    NetListen(long channelID, long createdTime, InetSocketAddress listen, AsyncServerChannel channel,//
-            ProtoInitializer initializer, SoContextService context, NetListenOptions options) {
+    NetListen(long channelID, long createdTime, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
+            ProtoInitializer initializer, SoContextService context, NetOptions options) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
         this.acceptCount = new AtomicLong();
         this.acceptLock = new Object();
         this.closeLock = new Object();
-        this.listen = listen;
+        this.listenAddr = listenAddr;
+        this.listenPort = listenPort;
         this.channel = channel;
         this.initializer = initializer;
         this.context = context;
@@ -105,7 +106,7 @@ public class NetListen extends AttributeChannel<NetListen> {
 
     @Override
     public SocketAddress getLocalAddr() {
-        return this.listen;
+        return this.listenAddr;
     }
 
     @Override
@@ -166,7 +167,7 @@ public class NetListen extends AttributeChannel<NetListen> {
      * return this listener bind socket port.
      */
     public int getListenPort() {
-        return this.listen.getPort();
+        return this.listenPort;
     }
 
     /** return Application layer network protocol stack to use */

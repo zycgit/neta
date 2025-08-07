@@ -23,7 +23,7 @@ import java.nio.channels.NetworkChannel;
  * Represents a server-side channel that can accept incoming connections asynchronously.
  * Extends Closeable to ensure proper resource cleanup.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version 2025-08-06
  */
 public interface AsyncServerChannel extends Closeable {
     /**

@@ -14,14 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.tcp.TcpAsyncChannel;
-import net.hasor.neta.channel.tcp.TcpAsyncServerChannel;
-import net.hasor.neta.channel.udp.UdpAsyncServerChannel;
+import net.hasor.neta.channel.tcp.TcpProvider;
+import net.hasor.neta.channel.udp.UdpProvider;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -42,37 +42,14 @@ public class NetManager extends AbstractNetManager {
         super(config);
     }
 
-    /**
-     * using UDP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     * @param listen local address:port for listen
-     * @param initializer Application layer network protocol
-     * @return A listener channel for accept incoming sockets
-     */
-    public synchronized NetListen bind(InetSocketAddress listen, ProtoInitializer initializer, NetListenOptions options) throws IOException {
-        this.initChannelGroup();
-
-        options = options == null ? new NetListenOptions() : options;
-        AsyncServerChannel channel = UdpAsyncServerChannel.openChannel(this.context.nextID(), this.config);
-
-        long channelID = this.context.nextID();
-        long createdTime = System.currentTimeMillis();
-        NetListen netListen = new NetListen(channelID, createdTime, listen, channel, initializer, this.context, options);
-        this.context.openChannel(netListen, listen);
-
-        channel.bind(netListen, this.context);
-        logger.info("bind at " + listen);
-        return netListen;
-    }
-
-    /**
-     * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     * @param listenAddr local address for listen
-     * @param listenPort local port for listen
-     * @param initializer Application layer network protocol
-     * @return A listener channel for accept incoming sockets
-     */
-    public synchronized NetListen listen(String listenAddr, int listenPort, ProtoInitializer initializer) throws IOException {
-        return this.listen(new InetSocketAddress(listenAddr, listenPort), initializer, null);
+    protected AsyncChannelProvider findProvider(String protocol) {
+        if (StringUtils.equalsIgnoreCase("tcp", protocol)) {
+            return new TcpProvider();
+        } else if (StringUtils.equalsIgnoreCase("udp", protocol)) {
+            return new UdpProvider();
+        } else {
+            throw new UnsupportedOperationException("not support protocol : " + protocol);
+        }
     }
 
     /**
@@ -81,30 +58,21 @@ public class NetManager extends AbstractNetManager {
      * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(InetSocketAddress listenAddr, ProtoInitializer initializer, NetListenOptions options) throws IOException {
+    public synchronized NetListen listen(SocketAddress listenAddr, ProtoInitializer initializer, NetOptions options) throws IOException {
         this.initChannelGroup();
 
-        options = options == null ? new NetListenOptions() : options;
-        AsyncServerChannel socket = TcpAsyncServerChannel.openChannel(this.context.nextID(), this.config, this.channelGroup);
-
-        long channelID = socket.getChannelID();
+        long channelID = this.context.nextID();
         long createdTime = System.currentTimeMillis();
-        NetListen listen = new NetListen(channelID, createdTime, listenAddr, socket, initializer, this.context, options);
+        int listenPort = listenAddr instanceof InetSocketAddress ? ((InetSocketAddress) listenAddr).getPort() : 0;
+        AsyncChannelProvider provider = this.findProvider(options.getProtocol());
+
+        AsyncServerChannel socket = provider.createServerChannel(channelID, this.context, this.channelGroup);
+        NetListen listen = new NetListen(channelID, createdTime, listenAddr, listenPort, socket, initializer, this.context, options);
         this.context.openChannel(listen, listenAddr);
 
         socket.bind(listen, this.context);
-        logger.info("listenAddr at " + listenAddr);
+        logger.info("listen at " + listenAddr);
         return listen;
-    }
-
-    /**
-     * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
-     * @param remoteAddr remote address
-     * @param remotePort remote port
-     * @param initializer Application layer network protocol
-     */
-    public Future<NetChannel> connect(String remoteAddr, int remotePort, ProtoInitializer initializer) {
-        return this.connect(new InetSocketAddress(remoteAddr, remotePort), initializer);
     }
 
     /**
@@ -112,7 +80,7 @@ public class NetManager extends AbstractNetManager {
      * @param remoteAddr remoteAddr
      * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(InetSocketAddress remoteAddr, ProtoInitializer initializer) {
+    public Future<NetChannel> connect(SocketAddress remoteAddr, ProtoInitializer initializer, NetOptions options) {
         Future<NetChannel> future = new BasicFuture<>();
         SoAsyncChannel asyncChannel = null;
         NetChannel channel;
@@ -122,7 +90,8 @@ public class NetManager extends AbstractNetManager {
             this.initChannelGroup();
             long channelID = this.context.nextID();
             long createdTime = System.currentTimeMillis();
-            AsyncChannel aioChannel = TcpAsyncChannel.openChannel(channelID, this.config, this.channelGroup);
+            AsyncChannelProvider provider = this.findProvider(options.getProtocol());
+            AsyncChannel aioChannel = provider.createClientChannel(channelID, this.context, this.channelGroup);
             asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator(), this.config);
 
             // init NetChannel
