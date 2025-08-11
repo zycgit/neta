@@ -51,7 +51,7 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextSer
         try {
             SocketAddress localAddress = this.asyncChannel.getLocalAddress();
             SocketAddress remoteAddress = this.asyncChannel.getRemoteAddress();
-            logger.info("connected(" + channel.getChannelID() + ") L:" + localAddress + " -> R:" + remoteAddress);
+            logger.info("connected(" + this.channel.getChannelID() + ") L:" + localAddress + " -> R:" + remoteAddress);
 
             if (!this.channel.isClose()) {
                 this.protoStack.onActive(this.channel.protoCtx);

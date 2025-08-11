@@ -62,6 +62,9 @@ public interface SoChannel<T> {
     /** close this channel now. */
     Future<T> closeNow();
 
+    /** on close this channel. */
+    void onClose(SoCloseListener<SoChannel<?>> listener);
+
     /** return close status. */
     boolean isClose();
 

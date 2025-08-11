@@ -19,6 +19,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoContextService;
+import net.hasor.neta.channel.ProtoFullException;
 import net.hasor.neta.channel.ProtoStack;
 
 import java.util.ArrayList;
@@ -41,13 +42,10 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     private              long                              channelID;
     private              boolean                           netLog;
 
-    public ProtoChainRoot(ProtoConfig rootConfig) {
-        int rcvSize = rootConfig.getRcvDownSlotSize();
-        int sndSize = rootConfig.getSndUpSlotSize();
-
+    public ProtoChainRoot() {
         this.layers = new ArrayList<>();
-        this.headRcvUp = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
-        this.headSndUp = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
+        this.headRcvUp = new ProtoQueue<>(-1);
+        this.headSndUp = new ProtoQueue<>(-1);
         this.netLog = false;
     }
 
@@ -101,7 +99,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         }
     }
 
-    private void offerMessage(boolean isRcv, ProtoQueue<Object> queue, Object[] offerData) throws IllegalStateException {
+    private void offerMessage(boolean isRcv, ProtoQueue<Object> queue, Object[] offerData) throws ProtoFullException {
         if (queue.offerMessage(offerData) == offerData.length) {
             queue.sndSubmit();
         } else {
@@ -110,10 +108,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             int slotSize = queue.slotSize();
             int require = offerData.length;
 
-            String msg = String.format("%s(%s) %sQueue is full, available slot is %s, require %s.", msgTag, this.channelID, msgTag, slotSize, require);
-            IllegalStateException e = new IllegalStateException(msg);
-            logger.error(msg, e);
-            throw e;
+            String msg = String.format("%s(%s) ProtoStack slot is full, available slot is %s, require %s.", msgTag, this.channelID, slotSize, require);
+            logger.error(msg);
+            throw new ProtoFullException(msg);
         }
     }
 

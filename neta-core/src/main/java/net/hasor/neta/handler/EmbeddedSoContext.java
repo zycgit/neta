@@ -16,7 +16,10 @@
 package net.hasor.neta.handler;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.SoChannel;
+import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.SoContext;
 
 import java.net.SocketAddress;
 import java.util.Map;
@@ -103,11 +106,6 @@ public class EmbeddedSoContext implements SoContext {
     @Override
     public SoChannel<?> findChannel(long channelID) {
         return this.channelMap.get(channelID);
-    }
-
-    @Override
-    public SoChannel<?> initChannel(NetListen forListen, AsyncChannel realChannel) {
-        throw new UnsupportedOperationException();
     }
 
     @Override

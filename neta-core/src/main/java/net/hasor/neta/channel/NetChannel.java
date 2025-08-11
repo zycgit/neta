@@ -210,7 +210,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.channel.isOpen()) {
                 SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
-                this.context.submitSoTask(this.channelID, task, this).onCompleted(f -> {
+                this.context.submitSoTask(task, this).onCompleted(f -> {
                     this.closeFuture.completed(this);
                 }).onFailed(f -> {
                     this.closeFuture.failed(f.getCause());
@@ -232,6 +232,11 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         }
         this.closeFuture.completed(this);
         return this.closeFuture;
+    }
+
+    @Override
+    public void onClose(SoCloseListener<SoChannel<?>> listener) {
+        this.closeFuture.onCompleted(f -> listener.onClose(this));
     }
 
     /** Number of bytes received */
@@ -268,12 +273,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         }
 
         try {
-            if (this.protoStack.getRcvSlotSize() == 0) {
-                logger.info("rcv(" + this.channelID + ") the ProtoStack slot is full.");
-                this.protoStack.onRcvError(this.protoCtx, null, ProtoFullException.INSTANCE);
-                return;
-            }
-
             Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, new ByteBuf[] { rcvBytes });
             if (dataArray != null && dataArray.length > 0) {
                 appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));

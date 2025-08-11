@@ -51,8 +51,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
         this.context = sndContext.getContext();
 
         ByteBufAllocator allocator = this.context.getByteBufAllocator();
-        SoConfig soConfig = this.context.getConfig();
-        this.sndSwapBuf = allocator.jvmBuffer(soConfig.getSoSndBuf() != null ? soConfig.getSoSndBuf() : (16 * 1024));
+        this.sndSwapBuf = allocator.jvmBuffer(this.context.getConfig().getSoSndBuf());
     }
 
     public boolean tryLock() {
@@ -198,6 +197,6 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
     }
 
     private Future<?> submitTask(DefaultSoTask task) {
-        return this.context.submitSoTask(this.channelID, task, this);
+        return this.context.submitSoTask(task, this);
     }
 }

@@ -13,12 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.channel.tcp;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
 import net.hasor.neta.handler.*;
 import org.junit.Test;
 

@@ -13,43 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
-import net.hasor.neta.channel.tcp.TcpOptions;
-import net.hasor.neta.channel.udp.UdpOptions;
+package net.hasor.neta.channel.tcp;
+
+import net.hasor.neta.channel.NetOptions;
 
 /**
  * Listener options.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetOptions {
-    // for Listener
-    private final String  protocol;
-    private       boolean suspend = false;
+public class TcpOptions extends NetOptions {
 
-    protected NetOptions(String protocol) {
-        this.protocol = protocol;
-    }
-
-    public String getProtocol() {
-        return this.protocol;
-    }
-
-    public boolean isSuspend() {
-        return this.suspend;
-    }
-
-    public void setSuspend(boolean suspend) {
-        this.suspend = suspend;
-    }
-
-    //
-
-    public static TcpOptions TCP() {
-        return new TcpOptions();
-    }
-
-    public static UdpOptions UDP() {
-        return new UdpOptions();
+    public TcpOptions() {
+        super(TcpProvider.NAME);
     }
 }

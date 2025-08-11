@@ -185,7 +185,7 @@ public class NetListen extends AttributeChannel<NetListen> {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.channel.isOpen()) {
                 SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
-                this.context.submitSoTask(this.channelID, task, this).onCompleted(f -> {
+                this.context.submitSoTask(task, this).onCompleted(f -> {
                     closeFuture.completed(this);
                 }).onFailed(f -> {
                     closeFuture.failed(f.getCause());
@@ -207,6 +207,11 @@ public class NetListen extends AttributeChannel<NetListen> {
 
         this.closeFuture.completed(this);
         return this.closeFuture;
+    }
+
+    @Override
+    public void onClose(SoCloseListener<SoChannel<?>> listener) {
+        this.closeFuture.onCompleted(f -> listener.onClose(this));
     }
 
     /**

@@ -193,6 +193,11 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     @Override
+    public void onClose(SoCloseListener<SoChannel<?>> listener) {
+        this.closeFuture.onCompleted(f -> listener.onClose(this));
+    }
+
+    @Override
     public boolean isClose() {
         return this.closeStatus.get();
     }

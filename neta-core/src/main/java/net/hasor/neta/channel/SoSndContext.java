@@ -98,7 +98,7 @@ class SoSndContext {
      * submit async task to run.
      */
     public Future<?> submitTask(DefaultSoTask task, Object context) {
-        return this.context.submitSoTask(this.channelID, task, context);
+        return this.context.submitSoTask(task, context);
     }
 
 }

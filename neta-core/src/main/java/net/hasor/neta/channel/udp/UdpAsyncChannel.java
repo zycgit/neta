@@ -15,16 +15,13 @@
  */
 package net.hasor.neta.channel.udp;
 import net.hasor.neta.channel.AsyncChannel;
-import net.hasor.neta.channel.SoReadTimeoutException;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -45,19 +42,14 @@ import java.util.concurrent.TimeUnit;
  * @version 2025-08-06
  */
 class UdpAsyncChannel implements AsyncChannel {
-    private final long            channelID;
-    private final DatagramChannel channel;
-    private final ExecutorService ioExecutor;
-    private final Selector        selector;
+    protected final InetSocketAddress remoteAddr;
+    protected final long              channelID;
+    protected final DatagramChannel   channel;
 
-    UdpAsyncChannel(long channelID, DatagramChannel channel, ExecutorService ioExecutor) throws IOException {
+    UdpAsyncChannel(long channelID, InetSocketAddress remoteAddr, DatagramChannel channel) throws IOException {
         this.channelID = channelID;
+        this.remoteAddr = remoteAddr;
         this.channel = channel;
-        this.ioExecutor = ioExecutor;
-
-        this.selector = Selector.open();
-        this.channel.configureBlocking(false);
-        this.channel.register(this.selector, SelectionKey.OP_READ);
     }
 
     @Override
@@ -72,11 +64,11 @@ class UdpAsyncChannel implements AsyncChannel {
 
     @Override
     public SocketAddress getRemoteAddress() throws IOException {
-        return this.channel.getRemoteAddress();
+        return this.remoteAddr;
     }
 
     @Override
-    public Object getTarget() {
+    public DatagramChannel getTarget() {
         return this.channel;
     }
 
@@ -109,46 +101,17 @@ class UdpAsyncChannel implements AsyncChannel {
 
     @Override
     public void close() throws IOException {
-        this.channel.close();
+        //
     }
-
-    //
 
     @Override
     public <A> void read(ByteBuffer dst, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        this.ioExecutor.execute(() -> asyncReadToBuffer(dst, attachment, handler, -1));
+        //
     }
 
     @Override
     public <A> void read(ByteBuffer dst, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        this.ioExecutor.execute(() -> asyncReadToBuffer(dst, attachment, handler, unit.toMillis(timeout)));
-    }
-
-    private <A> void asyncReadToBuffer(ByteBuffer dst, A attachment, CompletionHandler<Integer, ? super A> handler, long timeoutMs) {
-        try {
-            long startTime = System.currentTimeMillis();
-            if (timeoutMs > 0) {
-                long remainingTimeout = timeoutMs - (System.currentTimeMillis() - startTime);
-                if (remainingTimeout <= 0) {
-                    handler.failed(new SoReadTimeoutException("socket read timeout"), attachment);
-                    return;
-                }
-                this.selector.select(remainingTimeout);
-            } else {
-                this.selector.select();
-            }
-
-            int pos = dst.position();
-            SocketAddress remoteADdr = this.channel.receive(dst);
-            int bytesRead = dst.position() - pos;
-            if (bytesRead >= 0) {
-                handler.completed(bytesRead, attachment);
-            } else {
-                handler.failed(new IOException("channel closed"), attachment);
-            }
-        } catch (IOException e) {
-            handler.failed(e, attachment);
-        }
+        //
     }
 
     @Override
@@ -160,8 +123,6 @@ class UdpAsyncChannel implements AsyncChannel {
     public <A> void write(ByteBuffer src, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
         throw new UnsupportedOperationException();
     }
-
-    //
 
     @Override
     public <A> void connect(SocketAddress remote, A attachment, CompletionHandler<Void, ? super A> handler) throws IOException {

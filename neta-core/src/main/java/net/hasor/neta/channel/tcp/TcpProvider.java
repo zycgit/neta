@@ -17,6 +17,7 @@ package net.hasor.neta.channel.tcp;
 import net.hasor.neta.channel.*;
 
 import java.io.IOException;
+import java.net.SocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -29,8 +30,10 @@ import java.nio.channels.AsynchronousSocketChannel;
  * @version 2025-08-07
  */
 public class TcpProvider implements AsyncChannelProvider {
+    public static final String NAME = "TCP";
+
     @Override
-    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup) throws IOException {
+    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
         SoConfig config = context.getConfig();
         AsynchronousServerSocketChannel channel = AsynchronousServerSocketChannel.open(channelGroup);
         SoConfigUtils.configListen(config, channel);
@@ -38,7 +41,7 @@ public class TcpProvider implements AsyncChannelProvider {
     }
 
     @Override
-    public AsyncChannel createClientChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup) throws IOException {
+    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
         SoConfig config = context.getConfig();
         AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(channelGroup);
         SoConfigUtils.configSocket(config, channel);

@@ -37,7 +37,17 @@ import java.util.Objects;
  */
 public interface ByteBuf extends ByteChannel {
 
-    ByteBuf EMPTY = ByteBuf.wrap(new byte[0]);
+    ByteBuf EMPTY = new ByteBufProxy(ByteBuf.wrap(new byte[0])) {
+        @Override
+        public void free() {
+
+        }
+
+        @Override
+        public void close() {
+
+        }
+    };
 
     static ByteBuf wrap(byte[] bytes) {
         return wrap(bytes, false);

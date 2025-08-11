@@ -42,7 +42,7 @@ public class SoContextTest {
             round--;
             AtomicInteger cnt = new AtomicInteger(0);
 
-            Future<SoContextTest> future = context.submitSoTask(1, new SoDelayTask(0), this).onCompleted(f -> {
+            Future<SoContextTest> future = context.submitSoTask(new SoDelayTask(0), this).onCompleted(f -> {
                 cnt.incrementAndGet();
             }).onFailed(f -> {
                 //

@@ -25,7 +25,6 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.NetworkChannel;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
@@ -38,24 +37,23 @@ import java.util.function.Consumer;
  * @version : 2023-09-24
  */
 public class SoContextService implements SoContext {
-    private static final Logger                     logger = Logger.getLogger(SoContextService.class);
-    private final        AtomicLong                 nextID = new AtomicLong(0);
-    private final        SoConfig                   config;
-    private final        NetManager                 manager;
-    private final        ByteBufAllocator           allocator;
-    private final        ClassLoader                useClassLoader;
-    private final        SoThreadFactory            useSoThreadFactory;
+    private static final Logger                  logger = Logger.getLogger(SoContextService.class);
+    private final        AtomicLong              nextID = new AtomicLong(0);
+    private final        SoConfig                config;
+    private final        NetManager              manager;
+    private final        ByteBufAllocator        allocator;
+    private final        ClassLoader             useClassLoader;
+    private final        SoThreadFactory         useSoThreadFactory;
     //
-    private final        HashedWheelTimer           globalTimer;
-    private final        ExecutorService            ioExecutor;
-    private final        SoEventExecutor            defaultTaskExecutor;
-    private final        Map<Long, SoEventExecutor> specialTaskExecutor;
+    private final        HashedWheelTimer        globalTimer;
+    private final        ExecutorService         ioExecutor;
+    private final        SoEventExecutor         eventExecutor;
     //
-    private volatile     boolean                    closeStatus;
-    private final        ReentrantReadWriteLock     closeSyncLock;
-    private final        Map<Long, SoChannel<?>>    channelMap;
-    private final        Queue<NetChannel>          channelList;
-    private final        Queue<NetListen>           listenList;
+    private volatile     boolean                 closeStatus;
+    private final        ReentrantReadWriteLock  closeSyncLock;
+    private final        Map<Long, SoChannel<?>> channelMap;
+    private final        Queue<NetChannel>       channelList;
+    private final        Queue<NetListen>        listenList;
 
     SoContextService(SoConfig config, NetManager manager) {
         this.manager = manager;
@@ -70,7 +68,7 @@ public class SoContextService implements SoContext {
         }
 
         // timer
-        ThreadFactory timerThread = ThreadUtils.daemonThreadFactory(this.useClassLoader, "Cobble-AIO-Timer");
+        ThreadFactory timerThread = ThreadUtils.daemonThreadFactory(this.useClassLoader, "Neta-Timer");
         this.globalTimer = new HashedWheelTimer(timerThread, 50, TimeUnit.MILLISECONDS);
         this.globalTimer.start();
 
@@ -79,7 +77,7 @@ public class SoContextService implements SoContext {
         if (defaultProcess < 1) {
             defaultProcess = Math.max(Runtime.getRuntime().availableProcessors() / 4, 1);
         }
-        ThreadFactory ioThreadFactory = this.useSoThreadFactory.newFactory(this.useClassLoader, "Cobble-AIO-Thread-%s");
+        ThreadFactory ioThreadFactory = this.useSoThreadFactory.newFactory(this.useClassLoader, "Neta-IO-%s");
         this.ioExecutor = Executors.newFixedThreadPool(defaultProcess, ioThreadFactory);
 
         // task exec
@@ -87,8 +85,7 @@ public class SoContextService implements SoContext {
         if (taskWorkSize < 1) {
             taskWorkSize = Runtime.getRuntime().availableProcessors();
         }
-        this.defaultTaskExecutor = new SoEventExecutor("default", this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer);
-        this.specialTaskExecutor = new ConcurrentHashMap<>();
+        this.eventExecutor = new SoEventExecutor(this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer);
 
         //
         this.closeStatus = false;
@@ -130,19 +127,6 @@ public class SoContextService implements SoContext {
         return this.ioExecutor;
     }
 
-    public void specialConfig(long channelID, SocketAddress remoteAddress) {
-        if (this.specialResManager(remoteAddress)) {
-            int threads = this.config.getTaskThreads();
-            SoEventExecutor executor = new SoEventExecutor(String.valueOf(channelID), this.useClassLoader, this.useSoThreadFactory, threads, this.globalTimer);
-            this.specialTaskExecutor.put(channelID, executor);
-        }
-    }
-
-    /** Whether to use special SoResManager. */
-    public boolean specialResManager(SocketAddress remoteAddress) {
-        return false;
-    }
-
     /** Whether to accept link socket. */
     public boolean acceptChannel(SocketAddress remoteAddress) {
         if (this.closeStatus) {
@@ -150,32 +134,6 @@ public class SoContextService implements SoContext {
         }
 
         return true;
-    }
-
-    /** new channel, The method {@link #openChannel(SoChannel, SocketAddress)} and {@link #closeAll(boolean)} are mutually exclusive */
-    public void openChannel(SoChannel<?> channel, SocketAddress remoteAddress) {
-        if (this.channelMap.containsKey(channel.getChannelID())) {
-            throw new IllegalStateException("channelID already exists.");
-        }
-
-        try {
-            this.closeSyncLock.readLock().lock();
-
-            this.channelMap.put(channel.getChannelID(), channel);
-            if (channel.isListen()) {
-                this.listenList.add((NetListen) channel);
-            } else {
-                this.channelList.add((NetChannel) channel);
-            }
-
-            if (this.closeStatus) {
-                this.defaultTaskExecutor.submitSoTask(new SimpleTask(channel::closeNow), this);
-            }
-
-            this.specialConfig(channel.getChannelID(), remoteAddress);
-        } finally {
-            this.closeSyncLock.readLock().unlock();
-        }
     }
 
     /** test the channel has been closed */
@@ -195,8 +153,7 @@ public class SoContextService implements SoContext {
         return this.channelMap.get(channelID);
     }
 
-    @Override
-    public SoChannel<?> initChannel(NetListen forListen, AsyncChannel realChannel) throws IOException {
+    public NetChannel initChannel(NetListen forListen, AsyncChannel realChannel) throws IOException {
         if (this.findChannel(realChannel.getChannelID()) != null) {
             throw new IllegalStateException("channelID already exists.");
         }
@@ -211,7 +168,6 @@ public class SoContextService implements SoContext {
         // open channel
         long channelID = realChannel.getChannelID();
         long createdTime = System.currentTimeMillis();
-        this.specialConfig(channelID, remoteAddr);
 
         SoSndContext wContext = new SoSndContext(channelID, createdTime, this);
         SoAsyncChannel asyncChannel = new SoAsyncChannel(realChannel, this.getByteBufAllocator(), this.getConfig());
@@ -226,7 +182,7 @@ public class SoContextService implements SoContext {
         // init and trigger ProtoStack
         try {
             logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
-            this.openChannel(channel, remoteAddr);
+            this.addChannel(channel);
             channel.protoStack.onInit(channel.protoCtx);
 
             if (!channel.isClose()) {
@@ -234,7 +190,7 @@ public class SoContextService implements SoContext {
             }
 
             if (!channel.isShutdownInput()) {
-                this.submitSoTask(channelID, new SoDelayTask(0), this).onFinal(f -> {
+                this.submitSoTask(new SoDelayTask(0), this).onFinal(f -> {
                     rHandler.read();
                 });
             }
@@ -250,6 +206,29 @@ public class SoContextService implements SoContext {
         }
     }
 
+    protected void addChannel(SoChannel<?> channel) {
+        if (this.channelMap.containsKey(channel.getChannelID())) {
+            throw new IllegalStateException("channelID already exists.");
+        }
+
+        try {
+            this.closeSyncLock.readLock().lock();
+
+            this.channelMap.put(channel.getChannelID(), channel);
+            if (channel.isListen()) {
+                this.listenList.add((NetListen) channel);
+            } else {
+                this.channelList.add((NetChannel) channel);
+            }
+
+            if (this.closeStatus) {
+                this.eventExecutor.submitSoTask(new SimpleTask(channel::closeNow), this);
+            }
+        } finally {
+            this.closeSyncLock.readLock().unlock();
+        }
+    }
+
     @Override
     public NetManager getNetManager() {
         return this.manager;
@@ -259,7 +238,7 @@ public class SoContextService implements SoContext {
         this.listenList.forEach(consumer);
     }
 
-    /** close all socket, The method {@link #openChannel(SoChannel, SocketAddress)} and {@link #closeAll(boolean)} are mutually exclusive */
+    /** close all socket, The method {@link #addChannel(SoChannel)} and {@link #closeAll(boolean)} are mutually exclusive */
     public void closeAll(boolean now) {
         // mark close is true.
         try {
@@ -338,9 +317,7 @@ public class SoContextService implements SoContext {
             return;// it does not exist, It is usually the io that triggers the shutdown early
         }
 
-        SoEventExecutor specialExecutor = this.specialTaskExecutor.get(channelID);
         this.channelMap.remove(channelID);
-        this.specialTaskExecutor.remove(channelID);
 
         if (channel.isClient() || channel.isServer()) {
             NetChannel netChannel = (NetChannel) channel;
@@ -357,7 +334,6 @@ public class SoContextService implements SoContext {
 
             netChannel.protoStack.onClose(netChannel.protoCtx);
             IOUtils.closeQuietly(netChannel.channel);
-            IOUtils.closeQuietly(specialExecutor);
             logger.info("channel(" + channelID + ") closed.");
 
             this.channelList.remove(channel);
@@ -365,7 +341,6 @@ public class SoContextService implements SoContext {
             NetListen netListen = (NetListen) channel;
             netListen.closeStatus.set(true);
             IOUtils.closeQuietly(netListen.channel);
-            IOUtils.closeQuietly(specialExecutor);
             logger.info("listen(" + channelID + ") closed, port :" + netListen.getListenPort());
             this.listenList.remove(channel);
         }
@@ -405,12 +380,8 @@ public class SoContextService implements SoContext {
     }
 
     /** asynchronously copy data from swap to rcv/snd */
-    public <T> Future<T> submitSoTask(long channelID, DefaultSoTask task, T result) {
-        SoEventExecutor executor = this.specialTaskExecutor.get(channelID);
-        if (executor == null) {
-            executor = this.defaultTaskExecutor;
-        }
-        return executor.submitSoTask(task, result);
+    public <T> Future<T> submitSoTask(DefaultSoTask task, T result) {
+        return this.eventExecutor.submitSoTask(task, result);
     }
 
     /** Set up a timer */

@@ -59,7 +59,7 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
             long channelId = ((SoContextService) attachment).nextID();
 
             SoConfigUtils.configSocket(attachment.getConfig(), result);
-            attachment.initChannel(this.forListen, new TcpAsyncChannel(channelId, result));
+            ((SoContextService) attachment).initChannel(this.forListen, new TcpAsyncChannel(channelId, result));
         } catch (Throwable e) {
             IOUtils.closeQuietly(result);
             logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);

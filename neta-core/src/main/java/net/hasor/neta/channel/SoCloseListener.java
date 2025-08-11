@@ -14,31 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-
-import java.net.SocketAddress;
+import java.util.EventListener;
 
 /**
- * manage all network NetChannel and NetListen
+ * Listener interface for receiving channel close events.
+ *
+ * @param <T> the type of channel that this listener can handle, must extend {@link }
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version 2023-09-24
  */
-public interface SoContext {
-    /** return global config. */
-    SoConfig getConfig();
-
-    /** default {@link ByteBufAllocator} */
-    ByteBufAllocator getByteBufAllocator();
-
-    /** get remote address of the channel */
-    SocketAddress getRemoteAddress(long channelID);
-
-    /** test channel is not exist or closed */
-    boolean isClose(long channelID);
-
-    /** find SoChannel by id */
-    SoChannel<?> findChannel(long channelID);
-
-    /** get {@link NetManager} */
-    NetManager getNetManager();
+@FunctionalInterface
+public interface SoCloseListener<T extends SoChannel<?>> extends EventListener {
+    /**
+     * Invoked when a channel is closed.
+     * @param channel the channel that was closed
+     */
+    void onClose(T channel);
 }

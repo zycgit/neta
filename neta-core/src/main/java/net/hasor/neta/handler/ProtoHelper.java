@@ -106,7 +106,7 @@ public final class ProtoHelper {
 
         @Override
         public <T> ProtoStack<T> build() {
-            ProtoChainRoot root = new ProtoChainRoot(this.defaultConf);
+            ProtoChainRoot root = new ProtoChainRoot();
             for (Consumer<ProtoChainRoot> consumer : taskAppend) {
                 consumer.accept(root);
             }

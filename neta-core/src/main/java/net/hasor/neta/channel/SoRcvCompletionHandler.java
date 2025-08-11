@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
@@ -148,9 +147,5 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextServ
         context.notifyRcvChannelError(this.channelID, e);
         context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
         this.status.set(SoHandlerStatus.IDLE);
-    }
-
-    private Future<?> submitTask(DefaultSoTask task) {
-        return this.context.submitSoTask(this.channelID, task, this);
     }
 }

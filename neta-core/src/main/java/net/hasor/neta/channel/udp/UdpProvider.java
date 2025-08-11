@@ -17,8 +17,11 @@ package net.hasor.neta.channel.udp;
 import net.hasor.neta.channel.*;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.DatagramChannel;
+import java.util.concurrent.ExecutorService;
 
 /**
  * Provides UDP-specific implementation for asynchronous server and client channels.
@@ -28,16 +31,25 @@ import java.nio.channels.DatagramChannel;
  * @version 2025-08-07
  */
 public class UdpProvider implements AsyncChannelProvider {
+    public static final String NAME = "UDP";
+
     @Override
-    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup) throws IOException {
+    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
         SoConfig config = context.getConfig();
+        ExecutorService executor = ((SoContextService) context).getIoExecutor();
+
         DatagramChannel channel = DatagramChannel.open();
         SoConfigUtils.configListen(config, channel);
-        return new UdpAsyncServerChannel(channelId, channel);
+        return new UdpAsyncServerChannel(channelId, channel, executor);
     }
 
     @Override
-    public AsyncChannel createClientChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup) throws IOException {
-        throw new UnsupportedOperationException("UDP Unsupported.");
+    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
+        SoConfig config = context.getConfig();
+        ExecutorService executor = ((SoContextService) context).getIoExecutor();
+
+        DatagramChannel channel = DatagramChannel.open();
+        SoConfigUtils.configSocket(config, channel);
+        return new UdpAsyncClientChannel(channelId, (InetSocketAddress) remoteAddr, channel, executor, config, options);
     }
 }

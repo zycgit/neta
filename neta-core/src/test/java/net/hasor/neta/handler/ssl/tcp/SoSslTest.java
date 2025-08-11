@@ -13,13 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler.ssl;
+package net.hasor.neta.handler.ssl.tcp;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.NetOptions;
 import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.handler.ssl.*;
 import org.junit.Test;
 
 import java.io.IOException;

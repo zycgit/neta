@@ -57,9 +57,13 @@ public interface SslProtocol {
     /**
      * TLS v1.2，Supports RFC 5246: TLS version 1.2 ; may support other versions
      */
-    String TLS_v1_2 = "TLSv1.2";
+    String TLS_v1_2  = "TLSv1.2";
     /**
      * TLS v1.3
      */
-    String TLS_v1_3 = "TLSv1.3";
+    String TLS_v1_3  = "TLSv1.3";
+    /**
+     * DTLS v1.2
+     */
+    String DTLS_v1_2 = "DTLSv1.2";
 }

@@ -16,6 +16,7 @@
 package net.hasor.neta.channel.tcp;
 import net.hasor.neta.channel.AsyncServerChannel;
 import net.hasor.neta.channel.NetListen;
+import net.hasor.neta.channel.NetOptions;
 import net.hasor.neta.channel.SoContext;
 
 import java.io.IOException;
@@ -60,7 +61,7 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public void bind(NetListen listen, SoContext context) throws IOException {
+    public void bind(NetListen listen, SoContext context, NetOptions options) throws IOException {
         this.channel.bind(listen.getLocalAddr(), 0);
         this.channel.accept(context, new TcpAcceptCompletionHandler(listen, this.channel));
     }

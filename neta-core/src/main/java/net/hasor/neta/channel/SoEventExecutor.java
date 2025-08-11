@@ -40,14 +40,14 @@ class SoEventExecutor implements Closeable {
     private final        AtomicBoolean        runTag;
     private final        Thread[]             workerThreads;
 
-    public SoEventExecutor(String ctxName, ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads, HashedWheelTimer timer) {
+    public SoEventExecutor(ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads, HashedWheelTimer timer) {
         this.timer = timer;
         this.tasks = new ConcurrentLinkedQueue<>();
         this.runTag = new AtomicBoolean(false);
         this.workerThreads = new Thread[taskThreads];
 
         if (this.runTag.compareAndSet(false, true)) {
-            ThreadFactory workerThreadFactory = soThreadFactory.newFactory(classLoader, "Neta[" + ctxName + "]-Workers-%s");
+            ThreadFactory workerThreadFactory = soThreadFactory.newFactory(classLoader, "Neta-Worker-%s");
             for (int i = 0; i < taskThreads; i++) {
                 this.workerThreads[i] = workerThreadFactory.newThread(this::doWork);
                 this.workerThreads[i].start();

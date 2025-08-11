@@ -66,11 +66,11 @@ public class NetManager extends AbstractNetManager {
         int listenPort = listenAddr instanceof InetSocketAddress ? ((InetSocketAddress) listenAddr).getPort() : 0;
         AsyncChannelProvider provider = this.findProvider(options.getProtocol());
 
-        AsyncServerChannel socket = provider.createServerChannel(channelID, this.context, this.channelGroup);
+        AsyncServerChannel socket = provider.createServerChannel(channelID, this.context, this.channelGroup, options);
         NetListen listen = new NetListen(channelID, createdTime, listenAddr, listenPort, socket, initializer, this.context, options);
-        this.context.openChannel(listen, listenAddr);
+        this.context.addChannel(listen);
 
-        socket.bind(listen, this.context);
+        socket.bind(listen, this.context, options);
         logger.info("listen at " + listenAddr);
         return listen;
     }
@@ -91,7 +91,7 @@ public class NetManager extends AbstractNetManager {
             long channelID = this.context.nextID();
             long createdTime = System.currentTimeMillis();
             AsyncChannelProvider provider = this.findProvider(options.getProtocol());
-            AsyncChannel aioChannel = provider.createClientChannel(channelID, this.context, this.channelGroup);
+            AsyncChannel aioChannel = provider.createClientChannel(channelID, this.context, remoteAddr, this.channelGroup, options);
             asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator(), this.config);
 
             // init NetChannel
@@ -113,7 +113,7 @@ public class NetManager extends AbstractNetManager {
 
         try {
             // init ProtoStack
-            this.context.openChannel(channel, remoteAddr);
+            this.context.addChannel(channel);
             channel.protoStack.onInit(channel.protoCtx);
 
             // connect to

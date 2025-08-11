@@ -25,8 +25,8 @@ public class SoConfig {
     // buffers
     private ByteBufAllocator bufAllocator;
     // so configs
-    private Integer          soRcvBuf          = 16 * 1024; // SO_RCVBUF: The size of the socket receive buffer
-    private Integer          soSndBuf          = null;      // SO_SNDBUF: The size of the socket send buffer
+    private int              soRcvBuf          = 32 * 1024 * 1024; // SO_RCVBUF: The size of the socket receive buffer
+    private int              soSndBuf          = 32 * 1024 * 1024; // SO_SNDBUF: The size of the socket send buffer
     private Boolean          soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
     private Integer          soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
     private Integer          soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
@@ -43,26 +43,26 @@ public class SoConfig {
     private int              ioThreads;                     // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
     private int              taskThreads;                   // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
     // other
-    private boolean          netlog            = false;    // 打印网络日志
+    private boolean          netlog            = false;// 打印网络日志
 
     public void setSoBufSize(int soRcvBuf, int soSndBuf) {
         this.soRcvBuf = soRcvBuf;
         this.soSndBuf = soSndBuf;
     }
 
-    public Integer getSoRcvBuf() {
+    public int getSoRcvBuf() {
         return this.soRcvBuf;
     }
 
-    public void setSoRcvBuf(Integer soRcvBuf) {
+    public void setSoRcvBuf(int soRcvBuf) {
         this.soRcvBuf = soRcvBuf;
     }
 
-    public Integer getSoSndBuf() {
+    public int getSoSndBuf() {
         return this.soSndBuf;
     }
 
-    public void setSoSndBuf(Integer soSndBuf) {
+    public void setSoSndBuf(int soSndBuf) {
         this.soSndBuf = soSndBuf;
     }
 

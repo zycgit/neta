@@ -48,7 +48,8 @@ public interface AsyncServerChannel extends Closeable {
      * Binds the server channel to a specific network address and starts listening for connections.
      * @param listen The network listening configuration
      * @param context The socket context for this connection
+     * @param options
      * @throws IOException If an I/O error occurs during binding
      */
-    void bind(NetListen listen, SoContext context) throws IOException;
+    void bind(NetListen listen, SoContext context, NetOptions options) throws IOException;
 }
