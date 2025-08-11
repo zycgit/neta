@@ -17,8 +17,8 @@ package net.hasor.neta.handler.ssl.tcp;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.NetOptions;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.NetConfig;
+import net.hasor.neta.channel.tcp.TcpOptions;
 import net.hasor.neta.handler.ssl.*;
 import org.junit.Test;
 
@@ -30,8 +30,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static net.hasor.neta.channel.AbstractSoTest.crateConfig;
-import static net.hasor.neta.channel.AbstractSoTest.safePort;
+import static net.hasor.neta.channel.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -42,13 +41,14 @@ public class SoNetaAsSslServerTest extends AbstractSslTest {
     public void netaAsSslServerTest_01() throws Exception {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SoConfig soConf = crateConfig(128, 4096);
+        TcpOptions tcpConf = tcpConfig(128, 4096);
+        NetConfig soConf = globalConf();
         soConf.setNetlog(false);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
         NetManager neta = new NetManager(soConf);
 
         List<String> rcvMessage = new ArrayList<>();
-        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage)), NetOptions.TCP());
+        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage)), tcpConf);
 
         // client
         AtomicBoolean writeFinish = new AtomicBoolean();

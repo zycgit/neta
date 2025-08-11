@@ -34,6 +34,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
     private final        long                             createdTime;
     private final        AtomicReference<SoHandlerStatus> status;
     private final        AtomicLong                       counterBytes;
+    private final        int                              connectTimeoutMs;
     //
     private final        SoAsyncChannel                   channel;
     private final        SoSndContext                     sndContext;
@@ -45,13 +46,14 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
         this.createdTime = createdTime;
         this.status = new AtomicReference<>(SoHandlerStatus.IDLE);
         this.counterBytes = new AtomicLong();
+        this.connectTimeoutMs = Math.max(10, channel.getSoConfig().getConnectTimeoutMs());
 
         this.channel = channel;
         this.sndContext = sndContext;
         this.context = sndContext.getContext();
 
         ByteBufAllocator allocator = this.context.getByteBufAllocator();
-        this.sndSwapBuf = allocator.jvmBuffer(this.context.getConfig().getSoSndBuf());
+        this.sndSwapBuf = allocator.jvmBuffer(this.channel.getSoConfig().getSoSndBuf());
     }
 
     public boolean tryLock() {
@@ -142,7 +144,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
 
         if (e instanceof NotYetConnectedException) {
             long costTimeMs = System.currentTimeMillis() - this.createdTime;
-            if (costTimeMs < this.context.getConnectTimeoutMs()) {
+            if (costTimeMs < this.connectTimeoutMs) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
                 }
@@ -155,7 +157,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
                 finalMsg = finalErr.getMessage();
             }
         } else if (e instanceof InterruptedByTimeoutException) {
-            String errorMsg = "send data timeout with " + this.context.getConfig().getSoWriteTimeoutMs() + " milliseconds.";
+            String errorMsg = "send data timeout with " + this.channel.getSoConfig().getSoWriteTimeoutMs() + " milliseconds.";
             String msg = "snd(" + this.channelID + ") " + errorMsg;
 
             finalErr = new SoWriteTimeoutException(errorMsg);

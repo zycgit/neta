@@ -40,13 +40,14 @@ public class NetListen extends AttributeChannel<NetListen> {
     protected final  AsyncServerChannel channel;
     private final    ProtoInitializer   initializer;
     private final    SoContextService   context;
+    private final    SoConfig           soConfig;
     private volatile boolean            suspend;
     //
     protected final  AtomicBoolean      closeStatus;
     protected final  Future<NetListen>  closeFuture;
 
     NetListen(long channelID, long createdTime, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
-            ProtoInitializer initializer, SoContextService context, NetOptions options) {
+            ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
         this.channelID = channelID;
         this.createdTime = createdTime;
         this.lastActiveTime = createdTime;
@@ -58,7 +59,8 @@ public class NetListen extends AttributeChannel<NetListen> {
         this.channel = channel;
         this.initializer = initializer;
         this.context = context;
-        this.suspend = options.isSuspend();
+        this.soConfig = soConfig;
+        this.suspend = soConfig.isSuspend();
 
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
@@ -117,6 +119,11 @@ public class NetListen extends AttributeChannel<NetListen> {
     @Override
     public SoContext getContext() {
         return this.context;
+    }
+
+    @Override
+    public SoConfig getConfig() {
+        return this.soConfig;
     }
 
     /**

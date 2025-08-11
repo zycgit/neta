@@ -34,22 +34,20 @@ public class UdpProvider implements AsyncChannelProvider {
     public static final String NAME = "UDP";
 
     @Override
-    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
-        SoConfig config = context.getConfig();
+    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException {
         ExecutorService executor = ((SoContextService) context).getIoExecutor();
 
         DatagramChannel channel = DatagramChannel.open();
-        SoConfigUtils.configListen(config, channel);
+        SoConfigUtils.configListen(soConfig, channel);
         return new UdpAsyncServerChannel(channelId, channel, executor);
     }
 
     @Override
-    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
-        SoConfig config = context.getConfig();
+    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException {
         ExecutorService executor = ((SoContextService) context).getIoExecutor();
 
         DatagramChannel channel = DatagramChannel.open();
-        SoConfigUtils.configSocket(config, channel);
-        return new UdpAsyncClientChannel(channelId, (InetSocketAddress) remoteAddr, channel, executor, config, options);
+        SoConfigUtils.configSocket(soConfig, channel);
+        return new UdpAsyncClientChannel(channelId, (InetSocketAddress) remoteAddr, channel, executor, soConfig);
     }
 }

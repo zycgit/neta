@@ -18,7 +18,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.SoChannel;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.SoContext;
 
 import java.net.SocketAddress;
@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicLong;
 public class EmbeddedSoContext implements SoContext {
     private static final Logger                  logger = Logger.getLogger(EmbeddedSoContext.class);
     private static final AtomicLong              nextID = new AtomicLong();
-    private final        SoConfig                config;
+    private final        NetConfig               config;
     private final        ByteBufAllocator        allocator;
     private final        Map<Long, SoChannel<?>> channelMap;
 
@@ -42,14 +42,14 @@ public class EmbeddedSoContext implements SoContext {
         this(newSoConfig());
     }
 
-    public EmbeddedSoContext(SoConfig config) {
+    public EmbeddedSoContext(NetConfig config) {
         this.config = config;
         this.allocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : config.getBufAllocator();
         this.channelMap = new ConcurrentHashMap<>();
     }
 
-    protected static SoConfig newSoConfig() {
-        SoConfig config = new SoConfig();
+    protected static NetConfig newSoConfig() {
+        NetConfig config = new NetConfig();
         config.setNetlog(true);
         return config;
     }
@@ -71,7 +71,7 @@ public class EmbeddedSoContext implements SoContext {
     }
 
     @Override
-    public SoConfig getConfig() {
+    public NetConfig getConfig() {
         return this.config;
     }
 

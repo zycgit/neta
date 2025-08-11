@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.udp;
 import net.hasor.neta.channel.AsyncChannel;
-import net.hasor.neta.channel.NetOptions;
 import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.channel.SoReadTimeoutException;
 
@@ -50,14 +49,12 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
     private final InetSocketAddress remoteAddr;
     private final ExecutorService   ioExecutor;
     private       Selector          selector;
-    private final SoConfig          config;
-    private final NetOptions        options;
+    private final SoConfig          options;
 
-    UdpAsyncClientChannel(long channelID, InetSocketAddress remoteAddr, DatagramChannel channel, ExecutorService ioExecutor, SoConfig config, NetOptions options) throws IOException {
-        super(channelID, remoteAddr, channel);
+    UdpAsyncClientChannel(long channelID, InetSocketAddress remoteAddr, DatagramChannel channel, ExecutorService ioExecutor, SoConfig options) {
+        super(channelID, remoteAddr, channel, options);
         this.remoteAddr = remoteAddr;
         this.ioExecutor = ioExecutor;
-        this.config = config;
         this.options = options;
     }
 
@@ -70,7 +67,7 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
 
         handler.completed(null, attachment);
 
-        int rcvPacketSize = this.config.getSoRcvBuf();
+        int rcvPacketSize = this.options.getSoRcvBuf();
         if (options instanceof UdpOptions) {
             Integer packetSize = ((UdpOptions) this.options).getRcvPacketSize();
             if (packetSize != null) {

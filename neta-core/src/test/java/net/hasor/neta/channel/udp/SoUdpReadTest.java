@@ -18,9 +18,8 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.NetOptions;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoHelper;
 import net.hasor.neta.handler.ProtoStatus;
@@ -29,13 +28,11 @@ import org.junit.Test;
 import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
-import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static net.hasor.neta.channel.AbstractSoTest.crateConfig;
-import static net.hasor.neta.channel.AbstractSoTest.safePort;
+import static net.hasor.neta.channel.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -46,9 +43,9 @@ public class SoUdpReadTest {
     public void udpRead_Test() throws IOException {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SoConfig soConf = crateConfig(128, 4096);
+
+        NetConfig soConf = globalConf();
         soConf.setNetlog(false);
-        soConf.setSoReadTimeoutMs(-1);
         NetManager neta = new NetManager(soConf);
 
         AtomicBoolean udpRead = new AtomicBoolean(false);
@@ -66,7 +63,9 @@ public class SoUdpReadTest {
             }).build();
         };
 
-        neta.listen(address, initializer, NetOptions.UDP());
+        UdpOptions udpConf = udpConfig(128, 4096);
+        udpConf.setSoReadTimeoutMs(-1);
+        neta.listen(address, initializer, udpConf);
 
         //
         DatagramSocket socket = new DatagramSocket();

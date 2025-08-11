@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SoContextTest {
     @Test
     public void submitSoTask_Test() throws ExecutionException, InterruptedException {
-        SoConfig config = new SoConfig();
+        NetConfig config = new NetConfig();
         config.setNetlog(true);
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(2);

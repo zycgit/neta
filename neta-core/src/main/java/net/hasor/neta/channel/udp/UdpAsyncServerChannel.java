@@ -85,13 +85,13 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public void bind(NetListen listen, SoContext context, NetOptions options) throws IOException {
+    public void bind(NetListen listen, SoContext context, SoConfig options) throws IOException {
         this.selector = Selector.open();
         this.channel.bind(listen.getLocalAddr());
         this.channel.configureBlocking(false);
         this.channel.register(this.selector, SelectionKey.OP_READ);
 
-        int rcvPacketSize = context.getConfig().getSoRcvBuf();
+        int rcvPacketSize = options.getSoRcvBuf();
         if (options instanceof UdpOptions) {
             Integer packetSize = ((UdpOptions) options).getRcvPacketSize();
             if (packetSize != null) {
@@ -100,10 +100,10 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         }
 
         int finalRcvPacketSize = rcvPacketSize;
-        this.ioExecutor.execute(() -> this.receiveData(listen, context, finalRcvPacketSize));
+        this.ioExecutor.execute(() -> this.receiveData(options, listen, context, finalRcvPacketSize));
     }
 
-    private void receiveData(NetListen listen, SoContext context, int packetSize) {
+    private void receiveData(SoConfig options, NetListen listen, SoContext context, int packetSize) {
         ByteBufAllocator allocator = context.getByteBufAllocator();
         ByteBuffer buffer = allocator.jvmBuffer(packetSize);
         Map<String, SoChannel<?>> channelMap = new ConcurrentHashMap<>();
@@ -127,7 +127,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
                         DatagramChannel channel = (DatagramChannel) key.channel();
 
                         InetSocketAddress remoteAddr = (InetSocketAddress) channel.receive(buffer);
-                        SoChannel<?> socket = this.findOrCreateChannel(listen, context, remoteAddr, channelMap);
+                        SoChannel<?> socket = this.findOrCreateChannel(options, listen, context, remoteAddr, channelMap);
                         if (socket != null) {
                             ByteBuf byteBuf = allocator.buffer(buffer.position());
                             buffer.flip();
@@ -145,7 +145,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
-    private SoChannel<?> findOrCreateChannel(NetListen listen, SoContext context, InetSocketAddress remoteAddr, Map<String, SoChannel<?>> channelMap) {
+    private SoChannel<?> findOrCreateChannel(SoConfig options, NetListen listen, SoContext context, InetSocketAddress remoteAddr, Map<String, SoChannel<?>> channelMap) {
         String remoteID = remoteAddr.getAddress().getHostAddress() + ":" + remoteAddr.getPort();
         SoChannel<?> socket = channelMap.get(remoteID);
         if (socket != null) {
@@ -154,7 +154,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
 
         try {
             long channelId = ((SoContextService) context).nextID();
-            socket = ((SoContextService) context).initChannel(listen, new UdpAsyncChannel(channelId, remoteAddr, this.channel));
+            socket = ((SoContextService) context).initChannel(listen, new UdpAsyncChannel(channelId, remoteAddr, this.channel, options));
             socket.setAttribute(UdpIdentifier.class.getName(), new UdpIdentifier(remoteID));
 
             channelMap.put(remoteID, socket);

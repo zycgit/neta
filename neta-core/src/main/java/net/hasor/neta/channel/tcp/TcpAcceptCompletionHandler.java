@@ -32,10 +32,12 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
     private static final Logger                          logger = Logger.getLogger(TcpAcceptCompletionHandler.class);
     private final        NetListen                       forListen;
     private final        AsynchronousServerSocketChannel channel;
+    private final        SoConfig                        soConfig;
 
-    TcpAcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel channel) {
+    TcpAcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel channel, SoConfig soConfig) {
         this.forListen = forListen;
         this.channel = channel;
+        this.soConfig = soConfig;
     }
 
     @Override
@@ -58,8 +60,8 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
         try {
             long channelId = ((SoContextService) attachment).nextID();
 
-            SoConfigUtils.configSocket(attachment.getConfig(), result);
-            ((SoContextService) attachment).initChannel(this.forListen, new TcpAsyncChannel(channelId, result));
+            SoConfigUtils.configSocket(this.soConfig, result);
+            ((SoContextService) attachment).initChannel(this.forListen, new TcpAsyncChannel(channelId, result, this.soConfig));
         } catch (Throwable e) {
             IOUtils.closeQuietly(result);
             logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);

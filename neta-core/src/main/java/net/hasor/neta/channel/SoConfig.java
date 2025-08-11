@@ -14,36 +14,57 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.tcp.TcpOptions;
+import net.hasor.neta.channel.udp.UdpOptions;
 
 /**
- * Socket Config
+ * Listener options.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public class SoConfig {
-    // buffers
-    private ByteBufAllocator bufAllocator;
-    // so configs
-    private int              soRcvBuf          = 32 * 1024 * 1024; // SO_RCVBUF: The size of the socket receive buffer
-    private int              soSndBuf          = 32 * 1024 * 1024; // SO_SNDBUF: The size of the socket send buffer
-    private Boolean          soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
-    private Integer          soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
-    private Integer          soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
-    private Integer          soKeepCount       = null;      // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
-    private Integer          soReadTimeoutMs   = -1;        // socket read timeout
-    private Integer          soWriteTimeoutMs  = -1;        // socket write timeout
+    // for Listener
+    private final String  protocol;
+    private       boolean suspend = false;
+
+    // for Socket
+    private int     soRcvBuf          = 32 * 1024 * 1024; // SO_RCVBUF: The size of the socket receive buffer
+    private int     soSndBuf          = 32 * 1024 * 1024; // SO_SNDBUF: The size of the socket send buffer
+    private Boolean soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
+    private Integer soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
+    private Integer soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
+    private Integer soKeepCount       = null;      // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
+    private Integer soReadTimeoutMs   = -1;        // socket read timeout
+    private Integer soWriteTimeoutMs  = -1;        // socket write timeout
     //    SO_LINGER
-    // timeout
-    private int              retryIntervalMs   = 50;        // cobble.net 内部任务延迟调度的延迟间隔
-    private int              connectTimeoutMs  = 10 * 1000; // 建立连接超时时间
-    // threads
-    private SoThreadFactory  threadFactory;                 // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private ClassLoader      classLoader;                   // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private int              ioThreads;                     // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
-    private int              taskThreads;                   // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
-    // other
-    private boolean          netlog            = false;// 打印网络日志
+
+    private int connectTimeoutMs = 10 * 1000; // 建立连接超时时间
+
+    protected SoConfig(String protocol) {
+        this.protocol = protocol;
+    }
+
+    public static TcpOptions TCP() {
+        return new TcpOptions();
+    }
+
+    public static UdpOptions UDP() {
+        return new UdpOptions();
+    }
+
+    public String getProtocol() {
+        return this.protocol;
+    }
+
+    public boolean isSuspend() {
+        return this.suspend;
+    }
+
+    public void setSuspend(boolean suspend) {
+        this.suspend = suspend;
+    }
+
+    //
 
     public void setSoBufSize(int soRcvBuf, int soSndBuf) {
         this.soRcvBuf = soRcvBuf;
@@ -114,67 +135,11 @@ public class SoConfig {
         this.soWriteTimeoutMs = soWriteTimeoutMs;
     }
 
-    public int getRetryIntervalMs() {
-        return this.retryIntervalMs;
-    }
-
-    public void setRetryIntervalMs(int retryIntervalMs) {
-        this.retryIntervalMs = retryIntervalMs;
-    }
-
     public int getConnectTimeoutMs() {
         return this.connectTimeoutMs;
     }
 
     public void setConnectTimeoutMs(int connectTimeoutMs) {
         this.connectTimeoutMs = connectTimeoutMs;
-    }
-
-    public ByteBufAllocator getBufAllocator() {
-        return this.bufAllocator;
-    }
-
-    public void setBufAllocator(ByteBufAllocator bufAllocator) {
-        this.bufAllocator = bufAllocator;
-    }
-
-    public SoThreadFactory getThreadFactory() {
-        return this.threadFactory;
-    }
-
-    public void setThreadFactory(SoThreadFactory threadFactory) {
-        this.threadFactory = threadFactory;
-    }
-
-    public ClassLoader getClassLoader() {
-        return this.classLoader;
-    }
-
-    public void setClassLoader(ClassLoader classLoader) {
-        this.classLoader = classLoader;
-    }
-
-    public int getIoThreads() {
-        return this.ioThreads;
-    }
-
-    public void setIoThreads(int ioThreads) {
-        this.ioThreads = ioThreads;
-    }
-
-    public int getTaskThreads() {
-        return this.taskThreads;
-    }
-
-    public void setTaskThreads(int taskThreads) {
-        this.taskThreads = taskThreads;
-    }
-
-    public boolean isNetlog() {
-        return this.netlog;
-    }
-
-    public void setNetlog(boolean netlog) {
-        this.netlog = netlog;
     }
 }

@@ -38,7 +38,11 @@ public class NetManager extends AbstractNetManager {
     private static final Logger                   logger = Logger.getLogger(NetManager.class);
     protected            AsynchronousChannelGroup channelGroup;
 
-    public NetManager(SoConfig config) {
+    public NetManager() {
+        super(new NetConfig());
+    }
+
+    public NetManager(NetConfig config) {
         super(config);
     }
 
@@ -58,7 +62,7 @@ public class NetManager extends AbstractNetManager {
      * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(SocketAddress listenAddr, ProtoInitializer initializer, NetOptions options) throws IOException {
+    public synchronized NetListen listen(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig options) throws IOException {
         this.initChannelGroup();
 
         long channelID = this.context.nextID();
@@ -80,7 +84,7 @@ public class NetManager extends AbstractNetManager {
      * @param remoteAddr remoteAddr
      * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(SocketAddress remoteAddr, ProtoInitializer initializer, NetOptions options) {
+    public Future<NetChannel> connect(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig options) {
         Future<NetChannel> future = new BasicFuture<>();
         SoAsyncChannel asyncChannel = null;
         NetChannel channel;
@@ -92,7 +96,7 @@ public class NetManager extends AbstractNetManager {
             long createdTime = System.currentTimeMillis();
             AsyncChannelProvider provider = this.findProvider(options.getProtocol());
             AsyncChannel aioChannel = provider.createClientChannel(channelID, this.context, remoteAddr, this.channelGroup, options);
-            asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator(), this.config);
+            asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator());
 
             // init NetChannel
             SoSndContext wContext = new SoSndContext(channelID, createdTime, this.context);

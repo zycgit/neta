@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.udp;
 import net.hasor.neta.channel.AsyncChannel;
+import net.hasor.neta.channel.SoConfig;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -45,11 +46,18 @@ class UdpAsyncChannel implements AsyncChannel {
     protected final InetSocketAddress remoteAddr;
     protected final long              channelID;
     protected final DatagramChannel   channel;
+    protected final SoConfig          options;
 
-    UdpAsyncChannel(long channelID, InetSocketAddress remoteAddr, DatagramChannel channel) throws IOException {
+    UdpAsyncChannel(long channelID, InetSocketAddress remoteAddr, DatagramChannel channel, SoConfig options) {
         this.channelID = channelID;
         this.remoteAddr = remoteAddr;
         this.channel = channel;
+        this.options = options;
+    }
+
+    @Override
+    public SoConfig getSoConfig() {
+        return this.options;
     }
 
     @Override

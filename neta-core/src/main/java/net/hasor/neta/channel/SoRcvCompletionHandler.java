@@ -35,6 +35,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextServ
     private final        long                             createdTime;
     private final        AtomicReference<SoHandlerStatus> status;
     private final        AtomicLong                       counterBytes;
+    private final        int                              connectTimeoutMs;
     //
     private final        SoAsyncChannel                   channel;
     private final        SoContextService                 context;
@@ -44,6 +45,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextServ
         this.createdTime = createdTime;
         this.status = new AtomicReference<>(SoHandlerStatus.IDLE);
         this.counterBytes = new AtomicLong();
+        this.connectTimeoutMs = Math.max(10, channel.getSoConfig().getConnectTimeoutMs());
 
         this.channel = channel;
         this.context = context;
@@ -117,7 +119,7 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextServ
 
         if (e instanceof NotYetConnectedException) {
             long costTimeMs = System.currentTimeMillis() - this.createdTime;
-            if (costTimeMs < context.getConnectTimeoutMs()) {
+            if (costTimeMs < this.connectTimeoutMs) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
                 }

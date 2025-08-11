@@ -19,6 +19,8 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.channel.tcp.TcpOptions;
+import net.hasor.neta.channel.udp.UdpOptions;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoRcvQueue;
 import net.hasor.neta.handler.ProtoSndQueue;
@@ -54,22 +56,38 @@ public class AbstractSoTest {
         throw new SocketException("No ports are available");
     }
 
-    public static SoConfig crateConfig(int sndSize, int rcvSize) {
-        SoConfig config = new SoConfig();
+    public static NetConfig globalConf() {
+        NetConfig config = new NetConfig();
         config.setNetlog(true);
-        config.setSoBufSize(rcvSize, sndSize);
-
-        config.setSoReadTimeoutMs(1000);
-        config.setSoWriteTimeoutMs(1000);
-        config.setSoKeepAlive(true);
-        config.setSoKeepIntervalSec(10);
-        config.setSoKeepIdleSec(10);
         config.setBufAllocator(ByteBufUtils.DEFAULT_ALLOCATOR);
-        //
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(2);
         config.setTaskThreads(2);
         return config;
+    }
+
+    public static TcpOptions tcpConfig(int sndSize, int rcvSize) {
+        TcpOptions tcpConf = SoConfig.TCP();
+        tcpConf.setSoRcvBuf(rcvSize);
+        tcpConf.setSoSndBuf(sndSize);
+        tcpConf.setSoReadTimeoutMs(1000);
+        tcpConf.setSoWriteTimeoutMs(1000);
+        tcpConf.setSoKeepAlive(true);
+        tcpConf.setSoKeepIntervalSec(10);
+        tcpConf.setSoKeepIdleSec(10);
+        return tcpConf;
+    }
+
+    public static UdpOptions udpConfig(int sndSize, int rcvSize) {
+        UdpOptions udpConf = SoConfig.UDP();
+        udpConf.setSoRcvBuf(rcvSize);
+        udpConf.setSoSndBuf(sndSize);
+        udpConf.setSoReadTimeoutMs(1000);
+        udpConf.setSoWriteTimeoutMs(1000);
+        udpConf.setSoKeepAlive(true);
+        udpConf.setSoKeepIntervalSec(10);
+        udpConf.setSoKeepIdleSec(10);
+        return udpConf;
     }
 
     public static ProtoHandler counter(AtomicInteger counter) {

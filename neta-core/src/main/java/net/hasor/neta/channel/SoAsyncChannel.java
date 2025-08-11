@@ -20,7 +20,6 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 
 import java.io.Closeable;
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
@@ -44,16 +43,21 @@ class SoAsyncChannel implements Closeable {
     //
     private       boolean          ignoreReadEofFlag;
 
-    SoAsyncChannel(AsyncChannel channel, ByteBufAllocator allocator, SoConfig soConfig) {
+    SoAsyncChannel(AsyncChannel channel, ByteBufAllocator allocator) {
         this.channel = channel;
-        this.rTimeoutMs = soConfig.getSoReadTimeoutMs();
-        this.wTimeoutMs = soConfig.getSoWriteTimeoutMs();
+        this.rTimeoutMs = channel.getSoConfig().getSoReadTimeoutMs();
+        this.wTimeoutMs = channel.getSoConfig().getSoWriteTimeoutMs();
         this.shutdownInputSignal = new AtomicBoolean(false);
         this.shutdownOutputSignal = new AtomicBoolean(false);
 
         this.allocator = allocator;
-        this.rcvSwapBuffer = allocator.jvmBuffer(soConfig.getSoRcvBuf());
+        this.rcvSwapBuffer = allocator.jvmBuffer(channel.getSoConfig().getSoRcvBuf());
         this.ignoreReadEofFlag = false;
+    }
+
+    /** return socket config. */
+    public SoConfig getSoConfig() {
+        return this.channel.getSoConfig();
     }
 
     public void ignoreReadEofFlag() {

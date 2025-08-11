@@ -30,11 +30,11 @@ public interface AsyncChannelProvider {
      * @param channelId Unique identifier for the channel
      * @param context Socket configuration context
      * @param channelGroup Asynchronous channel group for managing channel lifecycle
-     * @param options
+     * @param soConfig
      * @return The created server channel
      * @throws IOException If an I/O error occurs during channel creation
      */
-    AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException;
+    AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException;
 
     /**
      * Creates an asynchronous client channel
@@ -42,9 +42,9 @@ public interface AsyncChannelProvider {
      * @param context Socket configuration context
      * @param remoteAddr
      * @param channelGroup Asynchronous channel group for managing channel lifecycle
-     * @param options
+     * @param soConfig
      * @return The created client channel
      * @throws IOException If an I/O error occurs during channel creation
      */
-    AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException;
+    AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException;
 }

@@ -39,7 +39,7 @@ import java.util.function.Consumer;
 public class SoContextService implements SoContext {
     private static final Logger                  logger = Logger.getLogger(SoContextService.class);
     private final        AtomicLong              nextID = new AtomicLong(0);
-    private final        SoConfig                config;
+    private final        NetConfig               config;
     private final        NetManager              manager;
     private final        ByteBufAllocator        allocator;
     private final        ClassLoader             useClassLoader;
@@ -55,16 +55,16 @@ public class SoContextService implements SoContext {
     private final        Queue<NetChannel>       channelList;
     private final        Queue<NetListen>        listenList;
 
-    SoContextService(SoConfig config, NetManager manager) {
+    SoContextService(NetConfig netConf, NetManager manager) {
         this.manager = manager;
-        this.allocator = config.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : config.getBufAllocator();
-        this.config = Objects.requireNonNull(config);
+        this.allocator = netConf.getBufAllocator() == null ? ByteBufAllocator.DEFAULT : netConf.getBufAllocator();
+        this.config = Objects.requireNonNull(netConf);
         this.useClassLoader = this.config.getClassLoader() == null ? SoContextService.class.getClassLoader() : this.config.getClassLoader();
 
-        if (config.getThreadFactory() == null) {
+        if (netConf.getThreadFactory() == null) {
             this.useSoThreadFactory = (loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true);
         } else {
-            this.useSoThreadFactory = config.getThreadFactory();
+            this.useSoThreadFactory = netConf.getThreadFactory();
         }
 
         // timer
@@ -81,7 +81,7 @@ public class SoContextService implements SoContext {
         this.ioExecutor = Executors.newFixedThreadPool(defaultProcess, ioThreadFactory);
 
         // task exec
-        int taskWorkSize = config.getTaskThreads();
+        int taskWorkSize = netConf.getTaskThreads();
         if (taskWorkSize < 1) {
             taskWorkSize = Runtime.getRuntime().availableProcessors();
         }
@@ -100,17 +100,13 @@ public class SoContextService implements SoContext {
     }
 
     @Override
-    public SoConfig getConfig() {
+    public NetConfig getConfig() {
         return this.config;
     }
 
     @Override
     public ByteBufAllocator getByteBufAllocator() {
         return this.allocator;
-    }
-
-    public int getConnectTimeoutMs() {
-        return Math.max(10, this.config.getConnectTimeoutMs());
     }
 
     @Override
@@ -170,7 +166,7 @@ public class SoContextService implements SoContext {
         long createdTime = System.currentTimeMillis();
 
         SoSndContext wContext = new SoSndContext(channelID, createdTime, this);
-        SoAsyncChannel asyncChannel = new SoAsyncChannel(realChannel, this.getByteBufAllocator(), this.getConfig());
+        SoAsyncChannel asyncChannel = new SoAsyncChannel(realChannel, this.getByteBufAllocator());
         SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, this);
         SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
         NetChannel channel = new NetChannel(channelID, createdTime, forListen, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);

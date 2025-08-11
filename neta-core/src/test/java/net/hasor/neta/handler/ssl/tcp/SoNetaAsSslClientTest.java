@@ -19,8 +19,8 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.NetOptions;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.NetConfig;
+import net.hasor.neta.channel.tcp.TcpOptions;
 import net.hasor.neta.handler.ssl.AbstractSslTest;
 import net.hasor.neta.handler.ssl.SoSslUtils;
 import net.hasor.neta.handler.ssl.SslConfig;
@@ -37,8 +37,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static net.hasor.neta.channel.AbstractSoTest.crateConfig;
-import static net.hasor.neta.channel.AbstractSoTest.safePort;
+import static net.hasor.neta.channel.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -66,11 +65,12 @@ public class SoNetaAsSslClientTest extends AbstractSslTest {
         });
 
         // SSL Client
-        SoConfig soConf = crateConfig(128, 4096);
+        TcpOptions tcpConf = tcpConfig(128, 4096);
+        NetConfig soConf = globalConf();
         soConf.setNetlog(true);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
         NetManager neta = new NetManager(soConf);
-        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf), NetOptions.TCP());
+        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf), tcpConf);
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
         }

@@ -51,6 +51,9 @@ public interface SoChannel<T> {
     /** get context */
     SoContext getContext();
 
+    /** get config */
+    SoConfig getConfig();
+
     /**
      * close this channel.
      * <li>For the Listen channel, listening is turned off.</li>

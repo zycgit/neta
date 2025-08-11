@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.tcp;
 import net.hasor.neta.channel.AsyncChannel;
+import net.hasor.neta.channel.SoConfig;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -35,10 +36,17 @@ import java.util.concurrent.TimeUnit;
 class TcpAsyncChannel implements AsyncChannel {
     private final AsynchronousSocketChannel channel;
     private final long                      channelID;
+    private final SoConfig                  soConfig;
 
-    TcpAsyncChannel(long channelId, AsynchronousSocketChannel channel) {
+    TcpAsyncChannel(long channelId, AsynchronousSocketChannel channel, SoConfig soConfig) {
         this.channel = channel;
         this.channelID = channelId;
+        this.soConfig = soConfig;
+    }
+
+    @Override
+    public SoConfig getSoConfig() {
+        return this.soConfig;
     }
 
     @Override

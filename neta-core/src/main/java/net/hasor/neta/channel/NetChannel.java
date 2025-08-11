@@ -191,6 +191,11 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     }
 
     @Override
+    public SoConfig getConfig() {
+        return this.forListen.getConfig();
+    }
+
+    @Override
     public <T> T findProtoContext(Class<T> serviceType) {
         return this.protoCtx.context(serviceType);
     }
@@ -450,7 +455,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
      * @see SoConfig#getSoReadTimeoutMs()
      */
     public void setReadTimeout() {
-        SoConfig config = this.context.getConfig();
+        SoConfig config = this.getListen().getConfig();
         if (config.getSoReadTimeoutMs() > 0) {
             this.setReadTimeout(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
         } else {
@@ -488,7 +493,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
      * @see SoConfig#getSoReadTimeoutMs()
      */
     public void waitReceive() throws InterruptedException, SoReadTimeoutException {
-        SoConfig config = this.context.getConfig();
+        SoConfig config = this.getListen().getConfig();
         if (config.getSoReadTimeoutMs() > 0) {
             this.waitReceive(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
         } else {

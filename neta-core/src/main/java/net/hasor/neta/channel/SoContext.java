@@ -25,7 +25,7 @@ import java.net.SocketAddress;
  */
 public interface SoContext {
     /** return global config. */
-    SoConfig getConfig();
+    NetConfig getConfig();
 
     /** default {@link ByteBufAllocator} */
     ByteBufAllocator getByteBufAllocator();

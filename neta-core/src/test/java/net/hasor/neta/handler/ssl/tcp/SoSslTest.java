@@ -18,8 +18,8 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.NetOptions;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.NetConfig;
+import net.hasor.neta.channel.tcp.TcpOptions;
 import net.hasor.neta.handler.ssl.*;
 import org.junit.Test;
 
@@ -28,8 +28,7 @@ import java.net.InetSocketAddress;
 import java.util.ArrayList;
 import java.util.List;
 
-import static net.hasor.neta.channel.AbstractSoTest.crateConfig;
-import static net.hasor.neta.channel.AbstractSoTest.safePort;
+import static net.hasor.neta.channel.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -40,18 +39,20 @@ public class SoSslTest extends AbstractSslTest {
     public void netaToNetaTest_01() throws IOException {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SoConfig soConf = crateConfig(128, 4096);
+        TcpOptions tcpConf = tcpConfig(128, 4096);
+        NetConfig soConf = globalConf();
         soConf.setNetlog(true);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
+
         NetManager neta = new NetManager(soConf);
 
         // Server
         List<String> serverRcvData = new ArrayList<>();
-        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)), NetOptions.TCP());
+        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)), tcpConf);
 
         // Client
         List<String> clientRcvData = new ArrayList<>();
-        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)), NetOptions.TCP());
+        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)), tcpConf);
 
         //
         while (!connect.isDone()) {
@@ -78,18 +79,19 @@ public class SoSslTest extends AbstractSslTest {
     public void sslModelManualTest_1() throws IOException {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SoConfig soConf = crateConfig(128, 4096);
+        TcpOptions tcpConf = tcpConfig(128, 4096);
+        NetConfig soConf = globalConf();
         soConf.setNetlog(true);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Manual);
         NetManager neta = new NetManager(soConf);
 
         // Server
         List<String> serverRcvData = new ArrayList<>();
-        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)), NetOptions.TCP());
+        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData)), tcpConf);
 
         // Client
         List<String> clientRcvData = new ArrayList<>();
-        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)), NetOptions.TCP());
+        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData)), tcpConf);
         while (!connect.isDone()) {
             ThreadUtils.sleep(100);
         }

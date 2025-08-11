@@ -15,14 +15,14 @@
  */
 package net.hasor.neta.channel.tcp;
 
-import net.hasor.neta.channel.NetOptions;
+import net.hasor.neta.channel.SoConfig;
 
 /**
  * Listener options.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class TcpOptions extends NetOptions {
+public class TcpOptions extends SoConfig {
 
     public TcpOptions() {
         super(TcpProvider.NAME);

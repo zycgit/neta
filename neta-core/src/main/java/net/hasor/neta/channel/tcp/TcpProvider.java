@@ -33,18 +33,16 @@ public class TcpProvider implements AsyncChannelProvider {
     public static final String NAME = "TCP";
 
     @Override
-    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
-        SoConfig config = context.getConfig();
+    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException {
         AsynchronousServerSocketChannel channel = AsynchronousServerSocketChannel.open(channelGroup);
-        SoConfigUtils.configListen(config, channel);
+        SoConfigUtils.configListen(soConfig, channel);
         return new TcpAsyncServerChannel(channelId, channel);
     }
 
     @Override
-    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, NetOptions options) throws IOException {
-        SoConfig config = context.getConfig();
+    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException {
         AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(channelGroup);
-        SoConfigUtils.configSocket(config, channel);
-        return new TcpAsyncChannel(channelId, channel);
+        SoConfigUtils.configSocket(soConfig, channel);
+        return new TcpAsyncChannel(channelId, channel, soConfig);
     }
 }

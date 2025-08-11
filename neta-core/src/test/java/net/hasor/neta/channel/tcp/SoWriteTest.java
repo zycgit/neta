@@ -39,8 +39,10 @@ public class SoWriteTest extends AbstractSoTest {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        NetManager server = new NetManager(crateConfig(2, 30));
-        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), NetOptions.TCP());
+        TcpOptions tcpConf = tcpConfig(2, 30);
+
+        NetManager server = new NetManager(globalConf());
+        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
         Socket client = new Socket("127.0.0.1", safePort);
 
         listen.waitAnyAccept();
@@ -65,7 +67,9 @@ public class SoWriteTest extends AbstractSoTest {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        NetManager server = new NetManager(crateConfig(2, 30));
+        TcpOptions tcpConf = tcpConfig(2, 30);
+
+        NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public void onActive(ProtoContext context) throws Throwable {
@@ -76,7 +80,7 @@ public class SoWriteTest extends AbstractSoTest {
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 return ProtoStatus.Next;
             }
-        }).build(), NetOptions.TCP());
+        }).build(), tcpConf);
 
         // client connect to Server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -99,7 +103,7 @@ public class SoWriteTest extends AbstractSoTest {
         // server start
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        NetManager server = new NetManager(new SoConfig());
+        NetManager server = new NetManager(new NetConfig());
         NetListen listen = server.listen(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
@@ -113,7 +117,7 @@ public class SoWriteTest extends AbstractSoTest {
                     }
                 }).build();
             }
-        }, NetOptions.TCP());
+        }, SoConfig.TCP());
 
         // client start
         Socket client = new Socket("127.0.0.1", safePort);
@@ -158,11 +162,12 @@ public class SoWriteTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SoConfig soConfig = crateConfig(8, 30);
-        soConfig.setSoWriteTimeoutMs(1);
-        NetManager server = new NetManager(soConfig);
+        TcpOptions tcpConf = tcpConfig(8, 30);
+        tcpConf.setSoWriteTimeoutMs(1);
+
+        NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
-        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
+        NetListen listen = server.listen(address, initializer, tcpConf);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -204,11 +209,12 @@ public class SoWriteTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SoConfig soConfig = crateConfig(8, 30);
-        soConfig.setSoWriteTimeoutMs(1);
-        NetManager server = new NetManager(soConfig);
+        TcpOptions tcpConf = tcpConfig(8, 30);
+        tcpConf.setSoWriteTimeoutMs(1);
+
+        NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
-        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
+        NetListen listen = server.listen(address, initializer, tcpConf);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -250,11 +256,13 @@ public class SoWriteTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SoConfig soConfig = crateConfig(2, 30);
-        soConfig.setNetlog(false);
-        NetManager server = new NetManager(soConfig);
+        TcpOptions tcpConf = tcpConfig(2, 30);
+        NetConfig netConfig = globalConf();
+        netConfig.setNetlog(false);
+
+        NetManager server = new NetManager(netConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen(address, initializer, NetOptions.TCP());
+        NetListen listen = server.listen(address, initializer, tcpConf);
 
         // client: send a lot of pack
         Socket client = new Socket("127.0.0.1", safePort);
@@ -277,8 +285,10 @@ public class SoWriteTest extends AbstractSoTest {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        NetManager server = new NetManager(crateConfig(2, 32));
-        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), NetOptions.TCP());
+        TcpOptions tcpConf = tcpConfig(2, 32);
+
+        NetManager server = new NetManager(globalConf());
+        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
         Socket client = new Socket("127.0.0.1", safePort);
 
         listen.waitAnyAccept();

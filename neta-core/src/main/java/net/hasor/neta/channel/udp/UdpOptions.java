@@ -15,14 +15,14 @@
  */
 package net.hasor.neta.channel.udp;
 
-import net.hasor.neta.channel.NetOptions;
+import net.hasor.neta.channel.SoConfig;
 
 /**
  * Listener options.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class UdpOptions extends NetOptions {
+public class UdpOptions extends SoConfig {
     private Integer rcvPacketSize;
 
     public UdpOptions() {

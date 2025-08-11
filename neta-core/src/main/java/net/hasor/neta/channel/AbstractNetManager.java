@@ -29,18 +29,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class AbstractNetManager {
     private static final Logger           logger = Logger.getLogger(AbstractNetManager.class);
     protected            ExecutorService  ioExec;
-    protected final      SoConfig         config;
+    protected final      NetConfig        config;
     protected final      SoContextService context;
     protected final      AtomicBoolean    shutdown;
 
-    public AbstractNetManager(SoConfig config) {
+    public AbstractNetManager(NetConfig config) {
         this.config = config;
         this.context = new SoContextService(config, (NetManager) this);
         this.shutdown = new AtomicBoolean(false);
     }
 
-    /** return {@link SoConfig} */
-    public SoConfig getConfig() {
+    /** return {@link NetConfig} */
+    public NetConfig getConfig() {
         return this.config;
     }
 

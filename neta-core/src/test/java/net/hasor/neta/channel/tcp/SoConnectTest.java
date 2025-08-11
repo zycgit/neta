@@ -49,7 +49,9 @@ public class SoConnectTest extends AbstractSoTest {
 
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
-        NetManager neta = new NetManager(crateConfig(2, 30));
+        TcpOptions tcpConf = tcpConfig(2, 30);
+
+        NetManager neta = new NetManager(globalConf());
         Future<NetChannel> future = neta.connect(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
@@ -66,7 +68,7 @@ public class SoConnectTest extends AbstractSoTest {
                     }
                 }).build();
             }
-        }, NetOptions.TCP());
+        }, tcpConf);
 
         NetChannel remote = future.get();
         while (!remote.isClose()) {
@@ -83,14 +85,15 @@ public class SoConnectTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        TcpOptions tcpConf = tcpConfig(2, 30);
 
-        NetManager neta = new NetManager(crateConfig(2, 30));
+        NetManager neta = new NetManager(globalConf());
         Future<NetChannel> future = neta.connect(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
                 return ProtoHelper.builder().build();
             }
-        }, NetOptions.TCP());
+        }, tcpConf);
         neta.shutdown();
 
         ServerSocket server = new ServerSocket(safePort);

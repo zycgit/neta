@@ -51,5 +51,5 @@ public interface AsyncServerChannel extends Closeable {
      * @param options
      * @throws IOException If an I/O error occurs during binding
      */
-    void bind(NetListen listen, SoContext context, NetOptions options) throws IOException;
+    void bind(NetListen listen, SoContext context, SoConfig options) throws IOException;
 }

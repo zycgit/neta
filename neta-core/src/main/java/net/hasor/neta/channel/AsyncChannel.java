@@ -29,6 +29,10 @@ import java.util.concurrent.TimeUnit;
  * @version 2025-08-06
  */
 public interface AsyncChannel extends Closeable {
+
+    /** return socket config. */
+    SoConfig getSoConfig();
+
     /**
      * Gets the unique identifier of this channel.
      * @return The channel ID as a long value

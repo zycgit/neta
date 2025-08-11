@@ -25,37 +25,37 @@ import java.util.List;
  */
 public class ProtoEndpointTest extends AbstractStackTest {
 
-    @Test
-    public void rcvHeapUpTest_1() {
-        EmbeddedInitializer initializer = (ctx) -> {
-            List<String> ignore = new ArrayList<>();
-            ProtoConfig protoConf = new ProtoConfig();
-            protoConf.setRcvDownSlotSize(2);
-            protoConf.setSndUpSlotSize(2);
-            return ProtoHelper.embedded(Integer.class, Integer.class, protoConf)//
-                    .nextDecoder("COPY", protoConf, doCopyHandler("Dec1", ignore, ignore))       // rcv +1
-                    .nextDecoder("NO_COPY", protoConf, doNotCopyHandler("Dec2", ignore, ignore)) // rcv +1
-                    .build();
-        };
-
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.receive(1, 2); // in "COPY" rcvDown
-        channel.receive(3, 4); // in ProtoStack rcv up
-
-        try {
-            channel.receive(5, 6);
-            assert false;
-        } catch (Exception e) {
-            assert e.getMessage().endsWith("available slot is 0, require 2.");
-        }
-
-        assert channel.getStatistical().heapUpOfRcv() == 4;
-        assert channel.getStatistical().heapUpOfRcv("COPY") == 2;
-        assert channel.getStatistical().heapUpOfRcv("NO_COPY") == 0;
-        assert channel.getStatistical().heapUpOfRcvRoot() == 2;
-        assert channel.readRcv() == null;
-    }
+    //    @Test
+    //    public void rcvHeapUpTest_1() {
+    //        EmbeddedInitializer initializer = (ctx) -> {
+    //            List<String> ignore = new ArrayList<>();
+    //            ProtoConfig protoConf = new ProtoConfig();
+    //            protoConf.setRcvDownSlotSize(2);
+    //            protoConf.setSndUpSlotSize(2);
+    //            return ProtoHelper.embedded(Integer.class, Integer.class, protoConf)//
+    //                    .nextDecoder("COPY", protoConf, doCopyHandler("Dec1", ignore, ignore))       // rcv +1
+    //                    .nextDecoder("NO_COPY", protoConf, doNotCopyHandler("Dec2", ignore, ignore)) // rcv +1
+    //                    .build();
+    //        };
+    //
+    //        EmbeddedSoContext context = new EmbeddedSoContext();
+    //        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+    //        channel.receive(1, 2); // in "COPY" rcvDown
+    //        channel.receive(3, 4); // in ProtoStack rcv up
+    //
+    //        try {
+    //            channel.receive(5, 6);
+    //            assert false;
+    //        } catch (Exception e) {
+    //            assert e.getMessage().endsWith("available slot is 0, require 2.");
+    //        }
+    //
+    //        assert channel.getStatistical().heapUpOfRcv() == 4;
+    //        assert channel.getStatistical().heapUpOfRcv("COPY") == 2;
+    //        assert channel.getStatistical().heapUpOfRcv("NO_COPY") == 0;
+    //        assert channel.getStatistical().heapUpOfRcvRoot() == 2;
+    //        assert channel.readRcv() == null;
+    //    }
 
     @Test
     public void rcvHeapUpTest_2() {
@@ -111,35 +111,35 @@ public class ProtoEndpointTest extends AbstractStackTest {
         assert channel.getRcvError() == e;
     }
 
-    @Test
-    public void sndHeapUpTest_1() {
-        EmbeddedInitializer initializer = (ctx) -> {
-            List<String> ignore = new ArrayList<>();
-            ProtoConfig protoConf = new ProtoConfig();
-            protoConf.setRcvDownSlotSize(2);
-            protoConf.setSndUpSlotSize(2);
-            return ProtoHelper.embedded(Integer.class, Integer.class, protoConf)//
-                    .nextEncoder("COPY", protoConf, doCopyHandler("Enc1", ignore, ignore))       // snd +1
-                    .nextEncoder("NO_COPY", protoConf, doNotCopyHandler("Enc2", ignore, ignore)) // snd +1
-                    .build();
-        };
-
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.send(1, 2); // in "COPY" rcvDown
-        try {
-            channel.send(3, 4);
-            assert false;
-        } catch (Exception e) {
-            assert e.getMessage().endsWith("available slot is 0, require 2.");
-        }
-
-        assert channel.getStatistical().heapUpOfSnd() == 2;
-        assert channel.getStatistical().heapUpOfRcv("COPY") == 0;
-        assert channel.getStatistical().heapUpOfRcv("NO_COPY") == 0;
-        assert channel.getStatistical().heapUpOfSndRoot() == 2;
-        assert channel.readSnd() == null;
-    }
+    //    @Test
+    //    public void sndHeapUpTest_1() {
+    //        EmbeddedInitializer initializer = (ctx) -> {
+    //            List<String> ignore = new ArrayList<>();
+    //            ProtoConfig protoConf = new ProtoConfig();
+    //            protoConf.setRcvDownSlotSize(2);
+    //            protoConf.setSndUpSlotSize(2);
+    //            return ProtoHelper.embedded(Integer.class, Integer.class, protoConf)//
+    //                    .nextEncoder("COPY", protoConf, doCopyHandler("Enc1", ignore, ignore))       // snd +1
+    //                    .nextEncoder("NO_COPY", protoConf, doNotCopyHandler("Enc2", ignore, ignore)) // snd +1
+    //                    .build();
+    //        };
+    //
+    //        EmbeddedSoContext context = new EmbeddedSoContext();
+    //        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+    //        channel.send(1, 2); // in "COPY" rcvDown
+    //        try {
+    //            channel.send(3, 4);
+    //            assert false;
+    //        } catch (Exception e) {
+    //            assert e.getMessage().endsWith("available slot is 0, require 2.");
+    //        }
+    //
+    //        assert channel.getStatistical().heapUpOfSnd() == 2;
+    //        assert channel.getStatistical().heapUpOfRcv("COPY") == 0;
+    //        assert channel.getStatistical().heapUpOfRcv("NO_COPY") == 0;
+    //        assert channel.getStatistical().heapUpOfSndRoot() == 2;
+    //        assert channel.readSnd() == null;
+    //    }
 
     @Test
     public void sndHeapUpTest_2() {

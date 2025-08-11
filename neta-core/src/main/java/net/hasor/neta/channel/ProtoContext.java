@@ -31,7 +31,7 @@ public interface ProtoContext {
     String CURRENT_PROTO_STACK_DEPTH = ProtoContext.class.getName() + "_CURRENT_PROTO_STACK_DEPTH";
 
     /** global config */
-    SoConfig getConfig();
+    NetConfig getConfig();
 
     /** the channel */
     NetDuplexChannel<?> getChannel();

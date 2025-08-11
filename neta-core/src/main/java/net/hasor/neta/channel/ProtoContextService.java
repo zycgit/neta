@@ -41,7 +41,7 @@ public class ProtoContextService implements ProtoContext {
     }
 
     @Override
-    public SoConfig getConfig() {
+    public NetConfig getConfig() {
         return this.soContext.getConfig();
     }
 

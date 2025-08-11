@@ -37,6 +37,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     private              long                    lastActiveTime;
     private final        boolean                 asServer;
     private final        EmbeddedSoContext       context;
+    private final        SoConfig                soConfig;
     private static final SocketAddress           LOCAL_ADDRESS  = new EmbeddedSocketAddress();
     private static final SocketAddress           REMOTE_ADDRESS = new EmbeddedSocketAddress();
     //
@@ -88,6 +89,8 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
         this.lastActiveTime = System.currentTimeMillis();
         this.asServer = asServer;
         this.context = context;
+        this.soConfig = new SoConfig("embedded") {
+        };
 
         try {
             context.openChannel(this);
@@ -167,6 +170,11 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     @Override
     public SoContext getContext() {
         return this.context;
+    }
+
+    @Override
+    public SoConfig getConfig() {
+        return this.soConfig;
     }
 
     @Override
