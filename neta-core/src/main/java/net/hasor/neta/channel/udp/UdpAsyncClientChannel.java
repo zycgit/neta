@@ -62,14 +62,14 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
     public <A> void connect(SocketAddress remote, A attachment, CompletionHandler<Void, ? super A> handler) throws IOException {
         this.selector = Selector.open();
         this.channel.connect(remote);
-        this.channel.register(this.selector, SelectionKey.OP_READ);
         this.channel.configureBlocking(false);
+        this.channel.register(this.selector, SelectionKey.OP_READ);
 
         handler.completed(null, attachment);
 
         int rcvPacketSize = this.options.getSoRcvBuf();
-        if (options instanceof UdpOptions) {
-            Integer packetSize = ((UdpOptions) this.options).getRcvPacketSize();
+        if (options instanceof UdpSoConfig) {
+            Integer packetSize = ((UdpSoConfig) this.options).getRcvPacketSize();
             if (packetSize != null) {
                 rcvPacketSize = packetSize;
             }

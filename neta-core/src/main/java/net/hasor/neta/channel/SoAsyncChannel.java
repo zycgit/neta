@@ -128,6 +128,10 @@ class SoAsyncChannel implements Closeable {
         return this.ignoreReadEofFlag;
     }
 
+    public boolean usingSndSwapBuffer() {
+        return this.channel.usingSndSwapBuffer();
+    }
+
     @Override
     public void close() throws IOException {
         this.shutdownInputSignal.set(true);

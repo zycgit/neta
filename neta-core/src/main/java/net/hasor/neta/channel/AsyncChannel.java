@@ -59,6 +59,8 @@ public interface AsyncChannel extends Closeable {
      */
     Object getTarget();
 
+    boolean usingSndSwapBuffer();
+
     /**
      * Checks if this channel is open.
      * @return true if the channel is open, false otherwise

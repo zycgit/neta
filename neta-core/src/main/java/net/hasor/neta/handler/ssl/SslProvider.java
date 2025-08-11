@@ -26,9 +26,9 @@ public enum SslProvider {
      * <a href="https://docs.oracle.com/javase/8/docs/technotes/guides/security/jsse/tls.html">JSSE TLS</a>
      */
     JSSE,
-    /**
-     * OpenSSL-based implementation.
-     * see:
-     */
-    OPEN_SSL,
+    //    /**
+    //     * OpenSSL-based implementation.
+    //     * see:
+    //     */
+    //    OPEN_SSL,
 }

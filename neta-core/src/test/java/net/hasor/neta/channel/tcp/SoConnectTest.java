@@ -49,7 +49,7 @@ public class SoConnectTest extends AbstractSoTest {
 
         //
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager neta = new NetManager(globalConf());
         Future<NetChannel> future = neta.connect(address, new ProtoInitializer() {
@@ -85,7 +85,7 @@ public class SoConnectTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager neta = new NetManager(globalConf());
         Future<NetChannel> future = neta.connect(address, new ProtoInitializer() {

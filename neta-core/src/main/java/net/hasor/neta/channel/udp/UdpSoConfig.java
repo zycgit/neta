@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel.tcp;
+package net.hasor.neta.channel.udp;
 
 import net.hasor.neta.channel.SoConfig;
 
@@ -22,9 +22,24 @@ import net.hasor.neta.channel.SoConfig;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class TcpOptions extends SoConfig {
+public class UdpSoConfig extends SoConfig {
+    private Integer rcvPacketSize;
+    //SO_REUSEADDR	重复使用地址
+    //SO_BROADCAST	允许传输广播数据报
+    //IP_TOS	互联网协议 (IP) 标头中的服务类型 (ToS) 八位字节
+    //IP_MULTICAST_IF	网际协议 (IP) 多播数据报的网络接口
+    //IP_MULTICAST_TTL	time-to-live 用于 Internet 协议 (IP) 多播数据报
+    //IP_MULTICAST_LOOP	互联网协议 (IP) 多播数据报的环回
 
-    public TcpOptions() {
-        super(TcpProvider.NAME);
+    public UdpSoConfig() {
+        super(UdpProvider.NAME);
+    }
+
+    public Integer getRcvPacketSize() {
+        return this.rcvPacketSize;
+    }
+
+    public void setRcvPacketSize(Integer rcvPacketSize) {
+        this.rcvPacketSize = rcvPacketSize;
     }
 }

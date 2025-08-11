@@ -18,7 +18,7 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.NetConfig;
-import net.hasor.neta.channel.tcp.TcpOptions;
+import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.handler.ssl.*;
 import org.junit.Test;
 
@@ -41,7 +41,7 @@ public class SoNetaAsSslServerTest extends AbstractSslTest {
     public void netaAsSslServerTest_01() throws Exception {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(128, 4096);
+        TcpSoConfig tcpConf = tcpConfig(128, 4096);
         NetConfig soConf = globalConf();
         soConf.setNetlog(false);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);

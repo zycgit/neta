@@ -43,7 +43,7 @@ public class SoReadTest extends AbstractSoTest {
         // echo anything from remote
         AtomicInteger cnt = new AtomicInteger();
         int safePort = safePort();
-        TcpOptions tcpConf = tcpConfig(2, 32);
+        TcpSoConfig tcpConf = tcpConfig(2, 32);
 
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(globalConf());
@@ -87,7 +87,7 @@ public class SoReadTest extends AbstractSoTest {
         // echo anything from remote
         AtomicInteger cnt = new AtomicInteger();
         int safePort = safePort();
-        TcpOptions tcpConf = tcpConfig(2, 2);
+        TcpSoConfig tcpConf = tcpConfig(2, 2);
 
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(globalConf());
@@ -132,7 +132,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetConfig netConfig = globalConf();
         netConfig.setNetlog(false);
@@ -256,7 +256,7 @@ public class SoReadTest extends AbstractSoTest {
 
         // start server
         int safePort = safePort();
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
 
         NetManager server = new NetManager(globalConf());
@@ -343,7 +343,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = SoConfig.TCP();
+        TcpSoConfig tcpConf = SoConfig.TCP();
         tcpConf.setSoReadTimeoutMs(100);
 
         NetManager server = new NetManager();
@@ -431,7 +431,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = SoConfig.TCP();
+        TcpSoConfig tcpConf = SoConfig.TCP();
         tcpConf.setSoReadTimeoutMs(100);
 
         NetManager server = new NetManager();
@@ -484,7 +484,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
         NetConfig netConfig = globalConf();
         netConfig.setNetlog(false);
 
@@ -534,7 +534,7 @@ public class SoReadTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
         NetConfig netConfig = globalConf();
         netConfig.setNetlog(false);
 

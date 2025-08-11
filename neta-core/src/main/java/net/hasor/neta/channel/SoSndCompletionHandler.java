@@ -39,6 +39,7 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
     private final        SoAsyncChannel                   channel;
     private final        SoSndContext                     sndContext;
     private final        SoContextService                 context;
+    private final        boolean                          usingSndSwapBuffer;
     private final        ByteBuffer                       sndSwapBuf;
 
     public SoSndCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoSndContext sndContext) {
@@ -51,9 +52,10 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
         this.channel = channel;
         this.sndContext = sndContext;
         this.context = sndContext.getContext();
+        this.usingSndSwapBuffer = this.channel.usingSndSwapBuffer();
 
         ByteBufAllocator allocator = this.context.getByteBufAllocator();
-        this.sndSwapBuf = allocator.jvmBuffer(this.channel.getSoConfig().getSoSndBuf());
+        this.sndSwapBuf = this.usingSndSwapBuffer ? allocator.jvmBuffer(this.channel.getSoConfig().getSoSndBuf()) : null;
     }
 
     public boolean tryLock() {
@@ -81,8 +83,14 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
         }
 
         this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-            this.copyData();
-            this.writeData();
+            if (this.usingSndSwapBuffer) {
+                // for Stream TCP
+                this.copyData();
+                this.writeData();
+            } else {
+                // for Packet UDP
+                this.sendData();
+            }
         });
     }
 
@@ -128,6 +136,37 @@ class SoSndCompletionHandler implements CompletionHandler<Integer, SoContextServ
         } else if (this.sndContext.hasData()) {
             this.copyData();
             this.writeData();
+        } else {
+            this.status.set(SoHandlerStatus.IDLE);
+        }
+    }
+
+    private void sendData() {
+        if (this.sndContext.hasData()) {
+            SoSndData sndData = this.sndContext.peekData();
+
+            try {
+                this.status.set(SoHandlerStatus.WAITING);
+
+                ByteBuffer data = sndData.transferPull();
+                if (!this.channel.write(data, this.context, this)) {
+                    this.status.set(SoHandlerStatus.IDLE);
+                }
+            } catch (Throwable e) {
+                handleException(e);
+            }
+
+            if (!sndData.hasReadable()) {
+                this.sndContext.popData();
+                this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+                    sndData.completed();
+                });
+            }
+
+            //
+            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+                this.sendData(); // recursive send.
+            });
         } else {
             this.status.set(SoHandlerStatus.IDLE);
         }

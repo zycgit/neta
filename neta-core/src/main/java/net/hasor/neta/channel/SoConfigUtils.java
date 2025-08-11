@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.tcp.TcpSoConfig;
 
 import java.io.IOException;
 import java.nio.channels.NetworkChannel;
@@ -65,16 +66,19 @@ public class SoConfigUtils {
             }
         }
 
-        if (Boolean.TRUE.equals(config.getSoKeepAlive())) {
-            channel.setOption(SoOptions.SO_KEEPALIVE, true);
-            if (config.getSoKeepIdleSec() != null && SoOptions.TCP_KEEPIDLE != null) {
-                channel.setOption(SoOptions.TCP_KEEPIDLE, config.getSoKeepIdleSec());
-            }
-            if (config.getSoKeepIntervalSec() != null && SoOptions.TCP_KEEPINTERVAL != null) {
-                channel.setOption(SoOptions.TCP_KEEPINTERVAL, config.getSoKeepIntervalSec());
-            }
-            if (config.getSoKeepCount() != null && SoOptions.TCP_KEEPCOUNT != null) {
-                channel.setOption(SoOptions.TCP_KEEPCOUNT, config.getSoKeepCount());
+        if (config instanceof TcpSoConfig) {
+            TcpSoConfig soConfig = (TcpSoConfig) config;
+            if (Boolean.TRUE.equals(soConfig.getSoKeepAlive())) {
+                channel.setOption(SoOptions.SO_KEEPALIVE, true);
+                if (soConfig.getSoKeepIdleSec() != null && SoOptions.TCP_KEEPIDLE != null) {
+                    channel.setOption(SoOptions.TCP_KEEPIDLE, soConfig.getSoKeepIdleSec());
+                }
+                if (soConfig.getSoKeepIntervalSec() != null && SoOptions.TCP_KEEPINTERVAL != null) {
+                    channel.setOption(SoOptions.TCP_KEEPINTERVAL, soConfig.getSoKeepIntervalSec());
+                }
+                if (soConfig.getSoKeepCount() != null && SoOptions.TCP_KEEPCOUNT != null) {
+                    channel.setOption(SoOptions.TCP_KEEPCOUNT, soConfig.getSoKeepCount());
+                }
             }
         }
     }

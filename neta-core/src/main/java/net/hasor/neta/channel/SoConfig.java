@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.channel.tcp.TcpOptions;
-import net.hasor.neta.channel.udp.UdpOptions;
+import net.hasor.neta.channel.tcp.TcpSoConfig;
+import net.hasor.neta.channel.udp.UdpSoConfig;
 
 /**
  * Listener options.
@@ -28,15 +28,11 @@ public class SoConfig {
     private       boolean suspend = false;
 
     // for Socket
-    private int     soRcvBuf          = 32 * 1024 * 1024; // SO_RCVBUF: The size of the socket receive buffer
-    private int     soSndBuf          = 32 * 1024 * 1024; // SO_SNDBUF: The size of the socket send buffer
-    private Boolean soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
-    private Integer soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
-    private Integer soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
-    private Integer soKeepCount       = null;      // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
-    private Integer soReadTimeoutMs   = -1;        // socket read timeout
-    private Integer soWriteTimeoutMs  = -1;        // socket write timeout
-    //    SO_LINGER
+    private int     soRcvBuf         = 32 * 1024 * 1024; // SO_RCVBUF: The size of the socket receive buffer
+    private int     soSndBuf         = 32 * 1024 * 1024; // SO_SNDBUF: The size of the socket send buffer
+    private Integer soReadTimeoutMs  = -1;        // socket read timeout
+    private Integer soWriteTimeoutMs = -1;        // socket write timeout
+    // SO_REUSEADDR //重复使用地址
 
     private int connectTimeoutMs = 10 * 1000; // 建立连接超时时间
 
@@ -44,12 +40,12 @@ public class SoConfig {
         this.protocol = protocol;
     }
 
-    public static TcpOptions TCP() {
-        return new TcpOptions();
+    public static TcpSoConfig TCP() {
+        return new TcpSoConfig();
     }
 
-    public static UdpOptions UDP() {
-        return new UdpOptions();
+    public static UdpSoConfig UDP() {
+        return new UdpSoConfig();
     }
 
     public String getProtocol() {
@@ -85,38 +81,6 @@ public class SoConfig {
 
     public void setSoSndBuf(int soSndBuf) {
         this.soSndBuf = soSndBuf;
-    }
-
-    public Boolean getSoKeepAlive() {
-        return this.soKeepAlive;
-    }
-
-    public void setSoKeepAlive(Boolean soKeepAlive) {
-        this.soKeepAlive = soKeepAlive;
-    }
-
-    public Integer getSoKeepIdleSec() {
-        return this.soKeepIdleSec;
-    }
-
-    public void setSoKeepIdleSec(Integer soKeepIdleSec) {
-        this.soKeepIdleSec = soKeepIdleSec;
-    }
-
-    public Integer getSoKeepIntervalSec() {
-        return this.soKeepIntervalSec;
-    }
-
-    public void setSoKeepIntervalSec(Integer soKeepIntervalSec) {
-        this.soKeepIntervalSec = soKeepIntervalSec;
-    }
-
-    public Integer getSoKeepCount() {
-        return this.soKeepCount;
-    }
-
-    public void setSoKeepCount(Integer soKeepCount) {
-        this.soKeepCount = soKeepCount;
     }
 
     public Integer getSoReadTimeoutMs() {

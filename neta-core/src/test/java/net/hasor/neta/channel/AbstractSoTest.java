@@ -19,8 +19,8 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.channel.tcp.TcpOptions;
-import net.hasor.neta.channel.udp.UdpOptions;
+import net.hasor.neta.channel.tcp.TcpSoConfig;
+import net.hasor.neta.channel.udp.UdpSoConfig;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoRcvQueue;
 import net.hasor.neta.handler.ProtoSndQueue;
@@ -66,8 +66,8 @@ public class AbstractSoTest {
         return config;
     }
 
-    public static TcpOptions tcpConfig(int sndSize, int rcvSize) {
-        TcpOptions tcpConf = SoConfig.TCP();
+    public static TcpSoConfig tcpConfig(int sndSize, int rcvSize) {
+        TcpSoConfig tcpConf = SoConfig.TCP();
         tcpConf.setSoRcvBuf(rcvSize);
         tcpConf.setSoSndBuf(sndSize);
         tcpConf.setSoReadTimeoutMs(1000);
@@ -78,15 +78,12 @@ public class AbstractSoTest {
         return tcpConf;
     }
 
-    public static UdpOptions udpConfig(int sndSize, int rcvSize) {
-        UdpOptions udpConf = SoConfig.UDP();
+    public static UdpSoConfig udpConfig(int sndSize, int rcvSize) {
+        UdpSoConfig udpConf = SoConfig.UDP();
         udpConf.setSoRcvBuf(rcvSize);
         udpConf.setSoSndBuf(sndSize);
         udpConf.setSoReadTimeoutMs(1000);
         udpConf.setSoWriteTimeoutMs(1000);
-        udpConf.setSoKeepAlive(true);
-        udpConf.setSoKeepIntervalSec(10);
-        udpConf.setSoKeepIdleSec(10);
         return udpConf;
     }
 

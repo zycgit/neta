@@ -35,7 +35,7 @@ public class SoListenTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), tcpConf);
@@ -64,7 +64,7 @@ public class SoListenTest extends AbstractSoTest {
     public void suspendTest_1() throws Exception {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), tcpConf);
@@ -94,7 +94,7 @@ public class SoListenTest extends AbstractSoTest {
 
     @Test
     public void acceptListener_1() throws Exception {
-        TcpOptions tcpConf = tcpConfig(2, 32);
+        TcpSoConfig tcpConf = tcpConfig(2, 32);
         NetManager server = new NetManager(globalConf());
         NetListen listen1 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), tcpConf);
         NetListen listen2 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), tcpConf);
@@ -130,7 +130,7 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void acceptListener_2() throws Exception {
         AtomicInteger atomicListen = new AtomicInteger();
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(new InetSocketAddress("127.0.0.1", safePort()), new ProtoInitializer() {
@@ -163,7 +163,7 @@ public class SoListenTest extends AbstractSoTest {
     public void foundTest_1() throws Exception {
         // start server
         int safePort = safePort();
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), tcpConf);

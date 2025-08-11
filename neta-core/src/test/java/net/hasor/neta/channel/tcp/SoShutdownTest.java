@@ -63,7 +63,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start listen
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, initializer, tcpConf);
@@ -121,7 +121,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start listen
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, initializer, tcpConf);
@@ -184,7 +184,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start listen
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, initializer, tcpConf);
@@ -241,7 +241,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         // start listen
         int safePort = safePort();
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(globalConf());
@@ -280,7 +280,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
@@ -304,7 +304,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
@@ -347,7 +347,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start listen
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
@@ -391,7 +391,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start listen
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
@@ -441,7 +441,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start listen
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 8192);
+        TcpSoConfig tcpConf = tcpConfig(2, 8192);
 
         NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
@@ -496,7 +496,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
@@ -525,7 +525,7 @@ public class SoShutdownTest extends AbstractSoTest {
     public void sndRemoteShutdownInputTest_01() throws Exception {
         // start server
         int safePort = safePort();
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
@@ -576,7 +576,7 @@ public class SoShutdownTest extends AbstractSoTest {
         // start listen
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, initializer, tcpConf);

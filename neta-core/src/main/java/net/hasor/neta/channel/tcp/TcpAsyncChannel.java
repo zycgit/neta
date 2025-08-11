@@ -70,6 +70,11 @@ class TcpAsyncChannel implements AsyncChannel {
     }
 
     @Override
+    public boolean usingSndSwapBuffer() {
+        return true;
+    }
+
+    @Override
     public boolean isOpen() {
         return this.channel.isOpen();
     }

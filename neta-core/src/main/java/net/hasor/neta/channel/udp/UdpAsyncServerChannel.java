@@ -92,8 +92,8 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         this.channel.register(this.selector, SelectionKey.OP_READ);
 
         int rcvPacketSize = options.getSoRcvBuf();
-        if (options instanceof UdpOptions) {
-            Integer packetSize = ((UdpOptions) options).getRcvPacketSize();
+        if (options instanceof UdpSoConfig) {
+            Integer packetSize = ((UdpSoConfig) options).getRcvPacketSize();
             if (packetSize != null) {
                 rcvPacketSize = packetSize;
             }

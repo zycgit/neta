@@ -93,6 +93,24 @@ class SoSndData {
         return len;
     }
 
+    public ByteBuffer transferPull() {
+        if (!this.hasReadable()) {
+            return null;
+        }
+
+        try {
+            ByteBuf srcBuf = this.data[this.readIdx];
+            byte[] bytes = srcBuf.asByteArray();
+
+            srcBuf.skipReadableBytes(bytes.length);
+            srcBuf.markReader();
+            this.readIndexBytes += bytes.length;
+            return ByteBuffer.wrap(bytes);
+        } finally {
+            this.readIdx++;
+        }
+    }
+
     /**
      * completed callback.
      */

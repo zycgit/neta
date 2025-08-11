@@ -80,6 +80,11 @@ class UdpAsyncChannel implements AsyncChannel {
         return this.channel;
     }
 
+    @Override
+    public boolean usingSndSwapBuffer() {
+        return false;
+    }
+
     //
 
     @Override
@@ -124,12 +129,28 @@ class UdpAsyncChannel implements AsyncChannel {
 
     @Override
     public <A> void write(ByteBuffer src, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        throw new UnsupportedOperationException();
+        try {
+            int dataLen = src.limit();
+            int sentBytes = this.channel.send(src, this.remoteAddr);
+            if (sentBytes != dataLen) {
+                throw new IOException("UDP write failed, The datagram cannot be sent completely. expected " + dataLen + " bytes, but sent " + sentBytes + " bytes");
+            }
+        } catch (IOException e) {
+            handler.failed(e, attachment);
+        }
     }
 
     @Override
     public <A> void write(ByteBuffer src, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        throw new UnsupportedOperationException();
+        try {
+            int dataLen = src.limit();
+            int sentBytes = this.channel.send(src, this.remoteAddr);
+            if (sentBytes != dataLen) {
+                throw new IOException("UDP write failed, The datagram cannot be sent completely. expected " + dataLen + " bytes, but sent " + sentBytes + " bytes");
+            }
+        } catch (IOException e) {
+            handler.failed(e, attachment);
+        }
     }
 
     @Override

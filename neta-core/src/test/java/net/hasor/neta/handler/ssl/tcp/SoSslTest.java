@@ -19,7 +19,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.NetConfig;
-import net.hasor.neta.channel.tcp.TcpOptions;
+import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.handler.ssl.*;
 import org.junit.Test;
 
@@ -39,7 +39,7 @@ public class SoSslTest extends AbstractSslTest {
     public void netaToNetaTest_01() throws IOException {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(128, 4096);
+        TcpSoConfig tcpConf = tcpConfig(128, 4096);
         NetConfig soConf = globalConf();
         soConf.setNetlog(true);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
@@ -79,7 +79,7 @@ public class SoSslTest extends AbstractSslTest {
     public void sslModelManualTest_1() throws IOException {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(128, 4096);
+        TcpSoConfig tcpConf = tcpConfig(128, 4096);
         NetConfig soConf = globalConf();
         soConf.setNetlog(true);
         SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Manual);

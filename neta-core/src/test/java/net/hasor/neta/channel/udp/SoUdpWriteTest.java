@@ -1,0 +1,97 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.channel.udp;
+import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.NetChannel;
+import net.hasor.neta.channel.NetConfig;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.handler.ProtoHandler;
+import net.hasor.neta.handler.ProtoHelper;
+import net.hasor.neta.handler.ProtoStatus;
+import org.junit.Test;
+
+import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.atomic.AtomicBoolean;
+
+import static net.hasor.neta.channel.AbstractSoTest.safePort;
+
+/**
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
+ */
+public class SoUdpWriteTest {
+    @Test
+    public void udpWrite_Test() throws IOException, ExecutionException, InterruptedException {
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+
+        // read
+        AtomicBoolean udpRead = new AtomicBoolean(false);
+        ThreadUtils.daemonThread(true, (Runnable) () -> {
+            try {
+                Selector selector = Selector.open();
+                DatagramChannel channel = DatagramChannel.open();
+                channel.bind(address);
+                channel.configureBlocking(false);
+                channel.register(selector, SelectionKey.OP_READ);
+                selector.select();
+
+                ByteBuffer buffer = ByteBuffer.allocate(4096);
+                SocketAddress receive = channel.receive(buffer);
+                buffer.flip();
+                byte[] byteArray = ByteBuf.wrap(buffer).asByteArray();
+
+                udpRead.set(StringUtils.equals(new String(byteArray), "Hello UDP"));
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        });
+
+        //
+        NetManager neta = new NetManager(new NetConfig());
+        ProtoInitializer initializer = ctx -> {
+            return ProtoHelper.builder().nextEncoder((ProtoHandler<String, ByteBuf>) (context, src, dst) -> {
+                String data = src.takeMessage();
+                dst.offerMessage(ByteBuf.wrap(data.getBytes()));
+                return ProtoStatus.Next;
+            }).build();
+        };
+        Future<NetChannel> future = neta.connect(address, initializer, UdpSoConfig.UDP());
+        NetChannel channel = future.get();
+        channel.sendData("Hello UDP");
+
+        int i = 100 * 50; // max 5sce
+        while (!udpRead.get()) {
+            ThreadUtils.sleep(100);
+            i--;
+            if (i <= 0) {
+                break;
+            }
+        }
+        assert udpRead.get();
+    }
+}

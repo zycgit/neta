@@ -63,7 +63,7 @@ public class SoUdpReadTest {
             }).build();
         };
 
-        UdpOptions udpConf = udpConfig(128, 4096);
+        UdpSoConfig udpConf = udpConfig(128, 4096);
         udpConf.setSoReadTimeoutMs(-1);
         neta.listen(address, initializer, udpConf);
 

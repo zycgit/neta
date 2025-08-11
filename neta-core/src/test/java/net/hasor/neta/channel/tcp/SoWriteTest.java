@@ -39,7 +39,7 @@ public class SoWriteTest extends AbstractSoTest {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
@@ -67,7 +67,7 @@ public class SoWriteTest extends AbstractSoTest {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
@@ -162,7 +162,7 @@ public class SoWriteTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
         tcpConf.setSoWriteTimeoutMs(1);
 
         NetManager server = new NetManager(globalConf());
@@ -209,7 +209,7 @@ public class SoWriteTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(8, 30);
+        TcpSoConfig tcpConf = tcpConfig(8, 30);
         tcpConf.setSoWriteTimeoutMs(1);
 
         NetManager server = new NetManager(globalConf());
@@ -256,7 +256,7 @@ public class SoWriteTest extends AbstractSoTest {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
         NetConfig netConfig = globalConf();
         netConfig.setNetlog(false);
 
@@ -285,7 +285,7 @@ public class SoWriteTest extends AbstractSoTest {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpOptions tcpConf = tcpConfig(2, 32);
+        TcpSoConfig tcpConf = tcpConfig(2, 32);
 
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
