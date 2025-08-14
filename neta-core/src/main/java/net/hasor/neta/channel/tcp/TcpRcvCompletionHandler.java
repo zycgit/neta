@@ -13,67 +13,77 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.channel.tcp;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.channel.*;
 
+import java.io.Closeable;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.CompletionHandler;
 import java.nio.channels.NotYetConnectedException;
 import java.nio.channels.ShutdownChannelGroupException;
-import java.util.concurrent.atomic.AtomicLong;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.concurrent.TimeUnit;
 
 /**
  * received Handler
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextService> {
-    private static final Logger                           logger = Logger.getLogger(SoRcvCompletionHandler.class);
-    private final        long                             channelID;
-    private final        long                             createdTime;
-    private final        AtomicReference<SoHandlerStatus> status;
-    private final        AtomicLong                       counterBytes;
-    private final        int                              connectTimeoutMs;
+class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextService>, Closeable {
+    private static final Logger           logger = Logger.getLogger(TcpRcvCompletionHandler.class);
+    private final        long             channelID;
+    private final        TcpAsyncChannel  channel;
+    private final        SoContextService context;
+    private final        NetMonitor       monitor;
     //
-    private final        SoAsyncChannel                   channel;
-    private final        SoContextService                 context;
+    private final        Integer          rTimeoutMs;
+    private final        ByteBufAllocator allocator;
+    private final        ByteBuffer       rcvSwapBuffer;
+    private final        int              connectTimeoutMs;
 
-    public SoRcvCompletionHandler(long channelID, long createdTime, SoAsyncChannel channel, SoContextService context) {
-        this.channelID = channelID;
-        this.createdTime = createdTime;
-        this.status = new AtomicReference<>(SoHandlerStatus.IDLE);
-        this.counterBytes = new AtomicLong();
-        this.connectTimeoutMs = Math.max(10, channel.getSoConfig().getConnectTimeoutMs());
-
+    public TcpRcvCompletionHandler(TcpAsyncChannel channel, SoContext context, NetMonitor monitor) {
+        this.channelID = channel.getChannelID();
         this.channel = channel;
-        this.context = context;
+        this.context = (SoContextService) context;
+        this.monitor = monitor;
+
+        this.connectTimeoutMs = Math.max(10, channel.getSoConfig().getConnectTimeoutMs());
+        this.rTimeoutMs = channel.getSoConfig().getSoReadTimeoutMs();
+        this.allocator = context.getByteBufAllocator();
+        this.rcvSwapBuffer = this.allocator.jvmBuffer(channel.getSoConfig().getSwapRcvBuf());
     }
 
-    /** Returns this Handler status. */
-    public SoHandlerStatus getStatus() {
-        return this.status.get();
-    }
+    /** Reads a sequence of bytes from this channel into the given buffer. */
+    public void read() {
+        if (this.channel.isShutdownInput()) {
+            return;
+        }
 
-    /** Gets the number of bytes that have been received. */
-    public long getCounterBytes() {
-        return this.counterBytes.get();
+        this.rcvSwapBuffer.clear();
+        long timeout = this.rTimeoutMs != null && this.rTimeoutMs > 0 ? this.rTimeoutMs : 0L;
+        this.channel.read(this.rcvSwapBuffer, this.context, this, timeout, TimeUnit.MILLISECONDS);
     }
 
     @Override
     public void completed(Integer result, SoContextService context) {
-        this.status.set(SoHandlerStatus.PENDING);
-
         if (result > 0) {
-            this.counterBytes.addAndGet(result);
             if (logger.isDebugEnabled()) {
-                logger.debug("rcv(" + this.channelID + ") size:" + result);
+                logger.debug("rcv(" + this.channelID + ") the receive " + result + " bytes");
             }
 
             // copy buffer form swap to rcv
-            ByteBuf rcvBytes = this.channel.pullSwapBuffer(result);
-            this.context.notifyChannelRcv(this.channelID, rcvBytes);
+            this.rcvSwapBuffer.flip();
+            ByteBuf byteBuf = this.allocator.buffer(result);
+            byteBuf.writeBuffer(this.rcvSwapBuffer);
+            byteBuf.markWriter();
+
+            this.monitor.updateRcvCounter(result);
+            this.context.notifyChannelRcv(this.channelID, byteBuf);
 
             this.read();
         } else if (result == 0) {
@@ -84,41 +94,23 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextServ
             this.context.notifyChannelRcv(this.channelID, ByteBuf.EMPTY);
             this.read();
         } else {
-
-            this.status.set(SoHandlerStatus.IDLE);
-
             if (this.channel.isShutdownInput()) {
                 // for ShutdownInput local
-                NetChannel netChannel = (NetChannel) this.context.findChannel(this.channelID);
-                if (netChannel != null && !netChannel.closeStatus.get()) {
-                    String msg = "rcv(" + this.channelID + ") shutdownInput form local.";
-                    logger.info(msg);
-                    this.context.notifyRcvChannelError(this.channelID, SoInputCloseException.INSTANCE);
-                }
-            } else if (!this.channel.isIgnoreReadEofFlag()) {
+                logger.info("rcv(" + this.channelID + ") shutdownInput form local.");
+                this.context.notifyRcvChannelError(this.channelID, TcpInputCloseException.INSTANCE);
+            } else {
                 // for Remote
                 String msg = "rcv(" + this.channelID + ") close form remote.";
                 logger.info(msg);
                 context.asyncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
-            } else {
-                logger.info("rcv(" + this.channelID + ") shutdownInput form remote.");
             }
-        }
-    }
-
-    public void read() {
-        this.status.set(SoHandlerStatus.WAITING);
-        if (!this.channel.read(this.context, this)) {
-            this.status.set(SoHandlerStatus.IDLE);
         }
     }
 
     @Override
     public void failed(Throwable e, SoContextService context) {
-        this.status.set(SoHandlerStatus.PENDING);
-
         if (e instanceof NotYetConnectedException) {
-            long costTimeMs = System.currentTimeMillis() - this.createdTime;
+            long costTimeMs = System.currentTimeMillis() - this.monitor.getCreatedTime();
             if (costTimeMs < this.connectTimeoutMs) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
@@ -129,7 +121,6 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextServ
 
                 context.notifyRcvChannelError(this.channelID, cause);
                 context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
-                this.status.set(SoHandlerStatus.IDLE);
             }
             return;
         }
@@ -148,6 +139,10 @@ class SoRcvCompletionHandler implements CompletionHandler<Integer, SoContextServ
 
         context.notifyRcvChannelError(this.channelID, e);
         context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
-        this.status.set(SoHandlerStatus.IDLE);
+    }
+
+    @Override
+    public void close() throws IOException {
+        ByteBufUtils.CLEANER.freeDirectBuffer(this.rcvSwapBuffer);
     }
 }

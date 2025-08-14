@@ -32,6 +32,9 @@ public interface AsyncServerChannel extends Closeable {
      */
     long getChannelID();
 
+    /** return socket config. */
+    SoConfig getSoConfig();
+
     /**
      * Checks if the channel is currently open.
      * @return true if the channel is open, false otherwise
@@ -46,10 +49,8 @@ public interface AsyncServerChannel extends Closeable {
 
     /**
      * Binds the server channel to a specific network address and starts listening for connections.
-     * @param listen The network listening configuration
-     * @param context The socket context for this connection
-     * @param options
+     * @param initializer
      * @throws IOException If an I/O error occurs during binding
      */
-    void bind(NetListen listen, SoContext context, SoConfig options) throws IOException;
+    NetListen bind(ProtoInitializer initializer) throws Throwable;
 }

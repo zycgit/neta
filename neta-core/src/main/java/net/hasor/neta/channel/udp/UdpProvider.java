@@ -17,7 +17,6 @@ package net.hasor.neta.channel.udp;
 import net.hasor.neta.channel.*;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.DatagramChannel;
@@ -34,20 +33,16 @@ public class UdpProvider implements AsyncChannelProvider {
     public static final String NAME = "UDP";
 
     @Override
-    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException {
+    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         ExecutorService executor = ((SoContextService) context).getIoExecutor();
-
         DatagramChannel channel = DatagramChannel.open();
-        SoConfigUtils.configListen(soConfig, channel);
-        return new UdpAsyncServerChannel(channelId, channel, executor);
+        return new UdpAsyncServerChannel(channelId, channel, executor, context, listenAddr, soConfig);
     }
 
     @Override
-    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, AsynchronousChannelGroup channelGroup, SoConfig soConfig) throws IOException {
+    public AsyncChannel createClientChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
         ExecutorService executor = ((SoContextService) context).getIoExecutor();
-
         DatagramChannel channel = DatagramChannel.open();
-        SoConfigUtils.configSocket(soConfig, channel);
-        return new UdpAsyncClientChannel(channelId, (InetSocketAddress) remoteAddr, channel, executor, soConfig);
+        return new UdpAsyncClientChannel(channelId, channel, context, remoteAddr, soConfig, executor);
     }
 }

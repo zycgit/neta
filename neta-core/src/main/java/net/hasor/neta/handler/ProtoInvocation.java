@@ -132,7 +132,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
             if (ctxError == null) {
                 String msgTag = isRcv ? "rcv" : "snd";
                 long channelID = protoCtx.getChannel().getChannelID();
-                if (protoCtx.getConfig().isNetlog()) {
+                if (protoCtx.getConfig().isPrintLog()) {
                     logger.error(msgTag + "(" + channelID + ") " + this.handler.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage(), e);
                 } else {
                     logger.error(msgTag + "(" + channelID + ") " + this.handler.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage());

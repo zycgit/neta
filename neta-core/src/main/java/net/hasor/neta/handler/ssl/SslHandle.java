@@ -62,7 +62,7 @@ class SslHandle {
         this.protoCtx = protoCtx;
         this.engine = engine;
         this.bufAllocator = this.context.getByteBufAllocator();
-        this.sslLog = config.isSsllog();
+        this.sslLog = protoCtx.getSoContext().getConfig().isPrintLog();
         this.handshake = SslHandshakeStatus.NotHandshaking;
         this.closeCallBack = closeCallBack;
     }

@@ -24,6 +24,7 @@ import net.hasor.neta.channel.SoConfig;
  */
 public class UdpSoConfig extends SoConfig {
     private Integer rcvPacketSize;
+    private boolean rcvRemoteOnly = true;
     //SO_REUSEADDR	重复使用地址
     //SO_BROADCAST	允许传输广播数据报
     //IP_TOS	互联网协议 (IP) 标头中的服务类型 (ToS) 八位字节
@@ -41,5 +42,13 @@ public class UdpSoConfig extends SoConfig {
 
     public void setRcvPacketSize(Integer rcvPacketSize) {
         this.rcvPacketSize = rcvPacketSize;
+    }
+
+    public boolean isRcvRemoteOnly() {
+        return this.rcvRemoteOnly;
+    }
+
+    public void setRcvRemoteOnly(boolean rcvRemoteOnly) {
+        this.rcvRemoteOnly = rcvRemoteOnly;
     }
 }

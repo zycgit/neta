@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.neta.channel.AsyncServerChannel;
-import net.hasor.neta.channel.NetListen;
-import net.hasor.neta.channel.SoConfig;
-import net.hasor.neta.channel.SoContext;
+import net.hasor.neta.channel.*;
 
 import java.io.IOException;
+import java.net.InetSocketAddress;
+import java.net.SocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
 import java.nio.channels.NetworkChannel;
 
@@ -32,17 +31,28 @@ import java.nio.channels.NetworkChannel;
  * @version 2025-08-06
  */
 class TcpAsyncServerChannel implements AsyncServerChannel {
-    private final AsynchronousServerSocketChannel channel;
     private final long                            channelID;
+    private final AsynchronousServerSocketChannel channel;
+    private final SoContextService                context;
+    private final InetSocketAddress               listenAddr;
+    private final TcpSoConfig                     soConfig;
 
-    TcpAsyncServerChannel(long channelId, AsynchronousServerSocketChannel channel) {
-        this.channel = channel;
+    TcpAsyncServerChannel(long channelId, AsynchronousServerSocketChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
         this.channelID = channelId;
+        this.channel = channel;
+        this.context = (SoContextService) context;
+        this.listenAddr = (InetSocketAddress) listenAddr;
+        this.soConfig = (TcpSoConfig) soConfig;
     }
 
     @Override
     public long getChannelID() {
         return this.channelID;
+    }
+
+    @Override
+    public SoConfig getSoConfig() {
+        return this.soConfig;
     }
 
     @Override
@@ -56,13 +66,29 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public void close() throws IOException {
-        this.channel.close();
+    public NetListen bind(ProtoInitializer initializer) throws Throwable {
+        // create
+        TcpSoConfigUtils.configListen(this.soConfig, this.channel);
+        NetListen listen = new NetListen( //
+                this.channelID,           //
+                this.listenAddr,          //
+                this.listenAddr.getPort(),//
+                this,                     //
+                initializer,              //
+                this.context,             //
+                this.soConfig);
+
+        // init
+        this.context.initChannel(listen, false);
+
+        // start
+        this.channel.bind(this.listenAddr, 0);
+        this.channel.accept(context, new TcpAcceptCompletionHandler(listen, this.channel, this.soConfig));
+        return listen;
     }
 
     @Override
-    public void bind(NetListen listen, SoContext context, SoConfig options) throws IOException {
-        this.channel.bind(listen.getLocalAddr(), 0);
-        this.channel.accept(context, new TcpAcceptCompletionHandler(listen, this.channel, options));
+    public void close() throws IOException {
+        this.channel.close();
     }
 }

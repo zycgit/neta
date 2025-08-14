@@ -48,8 +48,6 @@ public class SslConfig extends ProtoConfig {
     private TrustManager[]         trustManagers;
     private TrustManagerFactory    trustManagerFactory   = null;
     private SslAppProtocolSelector appProtocolSelector   = null;                // 用于 NPN/ALPN
-    // other
-    private boolean                ssllog                = false;               // 打印SSL日志
 
     public SslMode getSslMode() {
         return this.sslMode;
@@ -193,13 +191,5 @@ public class SslConfig extends ProtoConfig {
 
     public void setAppProtocolSelector(SslAppProtocolSelector appProtocolSelector) {
         this.appProtocolSelector = appProtocolSelector;
-    }
-
-    public boolean isSsllog() {
-        return this.ssllog;
-    }
-
-    public void setSsllog(boolean ssllog) {
-        this.ssllog = ssllog;
     }
 }

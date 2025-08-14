@@ -25,7 +25,7 @@ import java.nio.ByteBuffer;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoSndData {
+public class SoSndData {
     private final long               dataSize;
     private final ByteBuf[]          data;
     private final Future<NetChannel> future;
@@ -33,24 +33,12 @@ class SoSndData {
     private       int                readIdx;
     private       int                readIndexBytes;
 
-    public SoSndData(ByteBuf[] data, Future<NetChannel> future, NetChannel result) {
-        this(dataSize(data), data, future, result);
-    }
-
-    public SoSndData(long sendSize, ByteBuf[] data, Future<NetChannel> future, NetChannel result) {
+    SoSndData(long sendSize, ByteBuf[] data, Future<NetChannel> future, NetChannel result) {
         this.dataSize = sendSize;
         this.data = data;
         this.future = future;
         this.result = result;
         this.readIdx = 0;
-    }
-
-    private static long dataSize(ByteBuf[] bufArray) {
-        long size = 0;
-        for (ByteBuf buf : bufArray) {
-            size += buf.readableBytes();
-        }
-        return size;
     }
 
     /**

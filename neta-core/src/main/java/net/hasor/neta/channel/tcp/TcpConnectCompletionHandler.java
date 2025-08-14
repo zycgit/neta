@@ -13,9 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.channel.tcp;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.AsyncChannel;
+import net.hasor.neta.channel.NetChannel;
+import net.hasor.neta.channel.SoContextService;
 
 import java.net.SocketAddress;
 import java.nio.channels.CompletionHandler;
@@ -25,15 +28,13 @@ import java.nio.channels.CompletionHandler;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextService> {
-    private static final Logger             logger = Logger.getLogger(SoConnectCompletionHandler.class);
-    private final        ProtoStack<?>      protoStack;
-    private final        NetChannel         channel;
-    private final        SoAsyncChannel     asyncChannel;
+class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextService> {
+    private static final Logger             logger = Logger.getLogger(TcpConnectCompletionHandler.class);
+    private final        TcpChannel         channel;
+    private final        AsyncChannel       asyncChannel;
     private final        Future<NetChannel> future;
 
-    public SoConnectCompletionHandler(NetChannel channel, SoAsyncChannel asyncChannel, Future<NetChannel> future) {
-        this.protoStack = channel.protoStack;
+    TcpConnectCompletionHandler(TcpChannel channel, AsyncChannel asyncChannel, Future<NetChannel> future) {
         this.channel = channel;
         this.asyncChannel = asyncChannel;
         this.future = future;
@@ -53,12 +54,12 @@ class SoConnectCompletionHandler implements CompletionHandler<Void, SoContextSer
             SocketAddress remoteAddress = this.asyncChannel.getRemoteAddress();
             logger.info("connected(" + this.channel.getChannelID() + ") L:" + localAddress + " -> R:" + remoteAddress);
 
-            if (!this.channel.isClose()) {
-                this.protoStack.onActive(this.channel.protoCtx);
-            }
+            // init
+            ((SoContextService) this.channel.getContext()).initChannel(this.channel, true);
 
+            // start read
             if (!this.channel.isShutdownInput()) {
-                this.channel.rHandler.read();
+                this.channel.getReadHandler().read();
             }
 
             this.future.completed(this.channel);

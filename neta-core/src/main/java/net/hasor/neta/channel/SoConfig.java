@@ -28,8 +28,8 @@ public class SoConfig {
     private       boolean suspend = false;
 
     // for Socket
-    private int     soRcvBuf         = 32 * 1024 * 1024; // SO_RCVBUF: The size of the socket receive buffer
-    private int     soSndBuf         = 32 * 1024 * 1024; // SO_SNDBUF: The size of the socket send buffer
+    private Integer soRcvBuf         = null; // SO_RCVBUF: The size of the socket receive buffer
+    private Integer soSndBuf         = null; // SO_SNDBUF: The size of the socket send buffer
     private Integer soReadTimeoutMs  = -1;        // socket read timeout
     private Integer soWriteTimeoutMs = -1;        // socket write timeout
     // SO_REUSEADDR //重复使用地址
@@ -67,19 +67,19 @@ public class SoConfig {
         this.soSndBuf = soSndBuf;
     }
 
-    public int getSoRcvBuf() {
+    public Integer getSoRcvBuf() {
         return this.soRcvBuf;
     }
 
-    public void setSoRcvBuf(int soRcvBuf) {
+    public void setSoRcvBuf(Integer soRcvBuf) {
         this.soRcvBuf = soRcvBuf;
     }
 
-    public int getSoSndBuf() {
+    public Integer getSoSndBuf() {
         return this.soSndBuf;
     }
 
-    public void setSoSndBuf(int soSndBuf) {
+    public void setSoSndBuf(Integer soSndBuf) {
         this.soSndBuf = soSndBuf;
     }
 

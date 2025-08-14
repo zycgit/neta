@@ -59,8 +59,8 @@ public abstract class SslContextBasic implements SslContext {
         this.protoCtx = protoCtx;
         this.soContext = protoCtx.getSoContext();
         this.clientMode = clientMode;
-        this.sslLog = config.isSsllog();
-        this.netLog = this.soContext.getConfig().isNetlog();
+        this.sslLog = protoCtx.getSoContext().getConfig().isPrintLog();
+        this.netLog = this.soContext.getConfig().isPrintLog();
 
         this.sslConfig = config;
         this.sslMode = config.getSslMode();

@@ -28,12 +28,12 @@ import java.util.Map;
  * @version : 2023-09-24
  */
 public class ProtoContextService implements ProtoContext {
-    private final NetDuplexChannel<?>   channel;
+    private final SoChannel<?>          channel;
     private final SoContext             soContext;
     private final Map<Class<?>, Object> contextData;
     private final Map<String, Object>   flash;
 
-    protected ProtoContextService(NetDuplexChannel<?> channel, SoContext soContext) {
+    protected ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
         this.soContext = soContext;
         this.contextData = new HashMap<>();
@@ -46,7 +46,7 @@ public class ProtoContextService implements ProtoContext {
     }
 
     @Override
-    public NetDuplexChannel<?> getChannel() {
+    public SoChannel<?> getChannel() {
         return this.channel;
     }
 

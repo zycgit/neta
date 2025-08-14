@@ -63,7 +63,7 @@ public interface SoChannel<T> {
     Future<T> close();
 
     /** close this channel now. */
-    Future<T> closeNow();
+    void closeNow();
 
     /** on close this channel. */
     void onClose(SoCloseListener<SoChannel<?>> listener);

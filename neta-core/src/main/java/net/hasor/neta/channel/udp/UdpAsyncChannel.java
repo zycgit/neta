@@ -14,16 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.neta.channel.AsyncChannel;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.*;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.CompletionHandler;
 import java.nio.channels.DatagramChannel;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * An implementation of the {@link AsyncChannel} interface for UDP communication.
@@ -43,21 +43,28 @@ import java.util.concurrent.TimeUnit;
  * @version 2025-08-06
  */
 class UdpAsyncChannel implements AsyncChannel {
-    protected final InetSocketAddress remoteAddr;
-    protected final long              channelID;
-    protected final DatagramChannel   channel;
-    protected final SoConfig          options;
+    private static final Logger            logger = Logger.getLogger(UdpAsyncChannel.class);
+    protected final      long              channelID;
+    protected final      DatagramChannel   channel;
+    protected final      InetSocketAddress localAddress;
+    protected final      InetSocketAddress remoteAddress;
+    protected final      SoContextService  context;
+    protected final      UdpSoConfig       soConfig;
+    private final        AtomicBoolean     writing;
 
-    UdpAsyncChannel(long channelID, InetSocketAddress remoteAddr, DatagramChannel channel, SoConfig options) {
-        this.channelID = channelID;
-        this.remoteAddr = remoteAddr;
+    UdpAsyncChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
+        this.channelID = channelId;
         this.channel = channel;
-        this.options = options;
+        this.localAddress = (InetSocketAddress) channel.getLocalAddress();
+        this.remoteAddress = (InetSocketAddress) remoteAddress;
+        this.context = (SoContextService) context;
+        this.soConfig = (UdpSoConfig) soConfig;
+        this.writing = new AtomicBoolean(false);
     }
 
     @Override
-    public SoConfig getSoConfig() {
-        return this.options;
+    public UdpSoConfig getSoConfig() {
+        return this.soConfig;
     }
 
     @Override
@@ -66,23 +73,18 @@ class UdpAsyncChannel implements AsyncChannel {
     }
 
     @Override
-    public SocketAddress getLocalAddress() throws IOException {
-        return this.channel.getLocalAddress();
+    public SocketAddress getLocalAddress() {
+        return this.localAddress;
     }
 
     @Override
-    public SocketAddress getRemoteAddress() throws IOException {
-        return this.remoteAddr;
+    public SocketAddress getRemoteAddress() {
+        return this.remoteAddress;
     }
 
     @Override
     public DatagramChannel getTarget() {
         return this.channel;
-    }
-
-    @Override
-    public boolean usingSndSwapBuffer() {
-        return false;
     }
 
     //
@@ -93,68 +95,63 @@ class UdpAsyncChannel implements AsyncChannel {
     }
 
     @Override
-    public boolean supportShutdownInput() {
-        return false;
-    }
-
-    @Override
-    public void shutdownInput() throws IOException {
-        throw new UnsupportedOperationException("UDP Unsupported.");
-    }
-
-    @Override
-    public boolean supportShutdownOutput() {
-        return false;
-    }
-
-    @Override
-    public void shutdownOutput() throws IOException {
-        throw new UnsupportedOperationException("UDP Unsupported.");
-    }
-
-    @Override
     public void close() throws IOException {
-        //
     }
 
     @Override
-    public <A> void read(ByteBuffer dst, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        //
+    public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) throws Throwable {
+        throw new UnsupportedOperationException();
     }
 
     @Override
-    public <A> void read(ByteBuffer dst, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        //
+    public void write(NetChannel channel, SoSndContext wContext) {
+        //        try {
+        //            int dataLen = src.limit();
+        //            int sentBytes = this.channel.send(src, this.remoteAddr);
+        //            if (sentBytes != dataLen) {
+        //                throw new IOException("UDP write failed, The datagram cannot be sent completely. expected " + dataLen + " bytes, but sent " + sentBytes + " bytes");
+        //            }
+        //        } catch (IOException e) {
+        //            handler.failed(e, attachment);
+        //        }
     }
 
-    @Override
-    public <A> void write(ByteBuffer src, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        try {
-            int dataLen = src.limit();
-            int sentBytes = this.channel.send(src, this.remoteAddr);
-            if (sentBytes != dataLen) {
-                throw new IOException("UDP write failed, The datagram cannot be sent completely. expected " + dataLen + " bytes, but sent " + sentBytes + " bytes");
-            }
-        } catch (IOException e) {
-            handler.failed(e, attachment);
-        }
-    }
+    //    private void doWrite(SoSndContext wContext) {
+    //        if (wContext.isEmpty()) {
+    //            return;
+    //        }
+    //
+    //        if (!this.writing.compareAndSet(false, true)) {
+    //            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+    //                this.copyData(wContext);
+    //                this.writeData(wContext);
+    //            });
+    //        }
+    //    }
 
-    @Override
-    public <A> void write(ByteBuffer src, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        try {
-            int dataLen = src.limit();
-            int sentBytes = this.channel.send(src, this.remoteAddr);
-            if (sentBytes != dataLen) {
-                throw new IOException("UDP write failed, The datagram cannot be sent completely. expected " + dataLen + " bytes, but sent " + sentBytes + " bytes");
-            }
-        } catch (IOException e) {
-            handler.failed(e, attachment);
-        }
-    }
+    //    private void sendData() {
+    //        if (this.sndContext.hasData()) {
+    //            SoSndData sndData = this.sndContext.peekData();
+    //
+    //            try {
+    //                ByteBuffer data = sndData.transferPull();
+    //                this.channel.write(data, this.context, this);
+    //            } catch (Throwable e) {
+    //                handleException(e);
+    //            }
+    //
+    //            if (!sndData.hasReadable()) {
+    //                this.sndContext.popData();
+    //                this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+    //                    sndData.completed();
+    //                });
+    //            }
+    //
+    //            //
+    //            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+    //                this.sendData(); // recursive send.
+    //            });
+    //        }
+    //    }
 
-    @Override
-    public <A> void connect(SocketAddress remote, A attachment, CompletionHandler<Void, ? super A> handler) throws IOException {
-        throw new UnsupportedOperationException("UDP Unsupported.");
-    }
 }

@@ -50,7 +50,7 @@ public class EmbeddedSoContext implements SoContext {
 
     protected static NetConfig newSoConfig() {
         NetConfig config = new NetConfig();
-        config.setNetlog(true);
+        config.setPrintLog(true);
         return config;
     }
 

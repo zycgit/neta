@@ -32,7 +32,7 @@ public class NetConfig {
     private int              ioThreads;                     // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
     private int              taskThreads;                   // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
     // other
-    private boolean          netlog          = false;// 打印网络日志
+    private boolean          printLog        = false;       // 打印网络日志
 
     public int getRetryIntervalMs() {
         return this.retryIntervalMs;
@@ -82,11 +82,11 @@ public class NetConfig {
         this.taskThreads = taskThreads;
     }
 
-    public boolean isNetlog() {
-        return this.netlog;
+    public boolean isPrintLog() {
+        return this.printLog;
     }
 
-    public void setNetlog(boolean netlog) {
-        this.netlog = netlog;
+    public void setPrintLog(boolean printLog) {
+        this.printLog = printLog;
     }
 }

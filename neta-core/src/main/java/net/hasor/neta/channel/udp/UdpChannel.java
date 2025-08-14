@@ -13,16 +13,23 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.channel.udp;
+import net.hasor.neta.channel.*;
+
+import java.io.IOException;
+
 /**
- * When {@link NetChannel#shutdownInput()} called.
+ * A UDP network channel
+ * the channel that binds to the Application layer network protocol stack.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SoInputCloseException extends SoCloseException {
+public class UdpChannel extends NetChannel {
+    UdpChannel(long channelID, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, UdpAsyncChannel asyncChannel, SoContextService context) throws IOException {
+        super(channelID, monitor, forListen, initializer, asyncChannel, context);
+    }
 
-    public static final SoInputCloseException INSTANCE = new SoInputCloseException();
-
-    public SoInputCloseException() {
+    NetMonitor getNetMonitor() {
+        return this.monitor;
     }
 }

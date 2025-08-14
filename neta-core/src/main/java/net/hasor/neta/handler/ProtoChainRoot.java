@@ -77,7 +77,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
 
     @Override
     public void onInit(ProtoContext protoCtx) throws Throwable {
-        this.netLog = protoCtx.getConfig().isNetlog();
+        this.netLog = protoCtx.getConfig().isPrintLog();
         this.channelID = protoCtx.getChannel().getChannelID();
 
         for (ProtoInvocation<?, ?, ?, ?> layer : this.layers) {
@@ -147,7 +147,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         //  ...  <- ┃ SND_DOWN    ┆ SND_UP      <=>    SND_DOWN ┆      SND_UP ┃  <- DATA
         //          ┃             ╰┄┄┄┄┄┄┄┄┄┄┰┄┄┄┄┄┄┄┰┄┄┄┄┄┄┄┄┄┄╯             ┃
         //          ┗━━━━━━━━━━━━━━━━━━━━━━━━┛       ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
-        boolean netLog = protoCtx.getConfig().isNetlog();
+        boolean netLog = protoCtx.getConfig().isPrintLog();
         ProtoQueue<?> useRcvUp = i == 0 ? this.headRcvUp : this.layers.get(i - 1).getRcvDown();
         ProtoQueue<?> useSndUp = i == (this.layers.size() - 1) ? this.headSndUp : this.layers.get(i + 1).getSndDown();
 

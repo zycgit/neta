@@ -34,7 +34,7 @@ public interface ProtoContext {
     NetConfig getConfig();
 
     /** the channel */
-    NetDuplexChannel<?> getChannel();
+    SoChannel<?> getChannel();
 
     /** the SoContext */
     SoContext getSoContext();

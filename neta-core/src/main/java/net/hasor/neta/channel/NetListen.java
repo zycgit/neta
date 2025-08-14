@@ -46,11 +46,11 @@ public class NetListen extends AttributeChannel<NetListen> {
     protected final  AtomicBoolean      closeStatus;
     protected final  Future<NetListen>  closeFuture;
 
-    NetListen(long channelID, long createdTime, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
+    public NetListen(long channelID, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
             ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
         this.channelID = channelID;
-        this.createdTime = createdTime;
-        this.lastActiveTime = createdTime;
+        this.createdTime = System.currentTimeMillis();
+        this.lastActiveTime = this.createdTime;
         this.acceptCount = new AtomicLong();
         this.acceptLock = new Object();
         this.closeLock = new Object();
@@ -178,7 +178,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     }
 
     /** return Application layer network protocol stack to use */
-    ProtoInitializer getInitializer() {
+    public ProtoInitializer getInitializer() {
         return this.initializer;
     }
 
@@ -207,13 +207,11 @@ public class NetListen extends AttributeChannel<NetListen> {
     }
 
     @Override
-    public Future<NetListen> closeNow() {
+    public void closeNow() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
             new SoCloseTask(this.channelID, this.context, true).run();
         }
-
         this.closeFuture.completed(this);
-        return this.closeFuture;
     }
 
     @Override

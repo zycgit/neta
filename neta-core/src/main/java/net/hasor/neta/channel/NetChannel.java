@@ -26,7 +26,6 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
-import java.nio.channels.NotYetConnectedException;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -37,56 +36,34 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetChannel extends AttributeChannel<NetChannel> implements NetDuplexChannel<NetChannel> {
-    private static final Logger                 logger = Logger.getLogger(NetChannel.class);
-    private final        long                   channelID;
-    private final        NetListen              forListen;
-    protected final      SoAsyncChannel         channel;
-    protected final      SoSndContext           wContext;
-    protected final      SoContextService       context;
-    private final        SocketAddress          localAddr;
-    private final        SocketAddress          remoteAddr;
-    private final        long                   createdTime;
-    private              long                   lastSndTime;
-    private              long                   lastRcvTime;
-    private final        Object                 readTimeoutSyncObj;
-    private              long                   lastNotifyRcvRetryTime;
+public class NetChannel extends AttributeChannel<NetChannel> implements SoChannel<NetChannel> {
+    private static final Logger              logger = Logger.getLogger(NetChannel.class);
+    private final        long                channelID;
+    protected final      AsyncChannel        asyncChannel;
+    protected final      NetListen           forListen;
+    protected final      SoSndContext        wContext;
+    protected final      SoContextService    context;
+    private final        Object              readTimeoutSyncObj;
+    protected final      NetMonitor          monitor;
     //
-    protected final      SoRcvCompletionHandler rHandler;
-    protected final      SoSndCompletionHandler wHandler;
-    //
-    protected            ProtoContextService    protoCtx;
-    protected            ProtoStack<ByteBuf>    protoStack;
-    //
-    private final        boolean                netLog;
-    protected final      AtomicBoolean          closeStatus;
-    protected final      Future<NetChannel>     closeFuture;
+    protected final      ProtoContextService protoCtx;
+    protected final      ProtoStack<ByteBuf> protoStack;
+    protected final      AtomicBoolean       closeStatus;
+    protected final      Future<NetChannel>  closeFuture;
 
-    public NetChannel(long channelID, long createdTime, NetListen forListen, SocketAddress localAddr, SocketAddress remoteAddr,//
-            SoAsyncChannel channel, SoRcvCompletionHandler rHandler, SoSndCompletionHandler wHandler, SoSndContext wContext) {
+    protected NetChannel(long channelID, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
         this.channelID = channelID;
+        this.asyncChannel = asyncChannel;
         this.forListen = forListen;
-        this.createdTime = createdTime;
-        this.lastSndTime = createdTime;
-        this.lastRcvTime = createdTime;
+        this.monitor = monitor;
         this.readTimeoutSyncObj = new Object();
+        this.wContext = new SoSndContext();
+        this.context = context;
 
-        this.channel = channel;
-        this.wContext = wContext;
-        this.context = wContext.getContext();
-        this.localAddr = localAddr;
-        this.remoteAddr = remoteAddr;
-        this.netLog = this.context.getConfig().isNetlog();
+        this.protoCtx = new ProtoContextService(this, context);
+        this.protoStack = initializer.config(this.protoCtx);
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
-
-        this.rHandler = rHandler;
-        this.wHandler = wHandler;
-    }
-
-    protected void initChannel(ProtoContextService protoCtx, ProtoStack<ByteBuf> protoStack) {
-        this.protoCtx = protoCtx;
-        this.protoStack = Objects.requireNonNull(protoStack, "ProtoStack is null.");
     }
 
     @Override
@@ -101,32 +78,22 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
     @Override
     public long getCreatedTime() {
-        return this.createdTime;
+        return this.monitor.getCreatedTime();
     }
 
     @Override
     public long getLastActiveTime() {
-        return Math.max(this.lastRcvTime, this.lastSndTime);
+        return this.monitor.getLastActiveTime();
     }
 
     /** last sent data time */
     public long getLastSndTime() {
-        return this.lastSndTime;
+        return this.monitor.getLastSndTime();
     }
 
     /** last received data time */
     public long getLastRcvTime() {
-        return this.lastRcvTime;
-    }
-
-    /** Returns the receiving Handler state */
-    public SoHandlerStatus getRcvHandlerStatus() {
-        return this.rHandler.getStatus();
-    }
-
-    /** Returns the send Handler state */
-    public SoHandlerStatus getSndHandlerStatus() {
-        return this.wHandler.getStatus();
+        return this.monitor.getLastRcvTime();
     }
 
     @Override
@@ -140,54 +107,22 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     }
 
     @Override
-    public boolean isShutdownInput() {
-        return this.channel.isShutdownInput();
-    }
-
-    @Override
-    public void ignoreReadEofFlag() {
-        this.channel.ignoreReadEofFlag();
-    }
-
-    @Override
-    public void shutdownInput() {
-        try {
-            if (this.netLog) {
-                logger.info("channel(" + this.channelID + ") shutdownInput.");
-            }
-            this.channel.shutdownInput();
-        } catch (NotYetConnectedException | IOException e) {
-            logger.warn("channel(" + this.channelID + ") shutdownInput, failed " + e.getMessage(), e);
-        }
-    }
-
-    @Override
-    public boolean isShutdownOutput() {
-        return this.channel.isShutdownOutput();
-    }
-
-    @Override
-    public void shutdownOutput() {
-        try {
-            this.channel.shutdownOutput();
-        } catch (NotYetConnectedException | IOException e) {
-            logger.warn("channel(" + this.channelID + ") shutdownOutput " + e.getMessage(), e);
-        }
-    }
-
-    @Override
     public SocketAddress getLocalAddr() {
-        return this.localAddr;
+        return this.asyncChannel.getLocalAddress();
     }
 
     @Override
     public SocketAddress getRemoteAddr() {
-        return this.remoteAddr;
+        return this.asyncChannel.getRemoteAddress();
     }
 
     @Override
     public SoContext getContext() {
         return this.context;
+    }
+
+    AsyncChannel getAsyncChannel() {
+        return this.asyncChannel;
     }
 
     @Override
@@ -207,20 +142,18 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
     @Override
     public boolean isClose() {
-        return !this.channel.isOpen() || this.closeStatus.get();
+        return !this.asyncChannel.isOpen() || this.closeStatus.get();
     }
 
     @Override
     public Future<NetChannel> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
-            if (this.channel.isOpen()) {
+            if (this.asyncChannel.isOpen()) {
                 SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
                 this.context.submitSoTask(task, this).onCompleted(f -> {
                     this.closeFuture.completed(this);
                 }).onFailed(f -> {
                     this.closeFuture.failed(f.getCause());
-                }).onCancel(f -> {
-                    this.closeFuture.cancel();
                 });
             } else {
                 this.closeFuture.completed(this);
@@ -230,13 +163,12 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     }
 
     @Override
-    public Future<NetChannel> closeNow() {
-        if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
+    public void closeNow() {
+        if (this.asyncChannel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
             logger.info("channel(" + this.channelID + ") closeNow");
             new SoCloseTask(this.channelID, this.context, true).run();
         }
         this.closeFuture.completed(this);
-        return this.closeFuture;
     }
 
     @Override
@@ -246,39 +178,22 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
     /** Number of bytes received */
     public long getRcvBytes() {
-        return this.rHandler.getCounterBytes();
+        return this.monitor.getRcvCounterBytes();
     }
 
     /** Number of bytes send */
     public long getSndBytes() {
-        return this.wHandler.getCounterBytes();
-    }
-
-    /** Returns the number of ProtoStack received slots. */
-    public int getRcvSlotSize() {
-        return this.protoStack == null ? Integer.MAX_VALUE : this.protoStack.getRcvSlotSize();
-    }
-
-    /** Returns the number of ProtoStack send slots. */
-    public int getSndSlotSize() {
-        return this.protoStack == null ? Integer.MAX_VALUE : this.protoStack.getSndSlotSize();
+        return this.monitor.getSndCounterBytes();
     }
 
     /* Receive data without concurrency */
-    synchronized final void notifyRcv(ByteBuf rcvBytes) {
-        int dataSize = rcvBytes.readableBytes();
-        if (this.netLog) {
-            logger.info("rcv(" + this.channelID + ") the receive " + dataSize + " bytes");
-        }
-
-        this.lastRcvTime = System.currentTimeMillis();
-        this.lastNotifyRcvRetryTime = 0;
+    protected final void notifyRcv(Object rcvBytes) {
         synchronized (this.readTimeoutSyncObj) {
             this.readTimeoutSyncObj.notifyAll();
         }
 
         try {
-            Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, new ByteBuf[] { rcvBytes });
+            Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, new Object[] { rcvBytes });
             if (dataArray != null && dataArray.length > 0) {
                 appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
             }
@@ -295,7 +210,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
     }
 
     /* Receive error */
-    synchronized final void notifyError(boolean isRcv, Throwable e) {
+    protected final void notifyError(boolean isRcv, Throwable e) {
         try {
             Object[] dataArray = isRcv ?//
                     this.protoStack.onRcvError(this.protoCtx, null, e) ://
@@ -403,13 +318,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
 
     private Future<NetChannel> newFutureForSend() {
         Future<NetChannel> future = new BasicFuture<>();
-
-        if (this.isShutdownOutput()) {
-            logger.info("snd(" + this.channelID + ") the channel is shutdownOutput.");
-            future.failed(SoOutputCloseException.INSTANCE);
-            return future;
-        }
-
         if (this.protoStack.getSndSlotSize() == 0) {
             logger.info("snd(" + this.channelID + ") the ProtoStack slot is full.");
             future.failed(ProtoFullException.INSTANCE);
@@ -425,29 +333,13 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         return future;
     }
 
-    private void appendSoSndTask(SoSndData wTask) {
-        if (this.netLog) {
+    private synchronized void appendSoSndTask(SoSndData wTask) {
+        if (this.context.getConfig().isPrintLog()) {
             logger.info("snd(" + this.channelID + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
         }
 
-        synchronized (this.wContext) {
-            this.wContext.offer(wTask);
-
-            if (this.wHandler.tryLock()) {
-                this.wHandler.doWrite(this::checkOrSend);
-            }
-        }
-    }
-
-    private void checkOrSend() {
-        this.lastSndTime = System.currentTimeMillis();
-        synchronized (this.wContext) {
-            if (this.wContext.isEmpty()) {
-                this.wHandler.freeLock();
-            } else {
-                this.wHandler.doWrite(this::checkOrSend);
-            }
-        }
+        this.wContext.offer(wTask);
+        this.asyncChannel.write(this, this.wContext);
     }
 
     /**
@@ -485,7 +377,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements NetDuple
         }
 
         long waitTimeMs = unit.toMillis(timeout);
-        this.context.newTimeout(new CheckTimeout(this.lastRcvTime, waitTimeMs), timeout, unit);
+        this.context.newTimeout(new CheckTimeout(this.monitor.getLastRcvTime(), waitTimeMs), timeout, unit);
     }
 
     /**

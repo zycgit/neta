@@ -13,17 +13,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.channel.tcp;
+import net.hasor.neta.channel.SoCloseException;
+
 /**
- * Handler status
+ * When {@link TcpChannel#shutdownInput()} called.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2024-01-07
+ * @version : 2023-09-24
  */
-public enum SoHandlerStatus {
-    /** Waiting to be processed or in progress */
-    PENDING,
-    /** Waiting for IO. */
-    WAITING,
-    /** Idle, which usually means that the handler has exited the event loop. */
-    IDLE
+public class TcpInputCloseException extends SoCloseException {
+
+    public static final TcpInputCloseException INSTANCE = new TcpInputCloseException();
+
+    public TcpInputCloseException() {
+    }
 }

@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implements NetDuplexChannel<EmbeddedChannel> {
+public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implements SoChannel<EmbeddedChannel> {
     private final        long                    channelID;
     private final        long                    createdTime;
     private              long                    lastActiveTime;
@@ -192,12 +192,11 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     @Override
-    public Future<EmbeddedChannel> closeNow() {
+    public void closeNow() {
         if (this.closeStatus.compareAndSet(false, true)) {
             this.context.closeChannel(this.channelID, "close");
             this.closeFuture.completed(this);
         }
-        return this.closeFuture;
     }
 
     @Override
@@ -208,31 +207,6 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     @Override
     public boolean isClose() {
         return this.closeStatus.get();
-    }
-
-    @Override
-    public boolean isShutdownInput() {
-        return false;
-    }
-
-    @Override
-    public void shutdownInput() {
-
-    }
-
-    @Override
-    public void ignoreReadEofFlag() {
-
-    }
-
-    @Override
-    public boolean isShutdownOutput() {
-        return false;
-    }
-
-    @Override
-    public void shutdownOutput() {
-
     }
 
     /** Get protocol stack statistics */

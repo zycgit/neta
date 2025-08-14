@@ -24,7 +24,6 @@ import net.hasor.neta.channel.tcp.TcpProvider;
 import net.hasor.neta.channel.udp.UdpProvider;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.util.concurrent.atomic.AtomicReference;
@@ -62,19 +61,13 @@ public class NetManager extends AbstractNetManager {
      * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig options) throws IOException {
+    public synchronized NetListen listen(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig soConfig) throws Throwable {
         this.initChannelGroup();
 
         long channelID = this.context.nextID();
-        long createdTime = System.currentTimeMillis();
-        int listenPort = listenAddr instanceof InetSocketAddress ? ((InetSocketAddress) listenAddr).getPort() : 0;
-        AsyncChannelProvider provider = this.findProvider(options.getProtocol());
-
-        AsyncServerChannel socket = provider.createServerChannel(channelID, this.context, this.channelGroup, options);
-        NetListen listen = new NetListen(channelID, createdTime, listenAddr, listenPort, socket, initializer, this.context, options);
-        this.context.addChannel(listen);
-
-        socket.bind(listen, this.context, options);
+        AsyncChannelProvider provider = this.findProvider(soConfig.getProtocol());
+        AsyncServerChannel socket = provider.createServerChannel(channelID, this.context, this.channelGroup, listenAddr, soConfig);
+        NetListen listen = socket.bind(initializer);
         logger.info("listen at " + listenAddr);
         return listen;
     }
@@ -84,48 +77,19 @@ public class NetManager extends AbstractNetManager {
      * @param remoteAddr remoteAddr
      * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig options) {
+    public Future<NetChannel> connect(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) {
         Future<NetChannel> future = new BasicFuture<>();
-        SoAsyncChannel asyncChannel = null;
-        NetChannel channel;
+        AsyncChannel asyncChannel = null;
 
         try {
-            // aio Channel
             this.initChannelGroup();
             long channelID = this.context.nextID();
-            long createdTime = System.currentTimeMillis();
-            AsyncChannelProvider provider = this.findProvider(options.getProtocol());
-            AsyncChannel aioChannel = provider.createClientChannel(channelID, this.context, remoteAddr, this.channelGroup, options);
-            asyncChannel = new SoAsyncChannel(aioChannel, this.context.getByteBufAllocator());
-
-            // init NetChannel
-            SoSndContext wContext = new SoSndContext(channelID, createdTime, this.context);
-            SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, this.context);
-            SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
-
-            SocketAddress localAddr = asyncChannel.getLocalAddress();
-            channel = new NetChannel(channelID, createdTime, null, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
-
-            // init ProtoStack
-            ProtoContextService protoCtx = new ProtoContextService(channel, this.context);
-            channel.initChannel(protoCtx, initializer.config(protoCtx));
+            AsyncChannelProvider provider = this.findProvider(soConfig.getProtocol());
+            asyncChannel = provider.createClientChannel(channelID, this.context, this.channelGroup, remoteAddr, soConfig);
+            asyncChannel.connectTo(initializer, future);
+            return future;
         } catch (Throwable e) {
             IOUtils.closeQuietly(asyncChannel);
-            future.failed(e);
-            return future;
-        }
-
-        try {
-            // init ProtoStack
-            this.context.addChannel(channel);
-            channel.protoStack.onInit(channel.protoCtx);
-
-            // connect to
-            asyncChannel.connect(remoteAddr, this.context, new SoConnectCompletionHandler(channel, asyncChannel, future));
-            logger.info("initialize connect(" + channel.getChannelID() + ") to " + remoteAddr);
-            return future;
-        } catch (Throwable e) {
-            this.context.syncUnsafeCloseChannel(channel.getChannelID(), e.getMessage(), e);
             future.failed(e);
             return future;
         }

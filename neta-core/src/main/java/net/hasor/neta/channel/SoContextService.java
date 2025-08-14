@@ -23,7 +23,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
@@ -149,64 +148,13 @@ public class SoContextService implements SoContext {
         return this.channelMap.get(channelID);
     }
 
-    public NetChannel initChannel(NetListen forListen, AsyncChannel realChannel) throws IOException {
-        if (this.findChannel(realChannel.getChannelID()) != null) {
+    public void initChannel(SoChannel<?> channel, boolean init) throws Throwable {
+        long channelID = channel.getChannelID();
+        if (this.channelMap.containsKey(channelID)) {
             throw new IllegalStateException("channelID already exists.");
         }
 
-        // accept
-        SocketAddress localAddr = realChannel.getLocalAddress();
-        SocketAddress remoteAddr = realChannel.getRemoteAddress();
-        if (!this.acceptChannel(remoteAddr)) {
-            throw new SoRejectException("reject incoming socket.");
-        }
-
-        // open channel
-        long channelID = realChannel.getChannelID();
-        long createdTime = System.currentTimeMillis();
-
-        SoSndContext wContext = new SoSndContext(channelID, createdTime, this);
-        SoAsyncChannel asyncChannel = new SoAsyncChannel(realChannel, this.getByteBufAllocator());
-        SoRcvCompletionHandler rHandler = new SoRcvCompletionHandler(channelID, createdTime, asyncChannel, this);
-        SoSndCompletionHandler wHandler = new SoSndCompletionHandler(channelID, createdTime, asyncChannel, wContext);
-        NetChannel channel = new NetChannel(channelID, createdTime, forListen, localAddr, remoteAddr, asyncChannel, rHandler, wHandler, wContext);
-
-        ProtoContextService protoCtx = new ProtoContextService(channel, this);
-        ProtoStack<ByteBuf> stack = forListen.getInitializer().config(protoCtx);
-        channel.initChannel(protoCtx, stack);
-
-        // init and trigger ProtoStack
-        try {
-            logger.info("accept(" + channelID + ") R:" + remoteAddr + " -> L:" + localAddr);
-            this.addChannel(channel);
-            channel.protoStack.onInit(channel.protoCtx);
-
-            if (!channel.isClose()) {
-                channel.protoStack.onActive(protoCtx);
-            }
-
-            if (!channel.isShutdownInput()) {
-                this.submitSoTask(new SoDelayTask(0), this).onFinal(f -> {
-                    rHandler.read();
-                });
-            }
-
-            if (!channel.isClose()) {
-                forListen.notifyAccept(channel);
-            }
-
-            return channel;
-        } catch (Throwable e) {
-            this.syncUnsafeCloseChannel(channelID, e.getMessage(), e);
-            throw e instanceof IOException ? (IOException) e : new IOException(e);
-        }
-    }
-
-    protected void addChannel(SoChannel<?> channel) {
-        if (this.channelMap.containsKey(channel.getChannelID())) {
-            throw new IllegalStateException("channelID already exists.");
-        }
-
+        // add channel
         try {
             this.closeSyncLock.readLock().lock();
 
@@ -223,6 +171,22 @@ public class SoContextService implements SoContext {
         } finally {
             this.closeSyncLock.readLock().unlock();
         }
+
+        // init
+        if (init && channel instanceof NetChannel) {
+            NetChannel netChannel = (NetChannel) channel;
+            ProtoStack<ByteBuf> protoStack = netChannel.protoStack;
+            ProtoContextService protoCtx = netChannel.protoCtx;
+
+            protoStack.onInit(protoCtx);
+            if (!channel.isClose()) {
+                protoStack.onActive(protoCtx);
+            }
+
+            if (!channel.isClose() && netChannel.getListen() != null) {
+                netChannel.getListen().notifyAccept(netChannel);
+            }
+        }
     }
 
     @Override
@@ -234,7 +198,7 @@ public class SoContextService implements SoContext {
         this.listenList.forEach(consumer);
     }
 
-    /** close all socket, The method {@link #addChannel(SoChannel)} and {@link #closeAll(boolean)} are mutually exclusive */
+    /** close all socket, The method {@link #initChannel(SoChannel, boolean)} and {@link #closeAll(boolean)} are mutually exclusive */
     public void closeAll(boolean now) {
         // mark close is true.
         try {
@@ -290,17 +254,17 @@ public class SoContextService implements SoContext {
     }
 
     /** The network channel is forced to close, and all data not sent is discarded. */
-    protected void asyncUnsafeCloseChannel(long channelID, String message, Throwable e) {
+    public void asyncUnsafeCloseChannel(long channelID, String message, Throwable e) {
         this.unsafeCloseChannel(channelID, message, e, true);
     }
 
     /** The network channel is forced to close, and all data not sent is discarded. */
-    protected void syncUnsafeCloseChannel(long channelID, String message, Throwable e) {
+    public void syncUnsafeCloseChannel(long channelID, String message, Throwable e) {
         this.unsafeCloseChannel(channelID, message, e, false);
     }
 
     private void unsafeCloseChannel(long channelID, String message, Throwable e, boolean async) {
-        if (this.config.isNetlog()) {
+        if (this.config.isPrintLog()) {
             if (e == SoCloseException.INSTANCE) {
                 logger.info(message);
             } else {
@@ -329,7 +293,7 @@ public class SoContextService implements SoContext {
             }
 
             netChannel.protoStack.onClose(netChannel.protoCtx);
-            IOUtils.closeQuietly(netChannel.channel);
+            IOUtils.closeQuietly(netChannel.getAsyncChannel());
             logger.info("channel(" + channelID + ") closed.");
 
             this.channelList.remove(channel);

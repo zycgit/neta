@@ -26,14 +26,11 @@ class SoCloseTask extends DefaultSoTask {
     private final        long             channelID;
     private final        SoContextService context;
     private final        boolean          forceNow;
-    //
-    private              boolean          printLog;
 
     public SoCloseTask(long channelID, SoContextService context, boolean forceNow) {
         this.channelID = channelID;
         this.context = context;
         this.forceNow = forceNow;
-        this.printLog = false;
     }
 
     @Override
@@ -54,18 +51,12 @@ class SoCloseTask extends DefaultSoTask {
                 boolean needWaiting = !netChannel.wContext.isEmpty();
 
                 // notifyRcv last message
-                if (!this.printLog) {
+                if (!this.context.getConfig().isPrintLog()) {
                     if (needWaiting) {
                         logger.info("channel(" + this.channelID + ") safe close form local, waiting send finish.");
                     } else {
                         logger.info("channel(" + this.channelID + ") safe close form local.");
                     }
-                    this.printLog = true;
-                }
-
-                // shutdownInput
-                if (!netChannel.isShutdownInput()) {
-                    netChannel.shutdownInput();
                 }
 
                 // wait send finish
@@ -74,14 +65,8 @@ class SoCloseTask extends DefaultSoTask {
                     return;
                 }
 
-                if (netChannel.getSndHandlerStatus() != SoHandlerStatus.IDLE) {
-                    continueTask();
-                    return;
-                }
-
                 String msg = "channel(" + this.channelID + ") safe close form local.";
                 this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
-                netChannel.shutdownOutput();
                 finishTask();
             }
         } else {

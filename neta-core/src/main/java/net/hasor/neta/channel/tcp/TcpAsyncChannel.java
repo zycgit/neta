@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.neta.channel.AsyncChannel;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.*;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.CompletionHandler;
 import java.nio.channels.NetworkChannel;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * TCP implementation of asynchronous client channel.
@@ -34,18 +35,27 @@ import java.util.concurrent.TimeUnit;
  * @version 2025-08-06
  */
 class TcpAsyncChannel implements AsyncChannel {
-    private final AsynchronousSocketChannel channel;
-    private final long                      channelID;
-    private final SoConfig                  soConfig;
+    private static final Logger                    logger = Logger.getLogger(TcpAsyncChannel.class);
+    private final        long                      channelID;
+    private final        AsynchronousSocketChannel channel;
+    private final        SocketAddress             localAddress;
+    private final        SocketAddress             remoteAddress;
+    private final        AtomicBoolean             shutdownInputSignal;
+    private final        SoContextService          context;
+    private final        TcpSoConfig               soConfig;
 
-    TcpAsyncChannel(long channelId, AsynchronousSocketChannel channel, SoConfig soConfig) {
-        this.channel = channel;
+    TcpAsyncChannel(long channelId, AsynchronousSocketChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
         this.channelID = channelId;
-        this.soConfig = soConfig;
+        this.channel = channel;
+        this.localAddress = channel.getLocalAddress();
+        this.remoteAddress = remoteAddress;
+        this.shutdownInputSignal = new AtomicBoolean(false);
+        this.context = (SoContextService) context;
+        this.soConfig = (TcpSoConfig) soConfig;
     }
 
     @Override
-    public SoConfig getSoConfig() {
+    public TcpSoConfig getSoConfig() {
         return this.soConfig;
     }
 
@@ -55,13 +65,13 @@ class TcpAsyncChannel implements AsyncChannel {
     }
 
     @Override
-    public SocketAddress getLocalAddress() throws IOException {
-        return this.channel.getLocalAddress();
+    public SocketAddress getLocalAddress() {
+        return this.localAddress;
     }
 
     @Override
-    public SocketAddress getRemoteAddress() throws IOException {
-        return this.channel.getRemoteAddress();
+    public SocketAddress getRemoteAddress() {
+        return this.remoteAddress;
     }
 
     @Override
@@ -70,62 +80,69 @@ class TcpAsyncChannel implements AsyncChannel {
     }
 
     @Override
-    public boolean usingSndSwapBuffer() {
-        return true;
-    }
-
-    @Override
     public boolean isOpen() {
         return this.channel.isOpen();
     }
 
-    @Override
-    public boolean supportShutdownInput() {
-        return true;
+    /** Returns whether the read channel is closed. */
+    public boolean isShutdownInput() {
+        return this.shutdownInputSignal.get();
     }
 
-    @Override
+    /**
+     * Shuts down the input side of this channel.
+     * @throws IOException If an I/O error occurs
+     */
     public void shutdownInput() throws IOException {
-        this.channel.shutdownInput();
-    }
-
-    @Override
-    public boolean supportShutdownOutput() {
-        return true;
-    }
-
-    @Override
-    public void shutdownOutput() throws IOException {
-        this.channel.shutdownOutput();
+        if (this.shutdownInputSignal.compareAndSet(false, true)) {
+            if (this.context.getConfig().isPrintLog()) {
+                logger.info("channel(" + this.getChannelID() + ") shutdownInput.");
+            }
+            this.channel.shutdownInput();
+        }
     }
 
     @Override
     public void close() throws IOException {
-        this.channel.close();
+        if (this.channel.isOpen()) {
+            this.channel.close();
+        }
     }
 
     @Override
-    public <A> void read(ByteBuffer dst, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        this.channel.read(dst, attachment, handler);
+    public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) throws Throwable {
+        TcpSoConfigUtils.configSocket(this.soConfig, this.channel);
+        TcpAsyncChannel asyncChannel = new TcpAsyncChannel(this.channelID, this.channel, this.context, this.remoteAddress, this.soConfig);
+        TcpChannel channel = this.newChannel(asyncChannel, initializer);
+        this.channel.connect(this.remoteAddress, this.context, new TcpConnectCompletionHandler(channel, asyncChannel, future));
+    }
+
+    protected TcpChannel newChannel(TcpAsyncChannel realChannel, ProtoInitializer initializer) throws IOException {
+        NetMonitor monitor = new NetMonitor();
+        return new TcpChannel(                                                  //
+                realChannel.getChannelID(),                                     //
+                monitor,                                                        //
+                null,                                                           //
+                initializer,                                                    //
+                realChannel,                                                    //
+                this.context,                                                   //
+                new TcpRcvCompletionHandler(realChannel, this.context, monitor),//
+                new TcpSndCompletionHandler(realChannel, this.context, monitor) //
+        );
     }
 
     @Override
-    public <A> void read(ByteBuffer dst, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        this.channel.read(dst, timeout, unit, attachment, handler);
+    public void write(NetChannel channel, SoSndContext wContext) {
+        ((TcpChannel) channel).getWriteHandler().doWrite(wContext);
     }
 
-    @Override
-    public <A> void write(ByteBuffer src, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        this.channel.write(src, attachment, handler);
+    /** Reads a sequence of bytes from this channel into the given buffer. */
+    public void read(ByteBuffer dst, SoContextService context, TcpRcvCompletionHandler handler, long rTimeoutMs, TimeUnit timeUnit) {
+        this.channel.read(dst, rTimeoutMs, timeUnit, context, handler);
     }
 
-    @Override
-    public <A> void write(ByteBuffer src, long timeout, TimeUnit unit, A attachment, CompletionHandler<Integer, ? super A> handler) {
-        this.channel.write(src, timeout, unit, attachment, handler);
-    }
-
-    @Override
-    public <A> void connect(SocketAddress remote, A attachment, CompletionHandler<Void, ? super A> handler) {
-        this.channel.connect(remote, attachment, handler);
+    /** Writes a sequence of bytes to this channel from the given buffer. */
+    public void write(ByteBuffer src, SoSndContext context, TcpSndCompletionHandler handler, long wTimeoutMs, TimeUnit timeUnit) {
+        this.channel.write(src, wTimeoutMs, timeUnit, context, handler);
     }
 }
