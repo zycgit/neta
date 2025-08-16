@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.tcp;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
@@ -105,7 +106,7 @@ class TcpAsyncChannel implements AsyncChannel {
     @Override
     public void close() throws IOException {
         if (this.channel.isOpen()) {
-            this.channel.close();
+            IOUtils.closeQuietly(this.channel);
         }
     }
 
