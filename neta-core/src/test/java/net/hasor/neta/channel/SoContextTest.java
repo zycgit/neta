@@ -29,7 +29,7 @@ public class SoContextTest {
     @Test
     public void submitSoTask_Test() throws ExecutionException, InterruptedException {
         NetConfig config = new NetConfig();
-        config.setNetlog(true);
+        config.setPrintLog(true);
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(2);
         config.setTaskThreads(2);

@@ -106,7 +106,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
 
         if (this.sndSwapBuf.hasRemaining()) {
             this.writeData(context);
-        } else if (context.hasData()) {
+        } else if (!context.isEmpty()) {
             this.copyData(context);
             this.writeData(context);
         } else {

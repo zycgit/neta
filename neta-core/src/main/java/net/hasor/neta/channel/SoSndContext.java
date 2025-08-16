@@ -47,10 +47,6 @@ public class SoSndContext {
         } while (data != null);
     }
 
-    public boolean hasData() {
-        return !this.wQueue.isEmpty();
-    }
-
     /** peek data form wQueue */
     public SoSndData peekData() {
         return this.wQueue.peek();

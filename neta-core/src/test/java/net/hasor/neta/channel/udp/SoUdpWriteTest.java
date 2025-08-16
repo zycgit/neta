@@ -72,6 +72,8 @@ public class SoUdpWriteTest {
         });
 
         //
+        UdpSoConfig udpConfig = UdpSoConfig.UDP();
+        udpConfig.setRcvPacketSize(4096);
         NetManager neta = new NetManager(new NetConfig());
         ProtoInitializer initializer = ctx -> {
             return ProtoHelper.builder().nextEncoder((ProtoHandler<String, ByteBuf>) (context, src, dst) -> {
@@ -80,7 +82,7 @@ public class SoUdpWriteTest {
                 return ProtoStatus.Next;
             }).build();
         };
-        Future<NetChannel> future = neta.connect(address, initializer, UdpSoConfig.UDP());
+        Future<NetChannel> future = neta.connect(address, initializer, udpConfig);
         NetChannel channel = future.get();
         channel.sendData("Hello UDP");
 

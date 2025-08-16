@@ -31,7 +31,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class SoListenTest extends AbstractSoTest {
     @Test
-    public void acceptTest_1() throws Exception {
+    public void acceptTest_1() throws Throwable {
         // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
@@ -61,7 +61,7 @@ public class SoListenTest extends AbstractSoTest {
     }
 
     @Test
-    public void suspendTest_1() throws Exception {
+    public void suspendTest_1() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         TcpSoConfig tcpConf = tcpConfig(2, 30);
@@ -93,7 +93,7 @@ public class SoListenTest extends AbstractSoTest {
     }
 
     @Test
-    public void acceptListener_1() throws Exception {
+    public void acceptListener_1() throws Throwable {
         TcpSoConfig tcpConf = tcpConfig(2, 32);
         NetManager server = new NetManager(globalConf());
         NetListen listen1 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), tcpConf);
@@ -128,7 +128,7 @@ public class SoListenTest extends AbstractSoTest {
     }
 
     @Test
-    public void acceptListener_2() throws Exception {
+    public void acceptListener_2() throws Throwable {
         AtomicInteger atomicListen = new AtomicInteger();
         TcpSoConfig tcpConf = tcpConfig(2, 30);
 
@@ -160,7 +160,7 @@ public class SoListenTest extends AbstractSoTest {
     }
 
     @Test
-    public void foundTest_1() throws Exception {
+    public void foundTest_1() throws Throwable {
         // start server
         int safePort = safePort();
         TcpSoConfig tcpConf = tcpConfig(2, 30);

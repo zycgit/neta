@@ -39,7 +39,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SoReadTest extends AbstractSoTest {
     @Test
-    public void echoTest() throws Exception {
+    public void echoTest() throws Throwable {
         // echo anything from remote
         AtomicInteger cnt = new AtomicInteger();
         int safePort = safePort();
@@ -83,7 +83,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void rcvBufSizeTest() throws Exception {
+    public void rcvBufSizeTest() throws Throwable {
         // echo anything from remote
         AtomicInteger cnt = new AtomicInteger();
         int safePort = safePort();
@@ -124,7 +124,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void rcvBackPressedTest_01() throws Exception {
+    public void rcvBackPressedTest_01() throws Throwable {
         if (SystemUtils.isOsx()) {
             return;
         }
@@ -135,7 +135,7 @@ public class SoReadTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetConfig netConfig = globalConf();
-        netConfig.setNetlog(false);
+        netConfig.setPrintLog(false);
         NetManager server = new NetManager(netConfig);
         SoContext context = server.getContext();
         NetListen listen = server.listen(address, new ProtoInitializer() {
@@ -239,7 +239,7 @@ public class SoReadTest extends AbstractSoTest {
     //    }
 
     @Test
-    public void rcvCounterTest() throws Exception {
+    public void rcvCounterTest() throws Throwable {
         // eval dm5
         MessageDigest serverDigest = MessageDigest.getInstance("MD5");
         ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder((ProtoHandler<ByteBuf, ByteBuf>) (context, src, dst) -> {
@@ -283,7 +283,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void rcvReadTimeoutTest_01() throws Exception {
+    public void rcvReadTimeoutTest_01() throws Throwable {
         AtomicLong rcvErrTime = new AtomicLong(0);
         ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
@@ -323,7 +323,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void rcvReadTimeoutTest_02() throws Exception {
+    public void rcvReadTimeoutTest_02() throws Throwable {
         AtomicLong rcvErrTime = new AtomicLong(0);
         ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
@@ -366,7 +366,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void waitReceiveTest_01() throws Exception {
+    public void waitReceiveTest_01() throws Throwable {
         AtomicLong rcvErrTime = new AtomicLong(0);
         ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
@@ -411,7 +411,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void waitReceiveTest_02() throws Exception {
+    public void waitReceiveTest_02() throws Throwable {
         AtomicLong rcvErrTime = new AtomicLong(0);
         ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
@@ -459,7 +459,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void rcvThrowTest_01() throws Exception {
+    public void rcvThrowTest_01() throws Throwable {
         AtomicBoolean rcvErr1 = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
             return ProtoHelper.builder().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
@@ -486,7 +486,7 @@ public class SoReadTest extends AbstractSoTest {
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         TcpSoConfig tcpConf = tcpConfig(2, 30);
         NetConfig netConfig = globalConf();
-        netConfig.setNetlog(false);
+        netConfig.setPrintLog(false);
 
         NetManager server = new NetManager(netConfig);
         SoContext context = server.getContext();
@@ -509,7 +509,7 @@ public class SoReadTest extends AbstractSoTest {
     }
 
     @Test
-    public void rcvThrowTest_02() throws Exception {
+    public void rcvThrowTest_02() throws Throwable {
         AtomicBoolean rcvErr1 = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
             return ProtoHelper.builder().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
@@ -536,7 +536,7 @@ public class SoReadTest extends AbstractSoTest {
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         TcpSoConfig tcpConf = tcpConfig(2, 30);
         NetConfig netConfig = globalConf();
-        netConfig.setNetlog(false);
+        netConfig.setPrintLog(false);
 
         NetManager server = new NetManager(netConfig);
         SoContext context = server.getContext();

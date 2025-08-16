@@ -35,7 +35,7 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class SoWriteTest extends AbstractSoTest {
     @Test
-    public void serverSayHelloTest_01() throws Exception {
+    public void serverSayHelloTest_01() throws Throwable {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
@@ -63,7 +63,7 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void serverSayHelloTest_02() throws Exception {
+    public void serverSayHelloTest_02() throws Throwable {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
@@ -99,7 +99,7 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void serverEchoTest() throws Exception {
+    public void serverEchoTest() throws Throwable {
         // server start
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
@@ -141,7 +141,7 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void sndTimeoutTest_01() throws Exception {
+    public void sndTimeoutTest_01() throws Throwable {
         AtomicLong sndErrTime = new AtomicLong(0);
         ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
@@ -188,7 +188,7 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void sndTimeoutTest_02() throws Exception {
+    public void sndTimeoutTest_02() throws Throwable {
         AtomicLong sndErrTime = new AtomicLong(0);
         ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
@@ -235,7 +235,7 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void sndThrowTest_01() throws Exception {
+    public void sndThrowTest_01() throws Throwable {
         AtomicBoolean sndErr1 = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
             return ProtoHelper.builder().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
@@ -258,7 +258,7 @@ public class SoWriteTest extends AbstractSoTest {
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         TcpSoConfig tcpConf = tcpConfig(2, 30);
         NetConfig netConfig = globalConf();
-        netConfig.setNetlog(false);
+        netConfig.setPrintLog(false);
 
         NetManager server = new NetManager(netConfig);
         SoContext context = server.getContext();
@@ -281,7 +281,7 @@ public class SoWriteTest extends AbstractSoTest {
     }
 
     @Test
-    public void sendWaitFinishTest_01() throws Exception {
+    public void sendWaitFinishTest_01() throws Throwable {
         // server say Hello
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);

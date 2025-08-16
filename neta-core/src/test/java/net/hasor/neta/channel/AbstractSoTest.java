@@ -58,7 +58,7 @@ public class AbstractSoTest {
 
     public static NetConfig globalConf() {
         NetConfig config = new NetConfig();
-        config.setNetlog(true);
+        config.setPrintLog(true);
         config.setBufAllocator(ByteBufUtils.DEFAULT_ALLOCATOR);
         config.setThreadFactory((loader, nameTemplate) -> ThreadUtils.threadFactory(loader, nameTemplate, true));
         config.setIoThreads(2);
@@ -68,8 +68,8 @@ public class AbstractSoTest {
 
     public static TcpSoConfig tcpConfig(int sndSize, int rcvSize) {
         TcpSoConfig tcpConf = SoConfig.TCP();
-        tcpConf.setSoRcvBuf(rcvSize);
-        tcpConf.setSoSndBuf(sndSize);
+        tcpConf.setSwapRcvBuf(rcvSize);
+        tcpConf.setSwapSndBuf(sndSize);
         tcpConf.setSoReadTimeoutMs(1000);
         tcpConf.setSoWriteTimeoutMs(1000);
         tcpConf.setSoKeepAlive(true);
@@ -146,7 +146,7 @@ public class AbstractSoTest {
 
     public static Thread whiteHole(NetChannel channel) {
         return ThreadUtils.daemonThread(true, (Callable) () -> {
-            while (!channel.isClose() && !channel.isShutdownOutput()) {
+            while (!channel.isClose()) {
                 channel.sendData(ByteBuf.wrap(RandomUtils.nextBytes(32)));
                 Thread.sleep(50);
             }

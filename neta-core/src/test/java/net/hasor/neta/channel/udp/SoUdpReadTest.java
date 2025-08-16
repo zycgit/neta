@@ -17,15 +17,14 @@ package net.hasor.neta.channel.udp;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.handler.ProtoHandler;
 import net.hasor.neta.handler.ProtoHelper;
 import net.hasor.neta.handler.ProtoStatus;
 import org.junit.Test;
 
-import java.io.IOException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
@@ -40,12 +39,12 @@ import static net.hasor.neta.channel.AbstractSoTest.*;
  */
 public class SoUdpReadTest {
     @Test
-    public void udpRead_Test() throws IOException {
+    public void udpRead_Test() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
 
         NetConfig soConf = globalConf();
-        soConf.setNetlog(false);
+        soConf.setPrintLog(false);
         NetManager neta = new NetManager(soConf);
 
         AtomicBoolean udpRead = new AtomicBoolean(false);

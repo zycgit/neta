@@ -50,6 +50,7 @@ class UdpAsyncChannel implements AsyncChannel {
     protected final      InetSocketAddress remoteAddress;
     protected final      SoContextService  context;
     protected final      UdpSoConfig       soConfig;
+    //
     private final        AtomicBoolean     writing;
 
     UdpAsyncChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
@@ -59,6 +60,7 @@ class UdpAsyncChannel implements AsyncChannel {
         this.remoteAddress = (InetSocketAddress) remoteAddress;
         this.context = (SoContextService) context;
         this.soConfig = (UdpSoConfig) soConfig;
+
         this.writing = new AtomicBoolean(false);
     }
 
@@ -99,59 +101,25 @@ class UdpAsyncChannel implements AsyncChannel {
     }
 
     @Override
-    public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) throws Throwable {
+    public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
         throw new UnsupportedOperationException();
     }
 
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
-        //        try {
-        //            int dataLen = src.limit();
-        //            int sentBytes = this.channel.send(src, this.remoteAddr);
-        //            if (sentBytes != dataLen) {
-        //                throw new IOException("UDP write failed, The datagram cannot be sent completely. expected " + dataLen + " bytes, but sent " + sentBytes + " bytes");
-        //            }
-        //        } catch (IOException e) {
-        //            handler.failed(e, attachment);
-        //        }
+        if (wContext.isEmpty()) {
+            return;
+        }
+
+        if (this.writing.compareAndSet(false, true)) {
+            this.asyncWrite(channel, wContext);
+        }
     }
 
-    //    private void doWrite(SoSndContext wContext) {
-    //        if (wContext.isEmpty()) {
-    //            return;
-    //        }
-    //
-    //        if (!this.writing.compareAndSet(false, true)) {
-    //            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-    //                this.copyData(wContext);
-    //                this.writeData(wContext);
-    //            });
-    //        }
-    //    }
-
-    //    private void sendData() {
-    //        if (this.sndContext.hasData()) {
-    //            SoSndData sndData = this.sndContext.peekData();
-    //
-    //            try {
-    //                ByteBuffer data = sndData.transferPull();
-    //                this.channel.write(data, this.context, this);
-    //            } catch (Throwable e) {
-    //                handleException(e);
-    //            }
-    //
-    //            if (!sndData.hasReadable()) {
-    //                this.sndContext.popData();
-    //                this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-    //                    sndData.completed();
-    //                });
-    //            }
-    //
-    //            //
-    //            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-    //                this.sendData(); // recursive send.
-    //            });
-    //        }
-    //    }
-
+    private void asyncWrite(NetChannel channel, SoSndContext wContext) {
+        UdpWriteTask task = new UdpWriteTask(channel, this.channel, wContext, this.context);
+        this.context.submitSoTask(task, this).onFinal(f -> {
+            this.writing.set(false);
+        });
+    }
 }

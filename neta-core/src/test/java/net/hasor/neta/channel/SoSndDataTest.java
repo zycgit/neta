@@ -36,7 +36,7 @@ public class SoSndDataTest {
         };
         ByteBuffer wrap = ByteBuffer.wrap(new byte[1]);
 
-        SoSndData soData = new SoSndData(sndData, new BasicFuture<>(), null);
+        SoSndData soData = new SoSndData(8, sndData, new BasicFuture<>(), null);
         assert soData.getDataSize() == 8;
         assert soData.readableBytes() == 8;
         assert soData.hasReadable();
@@ -62,7 +62,7 @@ public class SoSndDataTest {
         };
         ByteBuffer wrap = ByteBuffer.wrap(new byte[1]);
 
-        SoSndData soData = new SoSndData(sndData, new BasicFuture<>(), null);
+        SoSndData soData = new SoSndData(8, sndData, new BasicFuture<>(), null);
         assert soData.getDataSize() == 8;
         assert soData.readableBytes() == 8;
         assert soData.hasReadable();
@@ -92,7 +92,7 @@ public class SoSndDataTest {
         };
         ByteBuffer wrap = ByteBuffer.wrap(new byte[3]);
 
-        SoSndData soData = new SoSndData(sndData, new BasicFuture<>(), null);
+        SoSndData soData = new SoSndData(8, sndData, new BasicFuture<>(), null);
 
         assert soData.transferTo(wrap) == 3;
         assert wrap.get(0) == 1;

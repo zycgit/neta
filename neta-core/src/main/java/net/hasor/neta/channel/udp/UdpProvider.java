@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.DatagramChannel;
-import java.util.concurrent.ExecutorService;
 
 /**
  * Provides UDP-specific implementation for asynchronous server and client channels.
@@ -34,15 +33,13 @@ public class UdpProvider implements AsyncChannelProvider {
 
     @Override
     public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
-        ExecutorService executor = ((SoContextService) context).getIoExecutor();
         DatagramChannel channel = DatagramChannel.open();
-        return new UdpAsyncServerChannel(channelId, channel, executor, context, listenAddr, soConfig);
+        return new UdpAsyncServerChannel(channelId, channel, context, listenAddr, soConfig);
     }
 
     @Override
     public AsyncChannel createClientChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
-        ExecutorService executor = ((SoContextService) context).getIoExecutor();
         DatagramChannel channel = DatagramChannel.open();
-        return new UdpAsyncClientChannel(channelId, channel, context, remoteAddr, soConfig, executor);
+        return new UdpAsyncClientChannel(channelId, channel, context, remoteAddr, soConfig);
     }
 }
