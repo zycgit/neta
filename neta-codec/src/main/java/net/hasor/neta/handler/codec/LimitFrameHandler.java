@@ -90,10 +90,10 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
     /**
      * Creates a new decoder/encoder.
-     * @param fixedLength the minimum/maximum length of the decoded frame.
+     * @param maxLength the maximum length of the decoded frame.
      */
-    public LimitFrameHandler(int fixedLength) {
-        this(fixedLength, fixedLength);
+    public LimitFrameHandler(int maxLength) {
+        this(1, maxLength);
     }
 
     /**

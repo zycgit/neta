@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
     <parent>
         <groupId>net.hasor</groupId>
@@ -14,8 +15,10 @@
     <!-- Project Info -->
     <name>Neta Codec</name>
     <description>
-        Hasor Neta is a network application framework that helps users to develop high performance and high scalability network applications easily.
-        It provides an abstract asynchronous duplex API model over various transports such as TCP/IP and UDP/IP via Java AIO.
+        Hasor Neta is a network application framework that helps users to develop high performance and high scalability
+        network applications easily.
+        It provides an abstract asynchronous duplex API model over various transports such as TCP/IP and UDP/IP via Java
+        AIO.
     </description>
 
     <developers>
@@ -29,6 +32,20 @@
         <dependency>
             <groupId>net.hasor</groupId>
             <artifactId>neta-core</artifactId>
+        </dependency>
+
+        <!-- ssh options-->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk15on</artifactId>
+            <version>1.70</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bctls-jdk15on</artifactId>
+            <version>1.70</version>
+            <optional>true</optional>
         </dependency>
 
         <!-- test -->
