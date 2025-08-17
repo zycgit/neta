@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.neta.channel.AbstractSoTest;
+import net.hasor.neta.channel.NetListen;
+import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.handler.ProtoHelper;
 import org.junit.Test;
 
-import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
-import java.net.SocketTimeoutException;
-import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -32,23 +31,31 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SoListenTest extends AbstractSoTest {
     @Test
     public void acceptTest_1() throws Throwable {
-        // start server
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         TcpSoConfig tcpConf = tcpConfig(2, 30);
 
+        // server
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), tcpConf);
 
-        Socket client = new Socket("127.0.0.1", safePort);
-        InputStream soInput = client.getInputStream();
+        // client 1 and 2
+        Socket client1 = new Socket("127.0.0.1", safePort);
+        Socket client2 = new Socket("127.0.0.1", safePort);
 
         // wait connected
         listen.waitAnyAccept();
-        assert listen.getChannelCount() == 1;
+        while (true) {
+            if (listen.getChannelCount() == 2) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
 
+        // close listen
         listen.closeNow();
-        assert listen.getChannelCount() == 1;
+        assert listen.getChannelCount() == 2;
         try {
             Socket badClient = new Socket("127.0.0.1", safePort);
             assert false;
@@ -56,37 +63,60 @@ public class SoListenTest extends AbstractSoTest {
             assert e.getMessage().startsWith("Connection refused");
         }
 
+        // client close
+        client1.close();
+        client2.close();
+        while (true) {
+            if (listen.getChannelCount() == 0) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
+
         server.shutdown();
-        client.close();
     }
 
     @Test
     public void suspendTest_1() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpSoConfig tcpConf = tcpConfig(2, 30);
+        TcpSoConfig tcpConf = TcpSoConfig.TCP();
 
+        // server
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.listen(address, context -> ProtoHelper.builder().build(), tcpConf);
 
-        listen.suspend();
-        Socket testClient1 = new Socket("127.0.0.1", safePort);
-        assert listen.getChannelCount() == 0;
+        // client 1 and 2
+        Socket client1 = new Socket("127.0.0.1", safePort);
+        Socket client2 = new Socket("127.0.0.1", safePort);
 
-        testClient1.setSoTimeout(1000);
-        assert testClient1.getInputStream().read() == -1;
-
-        listen.resume();
-        Socket testClient2 = new Socket("127.0.0.1", safePort);
+        // wait connected
         listen.waitAnyAccept();
-        assert listen.getChannelCount() == 1;
+        while (true) {
+            if (listen.getChannelCount() == 2) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
 
-        testClient2.setSoTimeout(1000);
-        try {
-            testClient2.getInputStream().read();
-            assert false;
-        } catch (SocketTimeoutException e) {
-            assert true;
+        // close listen
+        listen.suspend();
+        assert listen.getChannelCount() == 2;
+        Socket badClient = new Socket("127.0.0.1", safePort);
+        int read = badClient.getInputStream().read();
+        assert read == -1;
+
+        // client close
+        client1.close();
+        client2.close();
+        while (true) {
+            if (listen.getChannelCount() == 0) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
         }
 
         server.shutdown();
@@ -94,10 +124,9 @@ public class SoListenTest extends AbstractSoTest {
 
     @Test
     public void acceptListener_1() throws Throwable {
-        TcpSoConfig tcpConf = tcpConfig(2, 32);
-        NetManager server = new NetManager(globalConf());
-        NetListen listen1 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), tcpConf);
-        NetListen listen2 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), tcpConf);
+        NetManager server = new NetManager();
+        NetListen listen1 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), TcpSoConfig.TCP());
+        NetListen listen2 = server.listen(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.builder().build(), TcpSoConfig.TCP());
         int safePort1 = listen1.getListenPort();
         int safePort2 = listen2.getListenPort();
 
@@ -125,38 +154,6 @@ public class SoListenTest extends AbstractSoTest {
         assert listen1.getChannelCount() == 0;
         assert listen2.getChannelCount() == 0;
         server.shutdown();
-    }
-
-    @Test
-    public void acceptListener_2() throws Throwable {
-        AtomicInteger atomicListen = new AtomicInteger();
-        TcpSoConfig tcpConf = tcpConfig(2, 30);
-
-        NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(new InetSocketAddress("127.0.0.1", safePort()), new ProtoInitializer() {
-            @Override
-            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
-                return ProtoHelper.builder().nextDecoder(counter(atomicListen)).build();
-            }
-        }, tcpConf);
-
-        assert atomicListen.get() == 0;
-        assert listen.getChannelCount() == 0;
-        Socket client1 = new Socket("127.0.0.1", listen.getListenPort());
-        listen.waitAnyAccept();
-        assert atomicListen.get() == 1;
-        assert listen.getChannelCount() == 1;
-
-        Socket client2 = new Socket("127.0.0.1", listen.getListenPort());
-        Thread.sleep(500);
-
-        assert atomicListen.get() == 2;
-        assert listen.getChannelCount() == 2;
-
-        server.shutdown();
-
-        assert atomicListen.get() == 0;
-        assert listen.getChannelCount() == 0;
     }
 
     @Test

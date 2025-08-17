@@ -25,6 +25,7 @@ import java.util.concurrent.TimeUnit;
 class UdpWriteTask extends DefaultSoTask {
     private static final Logger           logger = Logger.getLogger(UdpWriteTask.class);
     private final        NetChannel       netChannel;
+    private final        NetMonitor       monitor;
     private final        DatagramChannel  udpChannel;
     private final        SoSndContext     wContext;
     protected final      SoContextService context;
@@ -32,6 +33,7 @@ class UdpWriteTask extends DefaultSoTask {
 
     public UdpWriteTask(NetChannel netChannel, DatagramChannel channel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;
+        this.monitor = netChannel.getMonitor();
         this.udpChannel = channel;
         this.wContext = wContext;
         this.context = context;
@@ -53,16 +55,28 @@ class UdpWriteTask extends DefaultSoTask {
         // prepare
         if (this.sendData == null) {
             SoSndData sndData = this.wContext.peekData();
-            this.sendData = sndData.transferPull();
+            byte[] bytes = sndData.transferPull();
+            if (bytes == null || bytes.length == 0) {
+                continueTask();
+                return;
+            } else {
+                this.sendData = bytes;
+            }
         }
 
         // send
         try {
-            int write = this.udpChannel.write(ByteBuffer.wrap(this.sendData));
+            int write;
+            if (this.netChannel.isServer()) {
+                write = this.udpChannel.send(ByteBuffer.wrap(this.sendData), this.netChannel.getRemoteAddr());
+            } else {
+                write = this.udpChannel.write(ByteBuffer.wrap(this.sendData));
+            }
             if (write == 0) {
                 this.delayTask(50, TimeUnit.MILLISECONDS);
                 return;
             } else {
+                this.monitor.updateSndCounter(write);
                 this.sendData = null;
             }
         } catch (Exception e) {

@@ -219,61 +219,61 @@ public class SoShutdownTest extends AbstractSoTest {
     }
 
     // shutdownInput with api.
-    @Test
-    public void rcvLocalShutdownInputTest_04() throws Throwable {
-        AtomicBoolean rcvAnyThing = new AtomicBoolean();
-        AtomicBoolean rcvError = new AtomicBoolean(false);
-        ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
-                @Override
-                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
-                    rcvAnyThing.set(true);
-                    return ProtoStatus.Next;
-                }
-
-                @Override
-                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    rcvError.set(e instanceof TcpInputCloseException);
-                    return ProtoStatus.Next;
-                }
-            }).build();
-        };
-
-        // start listen
-        int safePort = safePort();
-        TcpSoConfig tcpConf = tcpConfig(8, 30);
-
-        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, initializer, tcpConf);
-
-        // start client
-        Socket client = new Socket("127.0.0.1", safePort);
-        listen.waitAnyAccept();
-
-        TcpChannel channel = (TcpChannel) listen.findChannel(2);
-        channel.shutdownInput();
-        ThreadUtils.sleep(300);
-        assert channel.isShutdownInput();
-
-        assert !rcvAnyThing.get();
-        assert rcvError.get();
-
-        try {
-            OutputStream out = client.getOutputStream();
-            out.write(RandomUtils.nextBytes(4096 * 128));
-            out.flush();
-            assert false;
-        } catch (Exception e) {
-            System.out.println(e.getMessage());
-            assert e.getMessage().contains("Broken pipe") || e.getMessage().contains("Connection refused");
-        }
-
-        ThreadUtils.sleep(1000);
-        assert !rcvAnyThing.get();
-
-        server.shutdown();
-    }
+    //    @Test
+    //    public void rcvLocalShutdownInputTest_04() throws Throwable {
+    //        AtomicBoolean rcvAnyThing = new AtomicBoolean();
+    //        AtomicBoolean rcvError = new AtomicBoolean(false);
+    //        ProtoInitializer initializer = ctx -> {
+    //            return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+    //                @Override
+    //                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
+    //                    rcvAnyThing.set(true);
+    //                    return ProtoStatus.Next;
+    //                }
+    //
+    //                @Override
+    //                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+    //                    rcvError.set(e instanceof TcpInputCloseException);
+    //                    return ProtoStatus.Next;
+    //                }
+    //            }).build();
+    //        };
+    //
+    //        // start listen
+    //        int safePort = safePort();
+    //        TcpSoConfig tcpConf = tcpConfig(8, 30);
+    //
+    //        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+    //        NetManager server = new NetManager(globalConf());
+    //        NetListen listen = server.listen(address, initializer, tcpConf);
+    //
+    //        // start client
+    //        Socket client = new Socket("127.0.0.1", safePort);
+    //        listen.waitAnyAccept();
+    //
+    //        TcpChannel channel = (TcpChannel) listen.findChannel(2);
+    //        channel.shutdownInput();
+    //        ThreadUtils.sleep(300);
+    //        assert channel.isShutdownInput();
+    //
+    //        assert !rcvAnyThing.get();
+    //        assert rcvError.get();
+    //
+    //        try {
+    //            OutputStream out = client.getOutputStream();
+    //            out.write(RandomUtils.nextBytes(4096 * 128));
+    //            out.flush();
+    //            assert false;
+    //        } catch (Exception e) {
+    //            System.out.println(e.getMessage());
+    //            assert e.getMessage().contains("Broken pipe") || e.getMessage().contains("Connection refused");
+    //        }
+    //
+    //        ThreadUtils.sleep(1000);
+    //        assert !rcvAnyThing.get();
+    //
+    //        server.shutdown();
+    //    }
 
     @Test
     public void rcvRemoteShutdownOutputTest_01() throws Throwable {

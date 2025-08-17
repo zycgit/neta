@@ -32,8 +32,6 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -43,9 +41,9 @@ import static net.hasor.neta.channel.AbstractSoTest.safePort;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SoUdpWriteTest {
+public class UdpNeta2JvmTest {
     @Test
-    public void udpWrite_Test() throws IOException, ExecutionException, InterruptedException {
+    public void neta2Jvm() throws IOException, ExecutionException, InterruptedException {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
 
@@ -53,12 +51,8 @@ public class SoUdpWriteTest {
         AtomicBoolean udpRead = new AtomicBoolean(false);
         ThreadUtils.daemonThread(true, (Runnable) () -> {
             try {
-                Selector selector = Selector.open();
                 DatagramChannel channel = DatagramChannel.open();
                 channel.bind(address);
-                channel.configureBlocking(false);
-                channel.register(selector, SelectionKey.OP_READ);
-                selector.select();
 
                 ByteBuffer buffer = ByteBuffer.allocate(4096);
                 SocketAddress receive = channel.receive(buffer);
@@ -66,6 +60,8 @@ public class SoUdpWriteTest {
                 byte[] byteArray = ByteBuf.wrap(buffer).asByteArray();
 
                 udpRead.set(StringUtils.equals(new String(byteArray), "Hello UDP"));
+
+                channel.close();
             } catch (Exception e) {
                 e.printStackTrace();
             }

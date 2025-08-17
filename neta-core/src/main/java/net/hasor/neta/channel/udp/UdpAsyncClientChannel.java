@@ -80,9 +80,8 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
             this.channel.register(this.readSelector, SelectionKey.OP_READ);
 
             // create channel
-            long channelId = this.context.nextID();
             String remoteID = this.remoteAddress.getAddress().getHostAddress() + ":" + this.remoteAddress.getPort();
-            UdpAsyncChannel asyncChannel = new UdpAsyncChannel(channelId, this.channel, this.context, this.remoteAddress, this.soConfig);
+            UdpAsyncChannel asyncChannel = new UdpAsyncChannel(this.channelID, this.channel, this.context, this.remoteAddress, this.soConfig);
             UdpChannel channel = this.newChannel(remoteID, asyncChannel, initializer);
 
             // init

@@ -54,8 +54,8 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
         this.channel.accept(attachment, this);
 
         if (this.forListen.isSuspend()) {
-            this.printLog("ERROR: AcceptFailed, listen is suspend.");
             IOUtils.closeQuietly(result);
+            this.printLog("ERROR: AcceptFailed, listen is suspend.");
             return;
         }
 

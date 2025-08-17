@@ -125,6 +125,10 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         return this.asyncChannel;
     }
 
+    public NetMonitor getMonitor() {
+        return this.monitor;
+    }
+
     @Override
     public SoConfig getConfig() {
         return this.forListen.getConfig();

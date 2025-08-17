@@ -13,11 +13,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel.udp;
+package net.hasor.neta.channel.tcp;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.NetConfig;
+import net.hasor.neta.channel.AbstractSoTest;
+import net.hasor.neta.channel.NetListen;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.handler.ProtoHandler;
@@ -25,29 +26,22 @@ import net.hasor.neta.handler.ProtoHelper;
 import net.hasor.neta.handler.ProtoStatus;
 import org.junit.Test;
 
-import java.net.DatagramPacket;
-import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
-import java.nio.charset.StandardCharsets;
+import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
-
-import static net.hasor.neta.channel.AbstractSoTest.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SoUdpReadTest {
+public class TcpJvm2NetaTest extends AbstractSoTest {
     @Test
-    public void udpRead_Test() throws Throwable {
+    public void jvm2Neta_1() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
 
-        NetConfig soConf = globalConf();
-        soConf.setPrintLog(false);
-        NetManager neta = new NetManager(soConf);
-
-        AtomicBoolean udpRead = new AtomicBoolean(false);
+        // server
+        AtomicBoolean tcpRead = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
             return ProtoHelper.builder().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
                 while (src.hasMore()) {
@@ -55,32 +49,25 @@ public class SoUdpReadTest {
                     int len = data.readableBytes();
                     byte[] bytes = new byte[len];
                     data.readBytes(bytes);
-                    udpRead.set(StringUtils.equals(new String(bytes), "Hello UDP"));
+                    tcpRead.set(StringUtils.equals(new String(bytes), "Hello TCP"));
                     data.markReader();
                 }
                 return ProtoStatus.Next;
             }).build();
         };
+        NetManager neta = new NetManager();
+        NetListen serverSite = neta.listen(address, initializer, TcpSoConfig.TCP());
 
-        UdpSoConfig udpConf = udpConfig(128, 4096);
-        udpConf.setSoReadTimeoutMs(-1);
-        neta.listen(address, initializer, udpConf);
+        // client
+        Socket clientSite = new Socket(address.getHostString(), address.getPort());
+        clientSite.getOutputStream().write("Hello TCP".getBytes());
+        clientSite.getOutputStream().flush();
+        clientSite.close();
 
-        //
-        DatagramSocket socket = new DatagramSocket();
-        byte[] sendData = "Hello UDP".getBytes(StandardCharsets.UTF_8);
-        DatagramPacket sendPacket = new DatagramPacket(sendData, sendData.length, address);
-        socket.send(sendPacket);
-        socket.close();
-
-        int i = 100 * 50; // max 5sce
-        while (!udpRead.get()) {
-            ThreadUtils.sleep(100);
-            i--;
-            if (i <= 0) {
-                break;
-            }
+        // wait finish
+        while (!tcpRead.get()) {
+            ThreadUtils.sleep(10);
         }
-        assert udpRead.get();
+        neta.shutdown();
     }
 }
