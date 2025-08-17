@@ -28,6 +28,7 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * An {@link SslContext} which uses JDK's SSL/TLS implementation.
@@ -188,17 +189,41 @@ public class JdkSslContext extends SslContextBasic {
     }
 
     @Override
-    protected SSLContext createSSLContext() throws GeneralSecurityException, IOException {
+    protected SSLContext createSSLContext(String[] protocol) throws GeneralSecurityException, IOException {
         KeyStore ks = this.createKeyStore();
         KeyManagerFactory kmf = this.createKeyManagerFactory(ks);
         TrustManagerFactory tmf = this.getTrustManagers(ks);
 
-        if (this.sslLog) {
-            logger.info("ssl(" + this.channelID + ") create JdkSslContext.");
+        List<String> family = Arrays.stream(protocol).map(s -> {
+            if (StringUtils.startsWith(s, "SSL")) {
+                return "SSL";
+            } else if (StringUtils.startsWith(s, "TLS")) {
+                return "TLS";
+            }
+            if (StringUtils.startsWith(s, "DTLS")) {
+                return "DTLS";
+            }
+            return s;
+        }).distinct().collect(Collectors.toList());
+        if (family.size() > 1) {
+            throw new GeneralSecurityException("SSL/TLS/DTLS can only be chosen one.");
         }
-        SSLContext context = SSLContext.getInstance(PROTOCOL);
-        context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-        return context;
+
+        for (String p : protocol) {
+            try {
+                SSLContext context = SSLContext.getInstance(p);
+                context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+
+                if (this.sslLog) {
+                    logger.info("ssl(" + this.channelID + ") create JdkSslContext with protocol " + p);
+                }
+                return context;
+            } catch (Exception ignored) {
+                //
+            }
+        }
+
+        throw new GeneralSecurityException("create SSLContext failed, protocol = " + StringUtils.join(protocol, ", "));
     }
 
     @Override

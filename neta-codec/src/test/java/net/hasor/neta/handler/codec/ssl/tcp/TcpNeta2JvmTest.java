@@ -18,13 +18,10 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.NetChannel;
-import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.tcp.TcpSoConfig;
-import net.hasor.neta.handler.codec.ssl.AbstractSslTest;
-import net.hasor.neta.handler.codec.ssl.SoSslUtils;
-import net.hasor.neta.handler.codec.ssl.SslConfig;
-import net.hasor.neta.handler.codec.ssl.SslMode;
+import net.hasor.neta.handler.codec.ssl.*;
 import org.junit.Test;
 
 import javax.net.ssl.SSLServerSocket;
@@ -43,13 +40,14 @@ import static net.hasor.neta.handler.codec.AbstractSoTest.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SoNetaAsSslClientTest extends AbstractSslTest {
+public class TcpNeta2JvmTest extends AbstractSslTest {
     @Test
-    public void netaAsSslClientTest_01() throws Throwable {
-        // SSL Server
+    public void neta_2_jvm() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SSLServerSocketFactory sslFactory = SoSslUtils.sslContext().getServerSocketFactory();
+
+        // server
+        SSLServerSocketFactory sslFactory = SoSslUtils.sslContext(SslProtocol.TLS_v1_2).getServerSocketFactory();
         SSLServerSocket serverSocket = (SSLServerSocket) sslFactory.createServerSocket(safePort);
         AtomicBoolean readFinish = new AtomicBoolean();
         List<String> rcvMessage = new ArrayList<>();
@@ -57,34 +55,33 @@ public class SoNetaAsSslClientTest extends AbstractSslTest {
             try {
                 SSLSocket socket = (SSLSocket) serverSocket.accept();
                 BufferedReader input = new BufferedReader(new InputStreamReader(socket.getInputStream()));
+
                 rcvMessage.add(input.readLine());
                 readFinish.set(true);
+
+                socket.close();
+                serverSocket.close();
             } catch (Exception e) {
                 readFinish.set(true);
             }
         });
 
-        // SSL Client
+        // client
         TcpSoConfig tcpConf = tcpConfig(128, 4096);
-        NetConfig soConf = globalConf();
-        soConf.setPrintLog(true);
-        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
-        NetManager neta = new NetManager(soConf);
-        Future<NetChannel> connect = neta.connect(address, SoSslUtils.sslSocketProtoStack(sslConf), tcpConf);
-        while (!connect.isDone()) {
-            ThreadUtils.sleep(100);
-        }
-        NetChannel client = connect.get();
-        Future<?> send = client.sendData("Hello Server, this message form client.\n");
-        send.get();
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2, SslMode.Always);
+        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf);
 
+        // client say hello
+        NetManager neta = new NetManager(globalConf());
+        NetChannel client = neta.connect(address, clientProto, tcpConf).get();
+        Future<?> send = client.sendData("Hello Server, this message form client.\n");
+
+        // wait finish
         while (!readFinish.get()) {
             ThreadUtils.sleep(100);
         }
-
         assert rcvMessage.get(0).equals("Hello Server, this message form client.");
 
-        serverSocket.close();
         neta.shutdown();
     }
 }

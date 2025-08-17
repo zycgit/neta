@@ -20,7 +20,6 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoContext;
-import net.hasor.neta.channel.SoOverflowException;
 import net.hasor.neta.handler.ProtoRcvQueue;
 import net.hasor.neta.handler.ProtoSndQueue;
 
@@ -145,16 +144,17 @@ class SslHandle {
         HandshakeStatus hs = this.engine.getHandshakeStatus();
         while (hs != HandshakeStatus.FINISHED && hs != HandshakeStatus.NOT_HANDSHAKING) {
             SSLEngineResult result;
-            switch (hs) {
-                case NEED_UNWRAP:
+            switch (hs.name()) {
+                case "NEED_UNWRAP":
+                case "NEED_UNWRAP_AGAIN":
                     result = this.handshakeUnwrap(rcvUp, rcvDown);
                     hs = result.getHandshakeStatus();
                     break;
-                case NEED_WRAP:
+                case "NEED_WRAP":
                     result = this.handshakeWrap(sndUp, sndDown);
                     hs = result.getHandshakeStatus();
                     break;
-                case NEED_TASK:
+                case "NEED_TASK":
                     this.engine.getTask().run();
                     hs = this.engine.getHandshakeStatus();
                     continue;
@@ -227,6 +227,12 @@ class SslHandle {
         int producedBytes = 0;
         do {
             result = this.engine.unwrap(this.inNetData, this.inAppData);
+            // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
+            if (result.getStatus() == Status.BUFFER_OVERFLOW) {
+                this.resizingBufOverflowForUnwrap("sslHandshake");
+                result = this.engine.unwrap(this.inNetData, this.inAppData);
+            }
+
             hsStatus = result.getHandshakeStatus();
             consumedBytes += result.bytesConsumed();
             producedBytes += result.bytesProduced();
@@ -235,13 +241,6 @@ class SslHandle {
         } while (result.getStatus() == Status.OK            // process
                 && hsStatus == HandshakeStatus.NEED_UNWRAP  // need more UNWRAP
                 && producedBytes == 0);                     // no produced any data, continue SslHandshake.
-
-        // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
-        if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            this.resizingBufOverflowForUnwrap("sslHandshake");
-            // TODO rcvUpstream.resetReader();
-            return this.handshakeUnwrap(rcvUp, rcvDown);
-        }
 
         // has AppData
         if (this.sslLog) {
@@ -269,8 +268,7 @@ class SslHandle {
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             this.resizingBufOverflowForWrap("sslHandshake");
-            // TODO rcvUpstream.resetReader();
-            return this.handshakeWrap(sndUp, sndDown);
+            result = this.engine.wrap(this.outAppData, this.outNetData);
         }
 
         // has NetData
@@ -292,49 +290,23 @@ class SslHandle {
     }
 
     private void resizingBufOverflowForUnwrap(String type) {
-        int oldNetSize = this.inNetData.capacity();
         int oldAppSize = this.inAppData.capacity();
-        int newNetSize = this.engine.getPacketBufferSize();
         int newAppSize = this.engine.getApplicationBufferSize();
 
-        if (newNetSize > this.config.getMaxResizingNetBufSize() || newAppSize > this.config.getMaxResizingAppBufSize()) {
-            String part1 = newNetSize + "/" + newAppSize;
-            String part2 = this.config.getMaxResizingNetBufSize() + "/" + this.config.getMaxResizingAppBufSize();
-            String errorMsg = "Unwrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (netBuf/appBuf)";
+        String resizing = oldAppSize + " -> " + newAppSize;
+        logger.warn(type + " (" + this.channelID + ") Unwrap BUFFER_OVERFLOW, resizing " + resizing + " (inputAppBuf)");
 
-            logger.error(type + "(" + this.channelID + ") " + errorMsg);
-            throw new SoOverflowException(errorMsg);
-        }
-
-        String part1 = oldNetSize + "/" + oldAppSize;
-        String part2 = newNetSize + "/" + newAppSize;
-        logger.warn(type + " (" + this.channelID + ") Unwrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (netBuf/appBuf)");
-
-        this.inNetData = resizingBuffer(this.inNetData, newNetSize);
         this.inAppData = resizingBuffer(this.inAppData, newAppSize);
     }
 
     private void resizingBufOverflowForWrap(String type) {
         int oldNetSize = this.outNetData.capacity();
-        int oldAppSize = this.outAppData.capacity();
         int newNetSize = this.engine.getPacketBufferSize();
-        int newAppSize = this.engine.getApplicationBufferSize();
 
-        if (newAppSize > this.config.getMaxResizingAppBufSize() || newNetSize > this.config.getMaxResizingNetBufSize()) {
-            String part1 = newAppSize + "/" + newNetSize;
-            String part2 = this.config.getMaxResizingAppBufSize() + "/" + this.config.getMaxResizingNetBufSize();
-            String errorMsg = "Wrap BUFFER_OVERFLOW, " + part1 + " exceed the allowed resizing size " + part2 + " (netBuf/appBuf)";
-
-            logger.error(type + "(" + this.channelID + ") " + errorMsg);
-            throw new SoOverflowException(errorMsg);
-        }
-
-        String part1 = oldAppSize + "/" + oldNetSize;
-        String part2 = newAppSize + "/" + newNetSize;
-        logger.warn(type + "(" + this.channelID + ") Wrap BUFFER_OVERFLOW, resizing " + part1 + " -> " + part2 + " (netBuf/appBuf)");
+        String resizing = oldNetSize + " -> " + newNetSize;
+        logger.warn(type + "(" + this.channelID + ") Wrap BUFFER_OVERFLOW, resizing " + resizing + " (outputNetBuf)");
 
         this.outNetData = resizingBuffer(this.outNetData, newNetSize);
-        this.outAppData = resizingBuffer(this.outAppData, newAppSize);
     }
 
     private ByteBuffer resizingBuffer(ByteBuffer oldBuf, int newSize) {
@@ -346,7 +318,6 @@ class SslHandle {
         }
 
         if (oldBuf != null) {
-            newBuf.put(oldBuf);
             ByteBufUtils.CLEANER.freeDirectBuffer(oldBuf);
         }
 
@@ -383,7 +354,6 @@ class SslHandle {
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
             // try resizing Buf size.
             this.resizingBufOverflowForUnwrap("sslRcv");
-            // TODO rcvUpstream.resetReader();
             this.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
             return;
         }
@@ -425,9 +395,7 @@ class SslHandle {
         SSLEngineResult result = this.engine.wrap(this.outAppData, this.outNetData);
         // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
         if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            // try resizing Buf size.
             this.resizingBufOverflowForWrap("sslSnd");
-            //sndUpstream.resetReader();
             this.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
             return;
         }

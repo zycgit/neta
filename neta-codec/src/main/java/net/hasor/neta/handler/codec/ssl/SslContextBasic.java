@@ -65,7 +65,7 @@ public abstract class SslContextBasic implements SslContext {
         this.sslConfig = config;
         this.sslMode = config.getSslMode();
         this.sslStatus = this.sslMode == SslMode.Always;
-        this.sslContext = this.createSSLContext();
+        this.sslContext = this.createSSLContext(this.sslConfig.getProtocols());
         this.sslEngine = new SslEngineWrap(channelID, config, () -> this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine()));
         this.sslHandler = new SslHandle(channelID, protoCtx, this.sslEngine, () -> {
             this.sslStatus = this.sslMode == SslMode.Always; // auto reset
@@ -178,7 +178,7 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     /** create SSLContext */
-    protected abstract SSLContext createSSLContext() throws GeneralSecurityException, IOException;
+    protected abstract SSLContext createSSLContext(String[] protocol) throws GeneralSecurityException, IOException;
 
     /** create SSLEngine */
     protected abstract SSLEngine configSslEngine(SSLContext sslContext, SSLEngine engine) throws IOException;

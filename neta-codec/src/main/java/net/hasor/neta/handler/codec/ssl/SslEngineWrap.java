@@ -21,7 +21,6 @@ import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLException;
-import javax.net.ssl.SSLSession;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 
@@ -36,7 +35,6 @@ class SslEngineWrap {
     private final        SslConfig                         sslConfig;
     private final        ESupplier<SSLEngine, IOException> sslEngineFactory;
     private              SSLEngine                         sslEngine;
-    private              SSLSession                        sslSession;
 
     public SslEngineWrap(long channelID, SslConfig sslConfig, ESupplier<SSLEngine, IOException> factory) {
         this.channelID = channelID;
@@ -53,19 +51,19 @@ class SslEngineWrap {
     }
 
     public int getPacketBufferSize() {
-        return this.sslSession.getPacketBufferSize();
+        return this.sslEngine.getSession().getPacketBufferSize();
     }
 
     public int getApplicationBufferSize() {
-        return this.sslSession.getApplicationBufferSize();
+        return this.sslEngine.getSession().getApplicationBufferSize();
     }
 
     public String getPeerHost() {
-        return this.sslEngine.getPeerHost();
+        return this.sslEngine.getSession().getPeerHost();
     }
 
     public int getPeerPort() {
-        return this.sslEngine.getPeerPort();
+        return this.sslEngine.getSession().getPeerPort();
     }
 
     public SSLEngine unwrap() {
@@ -111,9 +109,6 @@ class SslEngineWrap {
 
         this.sslEngine = this.sslEngineFactory.eGet();
         this.sslEngine.beginHandshake();
-
-        this.sslSession = this.sslEngine.getSession();
-
     }
 
     public Runnable getTask() {

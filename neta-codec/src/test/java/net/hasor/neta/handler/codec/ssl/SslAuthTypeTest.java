@@ -23,46 +23,51 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SslAlpnTest extends AbstractSslTest {
-
-    public static SslConfig sslConfig(SslMode mode) {
-        SslConfig sslConfig = new SslConfig();
-        sslConfig.setAuthType(SslAuthKeyType.PEM);
-        sslConfig.setPemCertChain("ssl/ca/server.crt");
-        sslConfig.setPemPrivate("ssl/ca/server.pem");
-        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
-        sslConfig.setSslMode(mode);
-        return sslConfig;
-    }
+public class SslAuthTypeTest extends AbstractSslTest {
 
     @Test
-    public void alpnTest_01() {
-        SslConfig sslConf = sslConfig(SslMode.Always);
-        sslConf.setAppProtocol(new String[] { "HTTP", "HTTPS" });
-        sslConf.setAppProtocolSelector((channel, sslEngine, protocols) -> {
-            return "HTTPS";
-        });
+    public void byPemCert() {
+        SslConfig sslConf = new SslConfig();
+        sslConf.setAuthType(SslAuthKeyType.PEM);
+        sslConf.setPemCertChain("ssl/ca/server.crt");
+        sslConf.setPemPrivate("ssl/ca/server.pem");
+        sslConf.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
 
+        //
         EmbeddedSoContext context = new EmbeddedSoContext();
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        SslContext serverSSL = server.findProtoContext(SslContext.class);
-        SslContext clientSSL = client.findProtoContext(SslContext.class);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
-
-        //
-        assert serverSSL.getApplicationProtocol() == null;
-        assert clientSSL.getApplicationProtocol() == null;
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");
         transfer(transfer, 500, 10);
+
         assert client.readRcv().equals("Hello Client, this message form server.");
         assert server.readRcv().equals("Hello Server, this message form client.");
+    }
+
+    @Test
+    public void byJks() {
+        SslConfig sslConf = new SslConfig();
+        sslConf.setAuthType(SslAuthKeyType.JKS);
+        sslConf.setJksResource("ssl/jks/keystore.jks");
+        sslConf.setKeyPassword("123456");
+        sslConf.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
 
         //
-        assert serverSSL.getApplicationProtocol().equals("HTTPS");
-        assert clientSSL.getApplicationProtocol().equals("HTTPS");
+        EmbeddedSoContext context = new EmbeddedSoContext();
+        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
+        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
+        EmbeddedTransfer transfer = context.joinChannel(client, server);
+        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+
+        client.send("Hello Server, this message form client.\n");
+        server.send("Hello Client, this message form server.\n");
+        transfer(transfer, 500, 10);
+
+        assert client.readRcv().equals("Hello Client, this message form server.");
+        assert server.readRcv().equals("Hello Server, this message form client.");
     }
 }

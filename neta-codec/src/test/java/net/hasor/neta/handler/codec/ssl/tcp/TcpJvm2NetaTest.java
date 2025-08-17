@@ -16,9 +16,8 @@
 package net.hasor.neta.handler.codec.ssl.tcp;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
-import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
+import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.handler.codec.ssl.*;
 import org.junit.Test;
 
@@ -36,37 +35,37 @@ import static net.hasor.neta.handler.codec.AbstractSoTest.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class SoNetaAsSslServerTest extends AbstractSslTest {
+public class TcpJvm2NetaTest extends AbstractSslTest {
     @Test
-    public void netaAsSslServerTest_01() throws Throwable {
+    public void jvm_2_neta() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpSoConfig tcpConf = tcpConfig(128, 4096);
-        NetConfig soConf = globalConf();
-        soConf.setPrintLog(true);
-        SslConfig sslConf = SoSslUtils.sslConfig(SslMode.Always);
-        NetManager neta = new NetManager(soConf);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2, SslMode.Always);
 
+        // server
         List<String> rcvMessage = new ArrayList<>();
-        neta.listen(address, SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage)), tcpConf);
+        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage));
+        NetManager neta = new NetManager(globalConf());
+        neta.listen(address, serverProto, tcpConfig(128, 4096));
 
         // client
         AtomicBoolean writeFinish = new AtomicBoolean();
         ThreadUtils.daemonThread(true, (Callable) () -> {
             try {
-                SSLSocketFactory socketFactory = SoSslUtils.sslContext().getSocketFactory();
+                SSLSocketFactory socketFactory = SoSslUtils.sslContext(SslProtocol.TLS_v1_2).getSocketFactory();
                 SSLSocket socket = (SSLSocket) socketFactory.createSocket("127.0.0.1", safePort);
                 OutputStream out = socket.getOutputStream();
                 out.write("Hello Server, this message form client.\n".getBytes());
                 out.flush();
-                writeFinish.set(true);
-            } catch (Exception e) {
-                System.out.println("@@@@ " + e.getMessage());
+
+                out.close();
+                socket.close();
+            } finally {
                 writeFinish.set(true);
             }
         });
 
-        ThreadUtils.sleep(500);
+        // wait finish
         while (!writeFinish.get()) {
             ThreadUtils.sleep(100);
         }

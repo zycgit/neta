@@ -27,27 +27,25 @@ import java.security.KeyStore;
  * @version : 2023-09-24
  */
 public class SslConfig extends ProtoConfig {
-    private SslMode                sslMode               = SslMode.Always;
-    private SslProvider            provider              = SslProvider.JSSE;      // default is JDK
-    private SslClientAuth          clientAuth            = SslClientAuth.NONE;   //
-    private String[]               appProtocol           = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
-    private String[]               ciphers               = null;                 // JSSE Cipher Suite Names 使用的密钥套件
-    private String[]               protocols             = null;                 // The TLS protocol versions to enable.
-    private int                    maxResizingNetBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
-    private int                    maxResizingAppBufSize = 128 * 1024;           // 当 SSL 在 WRAP/UNWRAP 期间遇到 BUFFER_OVERFLOW 后最大允许的扩容容量，默认 128KB
+    private SslMode                sslMode             = SslMode.Always;
+    private SslProvider            provider            = SslProvider.JSSE;      // default is JDK
+    private SslClientAuth          clientAuth          = SslClientAuth.NONE;   //
+    private String[]               appProtocol         = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
+    private String[]               ciphers             = null;                 // JSSE Cipher Suite Names 使用的密钥套件
+    private String[]               protocols           = null;                 // The TLS protocol versions to enable.
     //
-    private SslAuthKeyType         authType              = null;
-    private String                 jksResource           = null;                 // JKS File
-    private String                 pemCertChain          = null;                 // X.509 certificate chain in PEM format.
-    private String                 pemPrivate            = null;                 // PKCS#8 private key in PEM format.
-    private String                 keyPassword           = null;
+    private SslAuthKeyType         authType            = null;
+    private String                 jksResource         = null;                 // JKS File
+    private String                 pemCertChain        = null;                 // X.509 certificate chain in PEM format.
+    private String                 pemPrivate          = null;                 // PKCS#8 private key in PEM format.
+    private String                 keyPassword         = null;
     //
-    private KeyStore               keyStore              = null;
+    private KeyStore               keyStore            = null;
     //    private KeyManager[]           keyManagers;
-    private KeyManagerFactory      keyManagerFactory     = null;
+    private KeyManagerFactory      keyManagerFactory   = null;
     private TrustManager[]         trustManagers;
-    private TrustManagerFactory    trustManagerFactory   = null;
-    private SslAppProtocolSelector appProtocolSelector   = null;                // 用于 NPN/ALPN
+    private TrustManagerFactory    trustManagerFactory = null;
+    private SslAppProtocolSelector appProtocolSelector = null;                // 用于 NPN/ALPN
 
     public SslMode getSslMode() {
         return this.sslMode;
@@ -95,22 +93,6 @@ public class SslConfig extends ProtoConfig {
 
     public void setProtocols(String[] protocols) {
         this.protocols = protocols;
-    }
-
-    public int getMaxResizingNetBufSize() {
-        return this.maxResizingNetBufSize;
-    }
-
-    public void setMaxResizingNetBufSize(int maxResizingNetBufSize) {
-        this.maxResizingNetBufSize = maxResizingNetBufSize;
-    }
-
-    public int getMaxResizingAppBufSize() {
-        return this.maxResizingAppBufSize;
-    }
-
-    public void setMaxResizingAppBufSize(int maxResizingAppBufSize) {
-        this.maxResizingAppBufSize = maxResizingAppBufSize;
     }
 
     public SslAuthKeyType getAuthType() {

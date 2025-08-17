@@ -43,6 +43,12 @@
         </dependency>
         <dependency>
             <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk15on</artifactId>
+            <version>1.70</version>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
             <artifactId>bctls-jdk15on</artifactId>
             <version>1.70</version>
             <optional>true</optional>
@@ -52,6 +58,12 @@
         <dependency>
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bctls-jdk15on</artifactId>
+            <version>1.70</version>
             <scope>test</scope>
         </dependency>
     </dependencies>

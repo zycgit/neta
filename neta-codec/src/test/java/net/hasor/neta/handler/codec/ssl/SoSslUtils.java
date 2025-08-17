@@ -33,7 +33,7 @@ import java.security.KeyStore;
  */
 public class SoSslUtils {
 
-    public static SSLContext sslContext() throws Exception {
+    public static SSLContext sslContext(String sslProtocol) throws Exception {
         char[] password = "123456".toCharArray();
         KeyStore jsk = KeyStore.getInstance("JKS");
         SslUtils.loadKeyStore(jsk, ResourcesUtils.getResourceAsStream("ssl/jks/keystore.jks"), password);
@@ -42,18 +42,38 @@ public class SoSslUtils {
         KeyManagerFactory kmf = SslUtils.buildKeyManagerFactory(jsk, password, null);
 
         // SSL Server
-        SSLContext sslContext = SSLContext.getInstance("SSLv3");
+        SSLContext sslContext = SSLContext.getInstance(sslProtocol);
         sslContext.init(kmf.getKeyManagers(), new TrustManager[] { new MyTrustManager() }, null);
 
         return sslContext;
     }
 
-    public static SslConfig sslConfig(SslMode mode) {
+    public static SslConfig sslConfig(String[] sslProtocol, SslMode mode) {
         SslConfig sslConfig = new SslConfig();
         sslConfig.setAuthType(SslAuthKeyType.JKS);
         sslConfig.setJksResource("ssl/jks/keystore.jks");
         sslConfig.setKeyPassword("123456");
-        sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1, SslProtocol.TLS_v1_2 });
+        sslConfig.setProtocols(sslProtocol);
+        sslConfig.setSslMode(mode);
+        return sslConfig;
+    }
+
+    public static SslConfig sslConfig(String sslProtocol, SslMode mode) {
+        SslConfig sslConfig = new SslConfig();
+        sslConfig.setAuthType(SslAuthKeyType.JKS);
+        sslConfig.setJksResource("ssl/jks/keystore.jks");
+        sslConfig.setKeyPassword("123456");
+        sslConfig.setProtocols(new String[] { sslProtocol });
+        sslConfig.setSslMode(mode);
+        return sslConfig;
+    }
+
+    public static SslConfig dtlsConfig(SslMode mode) {
+        SslConfig sslConfig = new SslConfig();
+        sslConfig.setAuthType(SslAuthKeyType.JKS);
+        sslConfig.setJksResource("ssl/jks/keystore.jks");
+        sslConfig.setKeyPassword("123456");
+        sslConfig.setProtocols(new String[] { SslProtocol.DTLS_v1_2 });
         sslConfig.setSslMode(mode);
         return sslConfig;
     }
@@ -77,8 +97,6 @@ public class SoSslUtils {
         // Bytes <- Bytes <- String
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
         return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
-                // limitFrame
-                .nextDuplex("LIMIT", new ProtoDuplexerHandler<>(limitFrame, limitFrame))
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
