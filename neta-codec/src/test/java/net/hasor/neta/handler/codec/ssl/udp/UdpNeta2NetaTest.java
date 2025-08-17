@@ -22,6 +22,7 @@ import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.udp.UdpSoConfig;
 import net.hasor.neta.handler.codec.ssl.*;
+import org.junit.Test;
 
 import java.net.InetSocketAddress;
 import java.util.ArrayList;
@@ -34,26 +35,69 @@ import static net.hasor.neta.handler.codec.AbstractSoTest.*;
  * @version : 2022-11-01
  */
 public class UdpNeta2NetaTest extends AbstractSslTest {
-    //    @Test
-    public void neta_2_neta() throws Throwable {
+    @Test
+    public void neta_2_neta_1() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager neta = new NetManager(globalConf());
-        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.DTLS_v1_2, SslMode.Always);
-        UdpSoConfig tcpConf = udpConfig(14096, 14096);
-        tcpConf.setRcvPacketSize(14096);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.DTLS_v1_2);
+        UdpSoConfig udpConf = udpConfig(4096, 4096);
+        udpConf.setRcvPacketSize(4096);
 
         List<String> serverRcvData = new ArrayList<>();
         List<String> clientRcvData = new ArrayList<>();
         ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
         ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
-        // server start
-        NetListen listen = neta.listen(address, serverProto, tcpConf);
+        // server
+        NetListen listen = neta.listen(address, serverProto, udpConf);
 
-        // client connect
-        NetChannel clientSide = neta.connect(address, clientProto, tcpConf).get();
-        assert clientSide.getChannelID() == 2;
+        // client
+        NetChannel clientSide = neta.connect(address, clientProto, udpConf).get();
+        listen.waitAnyAccept();
+        NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
+
+        // wait shake hands
+        SslContext clientSslCtx = SslUtils.getSslContext(clientSide);
+        SslContext serverSslCtx = SslUtils.getSslContext(serverSide);
+        while (!clientSslCtx.isReady() || !serverSslCtx.isReady()) {
+            ThreadUtils.sleep(100);
+        }
+
+        assert clientSide.getMonitor().getSndCounterBytes() > 0;
+        assert serverSide.getMonitor().getSndCounterBytes() > 0;
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void neta_2_neta_2() throws Throwable {
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        NetManager neta = new NetManager(globalConf());
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.DTLS_v1_2);
+        UdpSoConfig udpConf = udpConfig(14096, 14096);
+        udpConf.setRcvPacketSize(14096);
+
+        List<String> serverRcvData = new ArrayList<>();
+        List<String> clientRcvData = new ArrayList<>();
+        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
+        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
+
+        // server
+        NetListen listen = neta.listen(address, serverProto, udpConf);
+
+        // client
+        NetChannel clientSide = neta.connect(address, clientProto, udpConf).get();
+        listen.waitAnyAccept();
+        NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
+
+        // wait shake hands
+        SslContext clientSslCtx = SslUtils.getSslContext(clientSide);
+        SslContext serverSslCtx = SslUtils.getSslContext(serverSide);
+        while (!clientSslCtx.isReady() || !serverSslCtx.isReady()) {
+            ThreadUtils.sleep(100);
+        }
 
         // client say hello
         Future<?> send1_1 = clientSide.sendData("Hello Server, this message form client.\n");
@@ -61,34 +105,20 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
 
         // server accept data
         listen.waitAnyAccept();
-        NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
         while (serverRcvData.size() < 2) {
             ThreadUtils.sleep(100);
         }
         assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+        assert serverRcvData.get(1).equals("Hello Server, this message form client.");
 
-        //
-        serverRcvData.clear();
-        while (serverRcvData.isEmpty()) {
+        // server say hello
+        Future<?> send2_1 = serverSide.sendData("Hello Client, this message form Server.\n");
+        Future<?> send2_2 = serverSide.sendData("Hello Client, this message form Server.\n");
+        while (clientRcvData.size() < 2) {
             ThreadUtils.sleep(100);
         }
-        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-        //
-        //
-        //
-        //
-
-        //        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-        //
-        //        // server say hello
-        //        Future<?> send2 = serverSide.sendData("Hello Client, this message form server.\n");
-        //        send2.get();
-        //
-        //        // client accept data
-        //        while (clientRcvData.isEmpty()) {
-        //            ThreadUtils.sleep(100);
-        //        }
-        //        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+        assert clientRcvData.get(1).equals("Hello Client, this message form server.");
 
         // finish
         neta.shutdown();
