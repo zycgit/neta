@@ -95,8 +95,10 @@ public class SoSslUtils {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        LimitFrameHandler limitFrame = new LimitFrameHandler(2);
+        LimitFrameHandler limitFrame = new LimitFrameHandler(4096);
         return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
+                //
+                .nextDuplex("LIMIT", new ProtoDuplexerHandler<>(limitFrame, limitFrame))
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String

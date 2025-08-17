@@ -56,31 +56,30 @@ class UdpWriteTask extends DefaultSoTask {
         if (this.sendData == null) {
             SoSndData sndData = this.wContext.peekData();
             byte[] bytes = sndData.transferPull();
-            if (bytes == null || bytes.length == 0) {
-                continueTask();
-                return;
-            } else {
+            if (bytes != null) {
                 this.sendData = bytes;
             }
         }
 
         // send
-        try {
-            int write;
-            if (this.netChannel.isServer()) {
-                write = this.udpChannel.send(ByteBuffer.wrap(this.sendData), this.netChannel.getRemoteAddr());
-            } else {
-                write = this.udpChannel.write(ByteBuffer.wrap(this.sendData));
+        if (this.sendData != null) {
+            try {
+                int write;
+                if (this.netChannel.isServer()) {
+                    write = this.udpChannel.send(ByteBuffer.wrap(this.sendData), this.netChannel.getRemoteAddr());
+                } else {
+                    write = this.udpChannel.write(ByteBuffer.wrap(this.sendData));
+                }
+                if (write == 0) {
+                    this.delayTask(50, TimeUnit.MILLISECONDS);
+                    return;
+                } else {
+                    this.monitor.updateSndCounter(write);
+                    this.sendData = null;
+                }
+            } catch (Exception e) {
+                this.handleException(e, this.wContext);
             }
-            if (write == 0) {
-                this.delayTask(50, TimeUnit.MILLISECONDS);
-                return;
-            } else {
-                this.monitor.updateSndCounter(write);
-                this.sendData = null;
-            }
-        } catch (Exception e) {
-            this.handleException(e, this.wContext);
         }
 
         // try finish

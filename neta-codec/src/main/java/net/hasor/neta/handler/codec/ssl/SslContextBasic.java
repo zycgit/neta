@@ -186,7 +186,7 @@ public abstract class SslContextBasic implements SslContext {
     /** Receiving SSL data */
     public ProtoStatus handRcv(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslStatus) {
-            if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
+            if (!sndDown.hasSlot()) {
                 if (this.netLog) {
                     logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
                 }
