@@ -36,11 +36,47 @@ import static net.hasor.neta.handler.codec.AbstractSoTest.*;
  */
 public class TcpNeta2NetaTest extends AbstractSslTest {
     @Test
-    public void neta_2_neta() throws Throwable {
+    public void neta_2_neta_1() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager neta = new NetManager(globalConf());
-        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2, SslMode.Always);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2);
+        TcpSoConfig tcpConf = tcpConfig(128, 4096);
+
+        List<String> serverRcvData = new ArrayList<>();
+        List<String> clientRcvData = new ArrayList<>();
+        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
+        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
+
+        // server
+        NetListen listen = neta.listen(address, serverProto, tcpConf);
+
+        // client
+        NetChannel clientSide = neta.connect(address, clientProto, tcpConf).get();
+        listen.waitAnyAccept();
+        NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
+
+        // shake hands
+        SslContext clientSslCtx = SslUtils.getSslContext(clientSide);
+        SslContext serverSslCtx = SslUtils.getSslContext(serverSide);
+
+        // wait shake hands
+        while (!clientSslCtx.isReady() || !serverSslCtx.isReady()) {
+            ThreadUtils.sleep(100);
+        }
+
+        assert clientSide.getMonitor().getSndCounterBytes() > 0;
+        assert serverSide.getMonitor().getSndCounterBytes() > 0;
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void neta_2_neta_2() throws Throwable {
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        NetManager neta = new NetManager(globalConf());
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2);
         TcpSoConfig tcpConf = tcpConfig(128, 4096);
 
         List<String> serverRcvData = new ArrayList<>();

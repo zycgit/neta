@@ -56,6 +56,11 @@ public class ProtoContextService implements ProtoContext {
     }
 
     @Override
+    public String getStackName() {
+        return this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+    }
+
+    @Override
     public <T> T context(Class<T> attachment) {
         return (T) this.contextData.get(attachment);
     }

@@ -40,7 +40,7 @@ public class TcpJvm2NetaTest extends AbstractSslTest {
     public void jvm_2_neta() throws Throwable {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2, SslMode.Always);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2);
 
         // server
         List<String> rcvMessage = new ArrayList<>();

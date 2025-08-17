@@ -21,7 +21,10 @@ import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.tcp.TcpSoConfig;
-import net.hasor.neta.handler.codec.ssl.*;
+import net.hasor.neta.handler.codec.ssl.AbstractSslTest;
+import net.hasor.neta.handler.codec.ssl.SoSslUtils;
+import net.hasor.neta.handler.codec.ssl.SslConfig;
+import net.hasor.neta.handler.codec.ssl.SslProtocol;
 import org.junit.Test;
 
 import javax.net.ssl.SSLServerSocket;
@@ -68,7 +71,7 @@ public class TcpNeta2JvmTest extends AbstractSslTest {
 
         // client
         TcpSoConfig tcpConf = tcpConfig(128, 4096);
-        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2, SslMode.Always);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2);
         ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf);
 
         // client say hello

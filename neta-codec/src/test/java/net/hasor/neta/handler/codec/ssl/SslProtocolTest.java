@@ -31,7 +31,6 @@ public class SslProtocolTest extends AbstractSslTest {
         sslConfig.setPemCertChain("ssl/ca/server.crt");
         sslConfig.setPemPrivate("ssl/ca/server.pem");
         sslConfig.setProtocols(new String[] { protocol });
-        sslConfig.setSslMode(SslMode.Always);
         return sslConfig;
     }
 

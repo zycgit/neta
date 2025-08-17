@@ -25,19 +25,18 @@ import org.junit.Test;
  */
 public class SslAlpnTest extends AbstractSslTest {
 
-    public static SslConfig sslConfig(SslMode mode) {
+    public static SslConfig sslConfig() {
         SslConfig sslConfig = new SslConfig();
         sslConfig.setAuthType(SslAuthKeyType.PEM);
         sslConfig.setPemCertChain("ssl/ca/server.crt");
         sslConfig.setPemPrivate("ssl/ca/server.pem");
         sslConfig.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
-        sslConfig.setSslMode(mode);
         return sslConfig;
     }
 
     @Test
     public void alpnTest_01() {
-        SslConfig sslConf = sslConfig(SslMode.Always);
+        SslConfig sslConf = sslConfig();
         sslConf.setAppProtocol(new String[] { "HTTP", "HTTPS" });
         sslConf.setAppProtocolSelector((channel, sslEngine, protocols) -> {
             return "HTTPS";

@@ -62,9 +62,9 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
 
             String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
-                channel.send(current, writeData);
+                channel.sendTo(current, writeData);
             } else {
-                channel.send(writeData);
+                channel.sendTo(null, writeData);
             }
             return new BasicFuture<>(this);
         }

@@ -80,15 +80,31 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         this.netLog = protoCtx.getConfig().isPrintLog();
         this.channelID = protoCtx.getChannel().getChannelID();
 
-        for (ProtoInvocation<?, ?, ?, ?> layer : this.layers) {
-            layer.onInit(protoCtx);
+        for (int i = 0; i < this.layers.size(); i++) {
+            try {
+                ProtoInvocation<?, ?, ?, ?> layer = this.layers.get(i);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, layer.getName());
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, i);
+                layer.onInit(protoCtx);
+            } finally {
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, null);
+            }
         }
     }
 
     @Override
     public void onActive(ProtoContext protoCtx) throws Throwable {
-        for (ProtoInvocation<?, ?, ?, ?> layer : this.layers) {
-            layer.onActive(protoCtx);
+        for (int i = 0; i < this.layers.size(); i++) {
+            try {
+                ProtoInvocation<?, ?, ?, ?> layer = this.layers.get(i);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, layer.getName());
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, i);
+                layer.onActive(protoCtx);
+            } finally {
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, null);
+            }
         }
     }
 

@@ -48,33 +48,30 @@ public class SoSslUtils {
         return sslContext;
     }
 
-    public static SslConfig sslConfig(String[] sslProtocol, SslMode mode) {
+    public static SslConfig sslConfig(String[] sslProtocol) {
         SslConfig sslConfig = new SslConfig();
         sslConfig.setAuthType(SslAuthKeyType.JKS);
         sslConfig.setJksResource("ssl/jks/keystore.jks");
         sslConfig.setKeyPassword("123456");
         sslConfig.setProtocols(sslProtocol);
-        sslConfig.setSslMode(mode);
         return sslConfig;
     }
 
-    public static SslConfig sslConfig(String sslProtocol, SslMode mode) {
+    public static SslConfig sslConfig(String sslProtocol) {
         SslConfig sslConfig = new SslConfig();
         sslConfig.setAuthType(SslAuthKeyType.JKS);
         sslConfig.setJksResource("ssl/jks/keystore.jks");
         sslConfig.setKeyPassword("123456");
         sslConfig.setProtocols(new String[] { sslProtocol });
-        sslConfig.setSslMode(mode);
         return sslConfig;
     }
 
-    public static SslConfig dtlsConfig(SslMode mode) {
+    public static SslConfig dtlsConfig() {
         SslConfig sslConfig = new SslConfig();
         sslConfig.setAuthType(SslAuthKeyType.JKS);
         sslConfig.setJksResource("ssl/jks/keystore.jks");
         sslConfig.setKeyPassword("123456");
         sslConfig.setProtocols(new String[] { SslProtocol.DTLS_v1_2 });
-        sslConfig.setSslMode(mode);
         return sslConfig;
     }
 
