@@ -19,6 +19,7 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufInputStream;
+import net.hasor.neta.channel.NetChannel;
 
 import javax.crypto.Cipher;
 import javax.crypto.EncryptedPrivateKeyInfo;
@@ -53,8 +54,8 @@ public class SslUtils {
     public static final  String[] DEFAULT_TLSV13_CIPHER_SUITES;
     public static final  String[] TLSV13_CIPHER_SUITES = { "TLS_AES_128_GCM_SHA256", "TLS_AES_256_GCM_SHA384", "TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256", "TLS_ECDHE_RSA_WITH_AES_128_CBC_SHA" };
     private static final Logger   logger               = Logger.getLogger(SslUtils.class);
-    private static final boolean TLSV1_3_JDK_SUPPORTED;
-    private static final boolean TLSV1_3_JDK_DEFAULT_ENABLED;
+    private static final boolean  TLSV1_3_JDK_SUPPORTED;
+    private static final boolean  TLSV1_3_JDK_DEFAULT_ENABLED;
 
     static {
         TLSV1_3_JDK_SUPPORTED = isTLSv13SupportedByJDK0(null);
@@ -256,5 +257,9 @@ public class SslUtils {
         cipher.init(Cipher.DECRYPT_MODE, pbeKey, encryptedPrivateKeyInfo.getAlgParameters());
 
         return encryptedPrivateKeyInfo.getKeySpec(cipher);
+    }
+
+    public static SslContext getSslContext(NetChannel channel) {
+        return channel.findProtoContext(SslContext.class);
     }
 }

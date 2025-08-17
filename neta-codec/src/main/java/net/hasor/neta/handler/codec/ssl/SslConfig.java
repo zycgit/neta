@@ -27,7 +27,6 @@ import java.security.KeyStore;
  * @version : 2023-09-24
  */
 public class SslConfig extends ProtoConfig {
-    private SslMode                sslMode             = SslMode.Always;
     private SslProvider            provider            = SslProvider.JSSE;      // default is JDK
     private SslClientAuth          clientAuth          = SslClientAuth.NONE;   //
     private String[]               appProtocol         = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
@@ -46,14 +45,6 @@ public class SslConfig extends ProtoConfig {
     private TrustManager[]         trustManagers;
     private TrustManagerFactory    trustManagerFactory = null;
     private SslAppProtocolSelector appProtocolSelector = null;                // 用于 NPN/ALPN
-
-    public SslMode getSslMode() {
-        return this.sslMode;
-    }
-
-    public void setSslMode(SslMode sslMode) {
-        this.sslMode = sslMode;
-    }
 
     public SslProvider getProvider() {
         return this.provider;

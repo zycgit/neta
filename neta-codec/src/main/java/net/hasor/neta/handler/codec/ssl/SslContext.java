@@ -33,7 +33,7 @@ public interface SslContext {
     boolean isClient();
 
     /** return SSL status Active */
-    boolean isActive();
+    boolean isReady();
 
     /**
      * Returns the name of the negotiated application-level protocol.

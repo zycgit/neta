@@ -41,6 +41,7 @@ import java.util.Objects;
 public abstract class SslContextBasic implements SslContext {
     private static final Logger        logger = Logger.getLogger(SslContextBasic.class);
     protected final      long          channelID;
+    protected final      String        stackName;
     protected final      ProtoContext  protoCtx;
     protected final      SoContext     soContext;
     protected final      boolean       sslLog;
@@ -51,11 +52,11 @@ public abstract class SslContextBasic implements SslContext {
     private final        SSLContext    sslContext;
     private final        SslEngineWrap sslEngine;
     private final        SslHandle     sslHandler;
-    protected volatile   boolean       sslStatus;
-    protected            SslMode       sslMode;
+    protected volatile   boolean       sslEnable;
 
-    public SslContextBasic(long channelID, SslConfig config, ProtoContext protoCtx, boolean clientMode) throws Exception {
+    public SslContextBasic(long channelID, String stackName, SslConfig config, ProtoContext protoCtx, boolean clientMode) throws Exception {
         this.channelID = channelID;
+        this.stackName = stackName;
         this.protoCtx = protoCtx;
         this.soContext = protoCtx.getSoContext();
         this.clientMode = clientMode;
@@ -63,12 +64,11 @@ public abstract class SslContextBasic implements SslContext {
         this.netLog = this.soContext.getConfig().isPrintLog();
 
         this.sslConfig = config;
-        this.sslMode = config.getSslMode();
-        this.sslStatus = this.sslMode == SslMode.Always;
+        this.sslEnable = true;
         this.sslContext = this.createSSLContext(this.sslConfig.getProtocols());
         this.sslEngine = new SslEngineWrap(channelID, config, () -> this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine()));
         this.sslHandler = new SslHandle(channelID, protoCtx, this.sslEngine, () -> {
-            this.sslStatus = this.sslMode == SslMode.Always; // auto reset
+            this.sslEnable = false;
         });
     }
 
@@ -87,8 +87,8 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     @Override
-    public boolean isActive() {
-        return this.sslStatus;
+    public boolean isReady() {
+        return this.sslHandler.getHandshake() == SslHandshakeStatus.Finish;
     }
 
     @Override
@@ -107,7 +107,7 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     /** create KeyStore */
-    protected KeyStore createKeyStore() throws GeneralSecurityException, IOException {
+    protected KeyStore createKeyStore() throws GeneralSecurityException {
         KeyStore ks = this.sslConfig.getKeyStore();
         if (ks == null) {
             String defaultType = KeyStore.getDefaultType();
@@ -185,7 +185,7 @@ public abstract class SslContextBasic implements SslContext {
 
     /** Receiving SSL data */
     public ProtoStatus handRcv(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
-        if (this.sslStatus) {
+        if (this.sslEnable) {
             if (!sndDown.hasSlot()) {
                 if (this.netLog) {
                     logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
@@ -206,8 +206,8 @@ public abstract class SslContextBasic implements SslContext {
 
     /** Sending SSL data */
     public ProtoStatus handSnd(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
-        if (this.sslStatus) {
-            if (!rcvDown.hasSlot() || !sndDown.hasSlot()) {
+        if (this.sslEnable) {
+            if (!sndDown.hasSlot()) {
                 if (this.netLog) {
                     logger.info("sslSnd(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
                 }
@@ -227,7 +227,7 @@ public abstract class SslContextBasic implements SslContext {
 
     @Override
     public void closeSSL() {
-        if (!this.sslStatus) {
+        if (!this.sslEnable) {
             return;
         }
 
@@ -245,11 +245,11 @@ public abstract class SslContextBasic implements SslContext {
             }
         }
 
-        this.sslStatus = this.sslMode == SslMode.Always; // auto reset
+        this.sslEnable = false;
     }
 
     @Override
     public void openSSL() {
-        this.sslStatus = true;
+        this.sslEnable = true;
     }
 }

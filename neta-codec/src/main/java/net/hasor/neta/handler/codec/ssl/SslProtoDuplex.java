@@ -35,12 +35,13 @@ public class SslProtoDuplex implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, 
     @Override
     public void onInit(ProtoContext context) throws Throwable {
         SoChannel<?> channel = context.getChannel();
+        String stackName = context.getStackName();
 
         long channelID = channel.getChannelID();
         boolean clientMode = channel.isClient();
 
         if (this.config.getProvider() == SslProvider.JSSE) {
-            context.context(SslContext.class, new JdkSslContext(channelID, context, this.config, clientMode));
+            context.context(SslContext.class, new JdkSslContext(channelID, stackName, context, this.config, clientMode));
         } else {
             throw new UnsupportedOperationException(this.config.getProvider() + " Unsupported.");
         }
@@ -48,7 +49,9 @@ public class SslProtoDuplex implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, 
 
     @Override
     public void onActive(ProtoContext context) throws Exception {
-
+        if (context.getChannel().isClient()) {
+            context.sendData(ByteBuf.EMPTY);
+        }
     }
 
     @Override

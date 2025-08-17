@@ -71,6 +71,10 @@ class SslHandle {
         return this.channelID;
     }
 
+    public SslHandshakeStatus getHandshake() {
+        return this.handshake;
+    }
+
     private int queueToBuffer(ProtoRcvQueue<ByteBuf> src, ByteBuffer dst) {
         int total = 0;
         while (src.hasMore()) {

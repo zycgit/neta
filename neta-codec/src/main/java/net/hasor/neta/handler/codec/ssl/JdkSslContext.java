@@ -74,8 +74,8 @@ public class JdkSslContext extends SslContextBasic {
         }
     }
 
-    public JdkSslContext(long channelID, ProtoContext context, SslConfig config, boolean clientMode) throws Exception {
-        super(channelID, config, context, clientMode);
+    public JdkSslContext(long channelID, String stackName, ProtoContext context, SslConfig config, boolean clientMode) throws Exception {
+        super(channelID, stackName, config, context, clientMode);
     }
 
     private static String[] defaultProtocols(SSLContext context, SSLEngine engine) {
