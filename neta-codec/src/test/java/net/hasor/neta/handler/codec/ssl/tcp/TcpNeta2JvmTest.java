@@ -72,7 +72,7 @@ public class TcpNeta2JvmTest extends AbstractSslTest {
         // client
         TcpSoConfig tcpConf = tcpConfig(128, 4096);
         SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.TLS_v1_2);
-        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf);
+        ProtoInitializer clientProto = SoSslUtils.udpSslSocketProtoStack(sslConf);
 
         // client say hello
         NetManager neta = new NetManager(globalConf());

@@ -44,7 +44,7 @@ public class TcpJvm2NetaTest extends AbstractSslTest {
 
         // server
         List<String> rcvMessage = new ArrayList<>();
-        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage));
+        ProtoInitializer serverProto = SoSslUtils.tcpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage));
         NetManager neta = new NetManager(globalConf());
         neta.listen(address, serverProto, tcpConfig(128, 4096));
 

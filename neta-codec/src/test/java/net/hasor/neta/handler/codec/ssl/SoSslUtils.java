@@ -75,7 +75,7 @@ public class SoSslUtils {
         return sslConfig;
     }
 
-    public static ProtoInitializer sslSocketProtoStack(SslConfig sslConf) {
+    public static ProtoInitializer udpSslSocketProtoStack(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
@@ -88,13 +88,26 @@ public class SoSslUtils {
                 .build();
     }
 
-    public static ProtoInitializer sslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
+    public static ProtoInitializer udpSslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        LimitFrameHandler limitFrame = new LimitFrameHandler(4096);
         return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
-                //
+                // SSL
+                .nextDuplex("SSL", new SslProtoDuplex(sslConf))
+                // bytes <-> String
+                .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                // create Stack
+                .nextDecoder(last).build();
+    }
+
+    public static ProtoInitializer tcpSslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
+        //  Net      SSL     Message
+        // Bytes -> Bytes -> String
+        // Bytes <- Bytes <- String
+        LimitFrameHandler limitFrame = new LimitFrameHandler(2);
+        return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
+                // limit package
                 .nextDuplex("LIMIT", new ProtoDuplexerHandler<>(limitFrame, limitFrame))
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
@@ -103,4 +116,5 @@ public class SoSslUtils {
                 // create Stack
                 .nextDecoder(last).build();
     }
+
 }

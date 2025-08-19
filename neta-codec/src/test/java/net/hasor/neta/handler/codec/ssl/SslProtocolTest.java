@@ -130,12 +130,23 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
+        // round 1
+        client.send("Hello Server, this message 1 form client.\n");
         transfer(transfer, 600, 10);
+        assert server.readRcv().equals("Hello Server, this message 1 form client.");
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+        server.send("Hello Client, this message 1 form server.\n");
+        transfer(transfer, 600, 10);
+        assert client.readRcv().equals("Hello Client, this message 1 form server.");
+
+        // round 2
+        client.send("Hello Server, this message 2 form client.\n");
+        transfer(transfer, 600, 10);
+        assert server.readRcv().equals("Hello Server, this message 2 form client.");
+
+        server.send("Hello Client, this message 2 form server.\n");
+        transfer(transfer, 600, 10);
+        assert client.readRcv().equals("Hello Client, this message 2 form server.");
     }
 
     @Test
@@ -147,11 +158,24 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedTransfer transfer = context.joinChannel(client, server);
         System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
+        // round 1
+        System.out.println("client say hello");
+        client.send("Hello Server, this message 1 form client.\n");
         transfer(transfer, 600, 10);
+        assert server.readRcv().equals("Hello Server, this message 1 form client.");
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+        System.out.println("server say hello");
+        server.send("Hello Client, this message 1 form server.\n");
+        transfer(transfer, 600, 10);
+        assert client.readRcv().equals("Hello Client, this message 1 form server.");
+
+        // round 2
+        client.send("Hello Server, this message 2 form client.\n");
+        transfer(transfer, 600, 10);
+        assert server.readRcv().equals("Hello Server, this message 2 form client.");
+
+        server.send("Hello Client, this message 2 form server.\n");
+        transfer(transfer, 600, 10);
+        assert client.readRcv().equals("Hello Client, this message 2 form server.");
     }
 }

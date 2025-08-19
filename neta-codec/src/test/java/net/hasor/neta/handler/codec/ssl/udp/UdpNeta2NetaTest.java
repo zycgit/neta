@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.handler.codec.ssl.udp;
 import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetListen;
 import net.hasor.neta.channel.NetManager;
@@ -46,8 +45,8 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
 
         List<String> serverRcvData = new ArrayList<>();
         List<String> clientRcvData = new ArrayList<>();
-        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
-        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
+        ProtoInitializer clientProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
+        ProtoInitializer serverProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
         NetListen listen = neta.listen(address, serverProto, udpConf);
@@ -76,13 +75,13 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager neta = new NetManager(globalConf());
         SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.DTLS_v1_2);
-        UdpSoConfig udpConf = udpConfig(14096, 14096);
-        udpConf.setRcvPacketSize(14096);
+        UdpSoConfig udpConf = udpConfig(4096, 4096);
+        udpConf.setRcvPacketSize(4096);
 
         List<String> serverRcvData = new ArrayList<>();
         List<String> clientRcvData = new ArrayList<>();
-        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
-        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
+        ProtoInitializer clientProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
+        ProtoInitializer serverProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
         NetListen listen = neta.listen(address, serverProto, udpConf);
@@ -99,26 +98,42 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
             ThreadUtils.sleep(100);
         }
 
+        // round 1
         // client say hello
-        Future<?> send1_1 = clientSide.sendData("Hello Server, this message form client.\n");
-        Future<?> send1_2 = clientSide.sendData("Hello Server, this message form client.\n");
-
-        // server accept data
-        listen.waitAnyAccept();
-        while (serverRcvData.size() < 2) {
+        System.out.println("client say hello");
+        clientSide.sendData("Hello Server, this message 1 form client.\n");
+        while (serverRcvData.isEmpty()) {
             ThreadUtils.sleep(100);
         }
-        assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-        assert serverRcvData.get(1).equals("Hello Server, this message form client.");
+        assert serverRcvData.get(0).equals("Hello Server, this message 1 form client.");
 
         // server say hello
-        Future<?> send2_1 = serverSide.sendData("Hello Client, this message form Server.\n");
-        Future<?> send2_2 = serverSide.sendData("Hello Client, this message form Server.\n");
-        while (clientRcvData.size() < 2) {
+        System.out.println("server say hello");
+        serverSide.sendData("Hello Client, this message 1 form server.\n");
+        while (clientRcvData.isEmpty()) {
             ThreadUtils.sleep(100);
         }
-        assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-        assert clientRcvData.get(1).equals("Hello Client, this message form server.");
+        assert clientRcvData.get(0).equals("Hello Client, this message 1 form server.");
+
+        clientRcvData.clear();
+        serverRcvData.clear();
+
+        // round 2
+        // client say hello
+        System.out.println("client say hello");
+        clientSide.sendData("Hello Server, this message 2 form client.\n");
+        while (serverRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+        assert serverRcvData.get(0).equals("Hello Server, this message 2 form client.");
+
+        // server say hello
+        System.out.println("server say hello");
+        serverSide.sendData("Hello Client, this message 2 form server.\n");
+        while (clientRcvData.isEmpty()) {
+            ThreadUtils.sleep(100);
+        }
+        assert clientRcvData.get(0).equals("Hello Client, this message 2 form server.");
 
         // finish
         neta.shutdown();

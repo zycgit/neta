@@ -45,8 +45,8 @@ public class TcpNeta2NetaTest extends AbstractSslTest {
 
         List<String> serverRcvData = new ArrayList<>();
         List<String> clientRcvData = new ArrayList<>();
-        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
-        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
+        ProtoInitializer clientProto = SoSslUtils.tcpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
+        ProtoInitializer serverProto = SoSslUtils.tcpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
         NetListen listen = neta.listen(address, serverProto, tcpConf);
@@ -81,8 +81,8 @@ public class TcpNeta2NetaTest extends AbstractSslTest {
 
         List<String> serverRcvData = new ArrayList<>();
         List<String> clientRcvData = new ArrayList<>();
-        ProtoInitializer clientProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
-        ProtoInitializer serverProto = SoSslUtils.sslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
+        ProtoInitializer clientProto = SoSslUtils.tcpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(clientRcvData));
+        ProtoInitializer serverProto = SoSslUtils.tcpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
         NetListen listen = neta.listen(address, serverProto, tcpConf);

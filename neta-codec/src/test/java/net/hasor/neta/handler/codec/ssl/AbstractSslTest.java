@@ -19,7 +19,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.handler.*;
-import net.hasor.neta.handler.codec.LimitFrameHandler;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -35,10 +34,7 @@ public class AbstractSslTest {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        LimitFrameHandler limitFrame = new LimitFrameHandler(2);
         return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
-                // limitFrame
-                .nextDuplex("LIMIT", new ProtoDuplexerHandler<>(limitFrame, limitFrame))
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
