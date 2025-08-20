@@ -33,7 +33,7 @@ public interface AsyncChannel extends Closeable {
      * Gets the unique identifier of this channel.
      * @return The channel ID as a long value
      */
-    long getChannelID();
+    long getChannelId();
 
     /** return socket config. */
     SoConfig getSoConfig();

@@ -41,7 +41,7 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");
@@ -58,7 +58,7 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");
@@ -75,7 +75,7 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");
@@ -92,7 +92,7 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");
@@ -109,11 +109,11 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
 
         assert client.readRcv().equals("Hello Client, this message form server.");
         assert server.readRcv().equals("Hello Server, this message form client.");
@@ -128,24 +128,24 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         // round 1
         client.send("Hello Server, this message 1 form client.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert server.readRcv().equals("Hello Server, this message 1 form client.");
 
         server.send("Hello Client, this message 1 form server.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert client.readRcv().equals("Hello Client, this message 1 form server.");
 
         // round 2
         client.send("Hello Server, this message 2 form client.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert server.readRcv().equals("Hello Server, this message 2 form client.");
 
         server.send("Hello Client, this message 2 form server.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert client.readRcv().equals("Hello Client, this message 2 form server.");
     }
 
@@ -156,26 +156,26 @@ public class SslProtocolTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         // round 1
         System.out.println("client say hello");
         client.send("Hello Server, this message 1 form client.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert server.readRcv().equals("Hello Server, this message 1 form client.");
 
         System.out.println("server say hello");
         server.send("Hello Client, this message 1 form server.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert client.readRcv().equals("Hello Client, this message 1 form server.");
 
         // round 2
         client.send("Hello Server, this message 2 form client.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert server.readRcv().equals("Hello Server, this message 2 form client.");
 
         server.send("Hello Client, this message 2 form server.\n");
-        transfer(transfer, 600, 10);
+        transfer(transfer, 600, 1);
         assert client.readRcv().equals("Hello Client, this message 2 form server.");
     }
 }

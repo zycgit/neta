@@ -31,13 +31,13 @@ public interface SoContext {
     ByteBufAllocator getByteBufAllocator();
 
     /** get remote address of the channel */
-    SocketAddress getRemoteAddress(long channelID);
+    SocketAddress getRemoteAddress(long channelId);
 
     /** test channel is not exist or closed */
-    boolean isClose(long channelID);
+    boolean isClose(long channelId);
 
     /** find SoChannel by id */
-    SoChannel<?> findChannel(long channelID);
+    SoChannel<?> findChannel(long channelId);
 
     /** get {@link NetManager} */
     NetManager getNetManager();

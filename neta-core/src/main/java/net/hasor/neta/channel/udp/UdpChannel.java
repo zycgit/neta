@@ -25,8 +25,8 @@ import java.io.IOException;
  * @version : 2023-09-24
  */
 public class UdpChannel extends NetChannel {
-    UdpChannel(long channelID, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, UdpAsyncChannel asyncChannel, SoContextService context) throws IOException {
-        super(channelID, monitor, forListen, initializer, asyncChannel, context);
+    UdpChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, UdpAsyncChannel asyncChannel, SoContextService context) throws IOException {
+        super(channelId, monitor, forListen, initializer, asyncChannel, context);
     }
 
     NetMonitor getNetMonitor() {

@@ -127,6 +127,6 @@ public class SoSndData {
 
     @Override
     public String toString() {
-        return "ChannelID " + this.result.getChannelID() + ", " + this.data.toString();
+        return "ChannelID " + this.result.getChannelId() + ", " + this.data.toString();
     }
 }

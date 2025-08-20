@@ -109,8 +109,8 @@ public class SoContextService implements SoContext {
     }
 
     @Override
-    public SocketAddress getRemoteAddress(long channelID) {
-        SoChannel<?> channel = this.channelMap.get(channelID);
+    public SocketAddress getRemoteAddress(long channelId) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
             return null;
         } else {
@@ -133,8 +133,8 @@ public class SoContextService implements SoContext {
 
     /** test the channel has been closed */
     @Override
-    public boolean isClose(long channelID) {
-        SoChannel<?> channel = this.channelMap.get(channelID);
+    public boolean isClose(long channelId) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
         return channel == null || channel.isClose();
     }
 
@@ -144,21 +144,21 @@ public class SoContextService implements SoContext {
     }
 
     @Override
-    public SoChannel<?> findChannel(long channelID) {
-        return this.channelMap.get(channelID);
+    public SoChannel<?> findChannel(long channelId) {
+        return this.channelMap.get(channelId);
     }
 
     public void initChannel(SoChannel<?> channel, boolean init) throws Throwable {
-        long channelID = channel.getChannelID();
-        if (this.channelMap.containsKey(channelID)) {
-            throw new IllegalStateException("channelID already exists.");
+        long channelId = channel.getChannelId();
+        if (this.channelMap.containsKey(channelId)) {
+            throw new IllegalStateException("channelId already exists.");
         }
 
         // add channel
         try {
             this.closeSyncLock.readLock().lock();
 
-            this.channelMap.put(channel.getChannelID(), channel);
+            this.channelMap.put(channel.getChannelId(), channel);
             if (channel.isListen()) {
                 this.listenList.add((NetListen) channel);
             } else {

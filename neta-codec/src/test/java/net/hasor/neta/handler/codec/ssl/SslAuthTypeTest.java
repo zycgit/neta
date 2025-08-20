@@ -38,7 +38,7 @@ public class SslAuthTypeTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");
@@ -61,7 +61,7 @@ public class SslAuthTypeTest extends AbstractSslTest {
         EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
         EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         client.send("Hello Server, this message form client.\n");
         server.send("Hello Client, this message form server.\n");

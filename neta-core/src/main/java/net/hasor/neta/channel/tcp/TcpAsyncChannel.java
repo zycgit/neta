@@ -37,7 +37,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 class TcpAsyncChannel implements AsyncChannel {
     private static final Logger                    logger = Logger.getLogger(TcpAsyncChannel.class);
-    private final        long                      channelID;
+    private final        long                      channelId;
     private final        AsynchronousSocketChannel channel;
     private final        SocketAddress             localAddress;
     private final        SocketAddress             remoteAddress;
@@ -46,7 +46,7 @@ class TcpAsyncChannel implements AsyncChannel {
     private final        TcpSoConfig               soConfig;
 
     TcpAsyncChannel(long channelId, AsynchronousSocketChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
-        this.channelID = channelId;
+        this.channelId = channelId;
         this.channel = channel;
         this.localAddress = channel.getLocalAddress();
         this.remoteAddress = remoteAddress;
@@ -61,8 +61,8 @@ class TcpAsyncChannel implements AsyncChannel {
     }
 
     @Override
-    public long getChannelID() {
-        return this.channelID;
+    public long getChannelId() {
+        return this.channelId;
     }
 
     @Override
@@ -97,7 +97,7 @@ class TcpAsyncChannel implements AsyncChannel {
     public void shutdownInput() throws IOException {
         if (this.shutdownInputSignal.compareAndSet(false, true)) {
             if (this.context.getConfig().isPrintLog()) {
-                logger.info("channel(" + this.getChannelID() + ") shutdownInput.");
+                logger.info("channel(" + this.getChannelId() + ") shutdownInput.");
             }
             this.channel.shutdownInput();
         }
@@ -113,7 +113,7 @@ class TcpAsyncChannel implements AsyncChannel {
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) throws Throwable {
         TcpSoConfigUtils.configSocket(this.soConfig, this.channel);
-        TcpAsyncChannel asyncChannel = new TcpAsyncChannel(this.channelID, this.channel, this.context, this.remoteAddress, this.soConfig);
+        TcpAsyncChannel asyncChannel = new TcpAsyncChannel(this.channelId, this.channel, this.context, this.remoteAddress, this.soConfig);
         TcpChannel channel = this.newChannel(asyncChannel, initializer);
         this.channel.connect(this.remoteAddress, this.context, new TcpConnectCompletionHandler(channel, asyncChannel, future));
     }
@@ -121,7 +121,7 @@ class TcpAsyncChannel implements AsyncChannel {
     protected TcpChannel newChannel(TcpAsyncChannel realChannel, ProtoInitializer initializer) throws IOException {
         NetMonitor monitor = new NetMonitor();
         return new TcpChannel(                                                  //
-                realChannel.getChannelID(),                                     //
+                realChannel.getChannelId(),                                     //
                 monitor,                                                        //
                 null,                                                           //
                 initializer,                                                    //

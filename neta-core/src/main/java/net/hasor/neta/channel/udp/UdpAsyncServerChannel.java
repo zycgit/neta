@@ -52,7 +52,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 class UdpAsyncServerChannel implements AsyncServerChannel {
     private static final Logger            logger = Logger.getLogger(UdpAsyncServerChannel.class);
-    private final        long              channelID;
+    private final        long              channelId;
     private final        DatagramChannel   channel;
     private final        Selector          selector;
     private final        SoContextService  context;
@@ -63,7 +63,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     private final        ByteBuffer        receiveBuffer;
 
     UdpAsyncServerChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
-        this.channelID = channelId;
+        this.channelId = channelId;
         this.channel = channel;
         this.selector = Selector.open();
         this.context = (SoContextService) context;
@@ -75,8 +75,8 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public long getChannelID() {
-        return this.channelID;
+    public long getChannelId() {
+        return this.channelId;
     }
 
     @Override
@@ -106,7 +106,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         // create
         UdpSoConfigUtils.configListen(this.soConfig, this.channel);
         NetListen listen = new NetListen( //
-                this.channelID,           //
+                this.channelId,           //
                 this.listenAddr,          //
                 this.listenAddr.getPort(),//
                 this,                     //
@@ -172,11 +172,11 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
                     byteBuf.markWriter();
                     int readableBytes = byteBuf.readableBytes();
                     if (logger.isDebugEnabled()) {
-                        logger.debug("rcv(" + this.channelID + ") the receive " + readableBytes + " bytes");
+                        logger.debug("rcv(" + this.channelId + ") the receive " + readableBytes + " bytes");
                     }
 
                     socket.getNetMonitor().updateRcvCounter(byteBuf.readableBytes());
-                    this.context.notifyChannelRcv(socket.getChannelID(), byteBuf);
+                    this.context.notifyChannelRcv(socket.getChannelId(), byteBuf);
                 }
             }
         }
@@ -222,10 +222,10 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     private boolean acceptChannel(NetListen listen, SocketAddress localAddr, SocketAddress remoteAddr) {
         try {
             if (!this.context.acceptChannel(remoteAddr)) {
-                printLog("reject(" + listen.getChannelID() + ") R:" + remoteAddr + " -> L:" + localAddr);
+                printLog("reject(" + listen.getChannelId() + ") R:" + remoteAddr + " -> L:" + localAddr);
                 return false;
             } else {
-                printLog("accept(" + listen.getChannelID() + ") R:" + remoteAddr + " -> L:" + localAddr);
+                printLog("accept(" + listen.getChannelId() + ") R:" + remoteAddr + " -> L:" + localAddr);
                 return true;
             }
         } catch (Throwable e) {
@@ -246,7 +246,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     protected UdpChannel newChannel(String remoteID, NetListen forListen, UdpAsyncChannel realChannel) throws IOException {
         NetMonitor monitor = new NetMonitor();
         UdpChannel channel = new UdpChannel(//
-                realChannel.getChannelID(), //
+                realChannel.getChannelId(), //
                 monitor,                    //
                 forListen,                  //
                 forListen.getInitializer(), //

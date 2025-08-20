@@ -36,7 +36,7 @@ import java.util.concurrent.TimeUnit;
  */
 class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextService>, Closeable {
     private static final Logger           logger = Logger.getLogger(TcpRcvCompletionHandler.class);
-    private final        long             channelID;
+    private final        long             channelId;
     private final        TcpAsyncChannel  channel;
     private final        SoContextService context;
     private final        NetMonitor       monitor;
@@ -47,7 +47,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
     private final        int              connectTimeoutMs;
 
     public TcpRcvCompletionHandler(TcpAsyncChannel channel, SoContext context, NetMonitor monitor) {
-        this.channelID = channel.getChannelID();
+        this.channelId = channel.getChannelId();
         this.channel = channel;
         this.context = (SoContextService) context;
         this.monitor = monitor;
@@ -73,7 +73,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
     public void completed(Integer result, SoContextService context) {
         if (result > 0) {
             if (logger.isDebugEnabled()) {
-                logger.debug("rcv(" + this.channelID + ") the receive " + result + " bytes");
+                logger.debug("rcv(" + this.channelId + ") the receive " + result + " bytes");
             }
 
             // copy buffer form swap to rcv
@@ -83,26 +83,26 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             byteBuf.markWriter();
 
             this.monitor.updateRcvCounter(result);
-            this.context.notifyChannelRcv(this.channelID, byteBuf);
+            this.context.notifyChannelRcv(this.channelId, byteBuf);
 
             this.read();
         } else if (result == 0) {
             if (logger.isDebugEnabled()) {
-                logger.debug("rcv(" + this.channelID + ") empty");
+                logger.debug("rcv(" + this.channelId + ") empty");
             }
 
-            this.context.notifyChannelRcv(this.channelID, ByteBuf.EMPTY);
+            this.context.notifyChannelRcv(this.channelId, ByteBuf.EMPTY);
             this.read();
         } else {
             if (this.channel.isShutdownInput()) {
                 // for ShutdownInput local
-                logger.info("rcv(" + this.channelID + ") shutdownInput form local.");
-                this.context.notifyRcvChannelError(this.channelID, TcpInputCloseException.INSTANCE);
+                logger.info("rcv(" + this.channelId + ") shutdownInput form local.");
+                this.context.notifyRcvChannelError(this.channelId, TcpInputCloseException.INSTANCE);
             } else {
                 // for Remote
-                String msg = "rcv(" + this.channelID + ") close form remote.";
+                String msg = "rcv(" + this.channelId + ") close form remote.";
                 logger.info(msg);
-                context.asyncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+                context.asyncUnsafeCloseChannel(this.channelId, msg, SoCloseException.INSTANCE);
             }
         }
     }
@@ -113,32 +113,32 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             long costTimeMs = System.currentTimeMillis() - this.monitor.getCreatedTime();
             if (costTimeMs < this.connectTimeoutMs) {
                 if (logger.isDebugEnabled()) {
-                    logger.debug("rcv(" + this.channelID + ") NotYetConnected, read try again later.");
+                    logger.debug("rcv(" + this.channelId + ") NotYetConnected, read try again later.");
                 }
                 this.read();
             } else {
-                SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelID, this.context, e);
+                SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelId, this.context, e);
 
-                context.notifyRcvChannelError(this.channelID, cause);
-                context.asyncUnsafeCloseChannel(this.channelID, cause.getMessage(), cause);
+                context.notifyRcvChannelError(this.channelId, cause);
+                context.asyncUnsafeCloseChannel(this.channelId, cause.getMessage(), cause);
             }
             return;
         }
 
         String errorMsg = "";
         if (e instanceof ShutdownChannelGroupException || e instanceof ClosedChannelException) {
-            if (context.isClose(this.channelID)) {
+            if (context.isClose(this.channelId)) {
                 return;
             }
             // rcv Close
-            errorMsg = "rcv(" + this.channelID + ") channel is closed " + e.getMessage();
+            errorMsg = "rcv(" + this.channelId + ") channel is closed " + e.getMessage();
         } else {
             // rcv Exception
-            errorMsg = "rcv(" + this.channelID + ") " + e.getMessage();
+            errorMsg = "rcv(" + this.channelId + ") " + e.getMessage();
         }
 
-        context.notifyRcvChannelError(this.channelID, e);
-        context.asyncUnsafeCloseChannel(this.channelID, errorMsg, e);
+        context.notifyRcvChannelError(this.channelId, e);
+        context.asyncUnsafeCloseChannel(this.channelId, errorMsg, e);
     }
 
     @Override

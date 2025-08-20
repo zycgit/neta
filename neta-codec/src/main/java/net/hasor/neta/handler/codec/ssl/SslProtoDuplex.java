@@ -37,7 +37,7 @@ public class SslProtoDuplex implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, 
         SoChannel<?> channel = context.getChannel();
         String stackName = context.getStackName();
 
-        long channelID = channel.getChannelID();
+        long channelID = channel.getChannelId();
         boolean clientMode = channel.isClient();
 
         if (this.config.getProvider() == SslProvider.JSSE) {

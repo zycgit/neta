@@ -31,14 +31,14 @@ import java.nio.channels.NetworkChannel;
  * @version 2025-08-06
  */
 class TcpAsyncServerChannel implements AsyncServerChannel {
-    private final long                            channelID;
+    private final long                            channelId;
     private final AsynchronousServerSocketChannel channel;
     private final SoContextService                context;
     private final InetSocketAddress               listenAddr;
     private final TcpSoConfig                     soConfig;
 
     TcpAsyncServerChannel(long channelId, AsynchronousServerSocketChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
-        this.channelID = channelId;
+        this.channelId = channelId;
         this.channel = channel;
         this.context = (SoContextService) context;
         this.listenAddr = (InetSocketAddress) listenAddr;
@@ -46,8 +46,8 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public long getChannelID() {
-        return this.channelID;
+    public long getChannelId() {
+        return this.channelId;
     }
 
     @Override
@@ -70,7 +70,7 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
         // create
         TcpSoConfigUtils.configListen(this.soConfig, this.channel);
         NetListen listen = new NetListen( //
-                this.channelID,           //
+                this.channelId,           //
                 this.listenAddr,          //
                 this.listenAddr.getPort(),//
                 this,                     //

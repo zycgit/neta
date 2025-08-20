@@ -46,9 +46,9 @@ public class NetManager extends AbstractNetManager {
     }
 
     protected AsyncChannelProvider findProvider(String protocol) {
-        if (StringUtils.equalsIgnoreCase("tcp", protocol)) {
+        if (StringUtils.equalsIgnoreCase(TcpProvider.NAME, protocol)) {
             return new TcpProvider();
-        } else if (StringUtils.equalsIgnoreCase("udp", protocol)) {
+        } else if (StringUtils.equalsIgnoreCase(UdpProvider.NAME, protocol)) {
             return new UdpProvider();
         } else {
             throw new UnsupportedOperationException("not support protocol : " + protocol);
@@ -96,8 +96,8 @@ public class NetManager extends AbstractNetManager {
     }
 
     /** find SoChannel by id */
-    public SoChannel<?> findChannel(long channelID) {
-        return this.context.findChannel(channelID);
+    public SoChannel<?> findChannel(long channelId) {
+        return this.context.findChannel(channelId);
     }
 
     /** find NetListen by listenPort */

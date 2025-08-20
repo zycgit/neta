@@ -44,7 +44,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 class UdpAsyncChannel implements AsyncChannel {
     private static final Logger            logger = Logger.getLogger(UdpAsyncChannel.class);
-    protected final      long              channelID;
+    protected final      long              channelId;
     protected final      DatagramChannel   channel;
     protected final      InetSocketAddress localAddress;
     protected final      InetSocketAddress remoteAddress;
@@ -54,7 +54,7 @@ class UdpAsyncChannel implements AsyncChannel {
     private final        AtomicBoolean     writing;
 
     UdpAsyncChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
-        this.channelID = channelId;
+        this.channelId = channelId;
         this.channel = channel;
         this.localAddress = (InetSocketAddress) channel.getLocalAddress();
         this.remoteAddress = (InetSocketAddress) remoteAddress;
@@ -70,8 +70,8 @@ class UdpAsyncChannel implements AsyncChannel {
     }
 
     @Override
-    public long getChannelID() {
-        return this.channelID;
+    public long getChannelId() {
+        return this.channelId;
     }
 
     @Override

@@ -26,9 +26,9 @@ import java.net.SocketAddress;
  */
 public class SoUtils {
 
-    public static SoConnectTimeoutException newTimeout(boolean isRcv, long channelID, SoContextService context, Throwable e) {
-        SocketAddress address = context.getRemoteAddress(channelID);
-        String errorMsg = (isRcv ? "rcv(" : "snd(") + channelID + ") Connection timed out: " + address;
+    public static SoConnectTimeoutException newTimeout(boolean isRcv, long channelId, SoContextService context, Throwable e) {
+        SocketAddress address = context.getRemoteAddress(channelId);
+        String errorMsg = (isRcv ? "rcv(" : "snd(") + channelId + ") Connection timed out: " + address;
         SoConnectTimeoutException cause = new SoConnectTimeoutException(errorMsg);
         cause.setStackTrace(e.getStackTrace());
         return cause;
@@ -41,7 +41,7 @@ public class SoUtils {
     public static void printStackTrace(PrintStream s, SoChannel<?> channel, ProtoStack<?> protoStack) {
         String body = protoStack == null ? "--- There is no ProtoStack ---" : protoStack.toString();
         int len = body.split("\n")[0].length();
-        String ctitle = "ChannelID  : " + channel.getChannelID() + ",";
+        String ctitle = "ChannelId  : " + channel.getChannelId() + ",";
         String status = channel.isClient() ? "Client" : "Server";
         status = status + (channel.isClose() ? "(Closed)" : "(Active)");
         s.println(StringUtils.rightPad(ctitle, len - status.length(), " ") + status);

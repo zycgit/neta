@@ -89,7 +89,7 @@ public class TcpNeta2NetaTest extends AbstractSslTest {
 
         // client
         NetChannel clientSide = neta.connect(address, clientProto, tcpConf).get();
-        assert clientSide.getChannelID() == 2;
+        assert clientSide.getChannelId() == 2;
         Future<?> send1 = clientSide.sendData("Hello Server, this message form client.\n");
 
         // server

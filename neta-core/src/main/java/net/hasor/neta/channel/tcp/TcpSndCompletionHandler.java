@@ -34,7 +34,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext>, Closeable {
     private static final Logger           logger = Logger.getLogger(TcpSndCompletionHandler.class);
-    private final        long             channelID;
+    private final        long             channelId;
     private final        TcpAsyncChannel  channel;
     private final        SoContextService context;
     private final        NetMonitor       monitor;
@@ -46,7 +46,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
     private final        int              connectTimeoutMs;
 
     public TcpSndCompletionHandler(TcpAsyncChannel channel, SoContext context, NetMonitor monitor) {
-        this.channelID = channel.getChannelID();
+        this.channelId = channel.getChannelId();
         this.channel = channel;
         this.context = (SoContextService) context;
         this.monitor = monitor;
@@ -99,7 +99,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
     @Override
     public void completed(Integer result, SoSndContext context) {
         if (logger.isDebugEnabled()) {
-            logger.debug("snd(" + this.channelID + ") size:" + result);
+            logger.debug("snd(" + this.channelId + ") size:" + result);
         }
 
         this.monitor.updateSndCounter(result);
@@ -127,35 +127,35 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
             long costTimeMs = System.currentTimeMillis() - -this.monitor.getCreatedTime();
             if (costTimeMs < this.connectTimeoutMs) {
                 if (logger.isDebugEnabled()) {
-                    logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
+                    logger.debug("snd(" + this.channelId + ") NotYetConnected, write try again later.");
                 }
                 submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
                     writeData(context);
                 });
                 return;
             } else {
-                finalErr = SoUtils.newTimeout(false, this.channelID, this.context, e);
+                finalErr = SoUtils.newTimeout(false, this.channelId, this.context, e);
                 finalMsg = finalErr.getMessage();
             }
         } else if (e instanceof InterruptedByTimeoutException) {
             String errorMsg = "send data timeout with " + this.channel.getSoConfig().getSoWriteTimeoutMs() + " milliseconds.";
-            String msg = "snd(" + this.channelID + ") " + errorMsg;
+            String msg = "snd(" + this.channelId + ") " + errorMsg;
 
             finalErr = new SoWriteTimeoutException(errorMsg);
             finalMsg = msg;
         } else if (e instanceof ClosedChannelException) {
-            finalMsg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
+            finalMsg = "snd(" + this.channelId + ") close, msg:" + e.getMessage();
             finalErr = e;
         } else if (e instanceof ShutdownChannelGroupException) {
-            finalMsg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
+            finalMsg = "snd(" + this.channelId + ") shutdown, msg:" + e.getMessage();
             finalErr = e;
         } else {
-            finalMsg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
+            finalMsg = "snd(" + this.channelId + ") error, msg:" + e.getMessage();
             finalErr = e;
         }
 
-        this.context.notifySndChannelError(this.channelID, finalErr);
-        this.context.asyncUnsafeCloseChannel(this.channelID, finalMsg, finalErr);
+        this.context.notifySndChannelError(this.channelId, finalErr);
+        this.context.asyncUnsafeCloseChannel(this.channelId, finalMsg, finalErr);
 
         while (!context.isEmpty()) {
             SoSndData sndData = context.popData();

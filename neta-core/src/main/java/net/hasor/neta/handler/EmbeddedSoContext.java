@@ -92,8 +92,8 @@ public class EmbeddedSoContext implements SoContext {
 
     /** new channel. */
     public void openChannel(SoChannel<?> channel) {
-        logger.info("channel(" + channel.getChannelID() + ") created.");
-        this.channelMap.put(channel.getChannelID(), channel);
+        logger.info("channel(" + channel.getChannelId() + ") created.");
+        this.channelMap.put(channel.getChannelId(), channel);
     }
 
     /** test the channel has been closed */

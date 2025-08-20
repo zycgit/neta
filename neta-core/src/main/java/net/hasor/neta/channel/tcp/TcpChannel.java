@@ -32,9 +32,9 @@ public class TcpChannel extends NetChannel {
     private final        TcpRcvCompletionHandler readHandler;
     private final        TcpSndCompletionHandler writeHandler;
 
-    TcpChannel(long channelID, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, TcpAsyncChannel asyncChannel, SoContextService context//
+    TcpChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, TcpAsyncChannel asyncChannel, SoContextService context//
             , TcpRcvCompletionHandler readHandler, TcpSndCompletionHandler writeHandler) throws IOException {
-        super(channelID, monitor, forListen, initializer, asyncChannel, context);
+        super(channelId, monitor, forListen, initializer, asyncChannel, context);
         this.readHandler = readHandler;
         this.writeHandler = writeHandler;
 
@@ -62,7 +62,7 @@ public class TcpChannel extends NetChannel {
         try {
             ((TcpAsyncChannel) this.asyncChannel).shutdownInput();
         } catch (NotYetConnectedException | IOException e) {
-            logger.warn("channel(" + this.getChannelID() + ") shutdownInput, failed " + e.getMessage(), e);
+            logger.warn("channel(" + this.getChannelId() + ") shutdownInput, failed " + e.getMessage(), e);
         }
     }
 }

@@ -128,7 +128,7 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
     }
 
     @Override
-    public long getChannelID() {
+    public long getChannelId() {
         return this.channelID;
     }
 

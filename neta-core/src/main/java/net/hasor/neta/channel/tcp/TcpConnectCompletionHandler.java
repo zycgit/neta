@@ -52,7 +52,7 @@ class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextSe
         try {
             SocketAddress localAddress = this.asyncChannel.getLocalAddress();
             SocketAddress remoteAddress = this.asyncChannel.getRemoteAddress();
-            logger.info("connected(" + this.channel.getChannelID() + ") L:" + localAddress + " -> R:" + remoteAddress);
+            logger.info("connected(" + this.channel.getChannelId() + ") L:" + localAddress + " -> R:" + remoteAddress);
 
             // init
             ((SoContextService) this.channel.getContext()).initChannel(this.channel, true);
@@ -65,7 +65,7 @@ class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextSe
             this.future.completed(this.channel);
         } catch (Throwable e) {
             logger.error("ERROR: Connect finish, but onActive failed.");
-            context.syncUnsafeCloseChannel(this.channel.getChannelID(), e.getMessage(), e);
+            context.syncUnsafeCloseChannel(this.channel.getChannelId(), e.getMessage(), e);
             this.future.failed(e);
         }
     }

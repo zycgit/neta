@@ -24,18 +24,18 @@ package net.hasor.neta.channel.udp;
  * @version 2025-08-07
  */
 class UdpIdentifier {
-    private final String remoteID;
+    private final String remoteId;
 
     /**
      * Constructs a new UdpIdentifier with the specified remote ID.
-     * @param remoteID the remote ID of the UDP channel
+     * @param remoteId the remote ID of the UDP channel
      */
-    public UdpIdentifier(String remoteID) {
-        this.remoteID = remoteID;
+    public UdpIdentifier(String remoteId) {
+        this.remoteId = remoteId;
     }
 
     @Override
     public String toString() {
-        return this.remoteID;
+        return this.remoteId;
     }
 }

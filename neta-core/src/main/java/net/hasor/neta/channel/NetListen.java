@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version : 2023-09-24
  */
 public class NetListen extends AttributeChannel<NetListen> {
-    private final    long               channelID;
+    private final    long               channelId;
     private final    long               createdTime;
     private          long               lastActiveTime;
     private          long               lastAcceptTime;
@@ -46,9 +46,9 @@ public class NetListen extends AttributeChannel<NetListen> {
     protected final  AtomicBoolean      closeStatus;
     protected final  Future<NetListen>  closeFuture;
 
-    public NetListen(long channelID, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
+    public NetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
             ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
-        this.channelID = channelID;
+        this.channelId = channelId;
         this.createdTime = System.currentTimeMillis();
         this.lastActiveTime = this.createdTime;
         this.acceptCount = new AtomicLong();
@@ -67,8 +67,8 @@ public class NetListen extends AttributeChannel<NetListen> {
     }
 
     @Override
-    public long getChannelID() {
-        return this.channelID;
+    public long getChannelId() {
+        return this.channelId;
     }
 
     @Override
@@ -191,7 +191,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     public Future<NetListen> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.channel.isOpen()) {
-                SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
+                SoCloseTask task = new SoCloseTask(this.channelId, this.context, false);
                 this.context.submitSoTask(task, this).onCompleted(f -> {
                     closeFuture.completed(this);
                 }).onFailed(f -> {
@@ -209,7 +209,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     @Override
     public void closeNow() {
         if (this.channel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
-            new SoCloseTask(this.channelID, this.context, true).run();
+            new SoCloseTask(this.channelId, this.context, true).run();
         }
         this.closeFuture.completed(this);
     }

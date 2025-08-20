@@ -78,7 +78,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     @Override
     public void onInit(ProtoContext protoCtx) throws Throwable {
         this.netLog = protoCtx.getConfig().isPrintLog();
-        this.channelID = protoCtx.getChannel().getChannelID();
+        this.channelID = protoCtx.getChannel().getChannelId();
 
         for (int i = 0; i < this.layers.size(); i++) {
             try {

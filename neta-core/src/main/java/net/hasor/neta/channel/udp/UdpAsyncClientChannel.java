@@ -81,7 +81,7 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
 
             // create channel
             String remoteID = this.remoteAddress.getAddress().getHostAddress() + ":" + this.remoteAddress.getPort();
-            UdpAsyncChannel asyncChannel = new UdpAsyncChannel(this.channelID, this.channel, this.context, this.remoteAddress, this.soConfig);
+            UdpAsyncChannel asyncChannel = new UdpAsyncChannel(this.channelId, this.channel, this.context, this.remoteAddress, this.soConfig);
             UdpChannel channel = this.newChannel(remoteID, asyncChannel, initializer);
 
             // init
@@ -152,11 +152,11 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
                 byteBuf.markWriter();
                 int readableBytes = byteBuf.readableBytes();
                 if (logger.isDebugEnabled()) {
-                    logger.debug("rcv(" + this.channelID + ") the receive " + readableBytes + " bytes");
+                    logger.debug("rcv(" + this.channelId + ") the receive " + readableBytes + " bytes");
                 }
 
                 channel.getNetMonitor().updateRcvCounter(readableBytes);
-                this.context.notifyChannelRcv(channel.getChannelID(), byteBuf);
+                this.context.notifyChannelRcv(channel.getChannelId(), byteBuf);
             }
         }
     }
@@ -164,7 +164,7 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
     protected UdpChannel newChannel(String remoteID, UdpAsyncChannel realChannel, ProtoInitializer initializer) throws IOException {
         NetMonitor monitor = new NetMonitor();
         UdpChannel channel = new UdpChannel(//
-                realChannel.getChannelID(), //
+                realChannel.getChannelId(), //
                 monitor,                    //
                 null,                       //
                 initializer,                //

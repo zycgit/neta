@@ -25,7 +25,7 @@ import java.net.SocketAddress;
  */
 public interface SoChannel<T> {
     /** channel id */
-    long getChannelID();
+    long getChannelId();
 
     /** channel accept time */
     long getCreatedTime();

@@ -48,7 +48,7 @@ public class SslAlpnTest extends AbstractSslTest {
         SslContext serverSSL = server.findProtoContext(SslContext.class);
         SslContext clientSSL = client.findProtoContext(SslContext.class);
         EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelID() + ", client:" + client.getChannelID());
+        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         //
         assert serverSSL.getApplicationProtocol() == null;

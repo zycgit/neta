@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class NetChannel extends AttributeChannel<NetChannel> implements SoChannel<NetChannel> {
     private static final Logger              logger = Logger.getLogger(NetChannel.class);
-    private final        long                channelID;
+    private final        long                channelId;
     protected final      AsyncChannel        asyncChannel;
     protected final      NetListen           forListen;
     protected final      SoSndContext        wContext;
@@ -51,8 +51,8 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
     protected final      AtomicBoolean       closeStatus;
     protected final      Future<NetChannel>  closeFuture;
 
-    protected NetChannel(long channelID, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
-        this.channelID = channelID;
+    protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
+        this.channelId = channelId;
         this.asyncChannel = asyncChannel;
         this.forListen = forListen;
         this.monitor = monitor;
@@ -67,8 +67,8 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
     }
 
     @Override
-    public long getChannelID() {
-        return this.channelID;
+    public long getChannelId() {
+        return this.channelId;
     }
 
     @Override
@@ -153,7 +153,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
     public Future<NetChannel> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.asyncChannel.isOpen()) {
-                SoCloseTask task = new SoCloseTask(this.channelID, this.context, false);
+                SoCloseTask task = new SoCloseTask(this.channelId, this.context, false);
                 this.context.submitSoTask(task, this).onCompleted(f -> {
                     this.closeFuture.completed(this);
                 }).onFailed(f -> {
@@ -169,8 +169,8 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
     @Override
     public void closeNow() {
         if (this.asyncChannel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
-            logger.info("channel(" + this.channelID + ") closeNow");
-            new SoCloseTask(this.channelID, this.context, true).run();
+            logger.info("channel(" + this.channelId + ") closeNow");
+            new SoCloseTask(this.channelId, this.context, true).run();
         }
         this.closeFuture.completed(this);
     }
@@ -204,10 +204,10 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         } catch (Throwable e) {
             // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
             String msg = "invoker ProtoStack failed: " + e.getMessage();
-            logger.error("rcv(" + this.channelID + ") " + msg, e);
+            logger.error("rcv(" + this.channelId + ") " + msg, e);
 
             this.closeStatus.set(true);
-            this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
+            this.context.syncUnsafeCloseChannel(this.channelId, msg, e);
         } finally {
             this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
@@ -225,10 +225,10 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         } catch (Throwable ee) {
             // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
             String msg = "invoker ProtoStack failed: " + ee.getMessage();
-            logger.error("rcv(" + this.channelID + ") " + msg, ee);
+            logger.error("rcv(" + this.channelId + ") " + msg, ee);
 
             this.closeStatus.set(true);
-            this.context.syncUnsafeCloseChannel(this.channelID, msg, e);
+            this.context.syncUnsafeCloseChannel(this.channelId, msg, e);
         } finally {
             this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
@@ -281,7 +281,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
             }
             appendSoSndTask(toSoSndData(future, dataArray));
         } catch (Throwable e) {
-            logger.error("snd(" + this.channelID + ") failed, " + e.getMessage(), e);
+            logger.error("snd(" + this.channelId + ") failed, " + e.getMessage(), e);
             future.failed(e);
         } finally {
             this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
@@ -323,13 +323,13 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
     private Future<NetChannel> newFutureForSend() {
         Future<NetChannel> future = new BasicFuture<>();
         if (this.protoStack.getSndSlotSize() == 0) {
-            logger.info("snd(" + this.channelID + ") the ProtoStack slot is full.");
+            logger.info("snd(" + this.channelId + ") the ProtoStack slot is full.");
             future.failed(ProtoFullException.INSTANCE);
             return future;
         }
 
         if (this.closeStatus.get()) {
-            logger.info("snd(" + this.channelID + ") the channel is closed.");
+            logger.info("snd(" + this.channelId + ") the channel is closed.");
             future.failed(SoCloseException.INSTANCE);
             return future;
         }
@@ -339,7 +339,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
 
     private synchronized void appendSoSndTask(SoSndData wTask) {
         if (this.context.getConfig().isPrintLog()) {
-            logger.info("snd(" + this.channelID + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
+            logger.info("snd(" + this.channelId + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
         }
 
         this.wContext.offer(wTask);
