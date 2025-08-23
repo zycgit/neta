@@ -16,9 +16,9 @@
 package net.hasor.neta.handler;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.SoChannel;
-import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.SoContext;
 
 import java.net.SocketAddress;
@@ -31,6 +31,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
+@Deprecated
 public class EmbeddedSoContext implements SoContext {
     private static final Logger                  logger = Logger.getLogger(EmbeddedSoContext.class);
     private static final AtomicLong              nextID = new AtomicLong();

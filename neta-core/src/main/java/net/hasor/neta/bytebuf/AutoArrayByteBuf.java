@@ -32,20 +32,19 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(AutoArrayByteBuf.class, tar);
         }
     };
+    protected byte[] target;
+    private   int    extensionSize;
+
+    // ------------------------------------------------------------------------
+
+    private AutoArrayByteBuf() {
+    }
 
     void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, byte[] initData) {
         super.initByteBuf(alloc, maxCapacity);
         this.extensionSize = Math.min(extensionSize, maxCapacity);
         this.target = initData;
     }
-
-    private AutoArrayByteBuf() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    protected byte[] target;
-    private   int    extensionSize;
 
     @Override
     public ByteBuf markReader() {

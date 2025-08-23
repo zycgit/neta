@@ -39,7 +39,7 @@ public class SoShutdownTest extends AbstractSoTest {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            return ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                 @Override
                 public void onActive(ProtoContext context) {
                     ((TcpChannel) context.getChannel()).shutdownInput();// shutdownInput with accept.
@@ -65,7 +65,7 @@ public class SoShutdownTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, initializer, tcpConf);
+        NetListen listen = server.bind(address, initializer, tcpConf);
 
         // start client and snd data
         ThreadUtils.daemonThread(true, (Callable) () -> {
@@ -96,7 +96,7 @@ public class SoShutdownTest extends AbstractSoTest {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            return ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
                     while (rcvUp.hasMore()) {
@@ -122,7 +122,7 @@ public class SoShutdownTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, initializer, tcpConf);
+        NetListen listen = server.bind(address, initializer, tcpConf);
 
         // start client
         Socket client = new Socket("127.0.0.1", safePort);
@@ -163,7 +163,7 @@ public class SoShutdownTest extends AbstractSoTest {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            return ProtoHelper.standard().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
                     while (rcvUp.hasMore()) {
@@ -189,7 +189,7 @@ public class SoShutdownTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, initializer, tcpConf);
+        NetListen listen = server.bind(address, initializer, tcpConf);
 
         // start client
         Socket client = new Socket("127.0.0.1", safePort);
@@ -283,7 +283,7 @@ public class SoShutdownTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
+        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(), tcpConf);
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);

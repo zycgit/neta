@@ -29,19 +29,27 @@ import java.util.function.Consumer;
  * @version : 2023-10-20
  */
 public final class ProtoHelper {
-    public static ProtoBuilder<ByteBuf, ByteBuf> builder() {
+    public static ProtoBuilder<ByteBuf, ByteBuf> standard() {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
-    public static ProtoBuilder<ByteBuf, ByteBuf> builder(ProtoConfig protoConf) {
+    public static ProtoBuilder<ByteBuf, ByteBuf> standard(ProtoConfig protoConf) {
         return new ProtoHelper().nextTo(protoConf);
     }
 
-    public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> embedded(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown) {
+    public static ProtoBuilder<Object, Object> object() {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
-    public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> embedded(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown, ProtoConfig terminalConfig) {
+    public static ProtoBuilder<Object, Object> object(ProtoConfig protoConf) {
+        return new ProtoHelper().nextTo(protoConf);
+    }
+
+    public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown) {
+        return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
+    }
+
+    public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown, ProtoConfig terminalConfig) {
         return new ProtoHelper().nextTo(terminalConfig);
     }
 
@@ -49,7 +57,7 @@ public final class ProtoHelper {
         return new ProtoBuilderImpl<>(protoConf, new ArrayList<>());
     }
 
-    class ProtoBuilderImpl<RCV_DOWN, SND_UP> implements ProtoBuilder<RCV_DOWN, SND_UP> {
+    private static final class ProtoBuilderImpl<RCV_DOWN, SND_UP> implements ProtoBuilder<RCV_DOWN, SND_UP> {
         private final ProtoConfig                    defaultConf;
         private final List<Consumer<ProtoChainRoot>> taskAppend;
 
@@ -105,8 +113,8 @@ public final class ProtoHelper {
         }
 
         @Override
-        public <T> ProtoStack<T> build() {
-            ProtoChainRoot root = new ProtoChainRoot();
+        public <T> ProtoStack<T> build(EventBus eventBus) {
+            ProtoChainRoot root = new ProtoChainRoot(this.defaultConf, eventBus);
             for (Consumer<ProtoChainRoot> consumer : taskAppend) {
                 consumer.accept(root);
             }
@@ -114,7 +122,7 @@ public final class ProtoHelper {
         }
     }
 
-    static class DecoderDuplexWrap<RCV_UP, RCV_DOWN, SND> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND, SND> {
+    private static class DecoderDuplexWrap<RCV_UP, RCV_DOWN, SND> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND, SND> {
         private final ProtoHandler<RCV_UP, RCV_DOWN> decoder;
 
         public DecoderDuplexWrap(ProtoHandler<RCV_UP, RCV_DOWN> decoder) {
@@ -156,7 +164,7 @@ public final class ProtoHelper {
         }
     }
 
-    static class EncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV, RCV, SND_UP, SND_DOWN> {
+    private static class EncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV, RCV, SND_UP, SND_DOWN> {
         private final ProtoHandler<SND_UP, SND_DOWN> encoder;
 
         public EncoderDuplexWrap(ProtoHandler<SND_UP, SND_DOWN> encoder) {

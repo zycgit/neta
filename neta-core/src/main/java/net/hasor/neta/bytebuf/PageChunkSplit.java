@@ -32,6 +32,16 @@ class PageChunkSplit implements PageRange {
             RecycleObjectPool.free(PageChunkSplit.class, tar);
         }
     };
+    private int           fromPage;
+    private int           toPage;
+
+    // ------------------------------------------------------------------------
+    private int           capacity;
+    private PageChunkPool chunkPool;
+    private AtomicInteger refCount;
+    private boolean       available;
+    private PageChunkSplit() {
+    }
 
     void initPageChunk(PageChunkPool chunkPool, int fromPage, int toPage, AtomicInteger refCount) {
         this.chunkPool = chunkPool;
@@ -41,18 +51,6 @@ class PageChunkSplit implements PageRange {
         this.refCount = refCount;
         this.available = true;
     }
-
-    private PageChunkSplit() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    private int           fromPage;
-    private int           toPage;
-    private int           capacity;
-    private PageChunkPool chunkPool;
-    private AtomicInteger refCount;
-    private boolean       available;
 
     @Override
     public int getMemAddress() {

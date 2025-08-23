@@ -24,11 +24,11 @@ import java.util.concurrent.TimeUnit;
 
 class UdpWriteTask extends DefaultSoTask {
     private static final Logger           logger = Logger.getLogger(UdpWriteTask.class);
+    protected final      SoContextService context;
     private final        NetChannel       netChannel;
     private final        NetMonitor       monitor;
     private final        DatagramChannel  udpChannel;
     private final        SoSndContext     wContext;
-    protected final      SoContextService context;
     private              byte[]           sendData;
 
     public UdpWriteTask(NetChannel netChannel, DatagramChannel channel, SoSndContext wContext, SoContextService context) {

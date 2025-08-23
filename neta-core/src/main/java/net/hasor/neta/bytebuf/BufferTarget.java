@@ -33,6 +33,17 @@ class BufferTarget implements Buffer {
             RecycleObjectPool.free(BufferTarget.class, tar);
         }
     };
+    private Buffer         memory;
+    private PageChunkSplit pages;
+    private int            pageSize;
+
+    // ------------------------------------------------------------------------
+    private boolean        readOnly;
+    private int            offset;
+    private int            limit;
+    private int            capacity;
+    private BufferTarget() {
+    }
 
     void initBuffer(int pageSize, PageChunkSplit pages, Buffer memory) {
         this.memory = memory;
@@ -54,19 +65,6 @@ class BufferTarget implements Buffer {
         this.limit = limit;
         this.capacity = capacity;
     }
-
-    private BufferTarget() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    private Buffer         memory;
-    private PageChunkSplit pages;
-    private int            pageSize;
-    private boolean        readOnly;
-    private int            offset;
-    private int            limit;
-    private int            capacity;
 
     @Override
     public int capacity() {

@@ -32,23 +32,22 @@ final class RingByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RingByteBuffer.class, tar);
         }
     };
+    protected ByteBuffer target;
+
+    private RingByteBuffer() {
+    }
 
     void initBuffer(ByteBufAllocator alloc, int capacity) {
         super.initByteBuf(alloc, capacity);
         this.target = alloc.jvmBuffer(capacity);
     }
 
+    // ------------------------------------------------------------------------
+
     void initBuffer(ByteBufAllocator alloc, ByteBuffer initData) {
         super.initByteBuf(alloc, initData.capacity());
         this.target = initData;
     }
-
-    private RingByteBuffer() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    protected ByteBuffer target;
 
     @Override
     public ByteBuf markReader() {

@@ -23,7 +23,6 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.AsynchronousSocketChannel;
-import java.nio.channels.NetworkChannel;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -73,11 +72,6 @@ class TcpAsyncChannel implements AsyncChannel {
     @Override
     public SocketAddress getRemoteAddress() {
         return this.remoteAddress;
-    }
-
-    @Override
-    public NetworkChannel getTarget() {
-        return this.channel;
     }
 
     @Override

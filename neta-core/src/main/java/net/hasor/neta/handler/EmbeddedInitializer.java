@@ -22,6 +22,7 @@ import net.hasor.neta.channel.ProtoStack;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
+@Deprecated
 @FunctionalInterface
 public interface EmbeddedInitializer {
     ProtoStack<?> config(ProtoContext ctx);

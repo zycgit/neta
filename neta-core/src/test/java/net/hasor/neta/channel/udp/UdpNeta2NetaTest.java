@@ -50,10 +50,10 @@ public class UdpNeta2NetaTest {
         udpConfig.setRcvPacketSize(4096);
 
         // server
-        NetListen listen = neta.listen(address, serverProto, udpConfig);
+        NetListen listen = neta.bind(address, serverProto, udpConfig);
 
         // client
-        Future<NetChannel> connect = neta.connect(address, clientProto, udpConfig);
+        Future<NetChannel> connect = neta.connectAsync(address, clientProto, udpConfig);
         NetChannel clientSite = connect.get();
         Future<?> send1 = clientSite.sendData("Hello Server, this message form client.\n");
 

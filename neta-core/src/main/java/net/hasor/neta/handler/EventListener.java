@@ -13,13 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.events;
+package net.hasor.neta.handler;
 /**
- * Application stack builder
+ * on event
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
-public interface EventBus {
-
-    void bind(EventListener eventHandler);
+@FunctionalInterface
+public interface EventListener extends java.util.EventListener {
+    /**
+     * on event
+     * @param data event data
+     */
+    void onEvent(PlayLod data);
 }

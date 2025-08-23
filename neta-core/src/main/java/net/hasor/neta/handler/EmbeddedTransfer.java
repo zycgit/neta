@@ -23,6 +23,7 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-26
  */
+@Deprecated
 public class EmbeddedTransfer {
     private static final Logger          logger = Logger.getLogger(EmbeddedTransfer.class);
     private final        EmbeddedChannel client;

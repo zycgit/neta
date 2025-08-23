@@ -72,13 +72,13 @@ public class UdpNeta2JvmTest {
         udpConfig.setRcvPacketSize(4096);
         NetManager neta = new NetManager(new NetConfig());
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextEncoder((ProtoHandler<String, ByteBuf>) (context, src, dst) -> {
+            return ProtoHelper.standard().nextEncoder((ProtoHandler<String, ByteBuf>) (context, src, dst) -> {
                 String data = src.takeMessage();
                 dst.offerMessage(ByteBuf.wrap(data.getBytes()));
                 return ProtoStatus.Next;
             }).build();
         };
-        Future<NetChannel> future = neta.connect(address, initializer, udpConfig);
+        Future<NetChannel> future = neta.connectAsync(address, initializer, udpConfig);
         NetChannel channel = future.get();
         channel.sendData("Hello UDP");
 

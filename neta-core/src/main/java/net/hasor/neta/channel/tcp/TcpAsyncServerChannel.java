@@ -20,7 +20,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousServerSocketChannel;
-import java.nio.channels.NetworkChannel;
 
 /**
  * TCP implementation of asynchronous server channel.
@@ -58,11 +57,6 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
     @Override
     public boolean isOpen() {
         return this.channel.isOpen();
-    }
-
-    @Override
-    public NetworkChannel getChannel() {
-        return this.channel;
     }
 
     @Override

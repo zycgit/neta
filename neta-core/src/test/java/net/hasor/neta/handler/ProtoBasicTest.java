@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtMode;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.codec.TransparentProtoHandler;
 import org.junit.Test;
 
@@ -26,23 +32,24 @@ import java.io.PrintStream;
  */
 public class ProtoBasicTest extends AbstractStackTest {
     @Test
-    public void nextTest_0() {
-        EmbeddedInitializer initializer = (ctx) -> {
-            return ProtoHelper.embedded(Integer.class, Integer.class)        //
+    public void nextTest_0() throws Throwable {
+        ProtoInitializer initializer = (ctx) -> {
+            return ProtoHelper.typed(Integer.class, Integer.class)           //
                     .nextDecoder("L1", new TransparentProtoHandler<>())//
                     .build();
         };
 
-        EmbeddedSoContext.resetChannelID(0);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtSoConfig config = new VrtSoConfig();
+        config.setVrtMode(VrtMode.Server);
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, config);
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         channel.printStackTrace(new PrintStream(out));
 
-        String data = "ChannelID  : 1,          Server(Active)\n" + //
-                "Local Addr :                   embedded\n" + //
-                "Remote Addr:                   embedded\n" + //
+        String data = "ChannelId  : 1,          Server(Active)\n" + //
+                "Local Addr :                      vrt:1\n" + //
+                "Remote Addr:                      vrt:1\n" + //
                 "┏━━━━━━━━━━━━━━━━━━━━ ↓ 0/500+ (SND) ━┓\n" + //
                 "┃ L1 [↑ 0/500+,       ↓ 0/500+      ] ┃\n" + //
                 "┗━━━━ ↑ 0/500+ (RCV) ━━━━━━━━━━━━━━━━━┛\n";

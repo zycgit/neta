@@ -226,5 +226,10 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
     <SND_UP> ProtoBuilder<RCV_UP, SND_UP> nextEncoder(String name, ProtoConfig protoConf, ProtoHandler<SND_UP, SND_DOWN> encoder);
 
     /** build {@link ProtoStack} */
-    <T> ProtoStack<T> build();
+    default <T> ProtoStack<T> build() {
+        return this.build(null);
+    }
+
+    /** build {@link ProtoStack} */
+    <T> ProtoStack<T> build(EventBus eventBus);
 }

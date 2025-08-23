@@ -31,13 +31,6 @@ public abstract class BufferCleaner {
     protected static final Logger logger = Logger.getLogger(BufferCleaner.class);
     protected static final Unsafe UNSAFE;
 
-    public static boolean hasUnsafe() {
-        return UNSAFE != null;
-    }
-
-    /** Free a direct {@link ByteBuffer} if possible */
-    public abstract void freeDirectBuffer(ByteBuffer buffer);
-
     // ensure unsafe
     static {
         Unsafe unsafe = null;
@@ -127,4 +120,11 @@ public abstract class BufferCleaner {
 
         UNSAFE = unsafe;
     }
+
+    public static boolean hasUnsafe() {
+        return UNSAFE != null;
+    }
+
+    /** Free a direct {@link ByteBuffer} if possible */
+    public abstract void freeDirectBuffer(ByteBuffer buffer);
 }

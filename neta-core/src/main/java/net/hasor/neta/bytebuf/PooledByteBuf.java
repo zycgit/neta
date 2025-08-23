@@ -32,6 +32,14 @@ final class PooledByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(PooledByteBuf.class, tar);
         }
     };
+    protected Buffer     target;
+    private   BufferPool pool;
+
+    // ------------------------------------------------------------------------
+    private   int        initSize;
+    private   int        extensionSize;
+    private PooledByteBuf() {
+    }
 
     void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, Buffer target, BufferPool pool) {
         super.initByteBuf(alloc, maxCapacity);
@@ -40,16 +48,6 @@ final class PooledByteBuf extends AbstractByteBuf {
         this.initSize = target.capacity();
         this.extensionSize = extensionSize;
     }
-
-    private PooledByteBuf() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    protected Buffer     target;
-    private   BufferPool pool;
-    private   int        initSize;
-    private   int        extensionSize;
 
     @Override
     public ByteBuf markReader() {

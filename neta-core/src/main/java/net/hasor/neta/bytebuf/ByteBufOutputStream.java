@@ -32,9 +32,9 @@ import java.util.Objects;
  */
 public class ByteBufOutputStream extends OutputStream implements DataOutput {
     private final ByteBuf          buffer;
+    private final int              cacheSize;
     private       DataOutputStream utf8out; // lazily-instantiated
     private       boolean          closed;
-    private final int              cacheSize;
 
     /**
      * Creates a new stream which writes data to the specified {@code buffer}. (no cache)

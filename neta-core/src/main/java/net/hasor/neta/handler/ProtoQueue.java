@@ -26,10 +26,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     private final int      capacity;
-    protected     int      takeCount;
     private final List<T>  linkedList;
     private final List<T>  offerTemp;
     private final Class<?> elementArrayType;
+    protected     int      takeCount;
 
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;

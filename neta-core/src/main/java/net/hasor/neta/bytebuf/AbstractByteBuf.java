@@ -41,9 +41,9 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     protected        int              markedWriterIndex;
     protected        int              readerIndex;
     protected        int              writerIndex;
+    protected        ByteOrder        byteOrder = ByteOrder.BIG_ENDIAN;
     private          int              maxCapacity;
     private volatile boolean          isFree;
-    protected        ByteOrder        byteOrder = ByteOrder.BIG_ENDIAN;
 
     protected void initByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;

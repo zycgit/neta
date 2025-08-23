@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel.virtual;
+import net.hasor.cobble.ObjectUtils;
 import net.hasor.neta.channel.SoChannel;
 
 import java.net.SocketAddress;
@@ -23,10 +24,36 @@ import java.net.SocketAddress;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-@Deprecated
-public class EmbeddedSocketAddress extends SocketAddress {
+public class VrtSocketAddress extends SocketAddress {
+    private final long channelId;
+
+    public VrtSocketAddress(long channelId) {
+        this.channelId = ObjectUtils.checkPositiveOrZero(channelId, "channelId");
+    }
+
+    public long getChannelId() {
+        return this.channelId;
+    }
+
+    @Override
+    public int hashCode() {
+        return Long.hashCode(this.channelId);
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }
+        if (obj instanceof VrtSocketAddress) {
+            VrtSocketAddress that = (VrtSocketAddress) obj;
+            return this.channelId == that.channelId;
+        }
+        return false;
+    }
+
     @Override
     public String toString() {
-        return "embedded";
+        return "vrt:" + this.channelId;
     }
 }

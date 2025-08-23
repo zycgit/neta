@@ -38,18 +38,18 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class NetChannel extends AttributeChannel<NetChannel> implements SoChannel<NetChannel> {
     private static final Logger              logger = Logger.getLogger(NetChannel.class);
-    private final        long                channelId;
     protected final      AsyncChannel        asyncChannel;
     protected final      NetListen           forListen;
     protected final      SoSndContext        wContext;
     protected final      SoContextService    context;
-    private final        Object              readTimeoutSyncObj;
     protected final      NetMonitor          monitor;
     //
     protected final      ProtoContextService protoCtx;
     protected final      ProtoStack<ByteBuf> protoStack;
     protected final      AtomicBoolean       closeStatus;
     protected final      Future<NetChannel>  closeFuture;
+    private final        long                channelId;
+    private final        Object              readTimeoutSyncObj;
 
     protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
         this.channelId = channelId;
@@ -190,14 +190,21 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         return this.monitor.getSndCounterBytes();
     }
 
+    /**
+     * Returns protocol stack statistics
+     */
+    public ProtoStatistical getStatistical() {
+        return this.protoStack.getStatistical();
+    }
+
     /* Receive data without concurrency */
-    protected final void notifyRcv(Object rcvBytes) {
+    protected final void notifyRcv(Object[] rcvBytes) {
         synchronized (this.readTimeoutSyncObj) {
             this.readTimeoutSyncObj.notifyAll();
         }
 
         try {
-            Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, new Object[] { rcvBytes });
+            Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, rcvBytes);
             if (dataArray != null && dataArray.length > 0) {
                 appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
             }
@@ -240,7 +247,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
      */
     public Future<?> sendData(Object writeData) {
         Objects.requireNonNull(writeData, "the send data is null.");
-        return this.sendOrFlush(writeData, null);
+        return this.sendOrFlush(new Object[] { writeData }, null);
     }
 
     /**
@@ -248,6 +255,24 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
      * <p>data goes through the application layer network protocol stack</p>
      */
     public Future<NetChannel> sendData(Object writeData, String stackName) {
+        Objects.requireNonNull(writeData, "the send data is null.");
+        return this.sendOrFlush(new Object[] { writeData }, stackName);
+    }
+
+    /**
+     * sent data to remote, The network IO transfer operation is performed asynchronously.
+     * <p>data goes through the application layer network protocol stack</p>
+     */
+    public Future<?> sendData(Object[] writeData) {
+        Objects.requireNonNull(writeData, "the send data is null.");
+        return this.sendOrFlush(writeData, null);
+    }
+
+    /**
+     * sent data to remote, The network IO transfer operation is performed asynchronously.
+     * <p>data goes through the application layer network protocol stack</p>
+     */
+    public Future<NetChannel> sendData(Object[] writeData, String stackName) {
         Objects.requireNonNull(writeData, "the send data is null.");
         return this.sendOrFlush(writeData, stackName);
     }
@@ -265,7 +290,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         return this.sendOrFlush(null, stackName);
     }
 
-    private Future<NetChannel> sendOrFlush(Object writeData, String stackName) {
+    private Future<NetChannel> sendOrFlush(Object[] writeData, String stackName) {
         Future<NetChannel> future = newFutureForSend();
         if (future.isDone()) {
             return future;
@@ -274,10 +299,10 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         try {
             Object[] dataArray;
             synchronized (this) {
-                boolean isFlush = writeData == null;
+                boolean isFlush = writeData == null || writeData.length == 0;
                 dataArray = isFlush ?//
                         this.protoStack.onSndMessage(this.protoCtx, stackName, ArrayUtils.EMPTY_OBJECT_ARRAY) ://
-                        this.protoStack.onSndMessage(this.protoCtx, stackName, new Object[] { writeData });
+                        this.protoStack.onSndMessage(this.protoCtx, stackName, writeData);
             }
             appendSoSndTask(toSoSndData(future, dataArray));
         } catch (Throwable e) {
@@ -295,7 +320,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         }
 
         int sendSize = 0;
-        ByteBuf[] wrap = new ByteBuf[dataArray.length];
+        Object[] wrap = new Object[dataArray.length];
         for (int i = 0; i < dataArray.length; i++) {
             Object buf = dataArray[i];
             if (buf instanceof byte[]) {
@@ -309,11 +334,11 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
                 sendSize = sendSize + ((ByteBuf) buf).readableBytes();
 
                 wrap[i] = this.context.getByteBufAllocator().buffer(tmpBuf.readableBytes());
-                wrap[i].writeBuffer(tmpBuf);
-                wrap[i].markWriter();
+                ((ByteBuf) wrap[i]).writeBuffer(tmpBuf);
+                ((ByteBuf) wrap[i]).markWriter();
                 tmpBuf.markReader();
             } else {
-                throw new ClassCastException(dataArray.getClass().getName() + " cannot be cast to (byte[] / ByteBuffer / ByteBuf)");
+                wrap[i] = buf;
             }
         }
 

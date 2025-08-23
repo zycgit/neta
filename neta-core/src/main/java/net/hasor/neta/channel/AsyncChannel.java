@@ -51,12 +51,6 @@ public interface AsyncChannel extends Closeable {
     SocketAddress getRemoteAddress();
 
     /**
-     * Gets the target object associated with this channel.
-     * @return The target object
-     */
-    Object getTarget();
-
-    /**
      * Checks if this channel is open.
      * @return true if the channel is open, false otherwise
      */

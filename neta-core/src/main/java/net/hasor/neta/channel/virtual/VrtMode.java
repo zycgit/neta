@@ -13,19 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.events;
+package net.hasor.neta.channel.virtual;
+
 /**
- * Application stack builder
+ * virtual options.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-10-20
+ * @version : 2023-09-24
  */
-@FunctionalInterface
-public interface EventListener<T> extends java.util.EventListener {
-    /**
-     * 处理事件的处理方法，参数是要处理的事件。
-     * @param event 事件
-     * @param data 事件参数
-     * @throws Throwable 执行事件期间引发的异常。
-     */
-    void onEvent(String event, T data) throws Throwable;
+public enum VrtMode {
+    Server,
+    Client
 }

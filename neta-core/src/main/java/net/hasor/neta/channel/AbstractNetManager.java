@@ -28,10 +28,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public abstract class AbstractNetManager {
     private static final Logger           logger = Logger.getLogger(AbstractNetManager.class);
-    protected            ExecutorService  ioExec;
     protected final      NetConfig        config;
     protected final      SoContextService context;
     protected final      AtomicBoolean    shutdown;
+    protected            ExecutorService  ioExec;
 
     public AbstractNetManager(NetConfig config) {
         this.config = config;

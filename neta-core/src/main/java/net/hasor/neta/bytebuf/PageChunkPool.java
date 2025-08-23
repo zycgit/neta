@@ -26,13 +26,14 @@ import java.util.function.Consumer;
  * @version : 2024-02-15
  */
 class PageChunkPool {
+    private static final double LOG2 = Math.log(2);
+    protected final byte[]                  chunksMap;
     private final   int                     memAddress;
     private final   int                     pageSize;
     private final   int                     pageCount;
     private final   int                     capacity;
     private final   int                     height;
     private final   PageChunk[]             chunksHeads;
-    protected final byte[]                  chunksMap;
     private final   ReentrantLock[]         chunksLock;
     //
     private         Object                  owner;
@@ -56,12 +57,47 @@ class PageChunkPool {
         }
     }
 
-    public void setOwner(Object owner) {
-        this.owner = owner;
+    /** Returns a power of two size for the given target capacity. */
+    static int tableSizeFor(int cap, int maximumSize) {
+        int n = cap - 1;
+        n |= n >>> 1;
+        n |= n >>> 2;
+        n |= n >>> 4;
+        n |= n >>> 8;
+        n |= n >>> 16;
+        return (n < 0) ? 1 : (n >= maximumSize) ? maximumSize : n + 1;
+    }
+
+    private static int log2(double antilogarithm) {
+        return (int) (Math.log(antilogarithm) / LOG2);
+    }
+
+    protected static byte checkMask(int form, int to) {
+        byte m1 = (byte) (0b11111111 >>> to + 1);
+        if (form > 0) {
+            byte m2 = (byte) ((byte) 0b10000000 >>> (form - 1));
+            return (byte) (m1 | m2);
+        } else {
+            return m1;
+        }
+    }
+
+    protected static byte useMask(int form, int to) {
+        byte m1 = (byte) ((byte) 0b10000000 >> to);
+        if (form > 0) {
+            byte m2 = (byte) (0b11111111 >>> form);
+            return (byte) (m1 & m2);
+        } else {
+            return m1;
+        }
     }
 
     public Object getOwner() {
         return this.owner;
+    }
+
+    public void setOwner(Object owner) {
+        this.owner = owner;
     }
 
     public void setNotify(Consumer<PageChunkPool> notify) {
@@ -129,23 +165,6 @@ class PageChunkPool {
         return chunksHeads;
     }
 
-    /** Returns a power of two size for the given target capacity. */
-    static int tableSizeFor(int cap, int maximumSize) {
-        int n = cap - 1;
-        n |= n >>> 1;
-        n |= n >>> 2;
-        n |= n >>> 4;
-        n |= n >>> 8;
-        n |= n >>> 16;
-        return (n < 0) ? 1 : (n >= maximumSize) ? maximumSize : n + 1;
-    }
-
-    private static final double LOG2 = Math.log(2);
-
-    private static int log2(double antilogarithm) {
-        return (int) (Math.log(antilogarithm) / LOG2);
-    }
-
     /** Requests memory allocation and returns null if allocation fails. */
     public PageChunkSplit requestPages(int capacity) {
         if (capacity > this.capacity) {
@@ -177,26 +196,6 @@ class PageChunkPool {
             look = look.next;
         }
         return null;
-    }
-
-    protected static byte checkMask(int form, int to) {
-        byte m1 = (byte) (0b11111111 >>> to + 1);
-        if (form > 0) {
-            byte m2 = (byte) ((byte) 0b10000000 >>> (form - 1));
-            return (byte) (m1 | m2);
-        } else {
-            return m1;
-        }
-    }
-
-    protected static byte useMask(int form, int to) {
-        byte m1 = (byte) ((byte) 0b10000000 >> to);
-        if (form > 0) {
-            byte m2 = (byte) (0b11111111 >>> form);
-            return (byte) (m1 & m2);
-        } else {
-            return m1;
-        }
     }
 
     private boolean isFree(PageRange look) {

@@ -24,16 +24,29 @@ import java.util.concurrent.locks.Lock;
 class BufferArena {
     private final BufferPool                bufferPool;
     private final BufferRing<PageChunkPool> bufferRing;
+    private final Lock                      shareLock;
     private       double                    prevValve;
     private       BufferArena               prev;
     private       double                    nextValve;
     private       BufferArena               next;
-    private final Lock                      shareLock;
 
     BufferArena(BufferPool bufferPool, Lock shareLock) {
         this.bufferPool = bufferPool;
         this.bufferRing = new BufferRing<>();
         this.shareLock = shareLock;
+    }
+
+    private static int checkUsage(PageChunkPool pool) {
+        double usage = pool.getUsage();
+        BufferArena arena = (BufferArena) pool.getOwner();
+
+        if (usage < arena.prevValve && arena.prev != null) {
+            return -1;  // move to prev
+        } else if (usage >= arena.nextValve) {
+            return 1;   // move to next
+        } else {
+            return 0;
+        }
     }
 
     public int getChunkCount() {
@@ -120,19 +133,6 @@ class BufferArena {
                 arena.bufferRing.remove(pool);
                 arena.next.normalOffer(pool);
             }
-        }
-    }
-
-    private static int checkUsage(PageChunkPool pool) {
-        double usage = pool.getUsage();
-        BufferArena arena = (BufferArena) pool.getOwner();
-
-        if (usage < arena.prevValve && arena.prev != null) {
-            return -1;  // move to prev
-        } else if (usage >= arena.nextValve) {
-            return 1;   // move to next
-        } else {
-            return 0;
         }
     }
 

@@ -24,10 +24,10 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 public class NetMonitor {
     private final long       createdTime     = System.currentTimeMillis();
-    private       long       lastSndTime;
-    private       long       lastRcvTime;
     private final AtomicLong rcvCounterBytes = new AtomicLong();
     private final AtomicLong sndCounterBytes = new AtomicLong();
+    private       long       lastSndTime;
+    private       long       lastRcvTime;
 
     public long getCreatedTime() {
         return this.createdTime;

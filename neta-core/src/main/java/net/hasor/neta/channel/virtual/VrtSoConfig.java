@@ -13,29 +13,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel.virtual;
+
+import net.hasor.neta.channel.SoConfig;
+
 /**
- * Get protocol stack statistics
+ * virtual options.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-12-18
+ * @version : 2023-09-24
  */
-public interface ProtoStatistical {
+public class VrtSoConfig extends SoConfig {
+    private VrtMode vrtMode;
 
-    /** The incoming messages heapUp */
-    int heapUpOfRcv();
+    public VrtSoConfig() {
+        super(VrtProvider.NAME);
+        this.vrtMode = VrtMode.Client;
+    }
 
-    /** The incoming messages heapUp */
-    int heapUpOfRcv(String layerName);
+    public VrtMode getVrtMode() {
+        return this.vrtMode;
+    }
 
-    /** The incoming messages heapUp */
-    int heapUpOfRcvRoot();
-
-    /** The messages sent heapUp */
-    int heapUpOfSnd();
-
-    /** The incoming messages heapUp */
-    int heapUpOfSnd(String layerName);
-
-    /** The incoming messages heapUp */
-    int heapUpOfSndRoot();
+    public void setVrtMode(VrtMode vrtMode) {
+        this.vrtMode = vrtMode;
+    }
 }

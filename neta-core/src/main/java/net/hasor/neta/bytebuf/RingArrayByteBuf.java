@@ -34,6 +34,10 @@ final class RingArrayByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(RingArrayByteBuf.class, tar);
         }
     };
+    protected byte[] target;
+
+    private RingArrayByteBuf() {
+    }
 
     void initBuffer(ByteBufAllocator alloc, byte[] initData) {
         super.initByteBuf(alloc, initData.length);
@@ -42,19 +46,14 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         this.markedWriterIndex = initData.length;
     }
 
+    // ------------------------------------------------------------------------
+
     void initBuffer(ByteBufAllocator alloc, int capacity) {
         super.initByteBuf(alloc, ObjectUtils.checkPositiveOrZero(capacity, "capacity"));
         this.target = new byte[capacity];
         this.writerIndex = 0;
         this.markedWriterIndex = 0;
     }
-
-    private RingArrayByteBuf() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    protected byte[] target;
 
     @Override
     public ByteBuf markReader() {

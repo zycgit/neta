@@ -15,6 +15,11 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.cobble.StringUtils;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -26,244 +31,246 @@ import java.util.List;
  */
 public class ProtoSndTest extends AbstractStackTest {
     @Test
-    public void nextTest_1() {
+    public void nextTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Encoder
         decoderFinishCnt.clear();
         encoderFinishCnt.clear();
-        channel.send(123);// SND -> NET
+        channel.sendData(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
-        assert channel.readSnd().equals(123);
+        assert channel.readSend().equals(123);
     }
 
     @Test
-    public void errorTest_1() {
+    public void errorTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doThrowHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd(Err) +1
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.send(123);// SND -> NET
+
+        channel.sendData(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoThrow");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("2EncErrThrow,1EncErrNext");
-        assert channel.readSnd() == null;
+        assert channel.readSend() == null;
     }
 
     @Test
-    public void retryTest_1() {
+    public void retryTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.send(123);// SND -> NET
+
+        channel.sendData(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSnd().equals(123);
+        assert channel.readSend().equals(123);
     }
 
     @Test
-    public void againTest_1() {
+    public void againTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.send(123);// SND -> NET
+
+        channel.sendData(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSnd().equals(123);
+        assert channel.readSend().equals(123);
     }
 
     @Test
-    public void againTest_2() {
+    public void againTest_2() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.send(123);// SND -> NET
+
+        channel.sendData(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSnd().equals(123);
+        assert channel.readSend().equals(123);
     }
 
     @Test
-    public void restartTest_1() {
+    public void restartTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRestartHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.send(123);// SND -> NET
+
+        channel.sendData(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSnd().equals(123);
+        assert channel.readSend().equals(123);
     }
 
     @Test
-    public void exitTest_1() {
+    public void exitTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doExitHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Encoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.send(123);// SND -> NET
+
+        channel.sendData(123);// SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoExit");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSnd() == null;
+        assert channel.readSend() == null;
     }
 
     @Test
-    public void interruptTest_1() {
+    public void interruptTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> ProtoHelper.embedded(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex("L1", doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex("L2", doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doInterruptHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex("L3", doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Decoder
         decoderFinishCnt.clear();
         decoderFailedCnt.clear();
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        try {
-            channel.send(123);
-            assert false;
-        } catch (Exception e) {
-            assert e.getMessage().endsWith("- Interrupted by L2");
-        }
+
+        channel.sendData(123);
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoInterrupt");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSnd() == null;
+        assert channel.readSend() == null;
     }
 
     @Test
-    public void blackTest_1() {
+    public void blackTest_1() throws Throwable {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        EmbeddedInitializer initializer = ctx -> {
+        ProtoInitializer initializer = ctx -> {
             ProtoConfig protoConf1 = new ProtoConfig();
             protoConf1.setRcvDownSlotSize(3);
             protoConf1.setSndUpSlotSize(3);
@@ -271,23 +278,24 @@ public class ProtoSndTest extends AbstractStackTest {
             ProtoConfig protoConf2 = new ProtoConfig();
             protoConf2.setRcvDownSlotSize(2);
             protoConf2.setSndUpSlotSize(2);
-            return ProtoHelper.embedded(Integer.class, Integer.class)//
+            return ProtoHelper.typed(Integer.class, Integer.class)//
                     .nextEncoder("COPY1", protoConf1, doCopyUsingBlackHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                     .nextEncoder("COPY2", protoConf2, doCopyUsingBlackHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                     .build();
         };
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         // do Decoder
         encoderFinishCnt.clear();
         encoderFailedCnt.clear();
-        channel.send(1, 2, 3); // RCV -> SND -> NET
+
+        channel.sendData(new Object[] { 1, 2, 3 }); // RCV -> SND -> NET
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("2EncDoBack,1EncDoNext,2EncDoNext,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert channel.readSnd().equals(1);
-        assert channel.readSnd().equals(2);
-        assert channel.readSnd().equals(3);
+        assert channel.readSend().equals(1);
+        assert channel.readSend().equals(2);
+        assert channel.readSend().equals(3);
     }
 }

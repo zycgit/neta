@@ -38,17 +38,14 @@ public class SoSndDataTest {
 
         SoSndData soData = new SoSndData(8, sndData, new BasicFuture<>(), null);
         assert soData.getDataSize() == 8;
-        assert soData.readableBytes() == 8;
         assert soData.hasReadable();
 
         soData.transferTo(wrap);
         assert soData.getDataSize() == 8;
-        assert soData.readableBytes() == 7;
         assert soData.hasReadable();
 
         soData.transferTo(wrap);
         assert soData.getDataSize() == 8;
-        assert soData.readableBytes() == 7;
         assert soData.hasReadable();
     }
 
@@ -64,13 +61,11 @@ public class SoSndDataTest {
 
         SoSndData soData = new SoSndData(8, sndData, new BasicFuture<>(), null);
         assert soData.getDataSize() == 8;
-        assert soData.readableBytes() == 8;
         assert soData.hasReadable();
 
         long testReadableBytes = soData.getDataSize();
         while (testReadableBytes > 0) {
             assert soData.getDataSize() == 8;
-            assert soData.readableBytes() == testReadableBytes;
             assert soData.hasReadable();
             soData.transferTo(wrap);
             wrap.clear();
@@ -78,7 +73,6 @@ public class SoSndDataTest {
         }
 
         assert soData.getDataSize() == 8;
-        assert soData.readableBytes() == 0;
         assert !soData.hasReadable();
     }
 
@@ -112,7 +106,6 @@ public class SoSndDataTest {
         wrap.clear();
 
         assert soData.getDataSize() == 8;
-        assert soData.readableBytes() == 0;
         assert !soData.hasReadable();
     }
 

@@ -84,11 +84,6 @@ class UdpAsyncChannel implements AsyncChannel {
         return this.remoteAddress;
     }
 
-    @Override
-    public DatagramChannel getTarget() {
-        return this.channel;
-    }
-
     //
 
     @Override

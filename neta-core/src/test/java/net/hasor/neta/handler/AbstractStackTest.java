@@ -159,7 +159,7 @@ public class AbstractStackTest {
         };
     }
 
-    protected static ProtoHandler<Integer, Integer> doNextHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
+    public static ProtoHandler<Integer, Integer> doNextHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
@@ -327,7 +327,7 @@ public class AbstractStackTest {
         };
     }
 
-    protected static ProtoHandler<Integer, Integer> errNextHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
+    public static ProtoHandler<Integer, Integer> errNextHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {

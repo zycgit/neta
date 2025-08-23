@@ -39,6 +39,12 @@ class WrapByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(WrapByteBuffer.class, tar);
         }
     };
+    protected ByteBuffer target;
+
+    private WrapByteBuffer() {
+    }
+
+    // ------------------------------------------------------------------------
 
     void initBuffer(ByteBuffer initData, boolean asWrite) {
         super.initByteBuf(null, initData.limit());
@@ -48,13 +54,6 @@ class WrapByteBuffer extends AbstractByteBuf {
             this.markedWriterIndex = initData.limit();
         }
     }
-
-    private WrapByteBuffer() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    protected ByteBuffer target;
 
     @Override
     public int writableBytes() {

@@ -45,7 +45,7 @@ public class UdpJvm2NetaTest {
 
         AtomicBoolean udpRead = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
+            return ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
                 while (src.hasMore()) {
                     ByteBuf data = src.takeMessage();
                     int len = data.readableBytes();
@@ -60,7 +60,7 @@ public class UdpJvm2NetaTest {
 
         UdpSoConfig udpConf = udpConfig(128, 4096);
         udpConf.setSoReadTimeoutMs(-1);
-        neta.listen(address, initializer, udpConf);
+        neta.bind(address, initializer, udpConf);
 
         //
         DatagramSocket socket = new DatagramSocket();

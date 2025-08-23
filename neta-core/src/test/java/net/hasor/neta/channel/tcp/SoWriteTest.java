@@ -42,7 +42,7 @@ public class SoWriteTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
+        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(), tcpConf);
         Socket client = new Socket("127.0.0.1", safePort);
 
         listen.waitAnyAccept();
@@ -70,7 +70,7 @@ public class SoWriteTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public void onActive(ProtoContext context) throws Throwable {
                 context.sendData(ByteBuf.wrap("Hello this message form server.\n".getBytes()));
@@ -104,10 +104,10 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(new NetConfig());
-        NetListen listen = server.listen(address, new ProtoInitializer() {
+        NetListen listen = server.bind(address, new ProtoInitializer() {
             @Override
             public ProtoStack<ByteBuf> config(ProtoContext ctx) {
-                return ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+                return ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                     @Override
                     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                         while (src.hasMore()) {
@@ -143,7 +143,7 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void sndTimeoutTest_01() throws Throwable {
         AtomicLong sndErrTime = new AtomicLong(0);
-        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 dst.offerMessage(src);
@@ -167,7 +167,7 @@ public class SoWriteTest extends AbstractSoTest {
 
         NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
-        NetListen listen = server.listen(address, initializer, tcpConf);
+        NetListen listen = server.bind(address, initializer, tcpConf);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -190,7 +190,7 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void sndTimeoutTest_02() throws Throwable {
         AtomicLong sndErrTime = new AtomicLong(0);
-        ProtoInitializer initializer = ctx -> ProtoHelper.builder().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 dst.offerMessage(src);
@@ -214,7 +214,7 @@ public class SoWriteTest extends AbstractSoTest {
 
         NetManager server = new NetManager(globalConf());
         SoContext context = server.getContext();
-        NetListen listen = server.listen(address, initializer, tcpConf);
+        NetListen listen = server.bind(address, initializer, tcpConf);
 
         // connect to server -> send data -> close
         Socket client = new Socket("127.0.0.1", safePort);
@@ -238,7 +238,7 @@ public class SoWriteTest extends AbstractSoTest {
     public void sndThrowTest_01() throws Throwable {
         AtomicBoolean sndErr1 = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
+            return ProtoHelper.standard().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
 
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
@@ -262,7 +262,7 @@ public class SoWriteTest extends AbstractSoTest {
 
         NetManager server = new NetManager(netConfig);
         SoContext context = server.getContext();
-        NetListen listen = server.listen(address, initializer, tcpConf);
+        NetListen listen = server.bind(address, initializer, tcpConf);
 
         // client: send a lot of pack
         Socket client = new Socket("127.0.0.1", safePort);
@@ -288,7 +288,7 @@ public class SoWriteTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 32);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.listen(address, ctx -> ProtoHelper.builder().build(), tcpConf);
+        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(), tcpConf);
         Socket client = new Socket("127.0.0.1", safePort);
 
         listen.waitAnyAccept();

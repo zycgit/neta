@@ -29,11 +29,11 @@ import java.util.Objects;
  */
 public class ByteBufInputStream extends InputStream implements DataInput {
     private final ByteBuf buffer;
-    private       boolean closed;
     /**
      * we support a conditional flag which indicates if {@link #buffer} should be released when this {@link InputStream} is closed.
      */
     private final boolean releaseOnClose;
+    private       boolean closed;
 
     /**
      * Creates a new stream which reads data from the specified {@code buffer}

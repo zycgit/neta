@@ -98,7 +98,7 @@ public class HandlerUtils {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
+        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // bytes <-> String
                 .nextDuplex("String", HandlerUtils::doDecoder1, HandlerUtils::doEncoder1)
                 // create Stack

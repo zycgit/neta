@@ -41,10 +41,10 @@ public class TcpNeta2NetaTest extends AbstractSoTest {
         NetManager neta = new NetManager(globalConf());
 
         // server
-        NetListen listen = neta.listen(address, serverProto, TcpSoConfig.TCP());
+        NetListen listen = neta.bind(address, serverProto, TcpSoConfig.TCP());
 
         // client
-        Future<NetChannel> connect = neta.connect(address, clientProto, TcpSoConfig.TCP());
+        Future<NetChannel> connect = neta.connectAsync(address, clientProto, TcpSoConfig.TCP());
         NetChannel clientSite = connect.get();
         Future<?> send1 = clientSite.sendData("Hello Server, this message form client.\n");
 

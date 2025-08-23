@@ -28,12 +28,6 @@ import java.util.concurrent.locks.ReentrantLock;
  * @version : 2022-11-01
  */
 class BufferPool {
-    private final   int                  pageSize;
-    private final   int                  buddyTreeHeight;
-    private final   int                  maximumChunkCount;
-    private final   int                  memoryChunkSize;
-    private         long                 memoryCapacity;
-    private final   Map<Integer, Buffer> bufferPool;
     //
     protected final BufferArena          qInit;// 000%~025%
     protected final BufferArena          q000; // 001%~050%
@@ -42,6 +36,12 @@ class BufferPool {
     protected final BufferArena          q075; // 075%~100%
     protected final BufferArena          q100; // 100%~MAX
     protected final BufferArena[]        arenaList;
+    private final   int                  pageSize;
+    private final   int                  buddyTreeHeight;
+    private final   int                  maximumChunkCount;
+    private final   int                  memoryChunkSize;
+    private final   Map<Integer, Buffer> bufferPool;
+    private         long                 memoryCapacity;
 
     public BufferPool(int pageSize) {
         this(pageSize, -1, 12);

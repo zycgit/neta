@@ -32,19 +32,27 @@ class BufferWrap implements Buffer {
             RecycleObjectPool.free(BufferWrap.class, tar);
         }
     };
+    private ByteBuffer buffer;
+    private boolean    available;
+
+    // ------------------------------------------------------------------------
+
+    private BufferWrap() {
+    }
+
+    private static ByteBuffer clearAndPosition(ByteBuffer buffer, int index) {
+        if (index == 0) {
+            buffer.clear();
+        } else {
+            buffer.clear().position(index);
+        }
+        return buffer;
+    }
 
     void initBuffer(ByteBuffer buffer) {
         this.buffer = buffer;
         this.available = true;
     }
-
-    private BufferWrap() {
-    }
-
-    // ------------------------------------------------------------------------
-
-    private ByteBuffer buffer;
-    private boolean    available;
 
     @Override
     public boolean isAvailable() {
@@ -163,14 +171,5 @@ class BufferWrap implements Buffer {
         }
         this.buffer = null;
         RECYCLE_HANDLER.free(this);
-    }
-
-    private static ByteBuffer clearAndPosition(ByteBuffer buffer, int index) {
-        if (index == 0) {
-            buffer.clear();
-        } else {
-            buffer.clear().position(index);
-        }
-        return buffer;
     }
 }

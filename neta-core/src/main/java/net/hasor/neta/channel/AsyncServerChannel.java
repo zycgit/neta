@@ -16,7 +16,6 @@
 package net.hasor.neta.channel;
 import java.io.Closeable;
 import java.io.IOException;
-import java.nio.channels.NetworkChannel;
 
 /**
  * Asynchronous server channel interface for network communication.
@@ -40,12 +39,6 @@ public interface AsyncServerChannel extends Closeable {
      * @return true if the channel is open, false otherwise
      */
     boolean isOpen();
-
-    /**
-     * Gets the underlying network channel implementation.
-     * @return The NetworkChannel instance
-     */
-    NetworkChannel getChannel();
 
     /**
      * Binds the server channel to a specific network address and starts listening for connections.

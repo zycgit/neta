@@ -22,12 +22,6 @@ import java.util.concurrent.TimeUnit;
  * @version : 2023-09-24
  */
 public abstract class DefaultSoTask implements Runnable {
-    public enum SoTaskStatus {
-        Finish,
-        Failed,
-        Continue
-    }
-
     private SoTaskStatus status;
     private int          delayTime;
     private TimeUnit     delayUnit;
@@ -82,4 +76,10 @@ public abstract class DefaultSoTask implements Runnable {
     }
 
     protected abstract void doWork(int retryCnt);
+
+    public enum SoTaskStatus {
+        Finish,
+        Failed,
+        Continue
+    }
 }

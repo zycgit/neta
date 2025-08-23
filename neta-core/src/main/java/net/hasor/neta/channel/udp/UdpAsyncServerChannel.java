@@ -27,7 +27,6 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.NetworkChannel;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
@@ -87,11 +86,6 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     @Override
     public boolean isOpen() {
         return this.channel.isOpen();
-    }
-
-    @Override
-    public NetworkChannel getChannel() {
-        return this.channel;
     }
 
     @Override
@@ -183,15 +177,15 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     }
 
     private UdpChannel findOrCreateChannel(NetListen listen, SocketAddress localAddr, InetSocketAddress remoteAddr, Map<String, UdpChannel> channelMap) {
-        if (listen.isSuspend()) {
-            this.printLog("ERROR: AcceptFailed, listen is suspend.");
-            return null;
-        }
-
         String remoteID = remoteAddr.getAddress().getHostAddress() + ":" + remoteAddr.getPort();
         UdpChannel socket = channelMap.get(remoteID);
         if (socket != null) {
             return socket;
+        }
+
+        if (listen.isSuspend()) {
+            this.printLog("ERROR: AcceptFailed, listen is suspend.");
+            return null;
         }
 
         if (!this.acceptChannel(listen, localAddr, remoteAddr)) {

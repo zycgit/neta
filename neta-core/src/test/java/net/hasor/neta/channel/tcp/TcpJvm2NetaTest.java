@@ -43,7 +43,7 @@ public class TcpJvm2NetaTest extends AbstractSoTest {
         // server
         AtomicBoolean tcpRead = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.builder().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
+            return ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
                 while (src.hasMore()) {
                     ByteBuf data = src.takeMessage();
                     int len = data.readableBytes();
@@ -56,7 +56,7 @@ public class TcpJvm2NetaTest extends AbstractSoTest {
             }).build();
         };
         NetManager neta = new NetManager();
-        NetListen serverSite = neta.listen(address, initializer, TcpSoConfig.TCP());
+        NetListen serverSite = neta.bind(address, initializer, TcpSoConfig.TCP());
 
         // client
         Socket clientSite = new Socket(address.getHostString(), address.getPort());

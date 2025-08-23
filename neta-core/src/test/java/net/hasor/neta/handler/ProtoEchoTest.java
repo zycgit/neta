@@ -14,44 +14,55 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler;
+import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtMode;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.handler.frames.TypeFrame;
 import net.hasor.neta.handler.frames.TypeRequest;
 import net.hasor.neta.handler.frames.TypeResponse;
 import org.junit.Test;
+
+import java.util.ArrayDeque;
+import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 public class ProtoEchoTest {
-    private EmbeddedChannel createChannel(EmbeddedInitializer initializer) {
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        return new EmbeddedChannel(true, initializer, context);
-    }
-
     @Test
-    public void embeddedEcho() {
+    public void embeddedEcho() throws Throwable {
+        Queue<TypeRequest> queue = new ArrayDeque<>();
+        EventBus bus = new ProtoEventBus();
+        bus.subscribe(EventBus.TOPIC_CHANNEL, d -> queue.offer((TypeRequest) d.getData()));
+
         //  Data        Frame        Req/Res
         // String -> TypeFrame -> TypeRequest
         // String <- TypeFrame <- TypeResponse
         ProtoConfig protoConf = new ProtoConfig();
-        EmbeddedInitializer initializer = (ctx) -> ProtoHelper.embedded(String.class, String.class)//
+        ProtoInitializer initializer = (ctx) -> ProtoHelper.typed(String.class, String.class)//
                 .nextDuplex("TypeFrame", protoConf, ProtoEchoTest::doDecoder1, ProtoEchoTest::doEncoder1)
                 // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
                 .nextDuplex("TypeRequest/Response", protoConf, ProtoEchoTest::doDecoder2, ProtoEchoTest::doEncoder2)
                 // build
-                .build();
-        EmbeddedChannel channel = createChannel(initializer);
+                .build(bus);
 
-        //
-        channel.receive("hello");
-        TypeRequest request = (TypeRequest) channel.readRcv();
+        NetManager neta = new NetManager();
+        VrtSoConfig config = new VrtSoConfig();
+        config.setVrtMode(VrtMode.Server);
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, config);
+
+        channel.triggerReceive("hello");
+        TypeRequest request = queue.poll();
         assert request.getHeader().equals("TypeFrame>TypeRequest");
         assert request.getMessage().equals("hello");
 
-        channel.send(new TypeResponse(request.getHeader(), "echo hello"));
-        String response = (String) channel.readSnd();
+        channel.sendData(new TypeResponse(request.getHeader(), "echo hello"));
+        String response = (String) channel.readSend();
         assert response.equals("TypeFrame>TypeRequest>TypeResponse>TypeFrame echo hello");
     }
 

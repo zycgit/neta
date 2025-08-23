@@ -26,10 +26,10 @@ import java.util.function.Function;
  * @version : 2022-11-01
  */
 class BufferRing<T> {
-    private volatile Node<T>       curNode;
     private final    AtomicInteger size;
     private final    AtomicInteger parallelCnt;
     private final    AtomicBoolean writeLock;
+    private volatile Node<T>       curNode;
 
     public BufferRing() {
         this.size = new AtomicInteger();
@@ -75,17 +75,6 @@ class BufferRing<T> {
 
     public int size() {
         return this.size.get();
-    }
-
-    private static class Node<T> {
-        volatile Node<T> next;
-        volatile T       data;
-        volatile boolean hole;
-
-        @Override
-        public String toString() {
-            return this.data.toString();
-        }
     }
 
     public T find(int skip) {
@@ -188,5 +177,16 @@ class BufferRing<T> {
                 }
             } while (visitorNode != curNode);
         });
+    }
+
+    private static class Node<T> {
+        volatile Node<T> next;
+        volatile T       data;
+        volatile boolean hole;
+
+        @Override
+        public String toString() {
+            return this.data.toString();
+        }
     }
 }

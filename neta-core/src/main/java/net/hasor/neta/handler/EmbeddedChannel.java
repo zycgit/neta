@@ -31,57 +31,26 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
+@Deprecated
 public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implements SoChannel<EmbeddedChannel> {
+    private static final SocketAddress           LOCAL_ADDRESS  = new EmbeddedSocketAddress();
+    private static final SocketAddress           REMOTE_ADDRESS = new EmbeddedSocketAddress();
+    protected final      ProtoContext            protoCtx;
+    protected final      ProtoStack<?>           protoStack;
     private final        long                    channelID;
     private final        long                    createdTime;
-    private              long                    lastActiveTime;
     private final        boolean                 asServer;
     private final        EmbeddedSoContext       context;
     private final        SoConfig                soConfig;
-    private static final SocketAddress           LOCAL_ADDRESS  = new EmbeddedSocketAddress();
-    private static final SocketAddress           REMOTE_ADDRESS = new EmbeddedSocketAddress();
     //
     private final        ProtoQueue<Object>      rcvDown;
-    private              Throwable               rcvError;
     private final        ProtoQueue<Object>      sndDown;
-    private              Throwable               sndError;
-    protected final      ProtoContext            protoCtx;
-    protected final      ProtoStack<?>           protoStack;
     //
     private final        AtomicBoolean           closeStatus;
     private final        Future<EmbeddedChannel> closeFuture;
-
-    private static class EmbeddedProtoContextImpl extends ProtoContextService {
-        protected EmbeddedProtoContextImpl(EmbeddedChannel channel, SoContext soContext) {
-            super(channel, soContext);
-        }
-
-        @Override
-        public Future<?> sendData(Object writeData) {
-            EmbeddedChannel channel = (EmbeddedChannel) getChannel();
-
-            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
-            if (StringUtils.isNotBlank(current)) {
-                channel.sendTo(current, writeData);
-            } else {
-                channel.sendTo(null, writeData);
-            }
-            return new BasicFuture<>(this);
-        }
-
-        @Override
-        public Future<?> flush() {
-            EmbeddedChannel channel = (EmbeddedChannel) getChannel();
-
-            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
-            if (StringUtils.isNotBlank(current)) {
-                channel.send(current, ArrayUtils.EMPTY_OBJECT_ARRAY);
-            } else {
-                channel.send(ArrayUtils.EMPTY_OBJECT_ARRAY);
-            }
-            return new BasicFuture<>(this);
-        }
-    }
+    private              long                    lastActiveTime;
+    private              Throwable               rcvError;
+    private              Throwable               sndError;
 
     public EmbeddedChannel(boolean asServer, EmbeddedInitializer initializer, EmbeddedSoContext context) {
         this.channelID = EmbeddedSoContext.nextID();
@@ -101,22 +70,22 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
             this.sndDown = new ProtoQueue<>(-1);
 
             ProtoChainRoot chainRoot = (ProtoChainRoot) this.protoStack;
-            chainRoot.bindListener(new ProtoListener() {
-                @Override
-                public void onReceive(SoChannel<?> channel, Object data) {
-                    rcvDown.offerMessage(data);
-                    rcvDown.sndSubmit();
-                }
-
-                @Override
-                public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
-                    if (isRcv) {
-                        rcvError = e;
-                    } else {
-                        sndError = e;
-                    }
-                }
-            });
+//            chainRoot.bindListener(new ProtoListener() {
+//                @Override
+//                public void onReceive(SoChannel<?> channel, Object data) {
+//                    rcvDown.offerMessage(data);
+//                    rcvDown.sndSubmit();
+//                }
+//
+//                @Override
+//                public void onError(SoChannel<?> channel, Throwable e, boolean isRcv) {
+//                    if (isRcv) {
+//                        rcvError = e;
+//                    } else {
+//                        sndError = e;
+//                    }
+//                }
+//            });
 
             this.protoStack.onActive(this.protoCtx);
         } catch (Throwable e) {
@@ -436,5 +405,37 @@ public class EmbeddedChannel extends AttributeChannel<EmbeddedChannel> implement
      */
     public void printStackTrace(PrintStream s) {
         SoUtils.printStackTrace(s, this, this.protoStack);
+    }
+
+    private static class EmbeddedProtoContextImpl extends ProtoContextService {
+        protected EmbeddedProtoContextImpl(EmbeddedChannel channel, SoContext soContext) {
+            super(channel, soContext);
+        }
+
+        @Override
+        public Future<?> sendData(Object writeData) {
+            EmbeddedChannel channel = (EmbeddedChannel) getChannel();
+
+            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+            if (StringUtils.isNotBlank(current)) {
+                channel.sendTo(current, writeData);
+            } else {
+                channel.sendTo(null, writeData);
+            }
+            return new BasicFuture<>(this);
+        }
+
+        @Override
+        public Future<?> flush() {
+            EmbeddedChannel channel = (EmbeddedChannel) getChannel();
+
+            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+            if (StringUtils.isNotBlank(current)) {
+                channel.send(current, ArrayUtils.EMPTY_OBJECT_ARRAY);
+            } else {
+                channel.send(ArrayUtils.EMPTY_OBJECT_ARRAY);
+            }
+            return new BasicFuture<>(this);
+        }
     }
 }

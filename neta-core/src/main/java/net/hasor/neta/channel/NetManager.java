@@ -22,10 +22,12 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.tcp.TcpProvider;
 import net.hasor.neta.channel.udp.UdpProvider;
+import net.hasor.neta.channel.virtual.VrtProvider;
 
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.channels.AsynchronousChannelGroup;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -50,6 +52,8 @@ public class NetManager extends AbstractNetManager {
             return new TcpProvider();
         } else if (StringUtils.equalsIgnoreCase(UdpProvider.NAME, protocol)) {
             return new UdpProvider();
+        } else if (StringUtils.equalsIgnoreCase(VrtProvider.NAME, protocol)) {
+            return new VrtProvider();
         } else {
             throw new UnsupportedOperationException("not support protocol : " + protocol);
         }
@@ -61,7 +65,7 @@ public class NetManager extends AbstractNetManager {
      * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen listen(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig soConfig) throws Throwable {
+    public synchronized NetListen bind(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig soConfig) throws Throwable {
         this.initChannelGroup();
 
         long channelID = this.context.nextID();
@@ -77,7 +81,21 @@ public class NetManager extends AbstractNetManager {
      * @param remoteAddr remoteAddr
      * @param initializer Application layer network protocol
      */
-    public Future<NetChannel> connect(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) {
+    public NetChannel connectSync(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) throws Throwable {
+        try {
+            Future<NetChannel> future = this.connectAsync(remoteAddr, initializer, soConfig);
+            return future.get();
+        } catch (ExecutionException e) {
+            throw e.getCause();
+        }
+    }
+
+    /**
+     * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
+     * @param remoteAddr remoteAddr
+     * @param initializer Application layer network protocol
+     */
+    public Future<NetChannel> connectAsync(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) {
         Future<NetChannel> future = new BasicFuture<>();
         AsyncChannel asyncChannel = null;
 

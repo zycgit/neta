@@ -26,25 +26,15 @@ import java.util.List;
  * @version : 2022-11-01
  */
 public class ByteBufUtils {
-    private static final Logger           logger = Logger.getLogger(ByteBufUtils.class);
     public static final  ByteBufAllocator DEFAULT_ALLOCATOR;
     public static final  ByteBufAllocator POOLED_HEAP_ALLOCATOR;
     public static final  ByteBufAllocator POOLED_DIRECT_ALLOCATOR;
     public static final  ByteBufAllocator UNPOOLED_HEAP_ALLOCATOR;
     public static final  ByteBufAllocator UNPOOLED_DIRECT_ALLOCATOR;
     public static final  BufferCleaner    CLEANER;
-
-    private static boolean isPooled() {
-        return !SystemUtils.isAndroid();
-    }
-
-    private static boolean isDirect() {
-        if (SystemUtils.isAndroid()) {
-            return false;
-        }
-
-        return CLEANER != null;
-    }
+    /** <p>The system default newline character.</p> */
+    static final String NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
+    private static final Logger           logger = Logger.getLogger(ByteBufUtils.class);
 
     // ensure DEFAULT
     static {
@@ -146,8 +136,17 @@ public class ByteBufUtils {
         }
     }
 
-    /** <p>The system default newline character.</p> */
-    static final String NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
+    private static boolean isPooled() {
+        return !SystemUtils.isAndroid();
+    }
+
+    private static boolean isDirect() {
+        if (SystemUtils.isAndroid()) {
+            return false;
+        }
+
+        return CLEANER != null;
+    }
 
     public static byte[] toBytes(ByteBuf buf) {
         int available = buf.readableBytes();

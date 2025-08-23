@@ -42,16 +42,16 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version : 2023-10-20
  */
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
     public static final  String                                            RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
     public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
+    private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
     private final        String                                            name;
     private final        ProtoConfig                                       config;
     private final        AtomicBoolean                                     inited;
+    private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
     //
     private              ProtoQueue<RCV_DOWN>                              rcvDown;
     private              ProtoQueue<SND_DOWN>                              sndDown;
-    private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
 
     public ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler) {
         Objects.requireNonNull(protoConf, "protoConf is null.");

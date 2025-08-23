@@ -13,17 +13,29 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
-import net.hasor.neta.channel.ProtoStack;
-import net.hasor.neta.channel.SoChannel;
-
+package net.hasor.neta.channel;
 /**
- * The message receiving listener at the tail of the {@link ProtoStack}.
+ * Get protocol stack statistics
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-10-20
+ * @version : 2023-12-18
  */
-interface ProtoListener {
-    void onReceive(SoChannel<?> channel, Object data);
+public interface ProtoStatistical {
 
-    void onError(SoChannel<?> channel, Throwable e, boolean isRcv);
+    /** The incoming messages heapUp */
+    int heapUpOfRcv();
+
+    /** The incoming messages heapUp */
+    int heapUpOfRcv(String layerName);
+
+    /** The incoming messages heapUp */
+    int heapUpOfRcvRoot();
+
+    /** The messages sent heapUp */
+    int heapUpOfSnd();
+
+    /** The incoming messages heapUp */
+    int heapUpOfSnd(String layerName);
+
+    /** The incoming messages heapUp */
+    int heapUpOfSndRoot();
 }

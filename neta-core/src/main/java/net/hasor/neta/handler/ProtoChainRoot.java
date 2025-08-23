@@ -17,10 +17,7 @@ package net.hasor.neta.handler;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoContextService;
-import net.hasor.neta.channel.ProtoFullException;
-import net.hasor.neta.channel.ProtoStack;
+import net.hasor.neta.channel.*;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -38,23 +35,21 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     private final        List<ProtoInvocation<?, ?, ?, ?>> layers;
     private final        ProtoQueue<Object>                headRcvUp;
     private final        ProtoQueue<Object>                headSndUp;
-    private              ProtoListener                     listener;
+    private final        EventBus                          eventBus;
     private              long                              channelID;
-    private              boolean                           netLog;
 
-    public ProtoChainRoot() {
+    public ProtoChainRoot(ProtoConfig protoConf, EventBus eventBus) {
         this.layers = new ArrayList<>();
-        this.headRcvUp = new ProtoQueue<>(-1);
-        this.headSndUp = new ProtoQueue<>(-1);
-        this.netLog = false;
+        this.eventBus = eventBus == null ? new ProtoEventBus() : eventBus;
+
+        int rcvSize = protoConf.getRcvDownSlotSize();
+        int sndSize = protoConf.getSndUpSlotSize();
+        this.headRcvUp = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
+        this.headSndUp = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
     }
 
     public void addProtoStack(ProtoInvocation<?, ?, ?, ?> invocation) {
         this.layers.add(invocation);
-    }
-
-    public void bindListener(ProtoListener listener) {
-        this.listener = listener;
     }
 
     @Override
@@ -76,8 +71,12 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     }
 
     @Override
+    public ProtoStatistical getStatistical() {
+        return this;
+    }
+
+    @Override
     public void onInit(ProtoContext protoCtx) throws Throwable {
-        this.netLog = protoCtx.getConfig().isPrintLog();
         this.channelID = protoCtx.getChannel().getChannelId();
 
         for (int i = 0; i < this.layers.size(); i++) {
@@ -143,10 +142,6 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     }
 
     private void printLog(boolean isRcv, String msg) {
-        if (!this.netLog) {
-            return;
-        }
-
         if (isRcv) {
             logger.info("rcv(" + this.channelID + ") " + msg);
         } else {
@@ -309,19 +304,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         // 1st onReceive
         ProtoQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
         if (rcvDown.hasMore()) {
-            if (this.listener == null) {
-                // trigger tail. print event data to log
-                while (rcvDown.hasMore()) {
-                    Object data = rcvDown.takeMessage();
-                    String msg = "rcv(" + this.channelID + ") There are no program at the tail of the ProtoStack, Skipping event: ";
-                    logger.warn(msg + data);
-                }
-            } else {
-                // trigger the listener event.
-                while (rcvDown.hasMore()) {
-                    Object msg = rcvDown.takeMessage();
-                    this.listener.onReceive(protoCtx.getChannel(), msg);
-                }
+            while (rcvDown.hasMore()) {
+                Object msg = rcvDown.takeMessage();
+                this.eventBus.triggerReceive(protoCtx.getChannel(), msg);
             }
             rcvDown.rcvSubmit();
         }
@@ -329,48 +314,28 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         // 2st onError
         Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            if (this.listener == null) {
-                String msg = "rcv(" + this.channelID + ") rcv Exception was fired, and it reached at the tail of the ProtoStack." //
-                        + " It usually means the last handler in the ProtoStack did not handle the rcv exception.";
-                logger.warn(msg, ctxError);
-            } else {
-                this.listener.onError(protoCtx.getChannel(), ctxError, true);
-            }
+            this.eventBus.triggerError(protoCtx.getChannel(), ctxError, true);
         }
     }
 
     private Object[] triggerRcvWithEmpty(ProtoContext protoCtx, Object[] sndData) {
         // 1st onReceive
         if (sndData != null) {
-            if (this.listener == null) {
-                // trigger tail. print event data to log
-                for (Object obj : sndData) {
-                    String msg = "rcv(" + this.channelID + ") There are no program at the tail of the ProtoStack, Skipping event: ";
-                    logger.warn(msg + obj);
-                }
-            } else {
-                // trigger the listener event.
-                for (Object obj : sndData) {
-                    this.listener.onReceive(protoCtx.getChannel(), obj);
-                }
+            for (Object obj : sndData) {
+                this.eventBus.triggerReceive(protoCtx.getChannel(), obj);
             }
         }
 
         // 2st onError
         Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            if (this.listener == null) {
-                String msg = "rcv(" + this.channelID + ") rcv Exception was fired, and it reached at the tail of the ProtoStack." //
-                        + " It usually means the last handler in the ProtoStack did not handle the rcv exception.";
-                logger.warn(msg, ctxError);
-            } else {
-                this.listener.onError(protoCtx.getChannel(), ctxError, true);
-            }
+            this.eventBus.triggerError(protoCtx.getChannel(), ctxError, true);
         }
         return EMPTY;
     }
 
     private ProtoResult doRcvStack(final ProtoContext protoCtx, int depth) throws Throwable {
+        boolean netLog = protoCtx.getConfig().isPrintLog();
         boolean needRestartLater;
         boolean callFinish;
         int i;
@@ -394,10 +359,14 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                         if (status == ProtoStatus.Back) {
                             if (backTo == -1) {
                                 backTo = i;
-                                this.printLog(true, "stack '" + stackName + "' request Back.");
+                                if (netLog) {
+                                    this.printLog(true, "stack '" + stackName + "' request Back.");
+                                }
                             } else {
                                 String backToName = this.layers.get(backTo).getName();
-                                this.printLog(true, "stack '" + stackName + "' request Back, has been set to '" + backToName + "'");
+                                if (netLog) {
+                                    this.printLog(true, "stack '" + stackName + "' request Back, has been set to '" + backToName + "'");
+                                }
                             }
                         }
 
@@ -405,17 +374,23 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                         continue;
                     case Again:
                         needRestartLater = true;// restart when finished
-                        this.printLog(true, "stack '" + stackName + "' require Again");
+                        if (netLog) {
+                            this.printLog(true, "stack '" + stackName + "' require Again");
+                        }
                         i++;
                         continue;
                     case Restart:
                         needRestartLater = true;
-                        this.printLog(true, "stack '" + stackName + "' require Restart");
+                        if (netLog) {
+                            this.printLog(true, "stack '" + stackName + "' require Restart");
+                        }
                         i++;
                         break;
                     case Skip:
                         callFinish = false;
-                        this.printLog(true, "stack '" + stackName + "' require Exit");
+                        if (netLog) {
+                            this.printLog(true, "stack '" + stackName + "' require Exit");
+                        }
                         i++;
                         break;
                 }
@@ -518,17 +493,12 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     private void triggerSend(ProtoContext protoCtx) {
         Throwable ctxError = protoCtx.flash(ProtoInvocation.SND_ERROR_TAG);
         if (ctxError != null) {
-            if (this.listener == null) {
-                String msg = "snd(" + this.channelID + ") snd Exception was fired, and it reached at the head of the ProtoStack." //
-                        + " It usually means the first handler in the ProtoStack did not handle the snd exception.";
-                logger.warn(msg, ctxError);
-            } else {
-                this.listener.onError(protoCtx.getChannel(), ctxError, false);
-            }
+            this.eventBus.triggerError(protoCtx.getChannel(), ctxError, false);
         }
     }
 
     private ProtoResult doSndStack(ProtoContext protoCtx, int depth) throws Throwable {
+        boolean netLog = protoCtx.getConfig().isPrintLog();
         boolean needRestartLater;
         int i;
         int backTo = -1;
@@ -552,24 +522,34 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                         if (status == ProtoStatus.Back) {
                             if (backTo == -1) {
                                 backTo = i;
-                                this.printLog(false, "stack '" + stackName + "' require Back to '" + backTo + "'");
+                                if (netLog) {
+                                    this.printLog(false, "stack '" + stackName + "' require Back to '" + backTo + "'");
+                                }
                             } else {
-                                this.printLog(false, "stack '" + stackName + "' Back has been set to '" + backTo + "'");
+                                if (netLog) {
+                                    this.printLog(false, "stack '" + stackName + "' Back has been set to '" + backTo + "'");
+                                }
                             }
                         }
                         break;
                     case Again:
                         needRestartLater = true;// restart when finished
-                        this.printLog(false, "stack '" + stackName + "' require Again");
+                        if (netLog) {
+                            this.printLog(false, "stack '" + stackName + "' require Again");
+                        }
                         break;
                     case Restart:
                         needRestartLater = true;
                         breakFor = true;
-                        this.printLog(false, "stack '" + stackName + "' require Restart");
+                        if (netLog) {
+                            this.printLog(false, "stack '" + stackName + "' require Restart");
+                        }
                         break;
                     case Skip:
                         breakFor = true;
-                        this.printLog(false, "stack '" + stackName + "' require Exit");
+                        if (netLog) {
+                            this.printLog(false, "stack '" + stackName + "' require Exit");
+                        }
                         break;
                 }
             }
@@ -638,20 +618,6 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         return this.headSndUp.queueSize();
     }
 
-    private static final class ProtoResult {
-        public final Object[] result;
-        public final int      backTo;
-        public final int      layerDepth;
-        public final boolean  finish;
-
-        public ProtoResult(Object[] result, int backTo, int layerDepth, boolean finish) {
-            this.result = result;
-            this.backTo = backTo;
-            this.layerDepth = layerDepth;
-            this.finish = finish;
-        }
-    }
-
     @Override
     public String toString() {
         List<String> layerNames = new ArrayList<>();
@@ -715,6 +681,20 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             return this.headSndUp.queueSize() + "/500+";
         } else {
             return this.headSndUp.queueSize() + "/" + capacity;
+        }
+    }
+
+    private static final class ProtoResult {
+        public final Object[] result;
+        public final int      backTo;
+        public final int      layerDepth;
+        public final boolean  finish;
+
+        public ProtoResult(Object[] result, int backTo, int layerDepth, boolean finish) {
+            this.result = result;
+            this.backTo = backTo;
+            this.layerDepth = layerDepth;
+            this.finish = finish;
         }
     }
 }

@@ -47,12 +47,11 @@ public class SoContextService implements SoContext {
     private final        HashedWheelTimer        globalTimer;
     private final        ExecutorService         ioExecutor;
     private final        SoEventExecutor         eventExecutor;
-    //
-    private volatile     boolean                 closeStatus;
     private final        ReentrantReadWriteLock  closeSyncLock;
     private final        Map<Long, SoChannel<?>> channelMap;
     private final        Queue<NetChannel>       channelList;
     private final        Queue<NetListen>        listenList;
+    private volatile     boolean                 closeStatus;
 
     SoContextService(NetConfig netConf, NetManager manager) {
         this.manager = manager;
@@ -311,7 +310,7 @@ public class SoContextService implements SoContext {
         SoChannel<?> channel = this.channelMap.get(channelID);
         if (channel != null) {
             if (channel.isClient() || channel.isServer()) {
-                ((NetChannel) channel).notifyRcv(rcvBytes);
+                ((NetChannel) channel).notifyRcv(new ByteBuf[] { rcvBytes });
             } else {
                 throw new UnsupportedOperationException(); // Can't happen
             }
