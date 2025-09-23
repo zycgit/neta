@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 class BufferWrap implements Buffer {
-    static RecycleHandler<BufferWrap> RECYCLE_HANDLER = new RecycleHandler<BufferWrap>() {
+    static  RecycleHandler<BufferWrap> RECYCLE_HANDLER = new RecycleHandler<BufferWrap>() {
         public BufferWrap create() {
             return new BufferWrap();
         }
@@ -32,8 +32,8 @@ class BufferWrap implements Buffer {
             RecycleObjectPool.free(BufferWrap.class, tar);
         }
     };
-    private ByteBuffer buffer;
-    private boolean    available;
+    private ByteBuffer                 buffer;
+    private boolean                    available;
 
     // ------------------------------------------------------------------------
 

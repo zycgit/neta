@@ -35,12 +35,10 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     private final        List<ProtoInvocation<?, ?, ?, ?>> layers;
     private final        ProtoQueue<Object>                headRcvUp;
     private final        ProtoQueue<Object>                headSndUp;
-    private final        EventBus                          eventBus;
     private              long                              channelID;
 
-    public ProtoChainRoot(ProtoConfig protoConf, EventBus eventBus) {
+    public ProtoChainRoot(ProtoConfig protoConf) {
         this.layers = new ArrayList<>();
-        this.eventBus = eventBus == null ? new ProtoEventBus() : eventBus;
 
         int rcvSize = protoConf.getRcvDownSlotSize();
         int sndSize = protoConf.getSndUpSlotSize();
@@ -305,8 +303,8 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         ProtoQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
         if (rcvDown.hasMore()) {
             while (rcvDown.hasMore()) {
-                Object msg = rcvDown.takeMessage();
-                this.eventBus.triggerReceive(protoCtx.getChannel(), msg);
+                PlayLoad playLoad = PlayLoad.of(protoCtx.getChannel(), rcvDown.takeMessage(), true, false);
+                ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
             }
             rcvDown.rcvSubmit();
         }
@@ -314,7 +312,8 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         // 2st onError
         Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            this.eventBus.triggerError(protoCtx.getChannel(), ctxError, true);
+            PlayLoad playLoad = PlayLoad.ofError(protoCtx.getChannel(), ctxError, true, false);
+            ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
         }
     }
 
@@ -322,14 +321,16 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         // 1st onReceive
         if (sndData != null) {
             for (Object obj : sndData) {
-                this.eventBus.triggerReceive(protoCtx.getChannel(), obj);
+                PlayLoad playLoad = PlayLoad.of(protoCtx.getChannel(), obj, true, false);
+                ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
             }
         }
 
         // 2st onError
         Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            this.eventBus.triggerError(protoCtx.getChannel(), ctxError, true);
+            PlayLoad playLoad = PlayLoad.ofError(protoCtx.getChannel(), ctxError, true, false);
+            ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
         }
         return EMPTY;
     }
@@ -493,7 +494,8 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     private void triggerSend(ProtoContext protoCtx) {
         Throwable ctxError = protoCtx.flash(ProtoInvocation.SND_ERROR_TAG);
         if (ctxError != null) {
-            this.eventBus.triggerError(protoCtx.getChannel(), ctxError, false);
+            PlayLoad playLoad = PlayLoad.ofError(protoCtx.getChannel(), ctxError, false, true);
+            ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
         }
     }
 

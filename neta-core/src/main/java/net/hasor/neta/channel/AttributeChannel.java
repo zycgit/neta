@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.handler.PlayLoad;
+import net.hasor.neta.handler.PlayLoadListener;
+
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Predicate;
 
 /**
  * SoChannel abstract implementation, providing only get/set of attributes.
@@ -33,5 +37,16 @@ public abstract class AttributeChannel<T> implements SoChannel<T> {
     @Override
     public Object getAttribute(String key) {
         return this.attributes.get(key);
+    }
+
+    @Override
+    public void subscribe(PlayLoadListener listener) {
+        this.subscribe(t -> true, listener);
+    }
+
+    @Override
+    public void subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
+        Predicate<PlayLoad> predicate = select.and(t -> t.getSource().getChannelId() == this.getChannelId());
+        this.getContext().subscribe(predicate, listener);
     }
 }

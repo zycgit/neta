@@ -23,7 +23,7 @@ import java.nio.ReadOnlyBufferException;
  * @version : 2022-11-01
  */
 class BufferTarget implements Buffer {
-    static RecycleHandler<BufferTarget> RECYCLE_HANDLER = new RecycleHandler<BufferTarget>() {
+    static  RecycleHandler<BufferTarget> RECYCLE_HANDLER = new RecycleHandler<BufferTarget>() {
         public BufferTarget create() {
             return new BufferTarget();
         }
@@ -33,15 +33,16 @@ class BufferTarget implements Buffer {
             RecycleObjectPool.free(BufferTarget.class, tar);
         }
     };
-    private Buffer         memory;
-    private PageChunkSplit pages;
-    private int            pageSize;
+    private Buffer                       memory;
+    private PageChunkSplit               pages;
+    private int                          pageSize;
 
     // ------------------------------------------------------------------------
-    private boolean        readOnly;
-    private int            offset;
-    private int            limit;
-    private int            capacity;
+    private boolean readOnly;
+    private int     offset;
+    private int     limit;
+    private int     capacity;
+
     private BufferTarget() {
     }
 

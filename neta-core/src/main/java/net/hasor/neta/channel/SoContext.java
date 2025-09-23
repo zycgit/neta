@@ -15,8 +15,11 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.handler.PlayLoad;
+import net.hasor.neta.handler.PlayLoadListener;
 
 import java.net.SocketAddress;
+import java.util.function.Predicate;
 
 /**
  * manage all network NetChannel and NetListen
@@ -41,4 +44,18 @@ public interface SoContext {
 
     /** get {@link NetManager} */
     NetManager getNetManager();
+
+    /**
+     * subscribe event
+     * @param channelId event topic
+     * @param listener event listener
+     */
+    void subscribe(long channelId, PlayLoadListener listener);
+
+    /**
+     * subscribe event
+     * @param select event topic
+     * @param listener event listener
+     */
+    void subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
 }

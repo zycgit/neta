@@ -18,7 +18,6 @@ import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtMode;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.handler.frames.TypeFrame;
@@ -34,38 +33,6 @@ import java.util.Queue;
  * @version : 2022-11-01
  */
 public class ProtoEchoTest {
-    @Test
-    public void embeddedEcho() throws Throwable {
-        Queue<TypeRequest> queue = new ArrayDeque<>();
-        EventBus bus = new ProtoEventBus();
-        bus.subscribe(EventBus.TOPIC_CHANNEL, d -> queue.offer((TypeRequest) d.getData()));
-
-        //  Data        Frame        Req/Res
-        // String -> TypeFrame -> TypeRequest
-        // String <- TypeFrame <- TypeResponse
-        ProtoConfig protoConf = new ProtoConfig();
-        ProtoInitializer initializer = (ctx) -> ProtoHelper.typed(String.class, String.class)//
-                .nextDuplex("TypeFrame", protoConf, ProtoEchoTest::doDecoder1, ProtoEchoTest::doEncoder1)
-                // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
-                .nextDuplex("TypeRequest/Response", protoConf, ProtoEchoTest::doDecoder2, ProtoEchoTest::doEncoder2)
-                // build
-                .build(bus);
-
-        NetManager neta = new NetManager();
-        VrtSoConfig config = new VrtSoConfig();
-        config.setVrtMode(VrtMode.Server);
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, config);
-
-        channel.triggerReceive("hello");
-        TypeRequest request = queue.poll();
-        assert request.getHeader().equals("TypeFrame>TypeRequest");
-        assert request.getMessage().equals("hello");
-
-        channel.sendData(new TypeResponse(request.getHeader(), "echo hello"));
-        String response = (String) channel.readSend();
-        assert response.equals("TypeFrame>TypeRequest>TypeResponse>TypeFrame echo hello");
-    }
-
     /** Decoding the message: String -> TypeFrame */
     public static ProtoStatus doDecoder1(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<TypeFrame> dst) {
         String line;
@@ -116,5 +83,41 @@ public class ProtoEchoTest {
             }
         } while (response != null && dst.hasSlot());
         return ProtoStatus.Next;
+    }
+
+    @Test
+    public void embeddedEcho() throws Throwable {
+        //  Data        Frame        Req/Res
+        // String -> TypeFrame -> TypeRequest
+        // String <- TypeFrame <- TypeResponse
+        ProtoConfig protoConf = new ProtoConfig();
+        ProtoInitializer initializer = (ctx) -> ProtoHelper.typed(String.class, String.class)//
+                .nextDuplex("TypeFrame", protoConf, ProtoEchoTest::doDecoder1, ProtoEchoTest::doEncoder1)
+                // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
+                .nextDuplex("TypeRequest/Response", protoConf, ProtoEchoTest::doDecoder2, ProtoEchoTest::doEncoder2)
+                // build
+                .build();
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+
+        Queue<TypeRequest> in = new ArrayDeque<>();
+        Queue<String> out = new ArrayDeque<>();
+        channel.subscribe(d -> {
+            if (d.isInbound()) {
+                in.offer((TypeRequest) d.getData());
+            } else {
+                out.offer((String) d.getData());
+            }
+        });
+
+        channel.onReceive("hello");
+        TypeRequest request = in.poll();
+        assert request.getHeader().equals("TypeFrame>TypeRequest");
+        assert request.getMessage().equals("hello");
+
+        channel.sendData(new TypeResponse(request.getHeader(), "echo hello"));
+        String response = out.poll();
+        assert response.equals("TypeFrame>TypeRequest>TypeResponse>TypeFrame echo hello");
     }
 }

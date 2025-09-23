@@ -33,8 +33,8 @@ public class ByteBufUtils {
     public static final  ByteBufAllocator UNPOOLED_DIRECT_ALLOCATOR;
     public static final  BufferCleaner    CLEANER;
     /** <p>The system default newline character.</p> */
-    static final String NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
-    private static final Logger           logger = Logger.getLogger(ByteBufUtils.class);
+    static final         String           NEWLINE = SystemUtils.getSystemProperty("line.separator", "\n");
+    private static final Logger           logger  = Logger.getLogger(ByteBufUtils.class);
 
     // ensure DEFAULT
     static {

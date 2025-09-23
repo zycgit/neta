@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.virtual;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.handler.ProtoQueue;
 
 import java.io.IOException;
 
@@ -26,13 +25,11 @@ import java.io.IOException;
  * @version : 2023-09-24
  */
 public class VrtChannel extends NetChannel {
-    private final VrtMode            vrtMode;
-    private final ProtoQueue<Object> sndDown;
+    private final VrtMode vrtMode;
 
     VrtChannel(long channelId, NetMonitor monitor, NetListen forListen, VrtMode vrtMode, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
         super(channelId, monitor, forListen, initializer, asyncChannel, context);
         this.vrtMode = vrtMode;
-        this.sndDown = new ProtoQueue<>(-1);
     }
 
     @Override
@@ -45,20 +42,13 @@ public class VrtChannel extends NetChannel {
         return this.vrtMode == VrtMode.Server;
     }
 
-    void offerSndDown(Object data) {
-        if (data != null) {
-            this.sndDown.offerMessage(data);
-            this.sndDown.sndSubmit();
-        }
-    }
-
     // trigger Input/Output
 
     /**
      * Write messages to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param object the messages to be written
      */
-    public void triggerReceive(Object... object) {
+    public void onReceive(Object... object) {
         if (object != null) {
             this.notifyRcv((Object[]) object);
         }
@@ -68,7 +58,7 @@ public class VrtChannel extends NetChannel {
      * Write error to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void triggerReceive(Throwable e) {
+    public void onReceiveError(Throwable e) {
         if (e != null) {
             this.notifyError(true, e);
         }
@@ -78,34 +68,9 @@ public class VrtChannel extends NetChannel {
      * Write error to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void triggerSend(Throwable e) {
+    public void onSendError(Throwable e) {
         if (e != null) {
             this.notifyError(false, e);
         }
     }
-
-    // event Input/Output
-
-    /** read messages from the SND_DOWN of this {@link SoChannel}. */
-    public Object readSend() {
-        try {
-            if (this.sndDown.hasMore()) {
-                return this.sndDown.takeMessage();
-            } else {
-                return null;
-            }
-        } finally {
-            this.sndDown.rcvSubmit();
-        }
-    }
-
-    /** read messages from the SND_DOWN of this {@link SoChannel}. */
-    public Object[] readSendArray(int readSize) {
-        try {
-            return this.sndDown.takeMessage(Math.min(readSize, this.sndDown.queueSize())).toArray();
-        } finally {
-            this.sndDown.rcvSubmit();
-        }
-    }
-
 }

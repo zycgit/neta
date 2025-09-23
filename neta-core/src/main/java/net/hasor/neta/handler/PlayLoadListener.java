@@ -20,10 +20,10 @@ package net.hasor.neta.handler;
  * @version : 2023-10-20
  */
 @FunctionalInterface
-public interface EventListener extends java.util.EventListener {
+public interface PlayLoadListener extends java.util.EventListener {
     /**
      * on event
      * @param data event data
      */
-    void onEvent(PlayLod data);
+    void onEvent(PlayLoad data);
 }

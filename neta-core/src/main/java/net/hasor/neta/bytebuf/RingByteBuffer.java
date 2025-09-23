@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
  * @version :  2022-11-01
  */
 final class RingByteBuffer extends AbstractByteBuf {
-    static RecycleHandler<RingByteBuffer> RECYCLE_HANDLER = new RecycleHandler<RingByteBuffer>() {
+    static    RecycleHandler<RingByteBuffer> RECYCLE_HANDLER = new RecycleHandler<RingByteBuffer>() {
         public RingByteBuffer create() {
             return new RingByteBuffer();
         }
@@ -32,7 +32,7 @@ final class RingByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RingByteBuffer.class, tar);
         }
     };
-    protected ByteBuffer target;
+    protected ByteBuffer                     target;
 
     private RingByteBuffer() {
     }

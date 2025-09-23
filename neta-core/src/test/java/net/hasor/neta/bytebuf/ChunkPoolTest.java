@@ -9,20 +9,30 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
 public class ChunkPoolTest {
-    @Test
-    public void availableTest_1() {
-        PageChunkPool pool = new PageChunkPool(1234, 1, 12);
+    private static boolean checkUsed(int form, int to, byte[] chunksMap) {
+        int formByte = form / 8;
+        int formMask = form % 8;
+        int toByte = to / 8;
+        int toMask = to % 8;
 
-        PageChunkSplit pl1 = pool.requestPages(8);
-        assert pl1.isAvailable();
-        assert pl1.getFromPage() == 0 && pl1.getToPage() == 7;
+        if (formByte == toByte) {
+            byte data = chunksMap[toByte];
+            byte mask = PageChunkPool.useMask(formMask, toMask);
+            return data == (data | mask);
+        } else {
+            byte data1 = chunksMap[formByte];
+            byte data2 = chunksMap[toByte];
 
-        pl1.free();
-        assert !pl1.isAvailable();
+            byte mask1 = (byte) (0b11111111 >>> formMask);
+            byte mask2 = PageChunkPool.useMask(0, toMask);
 
-        PageChunkSplit pl2 = pool.requestPages(8);
-        assert pl2.isAvailable();
-        assert pl2.getFromPage() == 0 && pl2.getToPage() == 7;
+            for (int i = (formByte + 1); i < toByte; i++) {
+                if (chunksMap[i] != -1) {
+                    return false;
+                }
+            }
+            return (data1 == (data1 | mask1)) && (data2 == (data2 | mask2));
+        }
     }
 
     //    @Test
@@ -56,6 +66,52 @@ public class ChunkPoolTest {
     //        plTest1.free();
     //
     //    }
+
+    private static boolean checkFree(int form, int to, byte[] chunksMap) {
+        int formByte = form / 8;
+        int formMask = form % 8;
+        int toByte = to / 8;
+        int toMask = to % 8;
+
+        if (formByte == toByte) {
+            byte data = chunksMap[toByte];
+            byte mask = PageChunkPool.useMask(formMask, toMask);
+            return data == (data & ~mask);
+        } else {
+            byte data1 = chunksMap[formByte];
+            byte data2 = chunksMap[toByte];
+
+            byte mask1 = (byte) (0b11111111 >>> formMask);
+            byte mask2 = PageChunkPool.useMask(0, toMask);
+
+            for (int i = (formByte + 1); i < toByte; i++) {
+                if (chunksMap[i] != 0) {
+                    return false;
+                }
+            }
+            return (data1 == (data1 & ~mask1)) && (data2 == (data2 & ~mask2));
+        }
+    }
+
+    public static String binary(byte bytes) {
+        return new BigInteger(1, new byte[] { bytes }).toString(2);
+    }
+
+    @Test
+    public void availableTest_1() {
+        PageChunkPool pool = new PageChunkPool(1234, 1, 12);
+
+        PageChunkSplit pl1 = pool.requestPages(8);
+        assert pl1.isAvailable();
+        assert pl1.getFromPage() == 0 && pl1.getToPage() == 7;
+
+        pl1.free();
+        assert !pl1.isAvailable();
+
+        PageChunkSplit pl2 = pool.requestPages(8);
+        assert pl2.isAvailable();
+        assert pl2.getFromPage() == 0 && pl2.getToPage() == 7;
+    }
 
     @Test
     public void test_0() {
@@ -225,61 +281,5 @@ public class ChunkPoolTest {
         assert pool.getUsage() == 50.0;
         pl6.free();
         assert pool.getUsage() == 0.0;
-    }
-
-    private static boolean checkUsed(int form, int to, byte[] chunksMap) {
-        int formByte = form / 8;
-        int formMask = form % 8;
-        int toByte = to / 8;
-        int toMask = to % 8;
-
-        if (formByte == toByte) {
-            byte data = chunksMap[toByte];
-            byte mask = PageChunkPool.useMask(formMask, toMask);
-            return data == (data | mask);
-        } else {
-            byte data1 = chunksMap[formByte];
-            byte data2 = chunksMap[toByte];
-
-            byte mask1 = (byte) (0b11111111 >>> formMask);
-            byte mask2 = PageChunkPool.useMask(0, toMask);
-
-            for (int i = (formByte + 1); i < toByte; i++) {
-                if (chunksMap[i] != -1) {
-                    return false;
-                }
-            }
-            return (data1 == (data1 | mask1)) && (data2 == (data2 | mask2));
-        }
-    }
-
-    private static boolean checkFree(int form, int to, byte[] chunksMap) {
-        int formByte = form / 8;
-        int formMask = form % 8;
-        int toByte = to / 8;
-        int toMask = to % 8;
-
-        if (formByte == toByte) {
-            byte data = chunksMap[toByte];
-            byte mask = PageChunkPool.useMask(formMask, toMask);
-            return data == (data & ~mask);
-        } else {
-            byte data1 = chunksMap[formByte];
-            byte data2 = chunksMap[toByte];
-
-            byte mask1 = (byte) (0b11111111 >>> formMask);
-            byte mask2 = PageChunkPool.useMask(0, toMask);
-
-            for (int i = (formByte + 1); i < toByte; i++) {
-                if (chunksMap[i] != 0) {
-                    return false;
-                }
-            }
-            return (data1 == (data1 & ~mask1)) && (data2 == (data2 & ~mask2));
-        }
-    }
-
-    public static String binary(byte bytes) {
-        return new BigInteger(1, new byte[] { bytes }).toString(2);
     }
 }

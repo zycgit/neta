@@ -17,7 +17,6 @@ package net.hasor.neta.handler;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtMode;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.codec.TransparentProtoHandler;
@@ -40,9 +39,7 @@ public class ProtoBasicTest extends AbstractStackTest {
         };
 
         NetManager neta = new NetManager();
-        VrtSoConfig config = new VrtSoConfig();
-        config.setVrtMode(VrtMode.Server);
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, config);
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
         ByteArrayOutputStream out = new ByteArrayOutputStream();
         channel.printStackTrace(new PrintStream(out));

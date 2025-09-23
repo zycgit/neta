@@ -27,7 +27,25 @@ public class VrtSoConfig extends SoConfig {
 
     public VrtSoConfig() {
         super(VrtProvider.NAME);
-        this.vrtMode = VrtMode.Client;
+        this.vrtMode = VrtMode.Default;
+    }
+
+    public static VrtSoConfig asDefault() {
+        VrtSoConfig config = new VrtSoConfig();
+        config.vrtMode = VrtMode.Default;
+        return config;
+    }
+
+    public static VrtSoConfig asClient() {
+        VrtSoConfig config = new VrtSoConfig();
+        config.vrtMode = VrtMode.Client;
+        return config;
+    }
+
+    public static VrtSoConfig asServer() {
+        VrtSoConfig config = new VrtSoConfig();
+        config.vrtMode = VrtMode.Server;
+        return config;
     }
 
     public VrtMode getVrtMode() {

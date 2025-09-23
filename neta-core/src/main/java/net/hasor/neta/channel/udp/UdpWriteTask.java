@@ -15,21 +15,22 @@
  */
 package net.hasor.neta.channel.udp;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 import java.nio.ByteBuffer;
+import java.nio.channels.ClosedChannelException;
 import java.nio.channels.DatagramChannel;
+import java.nio.channels.InterruptedByTimeoutException;
+import java.nio.channels.ShutdownChannelGroupException;
 import java.util.concurrent.TimeUnit;
 
 class UdpWriteTask extends DefaultSoTask {
-    private static final Logger           logger = Logger.getLogger(UdpWriteTask.class);
-    protected final      SoContextService context;
-    private final        NetChannel       netChannel;
-    private final        NetMonitor       monitor;
-    private final        DatagramChannel  udpChannel;
-    private final        SoSndContext     wContext;
-    private              byte[]           sendData;
+    protected final SoContextService context;
+    private final   NetChannel       netChannel;
+    private final   NetMonitor       monitor;
+    private final   DatagramChannel  udpChannel;
+    private final   SoSndContext     wContext;
+    private         byte[]           sendData;
 
     public UdpWriteTask(NetChannel netChannel, DatagramChannel channel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;
@@ -98,54 +99,38 @@ class UdpWriteTask extends DefaultSoTask {
     }
 
     private void handleException(Throwable e, SoSndContext wContext) {
-        logger.error(e.getMessage(), e);
+        String finalMsg;
+        Throwable finalErr;
+        long channelId = this.netChannel.getChannelId();
+
+        if (e instanceof InterruptedByTimeoutException) {
+            String errorMsg = "send data timeout with " + this.netChannel.getConfig().getSoWriteTimeoutMs() + " milliseconds.";
+            String msg = "snd(" + channelId + ") " + errorMsg;
+
+            finalErr = new SoWriteTimeoutException(errorMsg);
+            finalMsg = msg;
+        } else if (e instanceof ClosedChannelException) {
+            finalMsg = "snd(" + channelId + ") close, msg:" + e.getMessage();
+            finalErr = e;
+        } else if (e instanceof ShutdownChannelGroupException) {
+            finalMsg = "snd(" + channelId + ") shutdown, msg:" + e.getMessage();
+            finalErr = e;
+        } else {
+            finalMsg = "snd(" + channelId + ") error, msg:" + e.getMessage();
+            finalErr = e;
+        }
+
+        this.context.notifySndChannelError(channelId, finalErr);
+        this.context.asyncUnsafeCloseChannel(channelId, finalMsg, finalErr);
+
+        while (!wContext.isEmpty()) {
+            SoSndData sndData = wContext.popData();
+            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+                sndData.failed(e);
+            });
+        }
     }
 
-    //    private void handleException(Throwable e, NetChannel channel, SoSndContext context) {
-    //        String finalMsg;
-    //        Throwable finalErr;
-    //
-    //        if (e instanceof NotYetConnectedException) {
-    //            long costTimeMs = System.currentTimeMillis() - -this.monitor.getCreatedTime();
-    //            if (costTimeMs < this.connectTimeoutMs) {
-    //                if (logger.isDebugEnabled()) {
-    //                    logger.debug("snd(" + this.channelID + ") NotYetConnected, write try again later.");
-    //                }
-    //                submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
-    //                    writeData(context);
-    //                });
-    //                return;
-    //            } else {
-    //                finalErr = SoUtils.newTimeout(false, this.channelID, this.context, e);
-    //                finalMsg = finalErr.getMessage();
-    //            }
-    //        } else if (e instanceof InterruptedByTimeoutException) {
-    //            String errorMsg = "send data timeout with " + this.channel.getSoConfig().getSoWriteTimeoutMs() + " milliseconds.";
-    //            String msg = "snd(" + this.channelID + ") " + errorMsg;
-    //
-    //            finalErr = new SoWriteTimeoutException(errorMsg);
-    //            finalMsg = msg;
-    //        } else if (e instanceof ClosedChannelException) {
-    //            finalMsg = "snd(" + this.channelID + ") close, msg:" + e.getMessage();
-    //            finalErr = e;
-    //        } else if (e instanceof ShutdownChannelGroupException) {
-    //            finalMsg = "snd(" + this.channelID + ") shutdown, msg:" + e.getMessage();
-    //            finalErr = e;
-    //        } else {
-    //            finalMsg = "snd(" + this.channelID + ") error, msg:" + e.getMessage();
-    //            finalErr = e;
-    //        }
-    //
-    //        this.context.notifySndChannelError(this.channelID, finalErr);
-    //        this.context.asyncUnsafeCloseChannel(this.channelID, finalMsg, finalErr);
-    //
-    //        while (!context.isEmpty()) {
-    //            SoSndData sndData = context.popData();
-    //            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-    //                sndData.failed(e);
-    //            });
-    //        }
-    //    }
     private Future<?> submitTask(DefaultSoTask task) {
         return this.context.submitSoTask(task, this);
     }

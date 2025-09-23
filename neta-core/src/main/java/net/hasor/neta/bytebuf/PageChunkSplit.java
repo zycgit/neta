@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2024-02-15
  */
 class PageChunkSplit implements PageRange {
-    static RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
+    static  RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
         public PageChunkSplit create() {
             return new PageChunkSplit();
         }
@@ -32,14 +32,15 @@ class PageChunkSplit implements PageRange {
             RecycleObjectPool.free(PageChunkSplit.class, tar);
         }
     };
-    private int           fromPage;
-    private int           toPage;
+    private int                            fromPage;
+    private int                            toPage;
 
     // ------------------------------------------------------------------------
     private int           capacity;
     private PageChunkPool chunkPool;
     private AtomicInteger refCount;
     private boolean       available;
+
     private PageChunkSplit() {
     }
 

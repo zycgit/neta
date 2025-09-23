@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class PooledByteBuf extends AbstractByteBuf {
-    static RecycleHandler<PooledByteBuf> RECYCLE_HANDLER = new RecycleHandler<PooledByteBuf>() {
+    static    RecycleHandler<PooledByteBuf> RECYCLE_HANDLER = new RecycleHandler<PooledByteBuf>() {
         public PooledByteBuf create() {
             return new PooledByteBuf();
         }
@@ -32,12 +32,13 @@ final class PooledByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(PooledByteBuf.class, tar);
         }
     };
-    protected Buffer     target;
-    private   BufferPool pool;
+    protected Buffer                        target;
+    private   BufferPool                    pool;
 
     // ------------------------------------------------------------------------
-    private   int        initSize;
-    private   int        extensionSize;
+    private int initSize;
+    private int extensionSize;
+
     private PooledByteBuf() {
     }
 

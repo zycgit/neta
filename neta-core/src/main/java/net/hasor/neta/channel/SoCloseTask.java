@@ -41,7 +41,7 @@ class SoCloseTask extends DefaultSoTask {
             return;
         }
 
-        if (channel.isClient() || channel.isServer()) {
+        if (channel instanceof NetChannel) {
             if (this.forceNow) {
                 String msg = "channel(" + this.channelID + ") close now form local.";
                 this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);

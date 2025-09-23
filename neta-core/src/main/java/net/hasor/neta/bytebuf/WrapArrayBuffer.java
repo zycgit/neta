@@ -29,7 +29,7 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class WrapArrayBuffer extends AbstractByteBuf {
-    static RecycleHandler<WrapArrayBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapArrayBuffer>() {
+    static    RecycleHandler<WrapArrayBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapArrayBuffer>() {
         public WrapArrayBuffer create() {
             return new WrapArrayBuffer();
         }
@@ -39,7 +39,7 @@ final class WrapArrayBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(WrapArrayBuffer.class, tar);
         }
     };
-    protected byte[] target;
+    protected byte[]                          target;
 
     private WrapArrayBuffer() {
     }

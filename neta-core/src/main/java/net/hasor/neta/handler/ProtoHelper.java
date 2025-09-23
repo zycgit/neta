@@ -113,8 +113,8 @@ public final class ProtoHelper {
         }
 
         @Override
-        public <T> ProtoStack<T> build(EventBus eventBus) {
-            ProtoChainRoot root = new ProtoChainRoot(this.defaultConf, eventBus);
+        public <T> ProtoStack<T> build() {
+            ProtoChainRoot root = new ProtoChainRoot(this.defaultConf);
             for (Consumer<ProtoChainRoot> consumer : taskAppend) {
                 consumer.accept(root);
             }

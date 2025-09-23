@@ -21,6 +21,7 @@ package net.hasor.neta.channel.virtual;
  * @version : 2023-09-24
  */
 public enum VrtMode {
+    Default,
     Server,
     Client
 }

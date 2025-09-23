@@ -22,6 +22,8 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.handler.PlayLoad;
+import net.hasor.neta.handler.PlayLoadListener;
 
 import java.net.SocketAddress;
 import java.util.*;
@@ -29,6 +31,8 @@ import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 /**
  * SoContext implements
@@ -36,22 +40,24 @@ import java.util.function.Consumer;
  * @version : 2023-09-24
  */
 public class SoContextService implements SoContext {
-    private static final Logger                  logger = Logger.getLogger(SoContextService.class);
-    private final        AtomicLong              nextID = new AtomicLong(0);
-    private final        NetConfig               config;
-    private final        NetManager              manager;
-    private final        ByteBufAllocator        allocator;
-    private final        ClassLoader             useClassLoader;
-    private final        SoThreadFactory         useSoThreadFactory;
+    private static final Logger                            logger    = Logger.getLogger(SoContextService.class);
+    private final        AtomicLong                        nextID    = new AtomicLong(0);
+    private final        NetConfig                         config;
+    private final        NetManager                        manager;
+    private final        ByteBufAllocator                  allocator;
+    private final        ClassLoader                       useClassLoader;
+    private final        SoThreadFactory                   useSoThreadFactory;
     //
-    private final        HashedWheelTimer        globalTimer;
-    private final        ExecutorService         ioExecutor;
-    private final        SoEventExecutor         eventExecutor;
-    private final        ReentrantReadWriteLock  closeSyncLock;
-    private final        Map<Long, SoChannel<?>> channelMap;
-    private final        Queue<NetChannel>       channelList;
-    private final        Queue<NetListen>        listenList;
-    private volatile     boolean                 closeStatus;
+    private final        List<Function<PlayLoad, Boolean>> listeners = new CopyOnWriteArrayList<>();
+    //
+    private final        HashedWheelTimer                  globalTimer;
+    private final        ExecutorService                   ioExecutor;
+    private final        SoEventExecutor                   eventExecutor;
+    private final        ReentrantReadWriteLock            closeSyncLock;
+    private final        Map<Long, SoChannel<?>>           channelMap;
+    private final        Queue<NetChannel>                 channelList;
+    private final        Queue<NetListen>                  listenList;
+    private volatile     boolean                           closeStatus;
 
     SoContextService(NetConfig netConf, NetManager manager) {
         this.manager = manager;
@@ -189,6 +195,51 @@ public class SoContextService implements SoContext {
     }
 
     @Override
+    public void subscribe(long channelId, PlayLoadListener listener) {
+        this.subscribe(p -> p.getSource().getChannelId() == channelId, listener);
+    }
+
+    @Override
+    public void subscribe(final Predicate<PlayLoad> select, final PlayLoadListener listener) {
+        if (listener != null) {
+            this.listeners.add(data -> {
+                if (select == null || select.test(data)) {
+                    listener.onEvent(data);
+                    return true;
+                } else {
+                    return false;
+                }
+            });
+        }
+    }
+
+    /** trigger event */
+    @Deprecated
+    public void trigger(PlayLoad data) {
+        boolean hasProcessed = false;
+        for (Function<PlayLoad, Boolean> listener : this.listeners) {
+            try {
+                hasProcessed = hasProcessed | listener.apply(data);
+            } catch (Exception e) {
+                logger.error("event(" + data.getSource().getChannelId() + ") trigger " + listener.getClass().getName() + " has error " + e.getMessage(), e);
+            }
+        }
+
+        if (!hasProcessed) {
+            String msg = "event(" + data.getSource().getChannelId() + ") There are no program at the tail of the ProtoStack, Skipping event: ";
+            logger.warn(msg + data.getData());
+        }
+    }
+    //        if (isRcv) {
+    //            msg = "rcv(" + channel.getChannelId() + ") rcv Exception was fired, and it reached at the tail of the ProtoStack." //
+    //                    + " It usually means the last handler in the ProtoStack did not handle the rcv exception.";
+    //        } else {
+    //            msg = "snd(" + channel.getChannelId() + ") snd Exception was fired, and it reached at the head of the ProtoStack." //
+    //                    + " It usually means the first handler in the ProtoStack did not handle the snd exception.";
+    //        }
+    //        logger.warn(msg, error);
+
+    @Override
     public NetManager getNetManager() {
         return this.manager;
     }
@@ -278,7 +329,7 @@ public class SoContextService implements SoContext {
 
         this.channelMap.remove(channelID);
 
-        if (channel.isClient() || channel.isServer()) {
+        if (channel instanceof NetChannel) {
             NetChannel netChannel = (NetChannel) channel;
             netChannel.closeStatus.set(true);
 

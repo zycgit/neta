@@ -10,6 +10,13 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 
 public class RingByteBufferTest {
+    public static ByteBuf defaultWrap(byte[] data) {
+        ByteBuf data2 = ByteBufAllocator.DEFAULT.ringDirectBuffer(4);
+        data2.writeBytes(data);
+        data2.markWriter();
+        return data2;
+    }
+
     @Test
     public void basicTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringDirectBuffer(111);
@@ -750,13 +757,6 @@ public class RingByteBufferTest {
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
         byteBuf.resetReader();
-    }
-
-    public static ByteBuf defaultWrap(byte[] data) {
-        ByteBuf data2 = ByteBufAllocator.DEFAULT.ringDirectBuffer(4);
-        data2.writeBytes(data);
-        data2.markWriter();
-        return data2;
     }
 
     @Test

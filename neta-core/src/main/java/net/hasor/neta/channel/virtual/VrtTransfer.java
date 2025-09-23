@@ -1,45 +1,47 @@
 package net.hasor.neta.channel.virtual;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.handler.PlayLoad;
 
-import net.hasor.cobble.ObjectUtils;
-
-import java.util.Objects;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.function.Predicate;
 
 public class VrtTransfer {
-    private final VrtChannel source;
-    private final VrtChannel target;
-    private       boolean    closed;
+    private final NetManager            manager;
+    private final List<Long>            sourceList;
+    private       boolean               closed;
+    private final Map<Long, List<Long>> distributeMap;
 
-    VrtTransfer(VrtChannel source, VrtChannel target) {
-        this.source = Objects.requireNonNull(source, "source");
-        this.target = Objects.requireNonNull(target, "target");
+    public VrtTransfer(NetManager manager) {
+        this.sourceList = new ArrayList<>();
+        this.distributeMap = new LinkedHashMap<>();
+        this.manager = manager;
+        this.manager.getContext().subscribe(this.subscribeSelect(), this::distribute);
         this.closed = false;
-        ObjectUtils.assertTrue(this.source.isServer(), "source must be server.");
-        ObjectUtils.assertTrue(this.target.isClient(), "target must be client.");
-
-        this.source.onClose(c -> this.close((VrtChannel) c));
-        this.target.onClose(c -> this.close((VrtChannel) c));
     }
 
-    public void close() {
-        this.close(null);
+    private Predicate<PlayLoad> subscribeSelect() {
+        return playLoad -> this.sourceList.contains(playLoad.getSource().getChannelId());
     }
 
-    private void close(VrtChannel event) {
-        //        this.source.transferFree();
-        //        this.target.transferFree();
+    private void distribute(PlayLoad playLoad) {
+        //
     }
 
-    //    public void transferTo(VrtChannel channel) throws SoCloseException {
-    //        if (this.isClose()) {
-    //            throw SoCloseException.INSTANCE;
-    //        }
-    //
-    //        if (this.transfer != null || channel.transfer != null) {
-    //            throw new IllegalStateException("VrtChannel has been transferred.");
-    //        }
-    //
-    //        VrtTransfer vt = new VrtTransfer(this, channel);
-    //        this.transfer = vt;
-    //        channel.transfer = vt;
-    //    }
+    public <IN, OUT> void linkTo(VrtChannel client, VrtChannel server, Function<IN, OUT> convert) {
+
+    }
+    // if (transferMode == TransferMode.ToTarget || transferMode == TransferMode.Both) {
+    //     transfer.source.addEventListener(EventBus, (EventListener) data -> {
+    //         transfer.sourceQueue.offerMessage(data.getData());
+    //     });
+    // }
+    // if (transferMode == TransferMode.ToSource || transferMode == TransferMode.Both) {
+    //     transfer.target.addEventListener(EventBus, (EventListener) data -> {
+    //         transfer.targetQueue.offerMessage(data.getData());
+    //     });
+    // }
 }

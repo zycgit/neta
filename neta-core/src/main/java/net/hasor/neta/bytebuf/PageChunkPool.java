@@ -26,22 +26,22 @@ import java.util.function.Consumer;
  * @version : 2024-02-15
  */
 class PageChunkPool {
-    private static final double LOG2 = Math.log(2);
-    protected final byte[]                  chunksMap;
-    private final   int                     memAddress;
-    private final   int                     pageSize;
-    private final   int                     pageCount;
-    private final   int                     capacity;
-    private final   int                     height;
-    private final   PageChunk[]             chunksHeads;
-    private final   ReentrantLock[]         chunksLock;
+    private static final double                  LOG2 = Math.log(2);
+    protected final      byte[]                  chunksMap;
+    private final        int                     memAddress;
+    private final        int                     pageSize;
+    private final        int                     pageCount;
+    private final        int                     capacity;
+    private final        int                     height;
+    private final        PageChunk[]             chunksHeads;
+    private final        ReentrantLock[]         chunksLock;
     //
-    private         Object                  owner;
-    private         Consumer<PageChunkPool> notify;
+    private              Object                  owner;
+    private              Consumer<PageChunkPool> notify;
     //
-    private         double                  usage;
-    private         int                     used;
-    private         int                     free;
+    private              double                  usage;
+    private              int                     used;
+    private              int                     free;
 
     public PageChunkPool(int memAddress, int pageSize, int treeHeight) {
         this.memAddress = memAddress;

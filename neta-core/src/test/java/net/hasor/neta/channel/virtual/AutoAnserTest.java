@@ -18,7 +18,6 @@ import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.handler.PlayLoad;
 import net.hasor.neta.handler.ProtoHelper;
-import net.hasor.neta.handler.ProtoStatus;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -27,13 +26,15 @@ import java.util.ArrayList;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class VirtualTest {
+public class AutoAnserTest {
     @Test
     public void direct() throws Throwable {
         ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();
 
         NetManager neta = new NetManager();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asDefault());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asDefault());
 
         ArrayList<Object> event = new ArrayList<>();
         channel.subscribe(PlayLoad::isOutbound, data -> {
@@ -42,27 +43,6 @@ public class VirtualTest {
 
         channel.sendData("Hello Vrt");
         assert event.get(0).equals("Hello Vrt");
-
-        neta.shutdown();
-    }
-
-    @Test
-    public void convert() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.object().nextEncoder((context, src, dst) -> {
-            dst.offerMessage("Data: " + src.takeMessage());
-            return ProtoStatus.Next;
-        }).build();
-
-        NetManager neta = new NetManager();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
-
-        ArrayList<Object> event = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
-            event.add(data.getData());
-        });
-
-        channel.sendData("Hello Vrt");
-        assert event.get(0).equals("Data: Hello Vrt");
 
         neta.shutdown();
     }

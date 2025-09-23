@@ -173,70 +173,70 @@ public class SoReadTest extends AbstractSoTest {
         server.shutdown();
     }
 
-    //    @Test 这个 test case 是验证 read 时 可处理的数据队列已满而反压 server 而设立
-    //    public void rcvBackPressedTest_02() throws Exception {
-    //        AtomicBoolean rcvErr = new AtomicBoolean(false);
-    //        ProtoConfig protoConf = new ProtoConfig();
-    //        protoConf.setRcvDownSlotSize(3);
-    //
-    //        ProtoBuilder<String, ByteBuf> builder = ProtoHelper.builder(protoConf)//
-    //                .nextDecoder("L1", protoConf, (ProtoHandler<ByteBuf, String>) (context, rcvUp, rcvDown) -> {
-    //                    while (rcvUp.hasMore() && rcvDown.hasSlot()) {
-    //                        ByteBuf byteBuf = rcvUp.peekMessage();
-    //                        while (byteBuf.hasLine()) {
-    //                            rcvDown.offerMessage(byteBuf.readLine());
-    //                        }
-    //                        byteBuf.markReader();
-    //                        if (byteBuf.readableBytes() <= 0) {
-    //                            rcvUp.skipMessage(1);
-    //                        }
-    //                    }
-    //                    // gen message to L2
-    //                    return ProtoStatus.Next;
-    //                }).nextDecoder("L2", protoConf, (ProtoHandler<String, String>) (context, rcvUp, rcvDown) -> {
-    //                    return ProtoStatus.Next; //No data consumption
-    //                }).nextDecoder(new ProtoHandler<String, String>() {
-    //                    @Override
-    //                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<String> dst) {
-    //                        return ProtoStatus.Next;
-    //                    }
-    //
-    //                    @Override
-    //                    public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-    //                        rcvErr.set(e instanceof ProtoFullException);
-    //                        return ProtoStatus.Next;
-    //                    }
-    //                });
-    //
-    //        // start server
-    //        int safePort = safePort();
-    //        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-    //        NetManager server = new NetManager(new SoConfig());
-    //        NetListen listen = server.listen(address, context -> builder.build(), NetOptions.TCP());
-    //
-    //        // client: send a lot of line
-    //        ThreadUtils.daemonThread(true, (Callable) () -> {
-    //            ThreadUtils.sleep(300);// make sure after listen.waitAnyAccept();
-    //            Socket client = new Socket("127.0.0.1", safePort);
-    //            OutputStream soOut = client.getOutputStream();
-    //            for (int i = 0; i < 10; i++) {
-    //                soOut.write("Hello\n".getBytes());
-    //                soOut.flush();
-    //                ThreadUtils.sleep(100);
-    //            }
-    //        });
-    //
-    //        listen.waitAnyAccept();
-    //        while (!rcvErr.get()) {
-    //            ThreadUtils.sleep(100);// wait full
-    //        }
-    //
-    //        NetChannel channel = (NetChannel) server.findChannel(2);
-    //        assert channel.getRcvSlotSize() == 0;
-    //        channel.printStackTrace();
-    //
-    //        server.shutdown();
-    //    }
+    @Test // 这个 test case 是验证 read 时 可处理的数据队列已满而反压 server 而设立
+    public void rcvBackPressedTest_02() throws Throwable {
+        AtomicBoolean rcvErr = new AtomicBoolean(false);
+        ProtoConfig protoConf = new ProtoConfig();
+        protoConf.setRcvDownSlotSize(3);
+
+        ProtoBuilder<String, ByteBuf> builder = ProtoHelper.standard(protoConf)//
+                .nextDecoder("L1", protoConf, (ProtoHandler<ByteBuf, String>) (context, rcvUp, rcvDown) -> {
+                    while (rcvUp.hasMore() && rcvDown.hasSlot()) {
+                        ByteBuf byteBuf = rcvUp.peekMessage();
+                        while (byteBuf.hasLine()) {
+                            rcvDown.offerMessage(byteBuf.readLine());
+                        }
+                        byteBuf.markReader();
+                        if (byteBuf.readableBytes() <= 0) {
+                            rcvUp.skipMessage(1);
+                        }
+                    }
+                    // gen message to L2
+                    return ProtoStatus.Next;
+                }).nextDecoder("L2", protoConf, (ProtoHandler<String, String>) (context, rcvUp, rcvDown) -> {
+                    return ProtoStatus.Next; //No data consumption
+                }).nextDecoder(new ProtoHandler<String, String>() {
+                    @Override
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<String> dst) {
+                        return ProtoStatus.Next;
+                    }
+
+                    @Override
+                    public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                        rcvErr.set(e instanceof ProtoFullException);
+                        return ProtoStatus.Next;
+                    }
+                });
+
+        // start server
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        NetManager server = new NetManager();
+        NetListen listen = server.bind(address, context -> builder.build(), SoConfig.TCP());
+
+        // client: send a lot of line
+        ThreadUtils.daemonThread(true, (Callable) () -> {
+            ThreadUtils.sleep(300);// make sure after listen.waitAnyAccept();
+            Socket client = new Socket("127.0.0.1", safePort);
+            OutputStream soOut = client.getOutputStream();
+            for (int i = 0; i < 10; i++) {
+                soOut.write("Hello\n".getBytes());
+                soOut.flush();
+                ThreadUtils.sleep(100);
+            }
+        });
+
+        listen.waitAnyAccept();
+        //while (!rcvErr.get()) {
+        //    ThreadUtils.sleep(100);// wait full
+        //}
+
+        NetChannel channel = (NetChannel) server.findChannel(2);
+        assert channel.getStatistical().heapUpOfRcvRoot() == 1;
+        channel.printStackTrace();
+
+        server.shutdown();
+    }
 
     @Test
     public void rcvCounterTest() throws Throwable {

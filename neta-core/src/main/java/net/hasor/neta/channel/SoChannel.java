@@ -15,68 +15,85 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.neta.handler.PlayLoad;
+import net.hasor.neta.handler.PlayLoadListener;
 
 import java.net.SocketAddress;
+import java.util.function.Predicate;
 
 /**
- * Channel
+ * Represents a network channel abstraction.
+ * Provides methods for managing channel state, attributes, and message subscriptions.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public interface SoChannel<T> {
-    /** channel id */
+    /** the unique channel ID. */
     long getChannelId();
 
-    /** channel accept time */
+    /** the time when the channel was created/accepted. */
     long getCreatedTime();
 
-    /** The last time data was received or sent */
+    /** the last time data was sent or received on this channel. */
     long getLastActiveTime();
 
-    /** a {@link NetListen} */
+    /** Returns true if this channel is a {@link NetListen} channel. */
     boolean isListen();
 
-    /** an accept {@link NetChannel} */
+    /** Returns true if this channel is a server-side accepted {@link NetChannel}. */
     boolean isServer();
 
-    /** a connect {@link NetChannel} */
+    /** Returns true if this channel is a client-side accepted {@link NetChannel}. */
     boolean isClient();
 
-    /** local {@link SocketAddress} */
+    /** the local {@link SocketAddress} of this channel. */
     SocketAddress getLocalAddr();
 
-    /** get remote address of the channel */
+    /** the remote {@link SocketAddress} of this channel. */
     SocketAddress getRemoteAddr();
 
-    /** get context */
+    /** the context with this channel. */
     SoContext getContext();
 
-    /** get config */
+    /** the configuration for this channel. */
     SoConfig getConfig();
 
     /**
      * close this channel.
-     * <li>For the Listen channel, listening is turned off.</li>
-     * <li>For the Socket channel, will be closed after all data are written.</li>
-     * <p>The {@link #closeNow()} and {@link #close()} methods are valid if they are called first</p>
+     * <ul>
+     *   <li>If the channel is a listening channel, it will stop listening.</li>
+     *   <li>If the channel is a socket channel, it will close after all data is written.</li>
+     * </ul>
+     * The {@link #closeNow()} and {@link #close()} methods are only effective if called first.
+     * @return a Future representing the close operation
      */
     Future<T> close();
 
-    /** close this channel now. */
+    /** Immediately closes this channel. */
     void closeNow();
 
-    /** on close this channel. */
+    /** Registers a listener to be notified when this channel is closed. */
     void onClose(SoCloseListener<SoChannel<?>> listener);
 
-    /** return close status. */
+    /** Returns true if this channel is closed. */
     boolean isClose();
 
-    /** set any object to SoChannel attributes */
+    /** Sets an attribute for this channel using the specified key. */
     void setAttribute(String key, Object value);
 
-    /** get SoChannel attributes */
+    /** Gets the attribute associated with the specified key for this channel. */
     Object getAttribute(String key);
 
-    /** Get the attachment for {@link ProtoContext} */
+    /** Gets the attachment for the specified ProtoContext type. */
     <V> V findProtoContext(Class<V> serviceType);
+
+    /** Subscribes to messages belonging to this channel. */
+    void subscribe(PlayLoadListener listener);
+
+    /**
+     * Subscribes to messages belonging to this channel and filters events using the provided predicate.
+     * @param select predicate to filter events
+     * @param listener listener to handle filtered events
+     */
+    void subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
 }

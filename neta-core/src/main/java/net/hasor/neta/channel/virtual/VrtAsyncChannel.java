@@ -17,6 +17,7 @@ package net.hasor.neta.channel.virtual;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.handler.PlayLoad;
 
 import java.io.IOException;
 import java.net.SocketAddress;
@@ -108,7 +109,8 @@ class VrtAsyncChannel implements AsyncChannel {
 
             while (sndData.hasReadable()) {
                 Object data = sndData.transferTake();
-                vrtChannel.offerSndDown(data);
+                PlayLoad playLoad = PlayLoad.of(vrtChannel, data, false, true);
+                this.context.trigger(playLoad);
             }
 
             sndData.completed();

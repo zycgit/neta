@@ -12,6 +12,10 @@ import java.security.NoSuchAlgorithmException;
 public class PooledByteBufTest {
     private static BufferPool POOL = new BufferPool(2);
 
+    public static ByteBuf defaultWrap(byte[] data) {
+        return ByteBuf.wrap(data);
+    }
+
     private ByteBuf pooledBuffer(int initCapacity) {
         int fmtMaxCap = PageChunkPool.tableSizeFor(initCapacity, Integer.MAX_VALUE);
         Buffer target = POOL.requestBuffer(initCapacity, ByteBufAllocator.DEFAULT);
@@ -776,10 +780,6 @@ public class PooledByteBufTest {
         assert byteBuf.readByte() == 3;
         assert byteBuf.readByte() == 4;
         byteBuf.resetReader();
-    }
-
-    public static ByteBuf defaultWrap(byte[] data) {
-        return ByteBuf.wrap(data);
     }
 
     @Test
