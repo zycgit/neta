@@ -151,16 +151,19 @@ public class NetManager extends AbstractNetManager {
         this.context.closeAll(now);
 
         // waiting close
-        long t = System.currentTimeMillis();
-        this.channelGroup.shutdown();
-        while (!this.channelGroup.isTerminated()) {
-            long cost = System.currentTimeMillis() - t;
-            if (cost > 3000) {
-                t = System.currentTimeMillis();
-                logger.info("close channelGroup waiting...");
+        if (this.channelGroup != null) {
+            long t = System.currentTimeMillis();
+            this.channelGroup.shutdown();
+            while (!this.channelGroup.isTerminated()) {
+                long cost = System.currentTimeMillis() - t;
+                if (cost > 3000) {
+                    t = System.currentTimeMillis();
+                    logger.info("close channelGroup waiting...");
+                }
+                ThreadUtils.sleep(50);
             }
-            ThreadUtils.sleep(50);
         }
+
         logger.info("close channelGroup done.");
     }
 }

@@ -27,7 +27,7 @@ import java.util.ArrayList;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class VirtualTest {
+public class VrtSubscribeTest {
     @Test
     public void direct() throws Throwable {
         ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();

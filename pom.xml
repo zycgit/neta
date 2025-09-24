@@ -14,7 +14,6 @@
     <url>https://www.hasor.net/</url>
     <inceptionYear>2022</inceptionYear>
 
-    <!-- 配置属性 -->
     <properties>
         <downloadSources>true</downloadSources>
         <downloadJavadocs>true</downloadJavadocs>
@@ -67,7 +66,7 @@
             <dependency>
                 <groupId>net.hasor</groupId>
                 <artifactId>cobble-all</artifactId>
-                <version>4.7.0</version>
+                <version>4.8.1</version>
             </dependency>
 
             <!-- for Test -->
@@ -87,7 +86,7 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.11.0</version>
+                <version>3.14.0</version>
                 <configuration>
                     <source>1.8</source>
                     <target>1.8</target>
@@ -112,17 +111,15 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.11.3</version>
                 <configuration>
                     <failOnError>false</failOnError>
                     <failOnWarnings>false</failOnWarnings>
                     <doclint>none</doclint>
                     <additionalJOption>--allow-script-in-comments</additionalJOption>
-                    <!-- <excludePackageNames>net.hasor.cobble.asm.*,net.hasor.cobble.setting.provider.yaml.lib.*</excludePackageNames>-->
                     <encoding>UTF-8</encoding>
                     <docencoding>UTF-8</docencoding>
-                    <!-- <header><![CDATA[ [<a target="_blank" href="http://www.hasor.net">Web Site</a>] ]]></header>-->
-                    <!-- <bottom>${javadocs.bottom}</bottom>-->
+                    <outputDirectory>${project.build.directory}</outputDirectory>
                 </configuration>
                 <executions>
                     <execution>
@@ -137,29 +134,23 @@
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-resources-plugin</artifactId>
-                <version>3.2.0</version>
+                <version>3.3.1</version>
                 <configuration>
                     <encoding>UTF-8</encoding>
                 </configuration>
             </plugin>
-            <!-- eclipse 插件 -->
-            <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-eclipse-plugin</artifactId>
-                <version>2.10</version>
-                <configuration>
-                    <workspace>${basedir}</workspace>
-                    <downloadSources>${downloadSources}</downloadSources>
-                    <downloadJavadocs>${downloadJavadocs}</downloadJavadocs>
-                </configuration>
-            </plugin>
-            <!-- Test 失败继续 -->
+            <!-- test 失败继续 -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-surefire-plugin</artifactId>
                 <version>2.7</version>
                 <configuration>
                     <testFailureIgnore>true</testFailureIgnore>
+                    <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED</argLine>
+                    <!-- <argLine>&#45;&#45;add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argLine>-->
+                    <!-- <argLine>&#45;&#45;add-opens=java.base/java.io=ALL-UNNAMED</argLine>-->
+                    <!-- <argLine>&#45;&#45;add-opens=java.base/java.net=ALL-UNNAMED</argLine>-->
+                    <!-- <argLine>&#45;&#45;add-opens=jdk.unsupported=ALL-UNNAMED</argLine>-->
                 </configuration>
             </plugin>
             <!-- 覆盖率 -->
@@ -188,28 +179,17 @@
         </plugins>
     </build>
 
-    <!-- 使用“-P release”启用下面配置 -->
     <profiles>
-        <profile>
-            <id>dev</id>
-            <modules>
-                <module>neta-example</module>
-                <module>performance</module>
-            </modules>
-        </profile>
+        <!-- 使用“-P release”启用下面配置 -->
         <profile>
             <id>release</id>
-            <properties>
-                <gpg.executable>gpg2</gpg.executable>
-                <gpg.passphrase>fubing220106</gpg.passphrase>
-            </properties>
             <build>
                 <plugins>
                     <!-- GPG -->
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
-                        <version>3.1.0</version>
+                        <version>3.2.8</version>
                         <executions>
                             <execution>
                                 <id>sign-artifacts</id>
@@ -224,7 +204,7 @@
                     <plugin>
                         <groupId>org.sonatype.central</groupId>
                         <artifactId>central-publishing-maven-plugin</artifactId>
-                        <version>0.5.0</version>
+                        <version>0.8.0</version>
                         <extensions>true</extensions>
                         <configuration>
                             <publishingServerId>central</publishingServerId>
@@ -233,7 +213,7 @@
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-release-plugin</artifactId>
-                        <version>3.0.1</version>
+                        <version>3.1.1</version>
                         <configuration>
                             <autoVersionSubmodules>true</autoVersionSubmodules>
                             <useReleaseProfile>false</useReleaseProfile>
@@ -245,47 +225,20 @@
                 </plugins>
             </build>
         </profile>
+        <!-- 在开发中增加测试工程 -->
         <profile>
-            <id>jdk-1.8</id>
-            <activation>
-                <jdk>1.8</jdk>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <version>3.2.5</version>
-                        <configuration>
-                            <testFailureIgnore>true</testFailureIgnore>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
+            <id>dev</id>
+            <modules>
+                <module>neta-example</module>
+                <module>performance</module>
+            </modules>
         </profile>
         <profile>
-            <id>jdk-default</id>
-            <activation>
-                <activeByDefault>true</activeByDefault>
-                <jdk>!1.8</jdk>
-            </activation>
-            <build>
-                <plugins>
-                    <plugin>
-                        <groupId>org.apache.maven.plugins</groupId>
-                        <artifactId>maven-surefire-plugin</artifactId>
-                        <version>3.2.5</version>
-                        <configuration>
-                            <testFailureIgnore>true</testFailureIgnore>
-                            <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED</argLine>
-                            <argLine>--add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argLine>
-                            <argLine>--add-opens=java.base/java.io=ALL-UNNAMED</argLine>
-                            <argLine>--add-opens=java.base/java.net=ALL-UNNAMED</argLine>
-                            <argLine>--add-opens=jdk.unsupported=ALL-UNNAMED</argLine>
-                        </configuration>
-                    </plugin>
-                </plugins>
-            </build>
+            <id>tests</id>
+            <modules>
+                <module>neta-example</module>
+                <module>performance</module>
+            </modules>
         </profile>
     </profiles>
 </project>

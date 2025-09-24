@@ -72,7 +72,7 @@ public class TcpNeta2JvmTest extends AbstractSoTest {
 
         NetManager neta = new NetManager();
         Future<NetChannel> future = neta.connectAsync(address, ctx -> ProtoHelper.standard().build(), TcpSoConfig.TCP());
-        neta.shutdown();
+        future.await();
 
         assert future.isDone();
         assert future.getCause().getMessage().equals("Connection refused");

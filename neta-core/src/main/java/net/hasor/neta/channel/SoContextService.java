@@ -216,28 +216,29 @@ public class SoContextService implements SoContext {
     /** trigger event */
     @Deprecated
     public void trigger(PlayLoad data) {
+        String prefix;
+        if (data.isInbound()) {
+            prefix = "rcv";
+        } else if (data.isOutbound()) {
+            prefix = "snd";
+        } else {
+            prefix = "event";
+        }
+
         boolean hasProcessed = false;
         for (Function<PlayLoad, Boolean> listener : this.listeners) {
             try {
                 hasProcessed = hasProcessed | listener.apply(data);
             } catch (Exception e) {
-                logger.error("event(" + data.getSource().getChannelId() + ") trigger " + listener.getClass().getName() + " has error " + e.getMessage(), e);
+                logger.error(prefix + "(" + data.getSource().getChannelId() + ") trigger " + listener.getClass().getName() + " has error " + e.getMessage(), e);
             }
         }
 
         if (!hasProcessed) {
-            String msg = "event(" + data.getSource().getChannelId() + ") There are no program at the tail of the ProtoStack, Skipping event: ";
+            String msg = prefix + "(" + data.getSource().getChannelId() + ") There are no program at the tail of the ProtoStack, Skipping event: ";
             logger.warn(msg + data.getData());
         }
     }
-    //        if (isRcv) {
-    //            msg = "rcv(" + channel.getChannelId() + ") rcv Exception was fired, and it reached at the tail of the ProtoStack." //
-    //                    + " It usually means the last handler in the ProtoStack did not handle the rcv exception.";
-    //        } else {
-    //            msg = "snd(" + channel.getChannelId() + ") snd Exception was fired, and it reached at the head of the ProtoStack." //
-    //                    + " It usually means the first handler in the ProtoStack did not handle the snd exception.";
-    //        }
-    //        logger.warn(msg, error);
 
     @Override
     public NetManager getNetManager() {
