@@ -40,7 +40,11 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf buffer(int initCapacity) {
-        return this.buffer(initCapacity, initCapacity);
+        if (initCapacity == 0) {
+            return ByteBuf.EMPTY;
+        } else {
+            return this.buffer(initCapacity, initCapacity);
+        }
     }
 
     @Override

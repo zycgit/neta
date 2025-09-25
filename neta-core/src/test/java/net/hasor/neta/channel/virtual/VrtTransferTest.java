@@ -44,8 +44,8 @@ public class VrtTransferTest {
 
         // transfer channel
         VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, o -> o);
-        transfer.linkTo(server, client, o -> o);
+        transfer.linkTo(client, server, VrtTransfer.direct());
+        transfer.linkTo(server, client, VrtTransfer.direct());
 
         //
         List<String> rcv = new ArrayList<>();
@@ -83,8 +83,8 @@ public class VrtTransferTest {
 
         // transfer channel
         VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, o -> o);
-        transfer.linkTo(server, client, o -> o);
+        transfer.linkTo(client, server, VrtTransfer.direct());
+        transfer.linkTo(server, client, VrtTransfer.direct());
 
         //
         List<String> rcv = new ArrayList<>();

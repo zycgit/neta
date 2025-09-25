@@ -88,12 +88,12 @@ public interface SoChannel<T> {
     <V> V findProtoContext(Class<V> serviceType);
 
     /** Subscribes to messages belonging to this channel. */
-    void subscribe(PlayLoadListener listener);
+    SubscribeHolder subscribe(PlayLoadListener listener);
 
     /**
      * Subscribes to messages belonging to this channel and filters events using the provided predicate.
      * @param select predicate to filter events
      * @param listener listener to handle filtered events
      */
-    void subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
+    SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
 }

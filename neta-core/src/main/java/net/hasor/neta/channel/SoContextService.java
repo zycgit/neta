@@ -195,21 +195,25 @@ public class SoContextService implements SoContext {
     }
 
     @Override
-    public void subscribe(long channelId, PlayLoadListener listener) {
-        this.subscribe(p -> p.getSource().getChannelId() == channelId, listener);
+    public SubscribeHolder subscribe(long channelId, PlayLoadListener listener) {
+        return this.subscribe(p -> p.getSource().getChannelId() == channelId, listener);
     }
 
     @Override
-    public void subscribe(final Predicate<PlayLoad> select, final PlayLoadListener listener) {
+    public SubscribeHolder subscribe(final Predicate<PlayLoad> select, final PlayLoadListener listener) {
         if (listener != null) {
-            this.listeners.add(data -> {
+            final Function<PlayLoad, Boolean> func = data -> {
                 if (select == null || select.test(data)) {
                     listener.onEvent(data);
                     return true;
                 } else {
                     return false;
                 }
-            });
+            };
+            this.listeners.add(func);
+            return () -> this.listeners.remove(func);
+        } else {
+            return null;
         }
     }
 

@@ -50,12 +50,12 @@ public interface SoContext {
      * @param channelId event topic
      * @param listener event listener
      */
-    void subscribe(long channelId, PlayLoadListener listener);
+    SubscribeHolder subscribe(long channelId, PlayLoadListener listener);
 
     /**
      * subscribe event
      * @param select event topic
      * @param listener event listener
      */
-    void subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
+    SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
 }

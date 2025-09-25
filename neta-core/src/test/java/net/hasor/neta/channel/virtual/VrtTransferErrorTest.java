@@ -37,10 +37,10 @@ public class VrtTransferErrorTest {
 
         // transfer channel
         VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(channel1, channel2, o -> o);
+        transfer.linkTo(channel1, channel2, VrtTransfer.direct());
 
         try {
-            transfer.linkTo(channel1, channel2, o -> o);
+            transfer.linkTo(channel1, channel2, VrtTransfer.direct());
             assert false;
         } catch (SocketException e) {
             assert e.getMessage().equals("link " + channel1.getChannelId() + " -> " + channel2.getChannelId() + " already exists");
@@ -61,7 +61,7 @@ public class VrtTransferErrorTest {
 
         try {
             VrtTransfer transfer = new VrtTransfer(neta1);
-            transfer.linkTo(channel1, channel2, o -> o);
+            transfer.linkTo(channel1, channel2, VrtTransfer.direct());
             assert false;
         } catch (SocketException e) {
             assert e.getMessage().equals("channels need same NetaManager");
@@ -83,7 +83,7 @@ public class VrtTransferErrorTest {
 
         try {
             VrtTransfer transfer = new VrtTransfer(neta2);
-            transfer.linkTo(channel1, channel2, o -> o);
+            transfer.linkTo(channel1, channel2, VrtTransfer.direct());
             assert false;
         } catch (SocketException e) {
             assert e.getMessage().equals("channels and VrtTransfer need same NetaManager.");
@@ -103,7 +103,7 @@ public class VrtTransferErrorTest {
 
         try {
             VrtTransfer transfer = new VrtTransfer(neta);
-            transfer.linkTo(channel, channel, o -> o);
+            transfer.linkTo(channel, channel, VrtTransfer.direct());
             assert false;
         } catch (SocketException e) {
             assert e.getMessage().equals("cannot create self link");

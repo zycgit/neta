@@ -40,13 +40,13 @@ public abstract class AttributeChannel<T> implements SoChannel<T> {
     }
 
     @Override
-    public void subscribe(PlayLoadListener listener) {
-        this.subscribe(t -> true, listener);
+    public SubscribeHolder subscribe(PlayLoadListener listener) {
+        return this.subscribe(t -> true, listener);
     }
 
     @Override
-    public void subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
+    public SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
         Predicate<PlayLoad> predicate = select.and(t -> t.getSource().getChannelId() == this.getChannelId());
-        this.getContext().subscribe(predicate, listener);
+        return this.getContext().subscribe(predicate, listener);
     }
 }
