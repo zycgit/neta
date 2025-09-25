@@ -15,167 +15,177 @@
  */
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.handler.*;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.channel.virtual.VrtTransfer;
+import net.hasor.neta.handler.ProtoHelper;
 import org.junit.Test;
 
 import java.nio.ByteOrder;
+import java.util.ArrayDeque;
 import java.util.Objects;
+import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public class LengthFieldBasedFrameHandlerTest {
-
-    private void coderTest1_case1(EmbeddedChannel channel) {
-        ByteBuf buf1 = (ByteBuf) channel.readRcv();
+    private void coderTest1_case1(Queue<ByteBuf> rcvData) {
+        ByteBuf buf1 = rcvData.poll();
         assert buf1.readableBytes() == 6;
         assert Objects.deepEquals(buf1.asByteArray(), new byte[] { 0, 4, 1, 2, 3, 4 });
 
-        ByteBuf buf2 = (ByteBuf) channel.readRcv();
+        ByteBuf buf2 = rcvData.poll();
         assert buf2.readableBytes() == 4;
         assert Objects.deepEquals(buf2.asByteArray(), new byte[] { 0, 2, 1, 2 });
 
-        ByteBuf buf3 = (ByteBuf) channel.readRcv();
+        ByteBuf buf3 = rcvData.poll();
         assert buf3.readableBytes() == 10;
         assert Objects.deepEquals(buf3.asByteArray(), new byte[] { 0, 8, 1, 2, 3, 4, 5, 6, 7, 8 });
 
-        ByteBuf buf4 = (ByteBuf) channel.readRcv();
+        ByteBuf buf4 = rcvData.poll();
         assert buf4.readableBytes() == 2;
         assert Objects.deepEquals(buf4.asByteArray(), new byte[] { 0, 0 });
 
-        ByteBuf buf5 = (ByteBuf) channel.readRcv();
+        ByteBuf buf5 = rcvData.poll();
         assert buf5.readableBytes() == 3;
         assert Objects.deepEquals(buf5.asByteArray(), new byte[] { 0, 1, 1 });
     }
 
-    private void coderTest1_case2(EmbeddedChannel channel) {
-        ByteBuf buf1 = (ByteBuf) channel.readRcv();
+    private void coderTest1_case2(Queue<ByteBuf> rcvData) {
+        ByteBuf buf1 = rcvData.poll();
         assert buf1.readableBytes() == 4;
         assert Objects.deepEquals(buf1.asByteArray(), new byte[] { 1, 2, 3, 4 });
 
-        ByteBuf buf2 = (ByteBuf) channel.readRcv();
+        ByteBuf buf2 = rcvData.poll();
         assert buf2.readableBytes() == 2;
         assert Objects.deepEquals(buf2.asByteArray(), new byte[] { 1, 2 });
 
-        ByteBuf buf3 = (ByteBuf) channel.readRcv();
+        ByteBuf buf3 = rcvData.poll();
         assert buf3.readableBytes() == 8;
         assert Objects.deepEquals(buf3.asByteArray(), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
 
-        ByteBuf buf4 = (ByteBuf) channel.readRcv();
+        ByteBuf buf4 = rcvData.poll();
         assert buf4.readableBytes() == 0;
         assert Objects.deepEquals(buf4.asByteArray(), new byte[0]);
 
-        ByteBuf buf5 = (ByteBuf) channel.readRcv();
+        ByteBuf buf5 = rcvData.poll();
         assert buf5.readableBytes() == 1;
         assert Objects.deepEquals(buf5.asByteArray(), new byte[] { 1 });
     }
 
     @Test
-    public void coder_1_case1() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_1_case1() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        client.send(ByteBuf.wrap(new byte[] {   //
-                0, 4, 1, 2, 3, 4,               //
-                0, 2, 1, 2,                     //
-                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,   //
-                0, 0,                           //
-                0, 1, 1,                        //
+        //
+        client.sendData(ByteBuf.wrap(new byte[] {//
+                0, 4, 1, 2, 3, 4,                //
+                0, 2, 1, 2,                      //
+                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,    //
+                0, 0,                            //
+                0, 1, 1,                         //
                 99, 99 }));
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case1(server);
+        assert rcvData.size() == 5;
+        coderTest1_case1(rcvData);
     }
 
     @Test
-    public void coder_1_case2() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_1_case2() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2, 2);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        client.send(ByteBuf.wrap(new byte[] {   //
-                0, 4, 1, 2, 3, 4,               //
-                0, 2, 1, 2,                     //
-                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,   //
-                0, 0,                           //
-                0, 1, 1,                        //
+        //
+        client.sendData(ByteBuf.wrap(new byte[] {//
+                0, 4, 1, 2, 3, 4,                //
+                0, 2, 1, 2,                      //
+                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,    //
+                0, 0,                            //
+                0, 1, 1,                         //
                 99, 99 }));
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case2(server);
+        assert rcvData.size() == 5;
+        coderTest1_case2(rcvData);
     }
 
     @Test
-    public void coder_1_case3() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_1_case3() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     1, ByteOrder.BIG_ENDIAN, 2, 3);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        client.send(ByteBuf.wrap(new byte[] {   //
-                1, 0, 4, 1, 2, 3, 4,            //
-                2, 0, 2, 1, 2,                  //
-                3, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8,//
-                4, 0, 0,                        //
-                5, 0, 1, 1,                     //
+        //
+        client.sendData(ByteBuf.wrap(new byte[] {//
+                1, 0, 4, 1, 2, 3, 4,             //
+                2, 0, 2, 1, 2,                   //
+                3, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, //
+                4, 0, 0,                         //
+                5, 0, 1, 1,                      //
                 6, 99, 99 }));
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case2(server);
+        assert rcvData.size() == 5;
+        coderTest1_case2(rcvData);
     }
 
     @Test
-    public void coder_2_case1() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_2_case1() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
+        //
         byte[] bytes1 = new byte[] {            //
                 0, 4, 1, 2, 3, 4,               //
                 0, 2, 1, 2,                     //
@@ -184,31 +194,31 @@ public class LengthFieldBasedFrameHandlerTest {
                 0, 1, 1,                        //
                 99, 99 };
         for (byte b : bytes1) {
-            client.send(ByteBuf.wrap(new byte[] { b }));
+            client.sendData(ByteBuf.wrap(new byte[] { b }));
         }
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case1(server);
+        assert rcvData.size() == 5;
+        coderTest1_case1(rcvData);
     }
 
     @Test
-    public void coder_2_case2() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_2_case2() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2, 2);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
+        //
         byte[] bytes1 = new byte[] {            //
                 0, 4, 1, 2, 3, 4,               //
                 0, 2, 1, 2,                     //
@@ -217,31 +227,31 @@ public class LengthFieldBasedFrameHandlerTest {
                 0, 1, 1,                        //
                 99, 99 };
         for (byte b : bytes1) {
-            client.send(ByteBuf.wrap(new byte[] { b }));
+            client.sendData(ByteBuf.wrap(new byte[] { b }));
         }
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case2(server);
+        assert rcvData.size() == 5;
+        coderTest1_case2(rcvData);
     }
 
     @Test
-    public void coder_2_case3() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_2_case3() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     1, ByteOrder.BIG_ENDIAN, 2, 3);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
+        //
         byte[] bytes1 = new byte[] {            //
                 1, 0, 4, 1, 2, 3, 4,            //
                 2, 0, 2, 1, 2,                  //
@@ -250,92 +260,92 @@ public class LengthFieldBasedFrameHandlerTest {
                 5, 0, 1, 1,                     //
                 6, 99, 99 };
         for (byte b : bytes1) {
-            client.send(ByteBuf.wrap(new byte[] { b }));
+            client.sendData(ByteBuf.wrap(new byte[] { b }));
         }
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case2(server);
+        assert rcvData.size() == 5;
+        coderTest1_case2(rcvData);
     }
 
     @Test
-    public void coder_3_case1() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_3_case1() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        client.send(ByteBuf.wrap(new byte[] { 0 }));
-        client.send(ByteBuf.wrap(new byte[] { 4, 1 }));
-        client.send(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
-        client.send(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
-        client.send(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case1(server);
+        //
+        client.sendData(ByteBuf.wrap(new byte[] { 0 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
+        assert rcvData.size() == 5;
+        coderTest1_case1(rcvData);
     }
 
     @Test
-    public void coder_3_case2() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_3_case2() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2, 2);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        client.send(ByteBuf.wrap(new byte[] { 0 }));
-        client.send(ByteBuf.wrap(new byte[] { 4, 1 }));
-        client.send(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
-        client.send(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
-        client.send(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case2(server);
+        //
+        client.sendData(ByteBuf.wrap(new byte[] { 0 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
+        assert rcvData.size() == 5;
+        coderTest1_case2(rcvData);
     }
 
     @Test
-    public void coder_3_case3() {
-        EmbeddedInitializer serverInitializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).build();
-        };
-        EmbeddedInitializer clientInitializer = ctx -> {
+    public void coder_3_case3() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            return ProtoHelper.standard().build();
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     1, ByteOrder.BIG_ENDIAN, 2, 3);
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextEncoder("", handler).build();
-        };
+            return ProtoHelper.standard().nextEncoder("", handler).build();
+        }, VrtSoConfig.asClient());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, serverInitializer, context);
-        EmbeddedChannel client = new EmbeddedChannel(false, clientInitializer, context);
+        //
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        client.send(ByteBuf.wrap(new byte[] { 1, 0 }));
-        client.send(ByteBuf.wrap(new byte[] { 4, 1 }));
-        client.send(ByteBuf.wrap(new byte[] { 2, 3, 4, 2, 0 }));
-        client.send(ByteBuf.wrap(new byte[] { 2, 1, 2, 3, 0, 8, 1, 2, 3 }));
-        client.send(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 4, 0, 0, 5, 0, 1, 1, 6, 99, 99 }));
+        //
+        client.sendData(ByteBuf.wrap(new byte[] { 1, 0 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 2, 0 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 3, 0, 8, 1, 2, 3 }));
+        client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 4, 0, 0, 5, 0, 1, 1, 6, 99, 99 }));
         byte[] bytes1 = new byte[] {            //
                 1, 0, 4, 1, 2, 3, 4,            //
                 2, 0, 2, 1, 2,                  //
@@ -344,13 +354,9 @@ public class LengthFieldBasedFrameHandlerTest {
                 5, 0, 1, 1,                     //
                 6, 99, 99 };
         for (byte b : bytes1) {
-            client.send(ByteBuf.wrap(new byte[] { b }));
+            client.sendData(ByteBuf.wrap(new byte[] { b }));
         }
-
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        transfer.transferToServer();
-        assert server.getRcvQueueSize() == 5;
-
-        coderTest1_case2(server);
+        assert rcvData.size() == 5;
+        coderTest1_case2(rcvData);
     }
 }

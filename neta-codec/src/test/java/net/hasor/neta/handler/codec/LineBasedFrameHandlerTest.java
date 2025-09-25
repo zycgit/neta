@@ -15,12 +15,15 @@
  */
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.handler.EmbeddedChannel;
-import net.hasor.neta.handler.EmbeddedInitializer;
-import net.hasor.neta.handler.EmbeddedSoContext;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.handler.ProtoHelper;
 import org.junit.Test;
+
+import java.util.ArrayDeque;
+import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -28,55 +31,60 @@ import org.junit.Test;
  */
 public class LineBasedFrameHandlerTest {
     @Test
-    public void lineBasedFrame_1() {
-        LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        EmbeddedInitializer initializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
-        };
+    public void lineBasedFrame_1() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
+            return ProtoHelper.standard().nextDecoder(lineBasedFrame).build();
+        }, VrtSoConfig.asDefault());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        // transfer channel
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        channel.receive(ByteBuf.wrap("abc".getBytes()));
-        assert channel.readRcv() == null;
-
-        channel.receive(ByteBuf.wrap("\r\n".getBytes()));
-
-        ByteBuf rcvDown = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtils.toBytes(rcvDown)).equals("abc\r\n");
+        //
+        channel.onReceive(ByteBuf.wrap("abc".getBytes()));
+        assert rcvData.isEmpty();
+        channel.onReceive(ByteBuf.wrap("\r\n".getBytes()));
+        assert rcvData.size() == 1;
+        assert new String(rcvData.poll().asByteArray()).equals("abc\r\n");
     }
 
     @Test
-    public void lineBasedFrame_2() {
-        LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        EmbeddedInitializer initializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
-        };
+    public void lineBasedFrame_2() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
+            return ProtoHelper.standard().nextDecoder(lineBasedFrame).build();
+        }, VrtSoConfig.asDefault());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
+        // transfer channel
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        channel.receive(ByteBuf.wrap("abc\r\n123".getBytes()));
-
-        ByteBuf rcvDown = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtils.toBytes(rcvDown)).equals("abc\r\n");
+        //
+        channel.onReceive(ByteBuf.wrap("abc\r\n123".getBytes()));
+        assert rcvData.size() == 1;
+        assert new String(rcvData.poll().asByteArray()).equals("abc\r\n");
     }
 
     @Test
-    public void lineBasedFrame_3() {
-        LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-        EmbeddedInitializer initializer = ctx -> {
-            return ProtoHelper.embedded(ByteBuf.class, ByteBuf.class).nextDecoder(lineBasedFrame).build();
-        };
+    public void lineBasedFrame_3() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
+            return ProtoHelper.standard().nextDecoder(lineBasedFrame).build();
+        }, VrtSoConfig.asDefault());
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel channel = new EmbeddedChannel(true, initializer, context);
-        channel.receive(ByteBuf.wrap("abc\r\n123".getBytes()));
-        channel.receive(ByteBuf.wrap("\r\n".getBytes()));
+        // transfer channel
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
-        ByteBuf dat1 = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtils.toBytes(dat1)).equals("abc\r\n");
-        ByteBuf dat2 = (ByteBuf) channel.readRcv();
-        assert new String(ByteBufUtils.toBytes(dat2)).equals("123\r\n");
+        //
+        channel.onReceive(ByteBuf.wrap("abc\r\n123".getBytes()));
+        channel.onReceive(ByteBuf.wrap("\r\n".getBytes()));
+        assert rcvData.size() == 2;
+        assert new String(rcvData.poll().asByteArray()).equals("abc\r\n");
+        assert new String(rcvData.poll().asByteArray()).equals("123\r\n");
     }
 }

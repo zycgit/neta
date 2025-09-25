@@ -34,7 +34,7 @@ public class AbstractSslTest {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
+        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String

@@ -49,10 +49,10 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
         ProtoInitializer serverProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
-        NetListen listen = neta.listen(address, serverProto, udpConf);
+        NetListen listen = neta.bind(address, serverProto, udpConf);
 
         // client
-        NetChannel clientSide = neta.connect(address, clientProto, udpConf).get();
+        NetChannel clientSide = neta.connectAsync(address, clientProto, udpConf).get();
         listen.waitAnyAccept();
         NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
 
@@ -84,10 +84,10 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
         ProtoInitializer serverProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
-        NetListen listen = neta.listen(address, serverProto, udpConf);
+        NetListen listen = neta.bind(address, serverProto, udpConf);
 
         // client
-        NetChannel clientSide = neta.connect(address, clientProto, udpConf).get();
+        NetChannel clientSide = neta.connectAsync(address, clientProto, udpConf).get();
         listen.waitAnyAccept();
         NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
 

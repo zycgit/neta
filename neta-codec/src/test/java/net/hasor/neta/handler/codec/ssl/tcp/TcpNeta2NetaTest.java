@@ -49,10 +49,10 @@ public class TcpNeta2NetaTest extends AbstractSslTest {
         ProtoInitializer serverProto = SoSslUtils.tcpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
-        NetListen listen = neta.listen(address, serverProto, tcpConf);
+        NetListen listen = neta.bind(address, serverProto, tcpConf);
 
         // client
-        NetChannel clientSide = neta.connect(address, clientProto, tcpConf).get();
+        NetChannel clientSide = neta.connectAsync(address, clientProto, tcpConf).get();
         listen.waitAnyAccept();
         NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
 
@@ -85,10 +85,10 @@ public class TcpNeta2NetaTest extends AbstractSslTest {
         ProtoInitializer serverProto = SoSslUtils.tcpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(serverRcvData));
 
         // server
-        NetListen listen = neta.listen(address, serverProto, tcpConf);
+        NetListen listen = neta.bind(address, serverProto, tcpConf);
 
         // client
-        NetChannel clientSide = neta.connect(address, clientProto, tcpConf).get();
+        NetChannel clientSide = neta.connectAsync(address, clientProto, tcpConf).get();
         assert clientSide.getChannelId() == 2;
         Future<?> send1 = clientSide.sendData("Hello Server, this message form client.\n");
 

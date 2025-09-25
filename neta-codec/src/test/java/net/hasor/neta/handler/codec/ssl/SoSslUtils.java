@@ -79,7 +79,7 @@ public class SoSslUtils {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.builder()
+        return ctx -> ProtoHelper.standard()
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
@@ -92,7 +92,7 @@ public class SoSslUtils {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
+        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
@@ -106,7 +106,7 @@ public class SoSslUtils {
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        return ctx -> ProtoHelper.embedded(ByteBuf.class, ByteBuf.class)
+        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // limit package
                 .nextDuplex("LIMIT", new ProtoDuplexerHandler<>(limitFrame, limitFrame))
                 // SSL

@@ -76,7 +76,7 @@ public class TcpNeta2JvmTest extends AbstractSslTest {
 
         // client say hello
         NetManager neta = new NetManager(globalConf());
-        NetChannel client = neta.connect(address, clientProto, tcpConf).get();
+        NetChannel client = neta.connectAsync(address, clientProto, tcpConf).get();
         Future<?> send = client.sendData("Hello Server, this message form client.\n");
 
         // wait finish
