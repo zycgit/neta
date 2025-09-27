@@ -13,23 +13,21 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
     private static final Logger                              logger = Logger.getLogger(VrtAsyncServerChannel.class);
     private final        long                                channelId;
     private              VrtListen                           vrtListen;
-    private final        VrtTransfer                         transfer;
     private final        AtomicBoolean                       closed;
     //
     private final        Map<Integer, VrtAsyncServerChannel> listenPool;
     private final        SoContextService                    context;
     private final        VrtSocketAddress                    listenAddr;
-    private final        SoConfig                            soConfig;
+    private final        VrtSoConfig                         soConfig;
 
     public VrtAsyncServerChannel(long channelId, Map<Integer, VrtAsyncServerChannel> listenPool, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
         this.channelId = channelId;
-        this.transfer = new VrtTransfer(context.getNetManager());
         this.closed = new AtomicBoolean(false);
 
         this.listenPool = listenPool;
         this.context = (SoContextService) context;
         this.listenAddr = (VrtSocketAddress) listenAddr;
-        this.soConfig = soConfig;
+        this.soConfig = (VrtSoConfig) soConfig;
     }
 
     @Override
@@ -54,7 +52,10 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         }
 
         // create
-        VrtListen listen = new VrtListen(this.channelId, this.listenAddr, this, initializer, this.context, this.soConfig);
+        VrtTransfer transfer = new VrtTransfer(this.context.getNetManager(), this.soConfig.isAsynchronous());
+        transfer.setBatchSize(this.soConfig.getBatchSize());
+        transfer.setLossRate(this.soConfig.getLossRate());
+        VrtListen listen = new VrtListen(this.channelId, this.listenAddr, this, initializer, this.context, this.soConfig, transfer);
 
         // init
         this.context.initChannel(listen, false);
@@ -81,8 +82,8 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         VrtChannel serverSite = new VrtChannel(vrtAsync.getChannelId(), new NetMonitor(), this.vrtListen, VrtMode.Server, initializer, vrtAsync, this.context);
 
         // connect transfer
-        this.transfer.linkTo(clientSite, serverSite, ((VrtSoConfig) serverSite.getConfig()).getRcvConvert());
-        this.transfer.linkTo(serverSite, clientSite, ((VrtSoConfig) clientSite.getConfig()).getRcvConvert());
+        this.vrtListen.getTransfer().linkTo(clientSite, serverSite, ((VrtSoConfig) serverSite.getConfig()).getRcvConvert());
+        this.vrtListen.getTransfer().linkTo(serverSite, clientSite, ((VrtSoConfig) clientSite.getConfig()).getRcvConvert());
 
         // init
         this.context.initChannel(serverSite, true);
@@ -100,7 +101,7 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
 
     @Override
     public void close() throws IOException {
-        this.transfer.close();
+        this.vrtListen.getTransfer().close();
         this.listenPool.remove(this.listenAddr.getAddress());
     }
 }

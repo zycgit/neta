@@ -14,9 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec.ssl;
-import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.function.EConsumer;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.handler.ProtoHelper;
@@ -26,7 +27,6 @@ import net.hasor.neta.handler.ProtoStatus;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -51,7 +51,7 @@ public class AbstractSslTest {
     /** Decoding the message: ByteBuf -> String */
     public static ProtoStatus doDecoder1(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) {
         List<ByteBuf> bufArray = src.peekMessage(src.queueSize());
-        if (bufArray == null || bufArray.size() == 0) {
+        if (bufArray == null || bufArray.isEmpty()) {
             return ProtoStatus.Next;
         }
 
@@ -111,15 +111,12 @@ public class AbstractSslTest {
         return ProtoStatus.Next;
     }
 
-    protected Object[] biasedArray(Object[] data) {
-        List<Object> list = new ArrayList<>(Arrays.asList(data));
-        ArrayList<Object> result = new ArrayList<>();
-        int cnt = list.size();
-
-        for (int i = 0; i < cnt; i++) {
-            int idx = RandomUtils.nextInt(0, list.size() - 1);
-            result.add(list.remove(idx));
+    protected void autoCloseNeta(EConsumer<NetManager, Throwable> consumer) throws Throwable {
+        NetManager neta = new NetManager();
+        try {
+            consumer.eAccept(neta);
+        } finally {
+            neta.shutdown();
         }
-        return result.toArray();
     }
 }

@@ -19,7 +19,7 @@ import java.util.EventListener;
 /**
  * Listener interface for receiving channel close events.
  *
- * @param <T> the type of channel that this listener can handle, must extend {@link }
+ * @param <T> the type of channel that this listener can handle, must extend {@link SoChannel}
  * @author 赵永春 (zyc@hasor.net)
  * @version 2023-09-24
  */

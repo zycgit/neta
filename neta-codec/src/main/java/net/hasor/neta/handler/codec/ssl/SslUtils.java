@@ -167,7 +167,6 @@ public class SslUtils {
      * Generates a new {@link KeyStore}.
      * @param jksInputStream a JKS file InputStream
      * @param passwordChars the password of the {@code keyFile}. {@code null} if it's not password-protected.
-     * @return generated {@link KeyStore}.
      */
     public static void loadKeyStore(KeyStore keyStore, InputStream jksInputStream, char[] passwordChars) throws GeneralSecurityException, IOException {
         keyStore.load(jksInputStream, passwordChars);

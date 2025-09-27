@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.virtual;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.NetListen;
+import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.SoContextService;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -22,8 +25,15 @@ import net.hasor.neta.channel.*;
  */
 public class VrtListen extends NetListen {
 
-    VrtListen(long channelId, VrtSocketAddress listenAddr, AsyncServerChannel channel,//
-            ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
+    private final VrtTransfer transfer;
+
+    VrtListen(long channelId, VrtSocketAddress listenAddr, VrtAsyncServerChannel channel,//
+            ProtoInitializer initializer, SoContextService context, SoConfig soConfig, VrtTransfer transfer) {
         super(channelId, listenAddr, listenAddr.getAddress(), channel, initializer, context, soConfig);
+        this.transfer = transfer;
+    }
+
+    public VrtTransfer getTransfer() {
+        return this.transfer;
     }
 }

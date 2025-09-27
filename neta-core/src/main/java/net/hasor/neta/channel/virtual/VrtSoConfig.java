@@ -25,11 +25,17 @@ import net.hasor.neta.channel.SoConfig;
 public class VrtSoConfig extends SoConfig {
     private VrtMode            vrtMode;
     private VrtTransferHandler rcvConvert;
+    private boolean            asynchronous;
+    private int                batchSize;
+    private int                lossRate;
 
     public VrtSoConfig() {
         super(VrtProvider.NAME);
         this.vrtMode = VrtMode.Default;
         this.rcvConvert = VrtTransfer.duplicate();
+        this.asynchronous = true;
+        this.batchSize = 1;
+        this.lossRate = 0;
     }
 
     public static VrtSoConfig asDefault() {
@@ -64,5 +70,29 @@ public class VrtSoConfig extends SoConfig {
 
     public void setRcvConvert(VrtTransferHandler rcvConvert) {
         this.rcvConvert = rcvConvert;
+    }
+
+    public boolean isAsynchronous() {
+        return asynchronous;
+    }
+
+    public void setAsynchronous(boolean asynchronous) {
+        this.asynchronous = asynchronous;
+    }
+
+    public int getBatchSize() {
+        return batchSize;
+    }
+
+    public void setBatchSize(int batchSize) {
+        this.batchSize = batchSize;
+    }
+
+    public int getLossRate() {
+        return lossRate;
+    }
+
+    public void setLossRate(int lossRate) {
+        this.lossRate = lossRate;
     }
 }

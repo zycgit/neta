@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec.ssl;
-import net.hasor.neta.handler.EmbeddedChannel;
-import net.hasor.neta.handler.EmbeddedSoContext;
-import net.hasor.neta.handler.EmbeddedTransfer;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtListen;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.handler.PlayLoad;
 import org.junit.Test;
+
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -35,147 +41,192 @@ public class SslProtocolTest extends AbstractSslTest {
     }
 
     @Test
-    public void ssl_v3() {
-        SslConfig sslConf = sslConfig(SslProtocol.SSL_v3);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+    public void ssl_v3() throws Throwable {
+        this.autoCloseNeta(neta -> {
+            SslConfig sslConf = sslConfig(SslProtocol.SSL_v3);
+            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel server = (VrtChannel) neta.findChannel(3);
+            listen.waitAnyAccept();
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 600, 10);
+            // transfer
+            List<Object> serverRcvData = new ArrayList<>();
+            List<Object> clientRcvData = new ArrayList<>();
+            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
+            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
+            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+            //
+            client.sendData("Hello Server, this message form client.\n");
+            server.sendData("Hello Client, this message form server.\n");
+            ThreadUtils.sleep(500);
+            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+        });
     }
 
     @Test
-    public void tls_v1() {
-        SslConfig sslConf = sslConfig(SslProtocol.TLS_v1);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+    public void tls_v1() throws Throwable {
+        this.autoCloseNeta(neta -> {
+            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1);
+            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel server = (VrtChannel) neta.findChannel(3);
+            listen.waitAnyAccept();
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 600, 10);
+            // transfer
+            List<Object> serverRcvData = new ArrayList<>();
+            List<Object> clientRcvData = new ArrayList<>();
+            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
+            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
+            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+            //
+            client.sendData("Hello Server, this message form client.\n");
+            server.sendData("Hello Client, this message form server.\n");
+            ThreadUtils.sleep(500);
+            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+        });
     }
 
     @Test
-    public void tls_v1_1() {
-        SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_1);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+    public void tls_v1_1() throws Throwable {
+        this.autoCloseNeta(neta -> {
+            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_1);
+            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel server = (VrtChannel) neta.findChannel(3);
+            listen.waitAnyAccept();
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 600, 10);
+            // transfer
+            List<Object> serverRcvData = new ArrayList<>();
+            List<Object> clientRcvData = new ArrayList<>();
+            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
+            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
+            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+            //
+            client.sendData("Hello Server, this message form client.\n");
+            server.sendData("Hello Client, this message form server.\n");
+            ThreadUtils.sleep(500);
+            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+        });
     }
 
     @Test
-    public void tls_v1_2() {
-        SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_2);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+    public void tls_v1_2() throws Throwable {
+        this.autoCloseNeta(neta -> {
+            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_2);
+            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel server = (VrtChannel) neta.findChannel(3);
+            listen.waitAnyAccept();
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 600, 10);
+            // transfer
+            List<Object> serverRcvData = new ArrayList<>();
+            List<Object> clientRcvData = new ArrayList<>();
+            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
+            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
+            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+            //
+            client.sendData("Hello Server, this message form client.\n");
+            server.sendData("Hello Client, this message form server.\n");
+            ThreadUtils.sleep(500);
+            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+        });
     }
 
     @Test
-    public void tls_v1_3() {
-        SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_3);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+    public void tls_v1_3() throws Throwable {
+        this.autoCloseNeta(neta -> {
+            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_3);
+            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtChannel server = (VrtChannel) neta.findChannel(3);
+            listen.waitAnyAccept();
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 600, 1);
+            // transfer
+            List<Object> serverRcvData = new ArrayList<>();
+            List<Object> clientRcvData = new ArrayList<>();
+            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
+            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
+            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+            //
+            client.sendData("Hello Server, this message form client.\n");
+            server.sendData("Hello Client, this message form server.\n");
+            ThreadUtils.sleep(500);
+            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
+            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+        });
     }
 
-    @Test
-    public void dtls_v1_0() {
-        System.setProperty("https.protocols", "TLSv1");
-
-        SslConfig sslConf = sslConfig(SslProtocol.DTLS_v1_0);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
-
-        // round 1
-        client.send("Hello Server, this message 1 form client.\n");
-        transfer(transfer, 600, 1);
-        assert server.readRcv().equals("Hello Server, this message 1 form client.");
-
-        server.send("Hello Client, this message 1 form server.\n");
-        transfer(transfer, 600, 1);
-        assert client.readRcv().equals("Hello Client, this message 1 form server.");
-
-        // round 2
-        client.send("Hello Server, this message 2 form client.\n");
-        transfer(transfer, 600, 1);
-        assert server.readRcv().equals("Hello Server, this message 2 form client.");
-
-        server.send("Hello Client, this message 2 form server.\n");
-        transfer(transfer, 600, 1);
-        assert client.readRcv().equals("Hello Client, this message 2 form server.");
-    }
-
-    @Test
-    public void dtls_v1_2() {
-        SslConfig sslConf = sslConfig(SslProtocol.DTLS_v1_2);
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
-        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
-
-        // round 1
-        System.out.println("client say hello");
-        client.send("Hello Server, this message 1 form client.\n");
-        transfer(transfer, 600, 1);
-        assert server.readRcv().equals("Hello Server, this message 1 form client.");
-
-        System.out.println("server say hello");
-        server.send("Hello Client, this message 1 form server.\n");
-        transfer(transfer, 600, 1);
-        assert client.readRcv().equals("Hello Client, this message 1 form server.");
-
-        // round 2
-        client.send("Hello Server, this message 2 form client.\n");
-        transfer(transfer, 600, 1);
-        assert server.readRcv().equals("Hello Server, this message 2 form client.");
-
-        server.send("Hello Client, this message 2 form server.\n");
-        transfer(transfer, 600, 1);
-        assert client.readRcv().equals("Hello Client, this message 2 form server.");
-    }
+    //    @Test
+    //    public void dtls_v1_0() {
+    //        System.setProperty("https.protocols", "TLSv1");
+    //
+    //        SslConfig sslConf = sslConfig(SslProtocol.DTLS_v1_0);
+    //        EmbeddedSoContext context = new EmbeddedSoContext();
+    //        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStackOld(sslConf), context);
+    //        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStackOld(sslConf), context);
+    //        EmbeddedTransfer transfer = context.joinChannel(client, server);
+    //        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+    //
+    //        // round 1
+    //        client.send("Hello Server, this message 1 form client.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert server.readRcv().equals("Hello Server, this message 1 form client.");
+    //
+    //        server.send("Hello Client, this message 1 form server.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert client.readRcv().equals("Hello Client, this message 1 form server.");
+    //
+    //        // round 2
+    //        client.send("Hello Server, this message 2 form client.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert server.readRcv().equals("Hello Server, this message 2 form client.");
+    //
+    //        server.send("Hello Client, this message 2 form server.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert client.readRcv().equals("Hello Client, this message 2 form server.");
+    //    }
+    //
+    //    @Test
+    //    public void dtls_v1_2() {
+    //        SslConfig sslConf = sslConfig(SslProtocol.DTLS_v1_2);
+    //        EmbeddedSoContext context = new EmbeddedSoContext();
+    //        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStackOld(sslConf), context);
+    //        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStackOld(sslConf), context);
+    //        EmbeddedTransfer transfer = context.joinChannel(client, server);
+    //        System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+    //
+    //        // round 1
+    //        System.out.println("client say hello");
+    //        client.send("Hello Server, this message 1 form client.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert server.readRcv().equals("Hello Server, this message 1 form client.");
+    //
+    //        System.out.println("server say hello");
+    //        server.send("Hello Client, this message 1 form server.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert client.readRcv().equals("Hello Client, this message 1 form server.");
+    //
+    //        // round 2
+    //        client.send("Hello Server, this message 2 form client.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert server.readRcv().equals("Hello Server, this message 2 form client.");
+    //
+    //        server.send("Hello Client, this message 2 form server.\n");
+    //        transfer(transfer, 600, 1);
+    //        assert client.readRcv().equals("Hello Client, this message 2 form server.");
+    //    }
 }

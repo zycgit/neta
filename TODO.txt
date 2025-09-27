@@ -1,31 +1,42 @@
-1. net.hasor.neta.channel.SoReadTest.rcvBackPressedTest_02
+1、net.hasor.neta.channel.tcp.SoReadTest.rcvBackPressedTest_02
     - FULL 异常的引发是因为 L1 的 rcvUp 满了，但 L1 的 rcvUp 中是重复的 ByteBufSafe 对象。这个问题需要在 ByteBuf 提供 split 方法时才能解决.
-
-2. 兼容 PKCS12
-JKS 密钥库使用专用格式。建议使用 "keytool -importkeystore -srckeystore local.jks -destkeystore local.jks -deststoretype pkcs12" 迁移到行业标准格式 PKCS12。
-https://tomcat.apache.org/native-doc/
-
-
-
 (i.e. inbound)、(i.e. inbound)
 
 
+文档
+1. NetListen 在 TCP 模式下会暂停接收新的传入链接，在 UDP 模式下来自新客户端的数据包会被丢弃，已经建立通道的远程数据会持续接收。
+2. UDP 无法感知连接是否关闭，因此用户需要通过例如 心跳等机制处理 UDP 的 close。
+3. UDP 模式下同样支持 reject 机制。
+4. 使用 DTLS 时 UdpSoConfig 的 soSndBuf 和 soRcvBuf 需要大于 1280，否则会抛出 java.net.SocketException: Message too long 异常。
+java.net.SocketException: Message too long
+5. DTLS 下必须保证封包完整性，因此在使用 SSL 时切记不要对 DTLS 的封包进行拆分，否则会导致数据发送和接收完全停滞并且没有明显报错。
+     - DTLS 协议中传输过大的封包建议在业务层对封包进行拆分并实现分包重传机制。
+6. VrtTransfer 由于实现机制问题，无法模拟背压情况。
 
 高优先
-1. 优雅关闭（需要测试）
-2. SSL Buffer 溢出问题（需要支持 OpenSSL 后继续测试）
-4. IP 白名单机制
+01. 背压机制 pipline 的输入/输出 队列容量是有界的，导致数据接收时如果通道没有可用槽需要暂停接收，目前会报错
+02. SoContextService 的 asyncUnsafeCloseChannel 方法调用需要在 review
+03. 整个系统的 异常传导机制需要在 review
+04. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
 
 次优先
-
-1. 协议路由，用来支持 NPN/ALPN
-2. 通过 SSL 参数支持 peerHost 能力
-3. ByteBuf 大文件 或输入输出流的 传输
-4. PipeRoute
-5. 流量控制
-6.  - 重协商/安全重协商（OpenSSL RFC5764，renegotiation_info） 待支持
-7. 支持 OpenSSL
-8. SoConfig 类还未完成英文化
+01. ProtoStatistical 整合到 NetMonitor 中
+02. IP 白名单机制
+03. AsyncChannelProvider 的 AsynchronousChannelGroup 参数不是必须的，目前仅 TCP 会使用它
+04. 协议路由，用来支持 NPN/ALPN
+05. 通过 SSL 参数支持 peerHost 能力
+06. ByteBuf 大文件 或输入输出流的 传输
+07. PipeRoute
+08. 流量控制
+09. SoConfig 类还未完成英文化
+10. SSL 证书兼容 PKCS12
+11. pipline 需要支持分叉式的以便可以支持复杂协议树，可以使用 event 来实现，工作在协议层之上
+12. 需要一个 CompositeByteBuf 来协助多个 ByteBuf 的操作。
+13. 需要将 ProtoRcvQueue 到 CompositeByteBuf 的代理操作接口，从而屏蔽底层 ProtoRcvQueue 的一些列操作。如 ByteBuf 脱管造成内存泄漏的问题
+14. 需要实现内存托管，简化资源释放。
+15. 需要 owner 机制避免并发操作。
+16. 需要一个流量心跳机制，用来检测对端是否还活着，例如在处理 UDP 连接时，服务器可以在某个特定时间时主动关闭连接
+17. 优雅关闭（需要测试）
 
 ## 参考资料
 
@@ -45,8 +56,6 @@ MQTT 协议的编解码，https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v
    5.  "Caching" [RFC7234]
    6.  "Authentication" [RFC7235]
 
-
-
      HTTP-message   = start-line
                       *( header-field CRLF )
                       CRLF
@@ -60,10 +69,3 @@ MQTT 协议的编解码，https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v
      method         = token （method 区分大小写）
      SP             = 空格
      status-code    = 3DIGIT
-
-
-https://my.oschina.net/ta8210/blog/11045373，更新了一下文章 《Neta 网络框架技术内幕 - 处理器》 对于 Neta 的单工器/双工器 解释的更加清晰
-https://my.oschina.net/ta8210/blog/11045372 ，《Neta 网络框架技术内幕 - 工作模型》 这有另外一篇专门介绍 Neta 的工作模型的文章，两者结合一起看收获会更大。
-
-欢迎大家，帮忙加一个星星：
-gitee：https://gitee.com/zycgit/neta

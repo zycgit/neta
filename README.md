@@ -1,6 +1,6 @@
 # Neta
 
-&emsp;&emsp; Hasor Neta is a network application framework that helps users to develop high performance and high scalability network applications easily.
+&emsp;&emsp; Neta is a network application framework that helps users to develop high performance and high scalability network applications easily.
 It provides an abstract asynchronous duplex programming model and works on top of Java AIO.
 
 ## Pipeline Model
@@ -31,22 +31,20 @@ Net ← ┃ SND_DOWN     SND_UP ┃ ← ┃ SND_DOWN     SND_UP ┃ ← ╰┄�
 
 ## 能力
 
+- 支持 在统一 API 风格下开发 TCP/UDP 协议应用程序
+- 支持 SSL/TLS/DTLS （SSLv3、TLSv1、TLSv1.1、TLSv1.2、TLSv1.3、DTLSv1.0、DTLSv1.2）
+- 支持 NPN/ALPN，SSL/TLS 扩展应用层协议协商
+- 
 - 支持 Pipeline 多种流转控制方式
-- 支持 单向 Socket 通信
-  - shutdownOutput 单方面永久关闭输出通道
-  - shutdownInput 单方面永久关闭输入通道
+- 支持 单向 Socket 通信，支持在 TCP 模式下关闭输入通道。
 - 支持 EmbeddedChannel 协议开发更加容易
 - 支持 ReadSocketTimeout、WriteSocketTimeout
 - 支持 监听器挂起，不在接受新的连接直到恢复
 - 支持 安全关闭
-- TLS/SSL
   - 证书格式：JKS、PEM/CER
-  - TLS/SSL 引擎：JDK、OpenSSL（计划中）
-  - TLS/SSL 协议：NONE、SSLv2Hello、SSL_v2、SSL_v3、TLS_v1、TLS_v1_1、TLS_v1_2、TLS_v1_3
   - TLS/SSL 客户端验证：NONE、OPTIONAL、REQUIRE
-- TLS/SSL 扩展
-  - NPN/ALPN，应用层协议协商
- 
+  - 
+
 ## 质量
 
 neta-core
@@ -100,3 +98,12 @@ Escape character is '^]'.
 Hello Word.
 echo Hello Word.
 ```
+
+
+## 开发和构建
+
+release versions and prepare next SNAPSHOT version
+- `mvn release:clean release:prepare -Dmaven.test.skip -Prelease -Pdev`
+
+push to center maven repository (version tag must be RELEASE)
+- `mvn clean package install deploy -Prelease`
