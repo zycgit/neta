@@ -18,7 +18,11 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.handler.*;
+import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.handler.ProtoHelper;
+import net.hasor.neta.handler.ProtoRcvQueue;
+import net.hasor.neta.handler.ProtoSndQueue;
+import net.hasor.neta.handler.ProtoStatus;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -30,25 +34,18 @@ import java.util.List;
  * @version : 2022-11-01
  */
 public class AbstractSslTest {
-    public static EmbeddedInitializer createProtoStack(SslConfig sslConf) {
+
+    public static ProtoInitializer createProtoStack(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
+        return ctx -> ProtoHelper.standard()
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
                 .build();
-    }
-
-    public static void transfer(EmbeddedTransfer transfer, int turn, int copyPacket) {
-        // mock network transfer
-        for (int i = 0; i < turn; i++) {
-            transfer.transferToServer(copyPacket); // copy client to server
-            transfer.transferToClient(copyPacket); // copy server to client
-        }
     }
 
     /** Decoding the message: ByteBuf -> String */

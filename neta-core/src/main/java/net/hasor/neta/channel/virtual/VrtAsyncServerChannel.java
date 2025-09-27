@@ -101,6 +101,6 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
     @Override
     public void close() throws IOException {
         this.transfer.close();
-        this.listenPool.remove(this.channelId);
+        this.listenPool.remove(this.listenAddr.getAddress());
     }
 }

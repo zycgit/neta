@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec.ssl;
-import net.hasor.neta.handler.EmbeddedChannel;
-import net.hasor.neta.handler.EmbeddedSoContext;
-import net.hasor.neta.handler.EmbeddedTransfer;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtListen;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.handler.PlayLoad;
 import org.junit.Test;
+
+import java.util.ArrayDeque;
+import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -26,48 +32,64 @@ import org.junit.Test;
 public class SslAuthTypeTest extends AbstractSslTest {
 
     @Test
-    public void byPemCert() {
+    public void byPemCert() throws Throwable {
+        VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
         SslConfig sslConf = new SslConfig();
         sslConf.setAuthType(SslAuthKeyType.PEM);
         sslConf.setPemCertChain("ssl/ca/server.crt");
         sslConf.setPemPrivate("ssl/ca/server.pem");
         sslConf.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
 
-        //
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
+        NetManager neta = new NetManager();
+        VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+        VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+        VrtChannel server = (VrtChannel) neta.findChannel(3);
+        listen.waitAnyAccept();
+
+        // transfer
+        Queue<Object> serverRcvData = new ArrayDeque<>();
+        Queue<Object> clientRcvData = new ArrayDeque<>();
+        server.subscribe(PlayLoad::isInbound, d -> serverRcvData.offer(d.getData()));
+        client.subscribe(PlayLoad::isInbound, d -> clientRcvData.offer(d.getData()));
         System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 500, 10);
+        //
+        client.sendData("Hello Server, this message form client.\n");
+        server.sendData("Hello Client, this message form server.\n");
+        assert clientRcvData.poll().equals("Hello Client, this message form server.");
+        assert serverRcvData.poll().equals("Hello Server, this message form client.");
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+        neta.shutdown();
     }
 
     @Test
-    public void byJks() {
+    public void byJks() throws Throwable {
+        VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
         SslConfig sslConf = new SslConfig();
         sslConf.setAuthType(SslAuthKeyType.JKS);
         sslConf.setJksResource("ssl/jks/keystore.jks");
         sslConf.setKeyPassword("123456");
         sslConf.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
 
-        //
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
+        NetManager neta = new NetManager();
+        VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+        VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+        VrtChannel server = (VrtChannel) neta.findChannel(3);
+        listen.waitAnyAccept();
+
+        // transfer
+        Queue<Object> serverRcvData = new ArrayDeque<>();
+        Queue<Object> clientRcvData = new ArrayDeque<>();
+        server.subscribe(PlayLoad::isInbound, d -> serverRcvData.offer(d.getData()));
+        client.subscribe(PlayLoad::isInbound, d -> clientRcvData.offer(d.getData()));
         System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 500, 10);
+        //
+        client.sendData("Hello Server, this message form client.\n");
+        server.sendData("Hello Client, this message form server.\n");
+        assert clientRcvData.poll().equals("Hello Client, this message form server.");
+        assert serverRcvData.poll().equals("Hello Server, this message form client.");
 
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
+        neta.shutdown();
     }
 }

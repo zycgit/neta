@@ -14,10 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec.ssl;
-import net.hasor.neta.handler.EmbeddedChannel;
-import net.hasor.neta.handler.EmbeddedSoContext;
-import net.hasor.neta.handler.EmbeddedTransfer;
+import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.virtual.VrtChannel;
+import net.hasor.neta.channel.virtual.VrtListen;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.handler.PlayLoad;
 import org.junit.Test;
+
+import java.util.ArrayDeque;
+import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -35,33 +41,38 @@ public class SslAlpnTest extends AbstractSslTest {
     }
 
     @Test
-    public void alpnTest_01() {
+    public void alpnTest_01() throws Throwable {
+        VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
         SslConfig sslConf = sslConfig();
         sslConf.setAppProtocol(new String[] { "HTTP", "HTTPS" });
         sslConf.setAppProtocolSelector((channel, sslEngine, protocols) -> {
             return "HTTPS";
         });
 
-        EmbeddedSoContext context = new EmbeddedSoContext();
-        EmbeddedChannel server = new EmbeddedChannel(true, createProtoStack(sslConf), context);
-        EmbeddedChannel client = new EmbeddedChannel(false, createProtoStack(sslConf), context);
-        SslContext serverSSL = server.findProtoContext(SslContext.class);
-        SslContext clientSSL = client.findProtoContext(SslContext.class);
-        EmbeddedTransfer transfer = context.joinChannel(client, server);
+        NetManager neta = new NetManager();
+        VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+        VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+        VrtChannel server = (VrtChannel) neta.findChannel(3);
+        listen.waitAnyAccept();
+
+        // transfer
+        Queue<Object> serverRcvData = new ArrayDeque<>();
+        Queue<Object> clientRcvData = new ArrayDeque<>();
+        server.subscribe(PlayLoad::isInbound, d -> serverRcvData.offer(d.getData()));
+        client.subscribe(PlayLoad::isInbound, d -> clientRcvData.offer(d.getData()));
         System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
         //
-        assert serverSSL.getApplicationProtocol() == null;
-        assert clientSSL.getApplicationProtocol() == null;
-
-        client.send("Hello Server, this message form client.\n");
-        server.send("Hello Client, this message form server.\n");
-        transfer(transfer, 500, 10);
-        assert client.readRcv().equals("Hello Client, this message form server.");
-        assert server.readRcv().equals("Hello Server, this message form client.");
-
-        //
+        SslContext serverSSL = server.findProtoContext(SslContext.class);
+        SslContext clientSSL = client.findProtoContext(SslContext.class);
         assert serverSSL.getApplicationProtocol().equals("HTTPS");
         assert clientSSL.getApplicationProtocol().equals("HTTPS");
+
+        //
+        client.sendData("Hello Server, this message form client.\n");
+        server.sendData("Hello Client, this message form server.\n");
+        assert clientRcvData.poll().equals("Hello Client, this message form server.");
+        assert serverRcvData.poll().equals("Hello Server, this message form client.");
+
     }
 }
