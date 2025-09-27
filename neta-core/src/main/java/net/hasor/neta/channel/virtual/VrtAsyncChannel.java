@@ -28,16 +28,20 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @version 2025-08-06
  */
 class VrtAsyncChannel implements AsyncChannel {
-    private static final Logger           logger = Logger.getLogger(VrtAsyncChannel.class);
-    private final        long             channelId;
-    private final        VrtSocketAddress vrtAddress;
-    private final        SoContextService context;
-    private final        VrtSoConfig      soConfig;
-    private final        AtomicBoolean    closeFlag;
+    private static final Logger                logger = Logger.getLogger(VrtAsyncChannel.class);
+    private final        long                  channelId;
+    private final        VrtSocketAddress      bindAddr;
+    private final        VrtSocketAddress      targetAddr;
+    private final        VrtAsyncServerChannel target;
+    private final        SoContextService      context;
+    private final        VrtSoConfig           soConfig;
+    private final        AtomicBoolean         closeFlag;
 
-    VrtAsyncChannel(long channelId, SoContext context, SocketAddress vrtAddress, SoConfig soConfig) {
+    VrtAsyncChannel(long channelId, VrtAsyncServerChannel target, SoContext context, SocketAddress targetAddr, SoConfig soConfig) {
         this.channelId = channelId;
-        this.vrtAddress = (VrtSocketAddress) vrtAddress;
+        this.bindAddr = new VrtSocketAddress(((VrtSocketAddress) targetAddr).getAddress(), target != null);
+        this.targetAddr = (VrtSocketAddress) targetAddr;
+        this.target = target;
         this.context = (SoContextService) context;
         this.soConfig = (VrtSoConfig) soConfig;
         this.closeFlag = new AtomicBoolean(false);
@@ -55,12 +59,12 @@ class VrtAsyncChannel implements AsyncChannel {
 
     @Override
     public VrtSocketAddress getLocalAddress() {
-        return this.vrtAddress;
+        return this.bindAddr;
     }
 
     @Override
     public VrtSocketAddress getRemoteAddress() {
-        return this.vrtAddress;
+        return this.targetAddr;
     }
 
     @Override
@@ -77,15 +81,15 @@ class VrtAsyncChannel implements AsyncChannel {
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
         try {
             // create channel
-            VrtChannel channel = new VrtChannel(//
-                    this.channelId,             //
-                    new NetMonitor(),           //
-                    null,                       //
-                    this.soConfig.getVrtMode(), //
-                    initializer,                //
-                    this,                       //
-                    this.context                //
-            );
+            VrtChannel channel;
+            if (this.target != null) {
+                VrtMode useMode = VrtMode.Client;
+                channel = new VrtChannel(this.channelId, new NetMonitor(), null, useMode, initializer, this, this.context);
+                this.target.acceptLink(channel);
+            } else {
+                VrtMode useMode = this.soConfig.getVrtMode();
+                channel = new VrtChannel(this.channelId, new NetMonitor(), null, useMode, initializer, this, this.context);
+            }
 
             // init
             this.context.initChannel(channel, true);

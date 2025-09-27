@@ -45,8 +45,8 @@ public class ProtoBasicTest extends AbstractStackTest {
         channel.printStackTrace(new PrintStream(out));
 
         String data = "ChannelId  : 1,          Server(Active)\n" + //
-                "Local Addr :                      vrt:1\n" + //
-                "Remote Addr:                      vrt:1\n" + //
+                "Local Addr :                 vrt:bind:1\n" + //
+                "Remote Addr:                 vrt:bind:1\n" + //
                 "┏━━━━━━━━━━━━━━━━━━━━ ↓ 0/500+ (SND) ━┓\n" + //
                 "┃ L1 [↑ 0/500+,       ↓ 0/500+      ] ┃\n" + //
                 "┗━━━━ ↑ 0/500+ (RCV) ━━━━━━━━━━━━━━━━━┛\n";

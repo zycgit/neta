@@ -23,11 +23,13 @@ import net.hasor.neta.channel.SoConfig;
  * @version : 2023-09-24
  */
 public class VrtSoConfig extends SoConfig {
-    private VrtMode vrtMode;
+    private VrtMode            vrtMode;
+    private VrtTransferHandler rcvConvert;
 
     public VrtSoConfig() {
         super(VrtProvider.NAME);
         this.vrtMode = VrtMode.Default;
+        this.rcvConvert = VrtTransfer.duplicate();
     }
 
     public static VrtSoConfig asDefault() {
@@ -54,5 +56,13 @@ public class VrtSoConfig extends SoConfig {
 
     public void setVrtMode(VrtMode vrtMode) {
         this.vrtMode = vrtMode;
+    }
+
+    public VrtTransferHandler getRcvConvert() {
+        return this.rcvConvert;
+    }
+
+    public void setRcvConvert(VrtTransferHandler rcvConvert) {
+        this.rcvConvert = rcvConvert;
     }
 }

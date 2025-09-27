@@ -85,7 +85,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public int offerMessage(T[] offerList) {
+    public synchronized int offerMessage(T[] offerList) {
         int size = Math.min(this.slotSize(), offerList.length);
         for (int i = 0; i < size; i++) {
             this.offerTemp.add(offerList[i]);
@@ -94,7 +94,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public int offerMessage(List<T> offerList) {
+    public synchronized int offerMessage(List<T> offerList) {
         int size = Math.min(this.slotSize(), offerList.size());
         for (int i = 0; i < size; i++) {
             this.offerTemp.add(offerList.get(i));
@@ -103,13 +103,13 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public int offerMessage(ProtoRcvQueue<T> offerList) {
+    public synchronized int offerMessage(ProtoRcvQueue<T> offerList) {
         int size = Math.min(offerList.queueSize(), this.slotSize());
         return this.offerMessage(offerList.takeMessage(size));
     }
 
     @Override
-    public List<T> takeMessage(int cnt) {
+    public synchronized List<T> takeMessage(int cnt) {
         if (cnt == 0) {
             return Collections.emptyList();
         }
@@ -130,7 +130,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public List<T> peekMessage(int cnt) {
+    public synchronized List<T> peekMessage(int cnt) {
         if (cnt < 0) {
             cnt = this.queueSize();
         }
@@ -141,7 +141,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public void skipMessage(int cnt) {
+    public synchronized void skipMessage(int cnt) {
         int fixCnt = Math.min(cnt, this.queueSize());
         this.takeCount += fixCnt;
     }

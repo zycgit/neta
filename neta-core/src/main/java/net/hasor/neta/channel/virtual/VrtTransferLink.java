@@ -19,7 +19,7 @@ class VrtTransferLink {
         this.tempQueue = new ProtoQueue<>(-1);
     }
 
-    public void onReceive(boolean asynchronous, int batchSize) {
+    public void onReceive(int batchSize) {
         if (this.cacheQueue.queueSize() >= batchSize) {
             this.convert.doTransfer(this.cacheQueue, this.tempQueue);
             this.cacheQueue.rcvSubmit();

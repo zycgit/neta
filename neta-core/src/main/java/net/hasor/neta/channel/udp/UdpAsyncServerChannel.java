@@ -99,7 +99,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     public NetListen bind(ProtoInitializer initializer) throws Throwable {
         // create
         UdpSoConfigUtils.configListen(this.soConfig, this.channel);
-        NetListen listen = new NetListen( //
+        NetListen listen = new UdpNetListen( //
                 this.channelId,           //
                 this.listenAddr,          //
                 this.listenAddr.getPort(),//

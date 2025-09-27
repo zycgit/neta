@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetListen extends AttributeChannel<NetListen> {
+public abstract class NetListen extends AttributeChannel<NetListen> {
     protected final  AsyncServerChannel channel;
     //
     protected final  AtomicBoolean      closeStatus;
@@ -46,7 +46,7 @@ public class NetListen extends AttributeChannel<NetListen> {
     private          long               lastAcceptTime;
     private volatile boolean            suspend;
 
-    public NetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
+    protected NetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
             ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
         this.channelId = channelId;
         this.createdTime = System.currentTimeMillis();

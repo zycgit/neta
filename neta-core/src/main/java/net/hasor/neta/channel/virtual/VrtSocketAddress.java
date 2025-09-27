@@ -25,19 +25,29 @@ import java.net.SocketAddress;
  * @version : 2023-09-24
  */
 public class VrtSocketAddress extends SocketAddress {
-    private final long channelId;
+    private final int     address;
+    private final boolean connectMode;
 
-    public VrtSocketAddress(long channelId) {
-        this.channelId = ObjectUtils.checkPositiveOrZero(channelId, "channelId");
+    public VrtSocketAddress(int address) {
+        this(address, false);
     }
 
-    public long getChannelId() {
-        return this.channelId;
+    public VrtSocketAddress(int address, boolean connectMode) {
+        this.address = ObjectUtils.checkPositiveOrZero(address, "address");
+        this.connectMode = connectMode;
+    }
+
+    public int getAddress() {
+        return this.address;
+    }
+
+    public boolean isConnectMode() {
+        return this.connectMode;
     }
 
     @Override
     public int hashCode() {
-        return Long.hashCode(this.channelId);
+        return Long.hashCode(this.address);
     }
 
     @Override
@@ -47,13 +57,13 @@ public class VrtSocketAddress extends SocketAddress {
         }
         if (obj instanceof VrtSocketAddress) {
             VrtSocketAddress that = (VrtSocketAddress) obj;
-            return this.channelId == that.channelId;
+            return this.address == that.address;
         }
         return false;
     }
 
     @Override
     public String toString() {
-        return "vrt:" + this.channelId;
+        return "vrt:" + (this.connectMode ? "connect" : "bind") + ":" + this.address;
     }
 }

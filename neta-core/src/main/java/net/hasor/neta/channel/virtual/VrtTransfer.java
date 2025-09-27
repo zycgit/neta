@@ -4,12 +4,15 @@ import net.hasor.cobble.NumberUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.SimpleTask;
+import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SubscribeHolder;
 import net.hasor.neta.handler.PlayLoad;
 
 import java.lang.reflect.Array;
 import java.net.SocketException;
 import java.util.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 public class VrtTransfer {
@@ -21,6 +24,7 @@ public class VrtTransfer {
     private final        boolean                          asynchronous;
     private              int                              batchSize;
     private              int                              lossRate;
+    private final        AtomicBoolean                    closed;
 
     static {
         RANDOM = new Random(System.currentTimeMillis());
@@ -45,6 +49,7 @@ public class VrtTransfer {
         this.batchSize = 1;
         this.lossRate = 0;
         this.subscribeHolder = this.manager.getContext().subscribe(this.playLoadFilter(), this::playLoadDistribute);
+        this.closed = new AtomicBoolean(false);
     }
 
     public boolean isAsynchronous() {
@@ -69,11 +74,22 @@ public class VrtTransfer {
         logger.warn("set lossRate to " + this.lossRate + "%");
     }
 
+    public void close() {
+        if (this.closed.compareAndSet(false, true)) {
+            this.subscribeHolder.unSubscribe();
+            this.distributeMap.clear();
+        }
+    }
+
     private Predicate<PlayLoad> playLoadFilter() {
         return playLoad -> playLoad.isOutbound() && this.distributeMap.containsKey(playLoad.getSource().getChannelId());
     }
 
     private void playLoadDistribute(PlayLoad playLoad) {
+        if (this.closed.get()) {
+            return;// is close
+        }
+
         long srcChannelId = playLoad.getSource().getChannelId();
         List<VrtTransferLink> linkList = this.distributeMap.get(srcChannelId);
         if (CollectionUtils.isEmpty(linkList)) {
@@ -90,10 +106,26 @@ public class VrtTransfer {
                 }
             }
 
-            link.cacheQueue.offerMessage(playLoad);
+            PlayLoad p = playLoad;
+            if (playLoad.getData() instanceof ByteBuf) {
+                ByteBuf byteBuf = ((ByteBuf) playLoad.getData()).copy();
+                if (playLoad.isSuccess()) {
+                    p = PlayLoad.of(playLoad.getSource(), byteBuf, playLoad.isInbound(), playLoad.isOutbound());
+                } else {
+                    p = PlayLoad.ofError(playLoad.getSource(), playLoad.getError(), playLoad.isInbound(), playLoad.isOutbound());
+                }
+            }
+
+            link.cacheQueue.offerMessage(p);
             link.cacheQueue.sndSubmit();
             logger.info("transfer " + srcChannelId + " -> " + dstChannelId + ", packet has been accepted, queueSize " + link.cacheQueue.queueSize());
-            link.onReceive(this.asynchronous, this.batchSize);
+
+            if (this.asynchronous) {
+                SoContextService s = (SoContextService) link.target.getContext();
+                s.submitSoTask(new SimpleTask(() -> link.onReceive(this.batchSize)), link.target);
+            } else {
+                link.onReceive(this.batchSize);
+            }
         }
     }
 
@@ -101,12 +133,16 @@ public class VrtTransfer {
      * Links two virtual channels with a conversion function.
      * @param from The source VrtChannel.
      * @param to The target VrtChannel.
-     * @param convert The conversion function to apply to the data.
+     * @param rcvConvert The conversion function to apply to the data.
      * @throws IllegalArgumentException If the from or to channels do not belong to the same NetaManager.
      * @throws IllegalStateException If the link already exists.
      */
-    public void linkTo(VrtChannel from, VrtChannel to, VrtTransferHandler convert) throws SocketException {
-        Objects.requireNonNull(convert, "convert is null.");
+    public void linkTo(VrtChannel from, VrtChannel to, VrtTransferHandler rcvConvert) throws SocketException {
+        Objects.requireNonNull(rcvConvert, "rcvConvert is null.");
+
+        if (this.closed.get()) {
+            throw new SocketException("VrtTransfer is closed.");
+        }
         if (from.getContext() != to.getContext()) {
             throw new SocketException("channels need same NetaManager");
         }
@@ -122,7 +158,7 @@ public class VrtTransfer {
             throw new SocketException("link " + from.getChannelId() + " -> " + to.getChannelId() + " already exists");
         }
 
-        linkList.add(new VrtTransferLink(to, convert));
+        linkList.add(new VrtTransferLink(to, rcvConvert));
     }
 
     public static VrtTransferHandler duplicate() {
