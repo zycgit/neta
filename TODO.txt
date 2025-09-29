@@ -22,7 +22,6 @@ java.net.SocketException: Message too long
 次优先
 01. ProtoStatistical 整合到 NetMonitor 中
 02. IP 白名单机制
-03. AsyncChannelProvider 的 AsynchronousChannelGroup 参数不是必须的，目前仅 TCP 会使用它
 04. 协议路由，用来支持 NPN/ALPN
 05. 通过 SSL 参数支持 peerHost 能力
 06. ByteBuf 大文件 或输入输出流的 传输

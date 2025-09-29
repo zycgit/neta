@@ -18,7 +18,6 @@ import net.hasor.neta.channel.*;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousChannelGroup;
 import java.nio.channels.DatagramChannel;
 
 /**
@@ -31,15 +30,23 @@ import java.nio.channels.DatagramChannel;
 public class UdpProvider implements AsyncChannelProvider {
     public static final String NAME = "UDP";
 
+    public UdpProvider(NetManager neta) {
+    }
+
     @Override
-    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
+    public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
         return new UdpAsyncServerChannel(channelId, channel, context, listenAddr, soConfig);
     }
 
     @Override
-    public AsyncChannel createClientChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
+    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
         return new UdpAsyncClientChannel(channelId, channel, context, remoteAddr, soConfig);
+    }
+
+    @Override
+    public void shutdown() {
+
     }
 }

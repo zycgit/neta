@@ -11,8 +11,8 @@
     <packaging>pom</packaging>
 
     <properties>
-        <neta.version>1.0.6</neta.version>
-        <!-- <neta.version>${project.version}</neta.version>-->
+        <!--        <neta.version>1.0.6</neta.version>-->
+        <neta.version>${project.version}</neta.version>
     </properties>
 
     <dependencyManagement>

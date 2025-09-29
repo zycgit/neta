@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 import java.io.IOException;
@@ -30,17 +32,41 @@ import java.nio.channels.AsynchronousSocketChannel;
  * @version 2025-08-07
  */
 public class TcpProvider implements AsyncChannelProvider {
-    public static final String NAME = "TCP";
+    private static final Logger                   logger = Logger.getLogger(TcpProvider.class);
+    public static final  String                   NAME   = "TCP";
+    private final        AsynchronousChannelGroup channelGroup;
+
+    public TcpProvider(NetManager neta) throws IOException {
+        this.channelGroup = AsynchronousChannelGroup.withThreadPool(((SoContextService) neta.getContext()).getIoExecutor());
+    }
 
     @Override
-    public AsyncServerChannel createServerChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
-        AsynchronousServerSocketChannel channel = AsynchronousServerSocketChannel.open(channelGroup);
+    public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
+        AsynchronousServerSocketChannel channel = AsynchronousServerSocketChannel.open(this.channelGroup);
         return new TcpAsyncServerChannel(channelId, channel, context, listenAddr, soConfig);
     }
 
     @Override
-    public AsyncChannel createClientChannel(long channelId, SoContext context, AsynchronousChannelGroup channelGroup, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
-        AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(channelGroup);
+    public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
+        AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.channelGroup);
         return new TcpAsyncChannel(channelId, channel, context, remoteAddr, soConfig);
+    }
+
+    @Override
+    public void shutdown() {
+        if (this.channelGroup != null) {
+            long t = System.currentTimeMillis();
+            this.channelGroup.shutdown();
+            while (!this.channelGroup.isTerminated()) {
+                long cost = System.currentTimeMillis() - t;
+                if (cost > 3000) {
+                    t = System.currentTimeMillis();
+                    logger.info("close channelGroup waiting...");
+                }
+                ThreadUtils.sleep(50);
+            }
+        }
+
+        logger.info("close tcpChannelGroup done.");
     }
 }

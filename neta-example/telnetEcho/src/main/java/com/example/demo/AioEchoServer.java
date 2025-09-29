@@ -43,28 +43,21 @@ public class AioEchoServer {
 
         // telnet server
         NetManager socket = new NetManager();
-        socket.bind(new InetSocketAddress("127.0.0.1", 5567), initializer, SoConfig.TCP());
+        socket.bind(new InetSocketAddress(5567), initializer, SoConfig.TCP());
 
         // echo any message to client
-        socket.getContext().subscribe(PlayLoad::isInbound, AioEchoServer::echoMessage);
-
-        // wait.
-        System.in.read();
-    }
-
-    private static final String CTRL_C = new String(new byte[] { -17, -65, -67, -17, -65, -67, -17, -65, -67, -17, -65, -67, 6 });
-
-    private static void echoMessage(PlayLoad data) {
-        if (data.isSuccess()) {
-            NetChannel channel = (NetChannel) data.getSource();
-            String str = (String) data.getData();
+        String CTRL_C = new String(new byte[] { -17, -65, -67, -17, -65, -67, -17, -65, -67, -17, -65, -67, 6 });
+        socket.subscribe(PlayLoad::isInbound, playload -> {
+            NetChannel channel = (NetChannel) playload.getSource();
+            String str = (String) playload.getData();
             if (CTRL_C.equals(str)) {
                 channel.sendData("bye.\n").onFinal(f -> channel.close());
             } else {
                 channel.sendData("echo " + str + "\n");
             }
-        } else {
-            System.out.println("onError");
-        }
+        });
+
+        // wait.
+        System.in.read();
     }
 }

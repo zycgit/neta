@@ -16,10 +16,13 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.handler.PlayLoad;
+import net.hasor.neta.handler.PlayLoadListener;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.Predicate;
 
 /**
  * AIO Socket basic
@@ -47,6 +50,24 @@ public abstract class AbstractNetManager {
     /** return {@link SoContext} */
     public SoContext getContext() {
         return this.context;
+    }
+
+    /**
+     * subscribe event
+     * @param channelId event topic
+     * @param listener event listener
+     */
+    public SubscribeHolder subscribe(long channelId, PlayLoadListener listener) {
+        return this.context.subscribe(channelId, listener);
+    }
+
+    /**
+     * subscribe event
+     * @param select event topic
+     * @param listener event listener
+     */
+    public SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
+        return this.context.subscribe(select, listener);
     }
 
     public final void shutdown() throws IOException {

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
@@ -26,7 +25,8 @@ import net.hasor.neta.channel.virtual.VrtProvider;
 
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.channels.AsynchronousChannelGroup;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -36,26 +36,34 @@ import java.util.concurrent.atomic.AtomicReference;
  * @version : 2023-09-24
  */
 public class NetManager extends AbstractNetManager {
-    private static final Logger                   logger = Logger.getLogger(NetManager.class);
-    protected            AsynchronousChannelGroup channelGroup;
+    private static final Logger                            logger = Logger.getLogger(NetManager.class);
+    protected final      Map<String, AsyncChannelProvider> providerMap;
 
     public NetManager() {
-        super(new NetConfig());
+        this(new NetConfig());
     }
 
     public NetManager(NetConfig config) {
         super(config);
+        this.providerMap = new ConcurrentHashMap<>();
     }
 
-    protected AsyncChannelProvider findProvider(String protocol) {
-        if (StringUtils.equalsIgnoreCase(TcpProvider.NAME, protocol)) {
-            return new TcpProvider();
-        } else if (StringUtils.equalsIgnoreCase(UdpProvider.NAME, protocol)) {
-            return new UdpProvider();
-        } else if (StringUtils.equalsIgnoreCase(VrtProvider.NAME, protocol)) {
-            return new VrtProvider();
+    protected AsyncChannelProvider findProvider(String protocol) throws IOException {
+        if (this.providerMap.containsKey(protocol)) {
+            return this.providerMap.get(protocol);
         } else {
-            throw new UnsupportedOperationException("not support protocol : " + protocol);
+            AsyncChannelProvider provider;
+            if (StringUtils.equalsIgnoreCase(TcpProvider.NAME, protocol)) {
+                provider = new TcpProvider(this);
+            } else if (StringUtils.equalsIgnoreCase(UdpProvider.NAME, protocol)) {
+                provider = new UdpProvider(this);
+            } else if (StringUtils.equalsIgnoreCase(VrtProvider.NAME, protocol)) {
+                provider = new VrtProvider(this);
+            } else {
+                throw new UnsupportedOperationException("not support protocol : " + protocol);
+            }
+            this.providerMap.put(protocol, provider);
+            return provider;
         }
     }
 
@@ -66,11 +74,9 @@ public class NetManager extends AbstractNetManager {
      * @return A listener channel for accept incoming sockets
      */
     public synchronized NetListen bind(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig soConfig) throws IOException {
-        this.initChannelGroup();
-
         long channelID = this.context.nextID();
         AsyncChannelProvider provider = this.findProvider(soConfig.getProtocol());
-        AsyncServerChannel socket = provider.createServerChannel(channelID, this.context, this.channelGroup, listenAddr, soConfig);
+        AsyncServerChannel socket = provider.createServerChannel(channelID, this.context, listenAddr, soConfig);
         NetListen listen = socket.bind(initializer);
         logger.info("listen at " + listenAddr);
         return listen;
@@ -107,10 +113,9 @@ public class NetManager extends AbstractNetManager {
         AsyncChannel asyncChannel = null;
 
         try {
-            this.initChannelGroup();
             long channelID = this.context.nextID();
             AsyncChannelProvider provider = this.findProvider(soConfig.getProtocol());
-            asyncChannel = provider.createClientChannel(channelID, this.context, this.channelGroup, remoteAddr, soConfig);
+            asyncChannel = provider.createClientChannel(channelID, this.context, remoteAddr, soConfig);
             asyncChannel.connectTo(initializer, future);
             return future;
         } catch (Throwable e) {
@@ -137,16 +142,6 @@ public class NetManager extends AbstractNetManager {
         return found.get();
     }
 
-    protected void initChannelGroup() throws IOException {
-        if (this.shutdown.get()) {
-            throw new IllegalStateException("service is shutdown.");
-        }
-
-        if (this.channelGroup == null) {
-            this.channelGroup = AsynchronousChannelGroup.withThreadPool(this.context.getIoExecutor());
-        }
-    }
-
     @Override
     protected void shutdown0(boolean now) {
         // close all channel
@@ -158,19 +153,8 @@ public class NetManager extends AbstractNetManager {
         this.context.closeAll(now);
 
         // waiting close
-        if (this.channelGroup != null) {
-            long t = System.currentTimeMillis();
-            this.channelGroup.shutdown();
-            while (!this.channelGroup.isTerminated()) {
-                long cost = System.currentTimeMillis() - t;
-                if (cost > 3000) {
-                    t = System.currentTimeMillis();
-                    logger.info("close channelGroup waiting...");
-                }
-                ThreadUtils.sleep(50);
-            }
+        for (AsyncChannelProvider provider : this.providerMap.values()) {
+            provider.shutdown();
         }
-
-        logger.info("close channelGroup done.");
     }
 }
