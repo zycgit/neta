@@ -45,5 +45,5 @@ public interface AsyncServerChannel extends Closeable {
      * @param initializer
      * @throws IOException If an I/O error occurs during binding
      */
-    NetListen bind(ProtoInitializer initializer) throws Throwable;
+    NetListen bind(ProtoInitializer initializer) throws IOException;
 }

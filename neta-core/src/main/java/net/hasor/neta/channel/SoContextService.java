@@ -25,6 +25,7 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.handler.PlayLoad;
 import net.hasor.neta.handler.PlayLoadListener;
 
+import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
@@ -153,7 +154,7 @@ public class SoContextService implements SoContext {
         return this.channelMap.get(channelId);
     }
 
-    public void initChannel(SoChannel<?> channel, boolean init) throws Throwable {
+    public void initChannel(SoChannel<?> channel, boolean init) throws IOException {
         long channelId = channel.getChannelId();
         if (this.channelMap.containsKey(channelId)) {
             throw new IllegalStateException("channelId already exists.");
@@ -183,9 +184,15 @@ public class SoContextService implements SoContext {
             ProtoStack<ByteBuf> protoStack = netChannel.protoStack;
             ProtoContextService protoCtx = netChannel.protoCtx;
 
-            protoStack.onInit(protoCtx);
-            if (!channel.isClose()) {
-                protoStack.onActive(protoCtx);
+            try {
+                protoStack.onInit(protoCtx);
+                if (!channel.isClose()) {
+                    protoStack.onActive(protoCtx);
+                }
+            } catch (RuntimeException | IOException e) {
+                throw e;
+            } catch (Throwable e) {
+                throw new IOException(e);
             }
 
             if (!channel.isClose() && netChannel.getListen() != null) {

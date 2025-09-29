@@ -96,7 +96,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public NetListen bind(ProtoInitializer initializer) throws Throwable {
+    public NetListen bind(ProtoInitializer initializer) throws IOException {
         // create
         UdpSoConfigUtils.configListen(this.soConfig, this.channel);
         NetListen listen = new UdpNetListen( //

@@ -46,7 +46,7 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public synchronized NetListen bind(ProtoInitializer initializer) throws Throwable {
+    public synchronized NetListen bind(ProtoInitializer initializer) throws IOException {
         if (this.vrtListen != null) {
             throw new IOException("VrtListen(" + this.listenAddr.getAddress() + ") already exists.");
         }

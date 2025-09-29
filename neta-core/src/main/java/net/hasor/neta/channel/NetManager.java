@@ -65,7 +65,7 @@ public class NetManager extends AbstractNetManager {
      * @param initializer Application layer network protocol
      * @return A listener channel for accept incoming sockets
      */
-    public synchronized NetListen bind(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig soConfig) throws Throwable {
+    public synchronized NetListen bind(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig soConfig) throws IOException {
         this.initChannelGroup();
 
         long channelID = this.context.nextID();
@@ -81,12 +81,19 @@ public class NetManager extends AbstractNetManager {
      * @param remoteAddr remoteAddr
      * @param initializer Application layer network protocol
      */
-    public NetChannel connectSync(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) throws Throwable {
+    public NetChannel connectSync(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) throws IOException {
         try {
             Future<NetChannel> future = this.connectAsync(remoteAddr, initializer, soConfig);
             return future.get();
         } catch (ExecutionException e) {
-            throw e.getCause();
+            Throwable cause = e.getCause();
+            if (cause instanceof IOException) {
+                throw (IOException) cause;
+            } else {
+                throw new IOException(cause);
+            }
+        } catch (InterruptedException e) {
+            throw new IOException(e);
         }
     }
 

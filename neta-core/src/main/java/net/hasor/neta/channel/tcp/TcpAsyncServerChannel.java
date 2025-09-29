@@ -60,7 +60,7 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
     }
 
     @Override
-    public NetListen bind(ProtoInitializer initializer) throws Throwable {
+    public NetListen bind(ProtoInitializer initializer) throws IOException {
         // create
         TcpSoConfigUtils.configListen(this.soConfig, this.channel);
         NetListen listen = new TcpNetListen( //
