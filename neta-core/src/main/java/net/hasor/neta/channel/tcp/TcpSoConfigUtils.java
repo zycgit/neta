@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import jdk.net.ExtendedSocketOptions;
 import net.hasor.cobble.logging.Logger;
 
 import java.io.IOException;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
+import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
+import java.util.Set;
 
 /**
  * config Socket
@@ -38,32 +39,28 @@ class TcpSoConfigUtils {
     private static final SocketOption<Integer> TCP_KEEPCOUNT;
 
     static {
-        SocketOption<Integer> tcpKeepIdleTmp;
-        try {
-            tcpKeepIdleTmp = ExtendedSocketOptions.TCP_KEEPIDLE;
-        } catch (Throwable e) {
-            logger.warn("your jdk does not support TCP_KEEPIDLE parameter, please upgrade to 1.8.0_333+");
-            tcpKeepIdleTmp = null;
-        }
-        TCP_KEEPIDLE = tcpKeepIdleTmp;
+        SocketOption<Integer> tcpKeepIdleTmp = null;
+        SocketOption<Integer> tcpKeepIntervalTmp = null;
+        SocketOption<Integer> tcpKeepCountTmp = null;
 
-        SocketOption<Integer> tcpKeepIntervalTmp;
-        try {
-            tcpKeepIntervalTmp = ExtendedSocketOptions.TCP_KEEPINTERVAL;
-        } catch (Throwable e) {
-            logger.warn("your jdk does not support TCP_KEEPINTERVAL parameter, please upgrade to 1.8.0_333+");
-            tcpKeepIntervalTmp = null;
+        try (AsynchronousSocketChannel c = AsynchronousSocketChannel.open()) {
+            Set<SocketOption<?>> options = c.supportedOptions();
+            for (SocketOption<?> opt : options) {
+                if (opt.name().equals("TCP_KEEPIDLE")) {
+                    tcpKeepIdleTmp = (SocketOption<Integer>) opt;
+                } else if (opt.name().equals("TCP_KEEPINTERVAL")) {
+                    tcpKeepIntervalTmp = (SocketOption<Integer>) opt;
+                } else if (opt.name().equals("TCP_KEEPCOUNT")) {
+                    tcpKeepCountTmp = (SocketOption<Integer>) opt;
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("your jdk does not support TCP_KEEPIDLE,TCP_KEEPINTERVAL,TCP_KEEPCOUNT.");
+        } finally {
+            TCP_KEEPIDLE = tcpKeepIdleTmp;
+            TCP_KEEPINTERVAL = tcpKeepIntervalTmp;
+            TCP_KEEPCOUNT = tcpKeepCountTmp;
         }
-        TCP_KEEPINTERVAL = tcpKeepIntervalTmp;
-
-        SocketOption<Integer> tcpKeepCountTmp;
-        try {
-            tcpKeepCountTmp = ExtendedSocketOptions.TCP_KEEPCOUNT;
-        } catch (Throwable e) {
-            logger.warn("your jdk does not support TCP_KEEPCOUNT parameter, please upgrade to 1.8.0_333+");
-            tcpKeepCountTmp = null;
-        }
-        TCP_KEEPCOUNT = tcpKeepCountTmp;
     }
 
     private static void configRcvSnd(TcpSoConfig config, NetworkChannel channel) throws IOException {
