@@ -48,7 +48,9 @@ class UdpWriteTask extends DefaultSoTask {
             return;
         }
         if (!this.udpChannel.isOpen()) {
-            this.wContext.purge(SoCloseException.INSTANCE);
+            SoUnfinishedSndException err = new SoUnfinishedSndException("channel is closed.");
+            context.notifySndChannelException(this.netChannel.getChannelId(), true, err);
+            this.wContext.purge(err);
             this.finishTask();
             return;
         }
@@ -99,30 +101,26 @@ class UdpWriteTask extends DefaultSoTask {
     }
 
     private void handleException(Throwable e, SoSndContext wContext) {
-        String finalMsg;
-        Throwable finalErr;
         long channelId = this.netChannel.getChannelId();
 
         if (e instanceof InterruptedByTimeoutException) {
             String errorMsg = "send data timeout with " + this.netChannel.getConfig().getSoWriteTimeoutMs() + " milliseconds.";
-            String msg = "snd(" + channelId + ") " + errorMsg;
-
-            finalErr = new SoWriteTimeoutException(errorMsg);
-            finalMsg = msg;
-        } else if (e instanceof ClosedChannelException) {
-            finalMsg = "snd(" + channelId + ") close, msg:" + e.getMessage();
-            finalErr = e;
-        } else if (e instanceof ShutdownChannelGroupException) {
-            finalMsg = "snd(" + channelId + ") shutdown, msg:" + e.getMessage();
-            finalErr = e;
-        } else {
-            finalMsg = "snd(" + channelId + ") error, msg:" + e.getMessage();
-            finalErr = e;
+            this.context.notifySndChannelException(channelId, false, new SoWriteTimeoutException(errorMsg));
+            return;
         }
 
-        this.context.notifySndChannelError(channelId, finalErr);
-        this.context.asyncUnsafeCloseChannel(channelId, finalMsg, finalErr);
+        SoException finalErr;
+        if (e instanceof ClosedChannelException || e instanceof ShutdownChannelGroupException) {
+            finalErr = new SoCloseException(e.getMessage(), e);
+            this.context.notifySndChannelException(channelId, true, finalErr);
+            this.purgeSndData(e, wContext);
+        } else {
+            finalErr = new SoSndException(e.getMessage(), e);
+            this.context.notifySndChannelException(channelId, false, finalErr);
+        }
+    }
 
+    private void purgeSndData(Throwable e, SoSndContext wContext) {
         while (!wContext.isEmpty()) {
             SoSndData sndData = wContext.popData();
             this.submitTask(new SoDelayTask(0)).onFinal(f -> {

@@ -12,8 +12,8 @@ import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
 public class VrtProvider implements AsyncChannelProvider {
-    private static final Logger                              logger = Logger.getLogger(VrtProvider.class);
     public static final  String                              NAME   = "VIRTUAL";
+    private static final Logger                              logger = Logger.getLogger(VrtProvider.class);
     private final        Map<Integer, VrtAsyncServerChannel> listenPool;
 
     public VrtProvider(NetManager neta) {
@@ -24,7 +24,7 @@ public class VrtProvider implements AsyncChannelProvider {
     public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         int listenPort = ((VrtSocketAddress) listenAddr).getAddress();
         if (this.listenPool.containsKey(listenPort)) {
-            throw new IOException("VrtListen(" + listenPort + ") already exists.");
+            throw new SocketException("VrtListen(" + listenPort + ") already exists.");
         } else {
             Objects.requireNonNull(((VrtSoConfig) soConfig).getRcvConvert(), "rcvConvert is null.");
             VrtAsyncServerChannel serverChannel = new VrtAsyncServerChannel(channelId, this.listenPool, context, listenAddr, soConfig);
@@ -40,7 +40,7 @@ public class VrtProvider implements AsyncChannelProvider {
             Objects.requireNonNull(vrtConfig.getRcvConvert(), "rcvConvert is null.");
 
             if (vrtConfig.getVrtMode() != VrtMode.Default) {
-                throw new IllegalArgumentException("VrtMode must be Default");
+                throw new SocketException("VrtMode must be Default");
             }
 
             int listenPort = ((VrtSocketAddress) targetAddr).getAddress();

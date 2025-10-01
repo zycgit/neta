@@ -23,10 +23,7 @@ import net.hasor.neta.channel.*;
 import java.io.Closeable;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.channels.ClosedChannelException;
-import java.nio.channels.CompletionHandler;
-import java.nio.channels.NotYetConnectedException;
-import java.nio.channels.ShutdownChannelGroupException;
+import java.nio.channels.*;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -83,7 +80,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             byteBuf.markWriter();
 
             this.monitor.updateRcvCounter(result);
-            this.context.notifyChannelRcv(this.channelId, byteBuf);
+            this.context.notifyRcvChannelData(this.channelId, byteBuf);
 
             this.read();
         } else if (result == 0) {
@@ -91,18 +88,17 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
                 logger.debug("rcv(" + this.channelId + ") empty");
             }
 
-            this.context.notifyChannelRcv(this.channelId, ByteBuf.EMPTY);
+            this.context.notifyRcvChannelData(this.channelId, ByteBuf.EMPTY);
             this.read();
         } else {
             if (this.channel.isShutdownInput()) {
                 // for ShutdownInput local
                 logger.info("rcv(" + this.channelId + ") shutdownInput form local.");
-                this.context.notifyRcvChannelError(this.channelId, TcpInputCloseException.INSTANCE);
+                this.context.notifyRcvChannelException(this.channelId, false, new SoInputCloseException("shutdownInput form local"));
             } else {
                 // for Remote
-                String msg = "rcv(" + this.channelId + ") close form remote.";
-                logger.info(msg);
-                context.asyncUnsafeCloseChannel(this.channelId, msg, SoCloseException.INSTANCE);
+                logger.info("rcv(" + this.channelId + ") close form remote.");
+                context.notifyChannelClose(this.channelId, true);
             }
         }
     }
@@ -117,28 +113,28 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
                 }
                 this.read();
             } else {
-                SoConnectTimeoutException cause = SoUtils.newTimeout(false, this.channelId, this.context, e);
-
-                context.notifyRcvChannelError(this.channelId, cause);
-                context.asyncUnsafeCloseChannel(this.channelId, cause.getMessage(), cause);
+                SoConnectTimeoutException cause = SoUtils.newConnectTimeout(false, this.channelId, this.context, e);
+                context.notifyRcvChannelException(this.channelId, true, cause);
             }
             return;
         }
 
-        String errorMsg = "";
         if (e instanceof ShutdownChannelGroupException || e instanceof ClosedChannelException) {
             if (context.isClose(this.channelId)) {
                 return;
             }
             // rcv Close
-            errorMsg = "rcv(" + this.channelId + ") channel is closed " + e.getMessage();
+            SoCloseException err = new SoCloseException("channel is closed " + e.getMessage());
+            context.notifyRcvChannelException(this.channelId, true, err);
+        } else if (e instanceof InterruptedByTimeoutException) {
+            // rcv timeout
+            SoReadTimeoutException err = new SoReadTimeoutException(e.getMessage(), e);
+            context.notifyRcvChannelException(this.channelId, false, err);
         } else {
             // rcv Exception
-            errorMsg = "rcv(" + this.channelId + ") " + e.getMessage();
+            SoRcvException err = new SoRcvException(e.getMessage(), e);
+            context.notifyRcvChannelException(this.channelId, true, err);
         }
-
-        context.notifyRcvChannelError(this.channelId, e);
-        context.asyncUnsafeCloseChannel(this.channelId, errorMsg, e);
     }
 
     @Override

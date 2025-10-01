@@ -14,17 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.channel.tcp.TcpChannel;
+
 /**
- * When {@link SoChannel} is closed.
+ * When {@link TcpChannel#shutdownInput()} called.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SoCloseException extends SoException {
-    public SoCloseException(String s) {
+public class SoInputCloseException extends SoCloseException {
+    public SoInputCloseException(String s) {
         super(s);
     }
 
-    public SoCloseException(String s, Throwable e) {
+    public SoInputCloseException(String s, Throwable e) {
         super(s, e);
     }
 }

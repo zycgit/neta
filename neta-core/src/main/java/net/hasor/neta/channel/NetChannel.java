@@ -198,7 +198,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
     }
 
     /* Receive data without concurrency */
-    protected final void notifyRcv(Object[] rcvBytes) {
+    protected final void notifyRcv(Object[] rcvBytes) throws Throwable {
         synchronized (this.readTimeoutSyncObj) {
             this.readTimeoutSyncObj.notifyAll();
         }
@@ -208,20 +208,13 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
             if (dataArray != null && dataArray.length > 0) {
                 appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
             }
-        } catch (Throwable e) {
-            // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
-            String msg = "invoker ProtoStack failed: " + e.getMessage();
-            logger.error("rcv(" + this.channelId + ") " + msg, e);
-
-            this.closeStatus.set(true);
-            this.context.syncUnsafeCloseChannel(this.channelId, msg, e);
         } finally {
             this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
     }
 
     /* Receive error */
-    protected final void notifyError(boolean isRcv, Throwable e) {
+    protected final void notifyError(boolean isRcv, Throwable e) throws Throwable {
         try {
             Object[] dataArray = isRcv ?//
                     this.protoStack.onRcvError(this.protoCtx, null, e) ://
@@ -229,13 +222,6 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
             if (dataArray != null && dataArray.length > 0) {
                 appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
             }
-        } catch (Throwable ee) {
-            // It is not executed unless the exception is thrown in ProtoReceiveListener.onError(...)
-            String msg = "invoker ProtoStack failed: " + ee.getMessage();
-            logger.error("rcv(" + this.channelId + ") " + msg, ee);
-
-            this.closeStatus.set(true);
-            this.context.syncUnsafeCloseChannel(this.channelId, msg, e);
         } finally {
             this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
@@ -354,8 +340,7 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
         }
 
         if (this.closeStatus.get()) {
-            logger.info("snd(" + this.channelId + ") the channel is closed.");
-            future.failed(SoCloseException.INSTANCE);
+            future.failed(new SoCloseException("the channel is closed."));
             return future;
         }
 
@@ -400,7 +385,8 @@ public class NetChannel extends AttributeChannel<NetChannel> implements SoChanne
             @Override
             public void run(Timeout timeout) {
                 if (getLastRcvTime() <= this.lastRcvTime) {
-                    notifyError(true, new SoReadTimeoutException("no data was received with " + this.waitTimeMs + " milliseconds."));
+                    SoReadTimeoutException readTimeout = new SoReadTimeoutException("no data was received with " + this.waitTimeMs + " milliseconds.");
+                    context.notifyRcvChannelException(channelId, false, readTimeout);
                 }
             }
         }

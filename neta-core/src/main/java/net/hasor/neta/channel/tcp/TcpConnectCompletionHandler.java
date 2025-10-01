@@ -18,6 +18,7 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.AsyncChannel;
 import net.hasor.neta.channel.NetChannel;
+import net.hasor.neta.channel.SoConnectException;
 import net.hasor.neta.channel.SoContextService;
 
 import java.net.SocketAddress;
@@ -65,13 +66,15 @@ class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextSe
             this.future.completed(this.channel);
         } catch (Throwable e) {
             logger.error("ERROR: Connect finish, but onActive failed.");
-            context.syncUnsafeCloseChannel(this.channel.getChannelId(), e.getMessage(), e);
-            this.future.failed(e);
+            this.failed(e, context);
         }
     }
 
     @Override
     public void failed(Throwable e, SoContextService context) {
+        logger.error("ERROR: Connect failed, " + e.getMessage());
+        SoConnectException ee = e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
+        context.notifyConnectChannelException(this.channel.getChannelId(), true, ee);
         this.future.failed(e);
     }
 }

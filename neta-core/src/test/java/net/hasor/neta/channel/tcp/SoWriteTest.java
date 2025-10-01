@@ -180,7 +180,8 @@ public class SoWriteTest extends AbstractSoTest {
             Thread.sleep(100);
         }
 
-        assert future.getCause() instanceof SoWriteTimeoutException;
+        assert future.getCause() instanceof SoSndException;
+        assert future.getCause().getMessage().equals("Writing not allowed due to timeout or cancellation");
         assert channel.isClose();
         assert sndErrTime.get() > 0;
 
@@ -227,7 +228,8 @@ public class SoWriteTest extends AbstractSoTest {
             Thread.sleep(100);
         }
 
-        assert future.getCause() instanceof SoWriteTimeoutException;
+        assert future.getCause() instanceof SoSndException;
+        assert future.getCause().getMessage().equals("Writing not allowed due to timeout or cancellation");
         assert channel.isClose();
         assert sndErrTime.get() == 0;
 

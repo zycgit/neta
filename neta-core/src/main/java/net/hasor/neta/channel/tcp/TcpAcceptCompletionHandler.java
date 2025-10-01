@@ -64,25 +64,30 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
             return;
         }
 
+        // create channel
+        TcpChannel channel;
         try {
-            // create
             long channelId = ((SoContextService) attachment).nextID();
             SocketAddress remoteAddr = result.getRemoteAddress();
             TcpSoConfigUtils.configSocket(this.soConfig, result);
-            TcpChannel channel = this.newChannel(this.forListen, new TcpAsyncChannel(channelId, result, this.forListen.getContext(), remoteAddr, this.soConfig));
+            channel = this.newChannel(this.forListen, new TcpAsyncChannel(channelId, result, this.forListen.getContext(), remoteAddr, this.soConfig));
+        } catch (Throwable e) {
+            IOUtils.closeQuietly(result);
+            logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);
+            return;
+        }
 
-            // init
+        // init and start read
+        try {
             ((SoContextService) attachment).initChannel(channel, true);
-
-            // start read
             if (!channel.isShutdownInput()) {
                 ((SoContextService) attachment).submitSoTask(new SoDelayTask(0), this).onFinal(f -> {
                     channel.getReadHandler().read();
                 });
             }
         } catch (Throwable e) {
-            IOUtils.closeQuietly(result);
-            logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);
+            SoConnectException ee = e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
+            ((SoContextService) attachment).notifyConnectChannelException(channel.getChannelId(), true, ee);
         }
     }
 
@@ -93,7 +98,7 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
         }
 
         if (this.forListen.getContext().getConfig().isPrintLog()) {
-            if (e == SoCloseException.INSTANCE) {
+            if (e instanceof SoCloseException) {
                 logger.info("ERROR: ListenFailed " + e.getMessage());
             } else {
                 logger.error("ERROR: ListenFailed " + e.getMessage(), e);
@@ -116,7 +121,6 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
                 return true;
             }
         } catch (Throwable e) {
-            IOUtils.closeQuietly(result);
             logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);
             return false;
         }

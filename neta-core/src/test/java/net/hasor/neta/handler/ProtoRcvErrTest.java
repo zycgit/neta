@@ -17,6 +17,7 @@ package net.hasor.neta.handler;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.channel.SoException;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -52,7 +53,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrNext,3DecErrNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
@@ -82,7 +83,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrThrow");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -112,7 +113,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrRetry,2DecErrRetry,2DecErrRetry,3DecErrNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
@@ -142,7 +143,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrAgain,2DecErrNext,3DecErrNext,1DecErrAgain,2DecErrNext,3DecErrNext,1DecErrAgain,2DecErrNext,3DecErrNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
@@ -172,7 +173,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrAgain,2DecErrRetry,2DecErrRetry,2DecErrRetry,3DecErrNext,1DecErrAgain,2DecErrRetry,2DecErrRetry,2DecErrRetry,3DecErrNext,1DecErrAgain,2DecErrRetry,2DecErrRetry,2DecErrRetry,3DecErrNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
@@ -202,7 +203,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrRestart,1DecErrNext,2DecErrRestart,1DecErrNext,2DecErrRestart,3DecErrNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
@@ -232,7 +233,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrExit");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("2EncDoNext,1EncDoNext");
@@ -262,7 +263,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new IllegalStateException("Test"));
+        channel.onReceiveError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrInterrupt");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");

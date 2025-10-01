@@ -73,18 +73,31 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
 
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
+        // connect to
         try {
-            // connect to
             this.channel.connect(this.remoteAddress);
             this.channel.configureBlocking(false);
             this.channel.register(this.readSelector, SelectionKey.OP_READ);
+        } catch (Throwable e) {
+            logger.error("ERROR: ConnectFailed, " + e.getMessage(), e);
+            future.failed(e);
+            return;
+        }
 
-            // create channel
+        // create channel
+        UdpChannel channel;
+        try {
             String remoteID = this.remoteAddress.getAddress().getHostAddress() + ":" + this.remoteAddress.getPort();
             UdpAsyncChannel asyncChannel = new UdpAsyncChannel(this.channelId, this.channel, this.context, this.remoteAddress, this.soConfig);
-            UdpChannel channel = this.newChannel(remoteID, asyncChannel, initializer);
+            channel = this.newChannel(remoteID, asyncChannel, initializer);
+        } catch (Throwable e) {
+            logger.error("ERROR: ConnectFailed, " + e.getMessage(), e);
+            future.failed(e);
+            return;
+        }
 
-            // init
+        // init & start read loop
+        try {
             this.context.initChannel(channel, true);
             future.completed(channel);
 
@@ -94,19 +107,26 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
             });
         } catch (Throwable e) {
             logger.error("ERROR: ConnectFailed, " + e.getMessage(), e);
+            SoConnectException ee = e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
+            this.context.notifyConnectChannelException(channel.getChannelId(), true, ee);
             future.failed(e);
         }
     }
 
     private void receiveLoop(UdpChannel channel) {
         if (!this.channel.isOpen()) {
+            logger.info("rcv(" + this.channelId + ") close form local.");
+            this.context.notifyChannelClose(channel.getChannelId(), false);
             return;
         }
 
         try {
-            this.receiveData(channel);
+            if (this.readSelector.select(100) > 0) {
+                this.receiveData(channel);
+            }
         } catch (IOException e) {
-            logger.error(e.getMessage(), e);
+            SoRcvException err = new SoRcvException(e.getMessage(), e);
+            this.context.notifyRcvChannelException(channel.getChannelId(), false, err);
         }
 
         this.submitTask(new SoDelayTask(0)).onFinal(f -> {
@@ -115,21 +135,6 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
     }
 
     private void receiveData(UdpChannel channel) throws IOException {
-        //long startTime = System.currentTimeMillis();
-        //if (timeoutMs > 0) {
-        //    long remainingTimeout = timeoutMs - (System.currentTimeMillis() - startTime);
-        //    if (remainingTimeout <= 0) {
-        //        handler.failed(new SoReadTimeoutException("socket read timeout"), attachment);
-        //        return;
-        //    }
-        //    this.selector.select(remainingTimeout);
-        //} else {
-        //    this.selector.select();
-        //}
-        if (this.readSelector.select(100) == 0) {
-            return;
-        }
-
         Iterator<SelectionKey> it = this.readSelector.selectedKeys().iterator();
         while (it.hasNext()) {
             // pull key
@@ -138,27 +143,35 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
 
             // process
             if (key.isReadable()) {
-                DatagramChannel socket = (DatagramChannel) key.channel();
-
-                this.receiveBuffer.clear();
-                InetSocketAddress remoteAddr = (InetSocketAddress) socket.receive(this.receiveBuffer);
-                if (this.soConfig.isRcvRemoteOnly() && !remoteAddr.equals(this.remoteAddress)) {
-                    continue; // in the UDP client mode, the remote address will be locked.
+                try {
+                    this.readSocket(channel, (DatagramChannel) key.channel());
+                } catch (Throwable e) {
+                    SoRcvException err = e instanceof SoRcvException ? (SoRcvException) e : new SoRcvException(e.getMessage(), e);
+                    this.context.notifyRcvChannelException(channel.getChannelId(), false, err);
+                    return;
                 }
-
-                ByteBuf byteBuf = this.bufAllocator.buffer(this.receiveBuffer.position());
-                this.receiveBuffer.flip();
-                byteBuf.writeBuffer(this.receiveBuffer);
-                byteBuf.markWriter();
-                int readableBytes = byteBuf.readableBytes();
-                if (logger.isDebugEnabled()) {
-                    logger.debug("rcv(" + this.channelId + ") the receive " + readableBytes + " bytes");
-                }
-
-                channel.getNetMonitor().updateRcvCounter(readableBytes);
-                this.context.notifyChannelRcv(channel.getChannelId(), byteBuf);
             }
         }
+    }
+
+    private void readSocket(UdpChannel channel, DatagramChannel socket) throws IOException {
+        this.receiveBuffer.clear();
+        InetSocketAddress remoteAddr = (InetSocketAddress) socket.receive(this.receiveBuffer);
+        if (this.soConfig.isRcvRemoteOnly() && !remoteAddr.equals(this.remoteAddress)) {
+            return;
+        }
+
+        ByteBuf byteBuf = this.bufAllocator.buffer(this.receiveBuffer.position());
+        this.receiveBuffer.flip();
+        byteBuf.writeBuffer(this.receiveBuffer);
+        byteBuf.markWriter();
+        int readableBytes = byteBuf.readableBytes();
+        if (logger.isDebugEnabled()) {
+            logger.debug("rcv(" + this.channelId + ") the receive " + readableBytes + " bytes");
+        }
+
+        channel.getNetMonitor().updateRcvCounter(readableBytes);
+        this.context.notifyRcvChannelData(channel.getChannelId(), byteBuf);
     }
 
     protected UdpChannel newChannel(String remoteID, UdpAsyncChannel realChannel, ProtoInitializer initializer) throws IOException {

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
     <!-- Maven Info -->
     <modelVersion>4.0.0</modelVersion>
     <groupId>net.hasor</groupId>
@@ -65,7 +66,7 @@
             <dependency>
                 <groupId>net.hasor</groupId>
                 <artifactId>cobble-all</artifactId>
-                <version>4.8.1</version>
+                <version>4.8.2-SNAPSHOT</version>
             </dependency>
 
             <!-- for Test -->
@@ -145,11 +146,12 @@
                 <version>2.7</version>
                 <configuration>
                     <testFailureIgnore>true</testFailureIgnore>
-                    <argLine>--add-opens=java.base/java.lang=ALL-UNNAMED</argLine>
+                    <!-- <argLine>&#45;&#45;add-modules=jdk.unsupported</argLine>-->
+                    <!-- <argLine>&#45;&#45;add-opens=java.base/java.lang=ALL-UNNAMED</argLine>-->
+                    <!-- <argLine>&#45;&#45;add-opens=java.base/sun.nio.ch=ALL-UNNAMED</argLine>-->
                     <!-- <argLine>&#45;&#45;add-opens=java.base/java.lang.reflect=ALL-UNNAMED</argLine>-->
                     <!-- <argLine>&#45;&#45;add-opens=java.base/java.io=ALL-UNNAMED</argLine>-->
                     <!-- <argLine>&#45;&#45;add-opens=java.base/java.net=ALL-UNNAMED</argLine>-->
-                    <!-- <argLine>&#45;&#45;add-opens=jdk.unsupported=ALL-UNNAMED</argLine>-->
                 </configuration>
             </plugin>
             <!-- 覆盖率 -->

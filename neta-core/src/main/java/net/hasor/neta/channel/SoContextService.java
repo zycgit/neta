@@ -25,7 +25,6 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.handler.PlayLoad;
 import net.hasor.neta.handler.PlayLoadListener;
 
-import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
@@ -154,10 +153,10 @@ public class SoContextService implements SoContext {
         return this.channelMap.get(channelId);
     }
 
-    public void initChannel(SoChannel<?> channel, boolean init) throws IOException {
+    public void initChannel(SoChannel<?> channel, boolean init) throws Throwable {
         long channelId = channel.getChannelId();
         if (this.channelMap.containsKey(channelId)) {
-            throw new IllegalStateException("channelId already exists.");
+            throw new SoException("channelId already exists.");
         }
 
         // add channel
@@ -170,10 +169,6 @@ public class SoContextService implements SoContext {
             } else {
                 this.channelList.add((NetChannel) channel);
             }
-
-            if (this.closeStatus) {
-                this.eventExecutor.submitSoTask(new SimpleTask(channel::closeNow), this);
-            }
         } finally {
             this.closeSyncLock.readLock().unlock();
         }
@@ -184,15 +179,9 @@ public class SoContextService implements SoContext {
             ProtoStack<ByteBuf> protoStack = netChannel.protoStack;
             ProtoContextService protoCtx = netChannel.protoCtx;
 
-            try {
-                protoStack.onInit(protoCtx);
-                if (!channel.isClose()) {
-                    protoStack.onActive(protoCtx);
-                }
-            } catch (RuntimeException | IOException e) {
-                throw e;
-            } catch (Throwable e) {
-                throw new IOException(e);
+            protoStack.onInit(protoCtx);
+            if (!channel.isClose()) {
+                protoStack.onActive(protoCtx);
             }
 
             if (!channel.isClose() && netChannel.getListen() != null) {
@@ -315,92 +304,6 @@ public class SoContextService implements SoContext {
         }
     }
 
-    /** The network channel is forced to close, and all data not sent is discarded. */
-    public void asyncUnsafeCloseChannel(long channelID, String message, Throwable e) {
-        this.unsafeCloseChannel(channelID, message, e, true);
-    }
-
-    /** The network channel is forced to close, and all data not sent is discarded. */
-    public void syncUnsafeCloseChannel(long channelID, String message, Throwable e) {
-        this.unsafeCloseChannel(channelID, message, e, false);
-    }
-
-    private void unsafeCloseChannel(long channelID, String message, Throwable e, boolean async) {
-        if (this.config.isPrintLog()) {
-            if (e == SoCloseException.INSTANCE) {
-                logger.info(message);
-            } else {
-                logger.error(message, e);
-            }
-        }
-
-        SoChannel<?> channel = this.channelMap.get(channelID);
-        if (channel == null) {
-            return;// it does not exist, It is usually the io that triggers the shutdown early
-        }
-
-        this.channelMap.remove(channelID);
-
-        if (channel instanceof NetChannel) {
-            NetChannel netChannel = (NetChannel) channel;
-            netChannel.closeStatus.set(true);
-
-            // clean wQueue
-            netChannel.wContext.purge(e);
-
-            // release ProtoStack
-            NetListen forListen = netChannel.getListen();
-            if (forListen != null) {
-                forListen.notifyClose(netChannel);
-            }
-
-            netChannel.protoStack.onClose(netChannel.protoCtx);
-            IOUtils.closeQuietly(netChannel.getAsyncChannel());
-            logger.info("channel(" + channelID + ") closed.");
-
-            this.channelList.remove(channel);
-        } else {
-            NetListen netListen = (NetListen) channel;
-            netListen.closeStatus.set(true);
-            IOUtils.closeQuietly(netListen.channel);
-            logger.info("listen(" + channelID + ") closed, port :" + netListen.getListenPort());
-            this.listenList.remove(channel);
-        }
-    }
-
-    /** receiving new data */
-    public void notifyChannelRcv(long channelID, ByteBuf rcvBytes) {
-        SoChannel<?> channel = this.channelMap.get(channelID);
-        if (channel != null) {
-            if (channel.isClient() || channel.isServer()) {
-                ((NetChannel) channel).notifyRcv(new ByteBuf[] { rcvBytes });
-            } else {
-                throw new UnsupportedOperationException(); // Can't happen
-            }
-        }
-    }
-
-    /** receiving rcv Error data */
-    public void notifyRcvChannelError(long channelID, Throwable e) {
-        this.notifyChannelError(channelID, true, e);
-    }
-
-    /** receiving snd Error data */
-    public void notifySndChannelError(long channelID, Throwable e) {
-        this.notifyChannelError(channelID, false, e);
-    }
-
-    /** receiving new data */
-    protected void notifyChannelError(long channelID, boolean isRcv, Throwable e) {
-        SoChannel<?> channel = this.channelMap.get(channelID);
-        if (channel != null) {
-            if (channel.isClient() || channel.isServer()) {
-                NetChannel netChannel = (NetChannel) channel;
-                netChannel.notifyError(isRcv, e);
-            }
-        }
-    }
-
     /** asynchronously copy data from swap to rcv/snd */
     public <T> Future<T> submitSoTask(DefaultSoTask task, T result) {
         return this.eventExecutor.submitSoTask(task, result);
@@ -409,5 +312,151 @@ public class SoContextService implements SoContext {
     /** Set up a timer */
     protected void newTimeout(TimerTask task, long delay, TimeUnit unit) {
         this.globalTimer.newTimeout(task, delay, unit);
+    }
+
+    public void notifyBindChannelException(long channelId, SoBindException e) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("channel not found. channelId : " + channelId);
+            return;
+        }
+
+        if (channel instanceof NetListen) {
+            logger.error("ERROR: bindFailed, " + e.getMessage(), e);
+            this.doCloseChannel(channel, "bindFailed, " + e.getMessage(), e);
+        } else {
+            logger.error("only NetChannel can notifyBindException. channelId : " + channelId);
+        }
+    }
+
+    public void notifyConnectChannelException(long channelId, boolean doClose, SoConnectException e) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("channel not found. channelId : " + channelId);
+            return;
+        }
+
+        if (channel instanceof NetChannel) {
+            this.doNotifyError(true, doClose, e, channel);
+        } else {
+            logger.error("only NetChannel can notifyConnectException. channelId : " + channelId);
+        }
+    }
+
+    /** receiving new data */
+    public void notifyRcvChannelData(long channelId, Object... rcvData) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("channel not found. channelId : " + channelId);
+            return;
+        }
+
+        if (!(channel instanceof NetChannel)) {
+            logger.error("only NetChannel can notifyData. channelId : " + channelId);
+            return;
+        }
+
+        try {
+            ((NetChannel) channel).notifyRcv(rcvData);
+        } catch (Throwable e) {
+            SoException ee = e instanceof SoException ? (SoException) e : new SoRcvException(e.getMessage(), e);
+            this.notifyRcvChannelException(channelId, true, ee);
+        }
+    }
+
+    public void notifyRcvChannelException(long channelId, boolean doClose, SoException e) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("channel not found. channelId : " + channelId);
+            return;
+        }
+
+        if (channel instanceof NetChannel) {
+            this.doNotifyError(true, doClose, e, channel);
+        } else {
+            logger.error("only NetChannel can notifyRcvException. channelId : " + channelId);
+        }
+    }
+
+    public void notifySndChannelException(long channelId, boolean doClose, SoException e) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("channel not found. channelId : " + channelId);
+            return;
+        }
+
+        if (channel instanceof NetChannel) {
+            this.doNotifyError(false, doClose, e, channel);
+        } else {
+            logger.error("only NetChannel can notifySendException. channelId : " + channelId);
+        }
+    }
+
+    private void doNotifyError(boolean isRcv, boolean doClose, SoException e, SoChannel<?> channel) {
+        try {
+            ((NetChannel) channel).notifyError(isRcv, e);
+            if (doClose) {
+                this.doCloseChannel(channel, "close channel for exception " + e.getMessage(), e);
+            }
+        } catch (Throwable ee) {
+            String errorMsg = "close channel for unhandled exception " + ee.getMessage();
+            logger.error(errorMsg, ee);
+            this.doCloseChannel(channel, errorMsg, ee);
+        }
+    }
+
+    public void notifyChannelClose(long channelId, boolean remote) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("channel not found. channelId : " + channelId);
+        } else {
+            String message = "closed from " + (remote ? "remote" : "local");
+            this.doCloseChannel(channel, message, null);
+        }
+    }
+
+    private void doCloseChannel(SoChannel<?> channel, String message, Throwable e) {
+        if (e == null) {
+            logger.info("channel(" + channel.getChannelId() + ") " + message);
+        } else {
+            logger.error(message, e);
+        }
+
+        // clean wQueue
+        if (channel instanceof NetChannel) {
+            NetChannel netChannel = (NetChannel) channel;
+            IOUtils.closeQuietly(netChannel.asyncChannel);
+            netChannel.closeStatus.set(true);
+
+            // purge data
+            netChannel.wContext.purge(e);
+
+            // on close event
+            try {
+                netChannel.protoStack.onClose(netChannel.protoCtx);
+            } catch (Exception ignore) {
+                //
+            } finally {
+                NetListen forListen = netChannel.getListen();
+                if (forListen != null) {
+                    forListen.notifyClose(netChannel);
+                }
+
+                this.channelMap.remove(channel.getChannelId());
+            }
+
+            try {
+                netChannel.closeFuture.completed(netChannel);
+            } catch (Exception ignore) {
+                //
+            }
+        } else {
+            NetListen netListen = (NetListen) channel;
+            IOUtils.closeQuietly(netListen.channel);
+            netListen.closeStatus.set(true);
+
+            this.listenList.remove(channel);
+            logger.info("listen(" + channel.getChannelId() + ") closed, port :" + netListen.getListenPort());
+        }
     }
 }

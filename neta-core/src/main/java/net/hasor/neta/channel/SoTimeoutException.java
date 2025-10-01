@@ -14,19 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.net.SocketException;
-
 /**
  * Thrown to indicate that there is an error creating or accessing a Socket.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SoTimeoutException extends SocketException {
-
-    public SoTimeoutException() {
+public class SoTimeoutException extends SoException {
+    public SoTimeoutException(String s) {
+        super(s);
     }
 
-    public SoTimeoutException(String msg) {
-        super(msg);
+    public SoTimeoutException(String s, Throwable e) {
+        super(s, e);
     }
 }

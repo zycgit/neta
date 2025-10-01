@@ -12,13 +12,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public class VrtAsyncServerChannel implements AsyncServerChannel {
     private static final Logger                              logger = Logger.getLogger(VrtAsyncServerChannel.class);
     private final        long                                channelId;
-    private              VrtListen                           vrtListen;
     private final        AtomicBoolean                       closed;
-    //
     private final        Map<Integer, VrtAsyncServerChannel> listenPool;
     private final        SoContextService                    context;
     private final        VrtSocketAddress                    listenAddr;
     private final        VrtSoConfig                         soConfig;
+    //
+    private              VrtListen                           vrtListen;
 
     public VrtAsyncServerChannel(long channelId, Map<Integer, VrtAsyncServerChannel> listenPool, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
         this.channelId = channelId;
@@ -58,9 +58,16 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         VrtListen listen = new VrtListen(this.channelId, this.listenAddr, this, initializer, this.context, this.soConfig, transfer);
 
         // init
-        this.context.initChannel(listen, false);
-        this.vrtListen = listen;
-        return vrtListen;
+        try {
+            this.context.initChannel(listen, false);
+            this.vrtListen = listen;
+            return vrtListen;
+        } catch (Throwable e) {
+            logger.error("ERROR: bindFailed, " + e.getMessage(), e);
+            SoBindException ee = e instanceof SoBindException ? (SoBindException) e : new SoBindException(e.getMessage(), e);
+            this.context.notifyBindChannelException(this.channelId, ee);
+            throw ee;
+        }
     }
 
     VrtChannel acceptLink(VrtChannel clientSite) throws Throwable {
@@ -76,18 +83,30 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         }
 
         // create
-        long channelId = this.context.nextID();
-        VrtAsyncChannel vrtAsync = new VrtAsyncChannel(channelId, this, this.context, remoteAddr, this.soConfig);
-        ProtoInitializer initializer = this.vrtListen.getInitializer();
-        VrtChannel serverSite = new VrtChannel(vrtAsync.getChannelId(), new NetMonitor(), this.vrtListen, VrtMode.Server, initializer, vrtAsync, this.context);
+        VrtChannel serverSite;
+        try {
+            long channelId = this.context.nextID();
+            VrtAsyncChannel vrtAsync = new VrtAsyncChannel(channelId, this, this.context, remoteAddr, this.soConfig);
+            ProtoInitializer initializer = this.vrtListen.getInitializer();
+            serverSite = new VrtChannel(vrtAsync.getChannelId(), new NetMonitor(), this.vrtListen, VrtMode.Server, initializer, vrtAsync, this.context);
+        } catch (Throwable e) {
+            throw e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
+        }
 
         // connect transfer
-        this.vrtListen.getTransfer().linkTo(clientSite, serverSite, ((VrtSoConfig) serverSite.getConfig()).getRcvConvert());
-        this.vrtListen.getTransfer().linkTo(serverSite, clientSite, ((VrtSoConfig) clientSite.getConfig()).getRcvConvert());
+        try {
+            this.vrtListen.getTransfer().linkTo(clientSite, serverSite, ((VrtSoConfig) serverSite.getConfig()).getRcvConvert());
+            this.vrtListen.getTransfer().linkTo(serverSite, clientSite, ((VrtSoConfig) clientSite.getConfig()).getRcvConvert());
 
-        // init
-        this.context.initChannel(serverSite, true);
-        return serverSite;
+            // init
+            this.context.initChannel(serverSite, true);
+            return serverSite;
+        } catch (Throwable e) {
+            logger.error("ERROR: ConnectFailed, " + e.getMessage(), e);
+            SoConnectException ee = e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
+            this.context.notifyConnectChannelException(serverSite.getChannelId(), true, ee);
+            throw ee;
+        }
     }
 
     private void printLog(String msg) {

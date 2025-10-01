@@ -53,7 +53,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
                 @Override
                 public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    rcvError.set(e instanceof TcpInputCloseException);
+                    rcvError.set(e instanceof SoInputCloseException);
                     return ProtoStatus.Next;
                 }
             }).build();
@@ -110,7 +110,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
                 @Override
                 public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    rcvError.set(e instanceof TcpInputCloseException);
+                    rcvError.set(e instanceof SoInputCloseException);
                     return ProtoStatus.Next;
                 }
             }).build();
@@ -177,7 +177,7 @@ public class SoShutdownTest extends AbstractSoTest {
 
                 @Override
                 public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    rcvError.set(e instanceof TcpInputCloseException);
+                    rcvError.set(e instanceof SoInputCloseException);
                     return ProtoStatus.Next;
                 }
             }).build();

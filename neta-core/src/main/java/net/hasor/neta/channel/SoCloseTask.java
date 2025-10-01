@@ -43,8 +43,7 @@ class SoCloseTask extends DefaultSoTask {
 
         if (channel instanceof NetChannel) {
             if (this.forceNow) {
-                String msg = "channel(" + this.channelID + ") close now form local.";
-                this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+                this.context.notifyChannelClose(this.channelID, false);
                 this.finishTask();
             } else {
                 NetChannel netChannel = (NetChannel) channel;
@@ -65,13 +64,11 @@ class SoCloseTask extends DefaultSoTask {
                     return;
                 }
 
-                String msg = "channel(" + this.channelID + ") safe close form local.";
-                this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+                this.context.notifyChannelClose(this.channelID, false);
                 finishTask();
             }
         } else {
-            String msg = "channel(" + this.channelID + ") close Listen.";
-            this.context.syncUnsafeCloseChannel(this.channelID, msg, SoCloseException.INSTANCE);
+            this.context.notifyChannelClose(this.channelID, false);
             this.finishTask();
         }
     }

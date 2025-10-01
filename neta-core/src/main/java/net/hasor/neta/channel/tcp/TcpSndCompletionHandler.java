@@ -119,44 +119,54 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         this.handleException(e, context);
     }
 
-    private void handleException(Throwable e, SoSndContext context) {
-        String finalMsg;
-        Throwable finalErr;
+    private void doSendAgain(SoSndContext context) {
+        if (!this.channel.isOpen()) {
+            SoUnfinishedSndException finalErr = new SoUnfinishedSndException("channel is closed.");
+            this.context.notifySndChannelException(this.channel.getChannelId(), true, finalErr);
+            this.purgeSndData(finalErr, context);
+        } else {
+            submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
+                writeData(context);
+            });
+        }
+    }
 
+    private void handleException(Throwable e, SoSndContext context) {
         if (e instanceof NotYetConnectedException) {
             long costTimeMs = System.currentTimeMillis() - -this.monitor.getCreatedTime();
             if (costTimeMs < this.connectTimeoutMs) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("snd(" + this.channelId + ") NotYetConnected, write try again later.");
                 }
-                submitTask(new SoDelayTask(this.context)).onCompleted(f -> {
-                    writeData(context);
-                });
-                return;
+                doSendAgain(context);
             } else {
-                finalErr = SoUtils.newTimeout(false, this.channelId, this.context, e);
-                finalMsg = finalErr.getMessage();
+                SoConnectTimeoutException finalErr = SoUtils.newConnectTimeout(false, this.channelId, this.context, e);
+                this.context.notifySndChannelException(this.channel.getChannelId(), true, finalErr);
+                this.purgeSndData(finalErr, context);
             }
-        } else if (e instanceof InterruptedByTimeoutException) {
-            String errorMsg = "send data timeout with " + this.channel.getSoConfig().getSoWriteTimeoutMs() + " milliseconds.";
-            String msg = "snd(" + this.channelId + ") " + errorMsg;
-
-            finalErr = new SoWriteTimeoutException(errorMsg);
-            finalMsg = msg;
-        } else if (e instanceof ClosedChannelException) {
-            finalMsg = "snd(" + this.channelId + ") close, msg:" + e.getMessage();
-            finalErr = e;
-        } else if (e instanceof ShutdownChannelGroupException) {
-            finalMsg = "snd(" + this.channelId + ") shutdown, msg:" + e.getMessage();
-            finalErr = e;
-        } else {
-            finalMsg = "snd(" + this.channelId + ") error, msg:" + e.getMessage();
-            finalErr = e;
+            return;
         }
 
-        this.context.notifySndChannelError(this.channelId, finalErr);
-        this.context.asyncUnsafeCloseChannel(this.channelId, finalMsg, finalErr);
+        if (e instanceof InterruptedByTimeoutException) {
+            String errorMsg = "send data timeout with " + this.channel.getSoConfig().getSoWriteTimeoutMs() + " milliseconds.";
+            SoException finalErr = new SoWriteTimeoutException(errorMsg);
+            this.context.notifySndChannelException(this.channel.getChannelId(), false, finalErr);
+            doSendAgain(context);
+            return;
+        }
 
+        SoException finalErr;
+        if (e instanceof ClosedChannelException || e instanceof ShutdownChannelGroupException) {
+            finalErr = new SoCloseException(e.getMessage(), e);
+        } else {
+            finalErr = new SoSndException(e.getMessage(), e);
+        }
+
+        this.context.notifySndChannelException(this.channel.getChannelId(), true, finalErr);
+        this.purgeSndData(finalErr, context);
+    }
+
+    private void purgeSndData(Throwable e, SoSndContext context) {
         while (!context.isEmpty()) {
             SoSndData sndData = context.popData();
             this.submitTask(new SoDelayTask(0)).onFinal(f -> {

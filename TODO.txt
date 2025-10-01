@@ -4,20 +4,51 @@
 
 
 文档
-1. NetListen 在 TCP 模式下会暂停接收新的传入链接，在 UDP 模式下来自新客户端的数据包会被丢弃，已经建立通道的远程数据会持续接收。
+1. NetListen 的 suspend 方法
+    - 在 TCP 模式下会暂停接收新的传入链接。
+    - 在 UDP 模式下来自新客户端的数据包会被丢弃，已经建立通道的远程数据会持续接收。
+    - 在 Vrt 模式下和 TCP 的行为模式保持一致。
 2. UDP 无法感知连接是否关闭，因此用户需要通过例如 心跳等机制处理 UDP 的 close。
-3. UDP 模式下同样支持 reject 机制。
-4. 使用 DTLS 时 UdpSoConfig 的 soSndBuf 和 soRcvBuf 需要大于 1280，否则会抛出 java.net.SocketException: Message too long 异常。
-java.net.SocketException: Message too long
-5. DTLS 下必须保证封包完整性，因此在使用 SSL 时切记不要对 DTLS 的封包进行拆分，否则会导致数据发送和接收完全停滞并且没有明显报错。
-     - DTLS 协议中传输过大的封包建议在业务层对封包进行拆分并实现分包重传机制。
+3. UDP 模式下 NetListen 同样支持 reject 机制。
+4. 使用 DTLS 时 UdpSoConfig 的 soSndBuf 和 soRcvBuf 需要大于 1280，否则会抛出 java.net.SocketException: Message too long 异常。这是由于 DTLS 数据包无法流式传输因此发送接收缓冲区大小至少需要满足握手数据包的需要。
+5. 保证 DTLS 的封包完整性，不要对 DTLS 的封包进行拆分，如有封包拆分需求需要在 DTLS 之前拆分好在传递给 DTLS 层
+    - 否则会因为封包不完整导致握手失败以及数据无法正常传输。现象表现为发送和接收完全停滞并且没有明显报错。
+    - DTLS 协议中重传机制，需要自己实现底层 DTLS 并不具备这个能力。
 6. VrtTransfer 由于实现机制问题，无法模拟背压情况。
+7. 异常处理机制：
+    - NetChannel
+        - SoReadTimeoutException    异常，使用 NetChannel.setReadTimeout 方法设置的指定时间内没有收到任何来自远程的消息，会触发事件但不会关闭连接。
+        - SoCloseException          由关闭触发的 SoCloseException 异常被当作接收异常。
+    - TCP 模式下异常
+        - SoBindException           异常，绑定端口失败，会触发事件并且关闭连接。
+        - SoInputCloseException     异常，则表示本地主动关闭了接收但仍然可以发送，会触发事件但不会关闭连接。
+        - SoCloseException          异常，表示远程关闭了连接，会触发事件并且关闭连接。
+        - SoUnfinishedSndException  异常，表示发送数据时通道被关闭了，会触发事件并且关闭连接。
+        - SoConnectTimeoutException 异常，表示建立连接超时，会触发事件并且关闭连接。
+        - SoRcvException            异常，其它数据读取时的异常，会触发事件并且关闭连接。
+        - SoSndException            异常，其它数据发送时的异常，会触发事件并且关闭连接。
+        - SoConnectException        异常，在创建连接时期发生的异常，通常是初始化协议栈、获取远程信息或者其它来自底层系统的异常，会触发事件并且关闭连接。
+        - SoWriteTimeoutException   异常，数据发送超时，会触发事件但不会关闭连接并且 Neta 会自动进入重试，如果再次超时会重复异常过程。可以选择监听这个异常并关闭连接。
+    - UDP 模式下异常
+        - SoBindException           异常，绑定端口失败，会触发事件并且关闭连接。
+        - SoConnectException        异常，在创建连接时期发生的异常，通常是初始化协议栈、获取远程信息或者其它来自底层系统的异常，会触发事件并且关闭连接。
+        - SoCloseException          异常，表示关闭了连接，会触发事件并且关闭连接。
+        - SoUnfinishedSndException  异常，表示发送数据时通道被关闭了，会触发事件并且关闭连接。
+        - SoRcvException            异常，其它数据读取时的异常，会触发事件但不关闭连接。
+        - SoWriteTimeoutException   异常，数据发送超时，会触发事件但不会关闭连接并且 Neta 会自动进入重试，如果再次超时会重复异常过程。可以选择监听这个异常并关闭连接。
+        - SoSndException            异常，其它数据发送时的异常，会触发事件但不关闭连接。
+    - Virtual 模式下异常
+        - SoBindException           异常，绑定端口失败，会触发事件并且关闭连接。
+        - SoConnectException        异常，在创建连接时期发生的异常，通常是初始化协议栈、获取远程信息或者其它来自底层系统的异常，会触发事件并且关闭连接。
+    - 特别说明
+        - SoConnectException        类型异常，会被当作接收异常。
+        - SoBindException           类型异常，会被当作接收异常。
+        - SoCloseException          类型异常，
 
 高优先
 01. 背压机制 pipline 的输入/输出 队列容量是有界的，导致数据接收时如果通道没有可用槽需要暂停接收，目前会报错
-02. SoContextService 的 asyncUnsafeCloseChannel 方法调用需要在 review
-03. 整个系统的 异常传导机制需要在 review
-04. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
+02. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
+03. SoConfig 类还未完成英文化
 
 次优先
 01. ProtoStatistical 整合到 NetMonitor 中
@@ -27,9 +58,9 @@ java.net.SocketException: Message too long
 06. ByteBuf 大文件 或输入输出流的 传输
 07. PipeRoute
 08. 流量控制
-09. SoConfig 类还未完成英文化
-10. SSL 证书兼容 PKCS12
-11. pipline 需要支持分叉式的以便可以支持复杂协议树，可以使用 event 来实现，工作在协议层之上
+09. pipline 需要支持分叉式的以便可以支持复杂协议树，可以使用 event 来实现，工作在协议层之上
+10. 异步任务机制需要简化使用逻辑。
+11. SSL 证书兼容 PKCS12
 12. 需要一个 CompositeByteBuf 来协助多个 ByteBuf 的操作。
 13. 需要将 ProtoRcvQueue 到 CompositeByteBuf 的代理操作接口，从而屏蔽底层 ProtoRcvQueue 的一些列操作。如 ByteBuf 脱管造成内存泄漏的问题
 14. 需要实现内存托管，简化资源释放。

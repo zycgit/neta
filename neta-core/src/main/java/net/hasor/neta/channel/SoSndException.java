@@ -14,16 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.net.SocketException;
-
 /**
- * Exception thrown when a connection attempt is rejected, such as when the server port is not open.
+ * When {@link SoChannel} is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SoRejectException extends SocketException {
-
-    public SoRejectException(String s) {
+public class SoSndException extends SoException {
+    public SoSndException(String s) {
         super(s);
+    }
+
+    public SoSndException(String s, Throwable e) {
+        super(s, e);
     }
 }

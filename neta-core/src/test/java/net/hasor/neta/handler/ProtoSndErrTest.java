@@ -17,6 +17,7 @@ package net.hasor.neta.handler;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
+import net.hasor.neta.channel.SoException;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -52,7 +53,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -82,7 +83,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -112,7 +113,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -142,7 +143,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -172,7 +173,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -202,7 +203,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -232,7 +233,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -262,7 +263,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new IllegalStateException("Test"));
+        channel.onSendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");

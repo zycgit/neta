@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 import java.io.IOException;
@@ -30,11 +31,12 @@ import java.nio.channels.AsynchronousServerSocketChannel;
  * @version 2025-08-06
  */
 class TcpAsyncServerChannel implements AsyncServerChannel {
-    private final long                            channelId;
-    private final AsynchronousServerSocketChannel channel;
-    private final SoContextService                context;
-    private final InetSocketAddress               listenAddr;
-    private final TcpSoConfig                     soConfig;
+    private static final Logger                          logger = Logger.getLogger(TcpAsyncServerChannel.class);
+    private final        long                            channelId;
+    private final        AsynchronousServerSocketChannel channel;
+    private final        SoContextService                context;
+    private final        InetSocketAddress               listenAddr;
+    private final        TcpSoConfig                     soConfig;
 
     TcpAsyncServerChannel(long channelId, AsynchronousServerSocketChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
         this.channelId = channelId;
@@ -72,12 +74,16 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
                 this.context,             //
                 this.soConfig);
 
-        // init
-        this.context.initChannel(listen, false);
-
-        // start
-        this.channel.bind(this.listenAddr, 0);
-        this.channel.accept(context, new TcpAcceptCompletionHandler(listen, this.channel, this.soConfig));
+        // init and start
+        try {
+            this.context.initChannel(listen, false);
+            this.channel.bind(this.listenAddr, 0);
+            this.channel.accept(context, new TcpAcceptCompletionHandler(listen, this.channel, this.soConfig));
+        } catch (Throwable e) {
+            SoBindException ee = e instanceof SoBindException ? (SoBindException) e : new SoBindException(e.getMessage(), e);
+            this.context.notifyBindChannelException(this.channelId, ee);
+            throw ee;
+        }
         return listen;
     }
 

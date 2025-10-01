@@ -34,7 +34,7 @@ public abstract class AbstractNetManager {
     protected final      NetConfig        config;
     protected final      SoContextService context;
     protected final      AtomicBoolean    shutdown;
-    protected            ExecutorService  ioExec;
+    protected            ExecutorService  executor;
 
     public AbstractNetManager(NetConfig config) {
         this.config = config;
@@ -78,9 +78,9 @@ public abstract class AbstractNetManager {
             // waiting close
             long t = System.currentTimeMillis();
             // waiting close accept
-            if (this.ioExec != null) {
-                this.ioExec.shutdown();
-                while (!this.ioExec.isTerminated()) {
+            if (this.executor != null) {
+                this.executor.shutdown();
+                while (!this.executor.isTerminated()) {
                     long cost = System.currentTimeMillis() - t;
                     if (cost > 3000) {
                         t = System.currentTimeMillis();

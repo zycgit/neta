@@ -21,9 +21,12 @@ import java.net.ConnectException;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SoConnectTimeoutException extends ConnectException {
+public class SoConnectTimeoutException extends SoTimeoutException {
+    public SoConnectTimeoutException(String s) {
+        super(s);
+    }
 
-    public SoConnectTimeoutException(String msg) {
-        super(msg);
+    public SoConnectTimeoutException(String s, Throwable e) {
+        super(s, e);
     }
 }

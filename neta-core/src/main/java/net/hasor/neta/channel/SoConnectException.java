@@ -19,12 +19,12 @@ package net.hasor.neta.channel;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SoCloseException extends SoException {
-    public SoCloseException(String s) {
+public class SoConnectException extends SoException {
+    public SoConnectException(String s) {
         super(s);
     }
 
-    public SoCloseException(String s, Throwable e) {
+    public SoConnectException(String s, Throwable e) {
         super(s, e);
     }
 }

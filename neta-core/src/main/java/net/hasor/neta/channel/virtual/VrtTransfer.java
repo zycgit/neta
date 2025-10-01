@@ -12,23 +12,25 @@ import net.hasor.neta.handler.PlayLoad;
 import java.lang.reflect.Array;
 import java.net.SocketException;
 import java.util.*;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
 
 public class VrtTransfer {
-    private static final Logger                           logger = Logger.getLogger(VrtTransfer.class);
-    private static final Random                           RANDOM;
-    private final        NetManager                       manager;
-    private final        Map<Long, List<VrtTransferLink>> distributeMap;
-    private final        SubscribeHolder                  subscribeHolder;
-    private final        boolean                          asynchronous;
-    private              int                              batchSize;
-    private              int                              lossRate;
-    private final        AtomicBoolean                    closed;
+    private static final Logger logger = Logger.getLogger(VrtTransfer.class);
+    private static final Random RANDOM;
 
     static {
         RANDOM = new Random(System.currentTimeMillis());
     }
+
+    private final NetManager                       manager;
+    private final Map<Long, List<VrtTransferLink>> distributeMap;
+    private final SubscribeHolder                  subscribeHolder;
+    private final boolean                          asynchronous;
+    private final AtomicBoolean                    closed;
+    private       int                              batchSize;
+    private       int                              lossRate;
 
     /**
      * Constructor for VrtTransfer.
@@ -50,6 +52,38 @@ public class VrtTransfer {
         this.lossRate = 0;
         this.subscribeHolder = this.manager.getContext().subscribe(this.playLoadFilter(), this::playLoadDistribute);
         this.closed = new AtomicBoolean(false);
+    }
+
+    public static VrtTransferHandler duplicate() {
+        return (src, dst) -> {
+            while (src.hasMore()) {
+                Object data = src.takeMessage().getData();
+                if (data == null) {
+                    dst.offerMessage((Object) null);
+                } else if (data instanceof ByteBuf) {
+                    dst.offerMessage(((ByteBuf) data).copy());
+                } else if (data instanceof List) {
+                    dst.offerMessage(new CopyOnWriteArrayList<>((List) data));
+                } else if (data.getClass().isArray()) {
+                    Class<?> componentType = data.getClass().getComponentType();
+
+                    int arrayLength = Array.getLength(data);
+                    Object newArray = Array.newInstance(componentType, arrayLength);
+                    System.arraycopy(data, 0, newArray, 0, arrayLength);
+                    dst.offerMessage(newArray);
+                } else {
+                    throw new UnsupportedOperationException("duplicate unsupported type " + data.getClass());
+                }
+            }
+        };
+    }
+
+    public static VrtTransferHandler direct() {
+        return (src, dst) -> {
+            while (src.hasMore()) {
+                dst.offerMessage(src.takeMessage().getData());
+            }
+        };
     }
 
     public boolean isAsynchronous() {
@@ -153,43 +187,35 @@ public class VrtTransfer {
             throw new SocketException("channels and VrtTransfer need same NetaManager.");
         }
 
-        List<VrtTransferLink> linkList = this.distributeMap.computeIfAbsent(from.getChannelId(), c -> new ArrayList<>());
-        if (linkList.stream().anyMatch(l -> l.target.getChannelId() == to.getChannelId())) {
-            throw new SocketException("link " + from.getChannelId() + " -> " + to.getChannelId() + " already exists");
+        // create link list if not exists.
+        List<VrtTransferLink> linkList = this.distributeMap.get(from.getChannelId());
+        if (linkList == null) {
+            linkList = new CopyOnWriteArrayList<>();
+            this.distributeMap.put(from.getChannelId(), linkList);
+
+            // when source channel closed, remove all distribute.
+            from.onClose(channel -> {
+                logger.info("unlink " + from.getChannelId() + " -> all.");
+                this.distributeMap.remove(from.getChannelId());
+            });
         }
 
-        linkList.add(new VrtTransferLink(to, rcvConvert));
+        //
+        if (linkList.stream().anyMatch(l -> l.target.getChannelId() == to.getChannelId())) {
+            throw new SocketException("link " + from.getChannelId() + " -> " + to.getChannelId() + " already exists");
+        } else {
+            to.onClose(channel -> {
+                this.removeLink(from, to);
+            });
+            linkList.add(new VrtTransferLink((SoContextService) this.manager.getContext(), to, rcvConvert));
+        }
     }
 
-    public static VrtTransferHandler duplicate() {
-        return (src, dst) -> {
-            while (src.hasMore()) {
-                Object data = src.takeMessage().getData();
-                if (data == null) {
-                    dst.offerMessage((Object) null);
-                } else if (data instanceof ByteBuf) {
-                    dst.offerMessage(((ByteBuf) data).copy());
-                } else if (data instanceof List) {
-                    dst.offerMessage(new ArrayList<>((List) data));
-                } else if (data.getClass().isArray()) {
-                    Class<?> componentType = data.getClass().getComponentType();
-
-                    int arrayLength = Array.getLength(data);
-                    Object newArray = Array.newInstance(componentType, arrayLength);
-                    System.arraycopy(data, 0, newArray, 0, arrayLength);
-                    dst.offerMessage(newArray);
-                } else {
-                    throw new UnsupportedOperationException("duplicate unsupported type " + data.getClass());
-                }
-            }
-        };
-    }
-
-    public static VrtTransferHandler direct() {
-        return (src, dst) -> {
-            while (src.hasMore()) {
-                dst.offerMessage(src.takeMessage().getData());
-            }
-        };
+    private void removeLink(VrtChannel from, VrtChannel to) {
+        logger.info("unlink " + from.getChannelId() + " -> " + to.getChannelId() + ".");
+        List<VrtTransferLink> links = this.distributeMap.get(from.getChannelId());
+        if (links != null) {
+            links.removeIf(l -> l.target.getChannelId() == to.getChannelId());
+        }
     }
 }

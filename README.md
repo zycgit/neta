@@ -3,38 +3,53 @@
 &emsp;&emsp; Neta is a network application framework that helps users to develop high performance and high scalability network applications easily.
 It provides an abstract asynchronous duplex programming model and works on top of Java AIO.
 
-## Pipeline Model
+## Programming Model
 
 ```text
-       PipeLayer 0     PipeLayer 1     PipeLayer 2
-      ┏━━━━━━━━━━━┓   ┏━━━━━━━━━━━┓   ┏━━━━━━━━━━━┓
-      ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃
-Net → ┃  ┆ RCV ┆  ┃ → ┃  ┆ RCV ┆  ┃ → ┃  ┆ RCV ┆  ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-      ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┆             ┆
-      ┃     ↓     ┃   ┃     ↓     ┃   ┃     ↓     ┃   ┆ Application ┆
-      ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┆             ┆
-Net ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
-      ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃
-      ┗━━━━━━━━━━━┛   ┗━━━━━━━━━━━┛   ┗━━━━━━━━━━━┛
+            Decoder/Encoder            Event and API
+      ┏━━━━━━━━━━━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+Net → ┃ ╭┄┄┄┄╮ ╭┄┄┄┄╮ ╭┄┄┄┄╮     ┃ → ┃ RCV: subscribe ┃ → ┆             ┆
+      ┃ ┆ L1 ┆ ┆ L2 ┆ ┆ L3 ┆ ... ┃   ┠┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┨   ┆ Application ┆
+Net ← ┃ ╰┄┄┄┄╯ ╰┄┄┄┄╯ ╰┄┄┄┄╯     ┃ ← ┃ SND: sendData  ┃ ← ┆             ┆
+      ┗━━━━━━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
 ```
 
 ## Duplex Model
 
 ```text
-           PipeLayer(0)              PipeLayer (1)
-      ┏━━━━━━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━━━━━━┓
-Net → ┃ RCV_UP     RCV_DOWN ┃ → ┃ RCV_UP     RCV_DOWN ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-      ┃                     ┃   ┃                     ┃   ┆ Application ┆
-Net ← ┃ SND_DOWN     SND_UP ┃ ← ┃ SND_DOWN     SND_UP ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
-      ┗━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━┛
+       PipeLayer 0     PipeLayer 1     PipeLayer 2   
+      ┏━━━━━━━━━━━┓   ┏━━━━━━━━━━━┓   ┏━━━━━━━━━━━┓  
+      ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃  
+Net → ┃  ┆ RCV ┆  ┃ → ┃  ┆ RCV ┆  ┃ → ┃  ┆ RCV ┆  ┃ →  ╭┄┄┄┄┄╮
+      ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃    ┆     ┆
+      ┃     ↓     ┃   ┃     ↓     ┃   ┃     ↓     ┃    ┆ ... ┆
+      ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄╮  ┃    ┆     ┆
+Net ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  ┃ ← ┃  ┆ SND ┆  ┃ ←  ╰┄┄┄┄┄╯
+      ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄╯  ┃  
+      ┗━━━━━━━━━━━┛   ┗━━━━━━━━━━━┛   ┗━━━━━━━━━━━┛
 ```
 
-## 能力
+```text
+      ProtoDuplexer                  ProtoDuplexer
+ ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮          ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮
+ ┆ RCV_UP     RCV_DOWN ┆          ┆ rcv ProtoHandler ┆
+ ┆                     ┆    OR    ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤
+ ┆ SND_DOWN     SND_UP ┆          ┆ SND ProtoHandler ┆
+ ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯          ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯
+```
 
-- 支持 在统一 API 风格下开发 TCP/UDP 协议应用程序
-- 支持 SSL/TLS/DTLS （SSLv3、TLSv1、TLSv1.1、TLSv1.2、TLSv1.3、DTLSv1.0、DTLSv1.2）
-    - 支持 NPN/ALPN 扩展应用层协议协商
-    - TLS/SSL 客户端验证：NONE、OPTIONAL、REQUIRE
+## Features
+
+### Design
+- Unified API for developing UDP/TCP programs.
+- Adapt to high-concurrency scenarios using the SEDA thread model.
+
+### Security
+- Support SSL/TLS/DTLS (include SSLv3、TLSv1、TLSv1.1、TLSv1.2、TLSv1.3、DTLSv1.0、DTLSv1.2)
+
+### Functions
+- 支持 NPN/ALPN 扩展应用层协议协商
+- TLS/SSL 客户端验证：NONE、OPTIONAL、REQUIRE
 - 支持 Pipeline 多种流转控制方式
 - 支持 虚拟通道（可模拟 端口监听、广播、、丢包、粘包等情况）
 - 支持 ReadSocketTimeout、WriteSocketTimeout
@@ -59,15 +74,13 @@ neta-core
 ```
 
 ```java
-//       ┏━━ nextToDecoder(..) ━┓   ┏━━ StringPipeLayer ━━┓
-//       ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃   ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃
-// Net → ┃  ┆ LineBasedFrame ┆  ┃ → ┃  ┆ StringDecoder ┆  ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-//       ┃  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯  ┃   ┃  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯  ┃   ┆             ┆
-//       ┃                      ┃   ┃                     ┃   ┆ echo + data ┆
-//       ┃                      ┃   ┃  ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮  ┃   ┆             ┆
-// Net ← ┃                      ┃ ← ┃  ┆ StringEncoder ┆  ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
-//       ┃                      ┃   ┃  ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯  ┃
-//       ┗━━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━┛
+//       ┏━ nextDecoder(..) ━━┓   ┏━ nextDuplex(..) ━━┓
+//       ┃ ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮ ┃   ┃ ╭┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╮ ┃
+// Net → ┃ ┆ LineBasedFrame ┆ ┃ → ┃ ┆ StringDecoder ┆ ┃ → ╭┄┄┄┄┄┄┄┄┄┄┄╮
+//       ┃ ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯ ┃   ┃ ├┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄┤ ┃   ┆ echo data ┆
+// Net ← ┃                    ┃ ← ┃ ┆ StringEncoder ┆ ┃ ← ╰┄┄┄┄┄┄┄┄┄┄┄╯
+//       ┃                    ┃   ┃ ╰┄┄┄┄┄┄┄┄┄┄┄┄┄┄┄╯ ┃
+//       ┗━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━┛
 
 PipeInitializer initializer = ctx -> {
     return PipeHelper.standard()

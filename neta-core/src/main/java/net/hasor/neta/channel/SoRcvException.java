@@ -13,18 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel.tcp;
-import net.hasor.neta.channel.SoCloseException;
-
+package net.hasor.neta.channel;
 /**
- * When {@link TcpChannel#shutdownInput()} called.
+ * When {@link SoChannel} is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class TcpInputCloseException extends SoCloseException {
+public class SoRcvException extends SoException {
 
-    public static final TcpInputCloseException INSTANCE = new TcpInputCloseException();
+    public SoRcvException(String s) {
+        super(s);
+    }
 
-    public TcpInputCloseException() {
+    public SoRcvException(String s, Throwable e) {
+        super(s, e);
     }
 }

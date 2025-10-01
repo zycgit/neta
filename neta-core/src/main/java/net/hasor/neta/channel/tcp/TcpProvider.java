@@ -32,8 +32,8 @@ import java.nio.channels.AsynchronousSocketChannel;
  * @version 2025-08-07
  */
 public class TcpProvider implements AsyncChannelProvider {
-    private static final Logger                   logger = Logger.getLogger(TcpProvider.class);
     public static final  String                   NAME   = "TCP";
+    private static final Logger                   logger = Logger.getLogger(TcpProvider.class);
     private final        AsynchronousChannelGroup channelGroup;
 
     public TcpProvider(NetManager neta) throws IOException {

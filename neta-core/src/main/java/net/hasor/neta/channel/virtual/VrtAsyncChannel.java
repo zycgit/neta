@@ -79,9 +79,9 @@ class VrtAsyncChannel implements AsyncChannel {
 
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
+        // create channel
+        VrtChannel channel;
         try {
-            // create channel
-            VrtChannel channel;
             if (this.target != null) {
                 VrtMode useMode = VrtMode.Client;
                 channel = new VrtChannel(this.channelId, new NetMonitor(), null, useMode, initializer, this, this.context);
@@ -90,12 +90,20 @@ class VrtAsyncChannel implements AsyncChannel {
                 VrtMode useMode = this.soConfig.getVrtMode();
                 channel = new VrtChannel(this.channelId, new NetMonitor(), null, useMode, initializer, this, this.context);
             }
+        } catch (Throwable e) {
+            logger.error("ERROR: Connect failed, " + e.getMessage());
+            future.failed(e);
+            return;
+        }
 
-            // init
+        // init
+        try {
             this.context.initChannel(channel, true);
             future.completed(channel);
         } catch (Throwable e) {
-            logger.error("ERROR: ConnectFailed, " + e.getMessage(), e);
+            logger.error("ERROR: Connect failed, " + e.getMessage());
+            SoConnectException ee = e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
+            context.notifyConnectChannelException(this.channelId, true, ee);
             future.failed(e);
         }
     }
@@ -107,7 +115,10 @@ class VrtAsyncChannel implements AsyncChannel {
             SoSndData sndData = wContext.popData();
 
             if (!this.isOpen()) {
-                sndData.failed(SoCloseException.INSTANCE);
+                SoUnfinishedSndException err = new SoUnfinishedSndException("channel is closed.");
+                this.context.notifySndChannelException(channel.getChannelId(), true, err);
+                sndData.failed(err);
+                this.purgeSndData(err, wContext);
                 continue;
             }
 
@@ -119,5 +130,18 @@ class VrtAsyncChannel implements AsyncChannel {
 
             sndData.completed();
         }
+    }
+
+    private void purgeSndData(Throwable e, SoSndContext context) {
+        while (!context.isEmpty()) {
+            SoSndData sndData = context.popData();
+            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+                sndData.failed(e);
+            });
+        }
+    }
+
+    private Future<?> submitTask(DefaultSoTask task) {
+        return this.context.submitSoTask(task, this);
     }
 }

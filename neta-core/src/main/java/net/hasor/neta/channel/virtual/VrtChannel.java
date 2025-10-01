@@ -50,7 +50,7 @@ public class VrtChannel extends NetChannel {
      */
     public void onReceive(Object... object) {
         if (object != null) {
-            this.notifyRcv((Object[]) object);
+            this.context.notifyRcvChannelData(this.getChannelId(), object);
         }
     }
 
@@ -58,9 +58,9 @@ public class VrtChannel extends NetChannel {
      * Write error to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void onReceiveError(Throwable e) {
+    public void onReceiveError(SoException e) {
         if (e != null) {
-            this.notifyError(true, e);
+            this.context.notifyRcvChannelException(this.getChannelId(), true, e);
         }
     }
 
@@ -68,9 +68,9 @@ public class VrtChannel extends NetChannel {
      * Write error to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void onSendError(Throwable e) {
+    public void onSendError(SoException e) {
         if (e != null) {
-            this.notifyError(false, e);
+            this.context.notifySndChannelException(this.getChannelId(), true, e);
         }
     }
 }

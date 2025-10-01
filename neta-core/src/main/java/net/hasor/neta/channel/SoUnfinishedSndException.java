@@ -15,15 +15,16 @@
  */
 package net.hasor.neta.channel;
 /**
- * socket Overflow Exception.
+ * When {@link SoChannel} is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SoOverflowException extends RuntimeException {
-    private static final long serialVersionUID = -5484897634319144535L;
+public class SoUnfinishedSndException extends SoSndException {
+    public SoUnfinishedSndException(String s) {
+        super(s);
+    }
 
-    /** Constructs an instance of this class. */
-    public SoOverflowException(String errorMsg) {
-        super(errorMsg);
+    public SoUnfinishedSndException(String s, Throwable e) {
+        super(s, e);
     }
 }

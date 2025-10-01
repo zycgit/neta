@@ -22,8 +22,11 @@ import java.net.ConnectException;
  * @version : 2023-09-24
  */
 public class SoReadTimeoutException extends SoTimeoutException {
+    public SoReadTimeoutException(String s) {
+        super(s);
+    }
 
-    public SoReadTimeoutException(String msg) {
-        super(msg);
+    public SoReadTimeoutException(String s, Throwable e) {
+        super(s, e);
     }
 }
