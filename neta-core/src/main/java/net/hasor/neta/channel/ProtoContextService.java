@@ -100,7 +100,7 @@ class ProtoContextService implements ProtoContext {
                 return ((NetChannel) this.channel).sendData(writeData);
             }
         } else {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("only NetChannel support sendData.");
         }
     }
 
@@ -110,7 +110,7 @@ class ProtoContextService implements ProtoContext {
             String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
             return ((NetChannel) this.channel).flush(current);
         } else {
-            throw new UnsupportedOperationException();
+            throw new UnsupportedOperationException("only NetChannel support flush.");
         }
     }
 

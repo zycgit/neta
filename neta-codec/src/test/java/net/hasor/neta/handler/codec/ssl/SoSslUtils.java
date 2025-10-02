@@ -65,15 +65,6 @@ public class SoSslUtils {
         return sslConfig;
     }
 
-    public static SslConfig dtlsConfig() {
-        SslConfig sslConfig = new SslConfig();
-        sslConfig.setAuthType(SslAuthKeyType.JKS);
-        sslConfig.setJksResource("ssl/jks/keystore.jks");
-        sslConfig.setKeyPassword("123456");
-        sslConfig.setProtocols(new String[] { SslProtocol.DTLS_v1_2 });
-        return sslConfig;
-    }
-
     public static ProtoInitializer udpSslSocketProtoStack(SslConfig sslConf) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
