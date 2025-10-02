@@ -14,7 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import net.hasor.cobble.ExceptionUtils;
+
 import java.lang.reflect.Field;
+import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 
@@ -29,44 +32,59 @@ final class BufferCleanerJava6 extends BufferCleaner {
     private static final long   CLEANER_FIELD_OFFSET;
     private static final Method CLEAN_METHOD;
     private static final Field  CLEANER_FIELD;
+    private static final Method UNSAFE_GET_OBJECT;
+
+    //objectFieldOffset
+    //getObject(Object var1, long var2)
 
     static {
         long fieldOffset = -1;
         Method clean = null;
         Field cleanerField = null;
+        Method unsafeGetObject = null;
+        Method unsafeObjFieldOffset = null;
 
-        try {
-            final Object cleaner;
-            // If we have sun.misc.Unsafe we will use it as its faster then using reflection, otherwise let us try reflection as last resort.
-            final ByteBuffer direct = ByteBuffer.allocateDirect(1);
-            cleanerField = direct.getClass().getDeclaredField("cleaner");
-            cleanerField.setAccessible(true); // We need to make it accessible if we do not use Unsafe as we will access it via reflection.
-
-            if (!hasUnsafe()) {
-                fieldOffset = UNSAFE.objectFieldOffset(cleanerField);
-                cleaner = UNSAFE.getObject(direct, fieldOffset);
-            } else {
-                fieldOffset = -1;
-                cleaner = cleanerField.get(direct);
+        if (isSupported()) {
+            try {
+                unsafeGetObject = UNSAFE_CLASS.getMethod("getObject", new Class[] { Object.class, long.class });
+                unsafeGetObject.setAccessible(true);
+                unsafeObjFieldOffset = UNSAFE_CLASS.getMethod("objectFieldOffset", new Class[] { Field.class });
+                unsafeObjFieldOffset.setAccessible(true);
+            } catch (Exception e) {
+                unsafeGetObject = null;
+                unsafeObjFieldOffset = null;
             }
 
-            clean = cleaner.getClass().getDeclaredMethod("clean");
-            clean.invoke(cleaner);
-            logger.debug("java.nio.ByteBuffer.cleaner(): available");
-        } catch (Throwable e) {
-            // We don't have ByteBuffer.cleaner().
-            fieldOffset = -1;
-            clean = null;
-            cleanerField = null;
+            logger.debug("java.nio.ByteBuffer.cleaner(): unavailable");
+            try {
+                final Object cleaner;
+                // If we have sun.misc.Unsafe we will use it as its faster then using reflection, otherwise let us try reflection as last resort.
+                final ByteBuffer direct = ByteBuffer.allocateDirect(1);
+                cleanerField = direct.getClass().getDeclaredField("cleaner");
+                cleanerField.setAccessible(true); // We need to make it accessible if we do not use Unsafe as we will access it via reflection.
 
-            if (logger.isDebugEnabled()) {
-                logger.warn("java.nio.ByteBuffer.cleaner(): unavailable", e);
+                fieldOffset = (Long) unsafeObjFieldOffset.invoke(BufferCleaner.UNSAFE, cleanerField);
+                cleaner = unsafeGetObject.invoke(BufferCleaner.UNSAFE, new Object[] { direct, fieldOffset });
+
+                clean = cleaner.getClass().getDeclaredMethod("clean");
+                clean.invoke(cleaner);
+                logger.debug("java.nio.ByteBuffer.cleaner(): available");
+            } catch (Throwable e) {
+                // We don't have ByteBuffer.cleaner().
+                fieldOffset = -1;
+                clean = null;
+                cleanerField = null;
+
+                if (logger.isDebugEnabled()) {
+                    logger.warn("java.nio.ByteBuffer.cleaner(): unavailable", e);
+                }
             }
         }
 
         CLEANER_FIELD = cleanerField;
         CLEANER_FIELD_OFFSET = fieldOffset;
         CLEAN_METHOD = clean;
+        UNSAFE_GET_OBJECT = unsafeGetObject;
     }
 
     static boolean isSupported() {
@@ -85,14 +103,18 @@ final class BufferCleanerJava6 extends BufferCleaner {
             if (CLEANER_FIELD_OFFSET == -1) {
                 cleaner = CLEANER_FIELD.get(buffer);
             } else {
-                cleaner = UNSAFE.getObject(buffer, CLEANER_FIELD_OFFSET);
+                cleaner = UNSAFE_GET_OBJECT.invoke(BufferCleaner.UNSAFE, new Object[] { buffer, CLEANER_FIELD_OFFSET });
             }
 
             if (cleaner != null) {
                 CLEAN_METHOD.invoke(cleaner);
             }
         } catch (Throwable e) {
-            UNSAFE.throwException(e);
+            try {
+                UNSAFE_THROW_METHOD.invoke(UNSAFE, e);
+            } catch (IllegalAccessException | InvocationTargetException ex) {
+                throw ExceptionUtils.toRuntime(e);
+            }
         }
     }
 }

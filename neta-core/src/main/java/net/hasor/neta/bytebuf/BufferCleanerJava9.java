@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import net.hasor.cobble.ExceptionUtils;
+
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -34,7 +36,7 @@ final class BufferCleanerJava9 extends BufferCleaner {
             try {
                 ByteBuffer buffer = ByteBuffer.allocateDirect(1);
                 // See https://bugs.openjdk.java.net/browse/JDK-8171377
-                method = UNSAFE.getClass().getDeclaredMethod("invokeCleaner", ByteBuffer.class);
+                method = UNSAFE_CLASS.getDeclaredMethod("invokeCleaner", ByteBuffer.class);
                 method.invoke(UNSAFE, buffer);
                 logger.debug("java.nio.ByteBuffer.cleaner(): available");
             } catch (NoSuchMethodException | InvocationTargetException | IllegalAccessException e) {
@@ -59,12 +61,14 @@ final class BufferCleanerJava9 extends BufferCleaner {
             return;
         }
 
-        // Try to minimize overhead when there is no SecurityManager present.
-        //    See https://bugs.openjdk.java.net/browse/JDK-8191053.
         try {
             INVOKE_CLEANER.invoke(UNSAFE, buffer);
         } catch (Throwable e) {
-            UNSAFE.throwException(e);
+            try {
+                UNSAFE_THROW_METHOD.invoke(UNSAFE, e);
+            } catch (IllegalAccessException | InvocationTargetException ex) {
+                throw ExceptionUtils.toRuntime(e);
+            }
         }
     }
 }

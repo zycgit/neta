@@ -15,10 +15,9 @@
  */
 package net.hasor.neta.bytebuf;
 import net.hasor.cobble.logging.Logger;
-import sun.misc.Unsafe;
 
 import java.lang.reflect.Field;
-import java.nio.Buffer;
+import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
 
 /**
@@ -28,96 +27,44 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 public abstract class BufferCleaner {
-    protected static final Logger logger = Logger.getLogger(BufferCleaner.class);
-    protected static final Unsafe UNSAFE;
+    protected static final Logger   logger = Logger.getLogger(BufferCleaner.class);
+    protected static final Object   UNSAFE;
+    protected static final Class<?> UNSAFE_CLASS;
+    protected static final Method   UNSAFE_THROW_METHOD;
 
     // ensure unsafe
     static {
-        Unsafe unsafe = null;
-        boolean storeFenceSupport = false;
-        boolean copyMemorySupport = false;
-        ByteBuffer direct = ByteBuffer.allocateDirect(1);
+        Object unsafe = null;
+        Class<?> unsafeClass = null;
+        Method throwMethod = null;
 
-        // We always want to try using Unsafe as the access still works on java9 as well and
-        // we need it for out native-transports and many optimizations.
         try {
-            Field unsafeField = Unsafe.class.getDeclaredField("theUnsafe");
+            unsafeClass = Class.forName("sun.misc.Unsafe");
+            Field unsafeField = unsafeClass.getDeclaredField("theUnsafe");
             unsafeField.setAccessible(true);
-            unsafe = (Unsafe) unsafeField.get(null);
-        } catch (NoSuchFieldException | IllegalAccessException | SecurityException e) {
+            unsafe = unsafeField.get(null);
+        } catch (NoSuchFieldException | IllegalAccessException | SecurityException | ClassNotFoundException e) {
             if (logger.isTraceEnabled()) {
-                logger.warn("sun.misc.Unsafe.copyMemory: unavailable", e);
+                logger.warn("sun.misc.Unsafe: unavailable", e);
             } else {
-                logger.info("sun.misc.Unsafe.copyMemory: unavailable: " + e.getMessage());
+                logger.info("sun.misc.Unsafe: unavailable: " + e.getMessage());
             }
         }
 
-        // ensure the unsafe supports all necessary methods to work around the mistake in the latest OpenJDK
-        // https://github.com/netty/netty/issues/1061
-        // https://www.mail-archive.com/jdk6-dev@openjdk.java.net/msg00698.html
-        if (unsafe != null) {
+        if (unsafeClass != null) {
             try {
-                unsafe.getClass().getDeclaredMethod("copyMemory", Object.class, long.class, Object.class, long.class, long.class);
-                copyMemorySupport = true;
-            } catch (NoSuchMethodException | SecurityException e) {
-                // Unsafe.copyMemory(Object, long, Object, long, long) unavailable.
-                copyMemorySupport = false;
+                throwMethod = unsafeClass.getMethod("throwException", Throwable.class);
+                throwMethod.setAccessible(true);
+            } catch (NoSuchMethodException e) {
                 if (logger.isTraceEnabled()) {
-                    logger.warn("sun.misc.Unsafe.copyMemory: unavailable", e);
+                    logger.warn("sun.misc.Unsafe: unsupport throwException", e);
                 } else {
-                    logger.info("sun.misc.Unsafe.copyMemory: unavailable: " + e.getMessage());
+                    logger.info("sun.misc.Unsafe: unsupport throwException: " + e.getMessage());
                 }
             }
         }
-
-        // ensure Unsafe::storeFence to be available: jdk < 8 shouldn't have it
-        if (unsafe != null) {
-            try {
-                unsafe.getClass().getDeclaredMethod("storeFence");
-                storeFenceSupport = true;
-                logger.debug("sun.misc.Unsafe.storeFence: available");
-            } catch (NoSuchMethodException | SecurityException e) {
-                storeFenceSupport = false;
-                if (logger.isTraceEnabled()) {
-                    logger.warn("sun.misc.Unsafe.storeFence: unavailable", e);
-                } else {
-                    logger.info("sun.misc.Unsafe.storeFence: unavailable: " + e.getMessage());
-                }
-            }
-        }
-
-        // test address
-        if (unsafe != null) {
-            Field addressField = null;
-            try {
-                Field field = Buffer.class.getDeclaredField("address");
-                // Use Unsafe to read value of the address field. This way it will not fail on JDK9+ which
-                // will forbid changing the access level via reflection.
-                long offset = unsafe.objectFieldOffset(field);
-                long address = unsafe.getLong(direct, offset);
-
-                // if direct really is a direct buffer, address will be non-zero
-                if (address == 0) {
-                    logger.debug("java.nio.Buffer.address: unavailable");
-                } else {
-                    addressField = field;
-                    logger.debug("java.nio.Buffer.address: available");
-                }
-            } catch (NoSuchFieldException | SecurityException e) {
-                if (logger.isTraceEnabled()) {
-                    logger.warn("java.nio.Buffer.address: unavailable", e);
-                } else {
-                    logger.info("java.nio.Buffer.address: unavailable: " + e.getMessage());
-                }
-            }
-
-            // If we cannot access the address of a direct buffer, there's no point of using unsafe.
-            // Let's just pretend unsafe is unavailable for overall simplicity.
-            if (addressField == null) {
-                unsafe = null;
-            }
-        }
-
+        UNSAFE_THROW_METHOD = throwMethod;
+        UNSAFE_CLASS = unsafeClass;
         UNSAFE = unsafe;
     }
 
