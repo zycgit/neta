@@ -16,8 +16,6 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.handler.PlayLoad;
-import net.hasor.neta.handler.PlayLoadListener;
 
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;

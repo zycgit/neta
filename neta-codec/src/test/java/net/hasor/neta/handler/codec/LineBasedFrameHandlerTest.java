@@ -19,7 +19,7 @@ import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.handler.ProtoHelper;
+import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
 
 import java.util.ArrayDeque;

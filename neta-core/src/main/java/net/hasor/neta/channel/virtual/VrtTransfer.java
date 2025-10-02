@@ -3,11 +3,7 @@ import net.hasor.cobble.CollectionUtils;
 import net.hasor.cobble.NumberUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.SimpleTask;
-import net.hasor.neta.channel.SoContextService;
-import net.hasor.neta.channel.SubscribeHolder;
-import net.hasor.neta.handler.PlayLoad;
+import net.hasor.neta.channel.*;
 
 import java.lang.reflect.Array;
 import java.net.SocketException;
@@ -144,9 +140,9 @@ public class VrtTransfer {
             if (playLoad.getData() instanceof ByteBuf) {
                 ByteBuf byteBuf = ((ByteBuf) playLoad.getData()).copy();
                 if (playLoad.isSuccess()) {
-                    p = PlayLoad.of(playLoad.getSource(), byteBuf, playLoad.isInbound(), playLoad.isOutbound());
+                    p = PlayLoadObject.of(playLoad.getSource(), byteBuf, playLoad.isInbound(), playLoad.isOutbound());
                 } else {
-                    p = PlayLoad.ofError(playLoad.getSource(), playLoad.getError(), playLoad.isInbound(), playLoad.isOutbound());
+                    p = PlayLoadObject.ofError(playLoad.getSource(), playLoad.getError(), playLoad.isInbound(), playLoad.isOutbound());
                 }
             }
 

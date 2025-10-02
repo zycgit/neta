@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.handler.PlayLoad;
-import net.hasor.neta.handler.PlayLoadListener;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -26,7 +24,7 @@ import java.util.function.Predicate;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public abstract class AttributeChannel<T> implements SoChannel<T> {
+public abstract class SoAttrChannel<T> implements SoChannel<T> {
     private final Map<String, Object> attributes = new HashMap<>();
 
     @Override

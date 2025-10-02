@@ -14,10 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.virtual;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.handler.*;
+import net.hasor.neta.channel.*;
 import org.junit.Test;
 
 import java.util.ArrayList;

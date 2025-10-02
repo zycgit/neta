@@ -13,20 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
-import net.hasor.neta.channel.ProtoContext;
+package net.hasor.neta.channel;
 
 /**
- * Used to represent a unidirectional data processor, two {@link ProtoDuplexerHandler}`s in opposite directions can to {@link ProtoDuplexer}
+ * Used to represent a unidirectional data processor, two {@link ProtoDuplexerHandlerWrap}`s in opposite directions can to {@link ProtoDuplexer}
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoDuplexer
  */
-public class ProtoDuplexerHandler<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
+class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     private final ProtoHandler<RCV_UP, RCV_DOWN> decoder;
     private final ProtoHandler<SND_UP, SND_DOWN> encoder;
 
-    public ProtoDuplexerHandler(ProtoHandler<RCV_UP, RCV_DOWN> decoder, ProtoHandler<SND_UP, SND_DOWN> encoder) {
+    ProtoDuplexerHandlerWrap(ProtoHandler<RCV_UP, RCV_DOWN> decoder, ProtoHandler<SND_UP, SND_DOWN> encoder) {
         this.decoder = decoder;
         this.encoder = encoder;
     }

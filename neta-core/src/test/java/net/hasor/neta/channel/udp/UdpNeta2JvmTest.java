@@ -22,9 +22,9 @@ import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.handler.ProtoHandler;
-import net.hasor.neta.handler.ProtoHelper;
-import net.hasor.neta.handler.ProtoStatus;
+import net.hasor.neta.channel.ProtoHandler;
+import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.ProtoStatus;
 import org.junit.Test;
 
 import java.io.IOException;

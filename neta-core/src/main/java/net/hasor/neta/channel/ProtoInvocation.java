@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoStack;
 
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -53,7 +51,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     private              ProtoQueue<RCV_DOWN>                              rcvDown;
     private              ProtoQueue<SND_DOWN>                              sndDown;
 
-    public ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler) {
+    ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler) {
         Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(handler, "handler is null.");
 

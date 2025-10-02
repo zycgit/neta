@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec.ssl;
-import net.hasor.neta.handler.ProtoConfig;
+import net.hasor.neta.channel.ProtoConfig;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.TrustManager;

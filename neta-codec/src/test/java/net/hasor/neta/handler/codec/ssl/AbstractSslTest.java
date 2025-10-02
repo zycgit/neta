@@ -20,10 +20,10 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.handler.ProtoHelper;
-import net.hasor.neta.handler.ProtoRcvQueue;
-import net.hasor.neta.handler.ProtoSndQueue;
-import net.hasor.neta.handler.ProtoStatus;
+import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.ProtoRcvQueue;
+import net.hasor.neta.channel.ProtoSndQueue;
+import net.hasor.neta.channel.ProtoStatus;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

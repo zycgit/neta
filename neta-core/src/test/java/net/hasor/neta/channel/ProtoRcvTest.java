@@ -13,11 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel;
 import net.hasor.cobble.StringUtils;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.SoException;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -30,7 +27,7 @@ import java.util.List;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class ProtoRcvErrTest extends AbstractStackTest {
+public class ProtoRcvTest extends AbstractStackTest {
     @Test
     public void nextTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
@@ -39,9 +36,9 @@ public class ProtoRcvErrTest extends AbstractStackTest {
         List<String> encoderFailedCnt = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextDuplex(errNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         // use VrtChannel test decoder/encoder
@@ -50,15 +47,13 @@ public class ProtoRcvErrTest extends AbstractStackTest {
 
         ArrayList<Object> input = new ArrayList<>();
         channel.subscribe(PlayLoad::isInbound, data -> {
-            input.add(data.getError());
+            input.add(data.getData());
         });
 
-        channel.onReceiveError(new SoException("Test"));
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrNext,3DecErrNext");
+        channel.onReceive(123); // RCV -> SND -> NET
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoNext,3DecDoNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
-        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert input.size() == 1 && ((Throwable) input.get(0)).getMessage().equals("Test");
+        assert input.size() == 1 && input.get(0).equals(123);
     }
 
     @Test
@@ -69,9 +64,9 @@ public class ProtoRcvErrTest extends AbstractStackTest {
         List<String> encoderFailedCnt = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .nextDuplex(errThrowHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv(Err)/snd +1
-                .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
+                .nextDuplex(doThrowHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv(Err)/snd +1
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .build();
 
         // use VrtChannel test decoder/encoder
@@ -83,12 +78,12 @@ public class ProtoRcvErrTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceiveError(new SoException("Test"));
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrThrow");
-        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
+        channel.onReceive(123); // RCV -> SND -> NET
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoThrow");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("2DecErrThrow,3DecErrNext");
+        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert input.isEmpty();
+        assert input.size() == 1 && input.get(0) instanceof IllegalArgumentException;
     }
 
     @Test
@@ -99,9 +94,9 @@ public class ProtoRcvErrTest extends AbstractStackTest {
         List<String> encoderFailedCnt = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex(errRetryHandler("2Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doRetryHandler("2Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         // use VrtChannel test decoder/encoder
@@ -110,15 +105,15 @@ public class ProtoRcvErrTest extends AbstractStackTest {
 
         ArrayList<Object> input = new ArrayList<>();
         channel.subscribe(PlayLoad::isInbound, data -> {
-            input.add(data.getError());
+            input.add(data.getData());
         });
 
-        channel.onReceiveError(new SoException("Test"));
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrRetry,2DecErrRetry,2DecErrRetry,3DecErrNext");
+        channel.onReceive(123); // RCV -> SND -> NET
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoRetry,2DecDoRetry,2DecDoRetry,3DecDoNext");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert input.size() == 1 && ((Throwable) input.get(0)).getMessage().equals("Test");
+        assert input.size() == 1 && input.get(0).equals(123);
     }
 
     @Test
@@ -129,9 +124,9 @@ public class ProtoRcvErrTest extends AbstractStackTest {
         List<String> encoderFailedCnt = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex(errExitHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doExitHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
+                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
                 .build();
 
         // use VrtChannel test decoder/encoder
@@ -140,12 +135,12 @@ public class ProtoRcvErrTest extends AbstractStackTest {
 
         ArrayList<Object> input = new ArrayList<>();
         channel.subscribe(PlayLoad::isInbound, data -> {
-            input.add(data.getError());
+            input.add(data.getData());
         });
 
-        channel.onReceiveError(new SoException("Test"));
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("1DecErrNext,2DecErrExit");
+        channel.onReceive(123); // RCV -> SND -> NET
+        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoExit");
+        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("2EncDoNext,1EncDoNext");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert input.isEmpty();

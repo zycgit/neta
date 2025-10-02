@@ -18,8 +18,8 @@ import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.SoConfig;
-import net.hasor.neta.handler.PlayLoad;
-import net.hasor.neta.handler.ProtoHelper;
+import net.hasor.neta.channel.PlayLoad;
+import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
 import net.hasor.neta.handler.codec.string.StringHandler;
 

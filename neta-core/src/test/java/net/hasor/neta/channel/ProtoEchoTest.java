@@ -13,16 +13,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoInitializer;
+package net.hasor.neta.channel;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.handler.frames.TypeFrame;
-import net.hasor.neta.handler.frames.TypeRequest;
-import net.hasor.neta.handler.frames.TypeResponse;
+import net.hasor.neta.channel.frames.TypeFrame;
+import net.hasor.neta.channel.frames.TypeRequest;
+import net.hasor.neta.channel.frames.TypeResponse;
 import org.junit.Test;
 
 import java.util.ArrayDeque;

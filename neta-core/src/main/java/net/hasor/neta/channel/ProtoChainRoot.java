@@ -13,11 +13,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
 
 import java.util.ArrayList;
 import java.util.LinkedList;
@@ -37,7 +36,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     private final        ProtoQueue<Object>                headSndUp;
     private              long                              channelID;
 
-    public ProtoChainRoot(ProtoConfig protoConf) {
+    ProtoChainRoot(ProtoConfig protoConf) {
         this.layers = new ArrayList<>();
 
         int rcvSize = protoConf.getRcvDownSlotSize();
@@ -290,7 +289,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         ProtoQueue<?> rcvDown = this.layers.get(this.layers.size() - 1).getRcvDown();
         if (rcvDown.hasMore()) {
             while (rcvDown.hasMore()) {
-                PlayLoad playLoad = PlayLoad.of(protoCtx.getChannel(), rcvDown.takeMessage(), true, false);
+                PlayLoad playLoad = PlayLoadObject.of(protoCtx.getChannel(), rcvDown.takeMessage(), true, false);
                 ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
             }
             rcvDown.rcvSubmit();
@@ -299,7 +298,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         // 2st onError
         Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            PlayLoad playLoad = PlayLoad.ofError(protoCtx.getChannel(), ctxError, true, false);
+            PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, true, false);
             ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
         }
     }
@@ -308,7 +307,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         // 1st onReceive
         if (sndData != null) {
             for (Object obj : sndData) {
-                PlayLoad playLoad = PlayLoad.of(protoCtx.getChannel(), obj, true, false);
+                PlayLoad playLoad = PlayLoadObject.of(protoCtx.getChannel(), obj, true, false);
                 ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
             }
         }
@@ -316,7 +315,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
         // 2st onError
         Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
         if (ctxError != null) {
-            PlayLoad playLoad = PlayLoad.ofError(protoCtx.getChannel(), ctxError, true, false);
+            PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, true, false);
             ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
         }
         return EMPTY;
@@ -451,7 +450,7 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
     private void triggerSend(ProtoContext protoCtx) {
         Throwable ctxError = protoCtx.flash(ProtoInvocation.SND_ERROR_TAG);
         if (ctxError != null) {
-            PlayLoad playLoad = PlayLoad.ofError(protoCtx.getChannel(), ctxError, false, true);
+            PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, false, true);
             ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
         }
     }

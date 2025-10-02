@@ -15,9 +15,7 @@
  */
 package net.hasor.neta.handler.codec.ssl;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.SoChannel;
-import net.hasor.neta.handler.*;
+import net.hasor.neta.channel.*;
 
 import java.io.IOException;
 import java.util.Objects;

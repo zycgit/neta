@@ -21,7 +21,7 @@ import net.hasor.cobble.function.Callable;
 import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.handler.ProtoHelper;
+import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;

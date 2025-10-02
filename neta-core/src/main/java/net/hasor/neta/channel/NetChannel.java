@@ -36,7 +36,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class NetChannel extends AttributeChannel<NetChannel> implements SoChannel<NetChannel> {
+public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<NetChannel> {
     private static final Logger              logger = Logger.getLogger(NetChannel.class);
     protected final      AsyncChannel        asyncChannel;
     protected final      NetListen           forListen;

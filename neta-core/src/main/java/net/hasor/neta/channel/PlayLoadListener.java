@@ -13,22 +13,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoHandler;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
-import net.hasor.neta.channel.ProtoStatus;
-
+package net.hasor.neta.channel;
 /**
- * Transparent conveyor belt.
+ * on event
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version : 2023-10-20
  */
-public class TransparentProtoHandler<T> implements ProtoHandler<T, T> {
-    @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<T> src, ProtoSndQueue<T> dst) {
-        dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return ProtoStatus.Next;
-    }
+@FunctionalInterface
+public interface PlayLoadListener extends java.util.EventListener {
+    /**
+     * on event
+     * @param data event data
+     */
+    void onEvent(PlayLoad data);
 }

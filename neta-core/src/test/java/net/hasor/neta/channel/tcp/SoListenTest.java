@@ -18,7 +18,7 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.channel.NetListen;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.handler.ProtoHelper;
+import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;

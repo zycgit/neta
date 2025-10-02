@@ -71,7 +71,7 @@ public class ProtoContextService implements ProtoContext {
         return attachment;
     }
 
-    public void clearFlash() {
+    void clearFlash() {
         this.flash.clear();
     }
 

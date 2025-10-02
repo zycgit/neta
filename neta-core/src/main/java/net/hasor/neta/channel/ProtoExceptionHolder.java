@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel;
 /**
  * Gets called if a Throwable was thrown.
  * @author 赵永春 (zyc@hasor.net)

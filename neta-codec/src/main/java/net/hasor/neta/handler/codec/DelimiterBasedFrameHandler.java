@@ -16,10 +16,10 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.handler.ProtoHandler;
-import net.hasor.neta.handler.ProtoRcvQueue;
-import net.hasor.neta.handler.ProtoSndQueue;
-import net.hasor.neta.handler.ProtoStatus;
+import net.hasor.neta.channel.ProtoHandler;
+import net.hasor.neta.channel.ProtoRcvQueue;
+import net.hasor.neta.channel.ProtoSndQueue;
+import net.hasor.neta.channel.ProtoStatus;
 
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;

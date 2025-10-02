@@ -16,9 +16,9 @@
 package net.hasor.neta.channel.virtual;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.handler.PlayLoad;
-import net.hasor.neta.handler.ProtoHelper;
-import net.hasor.neta.handler.ProtoStatus;
+import net.hasor.neta.channel.PlayLoad;
+import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.ProtoStatus;
 import org.junit.Test;
 
 import java.util.ArrayList;

@@ -16,9 +16,7 @@
 package net.hasor.neta.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.handler.*;
+import net.hasor.neta.channel.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;

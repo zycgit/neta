@@ -13,8 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
-import net.hasor.neta.channel.ProtoContext;
+package net.hasor.neta.channel;
 
 /**
  * {@link ProtoDuplexer} is a Duplexer handler, The data flow direction is identified by the isRcv parameter.

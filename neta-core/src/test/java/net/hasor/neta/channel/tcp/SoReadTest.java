@@ -20,7 +20,6 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.handler.*;
 import org.junit.Test;
 
 import java.io.InputStream;

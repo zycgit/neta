@@ -13,17 +13,38 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel.frames;
 /**
- * on event
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-10-20
+ * @version : 2022-11-01
  */
-@FunctionalInterface
-public interface PlayLoadListener extends java.util.EventListener {
-    /**
-     * on event
-     * @param data event data
-     */
-    void onEvent(PlayLoad data);
+public class TypeFrame {
+    private String header;
+    private String message;
+
+    public TypeFrame(String header, String message) {
+        this.header = header;
+        this.message = message;
+    }
+
+    public String getHeader() {
+        return this.header;
+    }
+
+    public void setHeader(String header) {
+        this.header = header;
+    }
+
+    public String getMessage() {
+        return this.message;
+    }
+
+    public void setMessage(String message) {
+        this.message = message;
+    }
+
+    @Override
+    public String toString() {
+        return "TypeFrame{'" + message + "'}";
+    }
 }

@@ -21,10 +21,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.channel.udp.UdpSoConfig;
-import net.hasor.neta.handler.ProtoHandler;
-import net.hasor.neta.handler.ProtoRcvQueue;
-import net.hasor.neta.handler.ProtoSndQueue;
-import net.hasor.neta.handler.ProtoStatus;
 
 import java.io.IOException;
 import java.io.InputStream;

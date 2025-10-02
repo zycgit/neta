@@ -15,8 +15,6 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.neta.handler.PlayLoad;
-import net.hasor.neta.handler.PlayLoadListener;
 
 import java.net.SocketAddress;
 import java.util.function.Predicate;

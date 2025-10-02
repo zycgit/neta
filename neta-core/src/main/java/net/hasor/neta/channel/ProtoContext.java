@@ -16,8 +16,6 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.handler.ProtoDuplexer;
-import net.hasor.neta.handler.ProtoHandler;
 
 import java.io.IOException;
 
@@ -40,6 +38,11 @@ public interface ProtoContext {
 
     /** the SoContext */
     SoContext getSoContext();
+
+    //    void addFirst();
+    //    void addLast();
+    //    void addBefore();
+    //    void addAfter();
 
     /**
      * Returns the name of the current protocol stack name.

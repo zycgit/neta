@@ -13,10 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
+package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoStack;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -83,7 +81,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(decoder, "decoder is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
 
-            ProtoDuplexerHandler<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> handler = new ProtoDuplexerHandler<>(decoder, encoder);
+            ProtoDuplexerHandlerWrap<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> handler = new ProtoDuplexerHandlerWrap<>(decoder, encoder);
             this.taskAppend.add(chainRoot -> {
                 chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, handler));
             });
@@ -96,7 +94,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(decoder, "decoder is null.");
 
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, new DecoderDuplexWrap<>(decoder)));
+                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoDecoderDuplexWrap<>(decoder)));
             });
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
@@ -107,7 +105,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(encoder, "encoder is null.");
 
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, new EncoderDuplexWrap<>(encoder)));
+                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoEncoderDuplexWrap<>(encoder)));
             });
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
@@ -119,90 +117,6 @@ public final class ProtoHelper {
                 consumer.accept(root);
             }
             return (ProtoStack<T>) root;
-        }
-    }
-
-    private static class DecoderDuplexWrap<RCV_UP, RCV_DOWN, SND> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND, SND> {
-        private final ProtoHandler<RCV_UP, RCV_DOWN> decoder;
-
-        public DecoderDuplexWrap(ProtoHandler<RCV_UP, RCV_DOWN> decoder) {
-            this.decoder = decoder;
-        }
-
-        @Override
-        public void onInit(ProtoContext context) throws Throwable {
-            this.decoder.onInit(context);
-        }
-
-        @Override
-        public void onActive(ProtoContext context) throws Throwable {
-            this.decoder.onActive(context);
-        }
-
-        @Override
-        public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<RCV_UP> rcvUp, ProtoSndQueue<RCV_DOWN> rcvDown, ProtoRcvQueue<SND> sndUp, ProtoSndQueue<SND> sndDown) throws Throwable {
-            if (isRcv) {
-                return this.decoder.onMessage(context, rcvUp, rcvDown);
-            } else {
-                sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
-                return ProtoStatus.Next;
-            }
-        }
-
-        @Override
-        public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-            if (isRcv) {
-                return this.decoder.onError(context, e, eh);
-            } else {
-                return ProtoStatus.Next;
-            }
-        }
-
-        @Override
-        public void onClose(ProtoContext context) {
-            this.decoder.onClose(context);
-        }
-    }
-
-    private static class EncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV, RCV, SND_UP, SND_DOWN> {
-        private final ProtoHandler<SND_UP, SND_DOWN> encoder;
-
-        public EncoderDuplexWrap(ProtoHandler<SND_UP, SND_DOWN> encoder) {
-            this.encoder = encoder;
-        }
-
-        @Override
-        public void onInit(ProtoContext context) throws Throwable {
-            this.encoder.onInit(context);
-        }
-
-        @Override
-        public void onActive(ProtoContext context) throws Throwable {
-            this.encoder.onActive(context);
-        }
-
-        @Override
-        public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<RCV> rcvUp, ProtoSndQueue<RCV> rcvDown, ProtoRcvQueue<SND_UP> sndUp, ProtoSndQueue<SND_DOWN> sndDown) throws Throwable {
-            if (isRcv) {
-                rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
-                return ProtoStatus.Next;
-            } else {
-                return this.encoder.onMessage(context, sndUp, sndDown);
-            }
-        }
-
-        @Override
-        public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-            if (isRcv) {
-                return ProtoStatus.Next;
-            } else {
-                return this.encoder.onError(context, e, eh);
-            }
-        }
-
-        @Override
-        public void onClose(ProtoContext context) {
-            this.encoder.onClose(context);
         }
     }
 }

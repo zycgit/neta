@@ -13,16 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler.frames;
+package net.hasor.neta.channel.frames;
 /**
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
-public class TypeFrame {
+public class TypeRequest {
     private String header;
     private String message;
 
-    public TypeFrame(String header, String message) {
+    public TypeRequest(String header, String message) {
         this.header = header;
         this.message = message;
     }
@@ -45,6 +45,6 @@ public class TypeFrame {
 
     @Override
     public String toString() {
-        return "TypeFrame{'" + message + "'}";
+        return "TypeRequest{'" + message + "'}";
     }
 }

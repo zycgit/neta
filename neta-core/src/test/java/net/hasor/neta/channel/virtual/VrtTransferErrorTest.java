@@ -16,7 +16,7 @@
 package net.hasor.neta.channel.virtual;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.handler.ProtoHelper;
+import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
 
 import java.net.SocketException;

@@ -26,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public abstract class NetListen extends AttributeChannel<NetListen> {
+public abstract class NetListen extends SoAttrChannel<NetListen> {
     protected final  AsyncServerChannel channel;
     //
     protected final  AtomicBoolean      closeStatus;

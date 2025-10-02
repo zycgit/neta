@@ -13,15 +13,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.handler;
-import net.hasor.neta.channel.SoChannel;
+package net.hasor.neta.channel;
 
 /**
  * A message data in the message bus
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
-class PlayLoadObject implements PlayLoad {
+public class PlayLoadObject implements PlayLoad {
     private final boolean      success;
     private final Object       data;
     private final Throwable    error;
@@ -36,6 +35,26 @@ class PlayLoadObject implements PlayLoad {
         this.source = source;
         this.inbound = inbound;
         this.outbound = outbound;
+    }
+
+    /**
+     * Creates a successful payload with the specified source channel and data.
+     * @param source the originating SoChannel
+     * @param data the message data
+     * @return a new PlayLoad instance containing the data
+     */
+    public static PlayLoad of(SoChannel<?> source, Object data, boolean inbound, boolean outbound) {
+        return new PlayLoadObject(data, null, source, inbound, outbound);
+    }
+
+    /**
+     * Creates an error payload with the specified source channel and error.
+     * @param source the originating SoChannel
+     * @param data the error information
+     * @return a new PlayLoad instance containing the error
+     */
+    public static PlayLoad ofError(SoChannel<?> source, Throwable data, boolean inbound, boolean outbound) {
+        return new PlayLoadObject(null, data, source, inbound, outbound);
     }
 
     @Override

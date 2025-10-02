@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.handler.codec.ssl;
-import net.hasor.neta.handler.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoDuplexer;
 
 /**
  * A status for {@link ProtoDuplexer}
