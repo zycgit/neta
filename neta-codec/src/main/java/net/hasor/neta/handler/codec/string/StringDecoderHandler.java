@@ -62,6 +62,6 @@ public class StringDecoderHandler implements ProtoHandler<ByteBuf, String> {
                 hasAny = true;
             }
         }
-        return hasAny ? ProtoStatus.Next : ProtoStatus.Skip;
+        return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
     }
 }

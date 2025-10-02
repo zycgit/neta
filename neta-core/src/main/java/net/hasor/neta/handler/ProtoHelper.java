@@ -145,7 +145,7 @@ public final class ProtoHelper {
                 return this.decoder.onMessage(context, rcvUp, rcvDown);
             } else {
                 sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
-                return sndUp.hasMore() && !sndDown.hasSlot() ? ProtoStatus.Back : ProtoStatus.Next;
+                return ProtoStatus.Next;
             }
         }
 
@@ -185,7 +185,7 @@ public final class ProtoHelper {
         public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<RCV> rcvUp, ProtoSndQueue<RCV> rcvDown, ProtoRcvQueue<SND_UP> sndUp, ProtoSndQueue<SND_DOWN> sndDown) throws Throwable {
             if (isRcv) {
                 rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
-                return rcvUp.hasMore() && !rcvDown.hasSlot() ? ProtoStatus.Back : ProtoStatus.Next;
+                return ProtoStatus.Next;
             } else {
                 return this.encoder.onMessage(context, sndUp, sndDown);
             }

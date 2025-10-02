@@ -44,73 +44,13 @@ public enum ProtoStatus {
     Retry,
 
     /**
-     * restart when protocol stack finished.
-     * <p>If the protocol stack is Interrupt, it will not be restarted</p>
-     * <pre>
-     * ╭──────────────────────────────────────────────╮
-     * │  ┏━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━┓         ┏━┷━━━━━━━━━━━┓
-     * ┕> ┃ Handler (0) ┃ > ┃ Handler (1) ┃ > ... > ┃ Handler (2) ┃ > ...
-     *    ┗━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━┛
-     *         Next              Again                   Next
-     * </pre>
-     */
-    Again,
-
-    /**
-     * restarted from the current node after protocol stack finished.
-     * <p>If the protocol stack is Interrupt, it will not be restarted</p>
-     * <pre>
-     *                  ╭────────────────────────────╮
-     *  ┏━━━━━━━━━━━━━┓ │  ┏━━━━━━━━━━━━━┓         ┏━┷━━━━━━━━━━━┓
-     *  ┃ Handler (0) ┃ ┷> ┃ Handler (1) ┃ > ... > ┃ Handler (2) ┃ > ...
-     *  ┗━━━━━━━━━━━━━┛    ┗━━━━━━━━━━━━━┛         ┗━━━━━━━━━━━━━┛
-     *       Next               Back                    Next
-     * </pre>
-     */
-    Back,
-
-    /**
-     * Interrupt the protocol stack event propagation and restarted of the protocol stack.
-     * <pre>
-     * ╭──────────────────────╮
-     * │  ┏━━━━━━━━━━━━━┓   ┏━┷━━━━━━━━━━━┓   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄╮
-     * ┕> ┃ Handler (0) ┃ > ┃ Handler (1) ┃ > ┆ Handler (2) ┆ > ...
-     *    ┗━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
-     *         Next             Restart            Skip
-     * </pre>
-     */
-    Restart,
-
-    /**
      * Interrupt protocol stack event propagation, and Skip all the following {@link ProtoDuplexer}
      * <pre>
      *     ┏━━━━━━━━━━━━━┓   ╭┄┄┄┄┄┄┄┄┄┄┄┄┄╮   ┌┄┄┄┄┄┄┄┄┄┄┄┄┄╮
      * ... ┃ Handler (0) ┃ > ┆ Handler (1) ┆ > ┆ Handler (2) ┆ > end
      *     ┗━━━━━━━━━━━━━┛   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯   ╰┄┄┄┄┄┄┄┄┄┄┄┄┄╯
-     *          Exit              Skip              Skip
+     *          Stop              Skip              Skip
      * </pre>
      */
-    Skip,
-
-    /**
-     * Interrupt protocol stack event propagation, and throw Error
-     * <pre>
-     *     ┏━━━━━━━━━━━━━┓
-     * ... ┃ Handler (0) ┃ > Throw Error
-     *     ┗━━━━━━━━━━━━━┛
-     *        Interrupt
-     * </pre>
-     */
-    Interrupt,
-
-    /**
-     * Interrupt protocol stack event propagation, and close socket channel.
-     * <pre>
-     *     ┏━━━━━━━━━━━━━┓
-     * ... ┃ Handler (0) ┃ > interrupt and close socket.
-     *     ┗━━━━━━━━━━━━━┛
-     *         Close
-     * </pre>
-     */
-    Close,
+    Stop,
 }

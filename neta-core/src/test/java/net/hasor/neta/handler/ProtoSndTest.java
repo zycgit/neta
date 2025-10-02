@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.handler;
 import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.virtual.VrtChannel;
@@ -25,7 +24,6 @@ import org.junit.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -121,96 +119,6 @@ public class ProtoSndTest extends AbstractStackTest {
     }
 
     @Test
-    public void againTest_1() throws Throwable {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build();
-
-        // use VrtChannel test decoder/encoder
-        NetManager neta = new NetManager();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
-
-        ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
-            output.add(data.getData());
-        });
-
-        channel.sendData(123);// SND -> NET
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
-        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain,3EncDoNext,2EncDoNext,1EncDoAgain");
-        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert output.size() == 1 && output.get(0).equals(123);
-    }
-
-    @Test
-    public void againTest_2() throws Throwable {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doAgainHandler("1Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRetryHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build();
-
-        // use VrtChannel test decoder/encoder
-        NetManager neta = new NetManager();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
-
-        ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
-            output.add(data.getData());
-        });
-
-        channel.sendData(123);// SND -> NET
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
-        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain,3EncDoNext,2EncDoRetry,2EncDoRetry,2EncDoRetry,1EncDoAgain");
-        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert output.size() == 1 && output.get(0).equals(123);
-    }
-
-    @Test
-    public void restartTest_1() throws Throwable {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doRestartHandler("2Enc", encoderFinishCnt, encoderFailedCnt, 2))//
-                .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build();
-
-        // use VrtChannel test decoder/encoder
-        NetManager neta = new NetManager();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
-
-        ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
-            output.add(data.getData());
-        });
-
-        channel.sendData(123);// SND -> NET
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
-        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,3EncDoNext,2EncDoRestart,1EncDoNext");
-        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert output.size() == 1 && output.get(0).equals(123);
-    }
-
-    @Test
     public void exitTest_1() throws Throwable {
         List<String> decoderFinishCnt = new ArrayList<>();
         List<String> decoderFailedCnt = new ArrayList<>();
@@ -238,69 +146,5 @@ public class ProtoSndTest extends AbstractStackTest {
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoExit");
         assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
         assert output.isEmpty();
-    }
-
-    @Test
-    public void interruptTest_1() throws Throwable {
-        List<String> decoderFinishCnt = new ArrayList<>();
-        List<String> decoderFailedCnt = new ArrayList<>();
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextDuplex("L1", doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex("L2", doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doInterruptHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                .nextDuplex("L3", doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build();
-
-        // use VrtChannel test decoder/encoder
-        NetManager neta = new NetManager();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
-
-        ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
-            output.add(data.getError());
-        });
-
-        Future<?> future = channel.sendData(123);
-        assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
-        assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
-        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoInterrupt");
-        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert output.isEmpty() && future.getCause().getMessage().equals("Interrupted by L2");
-    }
-
-    @Test
-    public void blackTest_1() throws Throwable {
-        List<String> encoderFinishCnt = new ArrayList<>();
-        List<String> encoderFailedCnt = new ArrayList<>();
-
-        ProtoInitializer initializer = ctx -> {
-            ProtoConfig protoConf1 = new ProtoConfig();
-            protoConf1.setRcvDownSlotSize(3);
-            protoConf1.setSndUpSlotSize(3);
-
-            ProtoConfig protoConf2 = new ProtoConfig();
-            protoConf2.setRcvDownSlotSize(2);
-            protoConf2.setSndUpSlotSize(2);
-            return ProtoHelper.typed(Integer.class, Integer.class)//
-                    .nextEncoder("COPY1", protoConf1, doCopyUsingBlackHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
-                    .nextEncoder("COPY2", protoConf2, doCopyUsingBlackHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
-                    .build();
-        };
-
-        // use VrtChannel test decoder/encoder
-        NetManager neta = new NetManager();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
-
-        ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
-            output.add(data.getData());
-        });
-
-        channel.sendData(new Object[] { 1, 2, 3 }); // RCV -> SND -> NET
-        assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("2EncDoBack,1EncDoNext,2EncDoNext,1EncDoNext");
-        assert StringUtils.join(encoderFailedCnt.toArray(), ",").equals("");
-        assert output.size() == 3 && Objects.deepEquals(output.toArray(), new Object[] { 1, 2, 3 });
     }
 }

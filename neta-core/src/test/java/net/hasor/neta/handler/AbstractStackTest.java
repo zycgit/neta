@@ -27,80 +27,12 @@ public class AbstractStackTest {
 
                 dst.offerMessage(src.takeMessage(src.queueSize()));
 
-                return ProtoStatus.Skip;
+                return ProtoStatus.Stop;
             }
 
             @Override
             public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 recordFailed.add(tag + "ErrExit");
-                return ProtoStatus.Next;
-            }
-        };
-    }
-
-    protected static ProtoHandler<Integer, Integer> doRestartHandler(String tag, List<String> recordFinish, List<String> recordFailed, int restartCnt) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                recordFinish.add(tag + "DoRestart");
-
-                Integer restart = context.flash("restartCnt");
-                if (restart == null) {
-                    restart = restartCnt;
-                } else {
-                    restart--;
-                }
-
-                dst.offerMessage(src.takeMessage(src.queueSize()));
-
-                context.flash("restartCnt", restart);
-
-                if (restart > 0) {
-                    return ProtoStatus.Restart;
-                } else {
-                    context.flash("restartCnt", null);
-                    return ProtoStatus.Next;
-                }
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrRestart");
-
-                return ProtoStatus.Next;
-            }
-        };
-    }
-
-    protected static ProtoHandler<Integer, Integer> doAgainHandler(String tag, List<String> recordFinish, List<String> recordFailed, int againCnt) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                recordFinish.add(tag + "DoAgain");
-
-                Integer again = context.flash("againCnt");
-                if (again == null) {
-                    again = againCnt;
-                } else {
-                    again--;
-                }
-
-                dst.offerMessage(src.takeMessage(src.queueSize()));
-
-                context.flash("againCnt", again);
-
-                if (again > 0) {
-                    return ProtoStatus.Again;
-                } else {
-                    context.flash("againCnt", null);
-                    return ProtoStatus.Next;
-                }
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrAgain");
-
                 return ProtoStatus.Next;
             }
         };
@@ -178,25 +110,6 @@ public class AbstractStackTest {
         };
     }
 
-    protected static ProtoHandler<Integer, Integer> doInterruptHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                recordFinish.add(tag + "DoInterrupt");
-
-                dst.offerMessage(src.takeMessage(src.queueSize()));
-                return ProtoStatus.Interrupt;
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrInterrupt");
-
-                return ProtoStatus.Next;
-            }
-        };
-    }
-
     protected static ProtoHandler<Integer, Integer> errExitHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
@@ -209,71 +122,7 @@ public class AbstractStackTest {
             @Override
             public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
                 recordFailed.add(tag + "ErrExit");
-                return ProtoStatus.Skip;
-            }
-        };
-    }
-
-    protected static ProtoHandler<Integer, Integer> errRestartHandler(String tag, List<String> recordFinish, List<String> recordFailed, int restartCnt) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                recordFinish.add(tag + "DoRestart");
-                dst.offerMessage(src.takeMessage(src.queueSize()));
-                return ProtoStatus.Next;
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrRestart");
-
-                Integer restart = context.flash("restartCnt");
-                if (restart == null) {
-                    restart = restartCnt;
-                } else {
-                    restart--;
-                }
-
-                context.flash("restartCnt", restart);
-
-                if (restart > 0) {
-                    return ProtoStatus.Restart;
-                } else {
-                    context.flash("restartCnt", null);
-                    return ProtoStatus.Next;
-                }
-            }
-        };
-    }
-
-    protected static ProtoHandler<Integer, Integer> errAgainHandler(String tag, List<String> recordFinish, List<String> recordFailed, int againCnt) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                recordFinish.add(tag + "DoAgain");
-                dst.offerMessage(src.takeMessage(src.queueSize()));
-                return ProtoStatus.Next;
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrAgain");
-
-                Integer again = context.flash("againCnt");
-                if (again == null) {
-                    again = againCnt;
-                } else {
-                    again--;
-                }
-
-                context.flash("againCnt", again);
-
-                if (again > 0) {
-                    return ProtoStatus.Again;
-                } else {
-                    context.flash("againCnt", null);
-                    return ProtoStatus.Next;
-                }
+                return ProtoStatus.Stop;
             }
         };
     }
@@ -346,25 +195,6 @@ public class AbstractStackTest {
         };
     }
 
-    protected static ProtoHandler<Integer, Integer> errInterruptHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                recordFinish.add(tag + "DoInterrupt");
-
-                dst.offerMessage(src.takeMessage(src.queueSize()));
-                return ProtoStatus.Next;
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrInterrupt");
-
-                return ProtoStatus.Interrupt;
-            }
-        };
-    }
-
     protected static ProtoHandler<Integer, Integer> doCopyHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
@@ -414,30 +244,6 @@ public class AbstractStackTest {
                 }
             }
             return ProtoStatus.Next;
-        };
-    }
-
-    protected static ProtoHandler<Integer, Integer> doCopyUsingBlackHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-
-                if (src.hasMore() && !dst.hasSlot()) {
-                    recordFinish.add(tag + "DoBack");
-                    return ProtoStatus.Back;
-                } else {
-                    recordFinish.add(tag + "DoNext");
-                    return ProtoStatus.Next;
-                }
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrNext");
-
-                return ProtoStatus.Next;
-            }
         };
     }
 }

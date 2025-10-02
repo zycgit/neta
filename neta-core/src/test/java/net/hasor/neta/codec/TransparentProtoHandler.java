@@ -29,6 +29,6 @@ public class TransparentProtoHandler<T> implements ProtoHandler<T, T> {
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<T> src, ProtoSndQueue<T> dst) {
         dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
-        return src.hasMore() && !dst.hasSlot() ? ProtoStatus.Back : ProtoStatus.Next;
+        return ProtoStatus.Next;
     }
 }

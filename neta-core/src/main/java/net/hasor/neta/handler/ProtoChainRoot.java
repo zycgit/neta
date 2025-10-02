@@ -177,19 +177,6 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                 throw new IllegalStateException("return status missing.");
             }
 
-            if (status == ProtoStatus.Interrupt) {
-                String errorTag = isRcv ? ProtoInvocation.RCV_ERROR_TAG : ProtoInvocation.SND_ERROR_TAG;
-                Throwable ctxError = protoCtx.flash(errorTag);
-                throw ctxError != null ? ctxError : new InterruptedException("Interrupted by " + layer.getName());
-            }
-
-            if (status == ProtoStatus.Close) {
-                protoCtx.getChannel().close();
-                String errorTag = isRcv ? ProtoInvocation.RCV_ERROR_TAG : ProtoInvocation.SND_ERROR_TAG;
-                Throwable ctxError = protoCtx.flash(errorTag);
-                throw ctxError != null ? ctxError : new InterruptedException("Interrupted by " + layer.getName());
-            }
-
             if (status == ProtoStatus.Retry && netLog) {
                 this.printLog(isRcv, "Stack " + i + "/" + this.layers.size() + " doRetry");
             }
@@ -353,41 +340,11 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
                     case Next:
-                    case Back:
                         // only the complete ProtoStack will fire triggerRcv
                         callFinish = (i == this.layers.size() - 1);
-
-                        if (status == ProtoStatus.Back) {
-                            if (backTo == -1) {
-                                backTo = i;
-                                if (netLog) {
-                                    this.printLog(true, "stack '" + stackName + "' request Back.");
-                                }
-                            } else {
-                                String backToName = this.layers.get(backTo).getName();
-                                if (netLog) {
-                                    this.printLog(true, "stack '" + stackName + "' request Back, has been set to '" + backToName + "'");
-                                }
-                            }
-                        }
-
                         i++;
                         continue;
-                    case Again:
-                        needRestartLater = true;// restart when finished
-                        if (netLog) {
-                            this.printLog(true, "stack '" + stackName + "' require Again");
-                        }
-                        i++;
-                        continue;
-                    case Restart:
-                        needRestartLater = true;
-                        if (netLog) {
-                            this.printLog(true, "stack '" + stackName + "' require Restart");
-                        }
-                        i++;
-                        break;
-                    case Skip:
+                    case Stop:
                         callFinish = false;
                         if (netLog) {
                             this.printLog(true, "stack '" + stackName + "' require Exit");
@@ -520,34 +477,8 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
                 switch (status) {
                     case Retry: // <-- can't happen, The Retry has been processed at doLayer
                     case Next:
-                    case Back:
-                        if (status == ProtoStatus.Back) {
-                            if (backTo == -1) {
-                                backTo = i;
-                                if (netLog) {
-                                    this.printLog(false, "stack '" + stackName + "' require Back to '" + backTo + "'");
-                                }
-                            } else {
-                                if (netLog) {
-                                    this.printLog(false, "stack '" + stackName + "' Back has been set to '" + backTo + "'");
-                                }
-                            }
-                        }
                         break;
-                    case Again:
-                        needRestartLater = true;// restart when finished
-                        if (netLog) {
-                            this.printLog(false, "stack '" + stackName + "' require Again");
-                        }
-                        break;
-                    case Restart:
-                        needRestartLater = true;
-                        breakFor = true;
-                        if (netLog) {
-                            this.printLog(false, "stack '" + stackName + "' require Restart");
-                        }
-                        break;
-                    case Skip:
+                    case Stop:
                         breakFor = true;
                         if (netLog) {
                             this.printLog(false, "stack '" + stackName + "' require Exit");
