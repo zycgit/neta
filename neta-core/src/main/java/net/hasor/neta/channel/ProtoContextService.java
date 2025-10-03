@@ -27,13 +27,13 @@ import java.util.Map;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class ProtoContextService implements ProtoContext {
+class ProtoContextService implements ProtoContext {
     private final SoChannel<?>          channel;
     private final SoContext             soContext;
     private final Map<Class<?>, Object> contextData;
     private final Map<String, Object>   flash;
 
-    protected ProtoContextService(SoChannel<?> channel, SoContext soContext) {
+    ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
         this.soContext = soContext;
         this.contextData = new HashMap<>();

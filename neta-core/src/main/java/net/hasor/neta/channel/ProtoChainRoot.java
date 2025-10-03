@@ -80,11 +80,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             try {
                 ProtoInvocation<?, ?, ?, ?> layer = this.layers.get(i);
                 protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, layer.getName());
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, i);
                 layer.onInit(protoCtx);
             } finally {
                 protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, null);
             }
         }
     }
@@ -95,11 +93,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
             try {
                 ProtoInvocation<?, ?, ?, ?> layer = this.layers.get(i);
                 protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, layer.getName());
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, i);
                 layer.onActive(protoCtx);
             } finally {
                 protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, null);
             }
         }
     }
@@ -165,11 +161,9 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
 
             try {
                 protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, layer.getName());
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, i);
                 status = layer.doLayer(protoCtx, isRcv, useRcvUp, useSndUp);
             } finally {
                 protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_DEPTH, null);
             }
 
             if (status == null) {
@@ -323,38 +317,34 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
 
     private ProtoResult doRcvStack(final ProtoContext protoCtx, int depth) throws Throwable {
         boolean netLog = protoCtx.getConfig().isPrintLog();
-        boolean needRestartLater;
         boolean callFinish;
         int i;
         int backTo = -1;
 
-        do {
-            needRestartLater = false;
-            callFinish = false;
-            i = depth;
+        callFinish = false;
+        i = depth;
 
-            while (i < this.layers.size()) {
-                String stackName = this.layers.get(i).getName();
-                ProtoStatus status = this.doLayer(true, protoCtx, i);
-                switch (status) {
-                    case Retry: // <-- can't happen, The Retry has been processed at doLayer
-                    case Next:
-                        // only the complete ProtoStack will fire triggerRcv
-                        callFinish = (i == this.layers.size() - 1);
-                        i++;
-                        continue;
-                    case Stop:
-                        callFinish = false;
-                        if (netLog) {
-                            this.printLog(true, "stack '" + stackName + "' require Exit");
-                        }
-                        i++;
-                        break;
-                }
-
-                break;
+        while (i < this.layers.size()) {
+            String stackName = this.layers.get(i).getName();
+            ProtoStatus status = this.doLayer(true, protoCtx, i);
+            switch (status) {
+                case Retry: // <-- can't happen, The Retry has been processed at doLayer
+                case Next:
+                    // only the complete ProtoStack will fire triggerRcv
+                    callFinish = (i == this.layers.size() - 1);
+                    i++;
+                    continue;
+                case Stop:
+                    callFinish = false;
+                    if (netLog) {
+                        this.printLog(true, "stack '" + stackName + "' require Exit");
+                    }
+                    i++;
+                    break;
             }
-        } while (needRestartLater);
+
+            break;
+        }
 
         // result
         ProtoQueue<?> sndDown = this.layers.get(0).getSndDown();
@@ -457,35 +447,31 @@ class ProtoChainRoot implements ProtoStack<Object>, ProtoStatistical {
 
     private ProtoResult doSndStack(ProtoContext protoCtx, int depth) throws Throwable {
         boolean netLog = protoCtx.getConfig().isPrintLog();
-        boolean needRestartLater;
         int i;
         int backTo = -1;
 
-        do {
-            needRestartLater = false;
-            boolean breakFor = false;
-            i = depth;
+        boolean breakFor = false;
+        i = depth;
 
-            for (; i >= 0; i--) {
-                if (breakFor) {
-                    break;
-                }
-
-                String stackName = this.layers.get(i).getName();
-                ProtoStatus status = this.doLayer(false, protoCtx, i);
-                switch (status) {
-                    case Retry: // <-- can't happen, The Retry has been processed at doLayer
-                    case Next:
-                        break;
-                    case Stop:
-                        breakFor = true;
-                        if (netLog) {
-                            this.printLog(false, "stack '" + stackName + "' require Exit");
-                        }
-                        break;
-                }
+        for (; i >= 0; i--) {
+            if (breakFor) {
+                break;
             }
-        } while (needRestartLater);
+
+            String stackName = this.layers.get(i).getName();
+            ProtoStatus status = this.doLayer(false, protoCtx, i);
+            switch (status) {
+                case Retry: // <-- can't happen, The Retry has been processed at doLayer
+                case Next:
+                    break;
+                case Stop:
+                    breakFor = true;
+                    if (netLog) {
+                        this.printLog(false, "stack '" + stackName + "' require Exit");
+                    }
+                    break;
+            }
+        }
 
         // result
         ProtoQueue<?> sndDown = this.layers.get(0).getSndDown();
