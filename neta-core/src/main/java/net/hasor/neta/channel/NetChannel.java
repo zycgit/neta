@@ -190,13 +190,6 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.monitor.getSndCounterBytes();
     }
 
-    /**
-     * Returns protocol stack statistics
-     */
-    public ProtoStatistical getStatistical() {
-        return this.protoStack.getStatistical();
-    }
-
     /* Receive data without concurrency */
     protected final void notifyRcv(Object[] rcvBytes) throws Throwable {
         synchronized (this.readTimeoutSyncObj) {

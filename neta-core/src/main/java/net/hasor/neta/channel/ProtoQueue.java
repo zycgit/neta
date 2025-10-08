@@ -136,8 +136,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         int fixCnt = Math.min(cnt, this.queueSize());
-        List<T> subList = this.linkedList.subList(this.takeCount, this.takeCount + fixCnt);
-        return Collections.unmodifiableList(subList);
+        return this.linkedList.subList(this.takeCount, this.takeCount + fixCnt);
     }
 
     @Override

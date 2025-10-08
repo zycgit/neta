@@ -44,20 +44,24 @@
         - SoConnectException        类型异常，会被当作接收异常。
         - SoBindException           类型异常，会被当作接收异常。
         - SoCloseException          异常，表示关闭了连接，会触发事件并且关闭连接。
+8. pipline 处理原则
+    - 在 onMessage 执行遇到错误时，会从当前层开始进入 onError 传播流程，直至该异常被正确处理才会恢复 onMessage 流程。
+    - 在 onError 阶段不应抛出异常，否则会导致中断 pipline 传递并且连接关闭。
+    -
+
 
 高优先
-01. 背压机制 pipline 的输入/输出 队列容量是有界的，导致数据接收时如果通道没有可用槽需要暂停接收，目前会报错
-02. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
-03. SoConfig 类还未完成英文化
-04. pipline 可以被动态添加和卸载
+01. pipline 可以被动态添加和卸载
+02. ProtoStatistical 整合到 NetMonitor 中
+03. 背压机制 pipline 的输入/输出 队列容量是有界的，导致数据接收时如果通道没有可用槽需要暂停接收，目前会报错
+04. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
+05. SoConfig 类还未完成英文化
 
 次优先
-01. ProtoStatistical 整合到 NetMonitor 中
 02. IP 白名单机制
 04. 协议路由，用来支持 NPN/ALPN
 05. 通过 SSL 参数支持 peerHost 能力
 06. ByteBuf 大文件 或输入输出流的 传输
-07. PipeRoute
 08. 流量控制
 09. pipline 需要支持分叉式的以便可以支持复杂协议树，可以使用 event 来实现，工作在协议层之上
 10. 异步任务机制需要简化使用逻辑。

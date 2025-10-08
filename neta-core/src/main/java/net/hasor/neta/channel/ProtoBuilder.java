@@ -90,8 +90,8 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
 
         String decName = decoder.getClass().getSimpleName();
         String encName = encoder.getClass().getSimpleName();
-        decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
-        encName = StringUtils.isBlank(encName) ? "Unknown" : encName;
+        decName = StringUtils.isBlank(decName) ? Integer.toHexString(System.identityHashCode(decoder)) : decName;
+        encName = StringUtils.isBlank(encName) ? Integer.toHexString(System.identityHashCode(encoder)) : encName;
 
         String name = String.format("%s/%s", decName, encName);
         return this.nextDuplex(name, ProtoConfig.DEFAULT, decoder, encoder);

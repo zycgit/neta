@@ -70,7 +70,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(duplexer, "duplexer is null.");
 
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, duplexer));
+                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, duplexer, chainRoot));
             });
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
@@ -83,7 +83,7 @@ public final class ProtoHelper {
 
             ProtoDuplexerHandlerWrap<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> handler = new ProtoDuplexerHandlerWrap<>(decoder, encoder);
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, handler));
+                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, handler, chainRoot));
             });
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
@@ -94,7 +94,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(decoder, "decoder is null.");
 
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoDecoderDuplexWrap<>(decoder)));
+                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoDecoderDuplexWrap<>(decoder), chainRoot));
             });
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
@@ -105,7 +105,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(encoder, "encoder is null.");
 
             this.taskAppend.add(chainRoot -> {
-                chainRoot.addProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoEncoderDuplexWrap<>(encoder)));
+                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoEncoderDuplexWrap<>(encoder), chainRoot));
             });
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }

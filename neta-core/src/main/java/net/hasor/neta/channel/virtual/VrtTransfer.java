@@ -1,5 +1,6 @@
 package net.hasor.neta.channel.virtual;
 import net.hasor.cobble.CollectionUtils;
+import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.NumberUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -53,7 +54,13 @@ public class VrtTransfer {
     public static VrtTransferHandler duplicate() {
         return (src, dst) -> {
             while (src.hasMore()) {
-                Object data = src.takeMessage().getData();
+                PlayLoad playLoad = src.takeMessage();
+                if (!playLoad.isSuccess()) {
+                    logger.error(playLoad.getError().getMessage(), playLoad.getError());
+                    throw ExceptionUtils.toRuntime(playLoad.getError());
+                }
+
+                Object data = playLoad.getData();
                 if (data == null) {
                     dst.offerMessage((Object) null);
                 } else if (data instanceof ByteBuf) {

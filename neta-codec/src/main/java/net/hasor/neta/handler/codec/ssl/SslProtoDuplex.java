@@ -48,7 +48,7 @@ public class SslProtoDuplex implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, 
     @Override
     public void onActive(ProtoContext context) throws Exception {
         if (context.getChannel().isClient()) {
-            context.sendData(ByteBuf.EMPTY);
+            context.sendData(ByteBuf.EMPTY);// make sure to trigger the handshake
         }
     }
 

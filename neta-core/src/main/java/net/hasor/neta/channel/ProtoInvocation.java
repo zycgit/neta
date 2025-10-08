@@ -17,7 +17,6 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.logging.Logger;
 
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * RCV_UP and RCV_DOWN,SND_UP and SND_DOWN. Is the name of RCV and SND under different endpoints.
@@ -44,21 +43,27 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
     private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
     private final        String                                            name;
-    private final        ProtoConfig                                       config;
-    private final        AtomicBoolean                                     inited;
     private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
+    protected final      ProtoQueue<Object>                                rcvUp;
+    protected final      ProtoQueue<Object>                                sndUp;
     //
-    private              ProtoQueue<RCV_DOWN>                              rcvDown;
-    private              ProtoQueue<SND_DOWN>                              sndDown;
+    private final        ProtoChainRoot                                    chainRoot;
+    protected            ProtoInvocation<Object, Object, Object, Object>   previous;
+    protected            ProtoInvocation<Object, Object, Object, Object>   next;
 
-    ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler) {
+    ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoChainRoot chainRoot) {
         Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(handler, "handler is null.");
 
         this.name = name;
-        this.config = protoConf;
-        this.inited = new AtomicBoolean();
         this.handler = handler;
+
+        int rcvSize = protoConf.getRcvSlotSize();
+        int sndSize = protoConf.getSndSlotSize();
+        this.rcvUp = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
+        this.sndUp = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
+
+        this.chainRoot = chainRoot;
     }
 
     /** return this {@link ProtoDuplexer} name. */
@@ -66,65 +71,70 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         return this.name;
     }
 
-    /** the {@link ProtoDuplexer} RCV_DOWN to connect the next {@link ProtoDuplexer} RCV_UP. */
-    public ProtoQueue<RCV_DOWN> getRcvDown() {
-        return this.rcvDown;
-    }
-
-    /** the {@link ProtoDuplexer} SND_DOWN to connect the next {@link ProtoDuplexer} SND_UP. */
-    public ProtoQueue<SND_DOWN> getSndDown() {
-        return this.sndDown;
-    }
-
     @Override
     public String toString() {
-        return "Handler [name=" + this.name + ", queue=" + this.rcvDown.queueSize() + ", slot=" + this.sndDown.slotSize() + "]";
+        return "Handler [name=" + this.name + ", queue=" + this.rcvUp.queueSize() + ", slot=" + this.sndUp.slotSize() + "]";
     }
 
     public String toMonitorRcvString() {
-        int capacity = this.rcvDown.getCapacity();
+        int capacity = this.rcvUp.getCapacity();
         if (capacity > 500) {
-            return this.rcvDown.queueSize() + "/500+";
+            return this.rcvUp.queueSize() + "/500+";
         } else {
-            return this.rcvDown.queueSize() + "/" + capacity;
+            return this.rcvUp.queueSize() + "/" + capacity;
         }
     }
 
     public String toMonitorSndString() {
-        int capacity = this.sndDown.getCapacity();
+        int capacity = this.sndUp.getCapacity();
         if (capacity > 500) {
-            return this.sndDown.queueSize() + "/500+";
+            return this.sndUp.queueSize() + "/500+";
         } else {
-            return this.sndDown.queueSize() + "/" + capacity;
+            return this.sndUp.queueSize() + "/" + capacity;
         }
     }
 
     public void onInit(ProtoContext protoCtx) throws Throwable {
-        if (this.inited.compareAndSet(false, true)) {
-            this.rcvDown = new ProtoQueue<>(this.config.getRcvDownSlotSize());
-            this.sndDown = new ProtoQueue<>(this.config.getSndUpSlotSize());
+        try {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
             this.handler.onInit(protoCtx);
+        } finally {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
         }
     }
 
     public void onActive(ProtoContext protoCtx) throws Throwable {
-        this.handler.onActive(protoCtx);
-    }
-
-    public void onClose(ProtoContext protoCtx) {
-        if (this.inited.compareAndSet(true, false)) {
-            this.handler.onClose(protoCtx);
+        try {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
+            this.handler.onActive(protoCtx);
+        } finally {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
         }
     }
 
-    public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv, ProtoRcvQueue<RCV_UP> rcvUp, ProtoRcvQueue<SND_UP> sndUp) throws Throwable {
+    public void onClose(ProtoContext protoCtx) {
+        try {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
+            this.handler.onClose(protoCtx);
+        } finally {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
+        }
+    }
+
+    public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {
+        ProtoRcvQueue<RCV_UP> rcvUp = (ProtoRcvQueue<RCV_UP>) this.rcvUp;
+        ProtoSndQueue<RCV_DOWN> rcvDown = (ProtoSndQueue<RCV_DOWN>) (this.next == null ? this.chainRoot.getTailRcvDown() : this.next.rcvUp);
+        ProtoRcvQueue<SND_UP> sndUp = (ProtoRcvQueue<SND_UP>) this.sndUp;
+        ProtoSndQueue<SND_DOWN> sndDown = (ProtoSndQueue<SND_DOWN>) (this.previous == null ? this.chainRoot.getHeadSndDown() : this.previous.sndUp);
+
         String errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
         Throwable ctxError = protoCtx.flash(errorTag);
         try {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
             if (ctxError == null) {
-                return this.handler.onMessage(protoCtx, isRcv, rcvUp, this.rcvDown, sndUp, this.sndDown);
+                return this.handler.onMessage(protoCtx, isRcv, rcvUp, rcvDown, sndUp, sndDown);
             } else {
-                return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, protoCtx, rcvUp, sndUp));
+                return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, protoCtx));
             }
         } catch (Throwable e) {
             if (ctxError == null) {
@@ -137,19 +147,20 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
                 }
 
                 protoCtx.flash(errorTag, e);
-                return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, protoCtx, rcvUp, sndUp));
+                return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, protoCtx));
             } else {
                 throw e;
             }
         } finally {
+            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
             rcvUp.rcvSubmit();
-            this.rcvDown.sndSubmit();
+            rcvDown.sndSubmit();
             sndUp.rcvSubmit();
-            this.sndDown.sndSubmit();
+            sndDown.sndSubmit();
         }
     }
 
-    private ProtoExceptionHolder createExceptionHandler(boolean isRcv, ProtoContext protoCtx, ProtoRcvQueue<RCV_UP> rcvUp, ProtoRcvQueue<SND_UP> sndUp) {
+    private ProtoExceptionHolder createExceptionHandler(boolean isRcv, ProtoContext protoCtx) {
         return new ProtoExceptionHolderImpl(isRcv, protoCtx);
     }
 
@@ -166,6 +177,5 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         public void clear() {
             this.context.flash(this.errorTag, null);
         }
-
     }
 }

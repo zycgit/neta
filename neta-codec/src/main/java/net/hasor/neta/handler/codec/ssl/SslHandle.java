@@ -19,9 +19,9 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.SoContext;
 import net.hasor.neta.channel.ProtoRcvQueue;
 import net.hasor.neta.channel.ProtoSndQueue;
+import net.hasor.neta.channel.SoContext;
 
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;

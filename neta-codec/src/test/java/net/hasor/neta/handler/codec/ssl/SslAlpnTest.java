@@ -15,11 +15,11 @@
  */
 package net.hasor.neta.handler.codec.ssl;
 import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtListen;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.channel.PlayLoad;
 import org.junit.Test;
 
 import java.util.ArrayDeque;
@@ -49,9 +49,12 @@ public class SslAlpnTest extends AbstractSslTest {
                 return "HTTPS";
             });
 
+            VrtSoConfig config = VrtSoConfig.asDefault();
+            config.setAsynchronous(false);
+
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), config);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), config);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 

@@ -32,32 +32,32 @@ import net.hasor.neta.bytebuf.ByteBuf;
 public class ProtoConfig {
     public static final ProtoConfig DEFAULT = new ProtoConfig() {
         @Override
-        public void setRcvDownSlotSize(int rcvDownSlotSize) {
+        public void setRcvSlotSize(int rcvSlotSize) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void setSndUpSlotSize(int sndUpSlotSize) {
+        public void setSndSlotSize(int sndSlotSize) {
             throw new UnsupportedOperationException();
         }
     };
 
-    private int rcvDownSlotSize = -1;
-    private int sndUpSlotSize   = -1;
+    private int rcvSlotSize = -1;
+    private int sndSlotSize = -1;
 
-    public int getRcvDownSlotSize() {
-        return this.rcvDownSlotSize;
+    public int getRcvSlotSize() {
+        return this.rcvSlotSize;
     }
 
-    public void setRcvDownSlotSize(int rcvDownSlotSize) {
-        this.rcvDownSlotSize = rcvDownSlotSize;
+    public void setRcvSlotSize(int rcvSlotSize) {
+        this.rcvSlotSize = rcvSlotSize;
     }
 
-    public int getSndUpSlotSize() {
-        return this.sndUpSlotSize;
+    public int getSndSlotSize() {
+        return this.sndSlotSize;
     }
 
-    public void setSndUpSlotSize(int sndUpSlotSize) {
-        this.sndUpSlotSize = sndUpSlotSize;
+    public void setSndSlotSize(int sndSlotSize) {
+        this.sndSlotSize = sndSlotSize;
     }
 }

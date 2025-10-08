@@ -34,11 +34,6 @@ public interface ProtoStack<OUT> {
     int getSndSlotSize();
 
     /**
-     * Returns protocol stack statistics
-     */
-    ProtoStatistical getStatistical();
-
-    /**
      * when init, before onActive
      * @param protoCtx protoCtx
      */
