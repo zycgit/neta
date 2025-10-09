@@ -35,20 +35,20 @@ import java.util.Objects;
  * @version : 2023-10-20
  */
 public abstract class SslContextBasic implements SslContext {
-    private static final Logger        logger = Logger.getLogger(SslContextBasic.class);
-    protected final      long          channelID;
-    protected final      String        stackName;
-    protected final      ProtoContext  protoCtx;
-    protected final      SoContext     soContext;
-    protected final      boolean       sslLog;
-    protected final      boolean       netLog;
+    protected static final Logger        logger = Logger.getLogger(SslContextBasic.class);
+    protected final        long          channelID;
+    protected final        String        stackName;
+    protected final        ProtoContext  protoCtx;
+    protected final        SoContext     soContext;
+    protected final        boolean       sslLog;
+    protected final        boolean       netLog;
     //
-    protected final      SslConfig     sslConfig;
-    private final        boolean       clientMode;
-    private final        SSLContext    sslContext;
-    private final        SslEngineWrap sslEngine;
-    private final        SslHandle     sslHandler;
-    protected volatile   boolean       sslEnable;
+    protected final        SslConfig     sslConfig;
+    private final          boolean       clientMode;
+    private final          SSLContext    sslContext;
+    private final          SslEngineWrap sslEngine;
+    private final          SslHandle     sslHandler;
+    protected volatile     boolean       sslEnable;
 
     public SslContextBasic(long channelID, String stackName, SslConfig config, ProtoContext protoCtx, boolean clientMode) throws Exception {
         this.channelID = channelID;

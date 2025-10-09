@@ -114,10 +114,10 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
             SocketAddress remoteAddr = result.getRemoteAddress();
             if (!((SoContextService) attachment).acceptChannel(remoteAddr)) {
                 IOUtils.closeQuietly(result);
-                printLog("reject(" + this.forListen.getChannelId() + ") R:" + remoteAddr + " -> L:" + localAddr);
+                logger.warn("reject(" + this.forListen.getChannelId() + ") R:" + remoteAddr + " -> L:" + localAddr);
                 return false;
             } else {
-                printLog("accept(" + this.forListen.getChannelId() + ") R:" + remoteAddr + " -> L:" + localAddr);
+                logger.info("accept(" + this.forListen.getChannelId() + ") R:" + remoteAddr + " -> L:" + localAddr);
                 return true;
             }
         } catch (Throwable e) {

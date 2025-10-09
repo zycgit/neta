@@ -17,6 +17,7 @@ package net.hasor.neta.handler.codec.ssl;
 import net.hasor.neta.channel.ProtoConfig;
 
 import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
 import java.security.KeyStore;
@@ -27,18 +28,20 @@ import java.security.KeyStore;
  * @version : 2023-09-24
  */
 public class SslConfig extends ProtoConfig {
-    private SslProvider            provider            = SslProvider.JSSE;     // default is JDK
-    private SslClientAuth          clientAuth          = SslClientAuth.NONE;   //
-    private String[]               appProtocol         = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
-    private String[]               ciphers             = null;                 // JSSE Cipher Suite Names 使用的密钥套件
-    private String[]               protocols           = null;                 // The TLS protocol versions to enable.
+    private SslProvider    provider     = SslProvider.JSSE;     // default is JDK
+    private SslClientAuth  clientAuth   = SslClientAuth.NONE;   //
+    private String[]       appProtocol  = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
+    private String[]       ciphers      = null;                 // JSSE Cipher Suite Names 使用的密钥套件
+    private String[]       protocols    = null;                 // The TLS protocol versions to enable.
     //
-    private SslAuthKeyType         authType            = null;
-    private String                 jksResource         = null;                 // JKS File
-    private String                 pemCertChain        = null;                 // X.509 certificate chain in PEM format.
-    private String                 pemPrivate          = null;                 // PKCS#8 private key in PEM format.
-    private String                 keyPassword         = null;
+    private SslAuthKeyType authType     = null;
+    private String         jksResource  = null;                 // JKS File
+    private String         pemCertChain = null;                 // X.509 certificate chain in PEM format.
+    private String         pemPrivate   = null;                 // PKCS#8 private key in PEM format.
+    private String         keyPassword  = null;
     //
+
+    private SSLContext             sslContext          = null;
     private KeyStore               keyStore            = null;
     //    private KeyManager[]           keyManagers;
     private KeyManagerFactory      keyManagerFactory   = null;
@@ -124,6 +127,14 @@ public class SslConfig extends ProtoConfig {
 
     public void setKeyPassword(String keyPassword) {
         this.keyPassword = keyPassword;
+    }
+
+    public SSLContext getSslContext() {
+        return this.sslContext;
+    }
+
+    public void setSslContext(SSLContext sslContext) {
+        this.sslContext = sslContext;
     }
 
     public KeyStore getKeyStore() {

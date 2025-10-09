@@ -190,6 +190,12 @@ public class JdkSslContext extends SslContextBasic {
 
     @Override
     protected SSLContext createSSLContext(String[] protocol) throws GeneralSecurityException, IOException {
+        if (this.sslConfig.getSslContext() != null) {
+            SSLContext context = this.sslConfig.getSslContext();
+            logger.info("ssl(" + this.channelID + ") use user-defined SSLContext with protocol " + context.getProtocol());
+            return context;
+        }
+
         KeyStore ks = this.createKeyStore();
         KeyManagerFactory kmf = this.createKeyManagerFactory(ks);
         TrustManagerFactory tmf = this.getTrustManagers(ks);

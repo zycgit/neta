@@ -314,7 +314,7 @@ public class SoContextService implements SoContext {
     public void notifyBindChannelException(long channelId, SoBindException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("channel not found. channelId : " + channelId);
+            logger.error("channel not found. channelId : " + channelId, e);
             return;
         }
 
@@ -329,7 +329,7 @@ public class SoContextService implements SoContext {
     public void notifyConnectChannelException(long channelId, boolean doClose, SoConnectException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("channel not found. channelId : " + channelId);
+            logger.error("channel not found. channelId : " + channelId, e);
             return;
         }
 
@@ -344,7 +344,7 @@ public class SoContextService implements SoContext {
     public void notifyRcvChannelData(long channelId, Object... rcvData) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("channel not found. channelId : " + channelId);
+            logger.error("notifyRcvFailed, channel not found. channelId : " + channelId);
             return;
         }
 
@@ -364,7 +364,7 @@ public class SoContextService implements SoContext {
     public void notifyRcvChannelException(long channelId, boolean doClose, SoException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("channel not found. channelId : " + channelId);
+            logger.error("channel not found. channelId : " + channelId, e);
             return;
         }
 
@@ -378,7 +378,7 @@ public class SoContextService implements SoContext {
     public void notifySndChannelException(long channelId, boolean doClose, SoException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("channel not found. channelId : " + channelId);
+            logger.error("channel not found. channelId : " + channelId, e);
             return;
         }
 
@@ -404,11 +404,8 @@ public class SoContextService implements SoContext {
 
     public void notifyChannelClose(long channelId, boolean remote) {
         SoChannel<?> channel = this.channelMap.get(channelId);
-        if (channel == null) {
-            logger.error("channel not found. channelId : " + channelId);
-        } else {
-            String message = "closed from " + (remote ? "remote" : "local");
-            this.doCloseChannel(channel, message, null);
+        if (channel != null) {
+            this.doCloseChannel(channel, "closed from " + (remote ? "remote" : "local"), null);
         }
     }
 
