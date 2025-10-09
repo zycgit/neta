@@ -20,7 +20,6 @@ import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.net.SocketAddress;
@@ -174,7 +173,7 @@ public class SoContextService implements SoContext {
         // init
         if (init && channel instanceof NetChannel) {
             NetChannel netChannel = (NetChannel) channel;
-            ProtoStack<ByteBuf> protoStack = netChannel.protoStack;
+            ProtoStack<Object> protoStack = netChannel.protoStack;
             ProtoContextService protoCtx = netChannel.protoCtx;
 
             protoStack.onInit(protoCtx);

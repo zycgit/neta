@@ -16,11 +16,11 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.virtual.VrtTransfer;
-import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
 
 import java.nio.ByteOrder;
@@ -81,12 +81,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_1_case1() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -111,12 +111,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_1_case2() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2, 2);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -141,12 +141,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_1_case3() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     1, ByteOrder.BIG_ENDIAN, 2, 3);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -171,12 +171,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_2_case1() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -204,12 +204,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_2_case2() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2, 2);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -237,12 +237,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_2_case3() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     1, ByteOrder.BIG_ENDIAN, 2, 3);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -270,12 +270,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_3_case1() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -298,12 +298,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_3_case2() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     0, ByteOrder.BIG_ENDIAN, 2, 2);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //
@@ -326,12 +326,12 @@ public class LengthFieldBasedFrameHandlerTest {
     public void coder_3_case3() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LengthFieldBasedFrameHandler handler = new LengthFieldBasedFrameHandler(//
                     1, ByteOrder.BIG_ENDIAN, 2, 3);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         //

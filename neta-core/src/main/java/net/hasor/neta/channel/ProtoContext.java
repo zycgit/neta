@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 import java.io.IOException;
@@ -37,11 +38,6 @@ public interface ProtoContext {
 
     /** the SoContext */
     SoContext getSoContext();
-
-    //    void addFirst();
-    //    void addLast();
-    //    void addBefore();
-    //    void addAfter();
 
     /**
      * Returns the name of the current protocol stack name.
@@ -81,4 +77,216 @@ public interface ProtoContext {
 
     /** Returns the pipeline mode is sent */
     boolean isSnd();
+
+    /**
+     * using decoder and encoder to combined for duplex.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param decoder RCV_UP to RCV_DOWN
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the decoder or encoder is {@code null}
+     */
+    void addFirst(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder);
+
+    /**
+     * using decoder and encoder to combined for duplex.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param name stack name
+     * @param decoder RCV_UP to RCV_DOWN
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the decoder or encoder is {@code null}
+     */
+    void addFirst(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder);
+
+    /**
+     * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param duplexer target duplexer
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addFirst(ProtoDuplexer<?, ?, ?, ?> duplexer);
+
+    /**
+     * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param name duplexer name
+     * @param duplexer target duplexer
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addFirst(String name, ProtoDuplexer<?, ?, ?, ?> duplexer);
+
+    /**
+     * using decoder and encoder to combined for duplex.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param decoder RCV_UP to RCV_DOWN
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the decoder or encoder is {@code null}
+     */
+    void addLast(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder);
+
+    /**
+     * using decoder and encoder to combined for duplex.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param name stack name
+     * @param decoder RCV_UP to RCV_DOWN
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the decoder or encoder is {@code null}
+     */
+    void addLast(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder);
+
+    /**
+     * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param duplexer target duplexer
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addLast(ProtoDuplexer<?, ?, ?, ?> duplexer);
+
+    /**
+     * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param name duplexer name
+     * @param duplexer target duplexer
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addLast(String name, ProtoDuplexer<?, ?, ?, ?> duplexer);
+
+    /**
+     * using encoder, the decoder is transparent
+     * <ul>
+     *  <li>RCV_UP equal to RCV_DOWN</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     *
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addFirstEncoder(ProtoHandler<?, ?> encoder);
+
+    /**
+     * using encoder, the decoder is transparent
+     * <ul>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     *
+     * @param name stack name
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addFirstEncoder(String name, ProtoHandler<?, ?> encoder);
+
+    /**
+     * using encoder, the decoder is transparent
+     * <ul>
+     *  <li>RCV_UP equal to RCV_DOWN</li>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     *
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addLastEncoder(ProtoHandler<?, ?> encoder);
+
+    /**
+     * using encoder, the decoder is transparent
+     * <ul>
+     *  <li>SND_UP is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     *
+     * @param name stack name
+     * @param encoder SND_UP to SND_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addLastEncoder(String name, ProtoHandler<?, ?> encoder);
+
+    /**
+     * using decoder, the encoder is transparent
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN equal to SND_UP</li>
+     * </ul>
+     * @param decoder RCV_UP to RCV_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addFirstDecoder(ProtoHandler<?, ?> decoder);
+
+    /**
+     * using decoder, the encoder is transparent
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param name stack name
+     * @param decoder RCV_UP to RCV_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addFirstDecoder(String name, ProtoHandler<?, ?> decoder);
+
+    /**
+     * using decoder, the encoder is transparent
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     *  <li>SND_DOWN equal to SND_UP</li>
+     * </ul>
+     * @param decoder RCV_UP to RCV_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addLastDecoder(ProtoHandler<?, ?> decoder);
+
+    /**
+     * using decoder, the encoder is transparent
+     * <ul>
+     *  <li>RCV_UP is {@link ByteBuf} or Message</li>
+     *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
+     * </ul>
+     * @param name stack name
+     * @param decoder RCV_UP to RCV_DOWN
+     * @throws NullPointerException if the specified handler is {@code null}
+     */
+    void addLastDecoder(String name, ProtoHandler<?, ?> decoder);
 }

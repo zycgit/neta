@@ -39,45 +39,6 @@ import static net.hasor.neta.handler.codec.AbstractSoTest.*;
  */
 public class UdpJvm2NetaTest extends AbstractSslTest {
 
-    @Test
-    public void jvm_2_neta() throws Exception {
-        int safePort = safePort();
-        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.DTLS_v1_2);
-
-        // server
-        List<String> rcvMessage = new ArrayList<>();
-        ProtoInitializer serverProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage));
-        NetManager neta = new NetManager(globalConf());
-        neta.bind(address, serverProto, udpConfig(4096, 4096));
-
-        // client
-        DatagramChannel udpClient = DatagramChannel.open();
-        udpClient.connect(address);
-
-        // ssl
-        SSLContext sslContext = SoSslUtils.sslContext(SslProtocol.DTLS_v1_2);
-        SSLEngine sslEngine = sslContext.createSSLEngine("127.0.0.1", safePort);
-        sslEngine.setUseClientMode(true);
-        sslHandshake(sslEngine, udpClient, address);
-
-        // snd data
-        SSLSession sslSession = sslEngine.getSession();
-        ByteBuffer sslOutAppBuffer = ByteBuffer.allocate(sslSession.getApplicationBufferSize());
-        ByteBuffer sslOutNetBuffer = ByteBuffer.allocate(sslSession.getPacketBufferSize());
-        sslOutAppBuffer.put("Hello Server, this message form client.\n".getBytes());
-        sslOutAppBuffer.flip();
-        sslEngine.wrap(sslOutAppBuffer, sslOutNetBuffer).getHandshakeStatus();
-        sslOutNetBuffer.flip();
-        udpClient.send(sslOutNetBuffer, address);
-
-        // wait finish
-        ThreadUtils.sleep(500);
-        assert rcvMessage.get(0).equals("Hello Server, this message form client.");
-        neta.shutdown();
-        udpClient.close();
-    }
-
     private static void sslHandshake(SSLEngine sslEngine, DatagramChannel udpClient, InetSocketAddress address) throws IOException {
         SSLSession sslSession = sslEngine.getSession();
         ByteBuffer sslOutAppBuffer = ByteBuffer.allocate(sslSession.getApplicationBufferSize());
@@ -115,5 +76,44 @@ public class UdpJvm2NetaTest extends AbstractSslTest {
                 return;
             }
         }
+    }
+
+    @Test
+    public void jvm_2_neta() throws Exception {
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        SslConfig sslConf = SoSslUtils.sslConfig(SslProtocol.DTLS_v1_2);
+
+        // server
+        List<String> rcvMessage = new ArrayList<>();
+        ProtoInitializer serverProto = SoSslUtils.udpSslSocketProtoStack(sslConf, new MyRcvToListProtoHandler(rcvMessage));
+        NetManager neta = new NetManager(globalConf());
+        neta.bind(address, serverProto, udpConfig(4096, 4096));
+
+        // client
+        DatagramChannel udpClient = DatagramChannel.open();
+        udpClient.connect(address);
+
+        // ssl
+        SSLContext sslContext = SoSslUtils.sslContext(SslProtocol.DTLS_v1_2);
+        SSLEngine sslEngine = sslContext.createSSLEngine("127.0.0.1", safePort);
+        sslEngine.setUseClientMode(true);
+        sslHandshake(sslEngine, udpClient, address);
+
+        // snd data
+        SSLSession sslSession = sslEngine.getSession();
+        ByteBuffer sslOutAppBuffer = ByteBuffer.allocate(sslSession.getApplicationBufferSize());
+        ByteBuffer sslOutNetBuffer = ByteBuffer.allocate(sslSession.getPacketBufferSize());
+        sslOutAppBuffer.put("Hello Server, this message form client.\n".getBytes());
+        sslOutAppBuffer.flip();
+        sslEngine.wrap(sslOutAppBuffer, sslOutNetBuffer).getHandshakeStatus();
+        sslOutNetBuffer.flip();
+        udpClient.send(sslOutNetBuffer, address);
+
+        // wait finish
+        ThreadUtils.sleep(500);
+        assert rcvMessage.get(0).equals("Hello Server, this message form client.");
+        neta.shutdown();
+        udpClient.close();
     }
 }

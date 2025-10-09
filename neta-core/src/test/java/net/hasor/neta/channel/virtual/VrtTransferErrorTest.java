@@ -15,8 +15,8 @@
  */
 package net.hasor.neta.channel.virtual;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.ProtoInitializer;
 import org.junit.Test;
 
 import java.net.SocketException;
@@ -28,7 +28,7 @@ import java.net.SocketException;
 public class VrtTransferErrorTest {
     @Test
     public void error1() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build(ctx);
 
         // server and client
         NetManager neta = new NetManager();
@@ -51,7 +51,7 @@ public class VrtTransferErrorTest {
 
     @Test
     public void error2() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build(ctx);
 
         // server and client
         NetManager neta1 = new NetManager();
@@ -73,7 +73,7 @@ public class VrtTransferErrorTest {
 
     @Test
     public void error2_1() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build(ctx);
 
         // server and client
         NetManager neta1 = new NetManager();
@@ -95,7 +95,7 @@ public class VrtTransferErrorTest {
 
     @Test
     public void error3() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build(ctx);
 
         // server and client
         NetManager neta = new NetManager();

@@ -39,7 +39,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
                 .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(errNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build();
+                .build(ctx);
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();
@@ -69,7 +69,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
                 .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(errThrowHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv(Err)/snd +1
                 .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build();
+                .build(ctx);
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();
@@ -99,7 +99,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
                 .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(errRetryHandler("2Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build();
+                .build(ctx);
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();
@@ -129,7 +129,7 @@ public class ProtoRcvErrTest extends AbstractStackTest {
                 .nextDuplex(errNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(errExitHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(errNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build();
+                .build(ctx);
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();

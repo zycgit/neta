@@ -25,6 +25,9 @@ import net.hasor.neta.channel.udp.UdpSoConfig;
 public class SoConfig {
     // for Listener
     private final String  protocol;
+    // for slot size
+    private int rcvSlotSize = -1;
+    private int sndSlotSize = -1;
     private       boolean suspend = false;
 
     // for Socket
@@ -46,6 +49,22 @@ public class SoConfig {
 
     public static UdpSoConfig UDP() {
         return new UdpSoConfig();
+    }
+
+    public int getRcvSlotSize() {
+        return this.rcvSlotSize;
+    }
+
+    public void setRcvSlotSize(int rcvSlotSize) {
+        this.rcvSlotSize = rcvSlotSize;
+    }
+
+    public int getSndSlotSize() {
+        return this.sndSlotSize;
+    }
+
+    public void setSndSlotSize(int sndSlotSize) {
+        this.sndSlotSize = sndSlotSize;
     }
 
     public String getProtocol() {

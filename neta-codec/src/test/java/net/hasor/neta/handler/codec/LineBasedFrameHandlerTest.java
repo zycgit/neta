@@ -16,10 +16,10 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
 
 import java.util.ArrayDeque;
@@ -35,7 +35,7 @@ public class LineBasedFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-            return ProtoHelper.standard().nextDecoder(lineBasedFrame).build();
+            ProtoHelper.standard().nextDecoder(lineBasedFrame).build(ctx);
         }, VrtSoConfig.asDefault());
 
         // transfer channel
@@ -55,7 +55,7 @@ public class LineBasedFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-            return ProtoHelper.standard().nextDecoder(lineBasedFrame).build();
+            ProtoHelper.standard().nextDecoder(lineBasedFrame).build(ctx);
         }, VrtSoConfig.asDefault());
 
         // transfer channel
@@ -73,7 +73,7 @@ public class LineBasedFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-            return ProtoHelper.standard().nextDecoder(lineBasedFrame).build();
+            ProtoHelper.standard().nextDecoder(lineBasedFrame).build(ctx);
         }, VrtSoConfig.asDefault());
 
         // transfer channel

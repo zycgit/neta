@@ -75,7 +75,7 @@ public class SoSslUtils {
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .build();
+                .build(ctx);
     }
 
     public static ProtoInitializer udpSslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
@@ -88,7 +88,7 @@ public class SoSslUtils {
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .nextDecoder(last).build();
+                .nextDecoder(last).build(ctx);
     }
 
     public static ProtoInitializer tcpSslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
@@ -104,7 +104,7 @@ public class SoSslUtils {
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .nextDecoder(last).build();
+                .nextDecoder(last).build(ctx);
     }
 
 }

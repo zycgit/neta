@@ -56,10 +56,10 @@ public final class ProtoHelper {
     }
 
     private static final class ProtoBuilderImpl<RCV_DOWN, SND_UP> implements ProtoBuilder<RCV_DOWN, SND_UP> {
-        private final ProtoConfig                    defaultConf;
-        private final List<Consumer<ProtoChainRoot>> taskAppend;
+        private final ProtoConfig                  defaultConf;
+        private final List<Consumer<ProtoContext>> taskAppend;
 
-        ProtoBuilderImpl(ProtoConfig protoConf, List<Consumer<ProtoChainRoot>> taskAppend) {
+        ProtoBuilderImpl(ProtoConfig protoConf, List<Consumer<ProtoContext>> taskAppend) {
             this.defaultConf = Objects.requireNonNull(protoConf, "ProtoConfig is null.");
             this.taskAppend = taskAppend;
         }
@@ -69,9 +69,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(duplexer, "duplexer is null.");
 
-            this.taskAppend.add(chainRoot -> {
-                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, duplexer, chainRoot));
-            });
+            this.taskAppend.add(c -> c.addLast(name, duplexer));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
@@ -81,10 +79,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(decoder, "decoder is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
 
-            ProtoDuplexerHandlerWrap<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> handler = new ProtoDuplexerHandlerWrap<>(decoder, encoder);
-            this.taskAppend.add(chainRoot -> {
-                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, handler, chainRoot));
-            });
+            this.taskAppend.add(c -> c.addLast(name, decoder, encoder));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
@@ -93,9 +88,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(decoder, "decoder is null.");
 
-            this.taskAppend.add(chainRoot -> {
-                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoDecoderDuplexWrap<>(decoder), chainRoot));
-            });
+            this.taskAppend.add(c -> c.addLastDecoder(name, decoder));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
@@ -104,19 +97,15 @@ public final class ProtoHelper {
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(encoder, "encoder is null.");
 
-            this.taskAppend.add(chainRoot -> {
-                chainRoot.appendProtoStack(new ProtoInvocation<>(name, protoConf, new ProtoEncoderDuplexWrap<>(encoder), chainRoot));
-            });
+            this.taskAppend.add(c -> c.addLastEncoder(name, encoder));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
         @Override
-        public <T> ProtoStack<T> build() {
-            ProtoChainRoot root = new ProtoChainRoot(this.defaultConf);
-            for (Consumer<ProtoChainRoot> consumer : taskAppend) {
-                consumer.accept(root);
+        public void build(ProtoContext context) {
+            for (Consumer<ProtoContext> consumer : taskAppend) {
+                consumer.accept(context);
             }
-            return (ProtoStack<T>) root;
         }
     }
 }

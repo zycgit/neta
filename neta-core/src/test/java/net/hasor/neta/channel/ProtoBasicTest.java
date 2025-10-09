@@ -31,9 +31,9 @@ public class ProtoBasicTest extends AbstractStackTest {
     @Test
     public void nextTest_0() throws Throwable {
         ProtoInitializer initializer = (ctx) -> {
-            return ProtoHelper.typed(Integer.class, Integer.class)           //
+            ProtoHelper.typed(Integer.class, Integer.class)           //
                     .nextDecoder("L1", new TransparentProtoHandler<>())//
-                    .build();
+                    .build(ctx);
         };
 
         NetManager neta = new NetManager();

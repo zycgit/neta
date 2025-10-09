@@ -42,14 +42,26 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     public static final  String                                            RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
     public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
     private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
-    private final        String                                            name;
-    private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
     protected final      ProtoQueue<Object>                                rcvUp;
     protected final      ProtoQueue<Object>                                sndUp;
+    private final        String                                            name;
+    private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
     //
     private final        ProtoChainRoot                                    chainRoot;
     protected            ProtoInvocation<Object, Object, Object, Object>   previous;
     protected            ProtoInvocation<Object, Object, Object, Object>   next;
+
+    ProtoInvocation(String name, int rcvSize, int sndSize, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoChainRoot chainRoot) {
+        Objects.requireNonNull(handler, "handler is null.");
+
+        this.name = name;
+        this.handler = handler;
+
+        this.rcvUp = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
+        this.sndUp = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
+
+        this.chainRoot = chainRoot;
+    }
 
     ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoChainRoot chainRoot) {
         Objects.requireNonNull(protoConf, "protoConf is null.");

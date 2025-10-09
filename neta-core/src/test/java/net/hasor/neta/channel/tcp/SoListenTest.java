@@ -37,7 +37,7 @@ public class SoListenTest extends AbstractSoTest {
 
         // server
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, context -> ProtoHelper.standard().build(), tcpConf);
+        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(ctx), tcpConf);
 
         // client 1 and 2
         Socket client1 = new Socket("127.0.0.1", safePort);
@@ -85,7 +85,7 @@ public class SoListenTest extends AbstractSoTest {
 
         // server
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, context -> ProtoHelper.standard().build(), tcpConf);
+        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(ctx), tcpConf);
 
         // client 1 and 2
         Socket client1 = new Socket("127.0.0.1", safePort);
@@ -125,8 +125,8 @@ public class SoListenTest extends AbstractSoTest {
     @Test
     public void acceptListener_1() throws Throwable {
         NetManager server = new NetManager();
-        NetListen listen1 = server.bind(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.standard().build(), TcpSoConfig.TCP());
-        NetListen listen2 = server.bind(new InetSocketAddress("127.0.0.1", safePort()), context -> ProtoHelper.standard().build(), TcpSoConfig.TCP());
+        NetListen listen1 = server.bind(new InetSocketAddress("127.0.0.1", safePort()), ctx -> ProtoHelper.standard().build(ctx), TcpSoConfig.TCP());
+        NetListen listen2 = server.bind(new InetSocketAddress("127.0.0.1", safePort()), ctx -> ProtoHelper.standard().build(ctx), TcpSoConfig.TCP());
         int safePort1 = listen1.getListenPort();
         int safePort2 = listen2.getListenPort();
 
@@ -163,7 +163,7 @@ public class SoListenTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 30);
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, context -> ProtoHelper.standard().build(), tcpConf);
+        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(ctx), tcpConf);
 
         assert listen == server.findListen(safePort);
 

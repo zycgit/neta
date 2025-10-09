@@ -39,7 +39,7 @@ public class AioEchoServer {
                 // encoder/decoder string
                 .nextDuplex("string", new StringHandler())
                 // Build ProtoStack
-                .build();
+                .build(ctx);
 
         // telnet server
         NetManager socket = new NetManager();

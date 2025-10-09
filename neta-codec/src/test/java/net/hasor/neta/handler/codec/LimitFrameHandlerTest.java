@@ -16,11 +16,11 @@
 package net.hasor.neta.handler.codec;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.virtual.VrtTransfer;
-import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
 
 import java.util.ArrayDeque;
@@ -36,11 +36,11 @@ public class LimitFrameHandlerTest {
     public void asEncoder_1() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(1, 10);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -79,11 +79,11 @@ public class LimitFrameHandlerTest {
     public void asEncoder_2() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(5, 10);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -122,11 +122,11 @@ public class LimitFrameHandlerTest {
     public void asEncoder_3() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(10, 10);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -158,11 +158,11 @@ public class LimitFrameHandlerTest {
     public void asEncoder_4() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(5, 10);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -205,11 +205,11 @@ public class LimitFrameHandlerTest {
     public void asEncoder_5() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(10, 10);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -243,11 +243,11 @@ public class LimitFrameHandlerTest {
     public void asEncoder_6() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(10, 10);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -277,11 +277,11 @@ public class LimitFrameHandlerTest {
     public void asEncoder_7() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(4, 10);
-            return ProtoHelper.standard().nextEncoder("", handler).build();
+            ProtoHelper.standard().nextEncoder("", handler).build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -326,10 +326,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(1, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -369,10 +369,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(5, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -412,10 +412,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(10, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -448,10 +448,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(5, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -495,10 +495,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(5, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -541,10 +541,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(10, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -579,10 +579,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(10, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -613,10 +613,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(4, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -661,10 +661,10 @@ public class LimitFrameHandlerTest {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             LimitFrameHandler handler = new LimitFrameHandler(4, 10);
-            return ProtoHelper.standard().nextDecoder("", handler).build();
+            ProtoHelper.standard().nextDecoder("", handler).build(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            return ProtoHelper.standard().build();
+            ProtoHelper.standard().build(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel

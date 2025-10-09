@@ -56,4 +56,18 @@ public class SoUtils {
 
         s.println(body);
     }
+
+    static String generateName(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
+        String decName = Integer.toHexString(System.identityHashCode(decoder));
+        String encName = Integer.toHexString(System.identityHashCode(encoder));
+        return String.format("%s/%s", decName, encName);
+    }
+
+    static String generateName(ProtoDuplexer<?, ?, ?, ?> duplexer) {
+        return Integer.toHexString(System.identityHashCode(duplexer));
+    }
+
+    static String generateName(ProtoHandler<?, ?> encoder) {
+        return Integer.toHexString(System.identityHashCode(encoder));
+    }
 }

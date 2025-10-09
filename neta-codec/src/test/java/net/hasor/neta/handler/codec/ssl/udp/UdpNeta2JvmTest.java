@@ -42,6 +42,48 @@ import static net.hasor.neta.handler.codec.AbstractSoTest.*;
  */
 public class UdpNeta2JvmTest extends AbstractSslTest {
 
+    private static void sslHandshake(SSLEngine sslEngine, DatagramChannel udpServer) throws IOException {
+        SocketAddress address = null;
+        SSLSession sslSession = sslEngine.getSession();
+        ByteBuffer sslOutAppBuffer = ByteBuffer.allocate(sslSession.getApplicationBufferSize());
+        ByteBuffer sslOutNetBuffer = ByteBuffer.allocate(sslSession.getPacketBufferSize());
+        ByteBuffer sslInAppBuffer = ByteBuffer.allocate(sslSession.getApplicationBufferSize());
+        ByteBuffer sslInNetBuffer = ByteBuffer.allocate(sslSession.getPacketBufferSize());
+
+        int i = 0;
+        sslEngine.beginHandshake();
+        while (true) {
+            i++;
+            SSLEngineResult.HandshakeStatus result = sslEngine.getHandshakeStatus();
+            if (result.name().equals("NEED_UNWRAP")) {
+                sslInNetBuffer.clear();
+                address = udpServer.receive(sslInNetBuffer);
+                sslInNetBuffer.flip();
+                result = sslEngine.unwrap(sslInNetBuffer, sslInAppBuffer).getHandshakeStatus();
+            } else if (result.name().equals("NEED_UNWRAP_AGAIN")) {
+                result = sslEngine.unwrap(sslInNetBuffer, sslInAppBuffer).getHandshakeStatus();
+            } else if (result.name().equals("NEED_WRAP")) {
+                sslOutNetBuffer.clear();
+                SSLEngineResult wrap = sslEngine.wrap(sslOutAppBuffer, sslOutNetBuffer);
+                if (wrap.getStatus() == SSLEngineResult.Status.BUFFER_OVERFLOW) {
+                    sslOutNetBuffer = ByteBuffer.allocate(sslEngine.getSession().getPacketBufferSize());
+                    continue;
+                }
+
+                result = wrap.getHandshakeStatus();
+                sslOutNetBuffer.flip();
+                udpServer.send(sslOutNetBuffer, address);
+            } else if (result.name().equals("NEED_TASK")) {
+                sslEngine.getDelegatedTask().run();
+                result = sslEngine.getHandshakeStatus();
+            }
+
+            if (result.name().equals("FINISHED")) {
+                return;
+            }
+        }
+    }
+
     @Test
     public void jvm_2_neta() throws Exception {
         int safePort = safePort();
@@ -83,47 +125,5 @@ public class UdpNeta2JvmTest extends AbstractSslTest {
         assert wrap.readLine().equals("Hello Server, this message form client.");
         neta.shutdown();
         udpServer.close();
-    }
-
-    private static void sslHandshake(SSLEngine sslEngine, DatagramChannel udpServer) throws IOException {
-        SocketAddress address = null;
-        SSLSession sslSession = sslEngine.getSession();
-        ByteBuffer sslOutAppBuffer = ByteBuffer.allocate(sslSession.getApplicationBufferSize());
-        ByteBuffer sslOutNetBuffer = ByteBuffer.allocate(sslSession.getPacketBufferSize());
-        ByteBuffer sslInAppBuffer = ByteBuffer.allocate(sslSession.getApplicationBufferSize());
-        ByteBuffer sslInNetBuffer = ByteBuffer.allocate(sslSession.getPacketBufferSize());
-
-        int i = 0;
-        sslEngine.beginHandshake();
-        while (true) {
-            i++;
-            SSLEngineResult.HandshakeStatus result = sslEngine.getHandshakeStatus();
-            if (result.name().equals("NEED_UNWRAP")) {
-                sslInNetBuffer.clear();
-                address = udpServer.receive(sslInNetBuffer);
-                sslInNetBuffer.flip();
-                result = sslEngine.unwrap(sslInNetBuffer, sslInAppBuffer).getHandshakeStatus();
-            } else if (result.name().equals("NEED_UNWRAP_AGAIN")) {
-                result = sslEngine.unwrap(sslInNetBuffer, sslInAppBuffer).getHandshakeStatus();
-            } else if (result.name().equals("NEED_WRAP")) {
-                sslOutNetBuffer.clear();
-                SSLEngineResult wrap = sslEngine.wrap(sslOutAppBuffer, sslOutNetBuffer);
-                if (wrap.getStatus() == SSLEngineResult.Status.BUFFER_OVERFLOW) {
-                    sslOutNetBuffer = ByteBuffer.allocate(sslEngine.getSession().getPacketBufferSize());
-                    continue;
-                }
-
-                result = wrap.getHandshakeStatus();
-                sslOutNetBuffer.flip();
-                udpServer.send(sslOutNetBuffer, address);
-            } else if (result.name().equals("NEED_TASK")) {
-                sslEngine.getDelegatedTask().run();
-                result = sslEngine.getHandshakeStatus();
-            }
-
-            if (result.name().equals("FINISHED")) {
-                return;
-            }
-        }
     }
 }

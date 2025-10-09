@@ -44,8 +44,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     protected final      SoContextService    context;
     protected final      NetMonitor          monitor;
     //
-    protected final      ProtoContextService protoCtx;
-    protected final      ProtoStack<ByteBuf> protoStack;
+    final                ProtoContextService protoCtx;
+    protected final      ProtoStack<Object>  protoStack;
     protected final      AtomicBoolean       closeStatus;
     protected final      Future<NetChannel>  closeFuture;
     private final        long                channelId;
@@ -61,7 +61,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         this.context = context;
 
         this.protoCtx = new ProtoContextService(this, context);
-        this.protoStack = initializer.config(this.protoCtx);
+        this.protoStack = this.protoCtx.getChainRoot();
+        initializer.config(this.protoCtx);
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
     }

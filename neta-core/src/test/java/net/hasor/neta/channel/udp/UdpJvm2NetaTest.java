@@ -17,11 +17,7 @@ package net.hasor.neta.channel.udp;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.ProtoHandler;
-import net.hasor.neta.channel.ProtoHelper;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
 import org.junit.Test;
 
 import java.net.DatagramPacket;
@@ -45,7 +41,7 @@ public class UdpJvm2NetaTest {
 
         AtomicBoolean udpRead = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
+            ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
                 while (src.hasMore()) {
                     ByteBuf data = src.takeMessage();
                     int len = data.readableBytes();
@@ -55,7 +51,7 @@ public class UdpJvm2NetaTest {
                     data.markReader();
                 }
                 return ProtoStatus.Next;
-            }).build();
+            }).build(ctx);
         };
 
         UdpSoConfig udpConf = udpConfig(128, 4096);

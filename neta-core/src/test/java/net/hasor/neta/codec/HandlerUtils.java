@@ -100,6 +100,6 @@ public class HandlerUtils {
                 // bytes <-> String
                 .nextDuplex("String", HandlerUtils::doDecoder1, HandlerUtils::doEncoder1)
                 // create Stack
-                .nextDecoder(last).build();
+                .nextDecoder(last).build(ctx);
     }
 }

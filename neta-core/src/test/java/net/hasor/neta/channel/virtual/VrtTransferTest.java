@@ -27,7 +27,7 @@ import java.util.List;
 public class VrtTransferTest {
     @Test
     public void echoTest_1() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build(ctx);
 
         // server and client
         NetManager neta = new NetManager();
@@ -57,7 +57,7 @@ public class VrtTransferTest {
     @Test
     public void echoTest_2() throws Throwable {
         ProtoInitializer serverProto = ctx -> {
-            return ProtoHelper.typed(String.class, String.class).nextDuplex(new ProtoDuplexer<String, String, String, String>() {
+            ProtoHelper.typed(String.class, String.class).nextDuplex(new ProtoDuplexer<String, String, String, String>() {
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, boolean isRcv,  //
                         ProtoRcvQueue<String> rcvUp, ProtoSndQueue<String> rcvDown,//
@@ -69,9 +69,9 @@ public class VrtTransferTest {
                     }
                     return ProtoStatus.Next;
                 }
-            }).build();
+            }).build(ctx);
         };
-        ProtoInitializer clientProto = ctx -> ProtoHelper.standard().build();
+        ProtoInitializer clientProto = ctx -> ProtoHelper.standard().build(ctx);
 
         // server and client
         NetManager neta = new NetManager();

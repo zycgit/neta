@@ -15,11 +15,7 @@
  */
 package net.hasor.neta.handler.codec.string;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
 import net.hasor.neta.handler.codec.DelimiterBasedFrameHandler;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
 

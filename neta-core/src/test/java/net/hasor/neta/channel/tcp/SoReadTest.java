@@ -48,8 +48,8 @@ public class SoReadTest extends AbstractSoTest {
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.bind(address, new ProtoInitializer() {
             @Override
-            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
-                return ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            public void config(ProtoContext ctx) {
+                ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                     @Override
                     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
                         NetChannel netChannel = ((NetChannel) context.getChannel());
@@ -59,7 +59,7 @@ public class SoReadTest extends AbstractSoTest {
                         }
                         return ProtoStatus.Next;
                     }
-                }).build();
+                }).build(ctx);
             }
         }, tcpConf);
 
@@ -92,8 +92,8 @@ public class SoReadTest extends AbstractSoTest {
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.bind(address, new ProtoInitializer() {
             @Override
-            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
-                return ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            public void config(ProtoContext ctx) {
+                ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
                     @Override
                     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
                         while (src.hasMore()) {
@@ -102,7 +102,7 @@ public class SoReadTest extends AbstractSoTest {
                         }
                         return ProtoStatus.Next;
                     }
-                }).build();
+                }).build(ctx);
             }
         }, tcpConf);
 
@@ -139,8 +139,8 @@ public class SoReadTest extends AbstractSoTest {
         SoContext context = server.getContext();
         NetListen listen = server.bind(address, new ProtoInitializer() {
             @Override
-            public ProtoStack<ByteBuf> config(ProtoContext ctx) {
-                return ProtoHelper.standard().build();// <-- stacking without handling
+            public void config(ProtoContext ctx) {
+                ProtoHelper.standard().build(ctx);// <-- stacking without handling
             }
         }, tcpConf);
 
@@ -211,7 +211,7 @@ public class SoReadTest extends AbstractSoTest {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager();
-        NetListen listen = server.bind(address, context -> builder.build(), SoConfig.TCP());
+        NetListen listen = server.bind(address, context -> builder.build(context), SoConfig.TCP());
 
         // client: send a lot of line
         ThreadUtils.daemonThread(true, (Callable) () -> {
@@ -251,7 +251,7 @@ public class SoReadTest extends AbstractSoTest {
                 serverDigest.digest(bytes);
             }
             return ProtoStatus.Next;
-        }).build();
+        }).build(ctx);
 
         // start server
         int safePort = safePort();
@@ -297,7 +297,7 @@ public class SoReadTest extends AbstractSoTest {
                 }
                 return ProtoStatus.Next;
             }
-        }).build();
+        }).build(ctx);
 
         // start server
         int safePort = safePort();
@@ -337,7 +337,7 @@ public class SoReadTest extends AbstractSoTest {
                 }
                 return ProtoStatus.Next;
             }
-        }).build();
+        }).build(ctx);
 
         // start server
         int safePort = safePort();
@@ -380,7 +380,7 @@ public class SoReadTest extends AbstractSoTest {
                 }
                 return ProtoStatus.Next;
             }
-        }).build();
+        }).build(ctx);
 
         // start server
         int safePort = safePort();
@@ -425,7 +425,7 @@ public class SoReadTest extends AbstractSoTest {
                 }
                 return ProtoStatus.Next;
             }
-        }).build();
+        }).build(ctx);
 
         // start server
         int safePort = safePort();
@@ -461,7 +461,7 @@ public class SoReadTest extends AbstractSoTest {
     public void rcvThrowTest_01() throws Throwable {
         AtomicBoolean rcvErr1 = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.standard().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
+            ProtoHelper.standard().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) throws Throwable {
                     throw new IllegalStateException("L1 Throw");
@@ -477,7 +477,7 @@ public class SoReadTest extends AbstractSoTest {
                     rcvErr1.set(e.getMessage().equals("L1 Throw")); //exception is handled
                     return ProtoStatus.Next;
                 }
-            }).build();
+            }).build(ctx);
         };
 
         // start server
@@ -511,7 +511,7 @@ public class SoReadTest extends AbstractSoTest {
     public void rcvThrowTest_02() throws Throwable {
         AtomicBoolean rcvErr1 = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.standard().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
+            ProtoHelper.standard().nextDecoder("L1", new ProtoHandler<ByteBuf, String>() {
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) {
                     throw new IllegalStateException("L1 Throw");
@@ -527,7 +527,7 @@ public class SoReadTest extends AbstractSoTest {
                     rcvErr1.set(e.getMessage().equals("L1 Throw"));
                     throw new IllegalArgumentException(); //Additional exceptions,Cause connection closure.
                 }
-            }).build();
+            }).build(ctx);
         };
 
         // start server

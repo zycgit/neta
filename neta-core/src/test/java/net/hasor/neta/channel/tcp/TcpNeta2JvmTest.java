@@ -54,7 +54,7 @@ public class TcpNeta2JvmTest extends AbstractSoTest {
 
         // client send
         NetManager neta = new NetManager();
-        NetChannel clientSite = neta.connectAsync(address, ctx -> ProtoHelper.standard().build(), TcpSoConfig.TCP()).get();
+        NetChannel clientSite = neta.connectAsync(address, ctx -> ProtoHelper.standard().build(ctx), TcpSoConfig.TCP()).get();
         clientSite.sendData("Hello TCP".getBytes());
 
         // wait finish
@@ -71,7 +71,7 @@ public class TcpNeta2JvmTest extends AbstractSoTest {
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
 
         NetManager neta = new NetManager();
-        Future<NetChannel> future = neta.connectAsync(address, ctx -> ProtoHelper.standard().build(), TcpSoConfig.TCP());
+        Future<NetChannel> future = neta.connectAsync(address, ctx -> ProtoHelper.standard().build(ctx), TcpSoConfig.TCP());
         future.await();
 
         assert future.isDone();

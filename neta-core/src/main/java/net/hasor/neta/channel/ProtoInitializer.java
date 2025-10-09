@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Application protocol stack
@@ -23,5 +22,5 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 @FunctionalInterface
 public interface ProtoInitializer {
-    ProtoStack<ByteBuf> config(ProtoContext ctx);
+    void config(ProtoContext ctx);
 }

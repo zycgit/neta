@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.virtual;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.PlayLoad;
-import net.hasor.neta.channel.ProtoHelper;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
 import org.junit.Test;
 
 import java.util.ArrayList;
@@ -30,7 +26,7 @@ import java.util.ArrayList;
 public class VrtSubscribeTest {
     @Test
     public void direct() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build();
+        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build(ctx);
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
@@ -51,7 +47,7 @@ public class VrtSubscribeTest {
         ProtoInitializer initializer = ctx -> ProtoHelper.object().nextEncoder((context, src, dst) -> {
             dst.offerMessage("Data: " + src.takeMessage());
             return ProtoStatus.Next;
-        }).build();
+        }).build(ctx);
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());

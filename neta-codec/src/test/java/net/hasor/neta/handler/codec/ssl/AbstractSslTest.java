@@ -17,13 +17,7 @@ package net.hasor.neta.handler.codec.ssl;
 import net.hasor.cobble.function.EConsumer;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.ProtoHelper;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
 
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -45,7 +39,7 @@ public class AbstractSslTest {
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .build();
+                .build(ctx);
     }
 
     /** Decoding the message: ByteBuf -> String */

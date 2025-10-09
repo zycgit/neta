@@ -17,13 +17,7 @@ package net.hasor.neta.channel.tcp;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.AbstractSoTest;
-import net.hasor.neta.channel.NetListen;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.ProtoHandler;
-import net.hasor.neta.channel.ProtoHelper;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
 import org.junit.Test;
 
 import java.net.InetSocketAddress;
@@ -43,7 +37,7 @@ public class TcpJvm2NetaTest extends AbstractSoTest {
         // server
         AtomicBoolean tcpRead = new AtomicBoolean(false);
         ProtoInitializer initializer = ctx -> {
-            return ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
+            ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
                 while (src.hasMore()) {
                     ByteBuf data = src.takeMessage();
                     int len = data.readableBytes();
@@ -53,7 +47,7 @@ public class TcpJvm2NetaTest extends AbstractSoTest {
                     data.markReader();
                 }
                 return ProtoStatus.Next;
-            }).build();
+            }).build(ctx);
         };
         NetManager neta = new NetManager();
         NetListen serverSite = neta.bind(address, initializer, TcpSoConfig.TCP());

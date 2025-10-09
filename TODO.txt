@@ -47,15 +47,14 @@
 8. pipline 处理原则
     - 在 onMessage 执行遇到错误时，会从当前层开始进入 onError 传播流程，直至该异常被正确处理才会恢复 onMessage 流程。
     - 在 onError 阶段不应抛出异常，否则会导致中断 pipline 传递并且连接关闭。
-    -
+    - 只有在使用 ProtoInitializer 在初始化 pipline 时所添加的 ProtoHandler 和 ProtoDuplexer 会触发其 init 和 onActive 机制。
 
 
 高优先
-01. pipline 可以被动态添加和卸载
-02. ProtoStatistical 整合到 NetMonitor 中
-03. 背压机制 pipline 的输入/输出 队列容量是有界的，导致数据接收时如果通道没有可用槽需要暂停接收，目前会报错
-04. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
-05. SoConfig 类还未完成英文化
+01. ProtoStatistical 整合到 NetMonitor 中
+02. 背压机制 pipline 的输入/输出 队列容量是有界的，导致数据接收时如果通道没有可用槽需要暂停接收，目前会报错
+03. 如果 pipline 为空 ByteBuf 会直接丢弃，目前没有关闭，在 pool 下会有内存泄漏问题。
+04. SoConfig 类还未完成英文化
 
 次优先
 02. IP 白名单机制

@@ -31,13 +31,13 @@ import java.util.List;
 class ProtoChainRoot implements ProtoStack<Object> {
     private static final Logger                      logger = Logger.getLogger(ProtoChainRoot.class);
     private static final ByteBuf[]                   EMPTY  = new ByteBuf[0];
-    private              ProtoInvocation<?, ?, ?, ?> head;
-    private              ProtoInvocation<?, ?, ?, ?> tail;
     private final        ProtoQueue<Object>          tailRcvDown;
     private final        ProtoQueue<Object>          headSndDown;
+    private              ProtoInvocation<?, ?, ?, ?> head;
+    private              ProtoInvocation<?, ?, ?, ?> tail;
     private              long                        channelID;
 
-    ProtoChainRoot(ProtoConfig protoConf) {
+    ProtoChainRoot(SoConfig protoConf) {
         int rcvSize = protoConf.getRcvSlotSize();
         int sndSize = protoConf.getSndSlotSize();
         this.tailRcvDown = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
@@ -60,7 +60,16 @@ class ProtoChainRoot implements ProtoStack<Object> {
             this.tail.next = (ProtoInvocation<Object, Object, Object, Object>) invocation;
             this.tail = invocation;
         }
+    }
 
+    public void insertProtoStack(ProtoInvocation<?, ?, ?, ?> invocation) {
+        if (this.head == null) {
+            this.head = this.tail = invocation;
+        } else {
+            this.head.previous = (ProtoInvocation<Object, Object, Object, Object>) invocation;
+            invocation.next = (ProtoInvocation<Object, Object, Object, Object>) this.head;
+            this.head = invocation;
+        }
     }
 
     @Override
@@ -481,20 +490,6 @@ class ProtoChainRoot implements ProtoStack<Object> {
             return this.headSndDown.queueSize() + "/500+";
         } else {
             return this.headSndDown.queueSize() + "/" + capacity;
-        }
-    }
-
-    private static final class ProtoResult {
-        public final Object[] result;
-        public final int      backTo;
-        public final int      layerDepth;
-        public final boolean  finish;
-
-        public ProtoResult(Object[] result, int backTo, int layerDepth, boolean finish) {
-            this.result = result;
-            this.backTo = backTo;
-            this.layerDepth = layerDepth;
-            this.finish = finish;
         }
     }
 }
