@@ -177,8 +177,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     @Override
-    public void onClose(SoCloseListener<SoChannel<?>> listener) {
-        this.closeFuture.onCompleted(f -> listener.onClose(this));
+    public void onClose(SoChannelListener<SoChannel<?>> listener) {
+        this.closeFuture.onCompleted(f -> listener.onEvent(this));
     }
 
     /** Number of bytes received */

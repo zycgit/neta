@@ -17,17 +17,17 @@ package net.hasor.neta.channel;
 import java.util.EventListener;
 
 /**
- * Listener interface for receiving channel close events.
+ * Listener interface for channel events.
  *
  * @param <T> the type of channel that this listener can handle, must extend {@link SoChannel}
  * @author 赵永春 (zyc@hasor.net)
  * @version 2023-09-24
  */
 @FunctionalInterface
-public interface SoCloseListener<T extends SoChannel<?>> extends EventListener {
+public interface SoChannelListener<T extends SoChannel<?>> extends EventListener {
     /**
-     * Invoked when a channel is closed.
-     * @param channel the channel that was closed
+     * the channel.
+     * @param channel the channel
      */
-    void onClose(T channel);
+    void onEvent(T channel);
 }

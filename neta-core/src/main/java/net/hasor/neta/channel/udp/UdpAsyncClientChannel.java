@@ -65,6 +65,9 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
 
     @Override
     public void close() throws IOException {
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("udpClientSide(" + this.getChannelId() + ") close.");
+        }
         IOUtils.closeQuietly(this.readSelector);
         super.close();
     }

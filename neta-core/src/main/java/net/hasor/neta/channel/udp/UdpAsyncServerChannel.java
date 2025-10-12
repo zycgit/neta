@@ -90,6 +90,9 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
 
     @Override
     public void close() throws IOException {
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("udpServerSide(" + this.getChannelId() + ") close.");
+        }
         IOUtils.closeQuietly(this.channel);
         IOUtils.closeQuietly(this.selector);
         ByteBufUtils.CLEANER.freeDirectBuffer(this.receiveBuffer);

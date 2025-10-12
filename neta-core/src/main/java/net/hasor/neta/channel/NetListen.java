@@ -16,8 +16,11 @@
 package net.hasor.neta.channel;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.logging.Logger;
 
 import java.net.SocketAddress;
+import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 
@@ -27,24 +30,26 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version : 2023-09-24
  */
 public abstract class NetListen extends SoAttrChannel<NetListen> {
-    protected final  AsyncServerChannel channel;
+    protected static final Logger                                logger = Logger.getLogger(NetListen.class);
+    protected final        AsyncServerChannel                    channel;
     //
-    protected final  AtomicBoolean      closeStatus;
-    protected final  Future<NetListen>  closeFuture;
-    private final    long               channelId;
-    private final    long               createdTime;
-    private final    AtomicLong         acceptCount;
-    private final    Object             acceptLock;
-    private final    Object             closeLock;
+    protected final        AtomicBoolean                         closeStatus;
+    protected final        Future<NetListen>                     closeFuture;
+    private final          List<SoChannelListener<SoChannel<?>>> onAcceptListeners;
+    private final          long                                  channelId;
+    private final          long                                  createdTime;
+    private final          AtomicLong                            acceptCount;
+    private final          Object                                acceptLock;
+    private final          Object                                closeLock;
     //
-    private final    SocketAddress      listenAddr;
-    private final    int                listenPort;
-    private final    ProtoInitializer   initializer;
-    private final    SoContextService   context;
-    private final    SoConfig           soConfig;
-    private          long               lastActiveTime;
-    private          long               lastAcceptTime;
-    private volatile boolean            suspend;
+    private final          SocketAddress                         listenAddr;
+    private final          int                                   listenPort;
+    private final          ProtoInitializer                      initializer;
+    private final          SoContextService                      context;
+    private final          SoConfig                              soConfig;
+    private                long                                  lastActiveTime;
+    private                long                                  lastAcceptTime;
+    private volatile       boolean                               suspend;
 
     protected NetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
             ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
@@ -64,6 +69,7 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
 
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
+        this.onAcceptListeners = new CopyOnWriteArrayList<>();
     }
 
     @Override
@@ -141,7 +147,7 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
 
     @Override
     public <T> T findProtoContext(Class<T> serviceType) {
-        throw new UnsupportedOperationException();
+        throw new UnsupportedOperationException("Listen channel not support this method.");
     }
 
     /**
@@ -215,8 +221,14 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     }
 
     @Override
-    public void onClose(SoCloseListener<SoChannel<?>> listener) {
-        this.closeFuture.onCompleted(f -> listener.onClose(this));
+    public void onClose(SoChannelListener<SoChannel<?>> listener) {
+        this.closeFuture.onCompleted(f -> listener.onEvent(this));
+    }
+
+    public void onAccept(SoChannelListener<SoChannel<?>> listener) {
+        if (listener != null) {
+            this.onAcceptListeners.add(listener);
+        }
     }
 
     /**
@@ -231,6 +243,16 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
             synchronized (this.acceptLock) {
                 this.acceptLock.notifyAll();
             }
+
+            this.context.submitSoTask(new SoDelayTask(0), this).onCompleted(f -> {
+                this.onAcceptListeners.forEach(listener -> {
+                    try {
+                        listener.onEvent(channel);
+                    } catch (Exception e) {
+                        logger.error("onAccept error " + e.getMessage(), e);
+                    }
+                });
+            });
         }
     }
 

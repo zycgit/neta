@@ -77,14 +77,6 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         this.sndSwapBuf.clear();
         sndData.transferTo(this.sndSwapBuf);
         this.sndSwapBuf.flip();
-
-        // when sndData finish, use async task to completed.
-        if (!sndData.hasReadable()) {
-            wContext.popData();
-            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-                sndData.completed();
-            });
-        }
     }
 
     private void writeData(SoSndContext wContext) {
@@ -97,18 +89,27 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
     }
 
     @Override
-    public void completed(Integer result, SoSndContext context) {
+    public void completed(Integer result, SoSndContext wContext) {
         if (logger.isDebugEnabled()) {
             logger.debug("snd(" + this.channelId + ") size:" + result);
+        }
+
+        // when sndData finish, use async task to completed.
+        SoSndData sndData = wContext.peekData();
+        if (!sndData.hasReadable()) {
+            wContext.popData();
+            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+                sndData.completed();
+            });
         }
 
         this.monitor.updateSndCounter(result);
 
         if (this.sndSwapBuf.hasRemaining()) {
-            this.writeData(context);
-        } else if (!context.isEmpty()) {
-            this.copyData(context);
-            this.writeData(context);
+            this.writeData(wContext);
+        } else if (!wContext.isEmpty()) {
+            this.copyData(wContext);
+            this.writeData(wContext);
         } else {
             this.writing.set(false);
         }

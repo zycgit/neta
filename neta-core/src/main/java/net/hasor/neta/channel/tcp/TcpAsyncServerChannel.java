@@ -89,6 +89,9 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
 
     @Override
     public void close() throws IOException {
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("tcpListen(" + this.getChannelId() + ") close.");
+        }
         this.channel.close();
     }
 }

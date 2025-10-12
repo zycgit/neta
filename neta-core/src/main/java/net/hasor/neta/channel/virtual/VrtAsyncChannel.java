@@ -73,6 +73,9 @@ class VrtAsyncChannel implements AsyncChannel {
 
     @Override
     public void close() throws IOException {
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("vrtClose(" + this.getChannelId() + ") close.");
+        }
         this.closeFlag.set(true);
     }
 

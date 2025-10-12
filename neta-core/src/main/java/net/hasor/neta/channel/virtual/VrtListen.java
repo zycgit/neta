@@ -24,7 +24,6 @@ import net.hasor.neta.channel.SoContextService;
  * @version : 2023-09-24
  */
 public class VrtListen extends NetListen {
-
     private final VrtTransfer transfer;
 
     VrtListen(long channelId, VrtSocketAddress listenAddr, VrtAsyncServerChannel channel,//

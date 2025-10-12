@@ -120,6 +120,9 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
 
     @Override
     public void close() throws IOException {
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("vrtListen(" + this.getChannelId() + ") close.");
+        }
         this.vrtListen.getTransfer().close();
         this.listenPool.remove(this.listenAddr.getAddress());
     }

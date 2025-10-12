@@ -100,6 +100,9 @@ class TcpAsyncChannel implements AsyncChannel {
     @Override
     public void close() throws IOException {
         if (this.channel.isOpen()) {
+            if (this.context.getConfig().isPrintLog()) {
+                logger.info("tcpChannel(" + this.getChannelId() + ") close.");
+            }
             IOUtils.closeQuietly(this.channel);
         }
     }

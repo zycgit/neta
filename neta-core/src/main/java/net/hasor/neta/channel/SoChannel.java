@@ -71,7 +71,7 @@ public interface SoChannel<T> {
     void closeNow();
 
     /** Registers a listener to be notified when this channel is closed. */
-    void onClose(SoCloseListener<SoChannel<?>> listener);
+    void onClose(SoChannelListener<SoChannel<?>> listener);
 
     /** Returns true if this channel is closed. */
     boolean isClose();
