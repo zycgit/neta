@@ -238,6 +238,7 @@
             <modules>
                 <module>neta-example</module>
                 <module>performance</module>
+                <module>neta-lab</module>
             </modules>
         </profile>
     </profiles>
