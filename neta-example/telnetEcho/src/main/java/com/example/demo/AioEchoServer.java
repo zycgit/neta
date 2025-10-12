@@ -14,12 +14,7 @@
  * limitations under the License.
  */
 package com.example.demo;
-import net.hasor.neta.channel.NetChannel;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.SoConfig;
-import net.hasor.neta.channel.PlayLoad;
-import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.*;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
 import net.hasor.neta.handler.codec.string.StringHandler;
 
@@ -33,13 +28,12 @@ public class AioEchoServer {
 
     public static void main(String[] args) throws Throwable {
         // telnet protocol stack
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard()
-                //split according to \r\n, max line is 4K
-                .nextDecoder("max length", new LineBasedFrameHandler(4096, false))
-                // encoder/decoder string
-                .nextDuplex("string", new StringHandler())
-                // Build ProtoStack
-                .build(ctx);
+        ProtoInitializer initializer = ctx -> {
+            //split according to \r\n, max line is 4K
+            ctx.addLastDecoder("max length", new LineBasedFrameHandler(4096, false));
+            // encoder/decoder string
+            ctx.addLast("string", new StringHandler());
+        };
 
         // telnet server
         NetManager socket = new NetManager();
