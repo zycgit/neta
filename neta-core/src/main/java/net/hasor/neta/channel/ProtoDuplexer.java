@@ -54,6 +54,10 @@ public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     default void onActive(ProtoContext context) throws Throwable {
     }
 
+    default boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+        return true;
+    }
+
     /**
      * process data the protocol stack.
      * After the doLayer method returns, The {@link ProtoRcvQueue#rcvSubmit()}/{@link ProtoSndQueue#sndSubmit()} method of (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) will be called.

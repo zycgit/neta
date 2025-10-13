@@ -307,6 +307,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
             ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
         }
     }
+
     // ------------------------------------------------------------
     // SND
     // ------------------------------------------------------------
@@ -416,6 +417,25 @@ class ProtoChainRoot implements ProtoStack<Object> {
         if (ctxError != null) {
             PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, false, true);
             ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
+        }
+    }
+
+    // ------------------------------------------------------------
+    // User Event
+    // ------------------------------------------------------------
+
+    @Override
+    public void onUserEvent(ProtoContext protoCtx, SoUserEvent event) throws Throwable {
+        boolean continueStatus = true;
+        ProtoInvocation<?, ?, ?, ?> current = this.head;
+        while (current != null) {
+            try {
+                if (continueStatus) {
+                    continueStatus = current.onEvent(protoCtx, event);
+                }
+            } finally {
+                current = current.next;
+            }
         }
     }
 

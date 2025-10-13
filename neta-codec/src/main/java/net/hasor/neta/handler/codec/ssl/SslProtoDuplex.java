@@ -35,11 +35,8 @@ public class SslProtoDuplex implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, 
         SoChannel<?> channel = context.getChannel();
         String stackName = context.getStackName();
 
-        long channelID = channel.getChannelId();
-        boolean clientMode = channel.isClient();
-
         if (this.config.getProvider() == SslProvider.JSSE) {
-            context.context(SslContext.class, new JdkSslContext(channelID, stackName, context, this.config, clientMode));
+            context.context(SslContext.class, new JdkSslContext(channel, stackName, context, this.config, channel.isClient()));
         } else {
             throw new UnsupportedOperationException(this.config.getProvider() + " Unsupported.");
         }

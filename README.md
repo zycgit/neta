@@ -69,7 +69,7 @@ neta-core
 <dependency>
     <groupId>net.hasor</groupId>
     <artifactId>neta-all</artifactId>
-    <version>1.0.6</version>
+    <version>1.1.0</version>
 </dependency>
 ```
 

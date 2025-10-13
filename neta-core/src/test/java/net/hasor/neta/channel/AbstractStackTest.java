@@ -212,37 +212,4 @@ public class AbstractStackTest {
             }
         };
     }
-
-    protected static ProtoHandler<Integer, Integer> doNotCopyHandler(String tag, List<String> recordFinish, List<String> recordFailed) {
-        return new ProtoHandler<Integer, Integer>() {
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
-                recordFinish.add(tag + "DoNext");
-                return ProtoStatus.Next;
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                recordFailed.add(tag + "ErrNext");
-                return ProtoStatus.Next;
-            }
-        };
-    }
-
-    protected static ProtoDuplexer<Integer, Integer, Integer, Integer> doProtoLayer(boolean rcvSend, boolean sndSend) {
-        return (context, isRcv, rcvUp, rcvDown, sndUp, sndDown) -> {
-            if (isRcv) {
-                rcvDown.offerMessage(rcvUp.takeMessage(Math.min(rcvUp.queueSize(), rcvDown.slotSize())));
-                if (rcvSend) {
-                    sndDown.offerMessage(888);
-                }
-            } else {
-                sndDown.offerMessage(sndUp.takeMessage(Math.min(sndUp.queueSize(), sndDown.slotSize())));
-                if (sndSend) {
-                    sndDown.offerMessage(999);
-                }
-            }
-            return ProtoStatus.Next;
-        };
-    }
 }

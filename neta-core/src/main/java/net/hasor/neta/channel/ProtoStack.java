@@ -76,6 +76,12 @@ public interface ProtoStack<OUT> {
     OUT[] onSndError(ProtoContext protoCtx, String stackName, Throwable sndError) throws Throwable;
 
     /**
+     * event from the network layer.
+     * @param protoCtx protoCtx
+     */
+    void onUserEvent(ProtoContext protoCtx, SoUserEvent event) throws Throwable;
+
+    /**
      * before close.
      * @param protoCtx protoCtx
      */

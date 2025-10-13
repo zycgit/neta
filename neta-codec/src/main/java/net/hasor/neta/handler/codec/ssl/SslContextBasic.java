@@ -36,7 +36,8 @@ import java.util.Objects;
  */
 public abstract class SslContextBasic implements SslContext {
     protected static final Logger        logger = Logger.getLogger(SslContextBasic.class);
-    protected final        long          channelID;
+    protected final        SoChannel<?>  channel;
+    protected final        long          channelId;
     protected final        String        stackName;
     protected final        ProtoContext  protoCtx;
     protected final        SoContext     soContext;
@@ -50,8 +51,9 @@ public abstract class SslContextBasic implements SslContext {
     private final          SslHandle     sslHandler;
     protected volatile     boolean       sslEnable;
 
-    public SslContextBasic(long channelID, String stackName, SslConfig config, ProtoContext protoCtx, boolean clientMode) throws Exception {
-        this.channelID = channelID;
+    public SslContextBasic(SoChannel<?> channel, String stackName, SslConfig config, ProtoContext protoCtx, boolean clientMode) throws Exception {
+        this.channel = channel;
+        this.channelId = channel.getChannelId();
         this.stackName = stackName;
         this.protoCtx = protoCtx;
         this.soContext = protoCtx.getSoContext();
@@ -62,14 +64,19 @@ public abstract class SslContextBasic implements SslContext {
         this.sslConfig = config;
         this.sslEnable = true;
         this.sslContext = this.createSSLContext(this.sslConfig.getProtocols());
-        this.sslEngine = new SslEngineWrap(channelID, config, () -> this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine()));
-        this.sslHandler = new SslHandle(channelID, protoCtx, this.sslEngine, () -> {
+        this.sslEngine = new SslEngineWrap(this.channelId, config, () -> this.configSslEngine(this.sslContext, this.sslContext.createSSLEngine()));
+        this.sslHandler = new SslHandle(this.channelId, protoCtx, this, this.sslEngine, () -> {
             this.sslEnable = false;
         });
     }
 
     protected SslEngineWrap getEngine() {
         return this.sslEngine;
+    }
+
+    @Override
+    public SoChannel<?> getChannel() {
+        return this.channel;
     }
 
     @Override
@@ -108,7 +115,7 @@ public abstract class SslContextBasic implements SslContext {
         if (ks == null) {
             String defaultType = KeyStore.getDefaultType();
             if (this.sslLog) {
-                logger.info("ssl(" + this.channelID + ") create KeyStore using '" + defaultType + "'");
+                logger.info("ssl(" + this.channelId + ") create KeyStore using '" + defaultType + "'");
             }
             ks = KeyStore.getInstance(defaultType);
         }
@@ -123,7 +130,7 @@ public abstract class SslContextBasic implements SslContext {
         if (this.sslConfig.getAuthType() == SslAuthKeyType.JKS) {
             String jskResource = Objects.requireNonNull(this.sslConfig.getJksResource());
             if (this.sslLog) {
-                logger.info("ssl(" + this.channelID + ") loadKeyStore by JKS, " + jskResource);
+                logger.info("ssl(" + this.channelId + ") loadKeyStore by JKS, " + jskResource);
             }
 
             try (InputStream in = ResourcesUtils.getResourceAsStream(jskResource)) {
@@ -133,7 +140,7 @@ public abstract class SslContextBasic implements SslContext {
             String pemPrivate = Objects.requireNonNull(this.sslConfig.getPemPrivate(), "key required for servers");
             String pemCertChain = Objects.requireNonNull(this.sslConfig.getPemCertChain(), "keyCertChain");
             if (this.sslLog) {
-                logger.info("ssl(" + this.channelID + ") loadKeyStore by PEM pemPrivate = " + pemPrivate + ", pemCertChain = " + pemCertChain);
+                logger.info("ssl(" + this.channelId + ") loadKeyStore by PEM pemPrivate = " + pemPrivate + ", pemCertChain = " + pemCertChain);
             }
 
             X509Certificate[] certChain;
@@ -148,7 +155,7 @@ public abstract class SslContextBasic implements SslContext {
             SslUtils.loadKeyStore(keyStore, certChain, privateKey, passwordChars);
         } else {
             if (this.sslLog) {
-                logger.info("ssl(" + this.channelID + ") loadKeyStore ignore.");
+                logger.info("ssl(" + this.channelId + ") loadKeyStore ignore.");
             }
         }
 
@@ -184,7 +191,7 @@ public abstract class SslContextBasic implements SslContext {
         if (this.sslEnable) {
             if (!sndDown.hasSlot()) {
                 if (this.netLog) {
-                    logger.info("sslRcv(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
+                    logger.info("sslRcv(" + this.channelId + ") rcvDown or sndDown Buffer is full.");
                 }
                 return ProtoStatus.Next;
             }
@@ -205,7 +212,7 @@ public abstract class SslContextBasic implements SslContext {
         if (this.sslEnable) {
             if (!sndDown.hasSlot()) {
                 if (this.netLog) {
-                    logger.info("sslSnd(" + this.channelID + ") rcvDown or sndDown Buffer is full.");
+                    logger.info("sslSnd(" + this.channelId + ") rcvDown or sndDown Buffer is full.");
                 }
                 return ProtoStatus.Next;
             }
@@ -234,9 +241,9 @@ public abstract class SslContextBasic implements SslContext {
                 this.protoCtx.flush();
             } catch (IOException e) {
                 if (this.sslLog) {
-                    logger.error("ssl(" + this.channelID + ") closeSSL, flash close_notify failed, " + e.getMessage(), e);
+                    logger.error("ssl(" + this.channelId + ") closeSSL, flash close_notify failed, " + e.getMessage(), e);
                 } else {
-                    logger.error("ssl(" + this.channelID + ") closeSSL, flash close_notify failed, " + e.getMessage());
+                    logger.error("ssl(" + this.channelId + ") closeSSL, flash close_notify failed, " + e.getMessage());
                 }
             }
         }

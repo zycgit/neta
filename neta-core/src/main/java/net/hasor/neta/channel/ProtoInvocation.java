@@ -133,6 +133,10 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    public boolean onEvent(ProtoContext protoCtx, SoUserEvent event) throws Throwable {
+        return this.handler.onUserEvent(protoCtx, event);
+    }
+
     public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {
         ProtoRcvQueue<RCV_UP> rcvUp = (ProtoRcvQueue<RCV_UP>) this.rcvUp;
         ProtoSndQueue<RCV_DOWN> rcvDown = (ProtoSndQueue<RCV_DOWN>) (this.next == null ? this.chainRoot.getTailRcvDown() : this.next.rcvUp);

@@ -221,6 +221,11 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         }
     }
 
+    /* Receive event */
+    public <T> void fireUserEvent(Class<T> eventType, T event) throws Throwable {
+        this.protoStack.onUserEvent(this.protoCtx, SoUserEventObject.of(this, eventType, event));
+    }
+
     /**
      * sent data to remote, The network IO transfer operation is performed asynchronously.
      * <p>data goes through the application layer network protocol stack</p>

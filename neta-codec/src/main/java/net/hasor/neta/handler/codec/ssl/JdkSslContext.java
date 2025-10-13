@@ -74,8 +74,8 @@ public class JdkSslContext extends SslContextBasic {
         }
     }
 
-    public JdkSslContext(long channelID, String stackName, ProtoContext context, SslConfig config, boolean clientMode) throws Exception {
-        super(channelID, stackName, config, context, clientMode);
+    public JdkSslContext(SoChannel<?> channel, String stackName, ProtoContext context, SslConfig config, boolean clientMode) throws Exception {
+        super(channel, stackName, config, context, clientMode);
     }
 
     private static String[] defaultProtocols(SSLContext context, SSLEngine engine) {
@@ -192,7 +192,7 @@ public class JdkSslContext extends SslContextBasic {
     protected SSLContext createSSLContext(String[] protocol) throws GeneralSecurityException, IOException {
         if (this.sslConfig.getSslContext() != null) {
             SSLContext context = this.sslConfig.getSslContext();
-            logger.info("ssl(" + this.channelID + ") use user-defined SSLContext with protocol " + context.getProtocol());
+            logger.info("ssl(" + this.channelId + ") use user-defined SSLContext with protocol " + context.getProtocol());
             return context;
         }
 
@@ -221,7 +221,7 @@ public class JdkSslContext extends SslContextBasic {
                 context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
                 if (this.sslLog) {
-                    logger.info("ssl(" + this.channelID + ") create JdkSslContext with protocol " + p);
+                    logger.info("ssl(" + this.channelId + ") create JdkSslContext with protocol " + p);
                 }
                 return context;
             } catch (Exception ignored) {
@@ -235,7 +235,7 @@ public class JdkSslContext extends SslContextBasic {
     @Override
     protected SSLEngine configSslEngine(SSLContext sslContext, SSLEngine sslEngine) {
         if (this.sslLog) {
-            logger.info("ssl(" + this.channelID + ") create SSLEngine on " + (isClient() ? "client" : "server"));
+            logger.info("ssl(" + this.channelId + ") create SSLEngine on " + (isClient() ? "client" : "server"));
         }
         //        SSLParameters sslParameters = SSLContext.getDefault().getSupportedSSLParameters();
         //        sslParameters.setAlgorithmConstraints();
@@ -256,7 +256,7 @@ public class JdkSslContext extends SslContextBasic {
             ciphers = filterCipherSuites(Arrays.asList(ciphers), DEFAULT_CIPHERS_NON_TLSV13, SUPPORTED_CIPHERS_NON_TLSV13);
         }
         if (this.sslLog) {
-            logger.info("ssl(" + this.channelID + ") enabled CipherSuites [" + StringUtils.join(ciphers, ", ") + "]");
+            logger.info("ssl(" + this.channelId + ") enabled CipherSuites [" + StringUtils.join(ciphers, ", ") + "]");
         }
         sslEngine.setEnabledCipherSuites(ciphers);
 
@@ -264,7 +264,7 @@ public class JdkSslContext extends SslContextBasic {
         SslClientAuth clientAuth = this.sslConfig.getClientAuth();
         if (this.isServer() && clientAuth != null) {
             if (this.sslLog) {
-                logger.info("ssl(" + this.channelID + ") clientAuth = " + clientAuth);
+                logger.info("ssl(" + this.channelId + ") clientAuth = " + clientAuth);
             }
             switch (clientAuth) {
                 case OPTIONAL:
@@ -286,7 +286,7 @@ public class JdkSslContext extends SslContextBasic {
         final SslAppProtocolSelector protocolSelector = this.sslConfig.getAppProtocolSelector();
         if (protocolSelector != null) {
             JdkAlpnSslUtils.setHandshakeApplicationProtocolSelector(sslEngine, (engine, strings) -> {
-                SoChannel<?> channel = this.soContext.findChannel(this.channelID);
+                SoChannel<?> channel = this.soContext.findChannel(this.channelId);
                 return protocolSelector.selector(channel, engine, strings);
             });
         }

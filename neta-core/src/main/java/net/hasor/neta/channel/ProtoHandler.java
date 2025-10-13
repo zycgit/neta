@@ -35,6 +35,10 @@ public interface ProtoHandler<IN, OUT> {
     default void onActive(ProtoContext context) throws Throwable {
     }
 
+    default boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+        return true;
+    }
+
     /**
      * process data the protocol stack.
      */

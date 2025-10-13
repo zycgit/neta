@@ -21,7 +21,7 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRcvQueue;
 import net.hasor.neta.channel.ProtoSndQueue;
-import net.hasor.neta.channel.SoContext;
+import net.hasor.neta.channel.SoContextService;
 
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
@@ -40,9 +40,8 @@ class SslHandle {
     private static final ByteBuffer         EMPTY  = ByteBuffer.allocate(0);
     //
     private final        long               channelID;
-    private final        SslConfig          config;
-    private final        SoContext          context;
-    private final        ProtoContext       protoCtx;
+    private final        SoContextService   soContext;
+    private final        SslContext         sslContext;
     private final        SslEngineWrap      engine;
     private final        ByteBufAllocator   bufAllocator;
     private final        boolean            sslLog;
@@ -54,13 +53,12 @@ class SslHandle {
     private              ByteBuffer         outNetData;
     private              ByteBuffer         outAppData;
 
-    public SslHandle(long channelID, ProtoContext protoCtx, SslEngineWrap engine, Runnable closeCallBack) {
+    public SslHandle(long channelID, ProtoContext protoCtx, SslContext sslContext, SslEngineWrap engine, Runnable closeCallBack) {
         this.channelID = channelID;
-        this.config = engine.getConfig();
-        this.context = protoCtx.getSoContext();
-        this.protoCtx = protoCtx;
+        this.soContext = (SoContextService) protoCtx.getSoContext();
+        this.sslContext = sslContext;
         this.engine = engine;
-        this.bufAllocator = this.context.getByteBufAllocator();
+        this.bufAllocator = protoCtx.getSoContext().getByteBufAllocator();
         this.sslLog = protoCtx.getSoContext().getConfig().isPrintLog();
         this.handshake = SslHandshakeStatus.NotHandshaking;
         this.closeCallBack = closeCallBack;
@@ -180,6 +178,8 @@ class SslHandle {
                     if (hs == HandshakeStatus.FINISHED) {
                         this.handshake = SslHandshakeStatus.Finish;
                         logger.info("sslHandshake(" + this.channelID + ") finish.");
+                        this.soContext.notifyUserEvent(this.channelID, SslEvent.class, new SslEvent(true, this.sslContext));
+
                         if (this.outAppData.hasRemaining()) {
                             this.handshakeWrap(sndUp, sndDown);
                         }
@@ -339,6 +339,7 @@ class SslHandle {
         this.clearBuffers();
         this.handshake = SslHandshakeStatus.NotHandshaking;
         this.closeCallBack.run();
+        this.soContext.notifyUserEvent(this.channelID, SslEvent.class, new SslEvent(false, this.sslContext));
     }
     // --------------------------------------------------------------------------------------------
     //

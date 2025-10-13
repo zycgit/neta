@@ -311,6 +311,26 @@ public class SoContextService implements SoContext {
         this.globalTimer.newTimeout(task, delay, unit);
     }
 
+    public <T> void notifyUserEvent(long channelId, Class<T> eventType, T event) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("notifyUserEvent, channel not found. channelId : " + channelId);
+            return;
+        }
+
+        if (!(channel instanceof NetChannel)) {
+            logger.error("only NetChannel can notifyUserEvent. channelId : " + channelId);
+            return;
+        }
+
+        try {
+            ((NetChannel) channel).fireUserEvent(eventType, event);
+        } catch (Throwable e) {
+            SoException ee = e instanceof SoException ? (SoException) e : new SoRcvException(e.getMessage(), e);
+            this.notifyRcvChannelException(channelId, false, ee);
+        }
+    }
+
     public void notifyBindChannelException(long channelId, SoBindException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {

@@ -18,6 +18,11 @@ class ProtoDecoderDuplexWrap<RCV_UP, RCV_DOWN, SND> implements ProtoDuplexer<RCV
     }
 
     @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+        return this.decoder.onUserEvent(context, event);
+    }
+
+    @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<RCV_UP> rcvUp, ProtoSndQueue<RCV_DOWN> rcvDown, ProtoRcvQueue<SND> sndUp, ProtoSndQueue<SND> sndDown) throws Throwable {
         if (isRcv) {
             return this.decoder.onMessage(context, rcvUp, rcvDown);

@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.handler.codec.ssl;
 import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.SoChannel;
 
 /**
  * A status for {@link ProtoDuplexer}
@@ -25,6 +26,8 @@ public interface SslContext {
 
     /** return ssl config. */
     SslConfig getConfig();
+
+    SoChannel<?> getChannel();
 
     /** SSL server side */
     boolean isServer();
