@@ -50,7 +50,7 @@ public class VrtChannel extends NetChannel {
      */
     public void onReceive(Object... object) {
         if (object != null) {
-            this.context.notifyRcvChannelData(this.getChannelId(), object);
+            this.soContext.notifyRcvChannelData(this.getChannelId(), object);
         }
     }
 
@@ -60,7 +60,7 @@ public class VrtChannel extends NetChannel {
      */
     public void onReceiveError(SoException e) {
         if (e != null) {
-            this.context.notifyRcvChannelException(this.getChannelId(), true, e);
+            this.soContext.notifyRcvChannelException(this.getChannelId(), true, e);
         }
     }
 
@@ -70,7 +70,7 @@ public class VrtChannel extends NetChannel {
      */
     public void onSendError(SoException e) {
         if (e != null) {
-            this.context.notifySndChannelException(this.getChannelId(), true, e);
+            this.soContext.notifySndChannelException(this.getChannelId(), true, e);
         }
     }
 }

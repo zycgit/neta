@@ -73,50 +73,89 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     @Override
-    public int getRcvSlotSize() {
-        return this.tailRcvDown.slotSize();
-    }
-
-    @Override
     public int getSndSlotSize() {
         return this.headSndDown.slotSize();
     }
 
-    @Override
-    public void onInit(ProtoContext protoCtx) throws Throwable {
-        this.channelID = protoCtx.getChannel().getChannelId();
-
+    public String findNextStack(String withName) {
         ProtoInvocation<?, ?, ?, ?> current = this.head;
         while (current != null) {
-            try {
-                current.onInit(protoCtx);
-            } finally {
+            if (StringUtils.equals(current.getName(), withName)) {
+                if (current.next != null) {
+                    return current.next.getName();
+                } else {
+                    return null; // has no next
+                }
+            } else {
                 current = current.next;
             }
+        }
+        return null;
+    }
+
+    public String findPreviousStack(String withName) {
+        ProtoInvocation<?, ?, ?, ?> current = this.tail;
+        while (current != null) {
+            if (StringUtils.equals(current.getName(), withName)) {
+                if (current.previous != null) {
+                    return current.previous.getName();
+                } else {
+                    return null; // has no previous
+                }
+            } else {
+                current = current.previous;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public void onInit(ProtoContext protoCtx) throws Throwable {
+        try {
+            this.channelID = protoCtx.getChannel().getChannelId();
+
+            ProtoInvocation<?, ?, ?, ?> current = this.head;
+            while (current != null) {
+                try {
+                    current.onInit(protoCtx);
+                } finally {
+                    current = current.next;
+                }
+            }
+        } finally {
+            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
     @Override
     public void onActive(ProtoContext protoCtx) throws Throwable {
-        ProtoInvocation<?, ?, ?, ?> current = this.head;
-        while (current != null) {
-            try {
-                current.onActive(protoCtx);
-            } finally {
-                current = current.next;
+        try {
+            ProtoInvocation<?, ?, ?, ?> current = this.head;
+            while (current != null) {
+                try {
+                    current.onActive(protoCtx);
+                } finally {
+                    current = current.next;
+                }
             }
+        } finally {
+            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
     @Override
     public void onClose(ProtoContext protoCtx) {
-        ProtoInvocation<?, ?, ?, ?> current = this.head;
-        while (current != null) {
-            try {
-                current.onClose(protoCtx);
-            } finally {
-                current = current.next;
+        try {
+            ProtoInvocation<?, ?, ?, ?> current = this.head;
+            while (current != null) {
+                try {
+                    current.onClose(protoCtx);
+                } finally {
+                    current = current.next;
+                }
             }
+        } finally {
+            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
@@ -423,20 +462,72 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // ------------------------------------------------------------
     // User Event
     // ------------------------------------------------------------
+    @Override
+    public void onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        try {
+            if (this.doRcvUserEvent(protoCtx, stackName, event)) {
+                this.doSndUserEvent(protoCtx, null, event);
+            }
+        } finally {
+            ((ProtoContextService) protoCtx).clearFlash();
+        }
+    }
 
     @Override
-    public void onUserEvent(ProtoContext protoCtx, SoUserEvent event) throws Throwable {
+    public void onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        try {
+            this.doSndUserEvent(protoCtx, stackName, event);
+        } finally {
+            ((ProtoContextService) protoCtx).clearFlash();
+        }
+    }
+
+    private boolean doRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
         boolean continueStatus = true;
+        boolean found = false;
         ProtoInvocation<?, ?, ?, ?> current = this.head;
         while (current != null) {
             try {
+                if (!found) {
+                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                        found = true;
+                    } else {
+                        continue;
+                    }
+                }
+
                 if (continueStatus) {
-                    continueStatus = current.onEvent(protoCtx, event);
+                    continueStatus = current.onEvent(protoCtx, event, true);
                 }
             } finally {
                 current = current.next;
             }
         }
+        return continueStatus;
+    }
+
+    private boolean doSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        boolean continueStatus = true;
+        boolean found = false;
+        ProtoInvocation<?, ?, ?, ?> current = this.tail;
+        while (current != null) {
+            try {
+                if (!found) {
+                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                        found = true;
+                    } else {
+                        continue;
+                    }
+                }
+
+                if (continueStatus) {
+                    continueStatus = current.onEvent(protoCtx, event, false);
+                }
+            } finally {
+                current = current.previous;
+            }
+        }
+        return continueStatus;
     }
 
     // ------------------------------------------------------------

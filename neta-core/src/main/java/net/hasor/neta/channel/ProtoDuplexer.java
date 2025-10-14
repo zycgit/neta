@@ -54,7 +54,7 @@ public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     default void onActive(ProtoContext context) throws Throwable {
     }
 
-    default boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+    default boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
         return true;
     }
 

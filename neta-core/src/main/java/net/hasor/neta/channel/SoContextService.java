@@ -311,23 +311,45 @@ public class SoContextService implements SoContext {
         this.globalTimer.newTimeout(task, delay, unit);
     }
 
-    public <T> void notifyUserEvent(long channelId, Class<T> eventType, T event) {
+    public void notifyRcvUserEvent(long channelId, String stackName, SoUserEvent event) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("notifyUserEvent, channel not found. channelId : " + channelId);
+            logger.error("notifyRcvUserEvent, channel not found. channelId : " + channelId);
             return;
         }
 
         if (!(channel instanceof NetChannel)) {
-            logger.error("only NetChannel can notifyUserEvent. channelId : " + channelId);
+            logger.error("only NetChannel can notifyRcvUserEvent. channelId : " + channelId);
             return;
         }
 
         try {
-            ((NetChannel) channel).fireUserEvent(eventType, event);
+            NetChannel netChannel = (NetChannel) channel;
+            netChannel.protoStack.onRcvUserEvent(netChannel.protoCtx, stackName, event);
         } catch (Throwable e) {
             SoException ee = e instanceof SoException ? (SoException) e : new SoRcvException(e.getMessage(), e);
             this.notifyRcvChannelException(channelId, false, ee);
+        }
+    }
+
+    public void notifySndUserEvent(long channelId, String stackName, SoUserEvent event) {
+        SoChannel<?> channel = this.channelMap.get(channelId);
+        if (channel == null) {
+            logger.error("notifySndUserEvent, channel not found. channelId : " + channelId);
+            return;
+        }
+
+        if (!(channel instanceof NetChannel)) {
+            logger.error("only NetChannel can notifySndUserEvent. channelId : " + channelId);
+            return;
+        }
+
+        try {
+            NetChannel netChannel = (NetChannel) channel;
+            netChannel.protoStack.onSndUserEvent(netChannel.protoCtx, stackName, event);
+        } catch (Throwable e) {
+            SoException ee = e instanceof SoException ? (SoException) e : new SoSndException(e.getMessage(), e);
+            this.notifySndChannelException(channelId, false, ee);
         }
     }
 

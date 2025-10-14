@@ -18,8 +18,6 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
-import java.io.IOException;
-
 /**
  * Each {@link NetChannel} has a {@link ProtoContext}.
  * @author 赵永春 (zyc@hasor.net)
@@ -47,6 +45,10 @@ public interface ProtoContext {
      */
     String getStackName();
 
+    String findNextStack(String withName);
+
+    String findPreviousStack(String withName);
+
     /** Get the attachment for {@link ProtoContext} */
     <T> T context(Class<T> attachment);
 
@@ -64,10 +66,12 @@ public interface ProtoContext {
     <T> T flash(String key, T flash);
 
     /** write data to protocol stack, the event propagates backward from the current protocol layer */
-    Future<?> sendData(Object writeData) throws IOException;
+    Future<?> sendData(Object writeData);
+
+    <T> void fireUserEvent(Class<T> eventType, T event);
 
     /** Refresh the protocol stack, the event propagates backward from the current protocol layer */
-    Future<?> flush() throws IOException;
+    Future<?> flush();
 
     /** return ByteBufAllocator from SoContext. */
     ByteBufAllocator byteBufAllocator();

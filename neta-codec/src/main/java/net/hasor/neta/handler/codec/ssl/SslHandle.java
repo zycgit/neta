@@ -18,10 +18,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
-import net.hasor.neta.channel.SoContextService;
+import net.hasor.neta.channel.*;
 
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
@@ -40,6 +37,7 @@ class SslHandle {
     private static final ByteBuffer         EMPTY  = ByteBuffer.allocate(0);
     //
     private final        long               channelID;
+    private final        ProtoContext       protoCtx;
     private final        SoContextService   soContext;
     private final        SslContext         sslContext;
     private final        SslEngineWrap      engine;
@@ -55,6 +53,7 @@ class SslHandle {
 
     public SslHandle(long channelID, ProtoContext protoCtx, SslContext sslContext, SslEngineWrap engine, Runnable closeCallBack) {
         this.channelID = channelID;
+        this.protoCtx = protoCtx;
         this.soContext = (SoContextService) protoCtx.getSoContext();
         this.sslContext = sslContext;
         this.engine = engine;
@@ -178,7 +177,7 @@ class SslHandle {
                     if (hs == HandshakeStatus.FINISHED) {
                         this.handshake = SslHandshakeStatus.Finish;
                         logger.info("sslHandshake(" + this.channelID + ") finish.");
-                        this.soContext.notifyUserEvent(this.channelID, SslEvent.class, new SslEvent(true, this.sslContext));
+                        ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslEvent.class, new SslEvent(true, this.sslContext));
 
                         if (this.outAppData.hasRemaining()) {
                             this.handshakeWrap(sndUp, sndDown);
@@ -335,11 +334,11 @@ class SslHandle {
         this.outAppData.clear();
     }
 
-    public void afterClose() {
+    public void afterClose() throws IOException {
         this.clearBuffers();
         this.handshake = SslHandshakeStatus.NotHandshaking;
         this.closeCallBack.run();
-        this.soContext.notifyUserEvent(this.channelID, SslEvent.class, new SslEvent(false, this.sslContext));
+        ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslEvent.class, new SslEvent(false, this.sslContext));
     }
     // --------------------------------------------------------------------------------------------
     //

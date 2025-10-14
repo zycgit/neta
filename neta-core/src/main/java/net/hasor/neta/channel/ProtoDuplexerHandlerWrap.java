@@ -43,10 +43,12 @@ class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pr
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
-        boolean r1 = this.decoder.onUserEvent(context, event);
-        boolean r2 = this.encoder.onUserEvent(context, event);
-        return r1 || r2;
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        if (isRcv) {
+            return this.decoder.onUserEvent(context, event);
+        } else {
+            return this.encoder.onUserEvent(context, event);
+        }
     }
 
     @Override

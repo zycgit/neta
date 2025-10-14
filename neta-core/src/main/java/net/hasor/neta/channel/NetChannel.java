@@ -41,7 +41,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     protected final      AsyncChannel        asyncChannel;
     protected final      NetListen           forListen;
     protected final      SoSndContext        wContext;
-    protected final      SoContextService    context;
+    protected final      SoContextService    soContext;
     protected final      NetMonitor          monitor;
     //
     final                ProtoContextService protoCtx;
@@ -51,16 +51,16 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     private final        long                channelId;
     private final        Object              readTimeoutSyncObj;
 
-    protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
+    protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService soContext) throws IOException {
         this.channelId = channelId;
         this.asyncChannel = asyncChannel;
         this.forListen = forListen;
         this.monitor = monitor;
         this.readTimeoutSyncObj = new Object();
         this.wContext = new SoSndContext();
-        this.context = context;
+        this.soContext = soContext;
 
-        this.protoCtx = new ProtoContextService(this, context);
+        this.protoCtx = new ProtoContextService(this, soContext);
         this.protoStack = this.protoCtx.getChainRoot();
         initializer.config(this.protoCtx);
         this.closeStatus = new AtomicBoolean(false);
@@ -119,7 +119,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
     @Override
     public SoContext getContext() {
-        return this.context;
+        return this.soContext;
     }
 
     AsyncChannel getAsyncChannel() {
@@ -154,8 +154,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     public Future<NetChannel> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
             if (this.asyncChannel.isOpen()) {
-                SoCloseTask task = new SoCloseTask(this.channelId, this.context, false);
-                this.context.submitSoTask(task, this).onCompleted(f -> {
+                SoCloseTask task = new SoCloseTask(this.channelId, this.soContext, false);
+                this.soContext.submitSoTask(task, this).onCompleted(f -> {
                     this.closeFuture.completed(this);
                 }).onFailed(f -> {
                     this.closeFuture.failed(f.getCause());
@@ -171,7 +171,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     public void closeNow() {
         if (this.asyncChannel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
             logger.info("channel(" + this.channelId + ") closeNow");
-            new SoCloseTask(this.channelId, this.context, true).run();
+            new SoCloseTask(this.channelId, this.soContext, true).run();
         }
         this.closeFuture.completed(this);
     }
@@ -197,33 +197,33 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             this.readTimeoutSyncObj.notifyAll();
         }
 
-        try {
-            Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, rcvBytes);
-            if (dataArray != null && dataArray.length > 0) {
-                appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
-            }
-        } finally {
-            this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
+        Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, rcvBytes);
+        if (dataArray != null && dataArray.length > 0) {
+            appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
         }
     }
 
     /* Receive error */
     protected final void notifyError(boolean isRcv, Throwable e) throws Throwable {
-        try {
-            Object[] dataArray = isRcv ?//
-                    this.protoStack.onRcvError(this.protoCtx, null, e) ://
-                    this.protoStack.onSndError(this.protoCtx, null, e);
-            if (dataArray != null && dataArray.length > 0) {
-                appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
-            }
-        } finally {
-            this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
+        Object[] dataArray = isRcv ?//
+                this.protoStack.onRcvError(this.protoCtx, null, e) ://
+                this.protoStack.onSndError(this.protoCtx, null, e);
+        if (dataArray != null && dataArray.length > 0) {
+            appendSoSndTask(toSoSndData(new BasicFuture<>(), dataArray));
         }
     }
 
     /* Receive event */
-    public <T> void fireUserEvent(Class<T> eventType, T event) throws Throwable {
-        this.protoStack.onUserEvent(this.protoCtx, SoUserEventObject.of(this, eventType, event));
+    public <T> void fireUserEvent(Class<T> eventType, T event) {
+        this.notifyUserEvent(true, null, eventType, event);
+    }
+
+    protected <T> void notifyUserEvent(boolean isRcv, String stackName, Class<T> eventType, T event) {
+        if (isRcv) {
+            this.soContext.notifyRcvUserEvent(this.channelId, stackName, SoUserEventObject.of(this, eventType, event));
+        } else {
+            this.soContext.notifySndUserEvent(this.channelId, stackName, SoUserEventObject.of(this, eventType, event));
+        }
     }
 
     /**
@@ -293,8 +293,6 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         } catch (Throwable e) {
             logger.error("snd(" + this.channelId + ") failed, " + e.getMessage(), e);
             future.failed(e);
-        } finally {
-            this.protoCtx.clearFlash(); // Cleanup must be performed because there are times when ProtoChainRoot is not used
         }
         return future;
     }
@@ -318,7 +316,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
                 ByteBuf tmpBuf = (ByteBuf) buf;
                 sendSize = sendSize + ((ByteBuf) buf).readableBytes();
 
-                wrap[i] = this.context.getByteBufAllocator().buffer(tmpBuf.readableBytes());
+                wrap[i] = this.soContext.getByteBufAllocator().buffer(tmpBuf.readableBytes());
                 ((ByteBuf) wrap[i]).writeBuffer(tmpBuf);
                 ((ByteBuf) wrap[i]).markWriter();
                 tmpBuf.markReader();
@@ -347,7 +345,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     private synchronized void appendSoSndTask(SoSndData wTask) {
-        if (this.context.getConfig().isPrintLog()) {
+        if (this.soContext.getConfig().isPrintLog()) {
             logger.info("snd(" + this.channelId + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
         }
 
@@ -385,13 +383,13 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             public void run(Timeout timeout) {
                 if (getLastRcvTime() <= this.lastRcvTime) {
                     SoReadTimeoutException readTimeout = new SoReadTimeoutException("no data was received with " + this.waitTimeMs + " milliseconds.");
-                    context.notifyRcvChannelException(channelId, false, readTimeout);
+                    soContext.notifyRcvChannelException(channelId, false, readTimeout);
                 }
             }
         }
 
         long waitTimeMs = unit.toMillis(timeout);
-        this.context.newTimeout(new CheckTimeout(this.monitor.getLastRcvTime(), waitTimeMs), timeout, unit);
+        this.soContext.newTimeout(new CheckTimeout(this.monitor.getLastRcvTime(), waitTimeMs), timeout, unit);
     }
 
     /**

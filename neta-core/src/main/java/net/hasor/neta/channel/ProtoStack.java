@@ -22,15 +22,10 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2023-09-24
  */
 public interface ProtoStack<OUT> {
-
-    /**
-     * Returns the number of available ProtoStack receive slots, The maximum value is Integer.MAX_VALUE
-     */
-    int getRcvSlotSize();
-
     /**
      * Returns the number of ProtoStack send slots available, The maximum value is Integer.MAX_VALUE
      */
+    @Deprecated
     int getSndSlotSize();
 
     /**
@@ -61,6 +56,12 @@ public interface ProtoStack<OUT> {
     OUT[] onRcvError(ProtoContext protoCtx, String stackName, Throwable rcvError) throws Throwable;
 
     /**
+     * event from the network layer.
+     * @param protoCtx protoCtx
+     */
+    void onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable;
+
+    /**
      * Trigger sending data
      * @param protoCtx protoCtx
      * @param sndData send data
@@ -79,7 +80,7 @@ public interface ProtoStack<OUT> {
      * event from the network layer.
      * @param protoCtx protoCtx
      */
-    void onUserEvent(ProtoContext protoCtx, SoUserEvent event) throws Throwable;
+    void onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable;
 
     /**
      * before close.

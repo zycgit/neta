@@ -39,9 +39,10 @@ import java.util.Objects;
  * @version : 2023-10-20
  */
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    public static final  String                                            RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
-    public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
-    private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
+    public static final  String                                            RCV_ERROR_TAG  = ProtoChainRoot.class.getName() + "-rcv-error-tag";
+    public static final  String                                            SND_ERROR_TAG  = ProtoChainRoot.class.getName() + "-snd-error-tag";
+    private static final String                                            FIRE_EVENT_TAG = ProtoChainRoot.class.getName() + "-fire-event-tag";
+    private static final Logger                                            logger         = Logger.getLogger(ProtoInvocation.class);
     protected final      ProtoQueue<Object>                                rcvUp;
     protected final      ProtoQueue<Object>                                sndUp;
     private final        String                                            name;
@@ -56,25 +57,8 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
         this.name = name;
         this.handler = handler;
-
         this.rcvUp = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
         this.sndUp = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
-
-        this.chainRoot = chainRoot;
-    }
-
-    ProtoInvocation(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoChainRoot chainRoot) {
-        Objects.requireNonNull(protoConf, "protoConf is null.");
-        Objects.requireNonNull(handler, "handler is null.");
-
-        this.name = name;
-        this.handler = handler;
-
-        int rcvSize = protoConf.getRcvSlotSize();
-        int sndSize = protoConf.getSndSlotSize();
-        this.rcvUp = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
-        this.sndUp = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
-
         this.chainRoot = chainRoot;
     }
 
@@ -133,8 +117,8 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    public boolean onEvent(ProtoContext protoCtx, SoUserEvent event) throws Throwable {
-        return this.handler.onUserEvent(protoCtx, event);
+    public boolean onEvent(ProtoContext protoCtx, SoUserEvent event, boolean isRcv) throws Throwable {
+        return this.handler.onUserEvent(protoCtx, event, isRcv);
     }
 
     public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {

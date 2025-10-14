@@ -18,7 +18,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -70,6 +69,16 @@ class ProtoContextService implements ProtoContext {
     }
 
     @Override
+    public String findNextStack(String withName) {
+        return this.chainRoot.findNextStack(withName);
+    }
+
+    @Override
+    public String findPreviousStack(String withName) {
+        return this.chainRoot.findPreviousStack(withName);
+    }
+
+    @Override
     public <T> T context(Class<T> attachment) {
         return (T) this.contextData.get(attachment);
     }
@@ -100,7 +109,7 @@ class ProtoContextService implements ProtoContext {
     }
 
     @Override
-    public Future<?> sendData(Object writeData) throws IOException {
+    public Future<?> sendData(Object writeData) {
         if (this.channel instanceof NetChannel) {
             String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
             if (StringUtils.isNotBlank(current)) {
@@ -114,7 +123,25 @@ class ProtoContextService implements ProtoContext {
     }
 
     @Override
-    public Future<?> flush() throws IOException {
+    public <T> void fireUserEvent(Class<T> eventType, T event) {
+        if (this.channel instanceof NetChannel) {
+            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+            current = StringUtils.isBlank(current) ? null : current;
+
+            if (this.isRcv()) {
+                String found = this.chainRoot.findNextStack(current);
+                ((NetChannel) this.channel).notifyUserEvent(true, found, eventType, event);
+            } else {
+                String found = this.chainRoot.findPreviousStack(current);
+                ((NetChannel) this.channel).notifyUserEvent(false, found, eventType, event);
+            }
+        } else {
+            throw new UnsupportedOperationException("only NetChannel support fireUserEvent.");
+        }
+    }
+
+    @Override
+    public Future<?> flush() {
         if (this.channel instanceof NetChannel) {
             String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
             return ((NetChannel) this.channel).flush(current);
@@ -232,7 +259,7 @@ class ProtoContextService implements ProtoContext {
     @Override
     public void addLastEncoder(ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addFirstEncoder(SoUtils.generateName(encoder), encoder);
+        this.addLastEncoder(SoUtils.generateName(encoder), encoder);
     }
 
     @Override
