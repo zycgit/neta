@@ -31,21 +31,21 @@ import java.util.Objects;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
-public class StringHandler implements ProtoDuplexer<ByteBuf, String, String, ByteBuf> {
+public class StringProtoDuplexer implements ProtoDuplexer<ByteBuf, String, String, ByteBuf> {
     private final StringDecoderHandler stringDecoder;
     private final StringEncoderHandler stringEncoder;
 
     /**
      * Creates a new instance with the current system character set.
      */
-    public StringHandler() {
+    public StringProtoDuplexer() {
         this(Charset.defaultCharset());
     }
 
     /**
      * Creates a new instance with the specified character set.
      */
-    public StringHandler(Charset charset) {
+    public StringProtoDuplexer(Charset charset) {
         Objects.requireNonNull(charset, "charset");
         this.stringDecoder = new StringDecoderHandler(charset);
         this.stringEncoder = new StringEncoderHandler(charset);
