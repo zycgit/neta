@@ -190,12 +190,14 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         byteBuf.writeBuffer(this.receiveBuffer);
         byteBuf.markWriter();
         int readableBytes = byteBuf.readableBytes();
+        socket.getNetMonitor().updateRcvCounter(readableBytes);
         if (logger.isDebugEnabled()) {
             logger.debug("rcv(" + this.channelId + ") the receive " + readableBytes + " bytes");
         }
 
-        socket.getNetMonitor().updateRcvCounter(byteBuf.readableBytes());
-        this.context.notifyRcvChannelData(socket.getChannelId(), byteBuf);
+        this.submitTask(new SoDelayTask(0)).onFinal(f -> {
+            this.context.notifyRcvChannelData(socket.getChannelId(), byteBuf);
+        });
     }
 
     private UdpChannel findOrCreateChannel(NetListen listen, SocketAddress localAddr, InetSocketAddress remoteAddr, Map<String, UdpChannel> channelMap) throws SoConnectException {
