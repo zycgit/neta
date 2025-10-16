@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
+import java.io.IOException;
+import java.nio.ByteOrder;
+import java.util.List;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-
-import java.io.IOException;
-import java.nio.ByteOrder;
-import java.util.List;
 
 /**
  * A decoder that splits the received {@link ByteBuf}s dynamically by the
@@ -31,7 +30,6 @@ import java.util.List;
  * <b>lengthFieldOffset</b>   = <b>0</b>
  * <b>lengthFieldLength</b>   = <b>2</b> (0~8)
  * initialBytesToStrip = 0 (= do not strip header)
- *
  * BEFORE (14 bytes)                  AFTER (14 bytes)
  * +--------+----------------+        +--------+----------------+
  * | Length | Actual Content | -----> | Length | Actual Content |
@@ -43,7 +41,6 @@ import java.util.List;
  * lengthFieldOffset   = 0
  * lengthFieldLength   = 2 (0~8)
  * <b>initialBytesToStrip</b> = <b>2</b> (= the length of the Length field)
- *
  * BEFORE (14 bytes)                  AFTER (12 bytes)
  * +--------+----------------+        +----------------+
  * | Length | Actual Content | -----> | Actual Content |
@@ -55,7 +52,6 @@ import java.util.List;
  * lengthFieldOffset   =  1
  * lengthFieldLength   =  2 (0~8)
  * <b>initialBytesToStrip</b> =  <b>3</b>
- *
  * BEFORE (16 bytes)                                AFTER (13 bytes)
  * +------+--------+------+----------------+        +------+----------------+
  * | HDR1 | Length | HDR2 | Actual Content | -----> | HDR2 | Actual Content |
@@ -75,7 +71,6 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
 
     /**
      * Creates a new decoder.
-     *
      * @param byteOrder the {@link ByteOrder} of the length field
      * @param lengthFieldLength the length of the length field
      */

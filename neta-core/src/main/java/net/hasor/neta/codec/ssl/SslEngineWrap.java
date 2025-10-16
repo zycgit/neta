@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.cobble.function.ESupplier;
-import net.hasor.cobble.logging.Logger;
-
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import javax.net.ssl.SSLEngine;
 import javax.net.ssl.SSLEngineResult;
 import javax.net.ssl.SSLEngineResult.HandshakeStatus;
 import javax.net.ssl.SSLException;
-import java.io.IOException;
-import java.nio.ByteBuffer;
+import net.hasor.cobble.function.ESupplier;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * Encapsulate SSLEngine.

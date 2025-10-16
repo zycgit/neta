@@ -14,16 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.*;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.*;
 
 /**
  * An implementation of the {@link AsyncChannel} interface for UDP communication.
@@ -36,11 +35,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * <p>
  * Upon creation, the channel is registered with a selector for reading, and all I/O operations
  * are performed by the provided I/O executor service.
- *
- * @see java.nio.channels.DatagramChannel
- * @see java.util.concurrent.ExecutorService
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
+ * @see java.nio.channels.DatagramChannel
+ * @see java.util.concurrent.ExecutorService
  */
 class UdpAsyncChannel implements AsyncChannel {
     private static final Logger            logger = Logger.getLogger(UdpAsyncChannel.class);

@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-
 import java.io.IOException;
 import java.util.Objects;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
 
 /**
  * SSL 网络协议层

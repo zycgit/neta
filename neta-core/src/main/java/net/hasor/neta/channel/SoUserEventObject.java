@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * A message data in the message bus
  * @author 赵永春 (zyc@hasor.net)

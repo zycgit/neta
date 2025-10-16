@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
+import java.io.IOException;
+import java.nio.channels.NotYetConnectedException;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
-import java.io.IOException;
-import java.nio.channels.NotYetConnectedException;
 
 /**
  * A tcp network channel

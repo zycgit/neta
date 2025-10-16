@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Predicate;

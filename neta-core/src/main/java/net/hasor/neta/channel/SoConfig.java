@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -26,9 +26,9 @@ public class SoConfig {
     // for Listener
     private final String  protocol;
     // for slot size
-    private int rcvSlotSize = -1;
-    private int sndSlotSize = -1;
-    private       boolean suspend = false;
+    private       int     rcvSlotSize = -1;
+    private       int     sndSlotSize = -1;
+    private       boolean suspend     = false;
 
     // for Socket
     private Integer soRcvBuf         = null; // SO_RCVBUF: The size of the socket receive buffer

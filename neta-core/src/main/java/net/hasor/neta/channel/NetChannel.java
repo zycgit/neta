@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,14 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.ArrayUtils;
-import net.hasor.cobble.concurrent.future.BasicFuture;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.concurrent.timer.Timeout;
-import net.hasor.cobble.concurrent.timer.TimerTask;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBuf;
-
 import java.io.IOException;
 import java.io.PrintStream;
 import java.net.SocketAddress;
@@ -29,6 +21,13 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.hasor.cobble.ArrayUtils;
+import net.hasor.cobble.concurrent.future.BasicFuture;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.concurrent.timer.Timeout;
+import net.hasor.cobble.concurrent.timer.TimerTask;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * A tcp network channel
@@ -122,7 +121,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.soContext;
     }
 
-    AsyncChannel getAsyncChannel() {
+    protected AsyncChannel getAsyncChannel() {
         return this.asyncChannel;
     }
 
@@ -192,7 +191,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /* Receive data without concurrency */
-    protected final void notifyRcv(Object[] rcvBytes) throws Throwable {
+    protected void notifyRcv(Object[] rcvBytes) throws Throwable {
         synchronized (this.readTimeoutSyncObj) {
             this.readTimeoutSyncObj.notifyAll();
         }
@@ -204,7 +203,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /* Receive error */
-    protected final void notifyError(boolean isRcv, Throwable e) throws Throwable {
+    protected void notifyError(boolean isRcv, Throwable e) throws Throwable {
         Object[] dataArray = isRcv ?//
                 this.protoStack.onRcvError(this.protoCtx, null, e) ://
                 this.protoStack.onSndError(this.protoCtx, null, e);

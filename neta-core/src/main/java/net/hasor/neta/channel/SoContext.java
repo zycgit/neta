@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-
 import java.net.SocketAddress;
 import java.util.function.Predicate;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
  * manage all network NetChannel and NetListen

@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package com.example.demo;
+import java.net.InetSocketAddress;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.handler.codec.LineBasedFrameHandler;
 import net.hasor.neta.handler.codec.string.StringHandler;
-
-import java.net.InetSocketAddress;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

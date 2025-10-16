@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.future.BasicFuture;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
-
 import java.net.SocketAddress;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import net.hasor.cobble.concurrent.future.BasicFuture;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * A listener channel for accept incoming sockets and binding them to the protocol stack

@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.ExceptionUtils;
-
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import net.hasor.cobble.ExceptionUtils;
 
 /**
  * Provide a way to clean a ByteBuffer on Java9+.

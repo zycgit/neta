@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.string;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-
 import java.nio.charset.Charset;
 import java.util.Objects;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
 
 /**
  * Encodes the requested {@link String} into a {@link ByteBuf}.

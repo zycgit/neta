@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-
 import net.hasor.neta.channel.SoConfig;
 
 /**

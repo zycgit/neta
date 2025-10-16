@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.neta.channel.*;
-
 import java.io.IOException;
+import net.hasor.neta.channel.*;
 
 /**
  * A UDP network channel

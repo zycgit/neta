@@ -14,14 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
-import net.hasor.cobble.concurrent.timer.TimerTask;
-import net.hasor.cobble.io.IOUtils;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-
 import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
@@ -30,6 +22,13 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Predicate;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
+import net.hasor.cobble.concurrent.timer.TimerTask;
+import net.hasor.cobble.io.IOUtils;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
  * SoContext implements

@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.Objects;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-
-import java.util.Objects;
 
 /**
  * Application stack builder
@@ -168,7 +167,6 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name stack name
      * @param protoConf stack config
      * @param decoder RCV_UP to RCV_DOWN
@@ -183,7 +181,6 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
@@ -202,7 +199,6 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name stack name
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}

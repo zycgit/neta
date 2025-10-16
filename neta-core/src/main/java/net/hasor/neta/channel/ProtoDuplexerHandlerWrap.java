@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Used to represent a unidirectional data processor, two {@link ProtoDuplexerHandlerWrap}`s in opposite directions can to {@link ProtoDuplexer}
  * @author 赵永春 (zyc@hasor.net)

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Application protocol stack
  * @author 赵永春 (zyc@hasor.net)

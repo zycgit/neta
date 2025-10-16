@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.neta.channel.*;
-
 import java.net.SocketAddress;
+import net.hasor.neta.channel.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

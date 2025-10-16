@@ -14,13 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.cobble.ArrayUtils;
-import net.hasor.cobble.ResourcesUtils;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-
-import javax.net.ssl.*;
 import java.io.IOException;
 import java.io.InputStream;
 import java.security.GeneralSecurityException;
@@ -28,6 +21,12 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
 import java.util.Objects;
+import javax.net.ssl.*;
+import net.hasor.cobble.ArrayUtils;
+import net.hasor.cobble.ResourcesUtils;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
 
 /**
  * An implementation of the {@link SslContext} interface that provides SSL handshake support

@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.logging.Logger;
-
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * Allows to free direct {@link ByteBuffer}s.

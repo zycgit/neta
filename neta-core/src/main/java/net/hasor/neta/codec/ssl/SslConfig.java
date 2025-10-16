@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.neta.channel.ProtoConfig;
-
+import java.security.KeyStore;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.TrustManagerFactory;
-import java.security.KeyStore;
+import net.hasor.neta.channel.ProtoConfig;
 
 /**
  * SSL 配置

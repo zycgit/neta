@@ -37,7 +37,6 @@ public interface AsyncChannelProvider {
      * Creates an asynchronous client channel
      * @param channelId Unique identifier for the channel
      * @param context Socket configuration context
-     * @param remoteAddr
      * @return The created client channel
      * @throws IOException If an I/O error occurs during channel creation
      */

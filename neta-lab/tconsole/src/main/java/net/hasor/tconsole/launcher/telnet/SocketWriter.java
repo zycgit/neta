@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.tconsole.launcher.telnet;
-import net.hasor.neta.channel.NetChannel;
-
 import java.io.Writer;
+import net.hasor.neta.channel.NetChannel;
 
 /**
  * Handles writer

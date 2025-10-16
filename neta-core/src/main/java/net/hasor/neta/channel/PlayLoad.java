@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * Represents a message payload in the message bus system.
  * Encapsulates the data, error, and source channel information for a message.

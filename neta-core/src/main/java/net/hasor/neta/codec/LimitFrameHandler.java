@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
+import java.util.List;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-
-import java.util.List;
 
 /**
  * in {@link ByteBuf} is split into multiple or merge {@link ByteBuf} using a fixed length

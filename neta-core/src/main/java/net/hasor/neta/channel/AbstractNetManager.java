@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.logging.Logger;
-
 import java.io.IOException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * AIO Socket basic

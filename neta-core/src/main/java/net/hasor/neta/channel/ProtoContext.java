@@ -201,7 +201,6 @@ public interface ProtoContext {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
@@ -213,7 +212,6 @@ public interface ProtoContext {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name stack name
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
@@ -227,7 +225,6 @@ public interface ProtoContext {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}
      */
@@ -239,7 +236,6 @@ public interface ProtoContext {
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
      * </ul>
-     *
      * @param name stack name
      * @param encoder SND_UP to SND_DOWN
      * @throws NullPointerException if the specified handler is {@code null}

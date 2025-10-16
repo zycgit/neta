@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.virtual;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.*;
-
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

@@ -18,7 +18,6 @@ import java.util.EventListener;
 
 /**
  * Listener interface for channel events.
- *
  * @param <T> the type of channel that this listener can handle, must extend {@link SoChannel}
  * @author 赵永春 (zyc@hasor.net)
  * @version 2023-09-24

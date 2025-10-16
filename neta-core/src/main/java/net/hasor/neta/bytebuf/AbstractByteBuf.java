@@ -14,12 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.ObjectUtils;
-
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
-
+import net.hasor.cobble.ObjectUtils;
 import static net.hasor.neta.bytebuf.Bits.*;
 
 /**
@@ -30,7 +28,6 @@ import static net.hasor.neta.bytebuf.Bits.*;
  * |          |             |            |             |          |
  * 0   ≤   marked  ≤  readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
  *      readerIndex                writerIndex
- *
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01

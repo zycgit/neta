@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.future.Future;
-
 import java.net.SocketAddress;
 import java.util.function.Predicate;
+import net.hasor.cobble.concurrent.future.Future;
 
 /**
  * Represents a network channel abstraction.

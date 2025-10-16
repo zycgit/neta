@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-
 import java.util.ArrayList;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
 
 /**
  * A decoder that splits the received {@link ByteBuf}s on line endings.

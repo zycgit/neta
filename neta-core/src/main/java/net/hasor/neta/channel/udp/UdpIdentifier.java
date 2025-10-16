@@ -19,7 +19,6 @@ package net.hasor.neta.channel.udp;
  * <p>
  * This class is used to uniquely identify a UDP connection based on the remote ID.
  * It provides a simple way to access the remote ID associated with a specific UDP channel.
- *
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-07
  */

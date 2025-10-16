@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.concurrent.future.Future;
-
 import java.io.Closeable;
 import java.io.IOException;
 import java.net.SocketAddress;
+import net.hasor.cobble.concurrent.future.Future;
 
 /**
  * Asynchronous channel interface for network communication.

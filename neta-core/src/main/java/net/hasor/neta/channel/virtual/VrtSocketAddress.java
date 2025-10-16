@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.virtual;
+import java.net.SocketAddress;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.neta.channel.SoChannel;
-
-import java.net.SocketAddress;
 
 /**
  * Base class for {@link SoChannel} implementations that are used in an embedded fashion.

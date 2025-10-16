@@ -1,5 +1,4 @@
 package net.hasor.neta.channel;
-
 import java.io.IOException;
 
 public class SoException extends IOException {

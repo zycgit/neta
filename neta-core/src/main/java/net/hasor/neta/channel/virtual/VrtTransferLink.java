@@ -1,8 +1,7 @@
 package net.hasor.neta.channel.virtual;
+import java.util.List;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-
-import java.util.List;
 
 class VrtTransferLink {
     private static final Logger               logger = Logger.getLogger(VrtTransferLink.class);

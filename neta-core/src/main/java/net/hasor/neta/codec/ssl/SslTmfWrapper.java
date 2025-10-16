@@ -14,10 +14,10 @@
  * under the License.
  */
 package net.hasor.neta.codec.ssl;
-import javax.net.ssl.ManagerFactoryParameters;
-import javax.net.ssl.TrustManager;
 import java.security.KeyStore;
 import java.util.Objects;
+import javax.net.ssl.ManagerFactoryParameters;
+import javax.net.ssl.TrustManager;
 
 public final class SslTmfWrapper extends SimpleTrustManagerFactory {
     private final TrustManager[] tmArray;

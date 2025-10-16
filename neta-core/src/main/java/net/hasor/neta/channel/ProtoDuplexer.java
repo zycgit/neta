@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
  * {@link ProtoDuplexer} is a Duplexer handler, The data flow direction is identified by the isRcv parameter.
  * A protocol stack has four endpoints: RCV_UP, RCV_DOWN, SND_UP, and SND_DOWN, these endpoints can store some data.
@@ -30,11 +29,9 @@ package net.hasor.neta.channel;
  *  ... ← ┃ SND_DOWN        SND_UP ┃ ← ┃ SND_DOWN        SND_UP ┃  ← DATA
  *        ┗━━━━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
  * </pre>
- *
  * <p>
  * This design means that during any rcv/snd, upstream and downstream of the ProtoStack can be operated.
  * </p>
- *
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoHandler

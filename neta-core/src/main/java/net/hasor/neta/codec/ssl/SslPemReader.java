@@ -14,10 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.cobble.codec.Base64;
-import net.hasor.cobble.io.IOUtils;
-import net.hasor.neta.bytebuf.ByteBuf;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -29,6 +25,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import net.hasor.cobble.codec.Base64;
+import net.hasor.cobble.io.IOUtils;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Reads a PEM file and converts it into a list of DERs so that they are imported into a {@link KeyStore} easily.

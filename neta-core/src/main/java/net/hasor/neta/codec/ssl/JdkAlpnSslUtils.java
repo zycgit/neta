@@ -14,18 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.cobble.ArrayUtils;
-import net.hasor.cobble.SystemUtils;
-import net.hasor.cobble.logging.Logger;
-
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.SSLParameters;
 import java.lang.reflect.Method;
 import java.security.AccessController;
 import java.security.PrivilegedExceptionAction;
 import java.util.List;
 import java.util.function.BiFunction;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.SSLParameters;
+import net.hasor.cobble.ArrayUtils;
+import net.hasor.cobble.SystemUtils;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * source code from io.netty.handler.ssl.JdkAlpnSslUtils.

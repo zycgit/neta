@@ -14,9 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.logging.Logger;
-
 import java.util.Objects;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * RCV_UP and RCV_DOWN,SND_UP and SND_DOWN. Is the name of RCV and SND under different endpoints.

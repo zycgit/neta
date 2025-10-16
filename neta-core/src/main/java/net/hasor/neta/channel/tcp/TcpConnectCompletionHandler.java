@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
+import java.net.SocketAddress;
+import java.nio.channels.CompletionHandler;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.AsyncChannel;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.SoConnectException;
 import net.hasor.neta.channel.SoContextService;
-
-import java.net.SocketAddress;
-import java.nio.channels.CompletionHandler;
 
 /**
  * Client Connect Handler

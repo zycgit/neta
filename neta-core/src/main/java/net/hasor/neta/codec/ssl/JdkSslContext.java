@@ -14,21 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.cobble.ArrayUtils;
-import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.SoChannel;
-
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.TrustManagerFactory;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.*;
 import java.util.stream.Collectors;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.SSLEngine;
+import javax.net.ssl.TrustManagerFactory;
+import net.hasor.cobble.ArrayUtils;
+import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.SoChannel;
 
 /**
  * An {@link SslContext} which uses JDK's SSL/TLS implementation.

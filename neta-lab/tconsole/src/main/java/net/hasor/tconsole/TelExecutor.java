@@ -15,9 +15,8 @@
  * limitations under the License.
  */
 package net.hasor.tconsole;
-import net.hasor.neta.bytebuf.ByteBuf;
-
 import java.nio.charset.Charset;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * tConsole 指令。

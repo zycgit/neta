@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.cobble.logging.Logger;
-
 import java.io.IOException;
 import java.net.SocketOption;
 import java.net.StandardSocketOptions;
 import java.nio.channels.AsynchronousSocketChannel;
 import java.nio.channels.NetworkChannel;
 import java.util.Set;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * config Socket

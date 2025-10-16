@@ -1,5 +1,4 @@
 package net.hasor.neta.channel;
-
 class ProtoEncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV, RCV, SND_UP, SND_DOWN> {
     private final ProtoHandler<SND_UP, SND_DOWN> encoder;
 

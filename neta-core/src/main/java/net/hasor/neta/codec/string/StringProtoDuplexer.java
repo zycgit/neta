@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.string;
+import java.nio.charset.Charset;
+import java.util.Objects;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.DelimiterBasedFrameHandler;
 import net.hasor.neta.codec.LineBasedFrameHandler;
-
-import java.nio.charset.Charset;
-import java.util.Objects;
 
 /**
  * Combined {@link StringDecoderHandler}, {@link StringEncoderHandler}.

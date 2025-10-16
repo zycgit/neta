@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

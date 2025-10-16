@@ -5,7 +5,7 @@
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ * http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -14,14 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.io.IOUtils;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.channel.*;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -32,6 +24,13 @@ import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.io.IOUtils;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.channel.*;
 
 /**
  * An implementation of the {@link AsyncServerChannel} interface for UDP communication.
@@ -176,11 +175,11 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
-    private void readSocket(NetListen listen, SocketAddress localAddr, Map<String, UdpChannel> channelMap, DatagramChannel channel) throws IOException {
+    private void readSocket(NetListen listen, SocketAddress localAddr, Map<String, UdpChannel> channelMap, DatagramChannel socket) throws IOException {
         this.receiveBuffer.clear();
-        InetSocketAddress remoteAddr = (InetSocketAddress) channel.receive(this.receiveBuffer);
-        UdpChannel socket = this.findOrCreateChannel(listen, localAddr, remoteAddr, channelMap);
-        if (socket == null) {
+        InetSocketAddress remoteAddr = (InetSocketAddress) socket.receive(this.receiveBuffer);
+        UdpChannel channel = this.findOrCreateChannel(listen, localAddr, remoteAddr, socket, channelMap);
+        if (channel == null) {
             return;
         }
 
@@ -189,21 +188,21 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         byteBuf.writeBuffer(this.receiveBuffer);
         byteBuf.markWriter();
         int readableBytes = byteBuf.readableBytes();
-        socket.getNetMonitor().updateRcvCounter(readableBytes);
+        channel.getNetMonitor().updateRcvCounter(readableBytes);
         if (logger.isDebugEnabled()) {
             logger.debug("rcv(" + this.channelId + ") the receive " + readableBytes + " bytes");
         }
 
         this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-            this.context.notifyRcvChannelData(socket.getChannelId(), byteBuf);
+            this.context.notifyRcvChannelData(channel.getChannelId(), byteBuf);
         });
     }
 
-    private UdpChannel findOrCreateChannel(NetListen listen, SocketAddress localAddr, InetSocketAddress remoteAddr, Map<String, UdpChannel> channelMap) throws SoConnectException {
+    private UdpChannel findOrCreateChannel(NetListen listen, SocketAddress localAddr, InetSocketAddress remoteAddr, DatagramChannel socket, Map<String, UdpChannel> channelMap) throws SoConnectException {
         String remoteID = remoteAddr.getAddress().getHostAddress() + ":" + remoteAddr.getPort();
-        UdpChannel socket = channelMap.get(remoteID);
-        if (socket != null) {
-            return socket;
+        UdpChannel channel = channelMap.get(remoteID);
+        if (channel != null) {
+            return channel;
         }
 
         if (listen.isSuspend()) {
@@ -218,13 +217,13 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         // create & init
         long newChannelId = this.context.nextID();
         try {
-            socket = this.newChannel(remoteID, listen, new UdpAsyncChannel(newChannelId, this.channel, this.context, remoteAddr, this.soConfig));
-            this.context.initChannel(socket, true);
+            channel = this.newChannel(remoteID, listen, new UdpAsyncChannel(newChannelId, socket, this.context, remoteAddr, this.soConfig));
+            this.context.initChannel(channel, true);
 
             //
-            channelMap.put(remoteID, socket);
-            socket.onClose(c -> channelMap.remove(c.getAttribute(UdpIdentifier.class.getName()).toString()));
-            return socket;
+            channelMap.put(remoteID, channel);
+            channel.onClose(c -> channelMap.remove(c.getAttribute(UdpIdentifier.class.getName()).toString()));
+            return channel;
         } catch (Throwable e) {
             logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);
             SoConnectException ee = e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);

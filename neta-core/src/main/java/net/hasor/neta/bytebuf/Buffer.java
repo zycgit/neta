@@ -54,7 +54,7 @@ public interface Buffer {
 
     /**
      * Tells whether or not this byte buffer is direct.
-     * @return  <tt>true</tt> if, and only if, this buffer is direct
+     * @return <tt>true</tt> if, and only if, this buffer is direct
      */
     boolean isDirect();
 }

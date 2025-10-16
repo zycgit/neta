@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.bytebuf.ByteBuf;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Application stack Builder

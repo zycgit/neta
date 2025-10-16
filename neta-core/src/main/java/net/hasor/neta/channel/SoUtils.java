@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.StringUtils;
-
 import java.io.PrintStream;
 import java.net.SocketAddress;
+import net.hasor.cobble.StringUtils;
 
 /**
  * Socket Utils.

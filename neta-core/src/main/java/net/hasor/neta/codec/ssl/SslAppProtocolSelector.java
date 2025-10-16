@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.neta.channel.SoChannel;
-
-import javax.net.ssl.SSLEngine;
 import java.util.List;
+import javax.net.ssl.SSLEngine;
+import net.hasor.neta.channel.SoChannel;
 
 /**
  * Select a protocol that is supported in the TLS NPN/ALPN extension.

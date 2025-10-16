@@ -1,4 +1,5 @@
 package net.hasor.neta.bytebuf;
+import java.util.concurrent.TimeUnit;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.io.IOUtils;
 import org.openjdk.jmh.annotations.*;
@@ -6,8 +7,6 @@ import org.openjdk.jmh.runner.Runner;
 import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
-
-import java.util.concurrent.TimeUnit;
 
 @Fork(1)
 @State(Scope.Thread)
