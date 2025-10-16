@@ -30,7 +30,9 @@ import java.util.Queue;
  * @version : 2022-11-01
  */
 public class ProtoEchoTest {
-    /** Decoding the message: String -> TypeFrame */
+    /**
+     * Decoding the message: String -> TypeFrame
+     */
     public static ProtoStatus doDecoder1(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<TypeFrame> dst) {
         String line;
         do {
@@ -43,7 +45,9 @@ public class ProtoEchoTest {
         return ProtoStatus.Next;
     }
 
-    /** encoded message: TypeFrame -> String */
+    /**
+     * encoded message: TypeFrame -> String
+     */
     public static ProtoStatus doEncoder1(ProtoContext context, ProtoRcvQueue<TypeFrame> src, ProtoSndQueue<String> dst) {
         do {
             TypeFrame message = src.takeMessage();
@@ -56,7 +60,9 @@ public class ProtoEchoTest {
         return ProtoStatus.Next;
     }
 
-    /** Decoding the message: TypeFrame -> TypeRequest */
+    /**
+     * Decoding the message: TypeFrame -> TypeRequest
+     */
     public static ProtoStatus doDecoder2(ProtoContext context, ProtoRcvQueue<TypeFrame> src, ProtoSndQueue<TypeRequest> dst) {
         TypeFrame frame;
         do {
@@ -69,7 +75,9 @@ public class ProtoEchoTest {
         return ProtoStatus.Next;
     }
 
-    /** encoded message: TypeResponse -> TypeFrame */
+    /**
+     * encoded message: TypeResponse -> TypeFrame
+     */
     public static ProtoStatus doEncoder2(ProtoContext context, ProtoRcvQueue<TypeResponse> src, ProtoSndQueue<TypeFrame> dst) {
         TypeResponse response;
         do {

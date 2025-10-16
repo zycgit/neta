@@ -43,11 +43,10 @@ import java.util.concurrent.ConcurrentHashMap;
  * and binds it to the provided {@link SoContext}.
  * <p>
  * The I/O operations for the accepted channels are performed by the provided I/O executor service.
- *
- * @see java.nio.channels.DatagramChannel
- * @see java.util.concurrent.ExecutorService
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
+ * @see java.nio.channels.DatagramChannel
+ * @see java.util.concurrent.ExecutorService
  */
 class UdpAsyncServerChannel implements AsyncServerChannel {
     private static final Logger            logger = Logger.getLogger(UdpAsyncServerChannel.class);

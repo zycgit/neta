@@ -9,4 +9,8 @@ module net.hasor.neta {
     exports net.hasor.neta.channel.tcp;
     exports net.hasor.neta.channel.udp;
     exports net.hasor.neta.channel.virtual;
+    exports net.hasor.neta.channel.sctp;
+    exports net.hasor.neta.codec;
+    exports net.hasor.neta.codec.ssl;
+    exports net.hasor.neta.codec.string;
 }

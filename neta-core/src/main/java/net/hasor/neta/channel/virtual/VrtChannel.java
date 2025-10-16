@@ -24,22 +24,9 @@ import java.io.IOException;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class VrtChannel extends NetChannel {
-    private final VrtMode vrtMode;
-
-    VrtChannel(long channelId, NetMonitor monitor, NetListen forListen, VrtMode vrtMode, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
-        super(channelId, monitor, forListen, initializer, asyncChannel, context);
-        this.vrtMode = vrtMode;
-    }
-
-    @Override
-    public boolean isClient() {
-        return this.vrtMode == VrtMode.Client;
-    }
-
-    @Override
-    public boolean isServer() {
-        return this.vrtMode == VrtMode.Server;
+public class VrtChannel extends AbstractVrtChannel {
+    protected VrtChannel(long channelId, NetMonitor monitor, NetListen forListen, VrtMode vrtMode, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
+        super(channelId, monitor, forListen, vrtMode, initializer, asyncChannel, context);
     }
 
     // trigger Input/Output

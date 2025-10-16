@@ -13,7 +13,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec;
+package net.hasor.neta.codec.ssl;
+import net.hasor.cobble.function.EConsumer;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
@@ -23,18 +24,30 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Transparent conveyor belt.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-09-24
+ * @version : 2022-11-01
  */
-public class HandlerUtils {
+public class AbstractSslTest {
+
+    public static ProtoInitializer createProtoStack(SslConfig sslConf) {
+        //  Net      SSL     Message
+        // Bytes -> Bytes -> String
+        // Bytes <- Bytes <- String
+        return ctx -> ProtoHelper.standard()
+                // SSL
+                .nextDuplex("SSL", new SslProtoDuplex(sslConf))
+                // bytes <-> String
+                .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
+                // create Stack
+                .build(ctx);
+    }
 
     /**
      * Decoding the message: ByteBuf -> String
      */
     public static ProtoStatus doDecoder1(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) {
         List<ByteBuf> bufArray = src.peekMessage(src.queueSize());
-        if (bufArray == null || bufArray.size() == 0) {
+        if (bufArray == null || bufArray.isEmpty()) {
             return ProtoStatus.Next;
         }
 
@@ -96,14 +109,12 @@ public class HandlerUtils {
         return ProtoStatus.Next;
     }
 
-    public static ProtoInitializer addListProtoStack(ProtoHandler<String, String> last) {
-        //  Net      SSL     Message
-        // Bytes -> Bytes -> String
-        // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
-                // bytes <-> String
-                .nextDuplex("String", HandlerUtils::doDecoder1, HandlerUtils::doEncoder1)
-                // create Stack
-                .nextDecoder(last).build(ctx);
+    protected void autoCloseNeta(EConsumer<NetManager, Throwable> consumer) throws Throwable {
+        NetManager neta = new NetManager();
+        try {
+            consumer.eAccept(neta);
+        } finally {
+            neta.shutdown();
+        }
     }
 }

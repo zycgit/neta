@@ -24,8 +24,8 @@ import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.SoConfig;
-import net.hasor.neta.handler.codec.LineBasedFrameHandler;
-import net.hasor.neta.handler.codec.string.StringProtoDuplexer;
+import net.hasor.neta.codec.LineBasedFrameHandler;
+import net.hasor.neta.codec.string.StringProtoDuplexer;
 import net.hasor.tconsole.TelAttribute;
 import net.hasor.tconsole.TelOptions;
 import net.hasor.tconsole.launcher.AttributeObject;
@@ -61,7 +61,9 @@ public class TelClient implements TelAttribute, AutoCloseable {
         this.attributeObject.setAttribute(ENDCODE_OF_SILENT, endcodeOfSilent); // 结束符
     }
 
-    /** 远程地址 */
+    /**
+     * 远程地址
+     */
     public SocketAddress remoteAddress() {
         return this.channel == null ? null : this.channel.getRemoteAddr();
     }
@@ -117,7 +119,9 @@ public class TelClient implements TelAttribute, AutoCloseable {
         }
     }
 
-    /** 发送命令 */
+    /**
+     * 发送命令
+     */
     public String sendCommand(String message) {
         if (!this.isConnected()) {
             throw new IllegalStateException("the TelClient has been closed or not init.");
