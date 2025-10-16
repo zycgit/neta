@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+import java.security.KeyStore;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
+import javax.net.ssl.TrustManager;
 import net.hasor.cobble.ResourcesUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.codec.LimitFrameHandler;
-
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import java.security.KeyStore;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -69,26 +68,26 @@ public class SoSslUtils {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.standard()
+        return ProtoHelper.standard()
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .build(ctx);
+                .build();
     }
 
     public static ProtoInitializer udpSslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
+        return ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .nextDecoder(last).build(ctx);
+                .nextDecoder(last).build();
     }
 
     public static ProtoInitializer tcpSslSocketProtoStack(SslConfig sslConf, ProtoHandler<String, String> last) {
@@ -96,7 +95,7 @@ public class SoSslUtils {
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
         LimitFrameHandler limitFrame = new LimitFrameHandler(2);
-        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
+        return ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // limit package
                 .nextDuplex("LIMIT", limitFrame, limitFrame)
                 // SSL
@@ -104,7 +103,7 @@ public class SoSslUtils {
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .nextDecoder(last).build(ctx);
+                .nextDecoder(last).build();
     }
 
 }

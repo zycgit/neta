@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -35,11 +34,11 @@ public class ProtoRcvTest extends AbstractStackTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(doNextHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build(ctx);
+                .build();
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();
@@ -63,11 +62,11 @@ public class ProtoRcvTest extends AbstractStackTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
                 .nextDuplex(doThrowHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt)) // rcv(Err)/snd +1
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt)) // rcv/snd +1
-                .build(ctx);
+                .build();
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();
@@ -93,11 +92,11 @@ public class ProtoRcvTest extends AbstractStackTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doRetryHandler("2Dec", decoderFinishCnt, decoderFailedCnt, 2), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build(ctx);
+                .build();
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();
@@ -123,11 +122,11 @@ public class ProtoRcvTest extends AbstractStackTest {
         List<String> encoderFinishCnt = new ArrayList<>();
         List<String> encoderFailedCnt = new ArrayList<>();
 
-        ProtoInitializer initializer = ctx -> ProtoHelper.typed(Integer.class, Integer.class)//
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
                 .nextDuplex(doNextHandler("1Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("1Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doExitHandler("2Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("2Enc", encoderFinishCnt, encoderFailedCnt))//
                 .nextDuplex(doNextHandler("3Dec", decoderFinishCnt, decoderFailedCnt), doNextHandler("3Enc", encoderFinishCnt, encoderFailedCnt))//
-                .build(ctx);
+                .build();
 
         // use VrtChannel test decoder/encoder
         NetManager neta = new NetManager();

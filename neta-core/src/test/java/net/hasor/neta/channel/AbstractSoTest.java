@@ -14,14 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.function.Callable;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
-import net.hasor.neta.channel.udp.UdpSoConfig;
-
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -32,6 +24,13 @@ import java.net.SocketException;
 import java.security.MessageDigest;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.function.Callable;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.channel.tcp.TcpSoConfig;
+import net.hasor.neta.channel.udp.UdpSoConfig;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import org.junit.Test;
-
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -36,19 +35,17 @@ public class TcpJvm2NetaTest extends AbstractSoTest {
 
         // server
         AtomicBoolean tcpRead = new AtomicBoolean(false);
-        ProtoInitializer initializer = ctx -> {
-            ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
-                while (src.hasMore()) {
-                    ByteBuf data = src.takeMessage();
-                    int len = data.readableBytes();
-                    byte[] bytes = new byte[len];
-                    data.readBytes(bytes);
-                    tcpRead.set(StringUtils.equals(new String(bytes), "Hello TCP"));
-                    data.markReader();
-                }
-                return ProtoStatus.Next;
-            }).build(ctx);
-        };
+        ProtoInitializer initializer = ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
+            while (src.hasMore()) {
+                ByteBuf data = src.takeMessage();
+                int len = data.readableBytes();
+                byte[] bytes = new byte[len];
+                data.readBytes(bytes);
+                tcpRead.set(StringUtils.equals(new String(bytes), "Hello TCP"));
+                data.markReader();
+            }
+            return ProtoStatus.Next;
+        }).build();
         NetManager neta = new NetManager();
         NetListen serverSite = neta.bind(address, initializer, TcpSoConfig.TCP());
 

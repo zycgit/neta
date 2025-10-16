@@ -14,6 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
@@ -23,11 +27,6 @@ import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoHelper;
 import org.junit.Test;
-
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -54,7 +53,7 @@ public class TcpNeta2JvmTest extends AbstractSoTest {
 
         // client send
         NetManager neta = new NetManager();
-        NetChannel clientSite = neta.connectAsync(address, ctx -> ProtoHelper.standard().build(ctx), TcpSoConfig.TCP()).get();
+        NetChannel clientSite = neta.connectAsync(address, ProtoHelper.standard().build(), TcpSoConfig.TCP()).get();
         clientSite.sendData("Hello TCP".getBytes());
 
         // wait finish
@@ -71,7 +70,7 @@ public class TcpNeta2JvmTest extends AbstractSoTest {
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
 
         NetManager neta = new NetManager();
-        Future<NetChannel> future = neta.connectAsync(address, ctx -> ProtoHelper.standard().build(ctx), TcpSoConfig.TCP());
+        Future<NetChannel> future = neta.connectAsync(address, ProtoHelper.standard().build(), TcpSoConfig.TCP());
         future.await();
 
         assert future.isDone();

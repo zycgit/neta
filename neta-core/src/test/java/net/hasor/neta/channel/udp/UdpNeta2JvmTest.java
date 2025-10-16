@@ -14,13 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-import org.junit.Test;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
@@ -28,7 +21,12 @@ import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
-
+import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
+import org.junit.Test;
 import static net.hasor.neta.channel.AbstractSoTest.safePort;
 
 /**
@@ -65,13 +63,11 @@ public class UdpNeta2JvmTest {
         UdpSoConfig udpConfig = UdpSoConfig.UDP();
         udpConfig.setRcvPacketSize(4096);
         NetManager neta = new NetManager(new NetConfig());
-        ProtoInitializer initializer = ctx -> {
-            ProtoHelper.standard().nextEncoder((ProtoHandler<String, ByteBuf>) (context, src, dst) -> {
-                String data = src.takeMessage();
-                dst.offerMessage(ByteBuf.wrap(data.getBytes()));
-                return ProtoStatus.Next;
-            }).build(ctx);
-        };
+        ProtoInitializer initializer = ProtoHelper.standard().nextEncoder((ProtoHandler<String, ByteBuf>) (context, src, dst) -> {
+            String data = src.takeMessage();
+            dst.offerMessage(ByteBuf.wrap(data.getBytes()));
+            return ProtoStatus.Next;
+        }).build();
         Future<NetChannel> future = neta.connectAsync(address, initializer, udpConfig);
         NetChannel channel = future.get();
         channel.sendData("Hello UDP");

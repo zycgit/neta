@@ -48,7 +48,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     protected final      AtomicBoolean       closeStatus;
     protected final      Future<NetChannel>  closeFuture;
     private final        long                channelId;
-    private final        Object              readTimeoutSyncObj;
+    protected final      Object              readTimeoutSyncObj;
 
     protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService soContext) throws IOException {
         this.channelId = channelId;

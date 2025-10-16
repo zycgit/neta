@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import net.hasor.neta.channel.frames.TypeFrame;
 import net.hasor.neta.channel.frames.TypeRequest;
 import net.hasor.neta.channel.frames.TypeResponse;
@@ -21,9 +23,6 @@ import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import org.junit.Test;
-
-import java.util.ArrayDeque;
-import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -96,12 +95,12 @@ public class ProtoEchoTest {
         // String -> TypeFrame -> TypeRequest
         // String <- TypeFrame <- TypeResponse
         ProtoConfig protoConf = new ProtoConfig();
-        ProtoInitializer initializer = (ctx) -> ProtoHelper.typed(String.class, String.class)//
+        ProtoInitializer initializer = ProtoHelper.typed(String.class, String.class)//
                 .nextDuplex("TypeFrame", protoConf, ProtoEchoTest::doDecoder1, ProtoEchoTest::doEncoder1)
                 // TypeFrame -> TypeRequest and TypeResponse -> TypeFrame
                 .nextDuplex("TypeRequest/Response", protoConf, ProtoEchoTest::doDecoder2, ProtoEchoTest::doEncoder2)
                 // build
-                .build(ctx);
+                .build();
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());

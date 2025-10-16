@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.*;
-
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.*;
 
 /**
  * Transparent conveyor belt.
@@ -100,10 +99,10 @@ public class HandlerUtils {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
+        return ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
                 // bytes <-> String
                 .nextDuplex("String", HandlerUtils::doDecoder1, HandlerUtils::doEncoder1)
                 // create Stack
-                .nextDecoder(last).build(ctx);
+                .nextDecoder(last).build();
     }
 }

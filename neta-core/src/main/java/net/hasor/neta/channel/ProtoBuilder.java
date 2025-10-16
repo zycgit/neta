@@ -221,5 +221,5 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
     <SND_UP> ProtoBuilder<RCV_UP, SND_UP> nextEncoder(String name, ProtoConfig protoConf, ProtoHandler<SND_UP, SND_DOWN> encoder);
 
     /** build {@link ProtoStack} */
-    void build(ProtoContext context);
+    ProtoInitializer build();
 }

@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.virtual;
-import net.hasor.neta.channel.*;
-import org.junit.Test;
-
 import java.util.ArrayList;
 import java.util.List;
+import net.hasor.neta.channel.*;
+import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -27,7 +26,7 @@ import java.util.List;
 public class VrtTransferTest {
     @Test
     public void echoTest_1() throws Throwable {
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().build(ctx);
+        ProtoInitializer initializer = ProtoHelper.standard().build();
 
         // server and client
         NetManager neta = new NetManager();
@@ -56,22 +55,20 @@ public class VrtTransferTest {
 
     @Test
     public void echoTest_2() throws Throwable {
-        ProtoInitializer serverProto = ctx -> {
-            ProtoHelper.typed(String.class, String.class).nextDuplex(new ProtoDuplexer<String, String, String, String>() {
-                @Override
-                public ProtoStatus onMessage(ProtoContext context, boolean isRcv,  //
-                        ProtoRcvQueue<String> rcvUp, ProtoSndQueue<String> rcvDown,//
-                        ProtoRcvQueue<String> sndUp, ProtoSndQueue<String> sndDown) {
-                    if (isRcv) {
-                        while (rcvUp.hasMore()) {
-                            sndDown.offerMessage("Echo " + rcvUp.takeMessage());
-                        }
+        ProtoInitializer serverProto = ProtoHelper.typed(String.class, String.class).nextDuplex(new ProtoDuplexer<String, String, String, String>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, boolean isRcv,  //
+                    ProtoRcvQueue<String> rcvUp, ProtoSndQueue<String> rcvDown,//
+                    ProtoRcvQueue<String> sndUp, ProtoSndQueue<String> sndDown) {
+                if (isRcv) {
+                    while (rcvUp.hasMore()) {
+                        sndDown.offerMessage("Echo " + rcvUp.takeMessage());
                     }
-                    return ProtoStatus.Next;
                 }
-            }).build(ctx);
-        };
-        ProtoInitializer clientProto = ctx -> ProtoHelper.standard().build(ctx);
+                return ProtoStatus.Next;
+            }
+        }).build();
+        ProtoInitializer clientProto = ProtoHelper.standard().build();
 
         // server and client
         NetManager neta = new NetManager();

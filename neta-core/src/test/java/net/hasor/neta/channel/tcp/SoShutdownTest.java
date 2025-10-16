@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
+import java.io.OutputStream;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import org.junit.Test;
-
-import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.Socket;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -37,26 +36,24 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvLocalShutdownInputTest_01() throws Throwable {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        ProtoInitializer initializer = ctx -> {
-            ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
-                @Override
-                public void onActive(ProtoContext context) {
-                    ((TcpChannel) context.getChannel()).shutdownInput();// shutdownInput with accept.
-                }
+        ProtoInitializer initializer = ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public void onActive(ProtoContext context) {
+                ((TcpChannel) context.getChannel()).shutdownInput();// shutdownInput with accept.
+            }
 
-                @Override
-                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
-                    rcvAnyThing.set(true);
-                    return ProtoStatus.Next;
-                }
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
+                rcvAnyThing.set(true);
+                return ProtoStatus.Next;
+            }
 
-                @Override
-                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    rcvError.set(e instanceof SoInputCloseException);
-                    return ProtoStatus.Next;
-                }
-            }).build(ctx);
-        };
+            @Override
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                rcvError.set(e instanceof SoInputCloseException);
+                return ProtoStatus.Next;
+            }
+        }).build();
 
         // start listen
         int safePort = safePort();
@@ -94,26 +91,24 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvLocalShutdownInputTest_02() throws Throwable {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        ProtoInitializer initializer = ctx -> {
-            ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
-                @Override
-                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
-                    while (rcvUp.hasMore()) {
-                        ByteBuf data = rcvUp.takeMessage();
-                        data.skipReadableBytes(data.readableBytes());
-                        data.markReader();
-                        rcvAnyThing.set(true);
-                    }
-                    return ProtoStatus.Next;
+        ProtoInitializer initializer = ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
+                while (rcvUp.hasMore()) {
+                    ByteBuf data = rcvUp.takeMessage();
+                    data.skipReadableBytes(data.readableBytes());
+                    data.markReader();
+                    rcvAnyThing.set(true);
                 }
+                return ProtoStatus.Next;
+            }
 
-                @Override
-                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    rcvError.set(e instanceof SoInputCloseException);
-                    return ProtoStatus.Next;
-                }
-            }).build(ctx);
-        };
+            @Override
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                rcvError.set(e instanceof SoInputCloseException);
+                return ProtoStatus.Next;
+            }
+        }).build();
 
         // start listen
         int safePort = safePort();
@@ -161,26 +156,24 @@ public class SoShutdownTest extends AbstractSoTest {
     public void rcvLocalShutdownInputTest_03() throws Throwable {
         AtomicBoolean rcvAnyThing = new AtomicBoolean();
         AtomicBoolean rcvError = new AtomicBoolean(false);
-        ProtoInitializer initializer = ctx -> {
-            ProtoHelper.standard().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
-                @Override
-                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
-                    while (rcvUp.hasMore()) {
-                        ByteBuf data = rcvUp.takeMessage();
-                        data.skipReadableBytes(data.readableBytes());
-                        data.markReader();
-                        rcvAnyThing.set(true);
-                    }
-                    return ProtoStatus.Next;
+        ProtoInitializer initializer = ProtoHelper.standard().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
+                while (rcvUp.hasMore()) {
+                    ByteBuf data = rcvUp.takeMessage();
+                    data.skipReadableBytes(data.readableBytes());
+                    data.markReader();
+                    rcvAnyThing.set(true);
                 }
+                return ProtoStatus.Next;
+            }
 
-                @Override
-                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    rcvError.set(e instanceof SoInputCloseException);
-                    return ProtoStatus.Next;
-                }
-            }).build(ctx);
-        };
+            @Override
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                rcvError.set(e instanceof SoInputCloseException);
+                return ProtoStatus.Next;
+            }
+        }).build();
 
         // start listen
         int safePort = safePort();
@@ -282,7 +275,7 @@ public class SoShutdownTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(8, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(ctx), tcpConf);
+        NetListen listen = server.bind(address, ProtoHelper.standard().build(), tcpConf);
 
         // connect to server
         Socket client = new Socket("127.0.0.1", safePort);

@@ -14,16 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoHelper;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import org.junit.Test;
-
-import java.util.ArrayDeque;
-import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -34,8 +32,7 @@ public class LineBasedFrameHandlerTest {
     public void lineBasedFrame_1() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-            ProtoHelper.standard().nextDecoder(lineBasedFrame).build(ctx);
+            ctx.addLastDecoder(new LineBasedFrameHandler());
         }, VrtSoConfig.asDefault());
 
         // transfer channel
@@ -54,8 +51,7 @@ public class LineBasedFrameHandlerTest {
     public void lineBasedFrame_2() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-            ProtoHelper.standard().nextDecoder(lineBasedFrame).build(ctx);
+            ctx.addLastDecoder(new LineBasedFrameHandler());
         }, VrtSoConfig.asDefault());
 
         // transfer channel
@@ -72,8 +68,7 @@ public class LineBasedFrameHandlerTest {
     public void lineBasedFrame_3() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            LineBasedFrameHandler lineBasedFrame = new LineBasedFrameHandler();
-            ProtoHelper.standard().nextDecoder(lineBasedFrame).build(ctx);
+            ctx.addLastDecoder(new LineBasedFrameHandler());
         }, VrtSoConfig.asDefault());
 
         // transfer channel

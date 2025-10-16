@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.io.ByteArrayOutputStream;
+import java.io.PrintStream;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.codec.TransparentProtoHandler;
 import org.junit.Test;
-
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -30,11 +29,9 @@ import java.io.PrintStream;
 public class ProtoBasicTest extends AbstractStackTest {
     @Test
     public void nextTest_0() throws Throwable {
-        ProtoInitializer initializer = (ctx) -> {
-            ProtoHelper.typed(Integer.class, Integer.class)           //
-                    .nextDecoder("L1", new TransparentProtoHandler<>())//
-                    .build(ctx);
-        };
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)  //
+                .nextDecoder("L1", new TransparentProtoHandler<>())                     //
+                .build();
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());

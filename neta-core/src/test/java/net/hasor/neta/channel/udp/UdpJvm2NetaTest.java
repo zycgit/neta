@@ -14,18 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
-import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-import org.junit.Test;
-
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.atomic.AtomicBoolean;
-
+import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
+import org.junit.Test;
 import static net.hasor.neta.channel.AbstractSoTest.*;
 
 /**
@@ -40,19 +38,17 @@ public class UdpJvm2NetaTest {
         NetManager neta = new NetManager(globalConf());
 
         AtomicBoolean udpRead = new AtomicBoolean(false);
-        ProtoInitializer initializer = ctx -> {
-            ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
-                while (src.hasMore()) {
-                    ByteBuf data = src.takeMessage();
-                    int len = data.readableBytes();
-                    byte[] bytes = new byte[len];
-                    data.readBytes(bytes);
-                    udpRead.set(StringUtils.equals(new String(bytes), "Hello UDP"));
-                    data.markReader();
-                }
-                return ProtoStatus.Next;
-            }).build(ctx);
-        };
+        ProtoInitializer initializer = ProtoHelper.standard().nextDecoder((ProtoHandler<ByteBuf, String>) (context, src, dst) -> {
+            while (src.hasMore()) {
+                ByteBuf data = src.takeMessage();
+                int len = data.readableBytes();
+                byte[] bytes = new byte[len];
+                data.readBytes(bytes);
+                udpRead.set(StringUtils.equals(new String(bytes), "Hello UDP"));
+                data.markReader();
+            }
+            return ProtoStatus.Next;
+        }).build();
 
         UdpSoConfig udpConf = udpConfig(128, 4096);
         udpConf.setSoReadTimeoutMs(-1);

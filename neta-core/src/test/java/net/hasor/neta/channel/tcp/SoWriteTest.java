@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
-import org.junit.Test;
-
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
+import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -41,7 +40,7 @@ public class SoWriteTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(ctx), tcpConf);
+        NetListen listen = server.bind(address, ProtoHelper.standard().build(), tcpConf);
         Socket client = new Socket("127.0.0.1", safePort);
 
         listen.waitAnyAccept();
@@ -69,7 +68,7 @@ public class SoWriteTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 30);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+        NetListen listen = server.bind(address, ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public void onActive(ProtoContext context) throws Throwable {
                 context.sendData(ByteBuf.wrap("Hello this message form server.\n".getBytes()));
@@ -79,7 +78,7 @@ public class SoWriteTest extends AbstractSoTest {
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 return ProtoStatus.Next;
             }
-        }).build(ctx), tcpConf);
+        }).build(), tcpConf);
 
         // client connect to Server
         Socket client = new Socket("127.0.0.1", safePort);
@@ -103,20 +102,15 @@ public class SoWriteTest extends AbstractSoTest {
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
         NetManager server = new NetManager(new NetConfig());
-        NetListen listen = server.bind(address, new ProtoInitializer() {
+        NetListen listen = server.bind(address, ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void config(ProtoContext ctx) {
-                ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
-                    @Override
-                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
-                        while (src.hasMore()) {
-                            ((NetChannel) context.getChannel()).sendData(src.takeMessage());
-                        }
-                        return ProtoStatus.Next;
-                    }
-                }).build(ctx);
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                while (src.hasMore()) {
+                    ((NetChannel) context.getChannel()).sendData(src.takeMessage());
+                }
+                return ProtoStatus.Next;
             }
-        }, SoConfig.TCP());
+        }).build(), SoConfig.TCP());
 
         // client start
         Socket client = new Socket("127.0.0.1", safePort);
@@ -142,7 +136,7 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void sndTimeoutTest_01() throws Throwable {
         AtomicLong sndErrTime = new AtomicLong(0);
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ProtoHelper.standard().nextEncoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 dst.offerMessage(src);
@@ -156,7 +150,7 @@ public class SoWriteTest extends AbstractSoTest {
                 }
                 return ProtoStatus.Next;
             }
-        }).build(ctx);
+        }).build();
 
         // start server
         int safePort = safePort();
@@ -190,7 +184,7 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void sndTimeoutTest_02() throws Throwable {
         AtomicLong sndErrTime = new AtomicLong(0);
-        ProtoInitializer initializer = ctx -> ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 dst.offerMessage(src);
@@ -204,7 +198,7 @@ public class SoWriteTest extends AbstractSoTest {
                 }
                 return ProtoStatus.Next;
             }
-        }).build(ctx);
+        }).build();
 
         // start server
         int safePort = safePort();
@@ -238,21 +232,18 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void sndThrowTest_01() throws Throwable {
         AtomicBoolean sndErr1 = new AtomicBoolean(false);
-        ProtoInitializer initializer = ctx -> {
-            ProtoHelper.standard().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ProtoHelper.standard().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                throw new IllegalStateException("L1 Throw");
+            }
 
-                @Override
-                public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
-                    throw new IllegalStateException("L1 Throw");
-                }
-
-                @Override
-                public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
-                    sndErr1.set(e.getMessage().equals("L1 Throw"));
-                    throw new IllegalArgumentException(); //Additional exceptions,Cause connection closure.
-                }
-            }).build(ctx);
-        };
+            @Override
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                sndErr1.set(e.getMessage().equals("L1 Throw"));
+                throw new IllegalArgumentException(); //Additional exceptions,Cause connection closure.
+            }
+        }).build();
 
         // start server
         int safePort = safePort();
@@ -289,7 +280,7 @@ public class SoWriteTest extends AbstractSoTest {
         TcpSoConfig tcpConf = tcpConfig(2, 32);
 
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, ctx -> ProtoHelper.standard().build(ctx), tcpConf);
+        NetListen listen = server.bind(address, ProtoHelper.standard().build(), tcpConf);
         Socket client = new Socket("127.0.0.1", safePort);
 
         listen.waitAnyAccept();

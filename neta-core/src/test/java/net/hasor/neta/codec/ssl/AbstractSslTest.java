@@ -14,14 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.cobble.function.EConsumer;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
-
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -33,13 +32,13 @@ public class AbstractSslTest {
         //  Net      SSL     Message
         // Bytes -> Bytes -> String
         // Bytes <- Bytes <- String
-        return ctx -> ProtoHelper.standard()
+        return ProtoHelper.standard()
                 // SSL
                 .nextDuplex("SSL", new SslProtoDuplex(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
-                .build(ctx);
+                .build();
     }
 
     /**

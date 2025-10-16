@@ -101,10 +101,12 @@ public final class ProtoHelper {
         }
 
         @Override
-        public void build(ProtoContext context) {
-            for (Consumer<ProtoContext> consumer : taskAppend) {
-                consumer.accept(context);
-            }
+        public ProtoInitializer build() {
+            return ctx -> {
+                for (Consumer<ProtoContext> consumer : taskAppend) {
+                    consumer.accept(ctx);
+                }
+            };
         }
     }
 }
