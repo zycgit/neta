@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtListen;
@@ -45,8 +44,10 @@ public class SslProtocolTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig sslConf = sslConfig(SslProtocol.SSL_v3);
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtSoConfig soConfig = VrtSoConfig.asDefault();
+            soConfig.setAsynchronous(false);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 
@@ -60,7 +61,6 @@ public class SslProtocolTest extends AbstractSslTest {
             //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            ThreadUtils.sleep(1000);
             assert clientRcvData.get(0).equals("Hello Client, this message form server.");
             assert serverRcvData.get(0).equals("Hello Server, this message form client.");
         });
@@ -71,8 +71,10 @@ public class SslProtocolTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig sslConf = sslConfig(SslProtocol.TLS_v1);
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtSoConfig soConfig = VrtSoConfig.asDefault();
+            soConfig.setAsynchronous(false);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 
@@ -86,7 +88,6 @@ public class SslProtocolTest extends AbstractSslTest {
             //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            ThreadUtils.sleep(1000);
             assert clientRcvData.get(0).equals("Hello Client, this message form server.");
             assert serverRcvData.get(0).equals("Hello Server, this message form client.");
         });
@@ -97,8 +98,10 @@ public class SslProtocolTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_1);
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtSoConfig soConfig = VrtSoConfig.asDefault();
+            soConfig.setAsynchronous(false);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 
@@ -112,7 +115,6 @@ public class SslProtocolTest extends AbstractSslTest {
             //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            ThreadUtils.sleep(500);
             assert clientRcvData.get(0).equals("Hello Client, this message form server.");
             assert serverRcvData.get(0).equals("Hello Server, this message form client.");
         });
@@ -123,8 +125,10 @@ public class SslProtocolTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_2);
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtSoConfig soConfig = VrtSoConfig.asDefault();
+            soConfig.setAsynchronous(false);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 
@@ -138,7 +142,6 @@ public class SslProtocolTest extends AbstractSslTest {
             //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            ThreadUtils.sleep(500);
             assert clientRcvData.get(0).equals("Hello Client, this message form server.");
             assert serverRcvData.get(0).equals("Hello Server, this message form client.");
         });
@@ -149,8 +152,10 @@ public class SslProtocolTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_3);
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtSoConfig soConfig = VrtSoConfig.asDefault();
+            soConfig.setAsynchronous(false);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 
@@ -164,7 +169,6 @@ public class SslProtocolTest extends AbstractSslTest {
             //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            ThreadUtils.sleep(1000);
             assert clientRcvData.get(0).equals("Hello Client, this message form server.");
             assert serverRcvData.get(0).equals("Hello Server, this message form client.");
         });
