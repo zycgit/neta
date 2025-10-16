@@ -1,0 +1,21 @@
+{
+	"name": "Neta Java 8 SCTP",
+	"build": {
+		"dockerfile": "Dockerfile"
+	},
+	"settings": {},
+	"extensions": [
+		"vscjava.vscode-java-pack",
+		"vscjava.vscode-maven"
+	],
+	"remoteUser": "vscode",
+	"features": {
+		"ghcr.io/devcontainers/features/java:1": {
+			"version": "8",
+			"installMaven": "true",
+			"installGradle": "false"
+		}
+	},
+	// Grant privileges to allow socket creation/modification for SCTP
+	"runArgs": [ "--privileged" ]
+}

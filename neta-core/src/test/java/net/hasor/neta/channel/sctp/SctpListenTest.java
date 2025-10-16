@@ -15,11 +15,8 @@
  */
 package net.hasor.neta.channel.sctp;
 import java.net.InetSocketAddress;
-import net.hasor.neta.channel.AbstractSoTest;
-import net.hasor.neta.channel.NetListen;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.ProtoHelper;
-import net.hasor.neta.channel.tcp.TcpSoConfig;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import net.hasor.neta.channel.*;
 import org.junit.Test;
 
 /**
@@ -28,16 +25,110 @@ import org.junit.Test;
  */
 public class SctpListenTest extends AbstractSoTest {
 
+    private boolean checkSupport() {
+        try {
+            com.sun.nio.sctp.SctpServerChannel.open().close();
+            return true;
+        } catch (Throwable e) {
+            return false;
+        }
+    }
+
     @Test
     public void acceptTest_1() throws Throwable {
+        if (!checkSupport()) {
+            System.out.println("SCTP not supported on this platform, skip test.");
+            return;
+        }
+
         int safePort = safePort();
         InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
-        TcpSoConfig tcpConf = tcpConfig(2, 30);
+        SctpSoConfig sctpConf = new SctpSoConfig();
 
         // server
         NetManager server = new NetManager(globalConf());
-        NetListen listen = server.bind(address, ProtoHelper.standard().build(), tcpConf);
+        NetListen listen = server.bind(address, ProtoHelper.standard().build(), sctpConf);
+
+        // client
+        NetManager client = new NetManager(globalConf());
+        NetChannel clientChannel = client.connectSync(address, ProtoHelper.standard().build(), sctpConf);
+
+        // wait connected
+        listen.waitAnyAccept();
+        while (true) {
+            if (listen.getChannelCount() == 1) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
+
+        // close client
+        clientChannel.close();
+        while (true) {
+            if (listen.getChannelCount() == 0) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
+
+        // close listen
+        listen.closeNow();
+
+        client.shutdown();
+        server.shutdown();
+    }
+
+    @Test
+    public void acceptTest_2() throws Throwable {
+        if (!checkSupport()) {
+            System.out.println("SCTP not supported on this platform, skip test.");
+            return;
+        }
+
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        SctpSoConfig sctpConf = new SctpSoConfig();
+
+        // server
+        NetManager server = new NetManager(globalConf());
+        NetListen listen = server.bind(address, ProtoHelper.standard().build(), sctpConf);
+
+        // client 1 & 2
+        NetManager client = new NetManager(globalConf());
+        NetChannel clientChannel1 = client.connectSync(address, ProtoHelper.standard().build(), sctpConf);
+        NetChannel clientChannel2 = client.connectSync(address, ProtoHelper.standard().build(), sctpConf);
+
+        // wait connected
+        listen.waitAnyAccept();
+        while (true) {
+            if (listen.getChannelCount() == 2) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
+
+        clientChannel1.close();
+        while (true) {
+            if (listen.getChannelCount() == 1) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
+
+        clientChannel2.close();
+        while (true) {
+            if (listen.getChannelCount() == 0) {
+                break;
+            } else {
+                ThreadUtils.sleep(100);
+            }
+        }
 
         server.shutdown();
+        client.shutdown();
     }
 }
