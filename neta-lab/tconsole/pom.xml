@@ -27,7 +27,7 @@
     <dependencies>
         <dependency>
             <groupId>net.hasor</groupId>
-            <artifactId>neta-codec</artifactId>
+            <artifactId>neta-core</artifactId>
         </dependency>
 
         <!-- test -->

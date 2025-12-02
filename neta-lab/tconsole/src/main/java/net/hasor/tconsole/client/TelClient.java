@@ -31,7 +31,7 @@ import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.codec.LineBasedFrameHandler;
-import net.hasor.neta.codec.string.StringProtoDuplexer;
+import net.hasor.neta.codec.string.StringDuplexer;
 import net.hasor.tconsole.TelAttribute;
 import net.hasor.tconsole.TelOptions;
 import net.hasor.tconsole.launcher.AttributeObject;
@@ -82,7 +82,7 @@ public class TelClient implements TelAttribute, AutoCloseable {
             //split according to \r\n, max line is 4K
             ctx.addLastDecoder("max length", new LineBasedFrameHandler(4096, false));
             // encoder/decoder string
-            ctx.addLast("string", new StringProtoDuplexer());
+            ctx.addLast("string", new StringDuplexer());
         }, SoConfig.TCP());
 
         // 3. 等待连接成功
