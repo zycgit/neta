@@ -1,21 +1,16 @@
 package net.hasor.neta.codec.net.ntp;
-
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoHandler;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
 
 public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<NTPMessage> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<NTPMessage> src, ProtoSndQueue<ByteBuf> dst) {
         while (src.hasMore()) {
             NTPMessage message = src.takeMessage();
             if (message instanceof NTPPacket) {
-                encodeNTPPacket(context, (NTPPacket) message, dst);
+                encodePacket(context, (NTPPacket) message, dst);
             } else if (message instanceof NTPControlPacket) {
-                encodeControlPacket(context, (NTPControlPacket) message, dst);
+                encodePacket(context, (NTPControlPacket) message, dst);
             } else {
                 throw new IllegalStateException("unknown message type.");
             }
@@ -23,9 +18,15 @@ public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
         return ProtoStatus.Next;
     }
 
-    private void encodeNTPPacket(ProtoContext context, NTPPacket packet, ProtoSndQueue<ByteBuf> dst) {
-        int length = 48 + (packet.getAuthenticator() == null ? 0 : packet.getAuthenticator().length);
-        ByteBuf buf = context.getSoContext().getByteBufAllocator().buffer(length);
+    private void encodePacket(ProtoContext context, NTPPacket packet, ProtoSndQueue<ByteBuf> dst) {
+        int length = 48;
+        if (packet.getVersion() == 4 && packet.getExtensionFields() != null) {
+            for (NTPField field : packet.getExtensionFields()) {
+                length += field.getLength();
+            }
+        }
+        length += this.evalLength(packet.getAuthenticator());
+        ByteBuf buf = context.byteBufAllocator().buffer(length);
 
         byte b0 = 0;
         b0 |= (packet.getLeapIndicator() & 0x3) << 6;
@@ -46,6 +47,21 @@ public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
         buf.writeInt64(packet.getReceiveTimestamp());
         buf.writeInt64(packet.getTransmitTimestamp());
 
+        if (packet.getVersion() == 4 && packet.getExtensionFields() != null) {
+            for (NTPField field : packet.getExtensionFields()) {
+                buf.writeInt16(field.getFieldType());
+                buf.writeInt16((short) field.getLength());
+                if (field.getValue() != null) {
+                    buf.writeBytes(field.getValue());
+                }
+                // Padding
+                int padding = field.getLength() - 4 - (field.getValue() == null ? 0 : field.getValue().length);
+                if (padding > 0) {
+                    buf.writeBytes(new byte[padding]);
+                }
+            }
+        }
+
         if (packet.getAuthenticator() != null) {
             buf.writeBytes(packet.getAuthenticator());
         }
@@ -54,9 +70,9 @@ public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
         dst.offerMessage(buf);
     }
 
-    private void encodeControlPacket(ProtoContext context, NTPControlPacket packet, ProtoSndQueue<ByteBuf> dst) {
-        int length = 12 + (packet.getData() == null ? 0 : packet.getData().length) + (packet.getAuthenticator() == null ? 0 : packet.getAuthenticator().length);
-        ByteBuf buf = context.getSoContext().getByteBufAllocator().buffer(length);
+    private void encodePacket(ProtoContext context, NTPControlPacket packet, ProtoSndQueue<ByteBuf> dst) {
+        int length = 12 + this.evalLength(packet.getData()) + this.evalLength(packet.getAuthenticator());
+        ByteBuf buf = context.byteBufAllocator().buffer(length);
 
         byte b0 = 0;
         b0 |= (packet.getLeapIndicator() & 0x3) << 6;
@@ -85,5 +101,9 @@ public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
 
         buf.markWriter();
         dst.offerMessage(buf);
+    }
+
+    private int evalLength(byte[] data) {
+        return data == null ? 0 : data.length;
     }
 }

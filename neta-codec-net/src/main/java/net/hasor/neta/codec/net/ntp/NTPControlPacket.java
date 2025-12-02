@@ -1,14 +1,14 @@
 package net.hasor.neta.codec.net.ntp;
 
 public class NTPControlPacket extends NTPMessage {
-    private byte    rem;                // 3bit, R(1) E(1) M(1)
-    private byte    op;                 // 5bit，操作码，表明命令的类型。
-    private int     sequence;           // 16bit, Sequence Number
-    private int     status;             // 16bit, Status
-    private int     associationID;      // 16bit, Association ID
-    private int     offset;             // 16bit, Offset
-    private int     count;              // 16bit, Count
-    private byte[]  data;               // Data
+    private byte   rem;                // 3bit, R(1) E(1) M(1)
+    private byte   op;                 // 5bit，操作码，表明命令的类型。
+    private int    sequence;           // 16bit, Sequence Number
+    private int    status;             // 16bit, Status
+    private int    associationID;      // 16bit, Association ID
+    private int    offset;             // 16bit, Offset
+    private int    count;              // 16bit, Count
+    private byte[] data;               // Data
 
     public NTPControlPacket() {
         setNtpMode(NTPMode.CONTROL_MESSAGE);
@@ -116,17 +116,17 @@ public class NTPControlPacket extends NTPMessage {
 
     @Override
     public String toString() {
-        return "NTPControlPacket{" +
-                "leapIndicator=" + getLeapIndicator() +
-                ", version=" + getVersion() +
-                ", ntpMode=" + getNtpMode() +
-                ", rem=" + rem +
-                ", op=" + op +
-                ", sequence=" + sequence +
-                ", status=" + status +
-                ", associationID=" + associationID +
-                ", offset=" + offset +
-                ", count=" + count +
+        return "NTPControlPacket{\n" +                                  //
+                "    leapIndicator=" + this.getLeapIndicator() + ",\n" +//
+                "    version=" + this.getVersion() + ",\n" +            //
+                "    ntpMode=" + this.getNtpMode() + ",\n" +            //
+                "    rem=" + this.rem + ",\n" +                         //
+                "    op=" + this.op + ",\n" +                           //
+                "    sequence=" + this.sequence + ",\n" +               //
+                "    status=" + this.status + ",\n" +                   //
+                "    associationID=" + this.associationID + ",\n" +     //
+                "    offset=" + this.offset + ",\n" +                   //
+                "    count=" + this.count + "\n" +                      //
                 '}';
     }
 }

@@ -24,10 +24,6 @@ public enum NTPMode {
         this.mode = mode;
     }
 
-    public int getMode() {
-        return mode;
-    }
-
     public static NTPMode fromMode(int mode) {
         for (NTPMode m : NTPMode.values()) {
             if (m.mode == mode) {
@@ -35,5 +31,9 @@ public enum NTPMode {
             }
         }
         return null;
+    }
+
+    public int getMode() {
+        return mode;
     }
 }

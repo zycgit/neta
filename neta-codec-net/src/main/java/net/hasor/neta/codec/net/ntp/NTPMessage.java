@@ -1,10 +1,10 @@
 package net.hasor.neta.codec.net.ntp;
 
 public abstract class NTPMessage {
-    private byte    leapIndicator;      // 2bit
-    private byte    version = 3;        // 3bit
+    private byte    leapIndicator;            // 2bit
+    private byte    version = 3;              // 3bit
     private NTPMode ntpMode = NTPMode.CLIENT; // 3bit
-    private byte[]  authenticator;      // 96bit+
+    private byte[]  authenticator;            // 96bit+
 
     public byte getLeapIndicator() {
         return leapIndicator;

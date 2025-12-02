@@ -13,7 +13,6 @@ import net.hasor.neta.channel.virtual.VrtTransfer;
 import org.junit.Test;
 
 public class NTPCodecTest {
-
     @Test
     public void testNTPPacketEncoding() throws Throwable {
         NetManager neta = new NetManager();
@@ -297,6 +296,246 @@ public class NTPCodecTest {
         assert decodedPacket.getCount() == 4;
         assert Arrays.equals(new byte[] { 0xA, 0xB, 0xC, 0xD }, decodedPacket.getData());
         assert Arrays.equals(new byte[] { 9, 8, 7 }, decodedPacket.getAuthenticator());
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void testNTPv4ExtensionFields() throws Throwable {
+        NetManager neta = new NetManager();
+
+        // Server: Receives NTPPacket (With NTPDecoder)
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            ctx.addLastDecoder(new NTPDecoder());
+        }, VrtSoConfig.asServer());
+
+        // Client: Sends ByteBuf (No Codec)
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
+        }, VrtSoConfig.asClient());
+
+        // Link
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // Capture received data
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Prepare Data (Manually construct ByteBuf for V4)
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
+        // Mode 3 (Client), Version 4, LI 0
+        byte b0 = 0;
+        b0 |= (0 & 0x3) << 6;
+        b0 |= (4 & 0x7) << 3; // Version 4
+        b0 |= (3 & 0x7);
+        buf.writeByte(b0);
+
+        buf.writeByte((byte) 2); // Stratum
+        buf.writeByte((byte) 4); // Poll
+        buf.writeByte((byte) -6); // Precision
+
+        buf.writeInt32(100); // Root Delay
+        buf.writeInt32(200); // Root Dispersion
+        buf.writeInt32(0x12345678); // Reference ID
+
+        long ts = System.currentTimeMillis();
+        buf.writeInt64(ts); // Ref TS
+        buf.writeInt64(ts); // Orig TS
+        buf.writeInt64(ts); // Recv TS
+        buf.writeInt64(ts); // Trans TS
+
+        // Extension Field 1: Type 0x0001, Length 8 (4 header + 4 value)
+        buf.writeInt16((short) 0x0001);
+        buf.writeInt16((short) 8);
+        buf.writeBytes(new byte[] { 0xA, 0xB, 0xC, 0xD });
+
+        // Extension Field 2: Type 0x0002, Length 4 (4 header + 0 value)
+        buf.writeInt16((short) 0x0002);
+        buf.writeInt16((short) 4);
+
+        // Authenticator (Optional, but let's add it to test boundary)
+        buf.writeBytes(new byte[] { 1, 2, 3, 4 });
+
+        buf.markWriter();
+
+        // Send
+        client.sendData(buf).get();
+
+        // Verify
+        assert rcvData.size() == 1;
+        Object msg = rcvData.poll();
+        assert msg instanceof NTPPacket;
+        NTPPacket decodedPacket = (NTPPacket) msg;
+
+        assert decodedPacket.getVersion() == 4;
+        assert decodedPacket.getExtensionFields().size() == 2;
+
+        NTPField field1 = decodedPacket.getExtensionFields().get(0);
+        assert field1.getFieldType() == 1;
+        assert field1.getLength() == 8;
+        assert Arrays.equals(new byte[] { 0xA, 0xB, 0xC, 0xD }, field1.getValue());
+
+        NTPField field2 = decodedPacket.getExtensionFields().get(1);
+        assert field2.getFieldType() == 2;
+        assert field2.getLength() == 4;
+        assert field2.getValue() == null || field2.getValue().length == 0;
+
+        assert Arrays.equals(new byte[] { 1, 2, 3, 4 }, decodedPacket.getAuthenticator());
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void testNTPv4ExtensionEncoding() throws Throwable {
+        NetManager neta = new NetManager();
+
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+        }, VrtSoConfig.asServer());
+
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
+            ctx.addLastEncoder(new NTPEncoder());
+        }, VrtSoConfig.asClient());
+
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        NTPPacket packet = new NTPPacket();
+        packet.setVersion((byte) 4);
+        packet.setNtpMode(NTPMode.CLIENT);
+
+        packet.addExtensionField(new NTPField((short) 1, new byte[] { 1, 2, 3, 4 }));
+        packet.addExtensionField(new NTPField((short) 2, null));
+
+        packet.setAuthenticator(new byte[] { 9, 9, 9, 9 });
+
+        client.sendData(packet).get();
+
+        assert rcvData.size() == 1;
+        ByteBuf buf = (ByteBuf) rcvData.poll();
+        assert buf != null;
+
+        // Skip Header (48 bytes)
+        buf.skipReadableBytes(48);
+
+        // Verify Ext Field 1
+        assert buf.readInt16() == 1; // Type
+        assert buf.readInt16() == 8; // Length
+        byte[] val1 = new byte[4];
+        buf.readBytes(val1);
+        assert Arrays.equals(new byte[] { 1, 2, 3, 4 }, val1);
+
+        // Verify Ext Field 2
+        assert buf.readInt16() == 2; // Type
+        assert buf.readInt16() == 4; // Length
+
+        // Verify Authenticator
+        byte[] auth = new byte[4];
+        buf.readBytes(auth);
+        assert Arrays.equals(new byte[] { 9, 9, 9, 9 }, auth);
+
+        neta.shutdown();
+    }
+
+    @Test
+    public void testStickyPackets() throws Throwable {
+        NetManager neta = new NetManager();
+
+        // Server: NTPDecoder
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            ctx.addLastDecoder(new NTPDecoder());
+        }, VrtSoConfig.asServer());
+
+        // Client: No Codec (Raw ByteBuf)
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
+            // No encoder
+        }, VrtSoConfig.asClient());
+
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Construct Sticky Buffer
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(96);
+
+        // Packet 1: V3 (3<<3 = 24), Client (3), Stratum 1
+        // 00 011 011 = 0x1B
+        buf.writeByte((byte) 0x1B);
+        buf.writeByte((byte) 1); // Stratum
+        buf.writeBytes(new byte[46]); // Rest of header
+
+        // Packet 2: V4 (4<<3 = 32), Server (4), Stratum 2
+        // 00 100 100 = 0x24
+        buf.writeByte((byte) 0x24);
+        buf.writeByte((byte) 2); // Stratum
+        buf.writeBytes(new byte[46]); // Rest of header
+
+        buf.markWriter();
+
+        // Send
+        client.sendData(buf).get();
+
+        // Verify
+        Thread.sleep(100);
+        assert rcvData.size() == 2;
+
+        NTPPacket p1 = (NTPPacket) rcvData.poll();
+        assert p1.getVersion() == 3;
+        assert p1.getStratum() == 1;
+
+        NTPPacket p2 = (NTPPacket) rcvData.poll();
+        assert p2.getVersion() == 4;
+        assert p2.getStratum() == 2;
+
+        neta.shutdown();
+    }
+
+    @org.junit.Test
+    public void testV3IgnoreExtensionFields() throws Throwable {
+        NetManager neta = new NetManager();
+
+        // Server: No Codec (Raw ByteBuf)
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            // No decoder
+        }, VrtSoConfig.asServer());
+
+        // Client: NTPEncoder
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
+            ctx.addLastEncoder(new NTPEncoder());
+        }, VrtSoConfig.asClient());
+
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> {
+            ByteBuf b = (ByteBuf) d.getData();
+            // Copy buffer because it might be recycled
+            rcvData.offer(b.copy());
+        });
+
+        // Construct V3 Packet with Extension Field
+        NTPPacket packet = new NTPPacket();
+        packet.setVersion((byte) 3);
+        packet.setNtpMode(NTPMode.CLIENT);
+
+        NTPField ext = new NTPField((short) 1, new byte[] { 1, 2, 3, 4 });
+        packet.addExtensionField(ext);
+
+        // Send
+        client.sendData(packet).get();
+
+        // Verify
+        Thread.sleep(100);
+        assert rcvData.size() == 1;
+
+        ByteBuf received = rcvData.poll();
+        // Should be exactly 48 bytes (header only), ignoring the 8 byte extension
+        assert received.readableBytes() == 48;
 
         neta.shutdown();
     }

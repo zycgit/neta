@@ -1,16 +1,27 @@
 package net.hasor.neta.codec.net.ntp;
+import java.util.ArrayList;
+import java.util.List;
 
 public class NTPPacket extends NTPMessage {
-    private int     stratum;            // 8bit，时钟的层数，定义了时钟的准确度。层数为1的时钟准确度最高，从1到15依次递减。
-    private int     pollInterval;       // 8bit，轮询时间，即发送报文的最小间隔时间。
-    private byte    precision;          // 8bit，本地时钟的精度。
-    private long    rootDelay;          // 32bit，到主参考时钟的总往返延迟时间。
-    private int     rootDispersion;     // 32bit，本地时钟相对于主参考时钟的最大误差。
-    private int     referenceID;        // 32bit，参考标识符，标识特定参考时钟。
-    private long    referenceTimestamp; // 64bit，本地时钟最后一次被设定或更新的时间。如果值为0表示本地时钟从未被同步过。
-    private long    originateTimestamp; // 64bit，NTP报文离开源端时的本地时间。
-    private long    receiveTimestamp;   // 64bit，NTP报文到达目的端的本地时间。
-    private long    transmitTimestamp;  // 64bit，目的端应答报文离开服务器端的本地时间。
+    private final List<NTPField> extensionFields = new ArrayList<>();
+    private       int            stratum;            // 8bit，时钟的层数，定义了时钟的准确度。层数为1的时钟准确度最高，从1到15依次递减。
+    private       int            pollInterval;       // 8bit，轮询时间，即发送报文的最小间隔时间。
+    private       byte           precision;          // 8bit，本地时钟的精度。
+    private       long           rootDelay;          // 32bit，到主参考时钟的总往返延迟时间。
+    private       int            rootDispersion;     // 32bit，本地时钟相对于主参考时钟的最大误差。
+    private       int            referenceID;        // 32bit，参考标识符，标识特定参考时钟。
+    private       long           referenceTimestamp; // 64bit，本地时钟最后一次被设定或更新的时间。如果值为0表示本地时钟从未被同步过。
+    private       long           originateTimestamp; // 64bit，NTP报文离开源端时的本地时间。
+    private       long           receiveTimestamp;   // 64bit，NTP报文到达目的端的本地时间。
+    private       long           transmitTimestamp;  // 64bit，目的端应答报文离开服务器端的本地时间。
+
+    public List<NTPField> getExtensionFields() {
+        return extensionFields;
+    }
+
+    public void addExtensionField(NTPField field) {
+        this.extensionFields.add(field);
+    }
 
     public int getStratum() {
         return stratum;
@@ -94,20 +105,20 @@ public class NTPPacket extends NTPMessage {
 
     @Override
     public String toString() {
-        return "NTPPacket{" +
-                "leapIndicator=" + getLeapIndicator() +
-                ", version=" + getVersion() +
-                ", ntpMode=" + getNtpMode() +
-                ", stratum=" + stratum +
-                ", pollInterval=" + pollInterval +
-                ", precision=" + precision +
-                ", rootDelay=" + rootDelay +
-                ", rootDispersion=" + rootDispersion +
-                ", referenceID=" + referenceID +
-                ", referenceTimestamp=" + referenceTimestamp +
-                ", originateTimestamp=" + originateTimestamp +
-                ", receiveTimestamp=" + receiveTimestamp +
-                ", transmitTimestamp=" + transmitTimestamp +
+        return "NTPPacket{\n" +                                               //
+                "    leapIndicator=" + this.getLeapIndicator() + ",\n" +      //
+                "    version=" + this.getVersion() + ",\n" +                  //
+                "    ntpMode=" + this.getNtpMode() + ",\n" +                  //
+                "    stratum=" + this.stratum + ",\n" +                       //
+                "    pollInterval=" + this.pollInterval + ",\n" +             //
+                "    precision=" + this.precision + ",\n" +                   //
+                "    rootDelay=" + this.rootDelay + ",\n" +                   //
+                "    rootDispersion=" + this.rootDispersion + ",\n" +         //
+                "    referenceID=" + this.referenceID + ",\n" +               //
+                "    referenceTimestamp=" + this.referenceTimestamp + ",\n" + //
+                "    originateTimestamp=" + this.originateTimestamp + ",\n" + //
+                "    receiveTimestamp=" + this.receiveTimestamp + ",\n" +     //
+                "    transmitTimestamp=" + this.transmitTimestamp + "\n" +    //
                 '}';
     }
 }
