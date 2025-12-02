@@ -4,7 +4,7 @@ import net.hasor.neta.channel.*;
 
 public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<NTPMessage> dst) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<NTPMessage> dst) {
         while (src.hasMore()) {
             ByteBuf buf = src.peekMessage();
             if (buf == null) {
@@ -40,7 +40,7 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
 
                 try {
                     if (mode == 6) {
-                        NTPControlPacket packet = decodeControlPacket(buf);
+                        NTPControlPacket packet = readCtlPacket(buf);
                         if (packet == null) {
                             buf.resetReader();
                             return ProtoStatus.Next;
@@ -48,7 +48,7 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
                         dst.offerMessage(packet);
                         decodedAtLeastOne = true;
                     } else if (mode >= 0 && mode <= 5) {
-                        NTPPacket packet = decodeNTPPacket(buf);
+                        NTPPacket packet = readPacket(buf);
                         if (packet == null) {
                             buf.resetReader();
                             return ProtoStatus.Next;
@@ -70,7 +70,7 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
         return ProtoStatus.Next;
     }
 
-    private NTPPacket decodeNTPPacket(ByteBuf buf) {
+    private NTPPacket readPacket(ByteBuf buf) {
         if (buf.readableBytes() < 48) {
             return null;
         }
@@ -177,7 +177,7 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
         return packet;
     }
 
-    private NTPControlPacket decodeControlPacket(ByteBuf buf) {
+    private NTPControlPacket readCtlPacket(ByteBuf buf) {
         if (buf.readableBytes() < 12) {
             return null;
         }

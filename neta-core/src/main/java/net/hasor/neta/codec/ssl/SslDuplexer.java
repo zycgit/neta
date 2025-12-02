@@ -22,10 +22,10 @@ import net.hasor.neta.channel.*;
 /**
  * SSL 网络协议层
  */
-public class SslProtoDuplex implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
+public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
     private final SslConfig config;
 
-    public SslProtoDuplex(SslConfig config) {
+    public SslDuplexer(SslConfig config) {
         this.config = Objects.requireNonNull(config);
     }
 

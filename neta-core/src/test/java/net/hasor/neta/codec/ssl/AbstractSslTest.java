@@ -34,7 +34,7 @@ public class AbstractSslTest {
         // Bytes <- Bytes <- String
         return ProtoHelper.standard()
                 // SSL
-                .nextDuplex("SSL", new SslProtoDuplex(sslConf))
+                .nextDuplex("SSL", new SslDuplexer(sslConf))
                 // bytes <-> String
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack

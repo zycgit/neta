@@ -14,6 +14,61 @@ import org.junit.Test;
 
 public class NTPRealServerTest {
     @Test
+    public void testNTPDuplexerGetTime() throws Throwable {
+        // 1. Setup NetManager
+        NetManager neta = new NetManager();
+
+        // 2. Define Protocol Stack (Duplexer)
+        ProtoInitializer initializer = c -> c.addLast(new NTPDuplexer());
+
+        // 3. Connect to NTP Server (UDP)
+        InetSocketAddress serverAddress = new InetSocketAddress("ntp.aliyun.com", 123);
+        UdpSoConfig udpConfig = UdpSoConfig.UDP();
+        udpConfig.setRcvPacketSize(1024);
+        NetChannel channel = neta.connectSync(serverAddress, initializer, udpConfig);
+
+        // 4. Subscribe to responses
+        CompletableFuture<NTPPacket> resultFuture = new CompletableFuture<>();
+        channel.subscribe(payload -> {
+            Object data = payload.getData();
+            if (data instanceof NTPPacket) {
+                resultFuture.complete((NTPPacket) data);
+            }
+        });
+
+        // 5. Create and Send NTP Request
+        NTPPacket request = new NTPPacket();
+        request.setNtpMode(NTPMode.CLIENT);
+        request.setVersion((byte) 3);
+        request.setLeapIndicator((byte) 0);
+        request.setStratum(0);
+        request.setPollInterval(0);
+        request.setPrecision((byte) 0);
+
+        // Set Transmit Timestamp to current time (client time) with OFFSET
+        long fakeOffset = 3600000; // 1 Hour ahead
+        long clientTime = System.currentTimeMillis() + fakeOffset;
+        request.setTransmitTimestamp(toNtpTime(clientTime));
+
+        channel.sendData(request);
+
+        // 6. Wait for response (Max 5 seconds)
+        NTPPacket response = resultFuture.get(5, TimeUnit.SECONDS);
+        long responseTime = System.currentTimeMillis() + fakeOffset; // T4
+
+        // 7. Process and Print Time
+        System.out.println("--------------------------------------------------");
+        System.out.println("NTP Duplexer Server: ntp.aliyun.com");
+        System.out.println("Local Time (Fake): " + new Date(clientTime));
+        System.out.println("Fake Offset:       " + fakeOffset + " ms");
+
+        printTime(response, clientTime, responseTime);
+        System.out.println("--------------------------------------------------");
+
+        neta.shutdown();
+    }
+
+    @Test
     public void testNTPv3GetTime() throws Throwable {
         // 1. Setup NetManager
         NetManager neta = new NetManager();

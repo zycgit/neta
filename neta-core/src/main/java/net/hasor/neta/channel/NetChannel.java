@@ -42,13 +42,13 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     protected final      SoSndContext        wContext;
     protected final      SoContextService    soContext;
     protected final      NetMonitor          monitor;
-    //
-    final                ProtoContextService protoCtx;
     protected final      ProtoStack<Object>  protoStack;
     protected final      AtomicBoolean       closeStatus;
     protected final      Future<NetChannel>  closeFuture;
-    private final        long                channelId;
     protected final      Object              readTimeoutSyncObj;
+    //
+    final                ProtoContextService protoCtx;
+    private final        long                channelId;
 
     protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService soContext) throws IOException {
         this.channelId = channelId;

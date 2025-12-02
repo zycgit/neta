@@ -24,7 +24,13 @@
         </dependency>
         <dependency>
             <groupId>net.hasor</groupId>
-            <artifactId>neta-codec</artifactId>
+            <artifactId>neta-codec-http</artifactId>
+            <scope>compile</scope>
+            <optional>true</optional>
+        </dependency>
+        <dependency>
+            <groupId>net.hasor</groupId>
+            <artifactId>neta-codec-net</artifactId>
             <scope>compile</scope>
             <optional>true</optional>
         </dependency>

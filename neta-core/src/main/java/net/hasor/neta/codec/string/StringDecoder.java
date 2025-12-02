@@ -22,7 +22,7 @@ import net.hasor.neta.codec.DelimiterBasedFrameHandler;
 import net.hasor.neta.codec.LineBasedFrameHandler;
 
 /**
- * Combined {@link StringDecoderHandler}, {@link StringEncoderHandler}.
+ * Decodes a received {@link ByteBuf} into a {@link String}.
  * Please note that this decoder must be used with a proper ByteBuf to String
  * such as {@link DelimiterBasedFrameHandler} or {@link LineBasedFrameHandler}
  * if you are using a stream-based transport such as TCP/IP.
@@ -30,32 +30,33 @@ import net.hasor.neta.codec.LineBasedFrameHandler;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
-public class StringProtoDuplexer implements ProtoDuplexer<ByteBuf, String, String, ByteBuf> {
-    private final StringDecoderHandler stringDecoder;
-    private final StringEncoderHandler stringEncoder;
+public class StringDecoder implements ProtoHandler<ByteBuf, String> {
+    private final Charset charset;
 
     /**
      * Creates a new instance with the current system character set.
      */
-    public StringProtoDuplexer() {
+    public StringDecoder() {
         this(Charset.defaultCharset());
     }
 
     /**
      * Creates a new instance with the specified character set.
      */
-    public StringProtoDuplexer(Charset charset) {
-        Objects.requireNonNull(charset, "charset");
-        this.stringDecoder = new StringDecoderHandler(charset);
-        this.stringEncoder = new StringEncoderHandler(charset);
+    public StringDecoder(Charset charset) {
+        this.charset = Objects.requireNonNull(charset, "charset");
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<String> rcvDown, ProtoRcvQueue<String> sndUp, ProtoSndQueue<ByteBuf> sndDown) {
-        if (isRcv) {
-            return this.stringDecoder.onMessage(context, rcvUp, rcvDown);
-        } else {
-            return this.stringEncoder.onMessage(context, sndUp, sndDown);
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<String> dst) {
+        boolean hasAny = false;
+        while (src.hasMore()) {
+            ByteBuf byteBuf = src.takeMessage();
+            if (byteBuf != null) {
+                dst.offerMessage(byteBuf.readString(byteBuf.readableBytes(), this.charset));
+                hasAny = true;
+            }
         }
+        return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;
     }
 }

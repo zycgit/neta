@@ -25,20 +25,20 @@ import net.hasor.neta.channel.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
-public class StringEncoderHandler implements ProtoHandler<String, ByteBuf> {
+public class StringEncoder implements ProtoHandler<String, ByteBuf> {
     private final Charset charset;
 
     /**
      * Creates a new instance with the current system character set.
      */
-    public StringEncoderHandler() {
+    public StringEncoder() {
         this(Charset.defaultCharset());
     }
 
     /**
      * Creates a new instance with the specified character set.
      */
-    public StringEncoderHandler(Charset charset) {
+    public StringEncoder(Charset charset) {
         this.charset = Objects.requireNonNull(charset, "charset");
     }
 
