@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 /**
@@ -58,7 +59,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
     private void recycle() {
         int requestSize = this.writerIndex - this.markedReaderIndex;
         ByteBuffer recycle = this.alloc.jvmBuffer(evalSize(requestSize));
-        this.target.clear().position(this.markedReaderIndex).limit(this.markedReaderIndex + requestSize);
+        ((Buffer) this.target).clear().position(this.markedReaderIndex).limit(this.markedReaderIndex + requestSize);
         recycle.put(this.target);
 
         int recyclePos = this.markedReaderIndex;
@@ -86,7 +87,8 @@ final class AutoByteBuffer extends AbstractByteBuf {
         int requestSize = offset + len;
         if (requestSize > currentCap) {
             ByteBuffer extension = this.alloc.jvmBuffer(evalSize(requestSize));
-            extension.put((ByteBuffer) this.target.clear());
+            ((Buffer) this.target).clear();
+            extension.put(this.target);
             this.target = extension;
         }
     }
@@ -96,7 +98,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
         checkFree();
         checkExtension(offset, 1);
 
-        this.target.clear();
+        ((Buffer) this.target).clear();
         this.target.put(offset, b);
     }
 
@@ -105,7 +107,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
         checkFree();
         checkExtension(offset, srcLen);
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear().position(offset);
         this.target.put(src, srcOffset, srcLen);
         return srcLen;
     }
@@ -117,7 +119,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
         srcLen = Math.min(src.remaining(), srcLen);
         checkExtension(offset, srcLen);
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear().position(offset);
         this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
         src.position(src.position() + srcLen);
         return srcLen;
@@ -130,7 +132,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
         srcLen = Math.min(src.readableBytes(), srcLen);
         checkExtension(offset, srcLen);
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear().position(offset);
         src.readBuffer(this.target, srcLen);
         return srcLen;
     }
@@ -139,7 +141,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        this.target.clear();
+        ((Buffer) this.target).clear();
         return this.target.get(offset);
     }
 
@@ -147,7 +149,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
     protected int _getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
         checkFree();
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear().position(offset);
         this.target.get(dst, dstOffset, dstLen);
         return dstLen;
     }
@@ -156,7 +158,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
     protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
         checkFree();
 
-        this.target.clear().position(offset).limit(offset + dstLen);
+        ((Buffer) this.target).clear().position(offset).limit(offset + dstLen);
         dst.put(this.target);
         return dstLen;
     }
@@ -197,7 +199,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
         checkFree();
 
         ByteBuffer copyBuffer = this.alloc.jvmBuffer(this.target.capacity());
-        this.target.clear();
+        ((Buffer) this.target).clear();
         copyBuffer.put(this.target);
 
         AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.class, AutoByteBuffer.RECYCLE_HANDLER);

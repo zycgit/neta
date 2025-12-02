@@ -68,7 +68,8 @@ final class PooledByteBuf extends AbstractByteBuf {
 
             if (requestSize > 0) {
                 ByteBuffer targetBuf = extTarget.getTarget().duplicate();
-                targetBuf.clear().position(extTarget.getOffset());
+                ((java.nio.Buffer) targetBuf).clear();
+                ((java.nio.Buffer) targetBuf).position(extTarget.getOffset());
                 this.target.get(this.markedReaderIndex, targetBuf, requestSize);
             }
             toFreeTarget = this.target;
@@ -109,7 +110,8 @@ final class PooledByteBuf extends AbstractByteBuf {
                 toFreeTarget = extTarget;// when try failed, free requestBuffer.
 
                 ByteBuffer targetBuf = extTarget.getTarget().duplicate();
-                targetBuf.clear().position(extTarget.getOffset());
+                ((java.nio.Buffer) targetBuf).clear();
+                ((java.nio.Buffer) targetBuf).position(extTarget.getOffset());
                 this.target.get(0, targetBuf, this.target.capacity());
                 toFreeTarget = this.target;
                 this.target = extTarget;
@@ -159,7 +161,8 @@ final class PooledByteBuf extends AbstractByteBuf {
         ByteBuffer tarBuf = this.target.getTarget().duplicate();
         int tarOffset = this.target.getOffset() + offset;
 
-        tarBuf.clear().position(tarOffset);
+        ((java.nio.Buffer) tarBuf).clear();
+        ((java.nio.Buffer) tarBuf).position(tarOffset);
         return src.readBuffer(tarBuf, srcLen);
     }
 
@@ -194,7 +197,8 @@ final class PooledByteBuf extends AbstractByteBuf {
         ByteBuffer targetBuf = this.target.getTarget().duplicate();
         int tarOffset = this.target.getOffset() + offset;
 
-        targetBuf.clear().position(tarOffset);
+        ((java.nio.Buffer) targetBuf).clear();
+        ((java.nio.Buffer) targetBuf).position(tarOffset);
         dst.writeBuffer(targetBuf, dstLen);
         return dstLen;
     }
@@ -225,7 +229,8 @@ final class PooledByteBuf extends AbstractByteBuf {
 
         Buffer target = this.pool.requestBuffer(this.target.capacity(), this.alloc);
         ByteBuffer targetBuf = target.getTarget().duplicate();
-        targetBuf.clear().position(target.getOffset());
+        ((java.nio.Buffer) targetBuf).clear();
+        ((java.nio.Buffer) targetBuf).position(target.getOffset());
         this._getBytes(this.markedReaderIndex, targetBuf, target.capacity());
 
         PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.class, PooledByteBuf.RECYCLE_HANDLER);

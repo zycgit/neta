@@ -16,6 +16,7 @@
 package net.hasor.neta.channel.tcp;
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.concurrent.TimeUnit;
@@ -73,9 +74,9 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
     private void copyData(SoSndContext wContext) {
         // copy data from sndBuf to swapBuf
         SoSndData sndData = wContext.peekData();
-        this.sndSwapBuf.clear();
+        ((Buffer) this.sndSwapBuf).clear();
         sndData.transferTo(this.sndSwapBuf);
-        this.sndSwapBuf.flip();
+        ((Buffer) this.sndSwapBuf).flip();
     }
 
     private void writeData(SoSndContext wContext) {
@@ -104,7 +105,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
 
         this.monitor.updateSndCounter(result);
 
-        if (this.sndSwapBuf.hasRemaining()) {
+        if (((Buffer) this.sndSwapBuf).hasRemaining()) {
             this.writeData(wContext);
         } else if (!wContext.isEmpty()) {
             this.copyData(wContext);

@@ -16,6 +16,7 @@
 package net.hasor.neta.channel.tcp;
 import java.io.Closeable;
 import java.io.IOException;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.*;
 import java.util.concurrent.TimeUnit;
@@ -60,7 +61,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             return;
         }
 
-        this.rcvSwapBuffer.clear();
+        ((Buffer) this.rcvSwapBuffer).clear();
         long timeout = this.rTimeoutMs != null && this.rTimeoutMs > 0 ? this.rTimeoutMs : 0L;
         this.channel.read(this.rcvSwapBuffer, this.context, this, timeout, TimeUnit.MILLISECONDS);
     }
@@ -73,7 +74,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             }
 
             // copy buffer form swap to rcv
-            this.rcvSwapBuffer.flip();
+            ((Buffer) this.rcvSwapBuffer).flip();
             ByteBuf byteBuf = this.allocator.buffer(result);
             byteBuf.writeBuffer(this.rcvSwapBuffer);
             byteBuf.markWriter();

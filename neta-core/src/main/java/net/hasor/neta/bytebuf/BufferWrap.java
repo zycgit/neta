@@ -42,9 +42,10 @@ class BufferWrap implements Buffer {
 
     private static ByteBuffer clearAndPosition(ByteBuffer buffer, int index) {
         if (index == 0) {
-            buffer.clear();
+            ((java.nio.Buffer) buffer).clear();
         } else {
-            buffer.clear().position(index);
+            ((java.nio.Buffer) buffer).clear();
+            ((java.nio.Buffer) buffer).position(index);
         }
         return buffer;
     }
@@ -111,7 +112,7 @@ class BufferWrap implements Buffer {
     public void get(int index, ByteBuffer dst, int dstLen) {
         ByteBuffer dupBuf = this.buffer.duplicate();
         clearAndPosition(dupBuf, index);
-        dupBuf.limit(index + dstLen);
+        ((java.nio.Buffer) dupBuf).limit(index + dstLen);
         dst.put(dupBuf);
     }
 
@@ -119,13 +120,14 @@ class BufferWrap implements Buffer {
     public void get(int index, ByteBuffer dst, int dstOffset, int dstLen) {
         ByteBuffer dupBuf = this.buffer.duplicate();
         clearAndPosition(dupBuf, index);
-        dupBuf.limit(index + dstLen);
-        ByteBuffer dup = (ByteBuffer) dst.duplicate().position(dstOffset);
+        ((java.nio.Buffer) dupBuf).limit(index + dstLen);
+        ByteBuffer dup = dst.duplicate();
+        ((java.nio.Buffer) dup).position(dstOffset);
         dup.put(dupBuf);
 
         int newPos = dstOffset + dstLen;
         if (newPos > dst.position()) {
-            dst.position(newPos);
+            ((java.nio.Buffer) dst).position(newPos);
         }
     }
 
@@ -139,8 +141,10 @@ class BufferWrap implements Buffer {
         ByteBuffer dupBuf = this.buffer.duplicate();
         clearAndPosition(dupBuf, index);
 
-        dupBuf.put((ByteBuffer) src.duplicate().limit(newPos));
-        src.position(newPos);
+        ByteBuffer srcDup = src.duplicate();
+        ((java.nio.Buffer) srcDup).limit(newPos);
+        dupBuf.put(srcDup);
+        ((java.nio.Buffer) src).position(newPos);
     }
 
     @Override
@@ -155,11 +159,11 @@ class BufferWrap implements Buffer {
 
         int limit = srcOffset + srcLen;
         ByteBuffer dupSrc = clearAndPosition(src.duplicate(), srcOffset);
-        dupSrc.limit(limit);
+        ((java.nio.Buffer) dupSrc).limit(limit);
         dupBuf.put(dupSrc);
 
         if (limit > src.position()) {
-            src.position(limit);
+            ((java.nio.Buffer) src).position(limit);
         }
     }
 

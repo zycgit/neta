@@ -17,6 +17,7 @@ package net.hasor.neta.channel.udp;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.nio.channels.SelectionKey;
@@ -176,7 +177,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
     }
 
     private void readSocket(NetListen listen, SocketAddress localAddr, Map<String, UdpChannel> channelMap, DatagramChannel socket) throws IOException {
-        this.receiveBuffer.clear();
+        ((Buffer) this.receiveBuffer).clear();
         InetSocketAddress remoteAddr = (InetSocketAddress) socket.receive(this.receiveBuffer);
         UdpChannel channel = this.findOrCreateChannel(listen, localAddr, remoteAddr, socket, channelMap);
         if (channel == null) {
@@ -184,7 +185,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         }
 
         ByteBuf byteBuf = this.bufAllocator.buffer(this.receiveBuffer.position());
-        this.receiveBuffer.flip();
+        ((Buffer) this.receiveBuffer).flip();
         byteBuf.writeBuffer(this.receiveBuffer);
         byteBuf.markWriter();
         int readableBytes = byteBuf.readableBytes();
