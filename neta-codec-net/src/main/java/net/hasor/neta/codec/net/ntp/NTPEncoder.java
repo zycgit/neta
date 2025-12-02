@@ -1,7 +1,25 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package net.hasor.neta.codec.net.ntp;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
+/**
+ * Encodes {@link NTPMessage} to {@link ByteBuf}.
+ */
 public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<NTPMessage> src, ProtoSndQueue<ByteBuf> dst) {
@@ -81,8 +99,13 @@ public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
         buf.writeByte(b0);
 
         byte b1 = 0;
-        b1 |= (packet.getRem() & 0x7) << 5;
-        b1 |= (packet.getOp() & 0x1F);
+        int rem = 0;
+        rem |= (packet.getResponseBit() & 0x1) << 2;
+        rem |= (packet.getErrorBit() & 0x1) << 1;
+        rem |= (packet.getMoreBit() & 0x1);
+
+        b1 |= (rem & 0x7) << 5;
+        b1 |= (packet.getOperationCode() & 0x1F);
         buf.writeByte(b1);
 
         buf.writeInt16((short) packet.getSequence());

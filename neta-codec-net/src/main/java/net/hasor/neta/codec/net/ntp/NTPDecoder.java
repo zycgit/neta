@@ -1,18 +1,31 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package net.hasor.neta.codec.net.ntp;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
+/**
+ * Decodes {@link ByteBuf} to {@link NTPMessage}.
+ */
 public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<NTPMessage> dst) {
         while (src.hasMore()) {
             ByteBuf buf = src.peekMessage();
-            if (buf == null) {
-                src.skipMessage(1);
-                continue;
-            }
-
-            if (buf.readableBytes() == 0) {
+            if (buf == null || buf.readableBytes() == 0) {
                 src.skipMessage(1);
                 continue;
             }
@@ -23,9 +36,6 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
 
                 if (buf.readableBytes() < 1) {
                     buf.resetReader();
-                    if (decodedAtLeastOne) {
-                        return ProtoStatus.Next;
-                    }
                     return ProtoStatus.Next;
                 }
 
@@ -56,6 +66,7 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
                         dst.offerMessage(packet);
                         decodedAtLeastOne = true;
                     } else {
+                        // Unknown mode, skip one byte
                         buf.readByte();
                     }
                 } catch (Exception e) {
@@ -96,60 +107,11 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
 
         // Try to parse Extension Fields (Only for V4)
         if (packet.getVersion() == 4) {
-            while (buf.readableBytes() >= 4) {
-                buf.markReader();
-                int type = buf.readUInt16();
-                int length = buf.readUInt16();
-
-                // Validation: Length must be at least 4, multiple of 4, and fit in remaining bytes
-                // Note: If length > remaining, it might be a partial packet.
-                // But we don't know if it's a partial packet or an Authenticator.
-                // If we assume "Multiple Packets", we should be careful.
-
-                if (length < 4 || (length % 4) != 0) {
-                    // Invalid length, treat as Authenticator or End
-                    buf.resetReader();
-                    break;
-                }
-
-                if (length > (buf.readableBytes() + 4)) {
-                    // Length exceeds available data.
-                    // This could be a partial packet.
-                    // We should return null to wait for more data?
-                    // BUT, if it was actually an Authenticator (which doesn't have length field),
-                    // interpreting it as extension length is wrong.
-                    // Given the ambiguity, we assume:
-                    // If it looks like a valid extension (valid type/len), we wait for it.
-                    // If not, we stop.
-
-                    // For now, let's assume if it exceeds, it's NOT an extension (or we can't handle it yet).
-                    // But if we return null, we stall.
-                    // Let's stick to: If it exceeds, we assume it's NOT an extension (so we break).
-                    buf.resetReader();
-                    break;
-                }
-
-                // It's a valid extension field
-                byte[] value = null;
-                int valueLen = length - 4;
-                if (valueLen > 0) {
-                    value = new byte[valueLen];
-                    buf.readBytes(value);
-                }
-                packet.addExtensionField(new NTPField((short) type, value));
-            }
+            readExtensionFields(buf, packet);
         }
-
-        // Authenticator Handling
-        // If we have remaining bytes, are they Authenticator or Next Packet?
-        // We assume: If remaining < 48, it MUST be Authenticator (too small for header).
-        // If remaining >= 48, it COULD be next packet.
-        // We check if it looks like a header? (LI/VN/Mode)
-        // This is heuristic.
 
         if (buf.readableBytes() > 0) {
             // Heuristic: If remaining bytes >= 48, check if it looks like a valid header.
-            // If so, don't consume.
             if (buf.readableBytes() >= 48) {
                 buf.markReader();
                 byte nextB0 = buf.readByte();
@@ -158,11 +120,8 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
                 int nextMode = nextB0 & 0x7;
                 int nextVer = (nextB0 >> 3) & 0x7;
 
-                // Valid Mode: 0-7. Valid Ver: 1-4.
-                // If it looks valid, we assume it's the next packet and STOP consuming.
                 if (nextVer >= 1 && nextVer <= 4 && nextMode >= 0 && nextMode <= 7) {
                     // It looks like a header. Stop.
-                    buf.markReader();
                     return packet;
                 }
             }
@@ -173,7 +132,6 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
             packet.setAuthenticator(auth);
         }
 
-        buf.markReader();
         return packet;
     }
 
@@ -189,8 +147,11 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
         packet.setNtpMode(NTPMode.CONTROL_MESSAGE);
 
         byte b1 = buf.readByte();
-        packet.setRem((byte) ((b1 >> 5) & 0x7));
-        packet.setOp((byte) (b1 & 0x1F));
+        int rem = (b1 >> 5) & 0x7;
+        packet.setResponseBit((byte) ((rem >> 2) & 0x1));
+        packet.setErrorBit((byte) ((rem >> 1) & 0x1));
+        packet.setMoreBit((byte) (rem & 0x1));
+        packet.setOperationCode((byte) (b1 & 0x1F));
 
         packet.setSequence(buf.readUInt16());
         packet.setStatus(buf.readUInt16());
@@ -209,16 +170,12 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
         }
 
         if (buf.readableBytes() > 0) {
-            // Same heuristic for Control Packet?
-            // Control packet is usually standalone.
-            // But let's apply same logic.
-            if (buf.readableBytes() >= 12) { // Min control packet size
+            if (buf.readableBytes() >= 12) {
                 buf.markReader();
                 byte nextB0 = buf.readByte();
                 buf.resetReader();
                 int nextMode = nextB0 & 0x7;
                 if (nextMode == 6 || (nextMode >= 0 && nextMode <= 5)) {
-                    buf.markReader();
                     return packet;
                 }
             }
@@ -228,7 +185,32 @@ public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
             packet.setAuthenticator(auth);
         }
 
-        buf.markReader();
         return packet;
+    }
+
+    private void readExtensionFields(ByteBuf buf, NTPPacket packet) {
+        while (buf.readableBytes() >= 4) {
+            buf.markReader();
+            int type = buf.readUInt16();
+            int length = buf.readUInt16();
+
+            if (length < 4 || (length % 4) != 0) {
+                buf.resetReader();
+                break;
+            }
+
+            if (length > (buf.readableBytes() + 4)) {
+                buf.resetReader();
+                break;
+            }
+
+            byte[] value = null;
+            int valueLen = length - 4;
+            if (valueLen > 0) {
+                value = new byte[valueLen];
+                buf.readBytes(value);
+            }
+            packet.addExtensionField(new NTPField((short) type, value));
+        }
     }
 }

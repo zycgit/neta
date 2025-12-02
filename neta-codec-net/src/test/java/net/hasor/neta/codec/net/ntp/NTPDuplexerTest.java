@@ -61,7 +61,7 @@ public class NTPDuplexerTest {
         // 2. Server sends NTPControlPacket to Client
         NTPControlPacket response = new NTPControlPacket();
         response.setVersion((byte) 3);
-        response.setOp((byte) 1);
+        response.setOperationCode((byte) 1);
         response.setSequence(100);
 
         server.sendData(response).get();
@@ -71,7 +71,7 @@ public class NTPDuplexerTest {
         assert msg2 instanceof NTPControlPacket;
         NTPControlPacket receivedResponse = (NTPControlPacket) msg2;
         assert receivedResponse.getVersion() == 3;
-        assert receivedResponse.getOp() == 1;
+        assert receivedResponse.getOperationCode() == 1;
         assert receivedResponse.getSequence() == 100;
 
         neta.shutdown();

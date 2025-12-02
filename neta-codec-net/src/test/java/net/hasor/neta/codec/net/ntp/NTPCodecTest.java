@@ -191,8 +191,11 @@ public class NTPCodecTest {
         NTPControlPacket packet = new NTPControlPacket();
         packet.setLeapIndicator((byte) 0);
         packet.setVersion((byte) 3);
-        packet.setRem((byte) 1);
-        packet.setOp((byte) 2);
+        // Rem = 1 (001) -> R=0, E=0, M=1
+        packet.setResponseBit((byte) 0);
+        packet.setErrorBit((byte) 0);
+        packet.setMoreBit((byte) 1);
+        packet.setOperationCode((byte) 2);
         packet.setSequence(100);
         packet.setStatus(200);
         packet.setAssociationID(300);
@@ -287,8 +290,11 @@ public class NTPCodecTest {
         assert decodedPacket.getLeapIndicator() == 0;
         assert decodedPacket.getVersion() == 3;
         assert decodedPacket.getNtpMode() == NTPMode.CONTROL_MESSAGE;
-        assert decodedPacket.getRem() == 1;
-        assert decodedPacket.getOp() == 2;
+        // Rem = 1 -> R=0, E=0, M=1
+        assert decodedPacket.getResponseBit() == 0;
+        assert decodedPacket.getErrorBit() == 0;
+        assert decodedPacket.getMoreBit() == 1;
+        assert decodedPacket.getOperationCode() == 2;
         assert decodedPacket.getSequence() == 100;
         assert decodedPacket.getStatus() == 200;
         assert decodedPacket.getAssociationID() == 300;

@@ -1,132 +1,212 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package net.hasor.neta.codec.net.ntp;
-
+/**
+ * Represents an NTP Control Message (Mode 6).
+ * <p>
+ * Control messages are used to monitor and control the NTP server.
+ * They are defined in RFC 1305, Appendix B.
+ * </p>
+ */
 public class NTPControlPacket extends NTPMessage {
-    private byte   rem;                // 3bit, R(1) E(1) M(1)
-    private byte   op;                 // 5bit，操作码，表明命令的类型。
-    private int    sequence;           // 16bit, Sequence Number
-    private int    status;             // 16bit, Status
-    private int    associationID;      // 16bit, Association ID
-    private int    offset;             // 16bit, Offset
-    private int    count;              // 16bit, Count
-    private byte[] data;               // Data
+    /** Response Bit (1 bit): 0 for command, 1 for response. */
+    private byte   responseBit;
+    /** Error Bit (1 bit): 0 for normal, 1 for error. */
+    private byte   errorBit;
+    /** More Bit (1 bit): 0 for last fragment, 1 for more fragments. */
+    private byte   moreBit;
+    /** Operation Code (5 bits): Specifies the function of the message. */
+    private byte   operationCode;
+    /** Sequence Number (16 bits): Used to match requests and responses. */
+    private int    sequence;
+    /** Status Word (16 bits): Contains system status information. */
+    private int    status;
+    /** Association ID (16 bits): Identifies a specific association. */
+    private int    associationID;
+    /** Offset (16 bits): Data offset, used for fragment reassembly. */
+    private int    offset;
+    /** Count (16 bits): Length of the data field in bytes. */
+    private int    count;
+    /** Data (variable length): Contains specific control information. */
+    private byte[] data;
 
+    /**
+     * Constructs a new NTPControlPacket.
+     */
     public NTPControlPacket() {
         setNtpMode(NTPMode.CONTROL_MESSAGE);
     }
 
-    public byte getRem() {
-        return rem;
+    /**
+     * Returns the Response Bit.
+     * @return 0 for command, 1 for response
+     */
+    public byte getResponseBit() {
+        return responseBit;
     }
 
-    public void setRem(byte rem) {
-        this.rem = rem;
+    /**
+     * Sets the Response Bit.
+     * @param responseBit the response bit to set
+     */
+    public void setResponseBit(byte responseBit) {
+        this.responseBit = responseBit;
     }
 
-    public boolean isResponse() {
-        return (rem & 0x4) != 0;
+    /**
+     * Returns the Error Bit.
+     * @return 0 for normal, 1 for error
+     */
+    public byte getErrorBit() {
+        return errorBit;
     }
 
-    public void setResponse(boolean response) {
-        if (response) {
-            rem |= 0x4;
-        } else {
-            rem &= ~0x4;
-        }
+    /**
+     * Sets the Error Bit.
+     * @param errorBit the error bit to set
+     */
+    public void setErrorBit(byte errorBit) {
+        this.errorBit = errorBit;
     }
 
-    public boolean isError() {
-        return (rem & 0x2) != 0;
+    /**
+     * Returns the More Bit.
+     * @return 0 for last fragment, 1 for more fragments
+     */
+    public byte getMoreBit() {
+        return moreBit;
     }
 
-    public void setError(boolean error) {
-        if (error) {
-            rem |= 0x2;
-        } else {
-            rem &= ~0x2;
-        }
+    /**
+     * Sets the More Bit.
+     * @param moreBit the more bit to set
+     */
+    public void setMoreBit(byte moreBit) {
+        this.moreBit = moreBit;
     }
 
-    public boolean isMore() {
-        return (rem & 0x1) != 0;
+    /**
+     * Returns the Operation Code.
+     * @return the operation code
+     */
+    public byte getOperationCode() {
+        return operationCode;
     }
 
-    public void setMore(boolean more) {
-        if (more) {
-            rem |= 0x1;
-        } else {
-            rem &= ~0x1;
-        }
+    /**
+     * Sets the Operation Code.
+     * @param operationCode the operation code to set
+     */
+    public void setOperationCode(byte operationCode) {
+        this.operationCode = operationCode;
     }
 
-    public byte getOp() {
-        return op;
-    }
-
-    public void setOp(byte op) {
-        this.op = op;
-    }
-
+    /**
+     * Returns the Sequence Number.
+     * @return the sequence number
+     */
     public int getSequence() {
         return sequence;
     }
 
+    /**
+     * Sets the Sequence Number.
+     * @param sequence the sequence number to set
+     */
     public void setSequence(int sequence) {
         this.sequence = sequence;
     }
 
+    /**
+     * Returns the Status Word.
+     * @return the status word
+     */
     public int getStatus() {
         return status;
     }
 
+    /**
+     * Sets the Status Word.
+     * @param status the status word to set
+     */
     public void setStatus(int status) {
         this.status = status;
     }
 
+    /**
+     * Returns the Association ID.
+     * @return the association ID
+     */
     public int getAssociationID() {
         return associationID;
     }
 
+    /**
+     * Sets the Association ID.
+     * @param associationID the association ID to set
+     */
     public void setAssociationID(int associationID) {
         this.associationID = associationID;
     }
 
+    /**
+     * Returns the Offset.
+     * @return the offset
+     */
     public int getOffset() {
         return offset;
     }
 
+    /**
+     * Sets the Offset.
+     * @param offset the offset to set
+     */
     public void setOffset(int offset) {
         this.offset = offset;
     }
 
+    /**
+     * Returns the Count (data length).
+     * @return the data length
+     */
     public int getCount() {
         return count;
     }
 
+    /**
+     * Sets the Count (data length).
+     * @param count the data length to set
+     */
     public void setCount(int count) {
         this.count = count;
     }
 
+    /**
+     * Returns the Data field.
+     * @return the data
+     */
     public byte[] getData() {
         return data;
     }
 
+    /**
+     * Sets the Data field.
+     * @param data the data to set
+     */
     public void setData(byte[] data) {
         this.data = data;
-    }
-
-    @Override
-    public String toString() {
-        return "NTPControlPacket{\n" +                                  //
-                "    leapIndicator=" + this.getLeapIndicator() + ",\n" +//
-                "    version=" + this.getVersion() + ",\n" +            //
-                "    ntpMode=" + this.getNtpMode() + ",\n" +            //
-                "    rem=" + this.rem + ",\n" +                         //
-                "    op=" + this.op + ",\n" +                           //
-                "    sequence=" + this.sequence + ",\n" +               //
-                "    status=" + this.status + ",\n" +                   //
-                "    associationID=" + this.associationID + ",\n" +     //
-                "    offset=" + this.offset + ",\n" +                   //
-                "    count=" + this.count + "\n" +                      //
-                '}';
     }
 }
