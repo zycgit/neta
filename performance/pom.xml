@@ -38,8 +38,7 @@
         </dependency>
         <dependency>
             <groupId>net.hasor</groupId>
-            <artifactId>neta-all</artifactId>
-            <version>${project.version}</version>
+            <artifactId>neta-core</artifactId>
         </dependency>
         <dependency>
             <groupId>io.netty</groupId>

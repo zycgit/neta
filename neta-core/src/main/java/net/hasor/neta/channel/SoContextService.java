@@ -300,6 +300,36 @@ public class SoContextService implements SoContext {
         }
     }
 
+    public void shutdown() {
+        if (this.ioExecutor != null) {
+            this.ioExecutor.shutdown();
+            try {
+                if (!this.ioExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                    this.ioExecutor.shutdownNow();
+                    if (!this.ioExecutor.awaitTermination(3, TimeUnit.SECONDS)) {
+                        logger.error("Pool did not terminate");
+                    }
+                }
+            } catch (InterruptedException ie) {
+                this.ioExecutor.shutdownNow();
+                Thread.currentThread().interrupt();
+            }
+            logger.info("shutdown ioExecutor done.");
+        }
+
+        if (this.eventExecutor != null) {
+            try {
+                this.eventExecutor.close();
+            } catch (Exception e) {
+                logger.error("shutdown eventExecutor failed.", e);
+            }
+        }
+
+        if (this.globalTimer != null) {
+            this.globalTimer.stop();
+        }
+    }
+
     /** asynchronously copy data from swap to rcv/snd */
     public <T> Future<T> submitSoTask(DefaultSoTask task, T result) {
         return this.eventExecutor.submitSoTask(task, result);

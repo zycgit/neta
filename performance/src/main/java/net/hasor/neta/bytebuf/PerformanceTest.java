@@ -30,7 +30,7 @@ public class PerformanceTest {
     @Threads(16)
     @Benchmark
     public void requestNetaBuffer() {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.pooledBuffer(77);
+        net.hasor.neta.bytebuf.ByteBuf buf = ByteBufAllocator.DEFAULT.pooledBuffer(77);
         IOUtils.closeQuietly(buf);
     }
 

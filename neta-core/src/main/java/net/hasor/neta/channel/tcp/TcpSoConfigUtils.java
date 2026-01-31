@@ -23,7 +23,7 @@ import java.util.Set;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * config Socket
+ * Utility class to configure TCP socket options.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

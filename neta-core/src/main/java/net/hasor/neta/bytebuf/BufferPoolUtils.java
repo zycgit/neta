@@ -20,14 +20,20 @@ package net.hasor.neta.bytebuf;
  * @version : 2022-11-01
  */
 class BufferPoolUtils {
-    private static final ThreadLocal<BufferPool> cachePool = ThreadLocal.withInitial(() -> new BufferPool(64, 10, 12));
-    private static final BufferPool              pool      = new BufferPool(4096);
+    private static final int          CPU_CORES = Runtime.getRuntime().availableProcessors();
+    private static final BufferPool[] POOLS     = new BufferPool[CPU_CORES];
+
+    static {
+        for (int i = 0; i < POOLS.length; i++) {
+            POOLS[i] = new BufferPool(4096);
+        }
+    }
 
     public static BufferPool getPool(int reqSize, BufferAllocator a) {
-        //        if (reqSize > cachePool.get().getMemChunkSize()) {
-        //
-        //        }
-
-        return pool;//.computeIfAbsent(a, bufferAllocator -> new BufferPool(4096));
+        // Simple Round-Robin or Hashing based on Thread
+        // This significantly reduces lock contention compared to a single global pool.
+        long hash = Thread.currentThread().getId();
+        int index = (int) (hash % CPU_CORES);
+        return POOLS[Math.abs(index)];
     }
 }

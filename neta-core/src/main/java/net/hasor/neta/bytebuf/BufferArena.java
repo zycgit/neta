@@ -78,10 +78,14 @@ class BufferArena {
                 continue;
             }
 
-            Buffer memory = this.bufferPool.getMemory(pages.getMemAddress()); // trigger call triggerUsage method.
-            BufferTarget buffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
-            buffer.initBuffer(this.bufferPool.getMemPageSize(), pages, memory);
-            return buffer;
+            try {
+                Buffer memory = this.bufferPool.getMemory(pages.getMemAddress()); // trigger call triggerUsage method.
+                BufferTarget buffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
+                buffer.initBuffer(this.bufferPool.getMemPageSize(), pages, memory);
+                return buffer;
+            } catch (Exception e) {
+                continue;
+            }
         }
 
         // from next BufferArena to request.
@@ -101,7 +105,10 @@ class BufferArena {
     private void normalOffer(PageChunkPool pool) {
         pool.setOwner(this);
         pool.setNotify(cbPool -> {
-            if (checkUsage(cbPool) == 0) {
+            // When checkUsage returns 0, it means no movement is needed, normally we return directly.
+            // But if it is in the qInit area (this.prev == null) and usage is close to 0, we need to pass through to triggerUsage to execute the free logic.
+            // Only qInit is eligible to execute the "return to operating system" operation.
+            if (checkUsage(cbPool) == 0 && (this.prev != null || cbPool.getUsage() > 0.000001d)) {
                 return;
             }
 
@@ -113,12 +120,19 @@ class BufferArena {
             }
         });
         this.bufferRing.add(pool);
-        triggerUsage(pool);
+
+        if (checkUsage(pool) != 0) {
+            this.triggerUsage(pool);
+        }
     }
 
     private void triggerUsage(PageChunkPool pool) {
         int mov = checkUsage(pool);
         if (mov == 0) {
+            if (this.prev == null && pool.getUsage() <= 0.000001d) {
+                this.bufferRing.remove(pool);
+                this.bufferPool.freeAllocator(pool);
+            }
             return;
         }
 

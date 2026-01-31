@@ -7,6 +7,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
+/**
+ * Virtual implementation of asynchronous server channel.
+ * Manages virtual listening ports and incoming virtual connections.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
+ */
 public class VrtAsyncServerChannel implements AsyncServerChannel {
     private static final Logger                              logger = Logger.getLogger(VrtAsyncServerChannel.class);
     private final        long                                channelId;

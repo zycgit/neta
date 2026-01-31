@@ -18,6 +18,8 @@ import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
 
 /**
+ * Represents a listening TCP server port.
+ * Manages the lifecycle of the server socket and accepting new connections.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

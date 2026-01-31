@@ -20,6 +20,8 @@ import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.channel.SoContextService;
 
 /**
+ * Virtual implementation of listening port.
+ * Accepts incoming virtual connections.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

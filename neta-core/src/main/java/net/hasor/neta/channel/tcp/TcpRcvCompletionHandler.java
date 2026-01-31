@@ -27,7 +27,8 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * received Handler
+ * Completion handler for TCP read operations.
+ * Processes received data and notifies the pipeline.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

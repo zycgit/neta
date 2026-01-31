@@ -17,47 +17,84 @@ package net.hasor.neta.bytebuf;
 import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Queue;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * The object pool.
+ * <p>
+ * Strategy:
+ * 1. L1 Cache (ThreadLocal): Fast, lock-free, primary choice.
+ * 2. L2 Cache (Global Shared): Thread-safe, lock-free (ConcurrentLinkedQueue), handles cross-thread recycling.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 class RecycleObjectPool {
-    private static final ThreadLocal<Map<Class<?>, ArrayDeque<Object>>> THREAD_CACHE = new ThreadLocal<>();
+    private static final int                                            LOCAL_CAPACITY  = 1024;
+    private static final int                                            GLOBAL_CAPACITY = 4096;
+    // L1: ThreadLocal Cache
+    private static final ThreadLocal<Map<Class<?>, ArrayDeque<Object>>> THREAD_CACHE    = new ThreadLocal<>();
+    // L2: Global Shared Cache
+    private static final Map<Class<?>, RecyclerQueue>                   GLOBAL_CACHE    = new ConcurrentHashMap<>();
 
-    private static ArrayDeque<Object> cacheDeque(Class<?> objType) {
-        Map<Class<?>, ArrayDeque<Object>> cacheMap = THREAD_CACHE.get();
-        if (cacheMap == null) {
-            synchronized (RecycleObjectPool.class) {
-                cacheMap = THREAD_CACHE.get();
-                if (cacheMap == null) {
-                    cacheMap = new HashMap<>();
-                    THREAD_CACHE.set(cacheMap);
-                }
-            }
-        }
-
-        ArrayDeque<Object> deque = cacheMap.get(objType);
-        if (deque == null) {
-            synchronized (cacheMap) {
-                deque = cacheMap.computeIfAbsent(objType, k -> new ArrayDeque<>());
-            }
-        }
-
-        return deque;
+    private static class RecyclerQueue {
+        final Queue<Object> queue = new ConcurrentLinkedQueue<>();
+        final AtomicInteger size  = new AtomicInteger(0);
     }
 
-    public static <T> T get(Class<T> objType, RecycleHandler<?> handler) {
-        ArrayDeque<Object> deque = cacheDeque(objType);
-        if (deque.isEmpty()) {
-            return (T) handler.create();
-        } else {
-            return (T) deque.pop();
+    private static ArrayDeque<Object> localQueue(Class<?> objType) {
+        Map<Class<?>, ArrayDeque<Object>> cacheMap = THREAD_CACHE.get();
+        if (cacheMap == null) {
+            cacheMap = new HashMap<>();
+            THREAD_CACHE.set(cacheMap);
         }
+
+        return cacheMap.computeIfAbsent(objType, k -> new ArrayDeque<>());
+    }
+
+    private static RecyclerQueue globalQueue(Class<?> objType) {
+        return GLOBAL_CACHE.computeIfAbsent(objType, k -> new RecyclerQueue());
+    }
+
+    @SuppressWarnings("unchecked")
+    public static <T> T get(Class<T> objType, RecycleHandler<?> handler) {
+        // 1. Try L1 (Thread Local)
+        ArrayDeque<Object> localDeque = localQueue(objType);
+        if (!localDeque.isEmpty()) {
+            return (T) localDeque.pop();
+        }
+
+        // 2. Try L2 (Global Shared) - Steal from global if local is empty
+        RecyclerQueue recyclerQueue = globalQueue(objType);
+        Object obj = recyclerQueue.queue.poll();
+        if (obj != null) {
+            recyclerQueue.size.decrementAndGet();
+            return (T) obj;
+        }
+
+        // 3. Create New
+        return (T) handler.create();
     }
 
     public static void free(Class<?> objType, Object obj) {
-        cacheDeque(objType).add(obj);
+        // 1. Try L1 (Thread Local)
+        ArrayDeque<Object> localDeque = localQueue(objType);
+        if (localDeque.size() < LOCAL_CAPACITY) {
+            localDeque.push(obj);
+            return;
+        }
+
+        // 2. Try L2 (Global Shared) - Offer to global if local is full
+        RecyclerQueue recyclerQueue = globalQueue(objType);
+        if (recyclerQueue.size.get() < GLOBAL_CAPACITY) {
+            if (recyclerQueue.queue.offer(obj)) {
+                recyclerQueue.size.incrementAndGet();
+                return;
+            }
+        }
+
+        // 3. Discard if both full (Let GC handle it)
     }
 }

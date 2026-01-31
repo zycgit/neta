@@ -291,6 +291,10 @@ class ProtoChainRoot implements ProtoStack<Object> {
                         // rcv life result.
                         arraySize += takeSndDownToArray(current, returnData);
 
+                        if (Boolean.TRUE.equals(protoCtx.flash(ProtoInvocation.SKIP_SND_LIFE))) {
+                            break;
+                        }
+
                         // snd life result.
                         Object[] objects = this.doSndLife(protoCtx, current.getName(), null);
                         arraySize += objects.length;

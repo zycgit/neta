@@ -23,6 +23,12 @@ import java.util.concurrent.TimeUnit;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
 
+/**
+ * Task for writing data to a UDP channel.
+ * Handles the actual transmission of packets.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
+ */
 class UdpWriteTask extends DefaultSoTask {
     protected final SoContextService context;
     private final   NetChannel       netChannel;

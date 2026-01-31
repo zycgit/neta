@@ -16,7 +16,7 @@
     <properties>
         <downloadSources>true</downloadSources>
         <downloadJavadocs>true</downloadJavadocs>
-        <jacoco.version>0.8.5</jacoco.version>
+        <jacoco.version>0.8.12</jacoco.version>
         <!--<maven.test.skip>true</maven.test.skip>-->
         <!--<skipTests>true</skipTests>-->
     </properties>
@@ -47,7 +47,8 @@
     <modules>
         <module>neta-all</module>
         <module>neta-core</module>
-        <module>neta-codec</module>
+        <module>neta-codec-http</module>
+        <module>neta-codec-net</module>
     </modules>
 
     <dependencyManagement>
@@ -59,7 +60,12 @@
             </dependency>
             <dependency>
                 <groupId>net.hasor</groupId>
-                <artifactId>neta-codec</artifactId>
+                <artifactId>neta-codec-http</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>net.hasor</groupId>
+                <artifactId>neta-codec-net</artifactId>
                 <version>${project.version}</version>
             </dependency>
             <dependency>

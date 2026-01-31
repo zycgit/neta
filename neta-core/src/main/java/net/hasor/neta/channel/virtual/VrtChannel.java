@@ -18,8 +18,8 @@ import java.io.IOException;
 import net.hasor.neta.channel.*;
 
 /**
- * virtual channel
- * the channel that binds to the Application layer network protocol stack.
+ * Virtual channel implementation for in-memory communication.
+ * Binds to the application layer protocol stack without physical network I/O.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

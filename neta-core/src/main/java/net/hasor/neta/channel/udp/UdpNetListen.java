@@ -18,6 +18,8 @@ import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
 
 /**
+ * Represents a listening UDP port.
+ * Manages receiving of UDP packets acting as a server.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

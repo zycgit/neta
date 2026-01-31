@@ -22,6 +22,8 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
+ * Virtual implementation of asynchronous client channel.
+ * Handles virtual connection and data processing.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

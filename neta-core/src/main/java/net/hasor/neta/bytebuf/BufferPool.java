@@ -130,7 +130,9 @@ class BufferPool {
             }
         }
 
-        PageChunkSplit pages = initChunkPool(alloc).requestPages(capacity);
+        PageChunkPool pool = newAllocator(alloc);
+        PageChunkSplit pages = pool.requestPages(capacity);
+        this.qInit.lockOffer(pool);
         return this.requestBuffer(pages);
     }
 

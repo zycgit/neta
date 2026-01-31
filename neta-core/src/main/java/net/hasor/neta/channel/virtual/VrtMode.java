@@ -15,7 +15,8 @@
  */
 package net.hasor.neta.channel.virtual;
 /**
- * virtual options.
+ * Configuration for Virtual channel mode.
+ * Defines whether the channel operates as Client, Server, or Default.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

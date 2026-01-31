@@ -9,6 +9,12 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
+/**
+ * Provider for creating Virtual channels.
+ * Implements logic to create server and client channels for in-memory virtual communication.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version 2025-08-07
+ */
 public class VrtProvider implements AsyncChannelProvider {
     public static final  String                              NAME   = "VIRTUAL";
     private static final Logger                              logger = Logger.getLogger(VrtProvider.class);

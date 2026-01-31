@@ -15,10 +15,8 @@
  */
 package net.hasor.neta.channel;
 import java.io.IOException;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.logging.Logger;
 
 /**
@@ -31,7 +29,6 @@ public abstract class AbstractNetManager {
     protected final      NetConfig        config;
     protected final      SoContextService context;
     protected final      AtomicBoolean    shutdown;
-    protected            ExecutorService  executor;
 
     public AbstractNetManager(NetConfig config) {
         this.config = config;
@@ -71,22 +68,6 @@ public abstract class AbstractNetManager {
         if (this.shutdown.compareAndSet(false, true)) {
             // do close
             this.shutdown0(true);
-
-            // waiting close
-            long t = System.currentTimeMillis();
-            // waiting close accept
-            if (this.executor != null) {
-                this.executor.shutdown();
-                while (!this.executor.isTerminated()) {
-                    long cost = System.currentTimeMillis() - t;
-                    if (cost > 3000) {
-                        t = System.currentTimeMillis();
-                        logger.info("shutdown ioExecutor waiting...");
-                    }
-                    ThreadUtils.sleep(50);
-                }
-                logger.info("shutdown ioExecutor done.");
-            }
 
             logger.info("service is shutdown.");
         } else {

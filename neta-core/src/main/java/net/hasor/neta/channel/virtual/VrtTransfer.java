@@ -12,6 +12,12 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
+/**
+ * Handles data transfer between virtual channels.
+ * Manages the distribution and routing of payloads in the virtual network.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
+ */
 public class VrtTransfer {
     private static final Logger logger = Logger.getLogger(VrtTransfer.class);
     private static final Random RANDOM;

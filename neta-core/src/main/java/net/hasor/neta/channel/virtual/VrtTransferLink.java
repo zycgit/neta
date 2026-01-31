@@ -3,6 +3,12 @@ import java.util.List;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
+/**
+ * Represents a link in the virtual transfer chain.
+ * Buffers and processes data flow for a virtual connection.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
+ */
 class VrtTransferLink {
     private static final Logger               logger = Logger.getLogger(VrtTransferLink.class);
     public final         VrtChannel           target;

@@ -17,7 +17,7 @@ package net.hasor.neta.channel.udp;
 import net.hasor.neta.channel.SoConfig;
 
 /**
- * Listener options.
+ * UDP specific configuration options.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

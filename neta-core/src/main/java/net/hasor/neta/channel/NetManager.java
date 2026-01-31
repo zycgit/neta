@@ -25,6 +25,7 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.sctp.SctpProvider;
 import net.hasor.neta.channel.tcp.TcpProvider;
 import net.hasor.neta.channel.udp.UdpProvider;
 import net.hasor.neta.channel.virtual.VrtProvider;
@@ -58,6 +59,8 @@ public class NetManager extends AbstractNetManager {
                 provider = new UdpProvider(this);
             } else if (StringUtils.equalsIgnoreCase(VrtProvider.NAME, protocol)) {
                 provider = new VrtProvider(this);
+            } else if (StringUtils.equalsIgnoreCase(SctpProvider.NAME, protocol)) {
+                provider = new SctpProvider(this);
             } else {
                 throw new UnsupportedOperationException("not support protocol : " + protocol);
             }
@@ -155,5 +158,7 @@ public class NetManager extends AbstractNetManager {
         for (AsyncChannelProvider provider : this.providerMap.values()) {
             provider.shutdown();
         }
+
+        this.context.shutdown();
     }
 }

@@ -38,9 +38,7 @@ class PageChunkPool {
     private              Object                  owner;
     private              Consumer<PageChunkPool> notify;
     //
-    private              double                  usage;
-    private              int                     used;
-    private              int                     free;
+    private              AtomicInteger           used;
 
     public PageChunkPool(int memAddress, int pageSize, int treeHeight) {
         this.memAddress = memAddress;
@@ -54,6 +52,7 @@ class PageChunkPool {
         for (int i = 0; i < this.chunksLock.length; i++) {
             this.chunksLock[i] = new ReentrantLock(false);
         }
+        this.used = new AtomicInteger(0);
     }
 
     /** Returns a power of two size for the given target capacity. */
@@ -104,9 +103,7 @@ class PageChunkPool {
     }
 
     private void updateUsage(int addon) {
-        this.used = this.used + addon;
-        this.free = this.pageCount - this.used;
-        this.usage = ((double) this.used / (double) this.pageCount) * 100;
+        this.used.addAndGet(addon);
 
         if (this.notify != null) {
             this.notify.accept(this);
@@ -114,7 +111,7 @@ class PageChunkPool {
     }
 
     public double getUsage() {
-        return this.usage;
+        return ((double) this.used.get() / (double) this.pageCount) * 100;
     }
 
     /** The memory address used to mark memory blocks */
@@ -321,9 +318,9 @@ class PageChunkPool {
     @Override
     public String toString() {
         return "Chunks(" + Integer.toHexString(System.identityHashCode(this)) +//
-                ", usage: " + this.usage + "%" +//
-                ", free:" + this.free +         //
-                ", used:" + this.used + "/" + this.pageCount + //
+                ", usage: " + this.getUsage() + "%" +//
+                ", free:" + (this.pageCount - this.used.get()) +         //
+                ", used:" + this.used.get() + "/" + this.pageCount + //
                 ", pageSize:" + this.pageSize + ")";
     }
 }

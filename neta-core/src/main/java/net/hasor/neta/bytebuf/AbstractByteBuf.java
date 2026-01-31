@@ -84,11 +84,6 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     }
 
     @Override
-    protected final void finalize() {
-        this.free();
-    }
-
-    @Override
     public ByteOrder order() {
         return this.byteOrder;
     }

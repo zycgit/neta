@@ -148,34 +148,40 @@ class BufferRing<T> {
             return;
         }
         this.writeLock(self -> {
-            this.size.decrementAndGet();
-            if (this.size.get() == 0) {
-                final Node<T> curNode = this.curNode;
-                this.curNode = null;
-                curNode.next = null;
+            if (this.curNode == null) {
                 return;
             }
 
-            final Node<T> curNode = this.curNode;
-            Node<T> visitorNode = curNode;
+            final Node<T> startNode = this.curNode;
+            Node<T> visitorNode = startNode;
 
             do {
                 final Node<T> nextNode = visitorNode.next;
+                if (nextNode == null) {
+                    this.curNode = null;
+                    this.size.set(0);
+                    return;
+                }
+
                 final T nextData = nextNode.data;
                 if (!nextNode.hole && Objects.equals(nextData, data)) {
-                    visitorNode.next = nextNode.next;
-
-                    if (nextNode == curNode) {
-                        this.curNode = visitorNode;
+                    // Check if it's the last element
+                    if (this.size.decrementAndGet() == 0) {
+                        this.curNode = null;
+                    } else {
+                        visitorNode.next = nextNode.next;
+                        if (nextNode == this.curNode) {
+                            this.curNode = visitorNode;
+                        }
                     }
 
                     nextNode.next = null;
                     nextNode.data = null;
                     break;
                 } else {
-                    visitorNode = visitorNode.next;
+                    visitorNode = nextNode;
                 }
-            } while (visitorNode != curNode);
+            } while (visitorNode != startNode);
         });
     }
 

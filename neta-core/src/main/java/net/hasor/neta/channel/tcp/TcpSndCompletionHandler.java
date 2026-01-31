@@ -28,7 +28,8 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * send Handler
+ * Completion handler for TCP write operations.
+ * Handles the completion of sending data and managing the send queue.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

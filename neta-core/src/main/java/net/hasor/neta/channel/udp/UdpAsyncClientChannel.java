@@ -31,16 +31,10 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
- * An implementation of the {@link AsyncChannel} interface for UDP communication.
- * This class provides asynchronous read and write operations over a UDP channel,
- * using a non-blocking {@link DatagramChannel} and a dedicated I/O executor service.
+ * UDP client channel implementation.
  * <p>
- * The UdpAsyncChannel supports reading data into a {@link ByteBuffer} with or without
- * a specified timeout. It does not support writing data, as well as connecting to a remote
- * address, which are unsupported operations for this type of channel.
- * <p>
- * Upon creation, the channel is registered with a selector for reading, and all I/O operations
- * are performed by the provided I/O executor service.
+ * The UdpAsyncClientChannel supports reading data into a {@link ByteBuffer} with or without
+ * a specified timeout.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  * @see DatagramChannel

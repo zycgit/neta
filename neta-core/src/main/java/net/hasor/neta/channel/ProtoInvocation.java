@@ -38,10 +38,10 @@ import net.hasor.cobble.logging.Logger;
  * @version : 2023-10-20
  */
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    public static final  String                                            RCV_ERROR_TAG  = ProtoChainRoot.class.getName() + "-rcv-error-tag";
-    public static final  String                                            SND_ERROR_TAG  = ProtoChainRoot.class.getName() + "-snd-error-tag";
-    private static final String                                            FIRE_EVENT_TAG = ProtoChainRoot.class.getName() + "-fire-event-tag";
-    private static final Logger                                            logger         = Logger.getLogger(ProtoInvocation.class);
+    public static final  String                                            RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
+    public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
+    public static final  String                                            SKIP_SND_LIFE = ProtoChainRoot.class.getName() + "-skip-snd-life";
+    private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
     protected final      ProtoQueue<Object>                                rcvUp;
     protected final      ProtoQueue<Object>                                sndUp;
     private final        String                                            name;
@@ -133,7 +133,13 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
             if (ctxError == null) {
                 return this.handler.onMessage(protoCtx, isRcv, rcvUp, rcvDown, sndUp, sndDown);
             } else {
-                return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, protoCtx));
+                try {
+                    return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, protoCtx));
+                } catch (Throwable e) {
+                    protoCtx.getChannel().close();
+                    protoCtx.flash(SKIP_SND_LIFE, true);
+                    return ProtoStatus.Stop;
+                }
             }
         } catch (Throwable e) {
             if (ctxError == null) {
@@ -146,7 +152,13 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
                 }
 
                 protoCtx.flash(errorTag, e);
-                return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, protoCtx));
+                try {
+                    return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, protoCtx));
+                } catch (Throwable ex2) {
+                    protoCtx.getChannel().close();
+                    protoCtx.flash(SKIP_SND_LIFE, true);
+                    return ProtoStatus.Stop;
+                }
             } else {
                 throw e;
             }
