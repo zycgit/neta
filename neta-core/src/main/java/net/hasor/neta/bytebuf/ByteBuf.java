@@ -35,17 +35,35 @@ import java.util.Objects;
  *      readerIndex                writerIndex
  * </pre>
  */
-public interface ByteBuf extends ByteChannel {
+public interface ByteBuf extends ByteChannel, ReferenceCounted {
 
     ByteBuf EMPTY = new ByteBufProxy(ByteBuf.wrap(new byte[0])) {
         @Override
         public void free() {
-
         }
 
         @Override
         public void close() {
+        }
 
+        @Override
+        public ByteBuf retain() {
+            return this;
+        }
+
+        @Override
+        public ByteBuf retain(int increment) {
+            return this;
+        }
+
+        @Override
+        public boolean release() {
+            return false;
+        }
+
+        @Override
+        public boolean release(int decrement) {
+            return false;
         }
     };
 
@@ -97,6 +115,12 @@ public interface ByteBuf extends ByteChannel {
 
     /** 字节序 */
     ByteOrder order();
+
+    @Override
+    ByteBuf retain();
+
+    @Override
+    ByteBuf retain(int increment);
 
     /** 设置字节序 */
     ByteBuf order(ByteOrder newOrder);

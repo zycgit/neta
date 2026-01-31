@@ -80,6 +80,33 @@ public class ByteBufAdapter implements ByteBuf {
     }
 
     @Override
+    public int refCnt() {
+        return this.byteBuf.refCnt();
+    }
+
+    @Override
+    public ByteBuf retain() {
+        this.byteBuf.retain();
+        return this;
+    }
+
+    @Override
+    public ByteBuf retain(int increment) {
+        this.byteBuf.retain(increment);
+        return this;
+    }
+
+    @Override
+    public boolean release() {
+        return this.byteBuf.release();
+    }
+
+    @Override
+    public boolean release(int decrement) {
+        return this.byteBuf.release(decrement);
+    }
+
+    @Override
     public void free() {
         this.byteBuf.free();
     }

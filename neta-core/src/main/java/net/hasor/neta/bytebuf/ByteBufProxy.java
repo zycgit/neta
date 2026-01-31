@@ -80,6 +80,33 @@ public class ByteBufProxy implements ByteBuf {
     }
 
     @Override
+    public int refCnt() {
+        return this.target.refCnt();
+    }
+
+    @Override
+    public ByteBuf retain() {
+        this.target.retain();
+        return this;
+    }
+
+    @Override
+    public ByteBuf retain(int increment) {
+        this.target.retain(increment);
+        return this;
+    }
+
+    @Override
+    public boolean release() {
+        return this.target.release();
+    }
+
+    @Override
+    public boolean release(int decrement) {
+        return this.target.release(decrement);
+    }
+
+    @Override
     public void free() {
         this.target.free();
     }

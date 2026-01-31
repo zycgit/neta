@@ -17,6 +17,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.BufferOverflowException;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.cobble.ObjectUtils;
 import static net.hasor.neta.bytebuf.Bits.*;
 
@@ -33,14 +34,20 @@ import static net.hasor.neta.bytebuf.Bits.*;
  * @version : 2022-11-01
  */
 public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
-    protected        ByteBufAllocator alloc;
-    protected        int              markedReaderIndex;
-    protected        int              markedWriterIndex;
-    protected        int              readerIndex;
-    protected        int              writerIndex;
-    protected        ByteOrder        byteOrder = ByteOrder.BIG_ENDIAN;
-    private          int              maxCapacity;
-    private volatile boolean          isFree;
+    protected ByteBufAllocator alloc;
+    protected int              markedReaderIndex;
+    protected int              markedWriterIndex;
+    protected int              readerIndex;
+    protected int              writerIndex;
+    protected ByteOrder        byteOrder = ByteOrder.BIG_ENDIAN;
+    private   int              maxCapacity;
+
+    private static class LeakDetectorHolder {
+        static final ResourceLeakDetector<ByteBuf> leakDetector = new ResourceLeakDetector<>(ByteBuf.class);
+    }
+
+    private final AtomicInteger                     refCnt = new AtomicInteger(1);
+    private       ResourceLeakDetector.ResourceLeak leak;
 
     protected void initByteBuf(ByteBufAllocator alloc, int maxCapacity) {
         this.alloc = alloc;
@@ -49,7 +56,8 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         this.markedWriterIndex = 0;
         this.readerIndex = 0;
         this.writerIndex = 0;
-        this.isFree = false;
+        this.refCnt.set(1);
+        this.leak = LeakDetectorHolder.leakDetector.open(this);
         this.byteOrder = ByteOrder.BIG_ENDIAN;
     }
 
@@ -63,24 +71,83 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     }
 
     protected final void checkFree() {
-        if (this.isFree) {
+        if (this.refCnt.get() == 0) {
             throw new IllegalStateException("has been released.");
         }
     }
 
     @Override
     public final boolean isFree() {
-        return this.isFree;
+        return this.refCnt.get() == 0;
+    }
+
+    @Override
+    public final int refCnt() {
+        return this.refCnt.get();
+    }
+
+    @Override
+    public ByteBuf retain() {
+        return retain(1);
+    }
+
+    @Override
+    public ByteBuf retain(int increment) {
+        if (increment <= 0) {
+            throw new IllegalArgumentException("increment: " + increment + " (expected: > 0)");
+        }
+        for (; ; ) {
+            int refCnt = this.refCnt.get();
+            if (refCnt == 0) {
+                throw new IllegalStateException("has been released.");
+            }
+            if (refCnt > Integer.MAX_VALUE - increment) {
+                throw new IllegalStateException("refCnt overflow: " + refCnt);
+            }
+            if (this.refCnt.compareAndSet(refCnt, refCnt + increment)) {
+                break;
+            }
+        }
+        return this;
+    }
+
+    @Override
+    public boolean release() {
+        return release(1);
+    }
+
+    @Override
+    public boolean release(int decrement) {
+        if (decrement <= 0) {
+            throw new IllegalArgumentException("decrement: " + decrement + " (expected: > 0)");
+        }
+        for (; ; ) {
+            int refCnt = this.refCnt.get();
+            if (refCnt < decrement) {
+                throw new IllegalStateException("refCnt: " + refCnt + " (expected: >= " + decrement + ")");
+            }
+
+            if (this.refCnt.compareAndSet(refCnt, refCnt - decrement)) {
+                if (refCnt == decrement) {
+                    closeLeak();
+                    this._free();
+                    return true;
+                }
+                return false;
+            }
+        }
+    }
+
+    private void closeLeak() {
+        if (this.leak != null) {
+            this.leak.close();
+            this.leak = null;
+        }
     }
 
     @Override
     public void free() {
-        if (this.isFree) {
-            throw new IllegalStateException("has been released.");
-        }
-
-        this.isFree = true;
-        this._free();
+        release();
     }
 
     @Override
