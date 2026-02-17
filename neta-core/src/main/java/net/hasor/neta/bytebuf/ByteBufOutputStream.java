@@ -56,7 +56,7 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
      * Returns the number of written bytes by this stream so far.
      */
     public int writtenBytes() {
-        return this.buffer.writableBytes();
+        return this.buffer.writtenBytes();
     }
 
     @Override
@@ -66,43 +66,43 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         }
 
         this.buffer.writeBytes(b, off, len);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void write(byte[] b) throws IOException {
         this.buffer.writeBytes(b);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void write(int b) throws IOException {
         this.buffer.writeByte((byte) b);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeBoolean(boolean v) throws IOException {
         this.buffer.writeByte((byte) (v ? 1 : 0));
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeByte(int v) throws IOException {
         this.buffer.writeByte((byte) v);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeBytes(String s) throws IOException {
         this.buffer.writeString(s, StandardCharsets.US_ASCII);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeChar(int v) throws IOException {
         this.buffer.writeInt16((short) v);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
@@ -110,43 +110,43 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         int len = s.length();
         for (int i = 0; i < len; i++) {
             this.buffer.writeInt16((short) s.charAt(i));
-            autoFlash();
+            autoFlush();
         }
     }
 
     @Override
     public void writeDouble(double v) throws IOException {
         this.buffer.writeFloat64(v);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeFloat(float v) throws IOException {
         this.buffer.writeFloat32(v);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeInt(int v) throws IOException {
         this.buffer.writeInt32(v);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeLong(long v) throws IOException {
         this.buffer.writeInt64(v);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
     public void writeShort(int v) throws IOException {
         this.buffer.writeInt16((short) v);
-        autoFlash();
+        autoFlush();
     }
 
     public void writeMedium(int v) throws IOException {
         this.buffer.writeInt24(v);
-        autoFlash();
+        autoFlush();
     }
 
     @Override
@@ -160,10 +160,10 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
             this.utf8out = out = new DataOutputStream(this);
         }
         out.writeUTF(s);
-        autoFlash();
+        autoFlush();
     }
 
-    private void autoFlash() throws IOException {
+    private void autoFlush() throws IOException {
         if (this.cacheSize < 0) {
             return;
         } else if (this.buffer.writtenBytes() >= this.cacheSize) {

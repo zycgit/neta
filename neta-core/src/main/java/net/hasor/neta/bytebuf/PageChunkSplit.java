@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -22,24 +23,24 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2024-02-15
  */
 class PageChunkSplit implements PageRange {
-    static  RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
+    static final int                               RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
         public PageChunkSplit create() {
             return new PageChunkSplit();
         }
 
         @Override
         public void free(PageChunkSplit tar) {
-            RecycleObjectPool.free(PageChunkSplit.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    private int                            fromPage;
-    private int                            toPage;
-
+    private final AtomicBoolean                  available       = new AtomicBoolean(false);
+    private       int                            fromPage;
+    private       int                            toPage;
     // ------------------------------------------------------------------------
-    private int           capacity;
-    private PageChunkPool chunkPool;
-    private AtomicInteger refCount;
-    private boolean       available;
+    private       int                            capacity;
+    private       PageChunkPool                  chunkPool;
+    private       AtomicInteger                  refCount;
 
     private PageChunkSplit() {
     }
@@ -50,7 +51,7 @@ class PageChunkSplit implements PageRange {
         this.toPage = toPage;
         this.capacity = chunkPool.getPageSize() * (toPage - fromPage + 1);
         this.refCount = refCount;
-        this.available = true;
+        this.available.set(true);
     }
 
     @Override
@@ -80,7 +81,7 @@ class PageChunkSplit implements PageRange {
 
     /** Returns if the current {@link PageChunkSplit} is available */
     public boolean isAvailable() {
-        return this.available;
+        return this.available.get();
     }
 
     /**
@@ -91,16 +92,47 @@ class PageChunkSplit implements PageRange {
      * </ul>
      */
     public void free() {
-        if (this.available) {
-            this.available = false;
-            this.refCount.decrementAndGet();
-            if (refCount.get() <= 0) {
+        if (this.available.compareAndSet(true, false)) {
+            if (this.refCount.decrementAndGet() <= 0) {
                 this.chunkPool.free(this);
                 this.chunkPool = null;
                 this.refCount = null;
                 RECYCLE_HANDLER.free(this);
             }
         }
+    }
+
+    /**
+     * Splits this chunk into two chunks. The first chunk (returned) contains the first {@code pagesForHead} pages.
+     * The second chunk (this) contains the remaining pages.
+     * <p>This method performs a physical split of the page range if the chunk is not shared.
+     * If the chunk is shared (refCount > 1), it returns null.</p>
+     * @param pagesForHead the number of pages to move to the new head chunk
+     * @return the new head chunk, or null if the split could not be performed
+     */
+    public PageChunkSplit split(int pagesForHead) {
+        if (!this.available.get() || this.refCount.get() > 1) {
+            return null;
+        }
+
+        int totalPages = this.toPage - this.fromPage + 1;
+        if (pagesForHead <= 0 || pagesForHead >= totalPages) {
+            return null;
+        }
+
+        // New Head Range
+        int headFrom = this.fromPage;
+        int headTo = this.fromPage + pagesForHead - 1;
+
+        // Create Head Chunk (Independent)
+        PageChunkSplit headChunk = RecycleObjectPool.get(PageChunkSplit.RECYCLE_INDEX, PageChunkSplit.RECYCLE_HANDLER);
+        headChunk.initPageChunk(this.chunkPool, headFrom, headTo, new AtomicInteger(1));
+
+        // Update This (Tail)
+        this.fromPage = headTo + 1;
+        this.capacity = this.chunkPool.getPageSize() * (this.toPage - this.fromPage + 1);
+
+        return headChunk;
     }
 
     /**
@@ -113,7 +145,7 @@ class PageChunkSplit implements PageRange {
     public PageChunkSplit duplicate() {
         this.refCount.incrementAndGet();
 
-        PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.class, PageChunkSplit.RECYCLE_HANDLER);
+        PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.RECYCLE_INDEX, PageChunkSplit.RECYCLE_HANDLER);
         chunk.initPageChunk(this.chunkPool, this.fromPage, this.toPage, this.refCount);
         return chunk;
     }

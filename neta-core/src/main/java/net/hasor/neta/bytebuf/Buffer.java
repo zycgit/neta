@@ -57,4 +57,19 @@ public interface Buffer {
      * @return <tt>true</tt> if, and only if, this buffer is direct
      */
     boolean isDirect();
+
+    /**
+     * Returns the backing heap byte array directly, or {@code null} if not available.
+     * This allows avoiding {@link #getTarget()} which may trigger lazy ByteBuffer creation.
+     */
+    default byte[] heapArray() {
+        return null;
+    }
+
+    /**
+     * Returns the offset into the backing heap byte array, or 0 if not applicable.
+     */
+    default int heapArrayOffset() {
+        return 0;
+    }
 }

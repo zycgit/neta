@@ -1,13 +1,12 @@
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.codec.MD5;
-import org.junit.Test;
-
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.codec.MD5;
+import org.junit.Test;
 
 public class PooledByteBufTest {
     private static BufferPool POOL = new BufferPool(2);
@@ -38,7 +37,7 @@ public class PooledByteBufTest {
     public void basicTest00() {
         ByteBuf byteBuf = this.pooledBuffer(111);
         assert byteBuf.capacity() == 128;
-        assert !byteBuf.isDirect();
+        assert byteBuf.isDirect() == ByteBufAllocator.DEFAULT.isDirect();
     }
 
     @Test

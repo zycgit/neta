@@ -37,6 +37,12 @@ public class ByteBufUtils {
 
     // ensure DEFAULT
     static {
+        if (SystemUtils.getJavaVersion() >= 9) {
+            CLEANER = BufferCleanerJava9.isSupported() ? new BufferCleanerJava9() : null;
+        } else {
+            CLEANER = BufferCleanerJava6.isSupported() ? new BufferCleanerJava6() : null;
+        }
+
         String allocType = SystemUtils.getSystemProperty("neta.bytebuf.type", isPooled() ? "pooled" : "unpooled");
         String memType = SystemUtils.getSystemProperty("neta.bytebuf.mem", isDirect() ? "direct" : "heap");
         String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(4 * 1024));
@@ -127,12 +133,6 @@ public class ByteBufUtils {
                 DEFAULT_ALLOCATOR = UNPOOLED_HEAP_ALLOCATOR;
             }
         }
-
-        if (SystemUtils.getJavaVersion() >= 9) {
-            CLEANER = BufferCleanerJava9.isSupported() ? new BufferCleanerJava9() : null;
-        } else {
-            CLEANER = BufferCleanerJava6.isSupported() ? new BufferCleanerJava6() : null;
-        }
     }
 
     private static boolean isPooled() {
@@ -152,6 +152,42 @@ public class ByteBufUtils {
         byte[] bytes = new byte[available];
         buf.readBytes(bytes);
         return bytes;
+    }
+
+    /**
+     * Create a new empty {@link CompositeByteBuf} using the default allocator.
+     * <p>
+     * Components can be dynamically appended via {@link CompositeByteBuf#addComponent(ByteBuf)}.
+     * @return a new empty CompositeByteBuf
+     */
+    public static CompositeByteBuf compositeBuffer() {
+        return new CompositeByteBuf(DEFAULT_ALLOCATOR);
+    }
+
+    /**
+     * Create a new empty {@link CompositeByteBuf} using the specified allocator.
+     * <p>
+     * Components can be dynamically appended via {@link CompositeByteBuf#addComponent(ByteBuf)}.
+     * @param alloc the allocator to use for copy operations
+     * @return a new empty CompositeByteBuf
+     */
+    public static CompositeByteBuf compositeBuffer(ByteBufAllocator alloc) {
+        return new CompositeByteBuf(alloc);
+    }
+
+    /**
+     * Create a new {@link CompositeByteBuf} pre-populated with the given buffers.
+     * <p>
+     * Each buffer's readable data becomes part of the composite. Buffers are retained.
+     * @param buffers the buffers to combine
+     * @return a new CompositeByteBuf containing all buffers
+     */
+    public static CompositeByteBuf compositeBuffer(ByteBuf... buffers) {
+        CompositeByteBuf composite = new CompositeByteBuf(DEFAULT_ALLOCATOR);
+        if (buffers != null) {
+            composite.addComponents(buffers);
+        }
+        return composite;
     }
 
     public static int readableBytes(List<ByteBuf> buffers) {
@@ -203,5 +239,23 @@ public class ByteBufUtils {
         for (ByteBuf peek : buffers) {
             peek.flush();
         }
+    }
+
+    /**
+     * Clear all SmallBufferCache L1 (thread-local) caches for the calling thread.
+     * Cached buffers are moved to L2 (global shared) if there is room; otherwise discarded for GC.
+     * <p>Call this when a thread is about to be retired, or periodically
+     * to keep per-thread memory usage bounded.
+     */
+    public static void trimSmallBufferCache() {
+        SmallBufferCache.trimCurrentThread();
+    }
+
+    /**
+     * Return the total number of cached objects held by SmallBufferCache L1
+     * for the calling thread. Useful for monitoring and diagnostics.
+     */
+    public static int smallBufferCacheSize() {
+        return SmallBufferCache.currentThreadCacheSize();
     }
 }

@@ -16,10 +16,10 @@
 package net.hasor.neta.bytebuf;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
 import net.hasor.cobble.ObjectUtils;
-import net.hasor.cobble.RandomUtils;
 
 /**
  * Memory pool
@@ -28,19 +28,20 @@ import net.hasor.cobble.RandomUtils;
  */
 class BufferPool {
     //
-    protected final BufferArena          qInit;// 000%~025%
-    protected final BufferArena          q000; // 001%~050%
-    protected final BufferArena          q025; // 025%~075%
-    protected final BufferArena          q050; // 050%~100%
-    protected final BufferArena          q075; // 075%~100%
-    protected final BufferArena          q100; // 100%~MAX
-    protected final BufferArena[]        arenaList;
-    private final   int                  pageSize;
-    private final   int                  buddyTreeHeight;
-    private final   int                  maximumChunkCount;
-    private final   int                  memoryChunkSize;
-    private final   Map<Integer, Buffer> bufferPool;
-    private         long                 memoryCapacity;
+    protected final  BufferArena          qInit;// 000%~025%
+    protected final  BufferArena          q000; // 001%~050%
+    protected final  BufferArena          q025; // 025%~075%
+    protected final  BufferArena          q050; // 050%~100%
+    protected final  BufferArena          q075; // 075%~100%
+    protected final  BufferArena          q100; // 100%~MAX
+    protected final  BufferArena[]        arenaList;
+    private final    int                  pageSize;
+    private final    int                  buddyTreeHeight;
+    private final    int                  maximumChunkCount;
+    private final    int                  memoryChunkSize;
+    private final    Map<Integer, Buffer> bufferPool;
+    private final    AtomicInteger        memAddressSeq;
+    private volatile long                 memoryCapacity;
 
     public BufferPool(int pageSize) {
         this(pageSize, -1, 12);
@@ -59,6 +60,7 @@ class BufferPool {
         this.maximumChunkCount = maximumChunkCount;
         this.memoryChunkSize = (int) Math.pow(2, buddyTreeHeight);
         this.bufferPool = new ConcurrentHashMap<>();
+        this.memAddressSeq = new AtomicInteger(1);
         Lock shareLock = new ReentrantLock(false);
 
         // init Arena
@@ -110,7 +112,7 @@ class BufferPool {
 
     protected Buffer requestBuffer(PageChunkSplit pages) {
         Buffer memory = this.getMemory(pages.getMemAddress());
-        BufferTarget buffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
+        BufferTarget buffer = RecycleObjectPool.get(BufferTarget.RECYCLE_INDEX, BufferTarget.RECYCLE_HANDLER);
         buffer.initBuffer(this.getMemPageSize(), pages, memory);
         return buffer;
     }
@@ -118,7 +120,7 @@ class BufferPool {
     public Buffer requestBuffer(int capacity, BufferAllocator alloc) {
         ObjectUtils.checkPositive(capacity, "capacity");
         if (capacity > this.memoryChunkSize) {
-            BufferWrap buffer = RecycleObjectPool.get(BufferWrap.class, BufferWrap.RECYCLE_HANDLER);
+            BufferWrap buffer = RecycleObjectPool.get(BufferWrap.RECYCLE_INDEX, BufferWrap.RECYCLE_HANDLER);
             buffer.initBuffer(alloc.jvmBuffer(capacity));
             return buffer;
         }
@@ -143,13 +145,7 @@ class BufferPool {
     }
 
     protected int newMemAddress() {
-        while (true) {
-            int memAddress = RandomUtils.nextInt();
-            if (this.bufferPool.containsKey(memAddress)) {
-                continue;
-            }
-            return memAddress;
-        }
+        return this.memAddressSeq.getAndIncrement();
     }
 
     protected synchronized PageChunkPool newAllocator(BufferAllocator alloc) {
@@ -159,7 +155,7 @@ class BufferPool {
 
         int memAddress = this.newMemAddress();
         PageChunkPool pool = new PageChunkPool(memAddress, this.pageSize, this.buddyTreeHeight);
-        BufferWrap buffer = RecycleObjectPool.get(BufferWrap.class, BufferWrap.RECYCLE_HANDLER);
+        BufferWrap buffer = RecycleObjectPool.get(BufferWrap.RECYCLE_INDEX, BufferWrap.RECYCLE_HANDLER);
         buffer.initBuffer(alloc.jvmBuffer(pool.getCapacity()));
 
         this.bufferPool.put(memAddress, buffer);
@@ -175,6 +171,7 @@ class BufferPool {
 
         Buffer buffer = this.bufferPool.get(memAddress);
         this.bufferPool.remove(memAddress);
+        this.memoryCapacity = this.memoryCapacity - buffer.capacity();
         buffer.free();
     }
 

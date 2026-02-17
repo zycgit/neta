@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 /**
@@ -22,24 +23,41 @@ import java.nio.ByteBuffer;
  * @version :  2022-11-01
  */
 final class RingByteBuffer extends AbstractByteBuf {
-    static    RecycleHandler<RingByteBuffer> RECYCLE_HANDLER = new RecycleHandler<RingByteBuffer>() {
+    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<RingByteBuffer> RECYCLE_HANDLER = new RecycleHandler<RingByteBuffer>() {
         public RingByteBuffer create() {
             return new RingByteBuffer();
         }
 
         @Override
         public void free(RingByteBuffer tar) {
-            RecycleObjectPool.free(RingByteBuffer.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
     protected ByteBuffer                     target;
+    private   int                            capacityMask;
 
     private RingByteBuffer() {
     }
 
+    /** Round up to the next power of 2 (for bitwise index masking). */
+    private static int nextPowerOf2(int val) {
+        if (val <= 1)
+            return val;
+        int n = val - 1;
+        n |= n >>> 1;
+        n |= n >>> 2;
+        n |= n >>> 4;
+        n |= n >>> 8;
+        n |= n >>> 16;
+        return n + 1;
+    }
+
     void initBuffer(ByteBufAllocator alloc, int capacity) {
-        super.initByteBuf(alloc, capacity);
-        this.target = alloc.jvmBuffer(capacity);
+        int roundedCapacity = capacity > 0 ? nextPowerOf2(capacity) : capacity;
+        super.initByteBuf(alloc, roundedCapacity);
+        this.target = alloc.jvmBuffer(roundedCapacity);
+        this.capacityMask = roundedCapacity > 0 ? roundedCapacity - 1 : 0;
     }
 
     // ------------------------------------------------------------------------
@@ -47,6 +65,7 @@ final class RingByteBuffer extends AbstractByteBuf {
     void initBuffer(ByteBufAllocator alloc, ByteBuffer initData) {
         super.initByteBuf(alloc, initData.capacity());
         this.target = initData;
+        this.capacityMask = initData.capacity() > 0 ? initData.capacity() - 1 : 0;
     }
 
     @Override
@@ -72,7 +91,7 @@ final class RingByteBuffer extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        int offsetSize = offset % this.getMaxCapacity();
+        int offsetSize = offset & this.capacityMask;
         this.target.put(offsetSize, b);
     }
 
@@ -81,21 +100,23 @@ final class RingByteBuffer extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + srcLen) < maxCap) {
-            this.target.clear().position(offsetSize);
+        if ((offsetSize + srcLen) <= maxCap) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             this.target.put(src, srcOffset, srcLen);
             return srcLen;
         } else {
             int partA = maxCap - offsetSize;
             int partB = srcLen - partA;
 
-            this.target.clear().position(offsetSize);
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             this.target.put(src, srcOffset, partA);
 
             if (partB > 0) {
-                this.target.clear();
+                ((Buffer) this.target).clear();
                 this.target.put(src, srcOffset + partA, partB);
                 return partA + partB;
             } else {
@@ -109,32 +130,31 @@ final class RingByteBuffer extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
         srcLen = Math.min(src.remaining(), srcLen);
 
         if ((offsetSize + srcLen) <= maxCap) {
-            this.target.clear().position(offsetSize);
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
             src.position(src.position() + srcLen);
             return srcLen;
         } else {
             int partA = maxCap - offsetSize;
             int partB = srcLen - partA;
-            int step = partA + partB;
 
-            this.target.clear().position(offsetSize);
-            ByteBuffer dup4Part = (ByteBuffer) src.duplicate().limit(partA);
-            this.target.put(dup4Part);
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
+            this.target.put((ByteBuffer) src.duplicate().limit(src.position() + partA));
             src.position(src.position() + partA);
 
             if (partB > 0) {
-                this.target.clear();
-                dup4Part.limit(step);
-                this.target.put(dup4Part);
+                ((Buffer) this.target).clear();
+                this.target.put((ByteBuffer) src.duplicate().limit(src.position() + partB));
                 src.position(src.position() + partB);
             }
 
-            return step;
+            return partA + partB;
         }
     }
 
@@ -143,22 +163,24 @@ final class RingByteBuffer extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
         srcLen = Math.min(src.readableBytes(), srcLen);
 
         if ((offsetSize + srcLen) <= maxCap) {
-            this.target.clear();
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             src.readBuffer(this.target, srcLen);
             return srcLen;
         } else {
             int partA = maxCap - offsetSize;
             int partB = srcLen - partA;
 
-            this.target.clear().position(offsetSize);
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             src.readBuffer(this.target, partA);
 
             if (partB > 0) {
-                this.target.clear();
+                ((Buffer) this.target).clear();
                 src.readBuffer(this.target, partB);
                 return partA + partB;
             } else {
@@ -171,8 +193,7 @@ final class RingByteBuffer extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        int offsetSize = offset % this.getMaxCapacity();
-        this.target.clear();
+        int offsetSize = offset & this.capacityMask;
         return this.target.get(offsetSize);
     }
 
@@ -181,22 +202,27 @@ final class RingByteBuffer extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + dstLen) < maxCap) {
-            this.target.clear().position(offsetSize);
+        if ((offsetSize + dstLen) <= maxCap) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             this.target.get(dst, dstOffset, dstLen);
             return dstLen;
         } else {
             int partA = maxCap - offsetSize;
             int partB = dstLen - partA;
 
-            this.target.clear().position(offsetSize).limit(offsetSize + partA);
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
+            ((Buffer) this.target).limit(offsetSize + partA);
             this.target.get(dst, dstOffset, partA);
 
             if (partB > 0) {
-                this.target.clear().limit(partB);
+                ((Buffer) this.target).clear();
+                ((Buffer) this.target).limit(partB);
                 this.target.get(dst, dstOffset + partA, partB);
+                ((Buffer) this.target).clear();
                 return partA + partB;
             } else {
                 return partA;
@@ -209,22 +235,29 @@ final class RingByteBuffer extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + dstLen) < maxCap) {
-            this.target.clear().position(offsetSize).limit(dstLen);
+        if ((offsetSize + dstLen) <= maxCap) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
+            ((Buffer) this.target).limit(offsetSize + dstLen);
             dst.put(this.target);
+            ((Buffer) this.target).clear();
             return dstLen;
         } else {
             int partA = maxCap - offsetSize;
             int partB = dstLen - partA;
 
-            this.target.clear().position(offsetSize).limit(offsetSize + partA);
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
+            ((Buffer) this.target).limit(offsetSize + partA);
             dst.put(this.target);
 
             if (partB > 0) {
-                this.target.clear().limit(partB);
+                ((Buffer) this.target).clear();
+                ((Buffer) this.target).limit(partB);
                 dst.put(this.target);
+                ((Buffer) this.target).clear();
                 return partA + partB;
             } else {
                 return partA;
@@ -237,21 +270,23 @@ final class RingByteBuffer extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + dstLen) < maxCap) {
-            this.target.clear();
+        if ((offsetSize + dstLen) <= maxCap) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             dst.writeBuffer(this.target, dstLen);
             return dstLen;
         } else {
             int partA = maxCap - offsetSize;
             int partB = dstLen - partA;
 
-            this.target.clear().position(offsetSize);
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(offsetSize);
             dst.writeBuffer(this.target, partA);
 
             if (partB > 0) {
-                this.target.clear();
+                ((Buffer) this.target).clear();
                 dst.writeBuffer(this.target, partB);
                 return partA + partB;
             } else {
@@ -261,12 +296,52 @@ final class RingByteBuffer extends AbstractByteBuf {
     }
 
     @Override
-    protected void _free() {
-        if (ByteBufUtils.CLEANER != null) {
-            ByteBufUtils.CLEANER.freeDirectBuffer(this.target);
+    public void discardReadBytes() {
+        throw new UnsupportedOperationException("RingByteBuffer can not discardReadBytes");
+    }
+
+    @Override
+    public ByteBuf sliceOff(int splitOffset) {
+        if (splitOffset == 0) {
+            return ByteBuf.EMPTY;
         }
-        this.target = null;
-        RECYCLE_HANDLER.free(this);
+        if (splitOffset < 0 || splitOffset > this.capacity()) {
+            throw new IndexOutOfBoundsException();
+        }
+
+        byte[] sliceData = new byte[splitOffset];
+        this._getBytes(this.readerIndex, sliceData, 0, splitOffset);
+
+        this.readerIndex += splitOffset;
+        this.markedReaderIndex = Math.min(this.markedReaderIndex, this.readerIndex);
+
+        ByteBuffer newBuf;
+        if (this.isDirect()) {
+            newBuf = ByteBuffer.allocateDirect(splitOffset);
+            newBuf.put(sliceData);
+            ((Buffer) newBuf).flip();
+        } else {
+            newBuf = ByteBuffer.wrap(sliceData);
+        }
+
+        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        slicedBuf.initBuffer(newBuf, false);
+        return slicedBuf;
+    }
+
+    @Override
+    protected void _free() {
+        try {
+            ByteBuffer oldTarget = this.target;
+            if (oldTarget != null && !SmallBufferCache.freeDirect(oldTarget)) {
+                if (ByteBufUtils.CLEANER != null) {
+                    ByteBufUtils.CLEANER.freeDirectBuffer(oldTarget);
+                }
+            }
+        } finally {
+            this.target = null;
+            RECYCLE_HANDLER.free(this);
+        }
     }
 
     @Override
@@ -286,13 +361,16 @@ final class RingByteBuffer extends AbstractByteBuf {
         int capacity = this.getMaxCapacity();
         ByteBuffer copyBuffer = this.alloc.jvmBuffer(capacity);
         this._getBytes(this.markedReaderIndex, copyBuffer, copyBuffer.capacity());
-        RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.class, RingByteBuffer.RECYCLE_HANDLER);
+        RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.RECYCLE_INDEX, RingByteBuffer.RECYCLE_HANDLER);
         byteBuf.initBuffer(this.alloc, copyBuffer);
 
-        byteBuf.writerIndex = this.writerIndex;
-        byteBuf.markedWriterIndex = this.markedWriterIndex;
-        byteBuf.readerIndex = this.readerIndex;
-        byteBuf.markedReaderIndex = this.markedReaderIndex;
+        int shift = this.markedReaderIndex;
+        byteBuf.markedReaderIndex = 0;
+        byteBuf.readerIndex = this.readerIndex - shift;
+        byteBuf.markedWriterIndex = this.markedWriterIndex - shift;
+        byteBuf.writerIndex = this.writerIndex - shift;
+        byteBuf.byteOrder = this.byteOrder;
+        byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
     }
 

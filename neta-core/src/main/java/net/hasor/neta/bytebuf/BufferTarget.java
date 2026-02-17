@@ -23,14 +23,15 @@ import java.nio.ReadOnlyBufferException;
  * @version : 2022-11-01
  */
 class BufferTarget implements Buffer {
-    static  RecycleHandler<BufferTarget> RECYCLE_HANDLER = new RecycleHandler<BufferTarget>() {
+    static final int                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<BufferTarget> RECYCLE_HANDLER = new RecycleHandler<BufferTarget>() {
         public BufferTarget create() {
             return new BufferTarget();
         }
 
         @Override
         public void free(BufferTarget tar) {
-            RecycleObjectPool.free(BufferTarget.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
     private Buffer                       memory;
@@ -88,6 +89,7 @@ class BufferTarget implements Buffer {
     @Override
     public void free() {
         this.pages.free();
+        this.memory = null;
         RECYCLE_HANDLER.free(this);
     }
 
@@ -140,8 +142,11 @@ class BufferTarget implements Buffer {
      * </pre>
      */
     public BufferTarget split(int splitOffset) {
-        if (splitOffset + 1 >= this.capacity) {
-            throw new IndexOutOfBoundsException("Buffer only 1 byte and cannot be split.");
+        if (this.capacity <= 1) {
+            throw new IllegalStateException("Buffer only 1 byte and cannot be split.");
+        }
+        if (splitOffset >= this.capacity) {
+            throw new IndexOutOfBoundsException("splitOffset out of range.");
         }
 
         checkOffset(splitOffset, 1, true);
@@ -149,10 +154,23 @@ class BufferTarget implements Buffer {
         int newOffset = this.offset + splitOffset;
         int newCapacity = splitOffset + 1;
 
+        // try physical split optimization
+        PageChunkSplit headPages = null;
+        int absoluteSplitEnd = newOffset + 1;
+        if (absoluteSplitEnd % this.pageSize == 0) {
+            int pagesForHead = (absoluteSplitEnd / this.pageSize) - this.pages.getFromPage();
+            // Try to split logic
+            headPages = this.pages.split(pagesForHead);
+        }
+
+        if (headPages == null) {
+            // Fallback to shared view
+            headPages = this.pages.duplicate();
+        }
+
         // build new Buffer
-        PageChunkSplit dupPages = this.pages.duplicate();
-        BufferTarget splitBuffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
-        splitBuffer.initBuffer(this.pageSize, dupPages, this.memory, this.offset, newOffset, newCapacity);
+        BufferTarget splitBuffer = RecycleObjectPool.get(BufferTarget.RECYCLE_INDEX, BufferTarget.RECYCLE_HANDLER);
+        splitBuffer.initBuffer(this.pageSize, headPages, this.memory, this.offset, newOffset, newCapacity);
 
         // update self
         this.offset = newOffset + 1;

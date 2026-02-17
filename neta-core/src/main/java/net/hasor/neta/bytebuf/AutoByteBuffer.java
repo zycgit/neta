@@ -23,14 +23,15 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class AutoByteBuffer extends AbstractByteBuf {
-    static    RecycleHandler<AutoByteBuffer> RECYCLE_HANDLER = new RecycleHandler<AutoByteBuffer>() {
+    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<AutoByteBuffer> RECYCLE_HANDLER = new RecycleHandler<AutoByteBuffer>() {
         public AutoByteBuffer create() {
             return new AutoByteBuffer();
         }
 
         @Override
         public void free(AutoByteBuffer tar) {
-            RecycleObjectPool.free(AutoByteBuffer.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
     protected ByteBuffer                     target;
@@ -43,7 +44,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
 
     void initBuffer(ByteBufAllocator alloc, int maxCapacity, int extensionSize, ByteBuffer initData) {
         super.initByteBuf(alloc, maxCapacity);
-        this.extensionSize = extensionSize;
+        this.extensionSize = Math.min(extensionSize, maxCapacity);
         this.target = initData;
     }
 
@@ -58,16 +59,29 @@ final class AutoByteBuffer extends AbstractByteBuf {
 
     private void recycle() {
         int requestSize = this.writerIndex - this.markedReaderIndex;
-        ByteBuffer recycle = this.alloc.jvmBuffer(evalSize(requestSize));
-        ((Buffer) this.target).clear().position(this.markedReaderIndex).limit(this.markedReaderIndex + requestSize);
-        recycle.put(this.target);
+        ByteBuffer oldTarget = this.target;
+        int newSize = evalSize(requestSize);
+        ByteBuffer recycle = SmallBufferCache.isSmallSize(newSize) ? SmallBufferCache.allocDirect(newSize) : this.alloc.jvmBuffer(newSize);
+        try {
+            ((Buffer) oldTarget).clear().position(this.markedReaderIndex).limit(this.markedReaderIndex + requestSize);
+            recycle.put(oldTarget);
 
-        int recyclePos = this.markedReaderIndex;
-        this.target = recycle;
-        this.writerIndex = this.writerIndex - recyclePos;
-        this.markedWriterIndex = this.markedWriterIndex - recyclePos;
-        this.readerIndex = this.readerIndex - recyclePos;
-        this.markedReaderIndex = 0;
+            int recyclePos = this.markedReaderIndex;
+            this.target = recycle;
+            recycle = null; // transfer ownership, don't free on exception
+            this.writerIndex = this.writerIndex - recyclePos;
+            this.markedWriterIndex = this.markedWriterIndex - recyclePos;
+            this.readerIndex = this.readerIndex - recyclePos;
+            this.markedReaderIndex = 0;
+        } finally {
+            // free the buffer that is no longer needed (oldTarget on success, recycle on failure)
+            ByteBuffer toFree = (recycle != null) ? recycle : oldTarget;
+            if (toFree != null && !SmallBufferCache.freeDirect(toFree)) {
+                if (ByteBufUtils.CLEANER != null) {
+                    ByteBufUtils.CLEANER.freeDirectBuffer(toFree);
+                }
+            }
+        }
     }
 
     private int evalSize(int requestSize) {
@@ -75,9 +89,9 @@ final class AutoByteBuffer extends AbstractByteBuf {
         int newSize;
         if ((requestSize % this.extensionSize) > 0) {
             int rate = (requestSize / this.extensionSize) + 1;
-            newSize = Math.min(rate * this.extensionSize, maxCap);
+            newSize = (int) Math.min((long) rate * this.extensionSize, maxCap);
         } else {
-            newSize = Math.min(requestSize + this.extensionSize, maxCap);
+            newSize = (int) Math.min((long) requestSize + this.extensionSize, maxCap);
         }
         return Math.min(newSize, maxCap);
     }
@@ -86,10 +100,22 @@ final class AutoByteBuffer extends AbstractByteBuf {
         int currentCap = this.capacity();
         int requestSize = offset + len;
         if (requestSize > currentCap) {
-            ByteBuffer extension = this.alloc.jvmBuffer(evalSize(requestSize));
-            ((Buffer) this.target).clear();
-            extension.put(this.target);
-            this.target = extension;
+            ByteBuffer oldTarget = this.target;
+            int newSize = evalSize(requestSize);
+            ByteBuffer extension = SmallBufferCache.isSmallSize(newSize) ? SmallBufferCache.allocDirect(newSize) : this.alloc.jvmBuffer(newSize);
+            try {
+                ((Buffer) oldTarget).clear();
+                extension.put(oldTarget);
+                this.target = extension;
+                extension = null; // transfer ownership
+            } finally {
+                ByteBuffer toFree = (extension != null) ? extension : oldTarget;
+                if (toFree != null && !SmallBufferCache.freeDirect(toFree)) {
+                    if (ByteBufUtils.CLEANER != null) {
+                        ByteBufUtils.CLEANER.freeDirectBuffer(toFree);
+                    }
+                }
+            }
         }
     }
 
@@ -98,7 +124,6 @@ final class AutoByteBuffer extends AbstractByteBuf {
         checkFree();
         checkExtension(offset, 1);
 
-        ((Buffer) this.target).clear();
         this.target.put(offset, b);
     }
 
@@ -141,7 +166,6 @@ final class AutoByteBuffer extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        ((Buffer) this.target).clear();
         return this.target.get(offset);
     }
 
@@ -160,6 +184,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
 
         ((Buffer) this.target).clear().position(offset).limit(offset + dstLen);
         dst.put(this.target);
+        ((Buffer) this.target).clear();
         return dstLen;
     }
 
@@ -167,16 +192,94 @@ final class AutoByteBuffer extends AbstractByteBuf {
     protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
         checkFree();
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(offset);
         dst.writeBuffer(this.target, dstLen);
         return dstLen;
     }
 
     @Override
+    public void discardReadBytes() {
+        if (this.readerIndex == 0) {
+            return;
+        }
+
+        if (this.readerIndex != this.writerIndex) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(this.readerIndex);
+            ((Buffer) this.target).limit(this.writerIndex);
+            ByteBuffer slice = this.target.slice();
+
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(0);
+            this.target.put(slice);
+
+            this.writerIndex -= this.readerIndex;
+            this.markedReaderIndex = Math.max(0, this.markedReaderIndex - this.readerIndex);
+            this.markedWriterIndex = Math.max(0, this.markedWriterIndex - this.readerIndex);
+            this.readerIndex = 0;
+            return;
+        }
+
+        this.markedReaderIndex = 0;
+        this.markedWriterIndex = 0;
+        this.writerIndex = 0;
+        this.readerIndex = 0;
+    }
+
+    @Override
+    public ByteBuf sliceOff(int splitOffset) {
+        if (splitOffset == 0) {
+            return ByteBuf.EMPTY;
+        }
+        if (splitOffset < 0 || splitOffset > this.capacity()) {
+            throw new IndexOutOfBoundsException();
+        }
+
+        ByteBuffer newBuf;
+        if (this.target.isDirect()) {
+            newBuf = SmallBufferCache.isSmallSize(splitOffset) ? SmallBufferCache.allocDirect(splitOffset) : ByteBuffer.allocateDirect(splitOffset);
+        } else {
+            byte[] arr = SmallBufferCache.allocHeap(splitOffset);
+            newBuf = ByteBuffer.wrap(arr);
+        }
+
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(0);
+        ((Buffer) this.target).limit(splitOffset);
+        newBuf.put(this.target);
+        ((Buffer) newBuf).flip();
+
+        int remaining = this.capacity() - splitOffset;
+        if (remaining > 0) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(splitOffset);
+            ((Buffer) this.target).limit(this.capacity());
+            ByteBuffer remainingSlice = this.target.slice();
+
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(0);
+            this.target.put(remainingSlice);
+        }
+
+        this.writerIndex = Math.max(0, this.writerIndex - splitOffset);
+        this.readerIndex = Math.max(0, this.readerIndex - splitOffset);
+        this.markedReaderIndex = Math.max(0, this.markedReaderIndex - splitOffset);
+        this.markedWriterIndex = Math.max(0, this.markedWriterIndex - splitOffset);
+
+        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        slicedBuf.initBuffer(newBuf, false);
+        return slicedBuf;
+    }
+
+    @Override
     protected void _free() {
         try {
-            if (ByteBufUtils.CLEANER != null) {
-                ByteBufUtils.CLEANER.freeDirectBuffer(this.target);
+            ByteBuffer oldTarget = this.target;
+            if (oldTarget != null && !SmallBufferCache.freeDirect(oldTarget)) {
+                if (ByteBufUtils.CLEANER != null) {
+                    ByteBufUtils.CLEANER.freeDirectBuffer(oldTarget);
+                }
             }
         } finally {
             this.target = null;
@@ -202,12 +305,14 @@ final class AutoByteBuffer extends AbstractByteBuf {
         ((Buffer) this.target).clear();
         copyBuffer.put(this.target);
 
-        AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.class, AutoByteBuffer.RECYCLE_HANDLER);
+        AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.RECYCLE_INDEX, AutoByteBuffer.RECYCLE_HANDLER);
         byteBuf.initBuffer(this.alloc, this.getMaxCapacity(), this.extensionSize, copyBuffer);
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.readerIndex = this.readerIndex;
         byteBuf.markedReaderIndex = this.markedReaderIndex;
+        byteBuf.byteOrder = this.byteOrder;
+        byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
     }
 

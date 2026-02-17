@@ -1,12 +1,11 @@
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.concurrent.ThreadUtils;
-import org.junit.Test;
-
 import java.math.BigInteger;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
+import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.concurrent.ThreadUtils;
+import org.junit.Test;
 
 public class ChunkPoolTest {
     private static boolean checkUsed(int form, int to, byte[] chunksMap) {
@@ -281,5 +280,44 @@ public class ChunkPoolTest {
         assert pool.getUsage() == 50.0;
         pl6.free();
         assert pool.getUsage() == 0.0;
+    }
+
+    @Test
+    public void testIsFree_multiByteSpan() {
+        // Create a pool with 16 pages (2 bytes in chunksMap)
+        PageChunkPool pool = new PageChunkPool(9999, 1, 16);
+
+        // All pages should initially be free
+        assert checkFree(0, 15, pool.chunksMap) : "all pages should be free initially";
+
+        // Allocate 4 pages (will get pages 0-3)
+        PageChunkSplit pl1 = pool.requestPages(4);
+        assert pl1 != null;
+
+        // Pages 0-3 used, 4-15 free
+        assert checkUsed(0, 3, pool.chunksMap) : "pages 0-3 should be used";
+        assert checkFree(4, 7, pool.chunksMap) : "pages 4-7 should be free";
+
+        // Allocate 4 more pages (will get pages 4-7)
+        PageChunkSplit pl2 = pool.requestPages(4);
+        assert pl2 != null;
+
+        // Pages 0-7 used (crosses byte boundary), 8-15 free
+        assert checkUsed(0, 7, pool.chunksMap) : "pages 0-7 should be used";
+        assert checkFree(8, 15, pool.chunksMap) : "pages 8-15 should be free";
+
+        // Free first allocation
+        pl1.free();
+
+        // Pages 0-3 free, 4-7 used, 8-15 free
+        assert checkFree(0, 3, pool.chunksMap) : "pages 0-3 should be free after free";
+        assert checkUsed(4, 7, pool.chunksMap) : "pages 4-7 should still be used";
+        assert checkFree(8, 15, pool.chunksMap) : "pages 8-15 should be free";
+
+        // Free second allocation
+        pl2.free();
+
+        // All pages free again, crosses byte boundary
+        assert checkFree(0, 15, pool.chunksMap) : "all pages should be free after freeing all";
     }
 }

@@ -1,8 +1,7 @@
 package net.hasor.neta.bytebuf;
-import org.junit.Test;
-
 import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicInteger;
+import org.junit.Test;
 
 public class BufferPoolTest {
     @Test

@@ -70,6 +70,11 @@ public class ByteBufProxy implements ByteBuf {
     }
 
     @Override
+    public ByteBuf asReadOnly() {
+        return new ReadOnlyByteBuf(this);
+    }
+
+    @Override
     public ByteOrder order() {
         return this.target.order();
     }
@@ -104,6 +109,16 @@ public class ByteBufProxy implements ByteBuf {
     @Override
     public boolean release(int decrement) {
         return this.target.release(decrement);
+    }
+
+    @Override
+    public void discardReadBytes() {
+        this.target.discardReadBytes();
+    }
+
+    @Override
+    public ByteBuf sliceOff(int splitOffset) {
+        return this.target.sliceOff(splitOffset);
     }
 
     @Override

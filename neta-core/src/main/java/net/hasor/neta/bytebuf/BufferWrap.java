@@ -22,18 +22,21 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 class BufferWrap implements Buffer {
-    static  RecycleHandler<BufferWrap> RECYCLE_HANDLER = new RecycleHandler<BufferWrap>() {
+    static final int                       RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<BufferWrap> RECYCLE_HANDLER = new RecycleHandler<BufferWrap>() {
         public BufferWrap create() {
             return new BufferWrap();
         }
 
         @Override
         public void free(BufferWrap tar) {
-            RecycleObjectPool.free(BufferWrap.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
     private ByteBuffer                 buffer;
+    private byte[]                     heapArray;   // direct heap array (avoids ByteBuffer.wrap)
     private boolean                    available;
+    private boolean                    fromSmallCache;
 
     // ------------------------------------------------------------------------
 
@@ -52,7 +55,33 @@ class BufferWrap implements Buffer {
 
     void initBuffer(ByteBuffer buffer) {
         this.buffer = buffer;
+        this.heapArray = null;
         this.available = true;
+        this.fromSmallCache = false;
+    }
+
+    void initSmallBuffer(ByteBuffer buffer) {
+        this.buffer = buffer;
+        this.heapArray = null;
+        this.available = true;
+        this.fromSmallCache = true;
+    }
+
+    /** Initialize with a direct heap byte array, avoiding ByteBuffer.wrap() allocation. */
+    void initSmallHeapBuffer(byte[] array) {
+        this.buffer = null;
+        this.heapArray = array;
+        this.available = true;
+        this.fromSmallCache = true;
+    }
+
+    private ByteBuffer ensureBuffer() {
+        ByteBuffer b = this.buffer;
+        if (b == null && this.heapArray != null) {
+            b = ByteBuffer.wrap(this.heapArray);
+            this.buffer = b;
+        }
+        return b;
     }
 
     @Override
@@ -60,23 +89,26 @@ class BufferWrap implements Buffer {
         return this.available;
     }
 
-    /**
-     * Tells whether or not this byte buffer is direct.
-     * @return <tt>true</tt> if, and only if, this buffer is direct
-     */
     @Override
     public boolean isDirect() {
+        if (this.heapArray != null) {
+            return false;
+        }
         return this.buffer.isDirect();
     }
 
     @Override
     public int capacity() {
+        byte[] ha = this.heapArray;
+        if (ha != null) {
+            return ha.length;
+        }
         return this.buffer.capacity();
     }
 
     @Override
     public ByteBuffer getTarget() {
-        return this.buffer;
+        return ensureBuffer();
     }
 
     @Override
@@ -86,16 +118,30 @@ class BufferWrap implements Buffer {
 
     @Override
     public byte get(int index) {
+        byte[] ha = this.heapArray;
+        if (ha != null) {
+            return ha[index];
+        }
         return this.buffer.get(index);
     }
 
     @Override
     public void put(int index, byte b) {
+        byte[] ha = this.heapArray;
+        if (ha != null) {
+            ha[index] = b;
+            return;
+        }
         this.buffer.put(index, b);
     }
 
     @Override
     public void get(int index, byte[] dst, int dstOffset, int dstLen) {
+        byte[] ha = this.heapArray;
+        if (ha != null) {
+            System.arraycopy(ha, index, dst, dstOffset, dstLen);
+            return;
+        }
         ByteBuffer dupBuf = this.buffer.duplicate();
         clearAndPosition(dupBuf, index);
         dupBuf.get(dst, dstOffset, dstLen);
@@ -103,6 +149,11 @@ class BufferWrap implements Buffer {
 
     @Override
     public void put(int index, byte[] src, int srcOffset, int srcLen) {
+        byte[] ha = this.heapArray;
+        if (ha != null) {
+            System.arraycopy(src, srcOffset, ha, index, srcLen);
+            return;
+        }
         ByteBuffer dupBuf = this.buffer.duplicate();
         clearAndPosition(dupBuf, index);
         dupBuf.put(src, srcOffset, srcLen);
@@ -110,7 +161,7 @@ class BufferWrap implements Buffer {
 
     @Override
     public void get(int index, ByteBuffer dst, int dstLen) {
-        ByteBuffer dupBuf = this.buffer.duplicate();
+        ByteBuffer dupBuf = ensureBuffer().duplicate();
         clearAndPosition(dupBuf, index);
         ((java.nio.Buffer) dupBuf).limit(index + dstLen);
         dst.put(dupBuf);
@@ -118,7 +169,7 @@ class BufferWrap implements Buffer {
 
     @Override
     public void get(int index, ByteBuffer dst, int dstOffset, int dstLen) {
-        ByteBuffer dupBuf = this.buffer.duplicate();
+        ByteBuffer dupBuf = ensureBuffer().duplicate();
         clearAndPosition(dupBuf, index);
         ((java.nio.Buffer) dupBuf).limit(index + dstLen);
         ByteBuffer dup = dst.duplicate();
@@ -138,7 +189,7 @@ class BufferWrap implements Buffer {
             throw new IllegalArgumentException("(src.position + srcLen) > limit: (" + newPos + " > " + src.limit() + ")");
         }
 
-        ByteBuffer dupBuf = this.buffer.duplicate();
+        ByteBuffer dupBuf = ensureBuffer().duplicate();
         clearAndPosition(dupBuf, index);
 
         ByteBuffer srcDup = src.duplicate();
@@ -154,7 +205,7 @@ class BufferWrap implements Buffer {
             throw new IllegalArgumentException("(srcOffset + srcLen) > limit: (" + newPos + " > " + src.limit() + ")");
         }
 
-        ByteBuffer dupBuf = this.buffer.duplicate();
+        ByteBuffer dupBuf = ensureBuffer().duplicate();
         clearAndPosition(dupBuf, index);
 
         int limit = srcOffset + srcLen;
@@ -168,12 +219,48 @@ class BufferWrap implements Buffer {
     }
 
     @Override
+    public byte[] heapArray() {
+        byte[] ha = this.heapArray;
+        if (ha != null) {
+            return ha;
+        }
+        ByteBuffer bb = this.buffer;
+        return (bb != null && !bb.isDirect() && bb.hasArray()) ? bb.array() : null;
+    }
+
+    @Override
+    public int heapArrayOffset() {
+        if (this.heapArray != null) {
+            return 0;
+        }
+        ByteBuffer bb = this.buffer;
+        return (bb != null && bb.hasArray()) ? bb.arrayOffset() : 0;
+    }
+
+    @Override
     public void free() {
         this.available = false;
-        if (ByteBufUtils.CLEANER != null) {
-            ByteBufUtils.CLEANER.freeDirectBuffer(this.buffer);
-        }
+        ByteBuffer buf = this.buffer;
+        byte[] ha = this.heapArray;
+        boolean wasSmallCache = this.fromSmallCache;
         this.buffer = null;
+        this.heapArray = null;
+        this.fromSmallCache = false;
+
+        if (ha != null && wasSmallCache) {
+            // Small heap buffer stored directly as byte[] — return to cache
+            SmallBufferCache.freeHeap(ha);
+        } else if (buf != null) {
+            if (buf.isDirect()) {
+                // always attempt small cache return first; freeDirect validates size class internally
+                if (!SmallBufferCache.freeDirect(buf) && ByteBufUtils.CLEANER != null) {
+                    ByteBufUtils.CLEANER.freeDirectBuffer(buf);
+                }
+            } else if (wasSmallCache && buf.hasArray()) {
+                SmallBufferCache.freeHeap(buf.array());
+            }
+        }
+
         RECYCLE_HANDLER.free(this);
     }
 }

@@ -140,6 +140,9 @@ public class ByteBufInputStream extends InputStream implements DataInput {
 
     @Override
     public boolean readBoolean() throws IOException {
+        if (available() < 1) {
+            throw new EOFException();
+        }
         int res = this.read();
         this.buffer.markReader();
         return res != 0;
@@ -157,39 +160,54 @@ public class ByteBufInputStream extends InputStream implements DataInput {
     }
 
     @Override
-    public char readChar() {
+    public char readChar() throws IOException {
+        if (available() < 2) {
+            throw new EOFException();
+        }
         char res = (char) this.readShort();
         this.buffer.markReader();
         return res;
     }
 
     @Override
-    public double readDouble() {
+    public double readDouble() throws IOException {
+        if (available() < 8) {
+            throw new EOFException();
+        }
         double res = this.buffer.readFloat64();
         this.buffer.markReader();
         return res;
     }
 
     @Override
-    public float readFloat() {
+    public float readFloat() throws IOException {
+        if (available() < 4) {
+            throw new EOFException();
+        }
         float res = this.buffer.readFloat32();
         this.buffer.markReader();
         return res;
     }
 
     @Override
-    public void readFully(byte[] b) {
+    public void readFully(byte[] b) throws IOException {
         this.readFully(b, 0, b.length);
     }
 
     @Override
-    public void readFully(byte[] b, int off, int len) {
+    public void readFully(byte[] b, int off, int len) throws IOException {
+        if (available() < len) {
+            throw new EOFException();
+        }
         this.buffer.readBytes(b, off, len);
         this.buffer.markReader();
     }
 
     @Override
-    public int readInt() {
+    public int readInt() throws IOException {
+        if (available() < 4) {
+            throw new EOFException();
+        }
         int res = this.buffer.readInt32();
         this.buffer.markReader();
         return res;
@@ -209,20 +227,29 @@ public class ByteBufInputStream extends InputStream implements DataInput {
     }
 
     @Override
-    public long readLong() {
+    public long readLong() throws IOException {
+        if (available() < 8) {
+            throw new EOFException();
+        }
         long res = this.buffer.readInt64();
         this.buffer.markReader();
         return res;
     }
 
     @Override
-    public short readShort() {
+    public short readShort() throws IOException {
+        if (available() < 2) {
+            throw new EOFException();
+        }
         short res = this.buffer.readInt16();
         this.buffer.markReader();
         return res;
     }
 
-    public int readMedium() {
+    public int readMedium() throws IOException {
+        if (available() < 3) {
+            throw new EOFException();
+        }
         int res = this.buffer.readInt24();
         this.buffer.markReader();
         return res;
@@ -236,14 +263,20 @@ public class ByteBufInputStream extends InputStream implements DataInput {
     }
 
     @Override
-    public int readUnsignedByte() {
+    public int readUnsignedByte() throws IOException {
+        if (available() < 1) {
+            throw new EOFException();
+        }
         int res = this.buffer.readUInt8();
         this.buffer.markReader();
         return res;
     }
 
     @Override
-    public int readUnsignedShort() {
+    public int readUnsignedShort() throws IOException {
+        if (available() < 2) {
+            throw new EOFException();
+        }
         int res = this.buffer.readUInt16();
         this.buffer.markReader();
         return res;

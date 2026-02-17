@@ -1,7 +1,6 @@
 package net.hasor.neta.bytebuf;
-import org.junit.Test;
-
 import java.nio.ByteBuffer;
+import org.junit.Test;
 
 public class BufferTest {
     @Test

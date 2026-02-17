@@ -27,6 +27,11 @@ public class PerformanceTest {
         }
     }
 
+    public static void main(String[] args) throws RunnerException {
+        Options opt = new OptionsBuilder().include(PerformanceTest.class.getSimpleName()).build();
+        new Runner(opt).run();
+    }
+
     @Threads(16)
     @Benchmark
     public void requestNetaBuffer() {
@@ -39,10 +44,5 @@ public class PerformanceTest {
     public void requestNettyBuffer() {
         io.netty.buffer.ByteBuf buffer = io.netty.buffer.ByteBufAllocator.DEFAULT.heapBuffer(77);
         buffer.release();
-    }
-
-    public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder().include(PerformanceTest.class.getSimpleName()).build();
-        new Runner(opt).run();
     }
 }

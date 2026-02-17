@@ -1,13 +1,12 @@
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.codec.MD5;
-import org.junit.Test;
-
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.codec.MD5;
+import org.junit.Test;
 
 public class AutoByteBufferTest {
     @Test

@@ -34,19 +34,16 @@ import static net.hasor.neta.bytebuf.Bits.*;
  * @version : 2022-11-01
  */
 public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
-    protected ByteBufAllocator alloc;
-    protected int              markedReaderIndex;
-    protected int              markedWriterIndex;
-    protected int              readerIndex;
-    protected int              writerIndex;
-    protected ByteOrder        byteOrder = ByteOrder.BIG_ENDIAN;
-    private   int              maxCapacity;
-
-    private static class LeakDetectorHolder {
-        static final ResourceLeakDetector<ByteBuf> leakDetector = new ResourceLeakDetector<>(ByteBuf.class);
-    }
-
-    private final AtomicInteger                     refCnt = new AtomicInteger(1);
+    private final AtomicInteger                     refCnt    = new AtomicInteger(1);
+    protected     ByteBufAllocator                  alloc;
+    protected     int                               markedReaderIndex;
+    protected     int                               markedWriterIndex;
+    protected     int                               readerIndex;
+    protected     int                               writerIndex;
+    protected     ByteOrder                         byteOrder = ByteOrder.BIG_ENDIAN;
+    protected     boolean                           bigEndian = true;
+    protected     boolean                           freed     = false;
+    private       int                               maxCapacity;
     private       ResourceLeakDetector.ResourceLeak leak;
 
     protected void initByteBuf(ByteBufAllocator alloc, int maxCapacity) {
@@ -56,9 +53,11 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         this.markedWriterIndex = 0;
         this.readerIndex = 0;
         this.writerIndex = 0;
-        this.refCnt.set(1);
+        this.refCnt.lazySet(1);
+        this.freed = false;
         this.leak = LeakDetectorHolder.leakDetector.open(this);
         this.byteOrder = ByteOrder.BIG_ENDIAN;
+        this.bigEndian = true;
     }
 
     @Override
@@ -71,7 +70,7 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     }
 
     protected final void checkFree() {
-        if (this.refCnt.get() == 0) {
+        if (this.freed) {
             throw new IllegalStateException("has been released.");
         }
     }
@@ -129,6 +128,7 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
             if (this.refCnt.compareAndSet(refCnt, refCnt - decrement)) {
                 if (refCnt == decrement) {
+                    this.freed = true;
                     closeLeak();
                     this._free();
                     return true;
@@ -158,11 +158,18 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     @Override
     public ByteBuf order(ByteOrder newOrder) {
         this.byteOrder = newOrder;
+        this.bigEndian = (newOrder == ByteOrder.BIG_ENDIAN);
         return this;
     }
 
+    @Override
+    public abstract void discardReadBytes();
+
+    @Override
+    public abstract ByteBuf sliceOff(int splitOffset);
+
     private boolean isBig() {
-        return this.byteOrder == ByteOrder.BIG_ENDIAN;
+        return this.bigEndian;
     }
 
     protected abstract void _putByte(int offset, byte b);
@@ -205,13 +212,49 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     /** move writerIndex and returns the writerIndex before changed. */
     protected int nextWritable(int writableBytes) {
-        if (writableBytes > this.writableBytes()) {
+        int ori = this.writerIndex;
+        // Fast path: when markedReaderIndex == 0 (common during writes), avoid reading it
+        if (ori + writableBytes <= this.maxCapacity) {
+            this.writerIndex = ori + writableBytes;
+            return ori;
+        }
+        // Slow path: markedReaderIndex > 0 provides extra writable capacity
+        if (writableBytes > this.maxCapacity - (ori - this.markedReaderIndex)) {
             throw new BufferOverflowException();
         }
+        this.writerIndex = ori + writableBytes;
+        return ori;
+    }
 
-        int oriWriterIndex = this.writerIndex;
-        this.writerIndex += writableBytes;
-        return oriWriterIndex;
+    /**
+     * Optimized final variant of nextWritable — avoids virtual call to writableBytes().
+     * Fast path skips markedReaderIndex read (saves 1 field read per write in common case).
+     */
+    protected final int nextWritableN(int n) {
+        int ori = this.writerIndex;
+        // Fast path: writerIndex + n within maxCapacity (true when markedReaderIndex == 0)
+        if (ori + n <= this.maxCapacity) {
+            this.writerIndex = ori + n;
+            return ori;
+        }
+        // Slow path: markedReaderIndex > 0 may allow more writes
+        if (n > this.maxCapacity - (ori - this.markedReaderIndex)) {
+            throw new BufferOverflowException();
+        }
+        this.writerIndex = ori + n;
+        return ori;
+    }
+
+    /**
+     * Optimized final variant of nextReadable — avoids String.format and virtual calls.
+     */
+    protected final int nextReadableN(int n) {
+        int ri = this.readerIndex;
+        if ((ri + n) > this.markedWriterIndex) {
+            throw new IndexOutOfBoundsException("read out of range. length: " + n + " (expected: 0 ~ " + (this.markedWriterIndex - ri) + ")");
+        }
+        this.readerIndex = ri + n;
+        return ri;
     }
 
     /** move readerIndex and returns the readerIndex before changed. */
@@ -228,7 +271,7 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     protected int offsetWritable(int offset, int writableBytes) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
         int offerWritableBytes = this.maxCapacity - (this.markedWriterIndex - this.markedReaderIndex);
-        if (writableBytes > offerWritableBytes) {
+        if ((offset + writableBytes) > offerWritableBytes) {
             throw new IndexOutOfBoundsException(String.format("write out of range. index: %d, length: %d (expected: 0 ~ %d)", offset, writableBytes, offerWritableBytes));
         }
 
@@ -295,14 +338,14 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
         return this.writerIndex;
     }
 
-    //    @Override
-    //    public ByteBuf asReadOnly() {
-    //        return new ReadOnlyByteBuf(this);
-    //    }
-
     @Override
     public void writeByte(byte n) {
         this._putByte(nextWritable(1), n);
+    }
+
+    @Override
+    public ByteBuf asReadOnly() {
+        return new ReadOnlyByteBuf(this);
     }
 
     @Override
@@ -461,22 +504,22 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public short readInt16() {
-        return dencodeInt16(this, nextReadable(2), isBig());
+        return decodeInt16(this, nextReadable(2), isBig());
     }
 
     @Override
     public int readInt24() {
-        return dencodeInt24(this, nextReadable(3), isBig());
+        return decodeInt24(this, nextReadable(3), isBig());
     }
 
     @Override
     public int readInt32() {
-        return dencodeInt32(this, nextReadable(4), isBig());
+        return decodeInt32(this, nextReadable(4), isBig());
     }
 
     @Override
     public long readInt64() {
-        return dencodeInt64(this, nextReadable(8), isBig());
+        return decodeInt64(this, nextReadable(8), isBig());
     }
 
     @Override
@@ -525,28 +568,28 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     public short getInt16(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeInt16(this, offsetReadable(offset, 2), isBig());
+        return decodeInt16(this, offsetReadable(offset, 2), isBig());
     }
 
     @Override
     public int getInt24(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeInt24(this, offsetReadable(offset, 3), isBig());
+        return decodeInt24(this, offsetReadable(offset, 3), isBig());
     }
 
     @Override
     public int getInt32(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeInt32(this, offsetReadable(offset, 4), isBig());
+        return decodeInt32(this, offsetReadable(offset, 4), isBig());
     }
 
     @Override
     public long getInt64(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeInt64(this, offsetReadable(offset, 8), isBig());
+        return decodeInt64(this, offsetReadable(offset, 8), isBig());
     }
 
     @Override
@@ -581,50 +624,50 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
 
     @Override
     public short readUInt8() {
-        return dencodeUInt8(this, nextReadable(1));
+        return decodeUInt8(this, nextReadable(1));
     }
 
     @Override
     public int readUInt16() {
-        return dencodeUInt16(this, nextReadable(2), isBig());
+        return decodeUInt16(this, nextReadable(2), isBig());
     }
 
     @Override
     public int readUInt24() {
-        return dencodeUInt24(this, nextReadable(3), isBig());
+        return decodeUInt24(this, nextReadable(3), isBig());
     }
 
     @Override
     public long readUInt32() {
-        return dencodeUInt32(this, nextReadable(4), isBig());
+        return decodeUInt32(this, nextReadable(4), isBig());
     }
 
     @Override
     public short getUInt8(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeUInt8(this, offsetReadable(offset, 1));
+        return decodeUInt8(this, offsetReadable(offset, 1));
     }
 
     @Override
     public int getUInt16(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeUInt16(this, offsetReadable(offset, 2), isBig());
+        return decodeUInt16(this, offsetReadable(offset, 2), isBig());
     }
 
     @Override
     public int getUInt24(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeUInt24(this, offsetReadable(offset, 3), isBig());
+        return decodeUInt24(this, offsetReadable(offset, 3), isBig());
     }
 
     @Override
     public long getUInt32(int offset) {
         ObjectUtils.checkPositiveOrZero(offset, "offset");
 
-        return dencodeUInt32(this, offsetReadable(offset, 4), isBig());
+        return decodeUInt32(this, offsetReadable(offset, 4), isBig());
     }
 
     @Override
@@ -646,4 +689,8 @@ public abstract class AbstractByteBuf implements ByteBuf, AutoCloseable {
     }
 
     protected abstract String getSimpleName();
+
+    private static class LeakDetectorHolder {
+        static final ResourceLeakDetector<ByteBuf> leakDetector = new ResourceLeakDetector<>(ByteBuf.class);
+    }
 }

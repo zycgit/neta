@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.nio.ByteBuffer;
 import net.hasor.cobble.ObjectUtils;
 
 /**
@@ -22,15 +23,21 @@ import net.hasor.cobble.ObjectUtils;
  * @version : 2022-11-01
  */
 public abstract class BasicByteBufAllocator implements ByteBufAllocator {
-    protected final boolean defaultUsingPooled;
-    protected final int     initCapacityByDefault;
-    protected final int     sliceSizeByDefault;
+    protected final boolean                defaultUsingPooled;
+    protected final int                    initCapacityByDefault;
+    protected final int                    sliceSizeByDefault;
+    private final   ByteBufAllocatorMetric metric = new ByteBufAllocatorMetric();
 
     /** Create new instance */
     protected BasicByteBufAllocator(boolean defaultUsingPooled, int initialCapacityByDefault, int sliceSizeByDefault) {
         this.defaultUsingPooled = defaultUsingPooled;
         this.initCapacityByDefault = initialCapacityByDefault;
         this.sliceSizeByDefault = sliceSizeByDefault;
+    }
+
+    @Override
+    public ByteBufAllocatorMetric metric() {
+        return this.metric;
     }
 
     @Override
@@ -49,7 +56,14 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     @Override
     public ByteBuf buffer(int initCapacity, int maxCapacity) {
+        if (initCapacity > maxCapacity) {
+            throw new IllegalArgumentException("initCapacity(" + initCapacity + ") > maxCapacity(" + maxCapacity + ")");
+        }
         if (this.defaultUsingPooled) {
+            // For small allocations, use unpooled with SmallBufferCache to avoid buddy algorithm overhead
+            if (SmallBufferCache.isSmallSize(maxCapacity)) {
+                return this.bufferByAllocator(this, initCapacity, maxCapacity);
+            }
             return this.pooledBuffer(initCapacity, maxCapacity);
         } else {
             if (this.isDirect()) {
@@ -79,12 +93,13 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     }
 
     private ByteBuf ringByAllocator(ByteBufAllocator alloc, int capacity) {
+        this.metric.recordRingAllocation(capacity);
         if (alloc.isDirect()) {
-            RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.class, RingByteBuffer.RECYCLE_HANDLER);
+            RingByteBuffer byteBuf = RecycleObjectPool.get(RingByteBuffer.RECYCLE_INDEX, RingByteBuffer.RECYCLE_HANDLER);
             byteBuf.initBuffer(alloc, capacity);
             return byteBuf;
         } else {
-            RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.class, RingArrayByteBuf.RECYCLE_HANDLER);
+            RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.RECYCLE_INDEX, RingArrayByteBuf.RECYCLE_HANDLER);
             byteBuf.initBuffer(alloc, capacity);
             return byteBuf;
         }
@@ -128,12 +143,16 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
 
     private ByteBuf bufferByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
         if (alloc.isDirect()) {
-            AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.class, AutoByteBuffer.RECYCLE_HANDLER);
-            byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, alloc.jvmBuffer(initCapacity));
+            this.metric.recordDirectAllocation(initCapacity);
+            AutoByteBuffer byteBuf = RecycleObjectPool.get(AutoByteBuffer.RECYCLE_INDEX, AutoByteBuffer.RECYCLE_HANDLER);
+            ByteBuffer jvmBuf = SmallBufferCache.isSmallSize(initCapacity) ? SmallBufferCache.allocDirect(initCapacity) : alloc.jvmBuffer(initCapacity);
+            byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, jvmBuf);
             return byteBuf;
         } else {
-            AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.class, AutoArrayByteBuf.RECYCLE_HANDLER);
-            byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, new byte[initCapacity]);
+            this.metric.recordHeapAllocation(initCapacity);
+            AutoArrayByteBuf byteBuf = RecycleObjectPool.get(AutoArrayByteBuf.RECYCLE_INDEX, AutoArrayByteBuf.RECYCLE_HANDLER);
+            byte[] data = SmallBufferCache.allocHeap(initCapacity);
+            byteBuf.initBuffer(alloc, maxCapacity, this.sliceSizeByDefault, data);
             return byteBuf;
         }
     }
@@ -157,12 +176,42 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     }
 
     private ByteBuf pooledByAllocator(ByteBufAllocator alloc, int initCapacity, int maxCapacity) {
+        this.metric.recordPooledAllocation(initCapacity);
         int fmtMaxCap = PageChunkPool.tableSizeFor(maxCapacity, Integer.MAX_VALUE);
         BufferPool pool = BufferPoolUtils.getPool(fmtMaxCap, alloc);
-        Buffer target = pool.requestBuffer(initCapacity, this);
 
-        PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.class, PooledByteBuf.RECYCLE_HANDLER);
-        byteBuf.initBuffer(alloc, fmtMaxCap, this.sliceSizeByDefault, target, pool);
-        return byteBuf;
+        // For small initial capacity, use SmallBufferCache to avoid buddy algorithm overhead.
+        // PooledByteBuf will naturally transition to BufferPool when the buffer grows beyond MAX_SMALL_SIZE.
+        Buffer target;
+        if (SmallBufferCache.isSmallSize(initCapacity)) {
+            target = SmallBufferCache.allocSmallBuffer(alloc.isDirect(), initCapacity);
+        } else {
+            // Check thread-local pooled buffer cache first (skips buddy tree search)
+            target = null;
+            java.util.ArrayDeque<Buffer> cache = PooledByteBuf.BUFFER_CACHE.get();
+            if (!cache.isEmpty()) {
+                java.util.Iterator<Buffer> it = cache.iterator();
+                while (it.hasNext()) {
+                    Buffer candidate = it.next();
+                    if (candidate.capacity() >= initCapacity && candidate.isDirect() == alloc.isDirect()) {
+                        it.remove();
+                        target = candidate;
+                        break;
+                    }
+                }
+            }
+            if (target == null) {
+                target = pool.requestBuffer(initCapacity, this);
+            }
+        }
+
+        try {
+            PooledByteBuf byteBuf = RecycleObjectPool.get(PooledByteBuf.RECYCLE_INDEX, PooledByteBuf.RECYCLE_HANDLER);
+            byteBuf.initBuffer(alloc, fmtMaxCap, this.sliceSizeByDefault, target, pool);
+            return byteBuf;
+        } catch (Throwable e) {
+            target.free();
+            throw e;
+        }
     }
 }

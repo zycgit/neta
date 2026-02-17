@@ -66,7 +66,9 @@ class BufferArena {
             return null;
         }
 
-        // find free
+        // Use per-iteration next() instead of scan() to avoid readLock-writeLock self-deadlock:
+        // requestPages() can trigger triggerUsage() -> bufferRing.remove() which needs writeLock,
+        // but scan() holds the readLock for the entire iteration, causing self-deadlock.
         for (int i = 0; i < cnt; i++) {
             PageChunkPool chunkPool = this.bufferRing.next();
             if (chunkPool == null) {
@@ -79,11 +81,12 @@ class BufferArena {
             }
 
             try {
-                Buffer memory = this.bufferPool.getMemory(pages.getMemAddress()); // trigger call triggerUsage method.
-                BufferTarget buffer = RecycleObjectPool.get(BufferTarget.class, BufferTarget.RECYCLE_HANDLER);
+                Buffer memory = this.bufferPool.getMemory(pages.getMemAddress());
+                BufferTarget buffer = RecycleObjectPool.get(BufferTarget.RECYCLE_INDEX, BufferTarget.RECYCLE_HANDLER);
                 buffer.initBuffer(this.bufferPool.getMemPageSize(), pages, memory);
                 return buffer;
             } catch (Exception e) {
+                pages.free(); // Prevent buddy allocator page leak
                 continue;
             }
         }
@@ -130,8 +133,12 @@ class BufferArena {
         int mov = checkUsage(pool);
         if (mov == 0) {
             if (this.prev == null && pool.getUsage() <= 0.000001d) {
-                this.bufferRing.remove(pool);
-                this.bufferPool.freeAllocator(pool);
+                // Keep at least one chunk in qInit as warm cache to avoid
+                // costly re-allocation on rapid alloc+free cycles.
+                if (this.bufferRing.size() > 1) {
+                    this.bufferRing.remove(pool);
+                    this.bufferPool.freeAllocator(pool);
+                }
             }
             return;
         }

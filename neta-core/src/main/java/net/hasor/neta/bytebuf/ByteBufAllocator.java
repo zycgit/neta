@@ -24,6 +24,9 @@ package net.hasor.neta.bytebuf;
 public interface ByteBufAllocator extends BufferAllocator {
     ByteBufAllocator DEFAULT = ByteBufUtils.DEFAULT_ALLOCATOR;
 
+    /** Returns the {@link ByteBufAllocatorMetric} for this allocator. */
+    ByteBufAllocatorMetric metric();
+
     /**
      * Allocate a {@link ByteBuf}.
      * If it is a direct or heap buffer depends on the actual implementation.

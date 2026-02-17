@@ -64,10 +64,10 @@ public class ByteBufAdapter implements ByteBuf {
         return this.byteBuf.copy();
     }
 
-    //    @Override
-    //    public ByteBuf asReadOnly() {
-    //        return this.byteBuf.asReadOnly();
-    //    }
+    @Override
+    public ByteBuf asReadOnly() {
+        return new ReadOnlyByteBuf(this);
+    }
 
     @Override
     public ByteOrder order() {
@@ -104,6 +104,16 @@ public class ByteBufAdapter implements ByteBuf {
     @Override
     public boolean release(int decrement) {
         return this.byteBuf.release(decrement);
+    }
+
+    @Override
+    public void discardReadBytes() {
+        this.byteBuf.discardReadBytes();
+    }
+
+    @Override
+    public ByteBuf sliceOff(int splitOffset) {
+        return this.byteBuf.sliceOff(splitOffset);
     }
 
     @Override

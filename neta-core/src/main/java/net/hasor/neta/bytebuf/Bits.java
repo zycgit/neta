@@ -15,6 +15,9 @@
  */
 package net.hasor.neta.bytebuf;
 class Bits {
+    // ThreadLocal temp buffer to avoid per-byte _putByte/_getByte calls (reduces checkFree/checkExtension from N to 1)
+    private static final ThreadLocal<byte[]> TMP8 = ThreadLocal.withInitial(() -> new byte[8]);
+
     private static byte long7(long x) {
         return (byte) (x >> 56);
     }
@@ -72,78 +75,88 @@ class Bits {
     }
 
     public static void encodeInt16(AbstractByteBuf bb, int offset, short v, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
         if (bigEndian) {
-            bb._putByte(offset, short1(v));
-            bb._putByte(offset + 1, short0(v));
+            tmp[0] = short1(v);
+            tmp[1] = short0(v);
         } else {
-            bb._putByte(offset, short0(v));
-            bb._putByte(offset + 1, short1(v));
+            tmp[0] = short0(v);
+            tmp[1] = short1(v);
         }
+        bb._putBytes(offset, tmp, 0, 2);
     }
 
     public static void encodeInt24(AbstractByteBuf bb, int offset, int v, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
         if (bigEndian) {
-            bb._putByte(offset, int2(v));
-            bb._putByte(offset + 1, int1(v));
-            bb._putByte(offset + 2, int0(v));
+            tmp[0] = int2(v);
+            tmp[1] = int1(v);
+            tmp[2] = int0(v);
         } else {
-            bb._putByte(offset, int0(v));
-            bb._putByte(offset + 1, int1(v));
-            bb._putByte(offset + 2, int2(v));
+            tmp[0] = int0(v);
+            tmp[1] = int1(v);
+            tmp[2] = int2(v);
         }
+        bb._putBytes(offset, tmp, 0, 3);
     }
 
     public static void encodeInt32(AbstractByteBuf bb, int offset, int v, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
         if (bigEndian) {
-            bb._putByte(offset, int3(v));
-            bb._putByte(offset + 1, int2(v));
-            bb._putByte(offset + 2, int1(v));
-            bb._putByte(offset + 3, int0(v));
+            tmp[0] = int3(v);
+            tmp[1] = int2(v);
+            tmp[2] = int1(v);
+            tmp[3] = int0(v);
         } else {
-            bb._putByte(offset, int0(v));
-            bb._putByte(offset + 1, int1(v));
-            bb._putByte(offset + 2, int2(v));
-            bb._putByte(offset + 3, int3(v));
+            tmp[0] = int0(v);
+            tmp[1] = int1(v);
+            tmp[2] = int2(v);
+            tmp[3] = int3(v);
         }
+        bb._putBytes(offset, tmp, 0, 4);
     }
 
     public static void encodeInt32(AbstractByteBuf bb, int offset, long v, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
         if (bigEndian) {
-            bb._putByte(offset, long3(v));
-            bb._putByte(offset + 1, long2(v));
-            bb._putByte(offset + 2, long1(v));
-            bb._putByte(offset + 3, long0(v));
+            tmp[0] = long3(v);
+            tmp[1] = long2(v);
+            tmp[2] = long1(v);
+            tmp[3] = long0(v);
         } else {
-            bb._putByte(offset, long0(v));
-            bb._putByte(offset + 1, long1(v));
-            bb._putByte(offset + 2, long2(v));
-            bb._putByte(offset + 3, long3(v));
+            tmp[0] = long0(v);
+            tmp[1] = long1(v);
+            tmp[2] = long2(v);
+            tmp[3] = long3(v);
         }
+        bb._putBytes(offset, tmp, 0, 4);
     }
 
     public static void encodeInt64(AbstractByteBuf bb, int offset, long v, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
         if (bigEndian) {
-            bb._putByte(offset, long7(v));
-            bb._putByte(offset + 1, long6(v));
-            bb._putByte(offset + 2, long5(v));
-            bb._putByte(offset + 3, long4(v));
-            bb._putByte(offset + 4, long3(v));
-            bb._putByte(offset + 5, long2(v));
-            bb._putByte(offset + 6, long1(v));
-            bb._putByte(offset + 7, long0(v));
+            tmp[0] = long7(v);
+            tmp[1] = long6(v);
+            tmp[2] = long5(v);
+            tmp[3] = long4(v);
+            tmp[4] = long3(v);
+            tmp[5] = long2(v);
+            tmp[6] = long1(v);
+            tmp[7] = long0(v);
         } else {
-            bb._putByte(offset, long0(v));
-            bb._putByte(offset + 1, long1(v));
-            bb._putByte(offset + 2, long2(v));
-            bb._putByte(offset + 3, long3(v));
-            bb._putByte(offset + 4, long4(v));
-            bb._putByte(offset + 5, long5(v));
-            bb._putByte(offset + 6, long6(v));
-            bb._putByte(offset + 7, long7(v));
+            tmp[0] = long0(v);
+            tmp[1] = long1(v);
+            tmp[2] = long2(v);
+            tmp[3] = long3(v);
+            tmp[4] = long4(v);
+            tmp[5] = long5(v);
+            tmp[6] = long6(v);
+            tmp[7] = long7(v);
         }
+        bb._putBytes(offset, tmp, 0, 8);
     }
 
-    private static short makeSort(byte b1, byte b0) {
+    private static short makeShort(byte b1, byte b0) {
         return (short) ((b1 << 8) | (b0 & 0xff));
     }
 
@@ -166,115 +179,77 @@ class Bits {
                 (((long) b0 & 0xff)));
     }
 
-    public static short dencodeInt16(AbstractByteBuf bb, int offset, boolean bigEndian) {
+    public static short decodeInt16(AbstractByteBuf bb, int offset, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
+        bb._getBytes(offset, tmp, 0, 2);
         if (bigEndian) {
-            return makeSort(//
-                    bb._getByte(offset), //
-                    bb._getByte(offset + 1));
+            return makeShort(tmp[0], tmp[1]);
         } else {
-            return makeSort(//
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset));
+            return makeShort(tmp[1], tmp[0]);
         }
     }
 
-    public static int dencodeInt24(AbstractByteBuf bb, int offset, boolean bigEndian) {
+    public static int decodeInt24(AbstractByteBuf bb, int offset, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
+        bb._getBytes(offset, tmp, 0, 3);
         if (bigEndian) {
-            return makeInt(//
-                    bb._getByte(offset), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset + 2));
+            return makeInt(tmp[0], tmp[1], tmp[2]);
         } else {
-            return makeInt(//
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset));
+            return makeInt(tmp[2], tmp[1], tmp[0]);
         }
     }
 
-    public static int dencodeInt32(AbstractByteBuf bb, int offset, boolean bigEndian) {
+    public static int decodeInt32(AbstractByteBuf bb, int offset, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
+        bb._getBytes(offset, tmp, 0, 4);
         if (bigEndian) {
-            return makeInt(//
-                    bb._getByte(offset), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 3));
+            return makeInt(tmp[0], tmp[1], tmp[2], tmp[3]);
         } else {
-            return makeInt(//
-                    bb._getByte(offset + 3), //
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset));
+            return makeInt(tmp[3], tmp[2], tmp[1], tmp[0]);
         }
     }
 
-    public static long dencodeInt64(AbstractByteBuf bb, int offset, boolean bigEndian) {
+    public static long decodeInt64(AbstractByteBuf bb, int offset, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
+        bb._getBytes(offset, tmp, 0, 8);
         if (bigEndian) {
-            return makeLong(//
-                    bb._getByte(offset), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 3), //
-                    bb._getByte(offset + 4), //
-                    bb._getByte(offset + 5), //
-                    bb._getByte(offset + 6), //
-                    bb._getByte(offset + 7));
+            return makeLong(tmp[0], tmp[1], tmp[2], tmp[3], tmp[4], tmp[5], tmp[6], tmp[7]);
         } else {
-            return makeLong(//
-                    bb._getByte(offset + 7), //
-                    bb._getByte(offset + 6), //
-                    bb._getByte(offset + 5), //
-                    bb._getByte(offset + 4), //
-                    bb._getByte(offset + 3), //
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset));
+            return makeLong(tmp[7], tmp[6], tmp[5], tmp[4], tmp[3], tmp[2], tmp[1], tmp[0]);
         }
     }
 
-    public static short dencodeUInt8(AbstractByteBuf bb, int offset) {
-        return makeSort((byte) 0, bb._getByte(offset));
+    public static short decodeUInt8(AbstractByteBuf bb, int offset) {
+        return makeShort((byte) 0, bb._getByte(offset));
     }
 
-    public static int dencodeUInt16(AbstractByteBuf bb, int offset, boolean bigEndian) {
+    public static int decodeUInt16(AbstractByteBuf bb, int offset, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
+        bb._getBytes(offset, tmp, 0, 2);
         if (bigEndian) {
-            return makeInt((byte) 0, //
-                    bb._getByte(offset), //
-                    bb._getByte(offset + 1));
+            return makeInt((byte) 0, tmp[0], tmp[1]);
         } else {
-            return makeInt((byte) 0, //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset));
+            return makeInt((byte) 0, tmp[1], tmp[0]);
         }
     }
 
-    public static int dencodeUInt24(AbstractByteBuf bb, int offset, boolean bigEndian) {
+    public static int decodeUInt24(AbstractByteBuf bb, int offset, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
+        bb._getBytes(offset, tmp, 0, 3);
         if (bigEndian) {
-            return makeInt((byte) 0, //
-                    bb._getByte(offset), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset + 2));
+            return makeInt((byte) 0, tmp[0], tmp[1], tmp[2]);
         } else {
-            return makeInt((byte) 0, //
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset));
+            return makeInt((byte) 0, tmp[2], tmp[1], tmp[0]);
         }
     }
 
-    public static long dencodeUInt32(AbstractByteBuf bb, int offset, boolean bigEndian) {
+    public static long decodeUInt32(AbstractByteBuf bb, int offset, boolean bigEndian) {
+        byte[] tmp = TMP8.get();
+        bb._getBytes(offset, tmp, 0, 4);
         if (bigEndian) {
-            return makeLong((byte) 0, (byte) 0, (byte) 0, (byte) 0, //
-                    bb._getByte(offset), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 3));
+            return makeLong((byte) 0, (byte) 0, (byte) 0, (byte) 0, tmp[0], tmp[1], tmp[2], tmp[3]);
         } else {
-            return makeLong((byte) 0, (byte) 0, (byte) 0, (byte) 0, //
-                    bb._getByte(offset + 3), //
-                    bb._getByte(offset + 2), //
-                    bb._getByte(offset + 1), //
-                    bb._getByte(offset));
+            return makeLong((byte) 0, (byte) 0, (byte) 0, (byte) 0, tmp[3], tmp[2], tmp[1], tmp[0]);
         }
     }
 }

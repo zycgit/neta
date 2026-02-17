@@ -29,14 +29,15 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class WrapArrayBuffer extends AbstractByteBuf {
-    static    RecycleHandler<WrapArrayBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapArrayBuffer>() {
+    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<WrapArrayBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapArrayBuffer>() {
         public WrapArrayBuffer create() {
             return new WrapArrayBuffer();
         }
 
         @Override
         public void free(WrapArrayBuffer tar) {
-            RecycleObjectPool.free(WrapArrayBuffer.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
     protected byte[]                          target;
@@ -53,6 +54,51 @@ final class WrapArrayBuffer extends AbstractByteBuf {
             this.writerIndex = initData.length;
             this.markedWriterIndex = initData.length;
         }
+    }
+
+    @Override
+    public void discardReadBytes() {
+        if (this.readerIndex == 0) {
+            return;
+        }
+
+        if (this.readerIndex != this.writerIndex) {
+            System.arraycopy(this.target, this.readerIndex, this.target, 0, this.readableBytes());
+            this.writerIndex -= this.readerIndex;
+            this.markedReaderIndex = Math.max(0, this.markedReaderIndex - this.readerIndex);
+            this.markedWriterIndex = Math.max(0, this.markedWriterIndex - this.readerIndex);
+            this.readerIndex = 0;
+            return;
+        }
+
+        this.markedReaderIndex = 0;
+        this.markedWriterIndex = 0;
+        this.writerIndex = 0;
+        this.readerIndex = 0;
+    }
+
+    @Override
+    public ByteBuf sliceOff(int splitOffset) {
+        if (splitOffset == 0) {
+            return ByteBuf.EMPTY;
+        }
+        if (splitOffset < 0 || splitOffset > this.capacity()) {
+            throw new IndexOutOfBoundsException();
+        }
+
+        byte[] sliceData = new byte[splitOffset];
+        System.arraycopy(this.target, 0, sliceData, 0, splitOffset);
+
+        int remaining = this.capacity() - splitOffset;
+        if (remaining > 0) {
+            System.arraycopy(this.target, splitOffset, this.target, 0, remaining);
+        }
+
+        this.writerIndex = Math.max(0, this.writerIndex - splitOffset);
+        this.readerIndex = Math.max(0, this.readerIndex - splitOffset);
+        this.markedReaderIndex = Math.max(0, this.markedReaderIndex - splitOffset);
+        this.markedWriterIndex = Math.max(0, this.markedWriterIndex - splitOffset);
+        return ByteBuf.wrap(sliceData);
     }
 
     @Override
@@ -145,13 +191,15 @@ final class WrapArrayBuffer extends AbstractByteBuf {
         checkFree();
 
         byte[] copyArray = this.target.clone();
-        WrapArrayBuffer byteBuf = RecycleObjectPool.get(WrapArrayBuffer.class, WrapArrayBuffer.RECYCLE_HANDLER);
+        WrapArrayBuffer byteBuf = RecycleObjectPool.get(WrapArrayBuffer.RECYCLE_INDEX, WrapArrayBuffer.RECYCLE_HANDLER);
         byteBuf.initBuffer(copyArray, true);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.readerIndex = this.readerIndex;
         byteBuf.markedReaderIndex = this.markedReaderIndex;
+        byteBuf.byteOrder = this.byteOrder;
+        byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
     }
 

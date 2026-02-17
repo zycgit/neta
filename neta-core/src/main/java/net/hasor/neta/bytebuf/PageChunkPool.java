@@ -25,20 +25,19 @@ import net.hasor.cobble.ObjectUtils;
  * @version : 2024-02-15
  */
 class PageChunkPool {
-    private static final double                  LOG2 = Math.log(2);
-    protected final      byte[]                  chunksMap;
-    private final        int                     memAddress;
-    private final        int                     pageSize;
-    private final        int                     pageCount;
-    private final        int                     capacity;
-    private final        int                     height;
-    private final        PageChunk[]             chunksHeads;
-    private final        ReentrantLock[]         chunksLock;
+    protected final  byte[]                  chunksMap;
+    private final    int                     memAddress;
+    private final    int                     pageSize;
+    private final    int                     pageCount;
+    private final    int                     capacity;
+    private final    int                     height;
+    private final    PageChunk[]             chunksHeads;
+    private final    ReentrantLock[]         chunksLock;
     //
-    private              Object                  owner;
-    private              Consumer<PageChunkPool> notify;
+    private volatile Object                  owner;
+    private volatile Consumer<PageChunkPool> notify;
     //
-    private              AtomicInteger           used;
+    private          AtomicInteger           used;
 
     public PageChunkPool(int memAddress, int pageSize, int treeHeight) {
         this.memAddress = memAddress;
@@ -66,8 +65,8 @@ class PageChunkPool {
         return (n < 0) ? 1 : (n >= maximumSize) ? maximumSize : n + 1;
     }
 
-    private static int log2(double antilogarithm) {
-        return (int) (Math.log(antilogarithm) / LOG2);
+    private static int log2(int value) {
+        return 31 - Integer.numberOfLeadingZeros(value);
     }
 
     protected static byte checkMask(int form, int to) {
@@ -181,7 +180,7 @@ class PageChunkPool {
                 if (tryLock(look, true)) {
                     try {
                         this.used(look);
-                        PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.class, PageChunkSplit.RECYCLE_HANDLER);
+                        PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.RECYCLE_INDEX, PageChunkSplit.RECYCLE_HANDLER);
                         chunk.initPageChunk(this, look.getFromPage(), look.getToPage(), new AtomicInteger(1));
                         return chunk;
                     } finally {
@@ -205,18 +204,16 @@ class PageChunkPool {
             byte mask = checkMask(formMask, toMask);
             return data == (data & mask);
         } else {
-            byte data1 = this.chunksMap[formByte];
-            byte data2 = this.chunksMap[toByte];
-
-            byte mask1 = (byte) (0b10000000 >> formMask);
-            byte mask2 = (byte) (0b11111111 >>> toMask);
+            // reuse same mask formulas as used()/free() and check for zero
+            byte mask1 = (byte) (0b11111111 >>> formMask);
+            byte mask2 = useMask(0, toMask);
 
             for (int i = (formByte + 1); i < toByte; i++) {
                 if (this.chunksMap[i] != 0) {
                     return false;
                 }
             }
-            return (data1 == (data1 & mask1)) && (data2 == (data2 & mask2));
+            return (this.chunksMap[formByte] & mask1) == 0 && (this.chunksMap[toByte] & mask2) == 0;
         }
     }
 

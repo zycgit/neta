@@ -1,13 +1,12 @@
 package net.hasor.neta.bytebuf;
-import net.hasor.cobble.RandomUtils;
-import net.hasor.cobble.codec.MD5;
-import org.junit.Test;
-
 import java.nio.BufferOverflowException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
+import net.hasor.cobble.RandomUtils;
+import net.hasor.cobble.codec.MD5;
+import org.junit.Test;
 
 public class RingByteBufferTest {
     public static ByteBuf defaultWrap(byte[] data) {
@@ -20,7 +19,7 @@ public class RingByteBufferTest {
     @Test
     public void basicTest01() {
         ByteBuf byteBuf = ByteBufAllocator.DEFAULT.ringDirectBuffer(111);
-        assert byteBuf.capacity() == 111;
+        assert byteBuf.capacity() == 128; // 111 rounds up to next power-of-2
         assert byteBuf.isDirect();
         assert byteBuf.toString().startsWith("RingByteBuffer[rMark=");
     }

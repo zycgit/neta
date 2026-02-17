@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+import java.nio.Buffer;
 import java.nio.ByteBuffer;
 
 /**
@@ -29,14 +30,15 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 class WrapByteBuffer extends AbstractByteBuf {
-    static    RecycleHandler<WrapByteBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapByteBuffer>() {
+    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<WrapByteBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapByteBuffer>() {
         public WrapByteBuffer create() {
             return new WrapByteBuffer();
         }
 
         @Override
         public void free(WrapByteBuffer tar) {
-            RecycleObjectPool.free(WrapByteBuffer.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
     protected ByteBuffer                     target;
@@ -51,8 +53,82 @@ class WrapByteBuffer extends AbstractByteBuf {
         this.target = initData;
         if (!asWrite) {
             this.writerIndex = initData.limit();
-            this.markedWriterIndex = initData.limit();
+            this.markedWriterIndex = initData.limit(); // initData.length -> initData.limit()
         }
+    }
+
+    @Override
+    public void discardReadBytes() {
+        if (this.readerIndex == 0) {
+            return;
+        }
+
+        if (this.readerIndex != this.writerIndex) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(this.readerIndex);
+            ((Buffer) this.target).limit(this.writerIndex);
+            ByteBuffer slice = this.target.slice();
+
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(0);
+            this.target.put(slice);
+
+            this.writerIndex -= this.readerIndex;
+            this.markedReaderIndex = Math.max(0, this.markedReaderIndex - this.readerIndex);
+            this.markedWriterIndex = Math.max(0, this.markedWriterIndex - this.readerIndex);
+            this.readerIndex = 0;
+            return;
+        }
+
+        this.markedReaderIndex = 0;
+        this.markedWriterIndex = 0;
+        this.writerIndex = 0;
+        this.readerIndex = 0;
+    }
+
+    @Override
+    public ByteBuf sliceOff(int splitOffset) {
+        if (splitOffset == 0) {
+            return ByteBuf.EMPTY;
+        }
+        if (splitOffset < 0 || splitOffset > this.capacity()) {
+            throw new IndexOutOfBoundsException();
+        }
+
+        ByteBuffer newBuf;
+        if (this.target.isDirect()) {
+            newBuf = ByteBuffer.allocateDirect(splitOffset);
+        } else {
+            newBuf = ByteBuffer.allocate(splitOffset);
+        }
+
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(0);
+        ((Buffer) this.target).limit(splitOffset);
+        newBuf.put(this.target);
+        ((Buffer) newBuf).flip();
+
+        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        slicedBuf.initBuffer(newBuf, false);
+
+        int remaining = this.capacity() - splitOffset;
+        if (remaining > 0) {
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(splitOffset);
+            ((Buffer) this.target).limit(this.capacity());
+            ByteBuffer remainingSlice = this.target.slice();
+
+            ((Buffer) this.target).clear();
+            ((Buffer) this.target).position(0);
+            this.target.put(remainingSlice);
+        }
+
+        this.writerIndex = Math.max(0, this.writerIndex - splitOffset);
+        this.readerIndex = Math.max(0, this.readerIndex - splitOffset);
+        this.markedReaderIndex = Math.max(0, this.markedReaderIndex - splitOffset);
+        this.markedWriterIndex = Math.max(0, this.markedWriterIndex - splitOffset);
+
+        return slicedBuf;
     }
 
     @Override
@@ -64,7 +140,6 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        this.target.clear();
         this.target.put(offset, b);
     }
 
@@ -72,7 +147,8 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _putBytes(int offset, byte[] src, int srcOffset, int srcLen) {
         checkFree();
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(offset);
         this.target.put(src, srcOffset, srcLen);
         return srcLen;
     }
@@ -81,7 +157,8 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
         checkFree();
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(offset);
         srcLen = Math.min(src.remaining(), srcLen);
 
         this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
@@ -93,7 +170,8 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _putBytes(int offset, ByteBuf src, int srcLen) {
         checkFree();
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(offset);
         srcLen = Math.min(src.readableBytes(), srcLen);
 
         src.readBuffer(this.target, srcLen);
@@ -104,7 +182,6 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        this.target.clear();
         return this.target.get(offset);
     }
 
@@ -112,7 +189,8 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _getBytes(int offset, byte[] dst, int dstOffset, int dstLen) {
         checkFree();
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(offset);
         this.target.get(dst, dstOffset, dstLen);
         return dstLen;
     }
@@ -121,8 +199,11 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _getBytes(int offset, ByteBuffer dst, int dstLen) {
         checkFree();
 
-        this.target.clear().position(offset).limit(offset + dstLen);
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(offset);
+        ((Buffer) this.target).limit(offset + dstLen);
         dst.put(this.target);
+        ((Buffer) this.target).clear();
         return dstLen;
     }
 
@@ -130,7 +211,8 @@ class WrapByteBuffer extends AbstractByteBuf {
     protected int _getBytes(int offset, ByteBuf dst, int dstLen) {
         checkFree();
 
-        this.target.clear().position(offset);
+        ((Buffer) this.target).clear();
+        ((Buffer) this.target).position(offset);
         dst.writeBuffer(this.target, dstLen);
         return dstLen;
     }
@@ -138,8 +220,17 @@ class WrapByteBuffer extends AbstractByteBuf {
     @Override
     protected void _free() {
         try {
-            if (ByteBufUtils.CLEANER != null) {
-                ByteBufUtils.CLEANER.freeDirectBuffer(this.target);
+            ByteBuffer buf = this.target;
+            if (buf != null) {
+                if (buf.isDirect()) {
+                    // Try SmallBufferCache first; fall back to cleaner for non-small direct buffers
+                    if (!SmallBufferCache.freeDirect(buf) && ByteBufUtils.CLEANER != null) {
+                        ByteBufUtils.CLEANER.freeDirectBuffer(buf);
+                    }
+                } else if (buf.hasArray()) {
+                    // Return heap byte[] to SmallBufferCache (no-op for non-size-class arrays)
+                    SmallBufferCache.freeHeap(buf.array());
+                }
             }
         } finally {
             this.target = null;
@@ -168,15 +259,17 @@ class WrapByteBuffer extends AbstractByteBuf {
             copyBuffer = ByteBuffer.allocate(this.getMaxCapacity());
         }
 
-        this.target.clear();
+        ((Buffer) this.target).clear();
         copyBuffer.put(this.target);
-        WrapByteBuffer byteBuf = RecycleObjectPool.get(WrapByteBuffer.class, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer byteBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
         byteBuf.initBuffer(copyBuffer, true);
 
         byteBuf.writerIndex = this.writerIndex;
         byteBuf.markedWriterIndex = this.markedWriterIndex;
         byteBuf.readerIndex = this.readerIndex;
         byteBuf.markedReaderIndex = this.markedReaderIndex;
+        byteBuf.byteOrder = this.byteOrder;
+        byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
     }
 

@@ -65,6 +65,11 @@ public interface ByteBuf extends ByteChannel, ReferenceCounted {
         public boolean release(int decrement) {
             return false;
         }
+
+        @Override
+        public ByteBuf asReadOnly() {
+            return this;
+        }
     };
 
     static ByteBuf wrap(byte[] bytes) {
@@ -73,7 +78,7 @@ public interface ByteBuf extends ByteChannel, ReferenceCounted {
 
     static ByteBuf wrap(byte[] bytes, boolean asWrite) {
         Objects.requireNonNull(bytes, "bytes is null.");
-        WrapArrayBuffer buf = RecycleObjectPool.get(WrapArrayBuffer.class, WrapArrayBuffer.RECYCLE_HANDLER);
+        WrapArrayBuffer buf = RecycleObjectPool.get(WrapArrayBuffer.RECYCLE_INDEX, WrapArrayBuffer.RECYCLE_HANDLER);
         buf.initBuffer(bytes, asWrite);
         return buf;
     }
@@ -84,7 +89,7 @@ public interface ByteBuf extends ByteChannel, ReferenceCounted {
 
     static ByteBuf wrap(ByteBuffer buffer, boolean asWrite) {
         Objects.requireNonNull(buffer, "buffer is null.");
-        WrapByteBuffer buf = RecycleObjectPool.get(WrapByteBuffer.class, WrapByteBuffer.RECYCLE_HANDLER);
+        WrapByteBuffer buf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
         buf.initBuffer(buffer, asWrite);
         return buf;
     }
@@ -110,8 +115,8 @@ public interface ByteBuf extends ByteChannel, ReferenceCounted {
     /** 复制个 ByteBuf , 连同 buffer 的数据一起复制 */
     ByteBuf copy();
 
-    //    /** 返回只读模式的 ByteBuf。只读模式的 如果底层 */
-    //    ByteBuf asReadOnly();
+    /** Returns a read-only view of this buffer. Write operations on the returned buffer will throw {@link java.nio.ReadOnlyBufferException}. */
+    ByteBuf asReadOnly();
 
     /** 字节序 */
     ByteOrder order();
@@ -124,6 +129,16 @@ public interface ByteBuf extends ByteChannel, ReferenceCounted {
 
     /** 设置字节序 */
     ByteBuf order(ByteOrder newOrder);
+
+    /**
+     * 丢弃已读数据，回收已读数据占用的内存空间。
+     */
+    void discardReadBytes();
+
+    /**
+     * 将 buffer 从指定位置分割成两个，分割之后本来会被丢弃的内存会通过返回值的形式 return 出去。
+     */
+    ByteBuf sliceOff(int splitOffset);
 
     /** 释放 Buffer 占用的内存 */
     void free();
@@ -757,6 +772,6 @@ public interface ByteBuf extends ByteChannel, ReferenceCounted {
     /** implements {@link Channel} */
     @Override
     default boolean isOpen() {
-        return this.isFree();
+        return !this.isFree();
     }
 }

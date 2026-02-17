@@ -20,14 +20,41 @@ import java.util.Collections;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import net.hasor.cobble.logging.Logger;
 
 /**
  * A simplified ResourceLeakDetector based on Netty's implementation.
+ * Uses ThreadLocal sampling counter to avoid global AtomicInteger CAS contention.
  */
 public class ResourceLeakDetector<T> {
-    private static final ReferenceQueue<Object>   refQueue            = new ReferenceQueue<>();
-    private static final Set<DefaultResourceLeak> allLeaks            = Collections.newSetFromMap(new ConcurrentHashMap<>());
-    private static final AtomicBoolean            loggedTooManyActive = new AtomicBoolean();
+    private static final Logger                   logger            = Logger.getLogger(ResourceLeakDetector.class);
+    private static final Level                    level;
+    private static final int                      SAMPLING_INTERVAL = 128;
+    private static final int                      SAMPLING_MASK     = SAMPLING_INTERVAL - 1;
+    private static final ThreadLocal<int[]>       sampleCounter     = ThreadLocal.withInitial(() -> new int[] { 0 });
+    private static final ReferenceQueue<Object>   refQueue          = new ReferenceQueue<>();
+    private static final Set<DefaultResourceLeak> allLeaks          = Collections.newSetFromMap(new ConcurrentHashMap<>());
+
+    static {
+        String levelStr;
+        try {
+            levelStr = System.getProperty("neta.bytebuf.leakDetection", "simple");
+        } catch (SecurityException e) {
+            levelStr = "simple";
+        }
+        switch (levelStr.toLowerCase().trim()) {
+            case "disabled":
+                level = Level.DISABLED;
+                break;
+            case "paranoid":
+                level = Level.PARANOID;
+                break;
+            case "simple":
+            default:
+                level = Level.SIMPLE;
+                break;
+        }
+    }
 
     private final String resourceType;
 
@@ -39,9 +66,26 @@ public class ResourceLeakDetector<T> {
         this.resourceType = resourceType;
     }
 
+    public static Level getLevel() {
+        return level;
+    }
+
     public ResourceLeak open(T obj) {
-        reportLeak();
-        return new DefaultResourceLeak(obj);
+        if (level == Level.DISABLED) {
+            return NoopLeak.INSTANCE;
+        }
+        if (level == Level.SIMPLE) {
+            int[] counter = sampleCounter.get();
+            if ((counter[0]++ & SAMPLING_MASK) != 0) {
+                return NoopLeak.INSTANCE;
+            }
+            // Only check for leaked resources when we're about to create a new tracker
+            reportLeak();
+        } else {
+            // PARANOID mode: always report
+            reportLeak();
+        }
+        return new DefaultResourceLeak(obj, level == Level.PARANOID);
     }
 
     private void reportLeak() {
@@ -56,11 +100,18 @@ public class ResourceLeakDetector<T> {
 
             String records = ref.toString();
             if (records.isEmpty()) {
-                System.err.println("LEAK: " + resourceType + ".release() was not called before it's garbage-collected. Enable advanced leak detection to find out where the leak occurred.");
+                logger.error("LEAK: " + resourceType + ".release() was not called before it's garbage-collected. Enable advanced leak detection to find out where the leak occurred.");
             } else {
-                System.err.println("LEAK: " + resourceType + ".release() was not called before it's garbage-collected. See leak detection log for details." + System.lineSeparator() + records);
+                logger.error("LEAK: " + resourceType + ".release() was not called before it's garbage-collected. See leak detection log for details." + System.lineSeparator() + records);
             }
         }
+    }
+
+    /** Detection level: DISABLED skips all tracking, SIMPLE samples without stack traces, PARANOID tracks all with stack traces. */
+    public enum Level {
+        DISABLED,
+        SIMPLE,
+        PARANOID
     }
 
     public interface ResourceLeak {
@@ -71,13 +122,30 @@ public class ResourceLeakDetector<T> {
         boolean close();
     }
 
+    private static final class NoopLeak implements ResourceLeak {
+        static final NoopLeak INSTANCE = new NoopLeak();
+
+        @Override
+        public void record() {
+        }
+
+        @Override
+        public void record(Object hint) {
+        }
+
+        @Override
+        public boolean close() {
+            return true;
+        }
+    }
+
     private static final class DefaultResourceLeak extends PhantomReference<Object> implements ResourceLeak {
         private final String        creationRecord;
         private final AtomicBoolean freed;
 
-        DefaultResourceLeak(Object referent) {
+        DefaultResourceLeak(Object referent, boolean captureStackTrace) {
             super(referent, refQueue);
-            this.creationRecord = Record.getRecord();
+            this.creationRecord = captureStackTrace ? Record.getRecord() : "";
             this.freed = new AtomicBoolean(false);
             allLeaks.add(this);
         }

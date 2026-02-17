@@ -23,24 +23,40 @@ import net.hasor.cobble.ObjectUtils;
  * @version : 2022-11-01
  */
 final class RingArrayByteBuf extends AbstractByteBuf {
-    static    RecycleHandler<RingArrayByteBuf> RECYCLE_HANDLER = new RecycleHandler<RingArrayByteBuf>() {
+    static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleHandler<RingArrayByteBuf> RECYCLE_HANDLER = new RecycleHandler<RingArrayByteBuf>() {
         public RingArrayByteBuf create() {
             return new RingArrayByteBuf();
         }
 
         @Override
         public void free(RingArrayByteBuf tar) {
-            RecycleObjectPool.free(RingArrayByteBuf.class, tar);
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
     protected byte[]                           target;
+    private   int                              capacityMask;
 
     private RingArrayByteBuf() {
+    }
+
+    /** Round up to the next power of 2 (for bitwise index masking). */
+    private static int nextPowerOf2(int val) {
+        if (val <= 1)
+            return val;
+        int n = val - 1;
+        n |= n >>> 1;
+        n |= n >>> 2;
+        n |= n >>> 4;
+        n |= n >>> 8;
+        n |= n >>> 16;
+        return n + 1;
     }
 
     void initBuffer(ByteBufAllocator alloc, byte[] initData) {
         super.initByteBuf(alloc, initData.length);
         this.target = initData;
+        this.capacityMask = initData.length > 0 ? initData.length - 1 : 0;
         this.writerIndex = initData.length;
         this.markedWriterIndex = initData.length;
     }
@@ -48,8 +64,10 @@ final class RingArrayByteBuf extends AbstractByteBuf {
     // ------------------------------------------------------------------------
 
     void initBuffer(ByteBufAllocator alloc, int capacity) {
-        super.initByteBuf(alloc, ObjectUtils.checkPositiveOrZero(capacity, "capacity"));
-        this.target = new byte[capacity];
+        int roundedCapacity = capacity > 0 ? nextPowerOf2(capacity) : capacity;
+        super.initByteBuf(alloc, ObjectUtils.checkPositiveOrZero(roundedCapacity, "capacity"));
+        this.target = new byte[roundedCapacity];
+        this.capacityMask = roundedCapacity > 0 ? roundedCapacity - 1 : 0;
         this.writerIndex = 0;
         this.markedWriterIndex = 0;
     }
@@ -77,7 +95,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
 
-        int offsetSize = offset % this.getMaxCapacity();
+        int offsetSize = offset & this.capacityMask;
         this.target[offsetSize] = b;
     }
 
@@ -86,9 +104,9 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + srcLen) < maxCap) {
+        if ((offsetSize + srcLen) <= maxCap) {
             System.arraycopy(src, srcOffset, this.target, offsetSize, srcLen);
             return srcLen;
         } else {
@@ -111,7 +129,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
         srcLen = Math.min(src.remaining(), srcLen);
 
         if ((offsetSize + srcLen) <= maxCap) {
@@ -137,7 +155,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
         srcLen = Math.min(src.readableBytes(), srcLen);
 
         if ((offsetSize + srcLen) <= maxCap) {
@@ -162,7 +180,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
     protected byte _getByte(int offset) {
         checkFree();
 
-        int offsetSize = offset % this.getMaxCapacity();
+        int offsetSize = offset & this.capacityMask;
         return this.target[offsetSize];
     }
 
@@ -171,9 +189,9 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + dstLen) < maxCap) {
+        if ((offsetSize + dstLen) <= maxCap) {
             System.arraycopy(this.target, offsetSize, dst, dstOffset, dstLen);
             return dstLen;
         } else {
@@ -196,9 +214,9 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + dstLen) < maxCap) {
+        if ((offsetSize + dstLen) <= maxCap) {
             dst.put(this.target, offsetSize, dstLen);
             return dstLen;
         } else {
@@ -221,9 +239,9 @@ final class RingArrayByteBuf extends AbstractByteBuf {
         checkFree();
 
         int maxCap = this.getMaxCapacity();
-        int offsetSize = offset % maxCap;
+        int offsetSize = offset & this.capacityMask;
 
-        if ((offsetSize + dstLen) < maxCap) {
+        if ((offsetSize + dstLen) <= maxCap) {
             dst.writeBytes(this.target, offsetSize, dstLen);
             return dstLen;
         } else {
@@ -238,6 +256,220 @@ final class RingArrayByteBuf extends AbstractByteBuf {
                 return partA;
             }
         }
+    }
+
+    // ==========================================================================
+    // Optimized hot-path overrides: eliminate checkFree (AtomicInteger.get),
+    // ThreadLocal.get for TMP8, intermediate byte[] copy, and virtual dispatch.
+    // Ring buffer uses (offset & capacityMask) for index wrapping.
+    // ==========================================================================
+
+    @Override
+    public byte readByte() {
+        checkFree();
+        return this.target[nextReadableN(1) & this.capacityMask];
+    }
+
+    @Override
+    public void writeByte(byte n) {
+        checkFree();
+        this.target[nextWritableN(1) & this.capacityMask] = n;
+    }
+
+    @Override
+    public short readInt16() {
+        checkFree();
+        int idx = nextReadableN(2);
+        byte[] t = this.target;
+        int mask = this.capacityMask;
+        int maskedIdx = idx & mask;
+        // Fast path: data doesn't cross ring boundary
+        if (maskedIdx + 2 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+            return UnsafeMemory.getInt16(t, maskedIdx, bigEndian);
+        }
+        byte b0 = t[maskedIdx];
+        byte b1 = t[(idx + 1) & mask];
+        if (bigEndian) {
+            return (short) ((b0 << 8) | (b1 & 0xff));
+        } else {
+            return (short) ((b1 << 8) | (b0 & 0xff));
+        }
+    }
+
+    @Override
+    public void writeInt16(short n) {
+        checkFree();
+        int idx = nextWritableN(2);
+        byte[] t = this.target;
+        int mask = this.capacityMask;
+        int maskedIdx = idx & mask;
+        // Fast path: data doesn't cross ring boundary
+        if (maskedIdx + 2 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+            UnsafeMemory.putInt16(t, maskedIdx, n, bigEndian);
+            return;
+        }
+        if (bigEndian) {
+            t[idx & mask] = (byte) (n >> 8);
+            t[(idx + 1) & mask] = (byte) n;
+        } else {
+            t[idx & mask] = (byte) n;
+            t[(idx + 1) & mask] = (byte) (n >> 8);
+        }
+    }
+
+    @Override
+    public int readInt32() {
+        checkFree();
+        int idx = nextReadableN(4);
+        byte[] t = this.target;
+        int mask = this.capacityMask;
+        int maskedIdx = idx & mask;
+        // Fast path: data doesn't cross ring boundary
+        if (maskedIdx + 4 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+            return UnsafeMemory.getInt32(t, maskedIdx, bigEndian);
+        }
+        byte b0 = t[maskedIdx];
+        byte b1 = t[(idx + 1) & mask];
+        byte b2 = t[(idx + 2) & mask];
+        byte b3 = t[(idx + 3) & mask];
+        if (bigEndian) {
+            return (b0 << 24) | ((b1 & 0xff) << 16) | ((b2 & 0xff) << 8) | (b3 & 0xff);
+        } else {
+            return (b3 << 24) | ((b2 & 0xff) << 16) | ((b1 & 0xff) << 8) | (b0 & 0xff);
+        }
+    }
+
+    @Override
+    public void writeInt32(int n) {
+        checkFree();
+        int idx = nextWritableN(4);
+        byte[] t = this.target;
+        int mask = this.capacityMask;
+        int maskedIdx = idx & mask;
+        // Fast path: data doesn't cross ring boundary
+        if (maskedIdx + 4 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+            UnsafeMemory.putInt32(t, maskedIdx, n, bigEndian);
+            return;
+        }
+        if (bigEndian) {
+            t[idx & mask] = (byte) (n >> 24);
+            t[(idx + 1) & mask] = (byte) (n >> 16);
+            t[(idx + 2) & mask] = (byte) (n >> 8);
+            t[(idx + 3) & mask] = (byte) n;
+        } else {
+            t[idx & mask] = (byte) n;
+            t[(idx + 1) & mask] = (byte) (n >> 8);
+            t[(idx + 2) & mask] = (byte) (n >> 16);
+            t[(idx + 3) & mask] = (byte) (n >> 24);
+        }
+    }
+
+    @Override
+    public long readInt64() {
+        checkFree();
+        int idx = nextReadableN(8);
+        byte[] t = this.target;
+        int mask = this.capacityMask;
+        int maskedIdx = idx & mask;
+        // Fast path: data doesn't cross ring boundary
+        if (maskedIdx + 8 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+            return UnsafeMemory.getInt64(t, maskedIdx, bigEndian);
+        }
+        byte b0 = t[maskedIdx];
+        byte b1 = t[(idx + 1) & mask];
+        byte b2 = t[(idx + 2) & mask];
+        byte b3 = t[(idx + 3) & mask];
+        byte b4 = t[(idx + 4) & mask];
+        byte b5 = t[(idx + 5) & mask];
+        byte b6 = t[(idx + 6) & mask];
+        byte b7 = t[(idx + 7) & mask];
+        if (bigEndian) {
+            return ((long) b0 << 56) | ((long) (b1 & 0xff) << 48) | ((long) (b2 & 0xff) << 40) | ((long) (b3 & 0xff) << 32) | ((long) (b4 & 0xff) << 24) | ((long) (b5 & 0xff) << 16) | ((long) (b6 & 0xff) << 8) | ((long) (b7 & 0xff));
+        } else {
+            return ((long) b7 << 56) | ((long) (b6 & 0xff) << 48) | ((long) (b5 & 0xff) << 40) | ((long) (b4 & 0xff) << 32) | ((long) (b3 & 0xff) << 24) | ((long) (b2 & 0xff) << 16) | ((long) (b1 & 0xff) << 8) | ((long) (b0 & 0xff));
+        }
+    }
+
+    @Override
+    public void writeInt64(long n) {
+        checkFree();
+        int idx = nextWritableN(8);
+        byte[] t = this.target;
+        int mask = this.capacityMask;
+        int maskedIdx = idx & mask;
+        // Fast path: data doesn't cross ring boundary
+        if (maskedIdx + 8 <= t.length && UnsafeMemory.HAS_UNSAFE) {
+            UnsafeMemory.putInt64(t, maskedIdx, n, bigEndian);
+            return;
+        }
+        if (bigEndian) {
+            t[idx & mask] = (byte) (n >> 56);
+            t[(idx + 1) & mask] = (byte) (n >> 48);
+            t[(idx + 2) & mask] = (byte) (n >> 40);
+            t[(idx + 3) & mask] = (byte) (n >> 32);
+            t[(idx + 4) & mask] = (byte) (n >> 24);
+            t[(idx + 5) & mask] = (byte) (n >> 16);
+            t[(idx + 6) & mask] = (byte) (n >> 8);
+            t[(idx + 7) & mask] = (byte) n;
+        } else {
+            t[idx & mask] = (byte) n;
+            t[(idx + 1) & mask] = (byte) (n >> 8);
+            t[(idx + 2) & mask] = (byte) (n >> 16);
+            t[(idx + 3) & mask] = (byte) (n >> 24);
+            t[(idx + 4) & mask] = (byte) (n >> 32);
+            t[(idx + 5) & mask] = (byte) (n >> 40);
+            t[(idx + 6) & mask] = (byte) (n >> 48);
+            t[(idx + 7) & mask] = (byte) (n >> 56);
+        }
+    }
+
+    @Override
+    public int readBytes(byte[] dst, int off, int len) {
+        checkFree();
+        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(off, "off");
+        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        int minLen = Math.min(len, this.markedWriterIndex - this.readerIndex);
+        int idx = nextReadableN(minLen);
+        // delegate to existing _getBytes which handles wrap-around
+        _getBytes(idx, dst, off, minLen);
+        return minLen;
+    }
+
+    @Override
+    public int writeBytes(byte[] src, int off, int len) {
+        checkFree();
+        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        int minLen = Math.min(len, this.getMaxCapacity() - (this.writerIndex - this.markedReaderIndex));
+        int idx = nextWritableN(minLen);
+        // delegate to existing _putBytes which handles wrap-around
+        _putBytes(idx, src, off, minLen);
+        return minLen;
+    }
+
+    @Override
+    public void discardReadBytes() {
+        throw new UnsupportedOperationException("RingArrayByteBuf can not discardReadBytes");
+    }
+
+    @Override
+    public ByteBuf sliceOff(int splitOffset) {
+        if (splitOffset == 0) {
+            return ByteBuf.EMPTY;
+        }
+        if (splitOffset < 0 || splitOffset > this.capacity()) {
+            throw new IndexOutOfBoundsException();
+        }
+
+        byte[] sliceData = new byte[splitOffset];
+        this._getBytes(this.readerIndex, sliceData, 0, splitOffset);
+
+        this.readerIndex += splitOffset;
+        this.markedReaderIndex = Math.min(this.markedReaderIndex, this.readerIndex);
+
+        ByteBuffer newBuf = ByteBuffer.wrap(sliceData);
+        WrapByteBuffer slicedBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
+        slicedBuf.initBuffer(newBuf, false);
+        return slicedBuf;
     }
 
     @Override
@@ -262,13 +494,16 @@ final class RingArrayByteBuf extends AbstractByteBuf {
 
         byte[] copyArray = new byte[this.getMaxCapacity()];
         this._getBytes(this.markedReaderIndex, copyArray, 0, copyArray.length);
-        RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.class, RingArrayByteBuf.RECYCLE_HANDLER);
+        RingArrayByteBuf byteBuf = RecycleObjectPool.get(RingArrayByteBuf.RECYCLE_INDEX, RingArrayByteBuf.RECYCLE_HANDLER);
         byteBuf.initBuffer(this.alloc, copyArray);
 
-        byteBuf.writerIndex = this.writerIndex;
-        byteBuf.markedWriterIndex = this.markedWriterIndex;
-        byteBuf.readerIndex = this.readerIndex;
-        byteBuf.markedReaderIndex = this.markedReaderIndex;
+        int shift = this.markedReaderIndex;
+        byteBuf.markedReaderIndex = 0;
+        byteBuf.readerIndex = this.readerIndex - shift;
+        byteBuf.markedWriterIndex = this.markedWriterIndex - shift;
+        byteBuf.writerIndex = this.writerIndex - shift;
+        byteBuf.byteOrder = this.byteOrder;
+        byteBuf.bigEndian = this.bigEndian;
         return byteBuf;
     }
 
