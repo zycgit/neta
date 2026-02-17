@@ -1,7 +1,6 @@
 package net.hasor.neta.codec;
-import net.hasor.neta.channel.*;
-
 import java.util.List;
+import net.hasor.neta.channel.*;
 
 public class MyRcvToListProtoHandler implements ProtoHandler<String, String> {
 

@@ -15,6 +15,9 @@
  */
 package net.hasor.neta.channel.sctp;
 
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -22,26 +25,18 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.HandlerUtils;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import org.junit.Test;
-
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.List;
-
 import static net.hasor.neta.channel.AbstractSoTest.globalConf;
 import static net.hasor.neta.channel.AbstractSoTest.safePort;
 
 public class SctpNeta2NetaTest {
 
     private static ProtoInitializer addSctpListProtoStack(ProtoHandler<String, String> last) {
-        return ProtoHelper.typed(SctpMessage.class, ByteBuf.class)
-                .nextDecoder((ProtoHandler<SctpMessage, ByteBuf>) (context, src, dst) -> {
-                    while (src.hasMore()) {
-                        dst.offerMessage(src.takeMessage().getByteBuf());
-                    }
-                    return ProtoStatus.Next;
-                })
-                .nextDuplex("String", HandlerUtils::doDecoder1, HandlerUtils::doEncoder1)
-                .nextDecoder(last).build();
+        return ProtoHelper.typed(SctpMessage.class, ByteBuf.class).nextDecoder((ProtoHandler<SctpMessage, ByteBuf>) (context, src, dst) -> {
+            while (src.hasMore()) {
+                dst.offerMessage(src.takeMessage().getByteBuf());
+            }
+            return ProtoStatus.Next;
+        }).nextDuplex("String", HandlerUtils::doDecoder1, HandlerUtils::doEncoder1).nextDecoder(last).build();
     }
 
     private boolean checkSupport() {
@@ -79,7 +74,7 @@ public class SctpNeta2NetaTest {
 
         // server
         listen.waitAnyAccept();
-        
+
         // Find the channel accepted by server. 
         // Note: ID allocation depends on implementation, finding it might tricky if we don't know ID.
         // But NetListen usually has a way or we can check Neta context.
@@ -93,7 +88,7 @@ public class SctpNeta2NetaTest {
         // IDs are usually increasing. 
         // 1=ServerListen, 2=ClientChannel, 3=ServerAcceptedChannel (usually)
         server = (NetChannel) neta.getContext().findChannel(3);
-        
+
         if (server == null) {
             throw new RuntimeException("Server accepted channel not found ID=3");
         }

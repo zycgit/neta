@@ -71,7 +71,7 @@
             <dependency>
                 <groupId>net.hasor</groupId>
                 <artifactId>cobble-all</artifactId>
-                <version>4.8.2</version>
+                <version>4.8.5</version>
             </dependency>
 
             <!-- for Test -->

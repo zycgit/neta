@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import org.junit.Test;
-
 import java.util.Arrays;
 import java.util.List;
+import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

@@ -15,6 +15,9 @@
  */
 package net.hasor.neta.channel.sctp;
 
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.util.concurrent.atomic.AtomicBoolean;
 import com.sun.nio.sctp.SctpChannel;
 import com.sun.nio.sctp.SctpServerChannel;
 import net.hasor.cobble.StringUtils;
@@ -23,11 +26,6 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import org.junit.Test;
-
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import static net.hasor.neta.channel.AbstractSoTest.safePort;
 
 public class SctpNeta2JvmTest {
@@ -59,10 +57,10 @@ public class SctpNeta2JvmTest {
 
                 SctpChannel clientChannel = serverChannel.accept();
                 ByteBuffer buffer = ByteBuffer.allocate(4096);
-                
+
                 // wait for message
                 clientChannel.receive(buffer, null, null);
-                
+
                 buffer.flip();
                 byte[] byteArray = new byte[buffer.remaining()];
                 buffer.get(byteArray);
@@ -90,7 +88,7 @@ public class SctpNeta2JvmTest {
             dst.offerMessage(ByteBuf.wrap(data.getBytes()));
             return ProtoStatus.Next;
         }).build();
-        
+
         Future<NetChannel> future = neta.connectAsync(address, initializer, sctpConfig);
         NetChannel channel = future.get();
         channel.sendData("Hello SCTP");

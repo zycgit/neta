@@ -1,13 +1,12 @@
 package net.hasor.neta.channel.sctp;
 
-import com.sun.nio.sctp.SctpChannel;
-import com.sun.nio.sctp.SctpServerChannel;
-import org.junit.Test;
-
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import com.sun.nio.sctp.SctpChannel;
+import com.sun.nio.sctp.SctpServerChannel;
+import org.junit.Test;
 
 public class SctpSimpleTest {
     @Test
@@ -29,10 +28,10 @@ public class SctpSimpleTest {
                 server.bind(address);
                 System.out.println("Server bound at " + address);
                 serverStarted.countDown();
-                
+
                 SctpChannel client = server.accept();
                 System.out.println("Server accepted connection");
-                
+
                 ByteBuffer buf = ByteBuffer.allocate(1024);
                 client.receive(buf, null, null);
                 System.out.println("Server received data");
@@ -48,7 +47,7 @@ public class SctpSimpleTest {
         System.out.println("Client connecting...");
         boolean connected = client.connect(address);
         System.out.println("Client connected: " + connected);
-        
+
         System.out.println("Client sending...");
         client.send(ByteBuffer.wrap("hello".getBytes()), com.sun.nio.sctp.MessageInfo.createOutgoing(null, 0));
         System.out.println("Client sent");

@@ -1,4 +1,5 @@
 package net.hasor.neta.recycler;
+import java.util.concurrent.TimeUnit;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
@@ -7,8 +8,6 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import org.junit.Test;
-
-import java.util.concurrent.TimeUnit;
 
 public class MemTest {
     static boolean[] randomBoolean = new boolean[1000];

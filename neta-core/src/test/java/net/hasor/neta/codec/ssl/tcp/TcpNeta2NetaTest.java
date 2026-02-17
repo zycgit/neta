@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl.tcp;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.NetChannel;
@@ -24,11 +27,6 @@ import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import net.hasor.neta.codec.ssl.*;
 import org.junit.Test;
-
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.List;
-
 import static net.hasor.neta.codec.AbstractSoTest.*;
 
 /**

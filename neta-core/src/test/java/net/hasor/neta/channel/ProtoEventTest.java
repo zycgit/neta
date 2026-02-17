@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import org.junit.Test;
-
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

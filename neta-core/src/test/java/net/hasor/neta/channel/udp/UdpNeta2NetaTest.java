@@ -14,6 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.udp;
+import java.net.InetSocketAddress;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.NetChannel;
@@ -23,11 +26,6 @@ import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.codec.HandlerUtils;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import org.junit.Test;
-
-import java.net.InetSocketAddress;
-import java.util.ArrayList;
-import java.util.List;
-
 import static net.hasor.neta.channel.AbstractSoTest.globalConf;
 import static net.hasor.neta.channel.AbstractSoTest.safePort;
 

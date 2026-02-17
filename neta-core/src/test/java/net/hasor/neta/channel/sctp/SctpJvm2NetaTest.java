@@ -15,6 +15,10 @@
  */
 package net.hasor.neta.channel.sctp;
 
+import java.net.InetSocketAddress;
+import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.concurrent.atomic.AtomicBoolean;
 import com.sun.nio.sctp.MessageInfo;
 import com.sun.nio.sctp.SctpChannel;
 import net.hasor.cobble.StringUtils;
@@ -22,12 +26,6 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import org.junit.Test;
-
-import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.concurrent.atomic.AtomicBoolean;
-
 import static net.hasor.neta.channel.AbstractSoTest.globalConf;
 import static net.hasor.neta.channel.AbstractSoTest.safePort;
 

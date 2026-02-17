@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+import java.security.cert.X509Certificate;
 import javax.net.ssl.TrustManager;
 import javax.net.ssl.X509TrustManager;
-import java.security.cert.X509Certificate;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

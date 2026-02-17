@@ -14,13 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-import net.hasor.cobble.StringUtils;
-import net.hasor.neta.channel.*;
-import org.junit.Test;
-
 import java.io.InputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import net.hasor.cobble.StringUtils;
+import net.hasor.neta.channel.*;
+import org.junit.Test;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

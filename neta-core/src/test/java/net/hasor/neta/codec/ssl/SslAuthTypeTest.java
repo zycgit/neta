@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+import java.util.ArrayDeque;
+import java.util.Queue;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.virtual.VrtChannel;
@@ -21,9 +23,6 @@ import net.hasor.neta.channel.virtual.VrtListen;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import org.junit.Test;
-
-import java.util.ArrayDeque;
-import java.util.Queue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)

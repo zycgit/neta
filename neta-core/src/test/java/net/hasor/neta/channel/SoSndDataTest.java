@@ -14,11 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.nio.ByteBuffer;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.neta.bytebuf.ByteBuf;
 import org.junit.Test;
-
-import java.nio.ByteBuffer;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
