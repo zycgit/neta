@@ -18,7 +18,6 @@ description: 本文将会介绍 Neta 中的协议栈(ProtoStack)执行机制以�
 - `下行消息` 会被放入 ProtoStack 顶部的 SND_UP 或 Encoder 的 SRC 端点中，事件传播路径自顶向下。
 - 无论是 `上行消息` 还是 `下行消息` 最终的终点都是 ProtoStack 的底部输出节点（SND_DOWN 或 DST）
 
-
 ## 事件流转
 
 事件按照状态分为：常规、异常两类，它们通常按照如下方式进行流转。

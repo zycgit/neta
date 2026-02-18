@@ -33,7 +33,7 @@ public class DemoProtoHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
 ## 双工器
 
-双工器特点在于它可以同时处理上行/下行数据，这在实现一些复杂的协议中可以带来非常大的便利性。
+双工器特点在于它使用同一个方法来处理上行/下行事件，这在实现一些复杂的协议中可以带来非常大的便利性。
 
 一个双工器结构中包含四个端点分别是：RCV_UP、RCV_DOWN、SND_DOWN、SND_UP。
 
