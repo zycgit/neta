@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
+import java.util.Map;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.constant.HttpHeaderNames;
@@ -64,6 +65,8 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private              long         bytesRead                       = 0;
     private              boolean      chunked                         = false;
     private              int          currentChunkSize                = 0;
+    // For chunked trailer accumulation across partial reads
+    private              HttpHeaders  pendingTrailerHeaders;
 
     /** Creates a decoder with default limits. */
     public HttpResponseDecoder() {
@@ -286,13 +289,23 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 return true;
             }
 
-            headerBytes += line.length();
+            headerBytes += line.length() + 2; // +2 for CRLF
             if (headerBytes > maxHeaderSize) {
                 throw new IllegalStateException("HTTP headers too large: " + headerBytes + " > " + maxHeaderSize);
             }
 
-            // Handle obs-fold
+            // Handle obs-fold (RFC 7230 §3.2.4)
             if ((line.charAt(0) == ' ' || line.charAt(0) == '\t') && !headers.isEmpty()) {
+                // Append folded continuation to the last added header value
+                String continuation = ' ' + line.trim();
+                String lastKey = null;
+                for (Map.Entry<String, String> e : headers) {
+                    lastKey = e.getKey();
+                }
+                if (lastKey != null) {
+                    String existing = headers.get(lastKey);
+                    headers.set(lastKey, existing + continuation);
+                }
                 continue;
             }
 
@@ -465,7 +478,10 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     private boolean decodeChunkTrailer(ProtoSndQueue<HttpObject> dst) {
-        HttpHeaders trailingHeaders = new HttpHeaders();
+        if (pendingTrailerHeaders == null) {
+            pendingTrailerHeaders = new HttpHeaders();
+        }
+        HttpHeaders trailingHeaders = pendingTrailerHeaders;
 
         while (accumulator.hasLine()) {
             String line = accumulator.readLine(StandardCharsets.US_ASCII);
@@ -479,6 +495,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             if (line.isEmpty()) {
                 dst.offerMessage(new DefaultLastHttpContent(ByteBuf.EMPTY, trailingHeaders));
+                pendingTrailerHeaders = null;
                 currentState = State.DONE;
                 return true;
             }
@@ -503,6 +520,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         bytesRead = 0;
         chunked = false;
         currentChunkSize = 0;
+        pendingTrailerHeaders = null;
     }
 
     @Override
