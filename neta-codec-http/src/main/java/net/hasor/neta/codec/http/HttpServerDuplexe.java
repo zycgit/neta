@@ -1,0 +1,91 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.codec.http;
+
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.*;
+
+/**
+ * A server-side HTTP codec that combines {@link HttpRequestDecoder} and
+ * {@link HttpResponseEncoder} into a single bidirectional handler.
+ * <p>
+ * RCV direction: ByteBuf → HttpObject (request decoding)
+ * SND direction: HttpObject → ByteBuf (response encoding)
+ * <p>
+ * This is the Neta equivalent of Netty's {@code HttpServerCodec}.
+ * <p>Pipeline usage:</p>
+ * <pre>
+ *   ctx.addLast("http", new HttpServerCodec());
+ * </pre>
+ */
+public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
+
+    private final HttpRequestDecoder  decoder;
+    private final HttpResponseEncoder encoder;
+
+    /** Creates a server codec with default decoder limits. */
+    public HttpServerDuplexe() {
+        this.decoder = new HttpRequestDecoder();
+        this.encoder = new HttpResponseEncoder();
+    }
+
+    /**
+     * Creates a server codec with the specified decoder limits.
+     * @param maxInitialLineLength maximum length of the request-line
+     * @param maxHeaderSize maximum total size of all headers
+     * @param maxChunkSize maximum chunk size for content delivery
+     */
+    public HttpServerDuplexe(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
+        this.decoder = new HttpRequestDecoder(maxInitialLineLength, maxHeaderSize, maxChunkSize);
+        this.encoder = new HttpResponseEncoder();
+    }
+
+    @Override
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
+        if (isRcv) {
+            return decoder.onMessage(context, rcvUp, rcvDown);
+        } else {
+            return encoder.onMessage(context, sndUp, sndDown);
+        }
+    }
+
+    @Override
+    public void onInit(ProtoContext context) throws Throwable {
+        decoder.onInit(context);
+        encoder.onInit(context);
+    }
+
+    @Override
+    public void onActive(ProtoContext context) throws Throwable {
+        decoder.onActive(context);
+        encoder.onActive(context);
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        decoder.onClose(context);
+        encoder.onClose(context);
+    }
+
+    @Override
+    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        if (isRcv) {
+            return decoder.onError(context, e, eh);
+        } else {
+            return encoder.onError(context, e, eh);
+        }
+    }
+}
