@@ -57,10 +57,8 @@ class SoEventExecutor implements Closeable {
     public void close() {
         this.runTag.set(false);
 
+        // wake up workers without interrupting, let them drain remaining tasks gracefully
         for (Thread thread : this.workerThreads) {
-            if (!thread.isInterrupted()) {
-                thread.interrupt();
-            }
             LockSupport.unpark(thread);
         }
 
@@ -72,14 +70,15 @@ class SoEventExecutor implements Closeable {
                 break;
             }
             if (thread.isAlive()) {
+                thread.interrupt();
                 logger.info("wait workerThread close... (" + thread.getName() + ")");
             }
         }
 
-        // drain remaining tasks, fail their futures
+        // safety drain: run any tasks still remaining after workers exit
         TaskWorker<?> remaining;
         while ((remaining = this.tasks.poll()) != null) {
-            remaining.getFuture().failed(new IllegalStateException("Executor shut down"));
+            remaining.run();
         }
 
         logger.info("workerThread closed.");
@@ -100,6 +99,13 @@ class SoEventExecutor implements Closeable {
                 }
             }
         }
+
+        // graceful shutdown: drain and execute remaining tasks before exit
+        TaskWorker<?> poll;
+        while ((poll = this.tasks.poll()) != null) {
+            poll.run();
+        }
+
         logger.info("task thread exit, (" + Thread.currentThread().getName() + ")");
     }
 
@@ -110,13 +116,21 @@ class SoEventExecutor implements Closeable {
     }
 
     private <T> void submitSoTask(DefaultSoTask task, Future<T> future, T result) {
+        // reject new submissions after shutdown to prevent infinite task chains(e.g. receiveLoop re-submitting itself via onFinal listener)
+        if (!this.runTag.get()) {
+            future.failed(new IllegalStateException("Executor has been shut down, task rejected."));
+            return;
+        }
+
         TaskWorker<T> worker = new TaskWorker<>(this, task, future, result);
 
         int delayTime = task.getDelayTime();
         if (delayTime > 0) {
             this.timer.newTimeout(t -> {
-                this.tasks.add(worker);
-                wakeUp();
+                if (this.runTag.get()) {
+                    this.tasks.add(worker);
+                    wakeUp();
+                }
             }, delayTime, task.getDelayUnit());
         } else {
             this.tasks.add(worker);
