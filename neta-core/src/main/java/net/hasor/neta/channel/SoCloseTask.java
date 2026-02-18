@@ -50,7 +50,7 @@ class SoCloseTask extends DefaultSoTask {
                 boolean needWaiting = !netChannel.wContext.isEmpty();
 
                 // notifyRcv last message
-                if (!this.context.getConfig().isPrintLog()) {
+                if (this.context.getConfig().isPrintLog()) {
                     if (needWaiting) {
                         logger.info("channel(" + this.channelID + ") safe close form local, waiting send finish.");
                     } else {

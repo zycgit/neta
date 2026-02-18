@@ -17,7 +17,6 @@ package net.hasor.neta.channel;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * {@link ProtoRcvQueue}/{@link ProtoSndQueue} implements
@@ -25,17 +24,15 @@ import java.util.concurrent.CopyOnWriteArrayList;
  * @version : 2023-09-24
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
-    private final int      capacity;
-    private final List<T>  linkedList;
-    private final List<T>  offerTemp;
-    private final Class<?> elementArrayType;
-    protected     int      takeCount;
+    private final int     capacity;
+    private final List<T> linkedList;
+    private final List<T> offerTemp;
+    protected     int     takeCount;
 
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
-        this.linkedList = new CopyOnWriteArrayList<>();
-        this.offerTemp = new CopyOnWriteArrayList<>();
-        this.elementArrayType = this.linkedList.toArray().getClass().getComponentType();
+        this.linkedList = new ArrayList<>();
+        this.offerTemp = new ArrayList<>();
     }
 
     @Override
@@ -136,7 +133,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         int fixCnt = Math.min(cnt, this.queueSize());
-        return this.linkedList.subList(this.takeCount, this.takeCount + fixCnt);
+        return new ArrayList<>(this.linkedList.subList(this.takeCount, this.takeCount + fixCnt));
     }
 
     @Override

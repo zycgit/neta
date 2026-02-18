@@ -357,7 +357,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
      * @see SoConfig#getSoReadTimeoutMs()
      */
     public void setReadTimeout() {
-        SoConfig config = this.getListen().getConfig();
+        NetListen listen = this.getListen();
+        SoConfig config = listen != null ? listen.getConfig() : this.getConfig();
         if (config.getSoReadTimeoutMs() > 0) {
             this.setReadTimeout(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
         } else {
@@ -396,7 +397,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
      * @see SoConfig#getSoReadTimeoutMs()
      */
     public void waitReceive() throws InterruptedException, SoReadTimeoutException {
-        SoConfig config = this.getListen().getConfig();
+        NetListen listen = this.getListen();
+        SoConfig config = listen != null ? listen.getConfig() : this.getConfig();
         if (config.getSoReadTimeoutMs() > 0) {
             this.waitReceive(config.getSoReadTimeoutMs(), TimeUnit.MILLISECONDS);
         } else {

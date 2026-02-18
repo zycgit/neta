@@ -14,8 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
@@ -24,7 +24,7 @@ import java.util.function.Predicate;
  * @version : 2023-09-24
  */
 public abstract class SoAttrChannel<T> implements SoChannel<T> {
-    private final Map<String, Object> attributes = new HashMap<>();
+    private final Map<String, Object> attributes = new ConcurrentHashMap<>();
 
     @Override
     public void setAttribute(String key, Object value) {

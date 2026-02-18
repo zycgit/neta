@@ -175,9 +175,20 @@ public class SoContextService implements SoContext {
             ProtoStack<Object> protoStack = netChannel.protoStack;
             ProtoContextService protoCtx = netChannel.protoCtx;
 
-            protoStack.onInit(protoCtx);
-            if (!channel.isClose()) {
-                protoStack.onActive(protoCtx);
+            try {
+                protoStack.onInit(protoCtx);
+                if (!channel.isClose()) {
+                    protoStack.onActive(protoCtx);
+                }
+            } catch (Throwable e) {
+                // rollback: remove channel from maps on init failure
+                this.channelMap.remove(channel.getChannelId());
+                if (channel.isListen()) {
+                    this.listenList.remove(channel);
+                } else {
+                    this.channelList.remove(channel);
+                }
+                throw e;
             }
 
             if (!channel.isClose() && netChannel.getListen() != null) {
@@ -508,6 +519,7 @@ public class SoContextService implements SoContext {
                 }
 
                 this.channelMap.remove(channel.getChannelId());
+                this.channelList.remove(netChannel);
             }
 
             try {

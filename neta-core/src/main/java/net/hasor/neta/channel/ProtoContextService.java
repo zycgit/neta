@@ -17,6 +17,7 @@ package net.hasor.neta.channel;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
@@ -37,7 +38,7 @@ class ProtoContextService implements ProtoContext {
     ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
         this.soContext = soContext;
-        this.contextData = new HashMap<>();
+        this.contextData = new ConcurrentHashMap<>();
         this.chainRoot = new ProtoChainRoot(channel.getConfig());
         this.flash = new HashMap<>();
         this.namedHandlerMap = new HashMap<>();
@@ -170,7 +171,7 @@ class ProtoContextService implements ProtoContext {
     public void addFirst(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addFirst(SoUtils.generateName(decoder, decoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addFirst(SoUtils.generateName(decoder, encoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
     @Override
@@ -204,7 +205,7 @@ class ProtoContextService implements ProtoContext {
     public void addLast(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
-        this.addLast(SoUtils.generateName(decoder, decoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+        this.addLast(SoUtils.generateName(decoder, encoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
     @Override

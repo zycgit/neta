@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.channel.tcp.TcpChannel;
 
 /**
- * When {@link TcpChannel#shutdownInput()} called.
+ * When shutdownInput() called.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

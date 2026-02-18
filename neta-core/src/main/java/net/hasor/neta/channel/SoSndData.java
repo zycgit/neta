@@ -16,6 +16,7 @@
 package net.hasor.neta.channel;
 import java.io.Closeable;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -135,6 +136,6 @@ public class SoSndData {
 
     @Override
     public String toString() {
-        return "ChannelID " + this.result.getChannelId() + ", " + this.data.toString();
+        return "ChannelID " + this.result.getChannelId() + ", " + Arrays.toString(this.data);
     }
 }
