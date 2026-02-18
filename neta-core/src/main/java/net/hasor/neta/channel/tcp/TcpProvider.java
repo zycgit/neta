@@ -53,15 +53,14 @@ public class TcpProvider implements AsyncChannelProvider {
     @Override
     public void shutdown() {
         if (this.channelGroup != null) {
-            long t = System.currentTimeMillis();
             this.channelGroup.shutdown();
-            while (!this.channelGroup.isTerminated()) {
-                long cost = System.currentTimeMillis() - t;
-                if (cost > 3000) {
-                    t = System.currentTimeMillis();
+            try {
+                if (!this.channelGroup.awaitTermination(3, java.util.concurrent.TimeUnit.SECONDS)) {
                     logger.info("close channelGroup waiting...");
+                    this.channelGroup.awaitTermination(10, java.util.concurrent.TimeUnit.SECONDS);
                 }
-                ThreadUtils.sleep(50);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
 

@@ -28,6 +28,7 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
@@ -104,6 +105,9 @@ class SctpAsyncChannel implements AsyncChannel {
         if (this.selector != null) {
             IOUtils.closeQuietly(this.selector);
         }
+        if (this.receiveBuffer != null && ByteBufUtils.CLEANER != null) {
+            ByteBufUtils.CLEANER.freeDirectBuffer(this.receiveBuffer);
+        }
     }
 
     @Override
@@ -127,7 +131,7 @@ class SctpAsyncChannel implements AsyncChannel {
     private void completeConnect(ProtoInitializer initializer, Future<NetChannel> future, boolean startLoop) throws Throwable {
         net.hasor.neta.channel.sctp.SctpChannel netChannel =//
                 new net.hasor.neta.channel.sctp.SctpChannel(this.channelId, new NetMonitor(), null, initializer, this, this.context);
-        this.context.initChannel(netChannel, false);
+        this.context.initChannel(netChannel, true);
         future.completed(netChannel);
 
         this.channel.register(this.selector, SelectionKey.OP_READ, netChannel);
@@ -192,6 +196,9 @@ class SctpAsyncChannel implements AsyncChannel {
                 ee = new SoRcvException(e.getMessage(), e);
             }
             this.context.notifyRcvChannelException(this.channelId, false, ee);
+            if (isOpen()) {
+                startReceiveLoop();
+            }
         }
     }
 

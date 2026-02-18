@@ -49,24 +49,29 @@ public class NetManager extends AbstractNetManager {
     }
 
     protected AsyncChannelProvider findProvider(String protocol) throws IOException {
-        if (this.providerMap.containsKey(protocol)) {
-            return this.providerMap.get(protocol);
-        } else {
-            AsyncChannelProvider provider;
-            if (StringUtils.equalsIgnoreCase(TcpProvider.NAME, protocol)) {
-                provider = new TcpProvider(this);
-            } else if (StringUtils.equalsIgnoreCase(UdpProvider.NAME, protocol)) {
-                provider = new UdpProvider(this);
-            } else if (StringUtils.equalsIgnoreCase(VrtProvider.NAME, protocol)) {
-                provider = new VrtProvider(this);
-            } else if (StringUtils.equalsIgnoreCase(SctpProvider.NAME, protocol)) {
-                provider = new SctpProvider(this);
-            } else {
-                throw new UnsupportedOperationException("not support protocol : " + protocol);
-            }
-            this.providerMap.put(protocol, provider);
-            return provider;
+        AsyncChannelProvider existing = this.providerMap.get(protocol);
+        if (existing != null) {
+            return existing;
         }
+
+        AsyncChannelProvider provider;
+        if (StringUtils.equalsIgnoreCase(TcpProvider.NAME, protocol)) {
+            provider = new TcpProvider(this);
+        } else if (StringUtils.equalsIgnoreCase(UdpProvider.NAME, protocol)) {
+            provider = new UdpProvider(this);
+        } else if (StringUtils.equalsIgnoreCase(VrtProvider.NAME, protocol)) {
+            provider = new VrtProvider(this);
+        } else if (StringUtils.equalsIgnoreCase(SctpProvider.NAME, protocol)) {
+            provider = new SctpProvider(this);
+        } else {
+            throw new UnsupportedOperationException("not support protocol : " + protocol);
+        }
+
+        AsyncChannelProvider prev = this.providerMap.putIfAbsent(protocol, provider);
+        if (prev != null) {
+            return prev;
+        }
+        return provider;
     }
 
     /**

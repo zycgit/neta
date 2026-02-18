@@ -31,6 +31,9 @@ public abstract class AbstractNetManager {
     protected final      AtomicBoolean    shutdown;
 
     public AbstractNetManager(NetConfig config) {
+        if (!(this instanceof NetManager)) {
+            throw new IllegalStateException("AbstractNetManager must be extended by NetManager");
+        }
         this.config = config;
         this.context = new SoContextService(config, (NetManager) this);
         this.shutdown = new AtomicBoolean(false);

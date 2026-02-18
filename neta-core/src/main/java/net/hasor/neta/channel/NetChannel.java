@@ -313,12 +313,11 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
                 sendSize = sendSize + ((ByteBuffer) buf).remaining();
             } else if (buf instanceof ByteBuf) {
                 ByteBuf tmpBuf = (ByteBuf) buf;
-                sendSize = sendSize + ((ByteBuf) buf).readableBytes();
+                sendSize = sendSize + tmpBuf.readableBytes();
 
                 wrap[i] = this.soContext.getByteBufAllocator().buffer(tmpBuf.readableBytes());
                 ((ByteBuf) wrap[i]).writeBuffer(tmpBuf);
                 ((ByteBuf) wrap[i]).markWriter();
-                tmpBuf.markReader();
             } else {
                 wrap[i] = buf;
             }

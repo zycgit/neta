@@ -46,8 +46,8 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     private final          ProtoInitializer                      initializer;
     private final          SoContextService                      context;
     private final          SoConfig                              soConfig;
-    private                long                                  lastActiveTime;
-    private                long                                  lastAcceptTime;
+    private volatile       long                                  lastActiveTime;
+    private volatile       long                                  lastAcceptTime;
     private volatile       boolean                               suspend;
 
     protected NetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
@@ -137,7 +137,7 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
      */
     public NetChannel findChannel(long channelID) {
         SoChannel<?> channel = this.context.findChannel(channelID);
-        if (channel != null && ((NetChannel) channel).getListen() == this) {
+        if (channel instanceof NetChannel && ((NetChannel) channel).getListen() == this) {
             return (NetChannel) channel;
         } else {
             return null;
@@ -261,7 +261,13 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     final void notifyClose(NetChannel channel) {
         if (channel.getListen() == this) {
             this.lastActiveTime = System.currentTimeMillis();
-            this.acceptCount.decrementAndGet();
+            long count;
+            do {
+                count = this.acceptCount.get();
+                if (count <= 0) {
+                    break;
+                }
+            } while (!this.acceptCount.compareAndSet(count, count - 1));
 
             synchronized (this.closeLock) {
                 this.closeLock.notifyAll();

@@ -113,6 +113,11 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
             this.writeData(wContext);
         } else {
             this.writing.set(false);
+            // re-check: data may have arrived between isEmpty() and set(false)
+            if (!wContext.isEmpty() && this.writing.compareAndSet(false, true)) {
+                this.copyData(wContext);
+                this.writeData(wContext);
+            }
         }
     }
 
@@ -135,7 +140,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
 
     private void handleException(Throwable e, SoSndContext context) {
         if (e instanceof NotYetConnectedException) {
-            long costTimeMs = System.currentTimeMillis() - -this.monitor.getCreatedTime();
+            long costTimeMs = System.currentTimeMillis() - this.monitor.getCreatedTime();
             if (costTimeMs < this.connectTimeoutMs) {
                 if (logger.isDebugEnabled()) {
                     logger.debug("snd(" + this.channelId + ") NotYetConnected, write try again later.");

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel;
 import java.util.ArrayList;
-import java.util.LinkedList;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
@@ -28,8 +27,9 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 @SuppressWarnings({ "unchecked" })
 class ProtoChainRoot implements ProtoStack<Object> {
-    private static final Logger                      logger = Logger.getLogger(ProtoChainRoot.class);
-    private static final ByteBuf[]                   EMPTY  = new ByteBuf[0];
+    private static final Logger                      logger   = Logger.getLogger(ProtoChainRoot.class);
+    private static final ByteBuf[]                   EMPTY    = new ByteBuf[0];
+    private final        Object                      pipeLock = new Object();
     private final        ProtoQueue<Object>          tailRcvDown;
     private final        ProtoQueue<Object>          headSndDown;
     private              ProtoInvocation<?, ?, ?, ?> head;
@@ -117,6 +117,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
             while (current != null) {
                 try {
                     current.onInit(protoCtx);
+                } catch (Throwable e) {
+                    logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onInit error: " + e.getMessage(), e);
                 } finally {
                     current = current.next;
                 }
@@ -133,6 +135,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
             while (current != null) {
                 try {
                     current.onActive(protoCtx);
+                } catch (Throwable e) {
+                    logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onActive error: " + e.getMessage(), e);
                 } finally {
                     current = current.next;
                 }
@@ -184,7 +188,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
     }
 
-    private int takeSndDownToArray(ProtoInvocation<?, ?, ?, ?> current, LinkedList<Object[]> array) {
+    private int takeSndDownToArray(ProtoInvocation<?, ?, ?, ?> current, List<Object[]> array) {
         if (current.previous == null) {
             Object[] take = this.headSndDown.takeMessage(this.headSndDown.queueSize()).toArray();
             array.add(take);
@@ -200,35 +204,39 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // ------------------------------------------------------------
 
     @Override
-    public synchronized Object[] onRcvMessage(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
-        try {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
+    public Object[] onRcvMessage(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
+        synchronized (this.pipeLock) {
+            try {
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
 
-            if (this.head == null) {
-                return this.triggerRcvWithEmpty(protoCtx, rcvData);
-            } else {
-                return this.onRcvLife(protoCtx, stackName, rcvData);
+                if (this.head == null) {
+                    return this.triggerRcvWithEmpty(protoCtx, rcvData);
+                } else {
+                    return this.onRcvLife(protoCtx, stackName, rcvData);
+                }
+            } finally {
+                ((ProtoContextService) protoCtx).clearFlash();
             }
-        } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
     @Override
-    public synchronized Object[] onRcvError(ProtoContext protoCtx, String stackName, Throwable rcvError) throws Throwable {
-        try {
-            protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG, rcvError);
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
+    public Object[] onRcvError(ProtoContext protoCtx, String stackName, Throwable rcvError) throws Throwable {
+        synchronized (this.pipeLock) {
+            try {
+                protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG, rcvError);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
 
-            if (this.head == null) {
-                return this.triggerRcvWithEmpty(protoCtx, EMPTY);
-            } else {
-                return this.onRcvLife(protoCtx, stackName, null);
+                if (this.head == null) {
+                    return this.triggerRcvWithEmpty(protoCtx, EMPTY);
+                } else {
+                    return this.onRcvLife(protoCtx, stackName, null);
+                }
+            } finally {
+                ((ProtoContextService) protoCtx).clearFlash();
             }
-        } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
@@ -251,7 +259,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     private Object[] onRcvLife(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
-        LinkedList<Object[]> returnData = new LinkedList<>();
+        ArrayList<Object[]> returnData = new ArrayList<>();
         int arraySize = 0;
 
         boolean found = false;
@@ -355,41 +363,45 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // ------------------------------------------------------------
 
     @Override
-    public synchronized Object[] onSndMessage(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
-        try {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
+    public Object[] onSndMessage(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
+        synchronized (this.pipeLock) {
+            try {
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
 
-            if (this.tail == null) {
-                return sndData;
-            } else {
-                return this.doSndLife(protoCtx, stackName, sndData);
+                if (this.tail == null) {
+                    return sndData;
+                } else {
+                    return this.doSndLife(protoCtx, stackName, sndData);
+                }
+            } finally {
+                ((ProtoContextService) protoCtx).clearFlash();
             }
-        } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
     @Override
-    public synchronized Object[] onSndError(ProtoContext protoCtx, String stackName, Throwable sndError) throws Throwable {
-        try {
-            protoCtx.flash(ProtoInvocation.SND_ERROR_TAG, sndError);
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
+    public Object[] onSndError(ProtoContext protoCtx, String stackName, Throwable sndError) throws Throwable {
+        synchronized (this.pipeLock) {
+            try {
+                protoCtx.flash(ProtoInvocation.SND_ERROR_TAG, sndError);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
+                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
 
-            if (this.tail == null) {
-                this.triggerSend(protoCtx);
-                return EMPTY;
-            } else {
-                return this.doSndLife(protoCtx, stackName, null);
+                if (this.tail == null) {
+                    this.triggerSend(protoCtx);
+                    return EMPTY;
+                } else {
+                    return this.doSndLife(protoCtx, stackName, null);
+                }
+            } finally {
+                ((ProtoContextService) protoCtx).clearFlash();
             }
-        } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
     private Object[] doSndLife(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
-        LinkedList<Object[]> returnData = new LinkedList<>();
+        ArrayList<Object[]> returnData = new ArrayList<>();
         int arraySize = 0;
 
         boolean found = false;

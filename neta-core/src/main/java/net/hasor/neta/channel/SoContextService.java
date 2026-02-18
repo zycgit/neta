@@ -159,6 +159,10 @@ public class SoContextService implements SoContext {
         try {
             this.closeSyncLock.readLock().lock();
 
+            if (this.closeStatus) {
+                throw new SoException("context is closed, cannot init channel.");
+            }
+
             this.channelMap.put(channel.getChannelId(), channel);
             if (channel.isListen()) {
                 this.listenList.add((NetListen) channel);
@@ -243,7 +247,7 @@ public class SoContextService implements SoContext {
 
         if (!hasProcessed) {
             String msg = prefix + "(" + data.getSource().getChannelId() + ") There are no program at the tail of the ProtoStack, Skipping event: ";
-            logger.warn(msg + data.getData());
+            logger.debug(msg + data.getData());
         }
     }
 
@@ -293,20 +297,11 @@ public class SoContextService implements SoContext {
         }
 
         // wait all finish
-        while (true) {
-            boolean allFinish = true;
-
-            for (Future<?> future : waitFinish) {
-                allFinish = future.isDone();
-                if (!allFinish) {
-                    break;
-                }
-            }
-
-            if (!allFinish) {
-                ThreadUtils.sleep(300);
-            } else {
-                break;
+        for (Future<?> future : waitFinish) {
+            try {
+                future.get(3, java.util.concurrent.TimeUnit.SECONDS);
+            } catch (Exception e) {
+                // timeout or other error, continue to next
             }
         }
     }
@@ -532,6 +527,7 @@ public class SoContextService implements SoContext {
             IOUtils.closeQuietly(netListen.channel);
             netListen.closeStatus.set(true);
 
+            this.channelMap.remove(channel.getChannelId());
             this.listenList.remove(channel);
             logger.info("listen(" + channel.getChannelId() + ") closed, port :" + netListen.getListenPort());
         }

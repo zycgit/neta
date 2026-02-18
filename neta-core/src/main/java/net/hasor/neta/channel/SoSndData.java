@@ -65,7 +65,11 @@ public class SoSndData {
 
         int len = 0;
         do {
-            ByteBuf srcBuf = (ByteBuf) this.data[this.readIdx];
+            Object raw = this.data[this.readIdx];
+            if (!(raw instanceof ByteBuf)) {
+                throw new ClassCastException("SoSndData element at index " + this.readIdx + " is " + (raw == null ? "null" : raw.getClass().getName()) + ", expected ByteBuf. Ensure the protocol pipeline encodes all data to ByteBuf.");
+            }
+            ByteBuf srcBuf = (ByteBuf) raw;
             len += srcBuf.readBuffer(dst);
             srcBuf.markReader();
             if (srcBuf.readableBytes() == 0) {
@@ -81,7 +85,11 @@ public class SoSndData {
         }
 
         try {
-            ByteBuf srcBuf = (ByteBuf) this.data[this.readIdx];
+            Object raw = this.data[this.readIdx];
+            if (!(raw instanceof ByteBuf)) {
+                throw new ClassCastException("SoSndData element at index " + this.readIdx + " is " + (raw == null ? "null" : raw.getClass().getName()) + ", expected ByteBuf. Ensure the protocol pipeline encodes all data to ByteBuf.");
+            }
+            ByteBuf srcBuf = (ByteBuf) raw;
             byte[] bytes = srcBuf.asByteArray();
 
             srcBuf.skipReadableBytes(bytes.length);

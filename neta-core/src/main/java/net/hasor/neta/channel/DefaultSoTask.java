@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit;
  * @version : 2023-09-24
  */
 public abstract class DefaultSoTask implements Runnable {
-    private SoTaskStatus status;
+    private SoTaskStatus status = SoTaskStatus.Finish;
     private int          delayTime;
     private TimeUnit     delayUnit;
     private Exception    cause;

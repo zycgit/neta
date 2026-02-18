@@ -1,7 +1,11 @@
 package net.hasor.neta.channel.virtual;
 import java.lang.reflect.Array;
 import java.net.SocketException;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Random;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Predicate;
@@ -26,13 +30,13 @@ public class VrtTransfer {
         RANDOM = new Random(System.currentTimeMillis());
     }
 
-    private final NetManager                       manager;
-    private final Map<Long, List<VrtTransferLink>> distributeMap;
-    private final SubscribeHolder                  subscribeHolder;
-    private final boolean                          asynchronous;
-    private final AtomicBoolean                    closed;
-    private       int                              batchSize;
-    private       int                              lossRate;
+    private final    NetManager                       manager;
+    private final    Map<Long, List<VrtTransferLink>> distributeMap;
+    private final    SubscribeHolder                  subscribeHolder;
+    private final    boolean                          asynchronous;
+    private final    AtomicBoolean                    closed;
+    private volatile int                              batchSize;
+    private volatile int                              lossRate;
 
     /**
      * Constructor for VrtTransfer.
@@ -48,7 +52,7 @@ public class VrtTransfer {
      */
     public VrtTransfer(NetManager manager, boolean asynchronous) {
         this.manager = manager;
-        this.distributeMap = new LinkedHashMap<>();
+        this.distributeMap = new ConcurrentHashMap<>();
         this.asynchronous = asynchronous;
         this.batchSize = 1;
         this.lossRate = 0;
@@ -150,8 +154,8 @@ public class VrtTransfer {
 
             PlayLoad p = playLoad;
             if (playLoad.getData() instanceof ByteBuf) {
-                ByteBuf byteBuf = ((ByteBuf) playLoad.getData()).copy();
                 if (playLoad.isSuccess()) {
+                    ByteBuf byteBuf = ((ByteBuf) playLoad.getData()).copy();
                     p = PlayLoadObject.of(playLoad.getSource(), byteBuf, playLoad.isInbound(), playLoad.isOutbound());
                 } else {
                     p = PlayLoadObject.ofError(playLoad.getSource(), playLoad.getError(), playLoad.isInbound(), playLoad.isOutbound());

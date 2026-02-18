@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.sctp;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.InterruptedByTimeoutException;
 import java.nio.channels.ShutdownChannelGroupException;
@@ -37,6 +38,7 @@ class SctpWriteTask extends DefaultSoTask {
     private final   SoSndContext     wContext;
     //
     private         SctpMessage      sendData;
+    private         ByteBuffer       sndSwapBuf;
 
     public SctpWriteTask(NetChannel netChannel, SctpChannel channel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;
@@ -76,11 +78,16 @@ class SctpWriteTask extends DefaultSoTask {
         if (this.sendData != null) {
             try {
                 int readable = this.sendData.getByteBuf().readableBytes();
-                java.nio.ByteBuffer buf = java.nio.ByteBuffer.allocate(readable);
-                this.sendData.getByteBuf().readBuffer(buf);
-                buf.flip();
+                if (this.sndSwapBuf == null || this.sndSwapBuf.capacity() < readable) {
+                    this.sndSwapBuf = ByteBuffer.allocate(readable);
+                } else {
+                    this.sndSwapBuf.clear();
+                    this.sndSwapBuf.limit(readable);
+                }
+                this.sendData.getByteBuf().readBuffer(this.sndSwapBuf);
+                this.sndSwapBuf.flip();
 
-                int write = this.channel.send(buf, this.sendData.getInfo());
+                int write = this.channel.send(this.sndSwapBuf, this.sendData.getInfo());
                 if (write == 0) {
                     this.delayTask(50, TimeUnit.MILLISECONDS);
                     return;

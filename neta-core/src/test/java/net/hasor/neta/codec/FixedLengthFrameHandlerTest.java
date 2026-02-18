@@ -236,4 +236,82 @@ public class FixedLengthFrameHandlerTest {
         assert Objects.deepEquals(rcvData.poll().asByteArray(), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 });
         assert Objects.deepEquals(rcvData.poll().asByteArray(), new byte[] { 11, 12, 13, 14, 15, 16, 17, 18, 19, 20 });
     }
+
+    // ===========================================
+    // Data exactly equals fixedLength
+    // ===========================================
+
+    @Test
+    public void asDecoder_exactLength() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            FixedLengthFrameHandler handler = new FixedLengthFrameHandler(5);
+            ctx.addLastDecoder("", handler);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
+            ProtoHelper.standard().build().config(ctx);
+        }, VrtSoConfig.asClient());
+
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+
+        // exactly fixedLength -> 1 frame
+        client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5 }));
+        assert rcvData.size() == 1;
+        assert Objects.deepEquals(rcvData.poll().asByteArray(), new byte[] { 1, 2, 3, 4, 5 });
+    }
+
+    // ===========================================
+    // Data less than fixedLength
+    // ===========================================
+
+    @Test
+    public void asDecoder_lessThanLength() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            FixedLengthFrameHandler handler = new FixedLengthFrameHandler(10);
+            ctx.addLastDecoder("", handler);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
+            ProtoHelper.standard().build().config(ctx);
+        }, VrtSoConfig.asClient());
+
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+
+        // less than fixedLength -> no frame
+        client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3 }));
+        assert rcvData.isEmpty();
+    }
+
+    // ===========================================
+    // fixedLength = 1
+    // ===========================================
+
+    @Test
+    public void asDecoder_singleByte() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
+            FixedLengthFrameHandler handler = new FixedLengthFrameHandler(1);
+            ctx.addLastDecoder("", handler);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
+            ProtoHelper.standard().build().config(ctx);
+        }, VrtSoConfig.asClient());
+
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<ByteBuf> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+
+        client.sendData(ByteBuf.wrap(new byte[] { 10, 20, 30 }));
+        assert rcvData.size() == 3;
+        assert rcvData.poll().getByte(0) == 10;
+        assert rcvData.poll().getByte(0) == 20;
+        assert rcvData.poll().getByte(0) == 30;
+    }
 }

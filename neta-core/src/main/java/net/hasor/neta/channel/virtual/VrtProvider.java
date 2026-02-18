@@ -48,10 +48,10 @@ public class VrtProvider implements AsyncChannelProvider {
             }
 
             int listenPort = ((VrtSocketAddress) targetAddr).getAddress();
-            if (!this.listenPool.containsKey(listenPort)) {
+            VrtAsyncServerChannel target = this.listenPool.get(listenPort);
+            if (target == null) {
                 throw new SocketException("Connection refused, VrtListen(" + listenPort + ") is not exist.");
             } else {
-                VrtAsyncServerChannel target = this.listenPool.get(listenPort);
                 return new VrtAsyncChannel(channelId, target, context, targetAddr, vrtConfig);
             }
         } else {

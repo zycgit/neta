@@ -57,34 +57,29 @@ class SoEventExecutor implements Closeable {
     public void close() {
         this.runTag.set(false);
 
-        long t = System.currentTimeMillis();
-        while (true) {
-            int terminated = 0;
-
-            for (Thread thread : this.workerThreads) {
-                Thread.State ts = thread.getState();
-                if (!thread.isInterrupted()) {
-                    thread.interrupt();
-                }
-                if (ts == Thread.State.TIMED_WAITING || ts == Thread.State.WAITING) {
-                    LockSupport.unpark(thread);
-                }
-
-                if (ts == Thread.State.TERMINATED) {
-                    terminated++;
-                }
+        for (Thread thread : this.workerThreads) {
+            if (!thread.isInterrupted()) {
+                thread.interrupt();
             }
+            LockSupport.unpark(thread);
+        }
 
-            if (terminated == this.workerThreads.length) {
+        for (Thread thread : this.workerThreads) {
+            try {
+                thread.join(3000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
                 break;
             }
-
-            long cost = System.currentTimeMillis() - t;
-            if (cost > 3000) {
-                t = System.currentTimeMillis();
-                logger.info("wait workerThread close...");
+            if (thread.isAlive()) {
+                logger.info("wait workerThread close... (" + thread.getName() + ")");
             }
-            ThreadUtils.sleep(100);
+        }
+
+        // drain remaining tasks, fail their futures
+        TaskWorker<?> remaining;
+        while ((remaining = this.tasks.poll()) != null) {
+            remaining.getFuture().failed(new IllegalStateException("Executor shut down"));
         }
 
         logger.info("workerThread closed.");
@@ -131,11 +126,7 @@ class SoEventExecutor implements Closeable {
 
     private void wakeUp() {
         for (Thread workerThread : this.workerThreads) {
-            Thread.State ts = workerThread.getState();
-            if (ts == Thread.State.TIMED_WAITING || ts == Thread.State.WAITING) {
-                LockSupport.unpark(workerThread);
-                break;
-            }
+            LockSupport.unpark(workerThread);
         }
     }
 

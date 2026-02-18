@@ -131,6 +131,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             // rcv timeout
             SoReadTimeoutException err = new SoReadTimeoutException(e.getMessage(), e);
             context.notifyRcvChannelException(this.channelId, false, err);
+            this.read();
         } else {
             // rcv Exception
             SoRcvException err = new SoRcvException(e.getMessage(), e);

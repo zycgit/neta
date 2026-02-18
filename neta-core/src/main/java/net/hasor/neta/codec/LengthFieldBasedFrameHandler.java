@@ -55,7 +55,7 @@ import net.hasor.neta.channel.*;
  * BEFORE (16 bytes)                                AFTER (13 bytes)
  * +------+--------+------+----------------+        +------+----------------+
  * | HDR1 | Length | HDR2 | Actual Content | -----> | HDR2 | Actual Content |
- * | 0xCA | 0x0010 | 0xFE | "HELLO, WORLD" |        | 0xFE | "HELLO, WORLD" |
+ * | 0xCA | 0x000D | 0xFE | "HELLO, WORLD" |        | 0xFE | "HELLO, WORLD" |
  * +------+--------+------+----------------+        +------+----------------+
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
@@ -259,7 +259,7 @@ public class LengthFieldBasedFrameHandler implements ProtoHandler<ByteBuf, ByteB
             case 8:
                 return buf.getInt64(offset);
             default:
-                throw new CodecException("unsupported lengthFieldLength: " + lengthFieldLength + " (expected: 1, 2, 3, 4, or 8)");
+                throw new CodecException("unsupported lengthFieldLength: " + length + " (expected: 1, 2, 3, 4, or 8)");
         }
     }
 }

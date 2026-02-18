@@ -53,16 +53,16 @@ import net.hasor.neta.channel.*;
  * <b>Case 4</b>
  * <b>minLength</b>   = <b>5</b>
  * <b>maxLength</b>   = <b>10</b>
- * BEFORE (16 bytes)                     AFTER (15 bytes)
+ * BEFORE (16 bytes)                     AFTER (16 bytes)
  * +------------------------------+      +----------+---------+
- * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes | 5 bytes |
+ * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes | 6 bytes |
  * +------------------------------+      +----------+---------+
  * </pre>
  * <pre>
  * <b>Case 5</b>
  * <b>minLength</b>   = <b>10</b>
  * <b>maxLength</b>   = <b>10</b>
- * BEFORE (16 bytes)                     AFTER (15 bytes)
+ * BEFORE (16 bytes)                     AFTER (10 bytes)
  * +------------------------------+      +----------+
  * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes |
  * +------------------------------+      +----------+
@@ -119,7 +119,7 @@ public class LimitFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
                         dstBuf = context.byteBufAllocator().buffer(this.minLength, this.maxLength);
                     }
 
-                    int read = copy(buf, dstBuf, this.maxLength);
+                    copy(buf, dstBuf, this.maxLength);
                     if (dstBuf.writerIndex() == this.maxLength) {
                         dstBuf.markWriter();
                         dst.offerMessage(dstBuf);

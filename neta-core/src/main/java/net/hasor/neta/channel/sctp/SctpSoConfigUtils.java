@@ -43,9 +43,6 @@ class SctpSoConfigUtils {
     //SO_RCVBUF                     The size of the socket receive buffer
     //SO_LINGER                     Linger on close if data is present (when configured in blocking mode only)
 
-    //    private static final SctpSocketOption<Integer>        SO_SNDBUF = StandardSocketOptions.SO_SNDBUF;
-    //    private static final SctpSocketOption<Integer>        SO_RCVBUF = StandardSocketOptions.SO_RCVBUF;
-    //    private static final SctpSocketOption<Integer>        SO_LINGER = StandardSocketOptions.SO_LINGER;
     private static final SctpSocketOption<Boolean>        SCTP_DISABLE_FRAGMENTS;
     private static final SctpSocketOption<Boolean>        SCTP_EXPLICIT_COMPLETE;
     private static final SctpSocketOption<Integer>        SCTP_FRAGMENT_INTERLEAVE;
@@ -95,28 +92,7 @@ class SctpSoConfigUtils {
         }
     }
 
-    //    private static void configRcvSnd(SctpSoConfig config, SctpChannel channel) throws IOException {
-    //        Integer soRcvBuf = config.getSoRcvBuf();
-    //        Integer soSndBuf = config.getSoSndBuf();
-    //        if (soRcvBuf != null) {
-    //            try {
-    //                channel.setOption(SO_RCVBUF, soRcvBuf);
-    //            } catch (UnsupportedOperationException e) {
-    //                logger.warn("the platform does not support SO_RCVBUF");
-    //            }
-    //        }
-    //
-    //        if (soSndBuf != null) {
-    //            try {
-    //                channel.setOption(SO_SNDBUF, soSndBuf);
-    //            } catch (UnsupportedOperationException e) {
-    //                logger.warn("the platform does not support SO_SNDBUF");
-    //            }
-    //        }
-    //    }
-
     public static void configListen(SctpSoConfig config, SctpServerChannel channel) throws IOException {
-        //configRcvSnd(config, channel);
     }
 
     public static int getRcvPacketSize(SctpSoConfig config) {
@@ -131,21 +107,4 @@ class SctpSoConfigUtils {
 
         return Objects.requireNonNull(rcvPacketSize, "Both rcvPacketSize and rcvBufSize are missing. At least one of them must be set.");
     }
-
-    //    public static void configSocket(TcpSoConfig config, SctpServerChannel channel) throws IOException {
-    //        configRcvSnd(config, channel);
-    //
-    //        if (Boolean.TRUE.equals(config.getSoKeepAlive())) {
-    //            channel.setOption(TCP_KEEPIDLE, true);
-    //            if (config.getSoKeepIdleSec() != null && TCP_KEEPIDLE != null) {
-    //                channel.setOption(TCP_KEEPIDLE, config.getSoKeepIdleSec());
-    //            }
-    //            if (config.getSoKeepIntervalSec() != null && TCP_KEEPINTERVAL != null) {
-    //                channel.setOption(TCP_KEEPINTERVAL, config.getSoKeepIntervalSec());
-    //            }
-    //            if (config.getSoKeepCount() != null && TCP_KEEPCOUNT != null) {
-    //                channel.setOption(TCP_KEEPCOUNT, config.getSoKeepCount());
-    //            }
-    //        }
-    //    }
 }

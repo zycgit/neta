@@ -28,6 +28,7 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
@@ -61,6 +62,9 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
             logger.info("udpClientSide(" + this.getChannelId() + ") close.");
         }
         IOUtils.closeQuietly(this.readSelector);
+        if (ByteBufUtils.CLEANER != null) {
+            ByteBufUtils.CLEANER.freeDirectBuffer(this.receiveBuffer);
+        }
         super.close();
     }
 

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
-import java.util.ArrayList;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
@@ -67,69 +66,100 @@ public class LineBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
-        if (src.hasMore()) {
+        while (src.hasMore()) {
             List<ByteBuf> peekArray = src.peekMessage(src.queueSize());
-            while (src.hasMore()) {
-                ByteBuf line = this.expectLine(context, src, peekArray);
-                if (line != null) {
-                    dst.offerMessage(line);
-                } else {
-                    break;
-                }
+            ByteBuf line = this.expectLine(context, src, peekArray);
+            if (line != null) {
+                dst.offerMessage(line);
+            } else {
+                break;
             }
         }
         return ProtoStatus.Next;
     }
 
     private ByteBuf expectLine(ProtoContext ctx, ProtoRcvQueue<ByteBuf> src, List<ByteBuf> peekArray) {
-        List<ByteBuf> temp = new ArrayList<>();
-        boolean hasLine = false;
+        int lineOffset = -1;
         int consumedBytes = 0;
+        int lineBufferIndex = -1;
 
-        for (ByteBuf buf : peekArray) {
+        for (int i = 0; i < peekArray.size(); i++) {
+            ByteBuf buf = peekArray.get(i);
             consumedBytes += buf.readableBytes();
-            temp.add(buf);
 
-            if (buf.hasLine()) {
-                hasLine = true;
+            lineOffset = buf.expectLine();
+            if (lineOffset >= 0) {
+                lineBufferIndex = i;
                 break;
             }
         }
-        if (!hasLine) {
+
+        if (lineOffset < 0) {
             if (this.maxLength > 0 && consumedBytes > this.maxLength) {
                 throw new TooLongFrameException("frame length " + consumedBytes + " exceeds " + this.maxLength);
-            } else {
-                return null;
             }
+            return null;
         }
 
-        ByteBuf tmpBuf = ctx.byteBufAllocator().buffer(consumedBytes);
+        // Calculate content length (bytes before delimiter in the buffer that contains it)
+        ByteBuf lastBuf = peekArray.get(lineBufferIndex);
+        int contentLength = consumedBytes - lastBuf.readableBytes() + lineOffset;
 
-        int lastIndex = temp.size() - 1;
-        for (int i = 0; i < temp.size(); i++) {
-            ByteBuf buf = temp.get(i);
+        // Detect cross-buffer \r\n: \r at end of a preceding buffer, \n at position 0 of lastBuf
+        int crBufferIndex = -1;
+        if (lineBufferIndex > 0 && lineOffset == 0 && lastBuf.getUInt8(0) == '\n') {
+            for (int j = lineBufferIndex - 1; j >= 0; j--) {
+                ByteBuf prevBuf = peekArray.get(j);
+                if (prevBuf.readableBytes() > 0) {
+                    if (prevBuf.getUInt8(prevBuf.readableBytes() - 1) == '\r') {
+                        crBufferIndex = j;
+                    }
+                    break;
+                }
+            }
+        }
+        boolean crossBufferCrLf = crBufferIndex >= 0;
 
-            if (i != lastIndex) {
-                buf.readBuffer(tmpBuf);
+        // Actual content length excluding all delimiter chars
+        int actualContentLength = crossBufferCrLf ? contentLength - 1 : contentLength;
+        if (this.maxLength > 0 && actualContentLength > this.maxLength) {
+            throw new TooLongFrameException("frame length " + actualContentLength + " exceeds " + this.maxLength);
+        }
+
+        // Determine read/skip parameters for the last buffer
+        int readLen = lineOffset;
+        int skipLen = 0;
+        boolean lastBufDelimiterIsCr = lastBuf.getUInt8(lineOffset) == '\r';
+        if (this.stripDelimiter) {
+            skipLen = lastBufDelimiterIsCr ? 2 : 1;
+        } else {
+            readLen += lastBufDelimiterIsCr ? 2 : 1;
+        }
+
+        // Calculate exact allocation size to avoid over-allocation
+        int allocSize;
+        if (this.stripDelimiter) {
+            allocSize = actualContentLength;
+        } else {
+            allocSize = contentLength + (lastBufDelimiterIsCr ? 2 : 1);
+        }
+
+        ByteBuf tmpBuf = ctx.byteBufAllocator().buffer(Math.max(allocSize, 1));
+
+        for (int i = 0; i <= lineBufferIndex; i++) {
+            ByteBuf buf = peekArray.get(i);
+
+            if (i != lineBufferIndex) {
+                if (this.stripDelimiter && i == crBufferIndex) {
+                    // Cross-buffer \r\n: read content but skip the trailing \r
+                    buf.readBuffer(tmpBuf, buf.readableBytes() - 1);
+                    buf.skipReadableBytes(1);
+                } else {
+                    buf.readBuffer(tmpBuf);
+                }
                 buf.markReader();
                 src.skipMessage(1);
             } else {
-                int readLen = buf.expectLine();
-                int skipLen = 0;
-                if (this.stripDelimiter) {
-                    if (buf.getUInt8(readLen) == '\r') {
-                        readLen += 2;
-                    } else {
-                        readLen += 1;
-                    }
-                } else {
-                    if (buf.getUInt8(readLen) == '\r') {
-                        skipLen = 2;
-                    } else {
-                        skipLen = 1;
-                    }
-                }
-
                 buf.readBuffer(tmpBuf, readLen);
                 buf.skipReadableBytes(skipLen);
                 buf.markReader();

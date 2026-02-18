@@ -31,6 +31,7 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
@@ -84,6 +85,9 @@ class SctpAsyncServerChannel implements AsyncServerChannel {
         }
         this.channel.close();
         IOUtils.closeQuietly(this.selector);
+        if (ByteBufUtils.CLEANER != null) {
+            ByteBufUtils.CLEANER.freeDirectBuffer(this.receiveBuffer);
+        }
     }
 
     @Override
@@ -242,8 +246,9 @@ class SctpAsyncServerChannel implements AsyncServerChannel {
             this.context.initChannel(channel, true);
 
             //
-            channelMap.put(sctpChannel, channel);
-            channel.onClose(channelMap::remove);
+            final com.sun.nio.sctp.SctpChannel sctpKey = sctpChannel;
+            channelMap.put(sctpKey, channel);
+            channel.onClose(c -> channelMap.remove(sctpKey));
             return channel;
         } catch (Throwable e) {
             logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);
