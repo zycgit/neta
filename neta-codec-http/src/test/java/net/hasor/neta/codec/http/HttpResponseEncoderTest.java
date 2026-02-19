@@ -13,7 +13,7 @@ import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.constant.HttpStatus;
 import net.hasor.neta.codec.http.constant.HttpVersion;
 import org.junit.Test;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Tests for {@link HttpResponseEncoder}.
@@ -241,6 +241,149 @@ public class HttpResponseEncoderTest {
         String encoded = result.toString();
         assertTrue(encoded.contains("0\r\n"));
         assertTrue(encoded.contains("checksum: abc123\r\n"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Multi-chunk streamed encoding =========================
+
+    @Test
+    public void testEncodeMultiChunkStreamedResponse() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            ctx.addLastEncoder(new HttpResponseEncoder());
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Send response head
+        DefaultHttpResponse head = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
+        head.headers().add("Transfer-Encoding", "chunked");
+        client.sendData(head).get();
+
+        // Send multiple chunks
+        for (int i = 1; i <= 3; i++) {
+            String chunkData = "chunk" + i;
+            ByteBuf chunkBuf = ByteBufAllocator.DEFAULT.buffer(chunkData.length());
+            chunkBuf.writeString(chunkData, StandardCharsets.US_ASCII);
+            chunkBuf.markWriter();
+            client.sendData(new DefaultHttpContent(chunkBuf)).get();
+        }
+
+        // Send last chunk (empty body)
+        client.sendData(new DefaultLastHttpContent()).get();
+
+        // Collect all output
+        StringBuilder result = new StringBuilder();
+        Object msg;
+        while ((msg = rcvData.poll()) != null) {
+            result.append(readByteBuf((ByteBuf) msg));
+        }
+        String encoded = result.toString();
+
+        // Verify status line
+        assertTrue("should contain status line", encoded.contains("HTTP/1.1 200 OK\r\n"));
+        // Verify each chunk has proper size + CRLF + data + CRLF format
+        assertTrue("should contain chunk1", encoded.contains("6\r\nchunk1\r\n"));
+        assertTrue("should contain chunk2", encoded.contains("6\r\nchunk2\r\n"));
+        assertTrue("should contain chunk3", encoded.contains("6\r\nchunk3\r\n"));
+        // Verify last chunk marker
+        assertTrue("should contain last chunk marker (0\\r\\n\\r\\n)", encoded.contains("0\r\n\r\n"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Chunked encoder round-trip with decoder =========================
+
+    @Test
+    public void testChunkedEncoderDecoderRoundTrip() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpResponseDecoder());
+            ctx.addLastDecoder(new HttpObjectAggregator(1048576));
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            ctx.addLastEncoder(new HttpResponseEncoder());
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Streamed chunked encode → decode → aggregate
+        DefaultHttpResponse head = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
+        head.headers().add("Transfer-Encoding", "chunked");
+        head.headers().add("Content-Type", "text/plain");
+        client.sendData(head).get();
+
+        ByteBuf c1 = ByteBufAllocator.DEFAULT.buffer(16);
+        c1.writeString("Hello", StandardCharsets.US_ASCII);
+        c1.markWriter();
+        client.sendData(new DefaultHttpContent(c1)).get();
+
+        ByteBuf c2 = ByteBufAllocator.DEFAULT.buffer(16);
+        c2.writeString(" World", StandardCharsets.US_ASCII);
+        c2.markWriter();
+        client.sendData(new DefaultLastHttpContent(c2)).get();
+
+        assertEquals(1, rcvData.size());
+        FullHttpResponse decoded = (FullHttpResponse) rcvData.poll();
+        assertEquals(200, decoded.status().code());
+        ByteBuf content = decoded.content();
+        assertEquals("Hello World", content.readString(content.readableBytes(), StandardCharsets.US_ASCII));
+        // After aggregation, Transfer-Encoding should be removed and Content-Length set
+        assertTrue(decoded.headers().get("transfer-encoding") == null);
+        assertEquals("11", decoded.headers().get("content-length"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Streamed non-chunked encoding =========================
+
+    @Test
+    public void testEncodeStreamedNonChunked() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            ctx.addLastEncoder(new HttpResponseEncoder());
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Non-chunked streaming: Content-Length based
+        DefaultHttpResponse head = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
+        head.headers().add("Content-Length", "11");
+        client.sendData(head).get();
+
+        ByteBuf b1 = ByteBufAllocator.DEFAULT.buffer(8);
+        b1.writeString("Hello", StandardCharsets.US_ASCII);
+        b1.markWriter();
+        client.sendData(new DefaultHttpContent(b1)).get();
+
+        ByteBuf b2 = ByteBufAllocator.DEFAULT.buffer(8);
+        b2.writeString(" World", StandardCharsets.US_ASCII);
+        b2.markWriter();
+        client.sendData(new DefaultLastHttpContent(b2)).get();
+
+        // Collect all output
+        StringBuilder result = new StringBuilder();
+        Object msg;
+        while ((msg = rcvData.poll()) != null) {
+            result.append(readByteBuf((ByteBuf) msg));
+        }
+        String encoded = result.toString();
+
+        // Non-chunked: should NOT have chunk size markers
+        assertTrue(encoded.contains("HTTP/1.1 200 OK\r\n"));
+        assertTrue(encoded.contains("Hello World"));
+        assertFalse("non-chunked should NOT contain chunk size markers", encoded.contains("5\r\nHello\r\n"));
 
         neta.shutdown();
     }

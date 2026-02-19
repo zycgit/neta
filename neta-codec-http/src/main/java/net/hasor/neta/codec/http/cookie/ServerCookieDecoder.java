@@ -45,53 +45,117 @@ public final class ServerCookieDecoder {
             return null;
         }
 
-        String[] parts = setCookieHeader.split(";");
-        if (parts.length == 0) {
-            return null;
+        int length = setCookieHeader.length();
+
+        // Find first semicolon to isolate name=value pair
+        int firstSemi = setCookieHeader.indexOf(';');
+        int firstEnd = firstSemi < 0 ? length : firstSemi;
+
+        // Parse name=value (first token)
+        int eqIdx = setCookieHeader.indexOf('=');
+        if (eqIdx <= 0 || eqIdx >= firstEnd) {
+            throw new IllegalArgumentException("Invalid Set-Cookie header: missing '=' in name=value pair: " + setCookieHeader.substring(0, firstEnd));
         }
 
-        // First token is always name=value
-        String nvPair = parts[0].trim();
-        int eqIdx = nvPair.indexOf('=');
-        if (eqIdx <= 0) {
-            throw new IllegalArgumentException("Invalid Set-Cookie header: missing '=' in name=value pair: " + nvPair);
+        // Trim name
+        int nameStart = 0;
+        while (nameStart < eqIdx && setCookieHeader.charAt(nameStart) <= ' ') {
+            nameStart++;
         }
-        String name = nvPair.substring(0, eqIdx).trim();
-        String value = nvPair.substring(eqIdx + 1).trim();
+        int nameEnd = eqIdx;
+        while (nameEnd > nameStart && setCookieHeader.charAt(nameEnd - 1) <= ' ') {
+            nameEnd--;
+        }
+        String name = setCookieHeader.substring(nameStart, nameEnd);
+
+        // Trim value
+        int valStart = eqIdx + 1;
+        while (valStart < firstEnd && setCookieHeader.charAt(valStart) <= ' ') {
+            valStart++;
+        }
+        int valEnd = firstEnd;
+        while (valEnd > valStart && setCookieHeader.charAt(valEnd - 1) <= ' ') {
+            valEnd--;
+        }
+        String value = setCookieHeader.substring(valStart, valEnd);
+
+        // Unquote value if quoted
         if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
             value = value.substring(1, value.length() - 1);
         }
 
         DefaultCookie cookie = new DefaultCookie(name, value);
 
-        // Parse attributes
-        for (int i = 1; i < parts.length; i++) {
-            String attr = parts[i].trim();
-            if (attr.isEmpty()) {
-                continue;
+        // Parse attributes using indexOf-based iteration (avoids split() and array allocation)
+        int pos = firstSemi < 0 ? length : firstSemi + 1;
+        while (pos < length) {
+            int nextSemi = setCookieHeader.indexOf(';', pos);
+            int end = nextSemi < 0 ? length : nextSemi;
+
+            // Trim attribute
+            int start = pos;
+            while (start < end && setCookieHeader.charAt(start) <= ' ') {
+                start++;
             }
-            String attrLower = attr.toLowerCase();
-            if (attrLower.equals("secure")) {
-                cookie.setSecure(true);
-            } else if (attrLower.equals("httponly")) {
-                cookie.setHttpOnly(true);
-            } else if (attrLower.startsWith("domain=")) {
-                cookie.setDomain(attr.substring("domain=".length()).trim());
-            } else if (attrLower.startsWith("path=")) {
-                cookie.setPath(attr.substring("path=".length()).trim());
-            } else if (attrLower.startsWith("max-age=")) {
-                String maxAgeStr = attr.substring("max-age=".length()).trim();
-                try {
-                    cookie.setMaxAge(Long.parseLong(maxAgeStr));
-                } catch (NumberFormatException ignored) {
-                    // ignore malformed max-age
+            int attrEnd = end;
+            while (attrEnd > start && setCookieHeader.charAt(attrEnd - 1) <= ' ') {
+                attrEnd--;
+            }
+
+            if (start < attrEnd) {
+                int attrEq = setCookieHeader.indexOf('=', start);
+                if (attrEq < 0 || attrEq >= attrEnd) {
+                    // Flag attribute (no value) - use regionMatches for case-insensitive comparison
+                    int attrLen = attrEnd - start;
+                    if (attrLen == 6 && setCookieHeader.regionMatches(true, start, "secure", 0, 6)) {
+                        cookie.setSecure(true);
+                    } else if (attrLen == 8 && setCookieHeader.regionMatches(true, start, "httponly", 0, 8)) {
+                        cookie.setHttpOnly(true);
+                    }
+                } else {
+                    // key=value attribute - use regionMatches instead of toLowerCase().startsWith()
+                    int keyLen = attrEq - start;
+                    // Trim value boundaries (defer substring creation to matching branch)
+                    int aValStart = attrEq + 1;
+                    while (aValStart < attrEnd && setCookieHeader.charAt(aValStart) <= ' ') {
+                        aValStart++;
+                    }
+
+                    if (keyLen == 6 && setCookieHeader.regionMatches(true, start, "domain", 0, 6)) {
+                        cookie.setDomain(setCookieHeader.substring(aValStart, attrEnd));
+                    } else if (keyLen == 4 && setCookieHeader.regionMatches(true, start, "path", 0, 4)) {
+                        cookie.setPath(setCookieHeader.substring(aValStart, attrEnd));
+                    } else if (keyLen == 7 && setCookieHeader.regionMatches(true, start, "max-age", 0, 7)) {
+                        // Parse long directly without substring allocation
+                        long maxAge = 0;
+                        boolean negative = false;
+                        int mi = aValStart;
+                        if (mi < attrEnd && setCookieHeader.charAt(mi) == '-') {
+                            negative = true;
+                            mi++;
+                        }
+                        boolean valid = false;
+                        for (; mi < attrEnd; mi++) {
+                            char mc = setCookieHeader.charAt(mi);
+                            if (mc < '0' || mc > '9') {
+                                break;
+                            }
+                            maxAge = maxAge * 10 + (mc - '0');
+                            valid = true;
+                        }
+                        if (valid) {
+                            cookie.setMaxAge(negative ? -maxAge : maxAge);
+                        }
+                    } else if (keyLen == 7 && setCookieHeader.regionMatches(true, start, "expires", 0, 7)) {
+                        cookie.setExpires(setCookieHeader.substring(aValStart, attrEnd));
+                    } else if (keyLen == 8 && setCookieHeader.regionMatches(true, start, "samesite", 0, 8)) {
+                        cookie.setSameSite(setCookieHeader.substring(aValStart, attrEnd));
+                    }
+                    // Unknown attributes are silently ignored per RFC 6265
                 }
-            } else if (attrLower.startsWith("expires=")) {
-                cookie.setExpires(attr.substring("expires=".length()).trim());
-            } else if (attrLower.startsWith("samesite=")) {
-                cookie.setSameSite(attr.substring("samesite=".length()).trim());
             }
-            // Unknown attributes are silently ignored per RFC 6265
+
+            pos = nextSemi < 0 ? length : nextSemi + 1;
         }
 
         return cookie;

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
@@ -43,10 +42,8 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
         }
         int len = content.readableBytes();
         byte[] bytes = new byte[len];
-        // Read without advancing the reader index of the original buffer
-        for (int i = 0; i < len; i++) {
-            bytes[i] = content.getByte(content.readerIndex() + i);
-        }
+        // Bulk read without advancing the reader index of the original buffer
+        content.getBytes(content.readerIndex(), bytes, 0, len);
         return bytes;
     }
 
@@ -55,15 +52,15 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
         while (src.hasMore()) {
             WebSocketFrame frame = src.takeMessage();
             if (frame != null) {
-                dst.offerMessage(encodeFrame(frame));
+                dst.offerMessage(encodeFrame(context, frame));
             }
         }
         return ProtoStatus.Next;
     }
 
-    private ByteBuf encodeFrame(WebSocketFrame frame) {
-        byte[] payload = readPayload(frame.content());
-        int payloadLen = payload.length;
+    private ByteBuf encodeFrame(ProtoContext context, WebSocketFrame frame) {
+        ByteBuf content = frame.content();
+        int payloadLen = (content != null) ? content.readableBytes() : 0;
         boolean masked = frame.isMasked() && frame.maskingKey() != null;
         byte[] maskKey = masked ? frame.maskingKey() : null;
 
@@ -79,7 +76,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
         }
 
         int totalSize = headerSize + payloadLen;
-        ByteBuf out = ByteBufAllocator.DEFAULT.buffer(totalSize, Integer.MAX_VALUE);
+        ByteBuf out = context.byteBufAllocator().buffer(totalSize, Integer.MAX_VALUE);
 
         // Byte 0: FIN + opcode
         byte byte0 = (byte) ((frame.isFinalFragment() ? 0x80 : 0x00) | (frame.opcode().code() & 0x0F));
@@ -110,15 +107,27 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
             out.writeBytes(maskKey, 0, 4);
         }
 
-        // Payload (apply mask if required)
-        if (masked) {
-            byte[] maskedPayload = new byte[payloadLen];
-            for (int i = 0; i < payloadLen; i++) {
-                maskedPayload[i] = (byte) (payload[i] ^ maskKey[i % 4]);
+        // Payload
+        if (payloadLen > 0) {
+            if (masked) {
+                // For masked frames, we need a byte array for XOR
+                byte[] payload = readPayload(content);
+                int i = 0;
+                int len4 = payloadLen & ~3;
+                for (; i < len4; i += 4) {
+                    payload[i] ^= maskKey[0];
+                    payload[i + 1] ^= maskKey[1];
+                    payload[i + 2] ^= maskKey[2];
+                    payload[i + 3] ^= maskKey[3];
+                }
+                for (; i < payloadLen; i++) {
+                    payload[i] ^= maskKey[i & 3];
+                }
+                out.writeBytes(payload, 0, payloadLen);
+            } else {
+                // Direct ByteBuf-to-ByteBuf copy (avoids intermediate byte array)
+                content.getBuffer(0, out, payloadLen);
             }
-            out.writeBytes(maskedPayload, 0, maskedPayload.length);
-        } else {
-            out.writeBytes(payload, 0, payloadLen);
         }
 
         out.markWriter();

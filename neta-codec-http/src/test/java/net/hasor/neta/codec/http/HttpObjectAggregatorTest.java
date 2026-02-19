@@ -6,6 +6,9 @@ import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoExceptionHolder;
+import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -14,8 +17,7 @@ import net.hasor.neta.codec.http.constant.HttpMethod;
 import net.hasor.neta.codec.http.constant.HttpStatus;
 import net.hasor.neta.codec.http.constant.HttpVersion;
 import org.junit.Test;
-import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.*;
 
 /**
  * Tests for {@link HttpObjectAggregator}.
@@ -439,4 +441,107 @@ public class HttpObjectAggregatorTest {
 
         neta.shutdown();
     }
+
+    // ========================= Error-capturing aggregator helper =========================
+
+    @Test
+    public void testExceedMaxContentLengthFixed() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingAggregator aggregator = new ErrorCapturingAggregator(10);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpRequestDecoder());
+            ctx.addLastDecoder(aggregator);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Body is 20 bytes, exceeds maxContentLength=10
+        String body = "01234567890123456789";
+        String request = "POST /data HTTP/1.1\r\n" + "Host: x\r\n" + "Content-Length: " + body.length() + "\r\n" + "\r\n" + body;
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught content length exceeded error", aggregator.lastError);
+        assertTrue("Should be HttpContentTooLargeException", aggregator.lastError instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException);
+        assertTrue(aggregator.lastError.getMessage().contains("content length exceeds maximum"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Exceed maxContentLength with Content-Length body =========================
+
+    @Test
+    public void testExceedMaxContentLengthChunked() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingAggregator aggregator = new ErrorCapturingAggregator(10);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpRequestDecoder());
+            ctx.addLastDecoder(aggregator);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Chunked body total > 10 bytes
+        String request = "POST /data HTTP/1.1\r\n" + "Host: x\r\n" + "Transfer-Encoding: chunked\r\n" + "\r\n" + "8\r\n" + "12345678\r\n" + "8\r\n" + "abcdefgh\r\n" + "0\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught content length exceeded error", aggregator.lastError);
+        assertTrue("Should be HttpContentTooLargeException", aggregator.lastError instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException);
+        assertTrue(aggregator.lastError.getMessage().contains("content length exceeds maximum"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Exceed maxContentLength with chunked body =========================
+
+    @Test
+    public void testSmallMaxContentLength() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpRequestDecoder());
+            ctx.addLastDecoder(new HttpObjectAggregator(5)); // very small limit
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Body fits within 5 bytes
+        String request = "POST /data HTTP/1.1\r\n" + "Host: x\r\n" + "Content-Length: 3\r\n" + "\r\n" + "abc";
+        client.sendData(toByteBuf(request)).get();
+
+        assertEquals(1, rcvData.size());
+        FullHttpRequest fullReq = (FullHttpRequest) rcvData.poll();
+        ByteBuf c = fullReq.content();
+        assertEquals("abc", c.readString(c.readableBytes(), StandardCharsets.US_ASCII));
+
+        neta.shutdown();
+    }
+
+    // ========================= Small maxContentLength (less than 256, tests buffer init) =========================
+
+    private static class ErrorCapturingAggregator extends HttpObjectAggregator {
+        volatile Throwable lastError;
+
+        ErrorCapturingAggregator(int maxContentLength) {
+            super(maxContentLength);
+        }
+
+        @Override
+        public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+            lastError = e;
+            eh.clear();
+            return ProtoStatus.Stop;
+        }
+    }
+
 }

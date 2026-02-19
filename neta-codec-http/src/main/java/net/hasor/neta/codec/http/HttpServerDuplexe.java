@@ -54,38 +54,40 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
-        if (isRcv) {
-            return decoder.onMessage(context, rcvUp, rcvDown);
-        } else {
-            return encoder.onMessage(context, sndUp, sndDown);
-        }
-    }
-
-    @Override
     public void onInit(ProtoContext context) throws Throwable {
-        decoder.onInit(context);
-        encoder.onInit(context);
+        this.decoder.onInit(context);
+        this.encoder.onInit(context);
     }
 
     @Override
     public void onActive(ProtoContext context) throws Throwable {
-        decoder.onActive(context);
-        encoder.onActive(context);
+        this.decoder.onActive(context);
+        this.encoder.onActive(context);
     }
 
     @Override
-    public void onClose(ProtoContext context) {
-        decoder.onClose(context);
-        encoder.onClose(context);
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
+            ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
+            ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
+        if (isRcv) {
+            return this.decoder.onMessage(context, rcvUp, rcvDown);
+        } else {
+            return this.encoder.onMessage(context, sndUp, sndDown);
+        }
     }
 
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
-            return decoder.onError(context, e, eh);
+            return this.decoder.onError(context, e, eh);
         } else {
-            return encoder.onError(context, e, eh);
+            return this.encoder.onError(context, e, eh);
         }
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        this.decoder.onClose(context);
+        this.encoder.onClose(context);
     }
 }

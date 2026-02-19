@@ -36,6 +36,9 @@ import net.hasor.neta.codec.http.constant.HttpHeaderValues;
  * <p>
  * For {@link FullHttpResponse}, the complete message (status-line + headers + body) is
  * encoded in a single call.
+ * <p><b>Thread safety:</b> This handler maintains internal state ({@code chunkedEncoding})
+ * and is intended to be used per-connection. Do not share a single instance across
+ * multiple connections/pipelines.
  * <p>Pipeline usage:</p>
  * <pre>
  *   ctx.addLastEncoder("http-response", new HttpResponseEncoder());
@@ -75,7 +78,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
      * Encodes a complete HTTP response (status-line + headers + body) into bytes.
      */
     private void encodeFullResponse(ProtoContext context, FullHttpResponse response, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf buf = context.byteBufAllocator().buffer(256);
+        ByteBuf buf = context.byteBufAllocator().buffer(256, Integer.MAX_VALUE);
 
         // Status-line: VERSION SP STATUS SP REASON CRLF
         writeStatusLine(buf, response);
@@ -102,14 +105,14 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
      * Encodes the status-line and headers.
      */
     private void encodeResponseHead(ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf buf = context.byteBufAllocator().buffer(256);
+        ByteBuf buf = context.byteBufAllocator().buffer(256, Integer.MAX_VALUE);
 
         // Status-line
         writeStatusLine(buf, response);
 
         // Determine if chunked
         String te = response.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-        chunkedEncoding = te != null && te.toLowerCase().contains(HttpHeaderValues.CHUNKED);
+        chunkedEncoding = te != null && HttpHeaders.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
 
         // Headers
         writeHeaders(buf, response.headers());
@@ -197,7 +200,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private void writeStatusLine(ByteBuf buf, HttpResponse response) {
         buf.writeString(response.protocolVersion().text(), StandardCharsets.US_ASCII);
         buf.writeBytes(SP, 0, SP.length);
-        buf.writeString(String.valueOf(response.status().code()), StandardCharsets.US_ASCII);
+        buf.writeString(response.status().codeAsString(), StandardCharsets.US_ASCII);
         buf.writeBytes(SP, 0, SP.length);
         buf.writeString(response.status().reasonPhrase(), StandardCharsets.US_ASCII);
         buf.writeBytes(CRLF, 0, CRLF.length);

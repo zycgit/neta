@@ -6,6 +6,9 @@ import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoExceptionHolder;
+import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -642,5 +645,338 @@ public class HttpRequestDecoderTest {
         assertEquals("ABCDEFGHIJ", content.readString(content.readableBytes(), StandardCharsets.US_ASCII));
 
         neta.shutdown();
+    }
+
+    // ========================= Error-capturing decoder helper =========================
+
+    @Test
+    public void testRequestLineTooLong() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(20, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Request line is 48 chars, exceeds maxInitialLineLength=20
+        String request = "GET /this-is-a-very-long-uri-path HTTP/1.1\r\n" + "Host: x\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught request line too long error", decoder.lastError);
+        assertTrue("Should be HttpInitialLineTooLongException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpInitialLineTooLongException);
+        assertTrue(decoder.lastError.getMessage().contains("request line too long"));
+        // No valid request should be produced
+        for (Object msg : rcvData) {
+            assertFalse("Should NOT receive HttpRequest", msg instanceof HttpRequest);
+        }
+
+        neta.shutdown();
+    }
+
+    // ========================= Request line too long =========================
+
+    @Test
+    public void testHeadersTooLarge() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(4096, 50, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Each header line: ~20 bytes + 2 CRLF = ~22 bytes. Three headers > 50 bytes
+        String request = "GET / HTTP/1.1\r\n" + "Host: www.example.com\r\n" + "Accept: text/html\r\n" + "User-Agent: TestClient\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught headers too large error", decoder.lastError);
+        assertTrue("Should be HttpHeaderTooLargeException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpHeaderTooLargeException);
+        assertTrue(decoder.lastError.getMessage().contains("HTTP headers too large"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Headers too large =========================
+
+    @Test
+    public void testInvalidRequestLineNoVersion() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // Missing HTTP version
+        String request = "GET /path\r\n" + "Host: x\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught invalid request line error", decoder.lastError);
+        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpMalformedRequestException);
+        assertTrue(decoder.lastError.getMessage().contains("invalid request line"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Invalid request line: missing version =========================
+
+    @Test
+    public void testInvalidRequestLineNoSpaces() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // Completely malformed request line
+        String request = "GARBAGE\r\n" + "Host: x\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught invalid request line error", decoder.lastError);
+        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpMalformedRequestException);
+        assertTrue(decoder.lastError.getMessage().contains("invalid request line"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Invalid request line: no spaces at all =========================
+
+    @Test
+    public void testInvalidChunkSizeNonHex() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // "XYZ" is not valid hex
+        String request = "POST /data HTTP/1.1\r\n" + "Host: x\r\n" + "Transfer-Encoding: chunked\r\n" + "\r\n" + "XYZ\r\n" + "Hello\r\n" + "0\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught invalid chunk size error", decoder.lastError);
+        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpMalformedRequestException);
+        assertTrue(decoder.lastError.getMessage().contains("invalid chunk size"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Invalid chunk size (non-hex) =========================
+
+    @Test
+    public void testNegativeContentLength() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        String request = "POST /data HTTP/1.1\r\n" + "Host: x\r\n" + "Content-Length: -5\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught negative Content-Length error", decoder.lastError);
+        assertTrue("Should be HttpContentTooLargeException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException);
+        assertTrue(decoder.lastError.getMessage().contains("negative Content-Length"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Negative Content-Length =========================
+
+    @Test
+    public void testPipeliningMultipleRequests() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpRequestDecoder());
+            ctx.addLastDecoder(new HttpObjectAggregator(1048576));
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Three requests in a single buffer (HTTP pipelining)
+        String req1 = "GET /first HTTP/1.1\r\n" + "Host: example.com\r\n" + "Connection: keep-alive\r\n" + "\r\n";
+        String req2 = "POST /second HTTP/1.1\r\n" + "Host: example.com\r\n" + "Connection: keep-alive\r\n" + "Content-Length: 5\r\n" + "\r\n" + "hello";
+        String req3 = "GET /third HTTP/1.1\r\n" + "Host: example.com\r\n" + "Connection: close\r\n" + "\r\n";
+        // Send all three pipelined in a single buffer
+        client.sendData(toByteBuf(req1 + req2 + req3)).get();
+
+        assertEquals("Should decode all 3 pipelined requests", 3, rcvData.size());
+
+        FullHttpRequest decoded1 = (FullHttpRequest) rcvData.poll();
+        assertEquals(HttpMethod.GET, decoded1.method());
+        assertEquals("/first", decoded1.uri());
+        assertEquals(0, decoded1.content().readableBytes());
+
+        FullHttpRequest decoded2 = (FullHttpRequest) rcvData.poll();
+        assertEquals(HttpMethod.POST, decoded2.method());
+        assertEquals("/second", decoded2.uri());
+        ByteBuf body2 = decoded2.content();
+        assertEquals("hello", body2.readString(body2.readableBytes(), StandardCharsets.US_ASCII));
+
+        FullHttpRequest decoded3 = (FullHttpRequest) rcvData.poll();
+        assertEquals(HttpMethod.GET, decoded3.method());
+        assertEquals("/third", decoded3.uri());
+
+        neta.shutdown();
+    }
+
+    // ========================= Pipelining: multiple keep-alive requests in single buffer =========================
+
+    @Test
+    public void testPipeliningMixedRequests() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpRequestDecoder());
+            ctx.addLastDecoder(new HttpObjectAggregator(1048576));
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // GET followed by chunked POST, all in one buffer
+        String req1 = "GET /api/status HTTP/1.1\r\n" + "Host: example.com\r\n" + "\r\n";
+        String req2 = "POST /api/upload HTTP/1.1\r\n" + "Host: example.com\r\n" + "Transfer-Encoding: chunked\r\n" + "\r\n" + "5\r\nHello\r\n" + "6\r\n World\r\n" + "0\r\n" + "\r\n";
+        client.sendData(toByteBuf(req1 + req2)).get();
+
+        assertEquals("Should decode both pipelined requests", 2, rcvData.size());
+
+        FullHttpRequest decoded1 = (FullHttpRequest) rcvData.poll();
+        assertEquals(HttpMethod.GET, decoded1.method());
+        assertEquals("/api/status", decoded1.uri());
+
+        FullHttpRequest decoded2 = (FullHttpRequest) rcvData.poll();
+        assertEquals(HttpMethod.POST, decoded2.method());
+        assertEquals("/api/upload", decoded2.uri());
+        ByteBuf body = decoded2.content();
+        assertEquals("Hello World", body.readString(body.readableBytes(), StandardCharsets.US_ASCII));
+
+        neta.shutdown();
+    }
+
+    // ========================= Pipelining: mixed GET and chunked POST =========================
+
+    @Test
+    public void testObsFoldHeaderContinuation() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpRequestDecoder());
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Header with obs-fold continuation (leading whitespace on continuation line)
+        String request = "GET /fold HTTP/1.1\r\n" + "Host: example.com\r\n" + "X-Long-Header: first-part\r\n" + " second-part\r\n" + "\tsecond-tab-part\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertTrue(rcvData.size() >= 1);
+        HttpRequest req = (HttpRequest) rcvData.poll();
+        String headerValue = req.headers().get("x-long-header");
+        // obs-fold should be replaced with SP and appended
+        assertTrue("obs-fold continuation should be appended", headerValue.contains("first-part"));
+        assertTrue("obs-fold continuation should contain second-part", headerValue.contains("second-part"));
+        assertTrue("obs-fold continuation should contain second-tab-part", headerValue.contains("second-tab-part"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Obs-fold header continuation (RFC 7230 §3.2.4) =========================
+
+    @Test
+    public void testInvalidHeaderLineNoColon() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // Header line without colon
+        String request = "GET / HTTP/1.1\r\n" + "InvalidHeader\r\n" + "\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught invalid header line error", decoder.lastError);
+        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpMalformedRequestException);
+        assertTrue(decoder.lastError.getMessage().contains("invalid header line"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Invalid header line (no colon) =========================
+
+    @Test
+    public void testEmptyChunkSize() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingRequestDecoder decoder = new ErrorCapturingRequestDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // Empty chunk size line
+        String request = "POST /data HTTP/1.1\r\n" + "Host: x\r\n" + "Transfer-Encoding: chunked\r\n" + "\r\n" + "\r\n" + "Hello\r\n";
+        client.sendData(toByteBuf(request)).get();
+
+        assertNotNull("Should have caught empty chunk size error", decoder.lastError);
+        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpMalformedRequestException);
+        assertTrue(decoder.lastError.getMessage().contains("empty chunk size"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Empty chunk size =========================
+
+    private static class ErrorCapturingRequestDecoder extends HttpRequestDecoder {
+        volatile Throwable lastError;
+
+        ErrorCapturingRequestDecoder(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
+            super(maxInitialLineLength, maxHeaderSize, maxChunkSize);
+        }
+
+        @Override
+        public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+            lastError = e;
+            eh.clear();
+            return ProtoStatus.Stop;
+        }
     }
 }

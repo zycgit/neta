@@ -36,6 +36,9 @@ import net.hasor.neta.codec.http.constant.HttpHeaderValues;
  * <p>
  * For {@link FullHttpRequest}, the complete message (request-line + headers + body) is
  * encoded in a single call.
+ * <p><b>Thread safety:</b> This handler maintains internal state ({@code chunkedEncoding})
+ * and is intended to be used per-connection. Do not share a single instance across
+ * multiple connections/pipelines.
  * <p>Pipeline usage:</p>
  * <pre>
  *   ctx.addLastEncoder("http-request", new HttpRequestEncoder());
@@ -114,7 +117,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
 
         // Determine if chunked
         String te = request.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-        chunkedEncoding = te != null && te.toLowerCase().contains(HttpHeaderValues.CHUNKED);
+        chunkedEncoding = te != null && HttpHeaders.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
 
         // Headers
         writeHeaders(buf, request.headers());

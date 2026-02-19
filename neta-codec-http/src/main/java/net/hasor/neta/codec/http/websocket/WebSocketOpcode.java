@@ -33,6 +33,15 @@ public enum WebSocketOpcode {
     /** Pong control frame (opcode 0xA). */
     PONG(0xA);
 
+    /** Lookup table for O(1) opcode resolution (WebSocket opcodes are 0x0-0xF). */
+    private static final WebSocketOpcode[] LOOKUP = new WebSocketOpcode[16];
+
+    static {
+        for (WebSocketOpcode op : values()) {
+            LOOKUP[op.code] = op;
+        }
+    }
+
     private final int code;
 
     WebSocketOpcode(int code) {
@@ -45,10 +54,8 @@ public enum WebSocketOpcode {
      * @return the matching constant, or {@code null} if unknown
      */
     public static WebSocketOpcode of(int code) {
-        for (WebSocketOpcode op : values()) {
-            if (op.code == code) {
-                return op;
-            }
+        if (code >= 0 && code < LOOKUP.length) {
+            return LOOKUP[code];
         }
         return null;
     }

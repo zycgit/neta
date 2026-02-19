@@ -49,6 +49,31 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
         this.readOnly = readOnly;
     }
 
+    /**
+     * Case-insensitive substring check without creating a temporary lowercase copy.
+     * @param source the source string to search in
+     * @param target the target substring to search for (must be lowercase)
+     * @return true if source contains target (case-insensitive)
+     */
+    static boolean containsIgnoreCase(String source, String target) {
+        int targetLen = target.length();
+        int sourceLen = source.length();
+        int maxStart = sourceLen - targetLen;
+        for (int i = 0; i <= maxStart; i++) {
+            boolean found = true;
+            for (int j = 0; j < targetLen; j++) {
+                if (Character.toLowerCase(source.charAt(i + j)) != target.charAt(j)) {
+                    found = false;
+                    break;
+                }
+            }
+            if (found) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private void checkReadOnly() {
         if (readOnly) {
             throw new UnsupportedOperationException("read-only HttpHeaders");
@@ -278,7 +303,40 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
 
     @Override
     public Iterator<Map.Entry<String, String>> iterator() {
-        return entries().iterator();
+        if (headers.isEmpty()) {
+            return Collections.<Map.Entry<String, String>>emptyList().iterator();
+        }
+        return new Iterator<Map.Entry<String, String>>() {
+            private final Iterator<Map.Entry<String, List<String>>> outer = headers.entrySet().iterator();
+            private       String                                    currentName;
+            private       Iterator<String>                          inner;
+
+            @Override
+            public boolean hasNext() {
+                while (inner == null || !inner.hasNext()) {
+                    if (!outer.hasNext()) {
+                        return false;
+                    }
+                    Map.Entry<String, List<String>> entry = outer.next();
+                    currentName = entry.getKey();
+                    inner = entry.getValue().iterator();
+                }
+                return true;
+            }
+
+            @Override
+            public Map.Entry<String, String> next() {
+                if (!hasNext()) {
+                    throw new NoSuchElementException();
+                }
+                return new AbstractMap.SimpleImmutableEntry<String, String>(currentName, inner.next());
+            }
+
+            @Override
+            public void remove() {
+                throw new UnsupportedOperationException();
+            }
+        };
     }
 
     /** Creates a shallow copy of this headers instance. */

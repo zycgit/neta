@@ -106,6 +106,7 @@ public final class HttpStatus {
 
     private final int    code;
     private final String reasonPhrase;
+    private final String codeStr;
 
     /**
      * Creates a new HttpResponseStatus with the specified status code and reason phrase.
@@ -121,6 +122,7 @@ public final class HttpStatus {
         }
         this.code = code;
         this.reasonPhrase = reasonPhrase;
+        this.codeStr = String.valueOf(code);
     }
 
     private static void register(HttpStatus... statuses) {
@@ -165,6 +167,11 @@ public final class HttpStatus {
     /** Returns the reason phrase (e.g., "OK", "Not Found"). */
     public String reasonPhrase() {
         return reasonPhrase;
+    }
+
+    /** Returns the status code as a pre-cached String (e.g., "200", "404"). */
+    public String codeAsString() {
+        return codeStr;
     }
 
     /**

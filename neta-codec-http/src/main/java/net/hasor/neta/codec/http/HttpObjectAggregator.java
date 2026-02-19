@@ -26,8 +26,8 @@ import net.hasor.neta.codec.http.constant.HttpHeaderNames;
  * This handler sits after the decoder in the pipeline and collects the streamed
  * HTTP message parts into a complete message object.
  * <p>
- * If the content exceeds {@code maxContentLength}, an {@link IllegalStateException}
- * is thrown.
+ * If the content exceeds {@code maxContentLength}, an
+ * {@link net.hasor.neta.codec.http.exception.HttpContentTooLargeException} is thrown.
  * <p>Pipeline usage:</p>
  * <pre>
  *   ctx.addLastDecoder("http-request", new HttpRequestDecoder());
@@ -133,13 +133,13 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         }
 
         if (currentMessage == null) {
-            throw new IllegalStateException("received HttpContent without preceding HttpMessage");
+            throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("received HttpContent without preceding HttpMessage");
         }
 
         int readable = content.readableBytes();
         int newLength = currentContentLength + readable;
         if (newLength > maxContentLength) {
-            throw new IllegalStateException("content length exceeds maximum: " + newLength + " > " + maxContentLength);
+            throw new net.hasor.neta.codec.http.exception.HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + maxContentLength);
         }
 
         int written = aggregatedContent.writeBuffer(content, readable);

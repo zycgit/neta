@@ -17,6 +17,7 @@ package net.hasor.neta.codec.http.multipart;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
+import net.hasor.neta.codec.http.constant.HttpHeaderValues;
 
 /**
  * Encodes a collection of {@link FileUpload} parts into a {@code multipart/form-data} body.
@@ -70,7 +71,7 @@ public class MultipartEncoder {
      * e.g. {@code "multipart/form-data; boundary=abc123"}.
      */
     public String contentType() {
-        return "multipart/form-data; boundary=" + boundary;
+        return HttpHeaderValues.MULTIPART_FORM_DATA + "; boundary=" + boundary;
     }
 
     /**
@@ -122,9 +123,9 @@ public class MultipartEncoder {
                 // --boundary\r\n
                 out.write(("--" + boundary + CRLF).getBytes(StandardCharsets.US_ASCII));
                 // Content-Disposition header
-                StringBuilder disp = new StringBuilder("Content-Disposition: form-data; name=\"").append(entry.name).append('"');
+                StringBuilder disp = new StringBuilder("Content-Disposition: " + HttpHeaderValues.FORM_DATA + "; " + HttpHeaderValues.NAME + "=\"").append(entry.name).append('"');
                 if (entry.filename != null) {
-                    disp.append("; filename=\"").append(entry.filename).append('"');
+                    disp.append("; " + HttpHeaderValues.FILENAME + "=\"").append(entry.filename).append('"');
                 }
                 out.write((disp + CRLF).getBytes(charset));
                 // Content-Type header (only for file parts)

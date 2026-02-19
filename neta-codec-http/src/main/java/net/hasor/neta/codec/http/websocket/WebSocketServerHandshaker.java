@@ -74,7 +74,7 @@ public final class WebSocketServerHandshaker {
         String wsKey = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_KEY);
         String wsVersion = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
 
-        return HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains("upgrade") && wsKey != null && !wsKey.isEmpty() && "13".equals(wsVersion);
+        return HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains(HttpHeaderValues.UPGRADE) && wsKey != null && !wsKey.isEmpty() && "13".equals(wsVersion);
     }
 
     /**

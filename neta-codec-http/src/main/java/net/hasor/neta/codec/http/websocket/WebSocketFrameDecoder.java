@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
@@ -42,7 +41,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
         if (accumulator == null) {
-            accumulator = ByteBufAllocator.DEFAULT.buffer(256, Integer.MAX_VALUE);
+            accumulator = context.byteBufAllocator().buffer(256, Integer.MAX_VALUE);
         }
 
         // Append all available chunks into the accumulator
@@ -57,7 +56,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
         // Attempt to decode as many complete frames as possible
         boolean decoded = true;
         while (decoded) {
-            decoded = decodeFrame(dst);
+            decoded = decodeFrame(context, dst);
         }
 
         // Compact consumed bytes
@@ -74,7 +73,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
      * Attempts to decode one complete frame from the accumulator.
      * @return true if a complete frame was decoded and emitted
      */
-    private boolean decodeFrame(ProtoSndQueue<WebSocketFrame> dst) {
+    private boolean decodeFrame(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst) {
         // Need at least 2 header bytes
         if (accumulator.readableBytes() < 2) {
             return false;
@@ -132,27 +131,39 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
         byte[] maskKey = null;
         if (masked) {
             maskKey = new byte[4];
-            for (int i = 0; i < 4; i++) {
-                maskKey[i] = accumulator.readByte();
-            }
+            accumulator.readBytes(maskKey, 0, 4);
         }
 
-        // Read and unmask payload
         int len = (int) payloadLen;
-        byte[] payload = new byte[len];
-        for (int i = 0; i < len; i++) {
-            payload[i] = accumulator.readByte();
-            if (masked) {
-                payload[i] ^= maskKey[i % 4];
-            }
-        }
-
         ByteBuf contentBuf;
+
         if (len == 0) {
             contentBuf = ByteBuf.EMPTY;
-        } else {
-            contentBuf = ByteBufAllocator.DEFAULT.buffer(len, Integer.MAX_VALUE);
+        } else if (masked) {
+            // For masked frames: read into byte[], unmask, then write to ByteBuf
+            byte[] payload = new byte[len];
+            accumulator.readBytes(payload, 0, len);
+
+            // Unrolled XOR unmask
+            int i = 0;
+            int len4 = len & ~3;
+            for (; i < len4; i += 4) {
+                payload[i] ^= maskKey[0];
+                payload[i + 1] ^= maskKey[1];
+                payload[i + 2] ^= maskKey[2];
+                payload[i + 3] ^= maskKey[3];
+            }
+            for (; i < len; i++) {
+                payload[i] ^= maskKey[i & 3];
+            }
+
+            contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
             contentBuf.writeBytes(payload, 0, len);
+            contentBuf.markWriter();
+        } else {
+            // For unmasked frames: direct buffer-to-buffer copy (avoids intermediate byte[])
+            contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
+            accumulator.readBuffer(contentBuf, len);
             contentBuf.markWriter();
         }
 
@@ -160,5 +171,13 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
         WebSocketFrame frame = new DefaultWebSocketFrame(opcode, fin, masked, masked ? maskKey : null, contentBuf);
         dst.offerMessage(frame);
         return true;
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        if (accumulator != null) {
+            accumulator.free();
+            accumulator = null;
+        }
     }
 }

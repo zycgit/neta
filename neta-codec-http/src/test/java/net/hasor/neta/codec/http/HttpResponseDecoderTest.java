@@ -6,6 +6,9 @@ import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoExceptionHolder;
+import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -591,5 +594,172 @@ public class HttpResponseDecoderTest {
         assertEquals("/new-page", decoded.headers().get("location"));
 
         neta.shutdown();
+    }
+
+    // ========================= Error-capturing decoder helper =========================
+
+    @Test
+    public void testStatusLineTooLong() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingResponseDecoder decoder = new ErrorCapturingResponseDecoder(20, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // Status line is longer than 20 chars
+        String response = "HTTP/1.1 200 OK with a very long reason phrase\r\n" + "Content-Length: 0\r\n" + "\r\n";
+        client.sendData(toByteBuf(response)).get();
+
+        assertNotNull("Should have caught status line too long error", decoder.lastError);
+        assertTrue("Should be HttpInitialLineTooLongException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpInitialLineTooLongException);
+        assertTrue(decoder.lastError.getMessage().contains("status line too long"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Status line too long =========================
+
+    @Test
+    public void testHeadersTooLarge() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingResponseDecoder decoder = new ErrorCapturingResponseDecoder(4096, 30, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        // Multiple headers that exceed 30 bytes total
+        String response = "HTTP/1.1 200 OK\r\n" + "Content-Type: text/html\r\n" + "Server: TestServer\r\n" + "\r\n";
+        client.sendData(toByteBuf(response)).get();
+
+        assertNotNull("Should have caught headers too large error", decoder.lastError);
+        assertTrue("Should be HttpHeaderTooLargeException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpHeaderTooLargeException);
+        assertTrue(decoder.lastError.getMessage().contains("HTTP headers too large"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Headers too large =========================
+
+    @Test
+    public void testNegativeContentLength() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingResponseDecoder decoder = new ErrorCapturingResponseDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        String response = "HTTP/1.1 200 OK\r\n" + "Content-Length: -10\r\n" + "\r\n";
+        client.sendData(toByteBuf(response)).get();
+
+        assertNotNull("Should have caught negative Content-Length error", decoder.lastError);
+        assertTrue("Should be HttpContentTooLargeException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException);
+        assertTrue(decoder.lastError.getMessage().contains("negative Content-Length"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Negative Content-Length =========================
+
+    @Test
+    public void testInvalidStatusCode() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingResponseDecoder decoder = new ErrorCapturingResponseDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        String response = "HTTP/1.1 ABC Bad Status\r\n" + "Content-Length: 0\r\n" + "\r\n";
+        client.sendData(toByteBuf(response)).get();
+
+        assertNotNull("Should have caught invalid status code error", decoder.lastError);
+        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpMalformedRequestException);
+        assertTrue(decoder.lastError.getMessage().contains("invalid status code"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Invalid status code (non-numeric) =========================
+
+    @Test
+    public void testInvalidChunkSizeNonHex() throws Throwable {
+        NetManager neta = new NetManager();
+        ErrorCapturingResponseDecoder decoder = new ErrorCapturingResponseDecoder(4096, 8192, 8192);
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(decoder);
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+
+        String response = "HTTP/1.1 200 OK\r\n" + "Transfer-Encoding: chunked\r\n" + "\r\n" + "ZZZZ\r\n" + "Data\r\n" + "0\r\n" + "\r\n";
+        client.sendData(toByteBuf(response)).get();
+
+        assertNotNull("Should have caught invalid chunk size error", decoder.lastError);
+        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof net.hasor.neta.codec.http.exception.HttpMalformedRequestException);
+        assertTrue(decoder.lastError.getMessage().contains("invalid chunk size"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Invalid chunk size in response =========================
+
+    @Test
+    public void testObsFoldHeaderContinuation() throws Throwable {
+        NetManager neta = new NetManager();
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLastDecoder(new HttpResponseDecoder());
+        }, VrtSoConfig.asServer());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+        }, VrtSoConfig.asClient());
+        VrtTransfer transfer = new VrtTransfer(neta);
+        transfer.linkTo(client, server, VrtTransfer.duplicate());
+        Queue<Object> rcvData = new ArrayDeque<>();
+        server.subscribe(d -> rcvData.offer(d.getData()));
+
+        // Header with obs-fold continuation
+        String response = "HTTP/1.1 200 OK\r\n" + "X-Multi: first-part\r\n" + " second-part\r\n" + "Content-Length: 0\r\n" + "\r\n";
+        client.sendData(toByteBuf(response)).get();
+
+        assertTrue(rcvData.size() >= 1);
+        HttpResponse resp = (HttpResponse) rcvData.poll();
+        String val = resp.headers().get("x-multi");
+        assertTrue("obs-fold should append continuation", val.contains("first-part"));
+        assertTrue("obs-fold should append continuation", val.contains("second-part"));
+
+        neta.shutdown();
+    }
+
+    // ========================= Obs-fold header continuation =========================
+
+    private static class ErrorCapturingResponseDecoder extends HttpResponseDecoder {
+        volatile Throwable lastError;
+
+        ErrorCapturingResponseDecoder(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
+            super(maxInitialLineLength, maxHeaderSize, maxChunkSize);
+        }
+
+        @Override
+        public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+            lastError = e;
+            eh.clear();
+            return ProtoStatus.Stop;
+        }
     }
 }

@@ -18,7 +18,8 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.codec.http.constant.HttpHeaderNames;
+import net.hasor.neta.codec.http.constant.HttpHeaderValues;
 
 /**
  * Decodes a {@code multipart/form-data} body into a list of {@link FileUpload} parts.
@@ -89,9 +90,8 @@ public final class MultipartDecoder {
 
         byte[] bodyBytes = readAllBytes(body);
         byte[] delimiterBytes = ("--" + boundary).getBytes(StandardCharsets.US_ASCII);
-        byte[] finalDelimiterBytes = ("--" + boundary + "--").getBytes(StandardCharsets.US_ASCII);
 
-        List<FileUpload> parts = new ArrayList<>();
+        List<FileUpload> parts = new ArrayList<>(4);
 
         // Find and iterate over all boundary positions
         int pos = 0;
@@ -167,45 +167,111 @@ public final class MultipartDecoder {
             return null;
         }
 
-        // Parse headers
-        String headerSection = new String(data, start, headerEnd - start, charset);
-        Map<String, String> headers = parseHeaders(headerSection);
+        // Parse headers directly from bytes (avoids String allocation for header section)
+        Map<String, String> headers = parseHeaders(data, start, headerEnd, charset);
 
         // Parse Content-Disposition
-        String disposition = headers.get("content-disposition");
+        String disposition = headers.get(HttpHeaderNames.CONTENT_DISPOSITION);
         String fieldName = null;
         String filename = null;
         if (disposition != null) {
-            fieldName = extractParam(disposition, "name");
-            filename = extractParam(disposition, "filename");
+            fieldName = extractParam(disposition, HttpHeaderValues.NAME);
+            filename = extractParam(disposition, HttpHeaderValues.FILENAME);
         }
         if (fieldName == null) {
             return null; // no name → skip malformed part
         }
 
-        String contentType = headers.get("content-type");
+        String contentType = headers.get(HttpHeaderNames.CONTENT_TYPE);
 
-        // Extract body bytes
+        // Extract body bytes — use ByteBuf.wrap for lightweight wrapping (avoids allocator overhead)
         int bodyLen = end - bodyStart;
-        ByteBuf content = ByteBufAllocator.DEFAULT.buffer(Math.max(bodyLen, 1), Integer.MAX_VALUE);
+        ByteBuf content;
         if (bodyLen > 0) {
-            content.writeBytes(data, bodyStart, bodyLen);
-            content.markWriter();
+            byte[] partBytes = new byte[bodyLen];
+            System.arraycopy(data, bodyStart, partBytes, 0, bodyLen);
+            content = ByteBuf.wrap(partBytes);
+        } else {
+            content = ByteBuf.wrap(new byte[0]);
         }
 
         return new DefaultFileUpload(fieldName, filename, contentType, content, headers);
     }
 
-    private static Map<String, String> parseHeaders(String headerSection) {
-        Map<String, String> headers = new LinkedHashMap<>();
-        String[] lines = headerSection.split("\r\n|\n");
-        for (String line : lines) {
-            int colon = line.indexOf(':');
-            if (colon > 0) {
-                String key = line.substring(0, colon).trim().toLowerCase();
-                String value = line.substring(colon + 1).trim();
-                headers.put(key, value);
+    private static Map<String, String> parseHeaders(byte[] data, int start, int end, Charset charset) {
+        Map<String, String> headers = new LinkedHashMap<>(4, 1.0f);
+        int pos = start;
+        while (pos < end) {
+            // Find end of line (\r\n or \n)
+            int lineEnd = -1;
+            int nextStart = -1;
+            for (int i = pos; i < end; i++) {
+                if (data[i] == '\r' && i + 1 < end && data[i + 1] == '\n') {
+                    lineEnd = i;
+                    nextStart = i + 2;
+                    break;
+                } else if (data[i] == '\n') {
+                    lineEnd = i;
+                    nextStart = i + 1;
+                    break;
+                }
             }
+            if (lineEnd < 0) {
+                lineEnd = end;
+                nextStart = end;
+            }
+
+            // Parse header from pos..lineEnd
+            if (lineEnd > pos) {
+                int colon = -1;
+                for (int i = pos; i < lineEnd; i++) {
+                    if (data[i] == ':') {
+                        colon = i;
+                        break;
+                    }
+                }
+                if (colon > pos) {
+                    // Trim key boundaries
+                    int keyEnd = colon;
+                    while (keyEnd > pos && data[keyEnd - 1] <= ' ') {
+                        keyEnd--;
+                    }
+                    int keyStart = pos;
+                    while (keyStart < keyEnd && data[keyStart] <= ' ') {
+                        keyStart++;
+                    }
+                    int keyLen = keyEnd - keyStart;
+
+                    // Reuse constants for common header names (avoids String allocation)
+                    String key;
+                    if (keyLen == 19 && regionMatchesBytes(data, keyStart, HttpHeaderNames.CONTENT_DISPOSITION)) {
+                        key = HttpHeaderNames.CONTENT_DISPOSITION;
+                    } else if (keyLen == 12 && regionMatchesBytes(data, keyStart, HttpHeaderNames.CONTENT_TYPE)) {
+                        key = HttpHeaderNames.CONTENT_TYPE;
+                    } else {
+                        char[] keyChars = new char[keyLen];
+                        for (int i = 0; i < keyLen; i++) {
+                            byte b = data[keyStart + i];
+                            keyChars[i] = (b >= 'A' && b <= 'Z') ? (char) (b + 32) : (char) (b & 0xFF);
+                        }
+                        key = new String(keyChars);
+                    }
+
+                    // Trim value and create String directly from bytes
+                    int valStart = colon + 1;
+                    while (valStart < lineEnd && data[valStart] <= ' ') {
+                        valStart++;
+                    }
+                    int valEnd = lineEnd;
+                    while (valEnd > valStart && data[valEnd - 1] <= ' ') {
+                        valEnd--;
+                    }
+                    String value = new String(data, valStart, valEnd - valStart, charset);
+
+                    headers.put(key, value);
+                }
+            }
+            pos = nextStart;
         }
         return headers;
     }
@@ -213,7 +279,7 @@ public final class MultipartDecoder {
     /** Extracts a named parameter from a header value, e.g. {@code name="field"} → {@code "field"}. */
     private static String extractParam(String header, String param) {
         String searchKey = param + "=";
-        int idx = header.toLowerCase().indexOf(searchKey.toLowerCase());
+        int idx = indexOfIgnoreCase(header, searchKey, 0);
         if (idx < 0) {
             return null;
         }
@@ -236,6 +302,18 @@ public final class MultipartDecoder {
         }
     }
 
+    /** Case-insensitive indexOf without creating temporary lowercase strings. */
+    private static int indexOfIgnoreCase(String str, String search, int fromIndex) {
+        int searchLen = search.length();
+        int maxIdx = str.length() - searchLen;
+        for (int i = fromIndex; i <= maxIdx; i++) {
+            if (str.regionMatches(true, i, search, 0, searchLen)) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
     private static byte[] readAllBytes(ByteBuf buf) {
         int len = buf.readableBytes();
         byte[] result = new byte[len];
@@ -243,20 +321,45 @@ public final class MultipartDecoder {
         return result;
     }
 
-    /** Boyer-Moore-Horspool-style simple indexOf for byte arrays. */
+    /** Optimized brute-force indexOf for byte arrays with first-byte fast skip. */
     private static int indexOf(byte[] haystack, byte[] needle, int fromIndex) {
         if (needle.length == 0) {
             return fromIndex;
         }
-        outer:
-        for (int i = fromIndex; i <= haystack.length - needle.length; i++) {
-            for (int j = 0; j < needle.length; j++) {
-                if (haystack[i + j] != needle[j]) {
-                    continue outer;
+        byte first = needle[0];
+        int maxI = haystack.length - needle.length;
+        for (int i = fromIndex; i <= maxI; i++) {
+            // Fast-skip until first byte matches
+            if (haystack[i] != first) {
+                while (++i <= maxI && haystack[i] != first) {
                 }
             }
-            return i;
+            if (i <= maxI) {
+                // Verify remaining bytes
+                boolean match = true;
+                for (int j = 1; j < needle.length; j++) {
+                    if (haystack[i + j] != needle[j]) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    return i;
+                }
+            }
         }
         return -1;
+    }
+
+    /** Case-insensitive match of byte array region against a lowercase ASCII string constant. */
+    private static boolean regionMatchesBytes(byte[] data, int offset, String expected) {
+        for (int i = 0; i < expected.length(); i++) {
+            byte b = data[offset + i];
+            char c = (b >= 'A' && b <= 'Z') ? (char) (b + 32) : (char) (b & 0xFF);
+            if (c != expected.charAt(i)) {
+                return false;
+            }
+        }
+        return true;
     }
 }
