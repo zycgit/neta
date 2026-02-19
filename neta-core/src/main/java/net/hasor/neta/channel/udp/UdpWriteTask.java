@@ -36,6 +36,7 @@ class UdpWriteTask extends DefaultSoTask {
     private final   DatagramChannel  udpChannel;
     private final   SoSndContext     wContext;
     private         byte[]           sendData;
+    private         int              timeoutRetryCnt = 0;
 
     public UdpWriteTask(NetChannel netChannel, DatagramChannel channel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;
@@ -86,7 +87,9 @@ class UdpWriteTask extends DefaultSoTask {
                     this.sendData = null;
                 }
             } catch (Exception e) {
-                this.handleException(e, this.wContext);
+                if (this.handleException(e, this.wContext)) {
+                    return;
+                }
             }
         }
 
@@ -105,13 +108,29 @@ class UdpWriteTask extends DefaultSoTask {
         this.continueTask();
     }
 
-    private void handleException(Throwable e, SoSndContext wContext) {
+    /**
+     * Handle send exception.
+     * @return true if doWork should return immediately (retry scheduled or fatal),
+     * false to fall through to try-finish and continueTask.
+     */
+    private boolean handleException(Throwable e, SoSndContext wContext) {
         long channelId = this.netChannel.getChannelId();
 
         if (e instanceof InterruptedByTimeoutException) {
-            String errorMsg = "send data timeout with " + this.netChannel.getConfig().getSoWriteTimeoutMs() + " milliseconds.";
+            UdpSoConfig cfg = (UdpSoConfig) this.netChannel.getConfig();
+            int maxRetry = cfg.getSndWriteRetryCount();
+            if (maxRetry > 0 && this.timeoutRetryCnt < maxRetry) {
+                this.timeoutRetryCnt++;
+                this.delayTask(cfg.getSndWriteRetryIntervalMs(), TimeUnit.MILLISECONDS);
+                return true; // retry after delay
+            }
+            // retries exhausted (or maxRetry = 0): notify and discard this packet
+            String retryInfo = maxRetry > 0 ? ", tried " + this.timeoutRetryCnt + " time(s)" : "";
+            this.timeoutRetryCnt = 0;
+            this.sendData = null;
+            String errorMsg = "send data timeout with " + this.netChannel.getConfig().getSoWriteTimeoutMs() + " milliseconds" + retryInfo + ".";
             this.context.notifySndChannelException(channelId, false, new SoWriteTimeoutException(errorMsg));
-            return;
+            return false; // fall through: try-finish will pop the discarded item
         }
 
         SoException finalErr;
@@ -123,6 +142,7 @@ class UdpWriteTask extends DefaultSoTask {
             finalErr = new SoSndException(e.getMessage(), e);
             this.context.notifySndChannelException(channelId, false, finalErr);
         }
+        return false;
     }
 
     private void purgeSndData(Throwable e, SoSndContext wContext) {

@@ -23,7 +23,10 @@ import net.hasor.neta.channel.SoConfig;
  */
 public class UdpSoConfig extends SoConfig {
     private Integer rcvPacketSize;
-    private boolean rcvRemoteOnly = true;
+    private boolean rcvRemoteOnly           = true;
+    // write-timeout retry (channel-level)
+    private int     sndWriteRetryCount      = 0;   // 0 = no retry; N = retry up to N times on write timeout
+    private int     sndWriteRetryIntervalMs = 50;  // delay between retries in milliseconds
     //SO_REUSEADDR	重复使用地址
     //SO_BROADCAST	允许传输广播数据报
     //IP_TOS	互联网协议 (IP) 标头中的服务类型 (ToS) 八位字节
@@ -49,5 +52,21 @@ public class UdpSoConfig extends SoConfig {
 
     public void setRcvRemoteOnly(boolean rcvRemoteOnly) {
         this.rcvRemoteOnly = rcvRemoteOnly;
+    }
+
+    public int getSndWriteRetryCount() {
+        return this.sndWriteRetryCount;
+    }
+
+    public void setSndWriteRetryCount(int sndWriteRetryCount) {
+        this.sndWriteRetryCount = sndWriteRetryCount;
+    }
+
+    public int getSndWriteRetryIntervalMs() {
+        return this.sndWriteRetryIntervalMs;
+    }
+
+    public void setSndWriteRetryIntervalMs(int sndWriteRetryIntervalMs) {
+        this.sndWriteRetryIntervalMs = sndWriteRetryIntervalMs;
     }
 }

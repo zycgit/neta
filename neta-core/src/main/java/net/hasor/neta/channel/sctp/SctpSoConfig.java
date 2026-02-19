@@ -23,8 +23,11 @@ import net.hasor.neta.channel.SoConfig;
  */
 public class SctpSoConfig extends SoConfig {
     // swapBuffer
-    private int swapRcvBuf = 64 * 1024;
-    private int swapSndBuf = 64 * 1024;
+    private int swapRcvBuf              = 64 * 1024;
+    private int swapSndBuf              = 64 * 1024;
+    // write-timeout retry (channel-level)
+    private int sndWriteRetryCount      = 0;   // 0 = no retry; N = retry up to N times on write timeout
+    private int sndWriteRetryIntervalMs = 50;  // delay between retries in milliseconds
 
     private Boolean soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
     private Integer soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
@@ -83,6 +86,22 @@ public class SctpSoConfig extends SoConfig {
 
     public void setSoKeepCount(Integer soKeepCount) {
         this.soKeepCount = soKeepCount;
+    }
+
+    public int getSndWriteRetryCount() {
+        return this.sndWriteRetryCount;
+    }
+
+    public void setSndWriteRetryCount(int sndWriteRetryCount) {
+        this.sndWriteRetryCount = sndWriteRetryCount;
+    }
+
+    public int getSndWriteRetryIntervalMs() {
+        return this.sndWriteRetryIntervalMs;
+    }
+
+    public void setSndWriteRetryIntervalMs(int sndWriteRetryIntervalMs) {
+        this.sndWriteRetryIntervalMs = sndWriteRetryIntervalMs;
     }
 
 }
