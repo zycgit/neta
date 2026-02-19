@@ -163,7 +163,7 @@ public class BasicByteBufAllocatorTest {
     public void pooledBuffer_withCapacity() {
         ByteBuf buf = ByteBufAllocator.DEFAULT.pooledBuffer(64);
         assert buf != null;
-        assert buf.toString().startsWith("PooledByteBuf[") : "pooled buffer should be PooledByteBuf, got: " + buf.toString();
+        assert buf.toString().startsWith("PooledByteBuf[") : "pooled buffer should be PooledByteBuf, got: " + buf;
         buf.free();
     }
 

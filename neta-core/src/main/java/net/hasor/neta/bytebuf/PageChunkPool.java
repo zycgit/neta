@@ -37,7 +37,7 @@ class PageChunkPool {
     private volatile Object                  owner;
     private volatile Consumer<PageChunkPool> notify;
     //
-    private          AtomicInteger           used;
+    private final    AtomicInteger           used;
 
     public PageChunkPool(int memAddress, int pageSize, int treeHeight) {
         this.memAddress = memAddress;

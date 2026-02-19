@@ -23,7 +23,7 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class AutoByteBuffer extends AbstractByteBuf {
-    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static final int                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
     static       RecycleHandler<AutoByteBuffer> RECYCLE_HANDLER = new RecycleHandler<AutoByteBuffer>() {
         public AutoByteBuffer create() {
             return new AutoByteBuffer();
@@ -34,8 +34,8 @@ final class AutoByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    protected ByteBuffer                     target;
-    private   int                            extensionSize;
+    ByteBuffer                     target;
+    private      int                            extensionSize;
 
     // ------------------------------------------------------------------------
 
@@ -145,7 +145,7 @@ final class AutoByteBuffer extends AbstractByteBuf {
         checkExtension(offset, srcLen);
 
         ((Buffer) this.target).clear().position(offset);
-        this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
+        this.target.put(src.duplicate().limit(src.position() + srcLen));
         src.position(src.position() + srcLen);
         return srcLen;
     }

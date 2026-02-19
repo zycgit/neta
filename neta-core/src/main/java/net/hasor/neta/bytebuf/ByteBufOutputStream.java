@@ -165,7 +165,6 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
 
     private void autoFlush() throws IOException {
         if (this.cacheSize < 0) {
-            return;
         } else if (this.buffer.writtenBytes() >= this.cacheSize) {
             this.flush();
         }

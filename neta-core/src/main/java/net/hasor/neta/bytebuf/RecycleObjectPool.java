@@ -30,10 +30,10 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>
  * Two APIs are provided:
  * - <b>Indexed API</b> (fast path): {@link #get(int, RecycleHandler)} / {@link #free(int, Object)}.
- *   Uses a single ThreadLocal array indexed by type index (no ConcurrentHashMap lookup).
- *   Production code should use {@link #registerType()} to obtain a type index.
+ * Uses a single ThreadLocal array indexed by type index (no ConcurrentHashMap lookup).
+ * Production code should use {@link #registerType()} to obtain a type index.
  * - <b>Class-based API</b> (legacy): {@link #get(Class, RecycleHandler)} / {@link #free(Class, Object)}.
- *   Uses ConcurrentHashMap per-type lookup. Retained for backward compatibility and tests.
+ * Uses ConcurrentHashMap per-type lookup. Retained for backward compatibility and tests.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
@@ -44,10 +44,14 @@ class RecycleObjectPool {
     // ==================== Indexed API (Fast Path) ====================
 
     /** Maximum number of registered types for the indexed fast path. */
-    private static final int                                MAX_INDEXED_TYPES    = 32;
-    private static final AtomicInteger                      TYPE_COUNTER         = new AtomicInteger(0);
-    private static final RecyclerQueue[]                    GLOBAL_INDEXED       = new RecyclerQueue[MAX_INDEXED_TYPES];
-    private static final ThreadLocal<ArrayDeque<Object>[]>  LOCAL_INDEXED_CACHES = ThreadLocal.withInitial(RecycleObjectPool::createIndexedCaches);
+    private static final int                                                          MAX_INDEXED_TYPES    = 32;
+    private static final AtomicInteger                                                TYPE_COUNTER         = new AtomicInteger(0);
+    private static final RecyclerQueue[]                                              GLOBAL_INDEXED       = new RecyclerQueue[MAX_INDEXED_TYPES];
+    private static final ThreadLocal<ArrayDeque<Object>[]>                            LOCAL_INDEXED_CACHES = ThreadLocal.withInitial(RecycleObjectPool::createIndexedCaches);
+    // Per-type ThreadLocal (eliminates inner HashMap lookup on every get/free call)
+    private static final ConcurrentHashMap<Class<?>, ThreadLocal<ArrayDeque<Object>>> PER_TYPE_LOCAL       = new ConcurrentHashMap<>();
+    // L2: Global Shared Cache
+    private static final Map<Class<?>, RecyclerQueue>                                 GLOBAL_CACHE         = new ConcurrentHashMap<>();
 
     @SuppressWarnings("unchecked")
     private static ArrayDeque<Object>[] createIndexedCaches() {
@@ -71,6 +75,8 @@ class RecycleObjectPool {
         GLOBAL_INDEXED[idx] = new RecyclerQueue();
         return idx;
     }
+
+    // ==================== Class-based API (Legacy) ====================
 
     /**
      * Fast-path get: retrieve a recycled object or create a new one.
@@ -118,13 +124,6 @@ class RecycleObjectPool {
         // 3. Discard if both full (Let GC handle it)
     }
 
-    // ==================== Class-based API (Legacy) ====================
-
-    // Per-type ThreadLocal (eliminates inner HashMap lookup on every get/free call)
-    private static final ConcurrentHashMap<Class<?>, ThreadLocal<ArrayDeque<Object>>> PER_TYPE_LOCAL = new ConcurrentHashMap<>();
-    // L2: Global Shared Cache
-    private static final Map<Class<?>, RecyclerQueue>                                 GLOBAL_CACHE   = new ConcurrentHashMap<>();
-
     private static ArrayDeque<Object> localQueue(Class<?> objType) {
         ThreadLocal<ArrayDeque<Object>> tl = PER_TYPE_LOCAL.get(objType);
         if (tl == null) {
@@ -171,7 +170,6 @@ class RecycleObjectPool {
         if (recyclerQueue.size.get() < GLOBAL_CAPACITY) {
             if (recyclerQueue.queue.offer(obj)) {
                 recyclerQueue.size.incrementAndGet();
-                return;
             }
         }
 

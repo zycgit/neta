@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 
@@ -84,9 +85,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     @Override
     public synchronized int offerMessage(T[] offerList) {
         int size = Math.min(this.slotSize(), offerList.length);
-        for (int i = 0; i < size; i++) {
-            this.offerTemp.add(offerList[i]);
-        }
+        this.offerTemp.addAll(Arrays.asList(offerList).subList(0, size));
         return size;
     }
 

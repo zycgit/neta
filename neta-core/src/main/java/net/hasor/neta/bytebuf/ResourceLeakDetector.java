@@ -167,10 +167,7 @@ public class ResourceLeakDetector<T> {
 
         @Override
         public boolean close() {
-            if (dispose()) {
-                return true;
-            }
-            return false;
+            return dispose();
         }
 
         @Override
@@ -190,7 +187,7 @@ public class ResourceLeakDetector<T> {
                 if (c.startsWith(ResourceLeakDetector.class.getName())) {
                     continue;
                 }
-                buf.append("\tat ").append(e.toString()).append(System.lineSeparator());
+                buf.append("\tat ").append(e).append(System.lineSeparator());
             }
             return buf.toString();
         }

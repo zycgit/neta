@@ -45,9 +45,9 @@ final class BufferCleanerJava6 extends BufferCleaner {
 
         if (isSupported()) {
             try {
-                unsafeGetObject = UNSAFE_CLASS.getMethod("getObject", new Class[] { Object.class, long.class });
+                unsafeGetObject = UNSAFE_CLASS.getMethod("getObject", Object.class, long.class);
                 unsafeGetObject.setAccessible(true);
-                unsafeObjFieldOffset = UNSAFE_CLASS.getMethod("objectFieldOffset", new Class[] { Field.class });
+                unsafeObjFieldOffset = UNSAFE_CLASS.getMethod("objectFieldOffset", Field.class);
                 unsafeObjFieldOffset.setAccessible(true);
             } catch (Exception e) {
                 unsafeGetObject = null;
@@ -63,7 +63,7 @@ final class BufferCleanerJava6 extends BufferCleaner {
                 cleanerField.setAccessible(true); // We need to make it accessible if we do not use Unsafe as we will access it via reflection.
 
                 fieldOffset = (Long) unsafeObjFieldOffset.invoke(BufferCleaner.UNSAFE, cleanerField);
-                cleaner = unsafeGetObject.invoke(BufferCleaner.UNSAFE, new Object[] { direct, fieldOffset });
+                cleaner = unsafeGetObject.invoke(BufferCleaner.UNSAFE, direct, fieldOffset);
 
                 clean = cleaner.getClass().getDeclaredMethod("clean");
                 clean.invoke(cleaner);
@@ -102,7 +102,7 @@ final class BufferCleanerJava6 extends BufferCleaner {
             if (CLEANER_FIELD_OFFSET == -1) {
                 cleaner = CLEANER_FIELD.get(buffer);
             } else {
-                cleaner = UNSAFE_GET_OBJECT.invoke(BufferCleaner.UNSAFE, new Object[] { buffer, CLEANER_FIELD_OFFSET });
+                cleaner = UNSAFE_GET_OBJECT.invoke(BufferCleaner.UNSAFE, buffer, CLEANER_FIELD_OFFSET);
             }
 
             if (cleaner != null) {

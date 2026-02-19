@@ -23,7 +23,7 @@ import net.hasor.cobble.ObjectUtils;
  * @version : 2022-11-01
  */
 final class RingArrayByteBuf extends AbstractByteBuf {
-    static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
     static       RecycleHandler<RingArrayByteBuf> RECYCLE_HANDLER = new RecycleHandler<RingArrayByteBuf>() {
         public RingArrayByteBuf create() {
             return new RingArrayByteBuf();
@@ -34,16 +34,17 @@ final class RingArrayByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    protected byte[]                           target;
-    private   int                              capacityMask;
+    byte[]                           target;
+    private      int                              capacityMask;
 
     private RingArrayByteBuf() {
     }
 
     /** Round up to the next power of 2 (for bitwise index masking). */
     private static int nextPowerOf2(int val) {
-        if (val <= 1)
+        if (val <= 1) {
             return val;
+        }
         int n = val - 1;
         n |= n >>> 1;
         n |= n >>> 2;

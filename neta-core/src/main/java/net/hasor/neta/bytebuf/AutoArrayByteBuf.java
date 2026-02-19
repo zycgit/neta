@@ -22,7 +22,7 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class AutoArrayByteBuf extends AbstractByteBuf {
-    static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
     static       RecycleHandler<AutoArrayByteBuf> RECYCLE_HANDLER = new RecycleHandler<AutoArrayByteBuf>() {
         public AutoArrayByteBuf create() {
             return new AutoArrayByteBuf();
@@ -33,10 +33,10 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    protected byte[]                           target;
-    private   int                              extensionSize;
+    byte[]                           target;
+    private      int                              extensionSize;
     /** Cached effective write limit = Math.min(target.length, maxCapacity). */
-    private   int                              writeLimit;
+    private      int                              writeLimit;
 
     // ------------------------------------------------------------------------
 
@@ -270,7 +270,9 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
 
     @Override
     public void writeInt32(int n) {
-        if (this.freed) throw new IllegalStateException("has been released.");
+        if (this.freed) {
+            throw new IllegalStateException("has been released.");
+        }
         int idx = this.writerIndex;
         byte[] t = this.target;
         if (idx + 4 <= this.writeLimit) {

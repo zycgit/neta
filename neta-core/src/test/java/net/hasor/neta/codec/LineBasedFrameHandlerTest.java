@@ -386,11 +386,7 @@ public class LineBasedFrameHandlerTest {
         channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
         // Each buffer is exactly one line; the first buffer is fully consumed each iteration
-        channel.onReceive(
-                ByteBuf.wrap("first\n".getBytes()),
-                ByteBuf.wrap("second\n".getBytes()),
-                ByteBuf.wrap("third\n".getBytes())
-        );
+        channel.onReceive(ByteBuf.wrap("first\n".getBytes()), ByteBuf.wrap("second\n".getBytes()), ByteBuf.wrap("third\n".getBytes()));
         assert rcvData.size() == 3 : "expected 3 lines but got " + rcvData.size();
         assert new String(rcvData.poll().asByteArray()).equals("first");
         assert new String(rcvData.poll().asByteArray()).equals("second");
@@ -462,11 +458,7 @@ public class LineBasedFrameHandlerTest {
         channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
 
         // Content split across 3 buffers: "hel" + "lo\r" + "\nworld\n"
-        channel.onReceive(
-                ByteBuf.wrap("hel".getBytes()),
-                ByteBuf.wrap("lo\r".getBytes()),
-                ByteBuf.wrap("\nworld\n".getBytes())
-        );
+        channel.onReceive(ByteBuf.wrap("hel".getBytes()), ByteBuf.wrap("lo\r".getBytes()), ByteBuf.wrap("\nworld\n".getBytes()));
         assert rcvData.size() == 2 : "expected 2 but got " + rcvData.size();
         assert new String(rcvData.poll().asByteArray()).equals("hello");
         assert new String(rcvData.poll().asByteArray()).equals("world");

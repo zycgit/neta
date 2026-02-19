@@ -238,7 +238,9 @@ public class CompositeByteBuf extends AbstractByteBuf {
      */
     @Override
     public byte readByte() {
-        if (this.freed) throw new IllegalStateException("has been released.");
+        if (this.freed) {
+            throw new IllegalStateException("has been released.");
+        }
         int idx = this.readerIndex;
         if (idx >= this.markedWriterIndex) {
             throw new IndexOutOfBoundsException("read out of range. length: 1 (expected: 0 ~ 0)");

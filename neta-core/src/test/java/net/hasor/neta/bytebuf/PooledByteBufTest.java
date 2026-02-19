@@ -9,7 +9,7 @@ import net.hasor.cobble.codec.MD5;
 import org.junit.Test;
 
 public class PooledByteBufTest {
-    private static BufferPool POOL = new BufferPool(2);
+    private static final BufferPool POOL = new BufferPool(2);
 
     public static ByteBuf defaultWrap(byte[] data) {
         return ByteBuf.wrap(data);

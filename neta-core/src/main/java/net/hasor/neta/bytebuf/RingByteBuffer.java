@@ -23,7 +23,7 @@ import java.nio.ByteBuffer;
  * @version :  2022-11-01
  */
 final class RingByteBuffer extends AbstractByteBuf {
-    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static final int                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
     static       RecycleHandler<RingByteBuffer> RECYCLE_HANDLER = new RecycleHandler<RingByteBuffer>() {
         public RingByteBuffer create() {
             return new RingByteBuffer();
@@ -34,16 +34,17 @@ final class RingByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    protected ByteBuffer                     target;
-    private   int                            capacityMask;
+    ByteBuffer                     target;
+    private      int                            capacityMask;
 
     private RingByteBuffer() {
     }
 
     /** Round up to the next power of 2 (for bitwise index masking). */
     private static int nextPowerOf2(int val) {
-        if (val <= 1)
+        if (val <= 1) {
             return val;
+        }
         int n = val - 1;
         n |= n >>> 1;
         n |= n >>> 2;
@@ -136,7 +137,7 @@ final class RingByteBuffer extends AbstractByteBuf {
         if ((offsetSize + srcLen) <= maxCap) {
             ((Buffer) this.target).clear();
             ((Buffer) this.target).position(offsetSize);
-            this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
+            this.target.put(src.duplicate().limit(src.position() + srcLen));
             src.position(src.position() + srcLen);
             return srcLen;
         } else {
@@ -145,12 +146,12 @@ final class RingByteBuffer extends AbstractByteBuf {
 
             ((Buffer) this.target).clear();
             ((Buffer) this.target).position(offsetSize);
-            this.target.put((ByteBuffer) src.duplicate().limit(src.position() + partA));
+            this.target.put(src.duplicate().limit(src.position() + partA));
             src.position(src.position() + partA);
 
             if (partB > 0) {
                 ((Buffer) this.target).clear();
-                this.target.put((ByteBuffer) src.duplicate().limit(src.position() + partB));
+                this.target.put(src.duplicate().limit(src.position() + partB));
                 src.position(src.position() + partB);
             }
 

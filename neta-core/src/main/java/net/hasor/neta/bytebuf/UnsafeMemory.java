@@ -33,7 +33,6 @@ import java.lang.reflect.Field;
  * <p>
  * On x86-64 native byte order is LITTLE_ENDIAN.
  * All methods handle endian conversion automatically.
- *
  * @author Generated for performance optimization
  * @version : 2024-01-01
  */

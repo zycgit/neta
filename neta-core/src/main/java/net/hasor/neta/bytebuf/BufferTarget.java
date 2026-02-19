@@ -34,9 +34,9 @@ class BufferTarget implements Buffer {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    private Buffer                       memory;
-    private PageChunkSplit               pages;
-    private int                          pageSize;
+    private      Buffer                       memory;
+    private      PageChunkSplit               pages;
+    private      int                          pageSize;
 
     // ------------------------------------------------------------------------
     private boolean readOnly;

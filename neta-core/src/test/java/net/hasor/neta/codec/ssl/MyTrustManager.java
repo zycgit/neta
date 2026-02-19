@@ -36,10 +36,8 @@ public class MyTrustManager implements TrustManager, X509TrustManager {
     }
 
     public void checkServerTrusted(X509Certificate[] certs, String authType) {
-        return;
     }
 
     public void checkClientTrusted(X509Certificate[] certs, String authType) {
-        return;
     }
 }

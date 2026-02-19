@@ -125,11 +125,7 @@ public class SoContextService implements SoContext {
 
     /** Whether to accept link socket. */
     public boolean acceptChannel(SocketAddress remoteAddress) {
-        if (this.closeStatus) {
-            return false;
-        }
-
-        return true;
+        return !this.closeStatus;
     }
 
     /** test the channel has been closed */

@@ -481,7 +481,7 @@ public class SmallBufferCacheTest {
         buf1.writeInt32(0xDEADBEEF);
         buf1.markWriter();
         assert buf1.readInt32() == 0x12345678;
-        assert buf1.readInt32() == (int) 0xDEADBEEF;
+        assert buf1.readInt32() == 0xDEADBEEF;
         buf1.free();
 
         // Second allocation - old data may be in the cached array, but writer/reader indices are reset

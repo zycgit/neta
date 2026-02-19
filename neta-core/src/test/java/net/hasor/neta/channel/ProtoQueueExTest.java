@@ -268,7 +268,7 @@ public class ProtoQueueExTest {
         src.sndSubmit();
 
         ProtoQueue<Integer> dst = new ProtoQueue<>(10);
-        int accepted = dst.offerMessage((ProtoRcvQueue<Integer>) src);
+        int accepted = dst.offerMessage(src);
         assert accepted == 3;
         assert src.queueSize() == 0; // all taken
 

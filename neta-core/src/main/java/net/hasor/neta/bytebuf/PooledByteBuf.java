@@ -22,8 +22,11 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class PooledByteBuf extends AbstractByteBuf {
-    static final int                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleHandler<PooledByteBuf> RECYCLE_HANDLER = new RecycleHandler<PooledByteBuf>() {
+    static final         int                                       RECYCLE_INDEX    = RecycleObjectPool.registerType();
+    static final         ThreadLocal<java.util.ArrayDeque<Buffer>> BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    /** Thread-local cache for recently freed pooled Buffers (pages stay allocated). */
+    private static final int                                       MAX_BUFFER_CACHE = 8;
+    static               RecycleHandler<PooledByteBuf>             RECYCLE_HANDLER  = new RecycleHandler<PooledByteBuf>() {
         public PooledByteBuf create() {
             return new PooledByteBuf();
         }
@@ -33,18 +36,13 @@ final class PooledByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-
-    /** Thread-local cache for recently freed pooled Buffers (pages stay allocated). */
-    private static final int MAX_BUFFER_CACHE = 8;
-    static final ThreadLocal<java.util.ArrayDeque<Buffer>> BUFFER_CACHE =
-            ThreadLocal.withInitial(java.util.ArrayDeque::new);
-    protected Buffer                        target;
-    private   BufferPool                    pool;
+    Buffer                                    target;
+    private              BufferPool                                pool;
     // Cached heap array + offset for fast-path access (null for direct buffers)
-    private   byte[]                        heapArray;
-    private   int                           heapOffset;
+    private              byte[]                                    heapArray;
+    private              int                                       heapOffset;
     // Cached direct buffer base address for Unsafe off-heap access (0 for heap buffers)
-    private   long                          directAddress;
+    private              long                                      directAddress;
 
     // ------------------------------------------------------------------------
     private int initSize;

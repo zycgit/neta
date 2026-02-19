@@ -30,7 +30,7 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 class WrapByteBuffer extends AbstractByteBuf {
-    static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static final int                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
     static       RecycleHandler<WrapByteBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapByteBuffer>() {
         public WrapByteBuffer create() {
             return new WrapByteBuffer();
@@ -41,7 +41,7 @@ class WrapByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    protected ByteBuffer                     target;
+    protected    ByteBuffer                     target;
 
     private WrapByteBuffer() {
     }
@@ -161,7 +161,7 @@ class WrapByteBuffer extends AbstractByteBuf {
         ((Buffer) this.target).position(offset);
         srcLen = Math.min(src.remaining(), srcLen);
 
-        this.target.put((ByteBuffer) src.duplicate().limit(src.position() + srcLen));
+        this.target.put(src.duplicate().limit(src.position() + srcLen));
         src.position(src.position() + srcLen);
         return srcLen;
     }

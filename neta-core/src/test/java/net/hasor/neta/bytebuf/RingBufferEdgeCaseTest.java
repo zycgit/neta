@@ -239,10 +239,10 @@ public class RingBufferEdgeCaseTest {
     @Test
     public void remove_usesEqualsNotIdentity() {
         BufferRing<String> ring = new BufferRing<>();
-        ring.add(new String("hello")); // intentionally new instance
+        ring.add("hello"); // intentionally new instance
         ring.add("world");
 
-        ring.remove(new String("hello")); // different instance, same value
+        ring.remove("hello"); // different instance, same value
         assert ring.size() == 1;
         assert ring.next().equals("world");
     }

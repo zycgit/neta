@@ -23,8 +23,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2024-02-15
  */
 class PageChunkSplit implements PageRange {
-    static final int                               RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
+    static final  int                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static        RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
         public PageChunkSplit create() {
             return new PageChunkSplit();
         }

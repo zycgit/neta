@@ -59,7 +59,7 @@ public class ByteBufStreamExtendedTest {
 
     @Test
     public void testInputStream_readLine_empty() {
-        ByteBuf buf = makeBuf(new byte[0]);
+        ByteBuf buf = makeBuf();
         buf.markWriter();
         ByteBufInputStream in = new ByteBufInputStream(buf);
         assert in.readLine() == null : "empty buf readLine";
@@ -135,7 +135,7 @@ public class ByteBufStreamExtendedTest {
 
     @Test(expected = EOFException.class)
     public void testInputStream_readBoolean_eof() throws IOException {
-        ByteBuf buf = makeBuf(new byte[0]);
+        ByteBuf buf = makeBuf();
         ByteBufInputStream in = new ByteBufInputStream(buf);
         in.readBoolean();
     }
@@ -246,7 +246,7 @@ public class ByteBufStreamExtendedTest {
 
     @Test
     public void testInputStream_readUnsignedByte() throws IOException {
-        ByteBuf buf = makeBuf(new byte[] { (byte) 0xFF });
+        ByteBuf buf = makeBuf((byte) 0xFF);
         ByteBufInputStream in = new ByteBufInputStream(buf);
 
         int val = in.readUnsignedByte();
@@ -256,7 +256,7 @@ public class ByteBufStreamExtendedTest {
 
     @Test(expected = EOFException.class)
     public void testInputStream_readUnsignedByte_eof() throws IOException {
-        ByteBuf buf = makeBuf(new byte[0]);
+        ByteBuf buf = makeBuf();
         ByteBufInputStream in = new ByteBufInputStream(buf);
         in.readUnsignedByte();
     }
