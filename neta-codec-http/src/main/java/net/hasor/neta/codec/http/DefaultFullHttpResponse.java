@@ -23,11 +23,11 @@ import net.hasor.neta.codec.http.constant.HttpVersion;
  * Combines HTTP response headers with the complete message body.
  */
 public class DefaultFullHttpResponse implements FullHttpResponse {
-    private HttpVersion version;
-    private HttpStatus  status;
-    private HttpHeaders headers;
-    private ByteBuf     content;
-    private HttpHeaders trailerHeaders;
+    private final HttpHeaders headers;
+    private final ByteBuf     content;
+    private final HttpHeaders trailerHeaders;
+    private       HttpVersion version;
+    private       HttpStatus  status;
 
     /**
      * Creates a new full HTTP response with an empty body.

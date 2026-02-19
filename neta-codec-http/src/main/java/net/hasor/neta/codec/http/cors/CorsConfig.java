@@ -34,7 +34,6 @@ import java.util.*;
  * </pre>
  */
 public final class CorsConfig {
-
     private final Set<String> allowedOrigins;  // null means wildcard (*)
     private final boolean     anyOrigin;
     private final Set<String> allowedMethods;
@@ -139,15 +138,14 @@ public final class CorsConfig {
 
     /** Fluent builder for {@link CorsConfig}. */
     public static final class Builder {
-
-        private boolean     anyOrigin        = false;
-        private Set<String> allowedOrigins   = new LinkedHashSet<>();
-        private Set<String> allowedMethods   = new LinkedHashSet<>(Arrays.asList("GET", "HEAD", "POST"));
-        private Set<String> allowedHeaders   = new LinkedHashSet<>();
-        private Set<String> exposedHeaders   = new LinkedHashSet<>();
-        private boolean     allowCredentials = false;
-        private long        maxAge           = -1;
-        private boolean     enabled          = true;
+        private final Set<String> allowedOrigins   = new LinkedHashSet<>();
+        private final Set<String> allowedMethods   = new LinkedHashSet<>(Arrays.asList("GET", "HEAD", "POST"));
+        private final Set<String> allowedHeaders   = new LinkedHashSet<>();
+        private final Set<String> exposedHeaders   = new LinkedHashSet<>();
+        private       boolean     anyOrigin        = false;
+        private       boolean     allowCredentials = false;
+        private       long        maxAge           = -1;
+        private       boolean     enabled          = true;
 
         private Builder() {
         }

@@ -14,7 +14,6 @@ import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.constant.HttpMethod;
-import net.hasor.neta.codec.http.exception.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

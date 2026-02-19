@@ -21,10 +21,10 @@ import net.hasor.neta.codec.http.constant.HttpVersion;
  * Default implementation of {@link HttpRequest}.
  */
 public class DefaultHttpRequest implements HttpRequest {
-    private HttpVersion version;
-    private HttpMethod  method;
-    private String      uri;
-    private HttpHeaders headers;
+    private final HttpHeaders headers;
+    private       HttpVersion version;
+    private       HttpMethod  method;
+    private       String      uri;
 
     /**
      * Creates a new HTTP request.

@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import java.nio.charset.StandardCharsets;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.constant.HttpHeaderNames;
 import net.hasor.neta.codec.http.constant.HttpHeaderValues;
@@ -47,29 +49,30 @@ import net.hasor.neta.codec.http.constant.HttpVersion;
  * </pre>
  */
 public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
-    private static final int          DEFAULT_MAX_INITIAL_LINE_LENGTH = 4096;
-    private static final int          DEFAULT_MAX_HEADER_SIZE         = 8192;
-    private static final int          DEFAULT_MAX_CHUNK_SIZE          = 8192;
+    private static final int                 DEFAULT_MAX_INITIAL_LINE_LENGTH = 4096;
+    private static final int                 DEFAULT_MAX_HEADER_SIZE         = 8192;
+    private static final int                 DEFAULT_MAX_CHUNK_SIZE          = 8192;
+    private static final int                 SCAN_BUF_SIZE                   = 8192;
+    private static final ThreadLocal<byte[]> SCAN_BUF                        = ThreadLocal.withInitial(() -> new byte[SCAN_BUF_SIZE]);
     //
-    private final        int          maxInitialLineLength;
-    private final        int          maxHeaderSize;
-    private final        int          maxChunkSize;
+    private final        int                 maxInitialLineLength;
+    private final        int                 maxHeaderSize;
+    private final        int                 maxChunkSize;
     // Decoder state
-    private              State        currentState                    = State.READ_INITIAL;
-    private              ByteBuf      accumulator;
-    private              byte[]       lineBuffer;
+    private              State               currentState                    = State.READ_INITIAL;
+    private              ByteBuf             accumulator;
     // Current message being decoded
-    private              HttpResponse currentResponse;
-    private              long         contentLength                   = -1;
-    private              long         bytesRead                       = 0;
-    private              boolean      chunked                         = false;
-    private              int          currentChunkSize                = 0;
+    private              HttpResponse        currentResponse;
+    private              long                contentLength                   = -1;
+    private              long                bytesRead                       = 0;
+    private              boolean             chunked                         = false;
+    private              int                 currentChunkSize                = 0;
     // For chunked trailer accumulation across partial reads
-    private              HttpHeaders  pendingTrailerHeaders;
+    private              HttpHeaders         pendingTrailerHeaders;
     // Accumulated header bytes across partial reads (for maxHeaderSize enforcement)
-    private              int          headerBytes                     = 0;
+    private              int                 headerBytes                     = 0;
     // Track last header name for obs-fold continuation lines
-    private              String       lastHeaderName;
+    private              String              lastHeaderName;
 
     /** Creates a decoder with default limits. */
     public HttpResponseDecoder() {
@@ -99,17 +102,11 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
-        // Accumulate all available data
-        if (accumulator == null) {
-            accumulator = context.byteBufAllocator().buffer(1024, Integer.MAX_VALUE);
+        // Create a zero-copy view over all queued ByteBuf data
+        if (this.accumulator != null) {
+            this.accumulator.free();
         }
-        while (src.hasMore()) {
-            ByteBuf chunk = src.takeMessage();
-            if (chunk != null && chunk.readableBytes() > 0) {
-                accumulator.writeBuffer(chunk, chunk.readableBytes());
-            }
-        }
-        accumulator.markWriter();
+        this.accumulator = ByteBufUtils.queueBuffer(src);
 
         // Try to decode as much as possible
         boolean needMoreData = false;
@@ -159,12 +156,8 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             }
         }
 
-        // Compact the accumulator
-        if (accumulator.readableBytes() == 0) {
-            accumulator.clear();
-        } else {
-            accumulator.discardReadBytes();
-        }
+        // Consume fully-read ByteBuf messages from the queue
+        accumulator.markReader();
 
         return ProtoStatus.Next;
     }
@@ -185,41 +178,39 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
 
         if (line.length() > maxInitialLineLength) {
-            throw new net.hasor.neta.codec.http.exception.HttpInitialLineTooLongException("status line too long: " + line.length() + " > " + maxInitialLineLength);
+            throw new HttpInitialLineTooLongException("status line too long: " + line.length() + " > " + maxInitialLineLength);
         }
 
         // Parse: VERSION SP STATUS SP REASON
         int firstSpace = line.indexOf(' ');
         if (firstSpace < 0) {
-            throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("invalid status line: " + line);
+            throw new HttpMalformedRequestException("invalid status line: " + line);
         }
 
         String versionStr = line.substring(0, firstSpace);
         HttpVersion version = HttpVersion.valueOf(versionStr);
 
-        String remaining = line.substring(firstSpace + 1);
-        int secondSpace = remaining.indexOf(' ');
+        // Find second space (separates status code from reason phrase)
+        int secondSpace = line.indexOf(' ', firstSpace + 1);
 
-        int statusCode;
-        String reasonPhrase;
-
-        if (secondSpace < 0) {
-            // No reason phrase (allowed per RFC 7230)
-            try {
-                statusCode = Integer.parseInt(remaining.trim());
-            } catch (NumberFormatException e) {
-                throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("invalid status code: " + remaining, e);
+        // Parse status code directly from characters (avoid substring + Integer.parseInt)
+        int codeEnd = secondSpace >= 0 ? secondSpace : line.length();
+        int statusCode = 0;
+        for (int i = firstSpace + 1; i < codeEnd; i++) {
+            char c = line.charAt(i);
+            if (c < '0' || c > '9') {
+                if (c != ' ' && c != '\t') {
+                    throw new HttpMalformedRequestException("invalid status code in: " + line);
+                }
+                continue; // skip whitespace
             }
-            reasonPhrase = "";
-        } else {
-            try {
-                statusCode = Integer.parseInt(remaining.substring(0, secondSpace).trim());
-            } catch (NumberFormatException e) {
-                throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("invalid status code: " + remaining.substring(0, secondSpace), e);
-            }
-            reasonPhrase = remaining.substring(secondSpace + 1);
+            statusCode = statusCode * 10 + (c - '0');
+        }
+        if (statusCode < 100 || statusCode > 999) {
+            throw new HttpMalformedRequestException("invalid status code: " + statusCode);
         }
 
+        String reasonPhrase = secondSpace >= 0 ? line.substring(secondSpace + 1) : "";
         HttpStatus status = HttpStatus.valueOf(statusCode, reasonPhrase);
         currentResponse = new DefaultHttpResponse(version, status);
         currentState = State.READ_HEADER;
@@ -278,7 +269,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             headerBytes += line.length() + 2; // +2 for CRLF
             if (headerBytes > maxHeaderSize) {
-                throw new net.hasor.neta.codec.http.exception.HttpHeaderTooLargeException("HTTP headers too large: " + headerBytes + " > " + maxHeaderSize);
+                throw new HttpHeaderTooLargeException("HTTP headers too large: " + headerBytes + " > " + maxHeaderSize);
             }
 
             // Handle obs-fold (RFC 7230 §3.2.4)
@@ -295,14 +286,14 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             // Parse header: name ":" value
             int colonIdx = line.indexOf(':');
             if (colonIdx < 0) {
-                throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("invalid header line (no colon): " + line);
+                throw new HttpMalformedRequestException("invalid header line (no colon): " + line);
             }
 
             String name = line.substring(0, colonIdx).trim();
             String value = line.substring(colonIdx + 1).trim();
 
             if (name.isEmpty()) {
-                throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("empty header name");
+                throw new HttpMalformedRequestException("empty header name");
             }
 
             headers.add(name, value);
@@ -327,10 +318,10 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             try {
                 contentLength = Long.parseLong(cl.trim());
                 if (contentLength < 0) {
-                    throw new net.hasor.neta.codec.http.exception.HttpContentTooLargeException("negative Content-Length: " + contentLength);
+                    throw new HttpContentTooLargeException("negative Content-Length: " + contentLength);
                 }
             } catch (NumberFormatException e) {
-                throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("invalid Content-Length: " + cl, e);
+                throw new HttpMalformedRequestException("invalid Content-Length: " + cl, e);
             }
         }
     }
@@ -393,17 +384,17 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         String sizeStr = semiIdx >= 0 ? line.substring(0, semiIdx).trim() : line.trim();
 
         if (sizeStr.isEmpty()) {
-            throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("empty chunk size");
+            throw new HttpMalformedRequestException("empty chunk size");
         }
 
         try {
             currentChunkSize = Integer.parseInt(sizeStr, 16);
         } catch (NumberFormatException e) {
-            throw new net.hasor.neta.codec.http.exception.HttpMalformedRequestException("invalid chunk size: " + sizeStr, e);
+            throw new HttpMalformedRequestException("invalid chunk size: " + sizeStr, e);
         }
 
         if (currentChunkSize < 0) {
-            throw new net.hasor.neta.codec.http.exception.HttpContentTooLargeException("negative chunk size: " + currentChunkSize);
+            throw new HttpContentTooLargeException("negative chunk size: " + currentChunkSize);
         }
 
         if (currentChunkSize == 0) {
@@ -492,9 +483,9 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     /**
-     * Fast line reading using bulk byte array scanning.
-     * Avoids the double-scan of hasLine() + readLine() and eliminates
-     * per-byte virtual dispatch overhead of getUInt8().
+     * Fast line reading: bulk-copies available bytes into a thread-local scratch buffer,
+     * then scans the local byte array for '\n'. This avoids per-byte virtual method dispatch
+     * through QueueByteBuf's component lookup chain (getByte → findComponent → delegate).
      */
     private String fastReadLine() {
         int available = accumulator.readableBytes();
@@ -502,17 +493,15 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             return null;
         }
 
-        int scanLen = Math.min(available, maxHeaderSize + 2);
-        if (lineBuffer == null || lineBuffer.length < scanLen) {
-            lineBuffer = new byte[Math.max(scanLen, 512)];
-        }
+        int maxScan = Math.min(available, Math.min(maxHeaderSize + 2, SCAN_BUF_SIZE));
+        byte[] buf = SCAN_BUF.get();
+        accumulator.getBytes(0, buf, 0, maxScan);
 
-        accumulator.getBytes(0, lineBuffer, 0, scanLen);
-
-        for (int i = 0; i < scanLen; i++) {
-            if (lineBuffer[i] == '\n') {
-                int lineLen = (i > 0 && lineBuffer[i - 1] == '\r') ? i - 1 : i;
-                String result = new String(lineBuffer, 0, lineLen);
+        // Scan the local array for '\n' (direct array access, no virtual dispatch)
+        for (int i = 0; i < maxScan; i++) {
+            if (buf[i] == '\n') {
+                int lineLen = (i > 0 && buf[i - 1] == '\r') ? i - 1 : i;
+                String result = (lineLen == 0) ? "" : new String(buf, 0, lineLen, StandardCharsets.US_ASCII);
                 accumulator.skipReadableBytes(i + 1);
                 return result;
             }
@@ -527,7 +516,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             accumulator.free();
             accumulator = null;
         }
-        lineBuffer = null;
     }
 
     private enum State {

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.constant;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -90,6 +91,8 @@ public final class HttpStatus {
     public static final HttpStatus NETWORK_AUTHENTICATION_REQUIRED = new HttpStatus(511, "Network Authentication Required");
 
     private static final Map<Integer, HttpStatus> KNOWN_STATUSES = new HashMap<Integer, HttpStatus>();
+    /** Array-based fast lookup for status codes 100-599 (avoids Integer autoboxing + HashMap overhead). */
+    private static final HttpStatus[]             STATUS_LOOKUP  = new HttpStatus[600];
 
     static {
         register(CONTINUE, SWITCHING_PROTOCOLS, PROCESSING);
@@ -107,6 +110,8 @@ public final class HttpStatus {
     private final int    code;
     private final String reasonPhrase;
     private final String codeStr;
+    private final byte[] codeBytes;
+    private final byte[] reasonPhraseBytes;
 
     /**
      * Creates a new HttpResponseStatus with the specified status code and reason phrase.
@@ -123,11 +128,16 @@ public final class HttpStatus {
         this.code = code;
         this.reasonPhrase = reasonPhrase;
         this.codeStr = String.valueOf(code);
+        this.codeBytes = this.codeStr.getBytes(StandardCharsets.US_ASCII);
+        this.reasonPhraseBytes = reasonPhrase.getBytes(StandardCharsets.US_ASCII);
     }
 
     private static void register(HttpStatus... statuses) {
         for (HttpStatus status : statuses) {
             KNOWN_STATUSES.put(status.code, status);
+            if (status.code < STATUS_LOOKUP.length) {
+                STATUS_LOOKUP[status.code] = status;
+            }
         }
     }
 
@@ -139,8 +149,14 @@ public final class HttpStatus {
      * @return the corresponding HttpResponseStatus
      */
     public static HttpStatus valueOf(int code) {
-        HttpStatus known = KNOWN_STATUSES.get(code);
-        return known != null ? known : new HttpStatus(code, "Unknown Status " + code);
+        // Fast path: array-based lookup for common codes (avoids autoboxing + HashMap)
+        if (code >= 100 && code < STATUS_LOOKUP.length) {
+            HttpStatus known = STATUS_LOOKUP[code];
+            if (known != null) {
+                return known;
+            }
+        }
+        return new HttpStatus(code, "Unknown Status " + code);
     }
 
     /**
@@ -152,9 +168,12 @@ public final class HttpStatus {
      * @return the corresponding HttpResponseStatus
      */
     public static HttpStatus valueOf(int code, String reasonPhrase) {
-        HttpStatus known = KNOWN_STATUSES.get(code);
-        if (known != null && known.reasonPhrase.equals(reasonPhrase)) {
-            return known;
+        // Fast path: array-based lookup for common codes
+        if (code >= 100 && code < STATUS_LOOKUP.length) {
+            HttpStatus known = STATUS_LOOKUP[code];
+            if (known != null && known.reasonPhrase.equals(reasonPhrase)) {
+                return known;
+            }
         }
         return new HttpStatus(code, reasonPhrase);
     }
@@ -172,6 +191,16 @@ public final class HttpStatus {
     /** Returns the status code as a pre-cached String (e.g., "200", "404"). */
     public String codeAsString() {
         return codeStr;
+    }
+
+    /** Returns the pre-cached ASCII bytes of the status code. */
+    public byte[] codeBytes() {
+        return codeBytes;
+    }
+
+    /** Returns the pre-cached ASCII bytes of the reason phrase. */
+    public byte[] reasonPhraseBytes() {
+        return reasonPhraseBytes;
     }
 
     /**

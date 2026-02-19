@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.constant;
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -65,6 +66,7 @@ public final class HttpMethod {
     }
 
     private final String name;
+    private final byte[] nameBytes;
 
     /**
      * Creates a new HTTP method with the specified name.
@@ -84,6 +86,7 @@ public final class HttpMethod {
             }
         }
         this.name = name;
+        this.nameBytes = name.getBytes(StandardCharsets.US_ASCII);
     }
 
     /**
@@ -94,17 +97,28 @@ public final class HttpMethod {
      * @return the corresponding HttpMethod
      */
     public static HttpMethod valueOf(String name) {
-        if (name == null || name.trim().isEmpty()) {
+        if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name must not be empty");
         }
-        name = name.trim().toUpperCase();
+        // Fast path: try direct lookup first (works for canonical uppercase methods without whitespace)
         HttpMethod known = KNOWN_METHODS.get(name);
+        if (known != null) {
+            return known;
+        }
+        // Slow path: normalize and retry
+        name = name.trim().toUpperCase();
+        known = KNOWN_METHODS.get(name);
         return known != null ? known : new HttpMethod(name);
     }
 
     /** Returns the method name (e.g., "GET", "POST"). */
     public String name() {
         return name;
+    }
+
+    /** Returns the pre-cached ASCII bytes of the method name. */
+    public byte[] nameBytes() {
+        return nameBytes;
     }
 
     @Override

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.constant;
+import java.nio.charset.StandardCharsets;
+
 /**
  * Represents an HTTP protocol version as defined in
  * <a href="https://tools.ietf.org/html/rfc7230#section-2.6">RFC 7230, Section 2.6</a>.
@@ -34,6 +36,7 @@ public final class HttpVersion {
     private final int     majorVersion;
     private final int     minorVersion;
     private final String  text;
+    private final byte[]  textBytes;
     private final boolean keepAliveDefault;
 
     /**
@@ -57,6 +60,7 @@ public final class HttpVersion {
         this.majorVersion = majorVersion;
         this.minorVersion = minorVersion;
         this.text = this.protocolName + "/" + majorVersion + "." + minorVersion;
+        this.textBytes = this.text.getBytes(StandardCharsets.US_ASCII);
         this.keepAliveDefault = keepAliveDefault;
     }
 
@@ -69,9 +73,18 @@ public final class HttpVersion {
      * @throws IllegalArgumentException if the text is not a valid HTTP version
      */
     public static HttpVersion valueOf(String text) {
-        if (text == null || text.trim().isEmpty()) {
+        if (text == null || text.isEmpty()) {
             throw new IllegalArgumentException("text must not be empty");
         }
+        // Fast path: direct comparison (works for canonical HTTP/1.x without whitespace)
+        if ("HTTP/1.1".equals(text)) {
+            return HTTP_1_1;
+        }
+        if ("HTTP/1.0".equals(text)) {
+            return HTTP_1_0;
+        }
+
+        // Slow path: normalize and retry
         text = text.trim().toUpperCase();
         if ("HTTP/1.1".equals(text)) {
             return HTTP_1_1;
@@ -118,6 +131,11 @@ public final class HttpVersion {
     /** Returns the full version text (e.g., "HTTP/1.1"). */
     public String text() {
         return text;
+    }
+
+    /** Returns the pre-cached ASCII bytes of the version text (e.g., "HTTP/1.1"). */
+    public byte[] textBytes() {
+        return textBytes;
     }
 
     /**

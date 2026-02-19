@@ -65,9 +65,8 @@ public class DefaultWebSocketFrame implements WebSocketFrame {
 
     /** Creates an unmasked text frame with FIN=true. */
     public static DefaultWebSocketFrame text(String text) {
-        byte[] bytes = text.getBytes(StandardCharsets.UTF_8);
-        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(bytes.length, Integer.MAX_VALUE);
-        buf.writeBytes(bytes, 0, bytes.length);
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(text.length() * 3, Integer.MAX_VALUE);
+        buf.writeString(text, StandardCharsets.UTF_8);
         buf.markWriter();
         return new DefaultWebSocketFrame(WebSocketOpcode.TEXT, true, false, null, buf);
     }
@@ -96,13 +95,13 @@ public class DefaultWebSocketFrame implements WebSocketFrame {
      * @param reason human-readable reason (may be empty)
      */
     public static DefaultWebSocketFrame close(int statusCode, String reason) {
-        byte[] reasonBytes = (reason != null ? reason : "").getBytes(StandardCharsets.UTF_8);
-        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(2 + reasonBytes.length, Integer.MAX_VALUE);
+        String reasonStr = reason != null ? reason : "";
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(2 + reasonStr.length() * 3, Integer.MAX_VALUE);
         // Write status code as big-endian 16-bit integer
         buf.writeByte((byte) ((statusCode >> 8) & 0xFF));
         buf.writeByte((byte) (statusCode & 0xFF));
-        if (reasonBytes.length > 0) {
-            buf.writeBytes(reasonBytes, 0, reasonBytes.length);
+        if (!reasonStr.isEmpty()) {
+            buf.writeString(reasonStr, StandardCharsets.UTF_8);
         }
         buf.markWriter();
         return new DefaultWebSocketFrame(WebSocketOpcode.CLOSE, true, false, null, buf);

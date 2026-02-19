@@ -14,8 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
-import java.util.Arrays;
+import java.nio.charset.StandardCharsets;
 import java.util.Collection;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Encodes one or more {@link Cookie} objects into the value of an HTTP <b>request</b>
@@ -34,8 +35,49 @@ import java.util.Collection;
  * </pre>
  */
 public final class CookieEncoder {
+    private static final byte[] SEPARATOR = { ';', ' ' };
 
-    private CookieEncoder() {
+    /**
+     * Encodes one or more cookies directly into a {@link ByteBuf}.
+     * @param dst the destination buffer to write to; must not be {@code null}
+     * @param cookies the cookies to encode; must not be {@code null} or empty
+     * @throws IllegalArgumentException if {@code cookies} is null or empty
+     */
+    public static void encode(ByteBuf dst, Cookie... cookies) {
+        if (cookies == null || cookies.length == 0) {
+            throw new IllegalArgumentException("at least one cookie is required");
+        }
+        for (int i = 0; i < cookies.length; i++) {
+            if (i > 0) {
+                dst.writeBytes(SEPARATOR);
+            }
+            dst.writeString(cookies[i].name(), StandardCharsets.US_ASCII);
+            dst.writeByte((byte) '=');
+            dst.writeString(cookies[i].value(), StandardCharsets.US_ASCII);
+        }
+    }
+
+    /**
+     * Encodes a collection of cookies directly into a {@link ByteBuf}.
+     * @param dst the destination buffer to write to; must not be {@code null}
+     * @param cookies the cookies to encode; must not be {@code null} or empty
+     * @throws IllegalArgumentException if {@code cookies} is null or empty
+     */
+    public static void encode(ByteBuf dst, Collection<? extends Cookie> cookies) {
+        if (cookies == null || cookies.isEmpty()) {
+            throw new IllegalArgumentException("at least one cookie is required");
+        }
+        boolean first = true;
+        for (Cookie cookie : cookies) {
+            if (first) {
+                first = false;
+            } else {
+                dst.writeBytes(SEPARATOR);
+            }
+            dst.writeString(cookie.name(), StandardCharsets.US_ASCII);
+            dst.writeByte((byte) '=');
+            dst.writeString(cookie.value(), StandardCharsets.US_ASCII);
+        }
     }
 
     /**
@@ -48,7 +90,32 @@ public final class CookieEncoder {
         if (cookies == null || cookies.length == 0) {
             throw new IllegalArgumentException("at least one cookie is required");
         }
-        return encode(Arrays.asList(cookies));
+
+        // Calculate exact length
+        int totalLen = 0;
+        for (int i = 0; i < cookies.length; i++) {
+            Cookie c = cookies[i];
+            totalLen += c.name().length() + 1 + c.value().length();
+            if (i > 0)
+                totalLen += 2; // "; "
+        }
+
+        char[] buf = new char[totalLen];
+        int pos = 0;
+        for (int i = 0; i < cookies.length; i++) {
+            if (i > 0) {
+                buf[pos++] = ';';
+                buf[pos++] = ' ';
+            }
+            String name = cookies[i].name();
+            name.getChars(0, name.length(), buf, pos);
+            pos += name.length();
+            buf[pos++] = '=';
+            String value = cookies[i].value();
+            value.getChars(0, value.length(), buf, pos);
+            pos += value.length();
+        }
+        return new String(buf, 0, pos);
     }
 
     /**
@@ -61,9 +128,12 @@ public final class CookieEncoder {
         if (cookies == null || cookies.isEmpty()) {
             throw new IllegalArgumentException("at least one cookie is required");
         }
-        StringBuilder sb = new StringBuilder();
+        StringBuilder sb = new StringBuilder(cookies.size() * 24);
+        boolean first = true;
         for (Cookie cookie : cookies) {
-            if (sb.length() > 0) {
+            if (first) {
+                first = false;
+            } else {
                 sb.append("; ");
             }
             sb.append(cookie.name()).append('=').append(cookie.value());

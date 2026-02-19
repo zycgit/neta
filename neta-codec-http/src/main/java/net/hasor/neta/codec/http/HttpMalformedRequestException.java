@@ -1,4 +1,4 @@
-package net.hasor.neta.codec.http.exception;
+package net.hasor.neta.codec.http;
 
 /**
  * HTTP 协议格式错误时抛出。

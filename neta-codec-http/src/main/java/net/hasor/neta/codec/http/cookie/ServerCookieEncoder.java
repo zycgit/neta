@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import java.nio.charset.StandardCharsets;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Encodes a {@link Cookie} into the value of an HTTP <b>response</b>
@@ -35,8 +37,67 @@ package net.hasor.neta.codec.http.cookie;
  * </pre>
  */
 public final class ServerCookieEncoder {
+    // pre-computed attribute prefix byte arrays
+    private static final byte[] PFX_DOMAIN   = "; Domain=".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PFX_PATH     = "; Path=".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PFX_MAXAGE   = "; Max-Age=".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PFX_EXPIRES  = "; Expires=".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PFX_SECURE   = "; Secure".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PFX_HTTPONLY = "; HttpOnly".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PFX_SAMESITE = "; SameSite=".getBytes(StandardCharsets.US_ASCII);
 
-    private ServerCookieEncoder() {
+    /**
+     * Encodes a single cookie directly into a {@link ByteBuf} as a {@code Set-Cookie} header value.
+     * @param dst the destination buffer to write to; must not be {@code null}
+     * @param cookie the cookie to encode; must not be {@code null}
+     * @throws IllegalArgumentException if {@code cookie} is null
+     */
+    public static void encode(ByteBuf dst, Cookie cookie) {
+        if (cookie == null) {
+            throw new IllegalArgumentException("cookie must not be null");
+        }
+
+        dst.writeString(cookie.name(), StandardCharsets.US_ASCII);
+        dst.writeByte((byte) '=');
+        dst.writeString(cookie.value(), StandardCharsets.US_ASCII);
+
+        String domain = cookie.domain();
+        if (domain != null && !domain.isEmpty()) {
+            dst.writeBytes(PFX_DOMAIN);
+            dst.writeString(domain, StandardCharsets.US_ASCII);
+        }
+
+        String path = cookie.path();
+        if (path != null && !path.isEmpty()) {
+            dst.writeBytes(PFX_PATH);
+            dst.writeString(path, StandardCharsets.US_ASCII);
+        }
+
+        long maxAge = cookie.maxAge();
+        if (maxAge != DefaultCookie.UNDEFINED_MAX_AGE) {
+            dst.writeBytes(PFX_MAXAGE);
+            CookieUtils.writeLong(dst, maxAge);
+        }
+
+        String expires = cookie.expires();
+        if (expires != null && !expires.isEmpty()) {
+            dst.writeBytes(PFX_EXPIRES);
+            dst.writeString(expires, StandardCharsets.US_ASCII);
+        }
+
+        if (cookie.isSecure()) {
+            dst.writeBytes(PFX_SECURE);
+        }
+
+        if (cookie.isHttpOnly()) {
+            dst.writeBytes(PFX_HTTPONLY);
+        }
+
+        String sameSite = cookie.sameSite();
+        if (sameSite != null && !sameSite.isEmpty()) {
+            dst.writeBytes(PFX_SAMESITE);
+            dst.writeString(sameSite, StandardCharsets.US_ASCII);
+        }
     }
 
     /**
@@ -50,31 +111,105 @@ public final class ServerCookieEncoder {
             throw new IllegalArgumentException("cookie must not be null");
         }
 
-        StringBuilder sb = new StringBuilder();
-        sb.append(cookie.name()).append('=').append(cookie.value());
+        // Pre-calculate exact buffer size to avoid any reallocation
+        String name = cookie.name();
+        String value = cookie.value();
+        String domain = cookie.domain();
+        String path = cookie.path();
+        long maxAge = cookie.maxAge();
+        String expires = cookie.expires();
+        boolean secure = cookie.isSecure();
+        boolean httpOnly = cookie.isHttpOnly();
+        String sameSite = cookie.sameSite();
 
-        if (cookie.domain() != null && !cookie.domain().isEmpty()) {
-            sb.append("; Domain=").append(cookie.domain());
+        // Pre-allocated attribute prefix strings (constant folded by JIT)
+        final String PFX_DOMAIN = "; Domain=";
+        final String PFX_PATH = "; Path=";
+        final String PFX_MAXAGE = "; Max-Age=";
+        final String PFX_EXPIRES = "; Expires=";
+        final String PFX_SECURE = "; Secure";
+        final String PFX_HTTPONLY = "; HttpOnly";
+        final String PFX_SAMESITE = "; SameSite=";
+
+        int len = name.length() + 1 + value.length();
+        boolean hasDomain = domain != null && !domain.isEmpty();
+        boolean hasPath = path != null && !path.isEmpty();
+        boolean hasMaxAge = maxAge != DefaultCookie.UNDEFINED_MAX_AGE;
+        boolean hasExpires = expires != null && !expires.isEmpty();
+        boolean hasSameSite = sameSite != null && !sameSite.isEmpty();
+        String maxAgeStr = null;
+
+        if (hasDomain) {
+            len += PFX_DOMAIN.length() + domain.length();
         }
-        if (cookie.path() != null && !cookie.path().isEmpty()) {
-            sb.append("; Path=").append(cookie.path());
+        if (hasPath) {
+            len += PFX_PATH.length() + path.length();
         }
-        if (cookie.maxAge() != DefaultCookie.UNDEFINED_MAX_AGE) {
-            sb.append("; Max-Age=").append(cookie.maxAge());
+        if (hasMaxAge) {
+            maxAgeStr = Long.toString(maxAge);
+            len += PFX_MAXAGE.length() + maxAgeStr.length();
         }
-        if (cookie.expires() != null && !cookie.expires().isEmpty()) {
-            sb.append("; Expires=").append(cookie.expires());
+        if (hasExpires) {
+            len += PFX_EXPIRES.length() + expires.length();
         }
-        if (cookie.isSecure()) {
-            sb.append("; Secure");
+        if (secure) {
+            len += PFX_SECURE.length();
         }
-        if (cookie.isHttpOnly()) {
-            sb.append("; HttpOnly");
+        if (httpOnly) {
+            len += PFX_HTTPONLY.length();
         }
-        if (cookie.sameSite() != null && !cookie.sameSite().isEmpty()) {
-            sb.append("; SameSite=").append(cookie.sameSite());
+        if (hasSameSite) {
+            len += PFX_SAMESITE.length() + sameSite.length();
         }
 
-        return sb.toString();
+        char[] buf = new char[len];
+        int pos = 0;
+
+        name.getChars(0, name.length(), buf, pos);
+        pos += name.length();
+        buf[pos++] = '=';
+        value.getChars(0, value.length(), buf, pos);
+        pos += value.length();
+
+        if (hasDomain) {
+            PFX_DOMAIN.getChars(0, PFX_DOMAIN.length(), buf, pos);
+            pos += PFX_DOMAIN.length();
+            domain.getChars(0, domain.length(), buf, pos);
+            pos += domain.length();
+        }
+        if (hasPath) {
+            PFX_PATH.getChars(0, PFX_PATH.length(), buf, pos);
+            pos += PFX_PATH.length();
+            path.getChars(0, path.length(), buf, pos);
+            pos += path.length();
+        }
+        if (hasMaxAge) {
+            PFX_MAXAGE.getChars(0, PFX_MAXAGE.length(), buf, pos);
+            pos += PFX_MAXAGE.length();
+            maxAgeStr.getChars(0, maxAgeStr.length(), buf, pos);
+            pos += maxAgeStr.length();
+        }
+        if (hasExpires) {
+            PFX_EXPIRES.getChars(0, PFX_EXPIRES.length(), buf, pos);
+            pos += PFX_EXPIRES.length();
+            expires.getChars(0, expires.length(), buf, pos);
+            pos += expires.length();
+        }
+        if (secure) {
+            PFX_SECURE.getChars(0, PFX_SECURE.length(), buf, pos);
+            pos += PFX_SECURE.length();
+        }
+        if (httpOnly) {
+            PFX_HTTPONLY.getChars(0, PFX_HTTPONLY.length(), buf, pos);
+            pos += PFX_HTTPONLY.length();
+        }
+        if (hasSameSite) {
+            PFX_SAMESITE.getChars(0, PFX_SAMESITE.length(), buf, pos);
+            pos += PFX_SAMESITE.length();
+            sameSite.getChars(0, sameSite.length(), buf, pos);
+            pos += sameSite.length();
+        }
+
+        return new String(buf, 0, pos);
     }
 }

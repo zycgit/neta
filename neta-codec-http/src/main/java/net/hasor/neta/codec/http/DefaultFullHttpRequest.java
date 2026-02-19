@@ -23,12 +23,12 @@ import net.hasor.neta.codec.http.constant.HttpVersion;
  * Combines HTTP request headers with the complete message body.
  */
 public class DefaultFullHttpRequest implements FullHttpRequest {
-    private HttpVersion version;
-    private HttpMethod  method;
-    private String      uri;
-    private HttpHeaders headers;
-    private ByteBuf     content;
-    private HttpHeaders trailerHeaders;
+    private final HttpHeaders headers;
+    private final ByteBuf     content;
+    private final HttpHeaders trailerHeaders;
+    private       HttpVersion version;
+    private       HttpMethod  method;
+    private       String      uri;
 
     /**
      * Creates a new full HTTP request with an empty body.

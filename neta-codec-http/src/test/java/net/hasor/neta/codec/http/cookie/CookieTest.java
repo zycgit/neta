@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -30,6 +33,15 @@ public class CookieTest {
     // =========================================================================
     // DefaultCookie – construction and attribute accessors
     // =========================================================================
+
+    private static ByteBuf toBuf(String s) {
+        return ByteBuf.wrap(s.getBytes(StandardCharsets.US_ASCII));
+    }
+
+    private static String bufToString(ByteBuf buf) {
+        buf.markWriter();
+        return buf.getString(0, buf.readableBytes(), StandardCharsets.US_ASCII);
+    }
 
     @Test
     public void testDefaultCookieBasicConstruction() {
@@ -119,6 +131,10 @@ public class CookieTest {
         assertEquals(c1.hashCode(), c2.hashCode());
     }
 
+    // =========================================================================
+    // CookieDecoder – parsing the request Cookie header
+    // =========================================================================
+
     @Test
     public void testDefaultCookieNotEqualsDifferentValue() {
         DefaultCookie c1 = new DefaultCookie("k", "v1");
@@ -131,10 +147,6 @@ public class CookieTest {
         DefaultCookie c = new DefaultCookie("k", "v");
         assertNotEquals(c, "k=v");
     }
-
-    // =========================================================================
-    // CookieDecoder – parsing the request Cookie header
-    // =========================================================================
 
     @Test
     public void testCookieDecoderSingleCookie() {
@@ -158,7 +170,7 @@ public class CookieTest {
 
     @Test
     public void testCookieDecoderNullReturnsEmpty() {
-        List<Cookie> cookies = CookieDecoder.decode(null);
+        List<Cookie> cookies = CookieDecoder.decode((String) null);
         assertTrue(cookies.isEmpty());
     }
 
@@ -201,6 +213,10 @@ public class CookieTest {
         assertEquals("abc==", cookies.get(0).value());
     }
 
+    // =========================================================================
+    // ServerCookieDecoder – parsing the Set-Cookie response header
+    // =========================================================================
+
     @Test
     public void testCookieDecoderTrimsWhitespace() {
         List<Cookie> cookies = CookieDecoder.decode("  x = hello  ;  y = world  ");
@@ -221,10 +237,6 @@ public class CookieTest {
             // expected
         }
     }
-
-    // =========================================================================
-    // ServerCookieDecoder – parsing the Set-Cookie response header
-    // =========================================================================
 
     @Test
     public void testServerCookieDecoderMinimal() {
@@ -268,7 +280,7 @@ public class CookieTest {
 
     @Test
     public void testServerCookieDecoderNullReturnsNull() {
-        assertNull(ServerCookieDecoder.decode(null));
+        assertNull(ServerCookieDecoder.decode((String) null));
     }
 
     @Test
@@ -301,6 +313,10 @@ public class CookieTest {
         assertEquals("y", c.value());
     }
 
+    // =========================================================================
+    // CookieEncoder – building the request Cookie header value
+    // =========================================================================
+
     @Test
     public void testServerCookieDecoderSameSiteLax() {
         DefaultCookie c = ServerCookieDecoder.decode("id=1; SameSite=Lax");
@@ -313,10 +329,6 @@ public class CookieTest {
         assertEquals("None", c.sameSite());
         assertTrue(c.isSecure());
     }
-
-    // =========================================================================
-    // CookieEncoder – building the request Cookie header value
-    // =========================================================================
 
     @Test
     public void testCookieEncoderSingleCookie() {
@@ -345,12 +357,16 @@ public class CookieTest {
 
     @Test(expected = IllegalArgumentException.class)
     public void testCookieEncoderEmptyArrayThrows() {
-        CookieEncoder.encode(new Cookie[0]);
+        CookieEncoder.encode();
     }
+
+    // =========================================================================
+    // ServerCookieEncoder – building the response Set-Cookie header value
+    // =========================================================================
 
     @Test(expected = IllegalArgumentException.class)
     public void testCookieEncoderEmptyCollectionThrows() {
-        CookieEncoder.encode(Collections.<Cookie>emptyList());
+        CookieEncoder.encode(Collections.emptyList());
     }
 
     @Test
@@ -363,10 +379,6 @@ public class CookieTest {
         assertFalse(encoded.contains("Domain"));
         assertFalse(encoded.contains("HttpOnly"));
     }
-
-    // =========================================================================
-    // ServerCookieEncoder – building the response Set-Cookie header value
-    // =========================================================================
 
     @Test
     public void testServerCookieEncoderMinimal() {
@@ -420,6 +432,10 @@ public class CookieTest {
         assertTrue(ServerCookieEncoder.encode(c).contains("Domain=sub.example.com"));
     }
 
+    // =========================================================================
+    // Round-trip: encode then decode
+    // =========================================================================
+
     @Test
     public void testServerCookieEncoderPathOnly() {
         DefaultCookie c = new DefaultCookie("k", "v").setPath("/admin");
@@ -431,10 +447,6 @@ public class CookieTest {
         DefaultCookie c = new DefaultCookie("k", "v").setSameSite("Strict");
         assertTrue(ServerCookieEncoder.encode(c).contains("SameSite=Strict"));
     }
-
-    // =========================================================================
-    // Round-trip: encode then decode
-    // =========================================================================
 
     @Test
     public void testRoundTripRequestCookie() {
@@ -469,6 +481,10 @@ public class CookieTest {
         assertEquals("Lax", decoded.sameSite());
     }
 
+    // =========================================================================
+    // Integration: read Cookie from HttpHeaders, write Set-Cookie to HttpHeaders
+    // =========================================================================
+
     @Test
     public void testRoundTripMinimalCookie() {
         DefaultCookie original = new DefaultCookie("key", "val");
@@ -491,10 +507,6 @@ public class CookieTest {
         assertEquals("/", decoded.path());
     }
 
-    // =========================================================================
-    // Integration: read Cookie from HttpHeaders, write Set-Cookie to HttpHeaders
-    // =========================================================================
-
     @Test
     public void testIntegrationReadCookieFromHeader() {
         net.hasor.neta.codec.http.HttpHeaders headers = new net.hasor.neta.codec.http.HttpHeaders();
@@ -509,6 +521,10 @@ public class CookieTest {
         assertEquals("role", cookies.get(1).name());
         assertEquals("admin", cookies.get(1).value());
     }
+
+    // =========================================================================
+    // ByteBuf-based CookieDecoder tests
+    // =========================================================================
 
     @Test
     public void testIntegrationWriteSetCookieToHeader() {
@@ -542,5 +558,233 @@ public class CookieTest {
         assertEquals("/", c1.path());
         assertEquals("b", c2.name());
         assertTrue(c2.isSecure());
+    }
+
+    @Test
+    public void testByteBufCookieDecoderSingleCookie() {
+        List<Cookie> cookies = CookieDecoder.decode(toBuf("session=abc123"));
+        assertEquals(1, cookies.size());
+        assertEquals("session", cookies.get(0).name());
+        assertEquals("abc123", cookies.get(0).value());
+    }
+
+    @Test
+    public void testByteBufCookieDecoderMultipleCookies() {
+        List<Cookie> cookies = CookieDecoder.decode(toBuf("a=1; b=2; c=3"));
+        assertEquals(3, cookies.size());
+        assertEquals("a", cookies.get(0).name());
+        assertEquals("1", cookies.get(0).value());
+        assertEquals("b", cookies.get(1).name());
+        assertEquals("2", cookies.get(1).value());
+        assertEquals("c", cookies.get(2).name());
+        assertEquals("3", cookies.get(2).value());
+    }
+
+    @Test
+    public void testByteBufCookieDecoderNullReturnsEmpty() {
+        assertTrue(CookieDecoder.decode((ByteBuf) null).isEmpty());
+    }
+
+    @Test
+    public void testByteBufCookieDecoderQuotedValue() {
+        List<Cookie> cookies = CookieDecoder.decode(toBuf("token=\"bearer-xyz\""));
+        assertEquals(1, cookies.size());
+        assertEquals("bearer-xyz", cookies.get(0).value());
+    }
+
+    @Test
+    public void testByteBufCookieDecoderEmptyValue() {
+        List<Cookie> cookies = CookieDecoder.decode(toBuf("key="));
+        assertEquals(1, cookies.size());
+        assertEquals("key", cookies.get(0).name());
+        assertEquals("", cookies.get(0).value());
+    }
+
+    @Test
+    public void testByteBufCookieDecoderMalformedTokenSkipped() {
+        List<Cookie> cookies = CookieDecoder.decode(toBuf("noequals; valid=ok"));
+        assertEquals(1, cookies.size());
+        assertEquals("valid", cookies.get(0).name());
+    }
+
+    @Test
+    public void testByteBufCookieDecoderTrimsWhitespace() {
+        List<Cookie> cookies = CookieDecoder.decode(toBuf("  x = hello  ;  y = world  "));
+        assertEquals(2, cookies.size());
+        assertEquals("x", cookies.get(0).name());
+        assertEquals("hello", cookies.get(0).value());
+        assertEquals("y", cookies.get(1).name());
+        assertEquals("world", cookies.get(1).value());
+    }
+
+    // =========================================================================
+    // ByteBuf-based ServerCookieDecoder tests
+    // =========================================================================
+
+    @Test
+    public void testByteBufServerCookieDecoderMinimal() {
+        DefaultCookie c = ServerCookieDecoder.decode(toBuf("session=abc"));
+        assertNotNull(c);
+        assertEquals("session", c.name());
+        assertEquals("abc", c.value());
+    }
+
+    @Test
+    public void testByteBufServerCookieDecoderFullAttributes() {
+        String header = "session=abc; Domain=example.com; Path=/api; Max-Age=3600; Expires=Thu, 01 Jan 2099 00:00:00 GMT; Secure; HttpOnly; SameSite=Strict";
+        DefaultCookie c = ServerCookieDecoder.decode(toBuf(header));
+        assertNotNull(c);
+        assertEquals("session", c.name());
+        assertEquals("abc", c.value());
+        assertEquals("example.com", c.domain());
+        assertEquals("/api", c.path());
+        assertEquals(3600L, c.maxAge());
+        assertEquals("Thu, 01 Jan 2099 00:00:00 GMT", c.expires());
+        assertTrue(c.isSecure());
+        assertTrue(c.isHttpOnly());
+        assertEquals("Strict", c.sameSite());
+    }
+
+    @Test
+    public void testByteBufServerCookieDecoderCaseInsensitive() {
+        DefaultCookie c = ServerCookieDecoder.decode(toBuf("k=v; SECURE; HTTPONLY; SAMESITE=lax; PATH=/; DOMAIN=foo.com; MAX-AGE=60"));
+        assertTrue(c.isSecure());
+        assertTrue(c.isHttpOnly());
+        assertEquals("lax", c.sameSite());
+        assertEquals("/", c.path());
+        assertEquals("foo.com", c.domain());
+        assertEquals(60L, c.maxAge());
+    }
+
+    @Test
+    public void testByteBufServerCookieDecoderNullReturnsNull() {
+        assertNull(ServerCookieDecoder.decode((ByteBuf) null));
+    }
+
+    @Test
+    public void testByteBufServerCookieDecoderQuotedValue() {
+        DefaultCookie c = ServerCookieDecoder.decode(toBuf("token=\"secret-value\""));
+        assertEquals("secret-value", c.value());
+    }
+
+    // =========================================================================
+    // ByteBuf-based CookieEncoder tests
+    // =========================================================================
+
+    @Test
+    public void testByteBufCookieEncoderSingleCookie() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        CookieEncoder.encode(buf, new DefaultCookie("session", "abc"));
+        assertEquals("session=abc", bufToString(buf));
+        buf.free();
+    }
+
+    @Test
+    public void testByteBufCookieEncoderMultipleCookies() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        Cookie c1 = new DefaultCookie("a", "1");
+        Cookie c2 = new DefaultCookie("b", "2");
+        Cookie c3 = new DefaultCookie("c", "3");
+        CookieEncoder.encode(buf, c1, c2, c3);
+        assertEquals("a=1; b=2; c=3", bufToString(buf));
+        buf.free();
+    }
+
+    @Test
+    public void testByteBufCookieEncoderCollection() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        List<Cookie> list = Arrays.asList(new DefaultCookie("x", "10"), new DefaultCookie("y", "20"));
+        CookieEncoder.encode(buf, list);
+        assertEquals("x=10; y=20", bufToString(buf));
+        buf.free();
+    }
+
+    @Test
+    public void testByteBufCookieEncoderOnlyNameValue() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        DefaultCookie c = new DefaultCookie("s", "v").setPath("/").setDomain("a.com").setHttpOnly(true);
+        CookieEncoder.encode(buf, c);
+        String encoded = bufToString(buf);
+        assertEquals("s=v", encoded);
+        assertFalse(encoded.contains("Path"));
+        buf.free();
+    }
+
+    // =========================================================================
+    // ByteBuf-based ServerCookieEncoder tests
+    // =========================================================================
+
+    @Test
+    public void testByteBufServerCookieEncoderMinimal() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        ServerCookieEncoder.encode(buf, new DefaultCookie("k", "v"));
+        assertEquals("k=v", bufToString(buf));
+        buf.free();
+    }
+
+    @Test
+    public void testByteBufServerCookieEncoderWithAllAttributes() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        DefaultCookie c = new DefaultCookie("session", "abc").setDomain("example.com").setPath("/").setMaxAge(3600).setExpires("Mon, 01 Jan 2099 00:00:00 GMT").setSecure(true).setHttpOnly(true).setSameSite("Lax");
+        ServerCookieEncoder.encode(buf, c);
+        assertEquals("session=abc; Domain=example.com; Path=/; Max-Age=3600; Expires=Mon, 01 Jan 2099 00:00:00 GMT; Secure; HttpOnly; SameSite=Lax", bufToString(buf));
+        buf.free();
+    }
+
+    @Test
+    public void testByteBufServerCookieEncoderSecureOnly() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        ServerCookieEncoder.encode(buf, new DefaultCookie("k", "v").setSecure(true));
+        assertEquals("k=v; Secure", bufToString(buf));
+        buf.free();
+    }
+
+    @Test
+    public void testByteBufServerCookieEncoderMaxAgeZero() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        ServerCookieEncoder.encode(buf, new DefaultCookie("old", "gone").setMaxAge(0));
+        assertTrue(bufToString(buf).contains("Max-Age=0"));
+        buf.free();
+    }
+
+    // =========================================================================
+    // ByteBuf Round-trip: encode to buf, then decode from buf
+    // =========================================================================
+
+    @Test
+    public void testByteBufRoundTripRequestCookie() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        Cookie original1 = new DefaultCookie("lang", "en");
+        Cookie original2 = new DefaultCookie("theme", "dark");
+        CookieEncoder.encode(buf, original1, original2);
+        buf.markWriter();
+
+        List<Cookie> decoded = CookieDecoder.decode(buf);
+        assertEquals(2, decoded.size());
+        assertEquals("lang", decoded.get(0).name());
+        assertEquals("en", decoded.get(0).value());
+        assertEquals("theme", decoded.get(1).name());
+        assertEquals("dark", decoded.get(1).value());
+        buf.free();
+    }
+
+    @Test
+    public void testByteBufRoundTripResponseCookie() {
+        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
+        DefaultCookie original = new DefaultCookie("session", "s3cr3t").setDomain("example.com").setPath("/").setMaxAge(86400).setSecure(true).setHttpOnly(true).setSameSite("Lax");
+        ServerCookieEncoder.encode(buf, original);
+        buf.markWriter();
+
+        DefaultCookie decoded = ServerCookieDecoder.decode(buf);
+        assertNotNull(decoded);
+        assertEquals("session", decoded.name());
+        assertEquals("s3cr3t", decoded.value());
+        assertEquals("example.com", decoded.domain());
+        assertEquals("/", decoded.path());
+        assertEquals(86400L, decoded.maxAge());
+        assertTrue(decoded.isSecure());
+        assertTrue(decoded.isHttpOnly());
+        assertEquals("Lax", decoded.sameSite());
+        buf.free();
     }
 }

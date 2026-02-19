@@ -1,4 +1,4 @@
-package net.hasor.neta.codec.http.exception;
+package net.hasor.neta.codec.http;
 
 /**
  * HTTP Header 超出最大限制时抛出。

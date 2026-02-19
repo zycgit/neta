@@ -18,6 +18,7 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.codec.http.constant.HttpHeaderNames;
 import net.hasor.neta.codec.http.constant.HttpHeaderValues;
 
@@ -33,10 +34,6 @@ import net.hasor.neta.codec.http.constant.HttpHeaderValues;
  * </pre>
  */
 public final class MultipartDecoder {
-
-    private MultipartDecoder() {
-    }
-
     /**
      * Extracts the boundary value from a {@code Content-Type} header value such as
      * {@code "multipart/form-data; boundary=----WebKitFormBoundary"}.
@@ -88,30 +85,30 @@ public final class MultipartDecoder {
             return Collections.emptyList();
         }
 
-        byte[] bodyBytes = readAllBytes(body);
         byte[] delimiterBytes = ("--" + boundary).getBytes(StandardCharsets.US_ASCII);
+        int bodyLen = body.readableBytes();
 
         List<FileUpload> parts = new ArrayList<>(4);
 
         // Find and iterate over all boundary positions
         int pos = 0;
-        while (pos < bodyBytes.length) {
-            int delimPos = indexOf(bodyBytes, delimiterBytes, pos);
+        while (pos < bodyLen) {
+            int delimPos = indexOfInBuf(body, delimiterBytes, pos);
             if (delimPos < 0) {
                 break;
             }
 
             // Skip past the delimiter line (delimiter + optional \r\n or --)
             int afterDelim = delimPos + delimiterBytes.length;
-            if (afterDelim + 2 <= bodyBytes.length) {
+            if (afterDelim + 2 <= bodyLen) {
                 // Check for final boundary "--"
-                if (bodyBytes[afterDelim] == '-' && bodyBytes[afterDelim + 1] == '-') {
+                if (body.getByte(afterDelim) == '-' && body.getByte(afterDelim + 1) == '-') {
                     break; // end of multipart
                 }
                 // Skip CRLF after delimiter
-                if (bodyBytes[afterDelim] == '\r' && bodyBytes[afterDelim + 1] == '\n') {
+                if (body.getByte(afterDelim) == '\r' && body.getByte(afterDelim + 1) == '\n') {
                     afterDelim += 2;
-                } else if (bodyBytes[afterDelim] == '\n') {
+                } else if (body.getByte(afterDelim) == '\n') {
                     afterDelim += 1;
                 }
             } else {
@@ -119,21 +116,21 @@ public final class MultipartDecoder {
             }
 
             // Find the next boundary to determine the end of this part's body
-            int nextDelimPos = indexOf(bodyBytes, delimiterBytes, afterDelim);
+            int nextDelimPos = indexOfInBuf(body, delimiterBytes, afterDelim);
             if (nextDelimPos < 0) {
                 break;
             }
 
             // The part content ends at the CRLF just before the next boundary
             int partEnd = nextDelimPos;
-            if (partEnd >= 2 && bodyBytes[partEnd - 2] == '\r' && bodyBytes[partEnd - 1] == '\n') {
+            if (partEnd >= 2 && body.getByte(partEnd - 2) == '\r' && body.getByte(partEnd - 1) == '\n') {
                 partEnd -= 2;
-            } else if (partEnd >= 1 && bodyBytes[partEnd - 1] == '\n') {
+            } else if (partEnd >= 1 && body.getByte(partEnd - 1) == '\n') {
                 partEnd -= 1;
             }
 
             // Parse headers and body from afterDelim..partEnd
-            FileUpload part = parsePart(bodyBytes, afterDelim, partEnd, charset);
+            FileUpload part = parsePart(body, afterDelim, partEnd, charset);
             if (part != null) {
                 parts.add(part);
             }
@@ -148,16 +145,16 @@ public final class MultipartDecoder {
     // Internal helpers
     // -------------------------------------------------------------------------
 
-    private static FileUpload parsePart(byte[] data, int start, int end, Charset charset) {
+    private static FileUpload parsePart(ByteBuf data, int start, int end, Charset charset) {
         // Find the blank line separating headers from body (\r\n\r\n or \n\n)
         int headerEnd = -1;
         int bodyStart = -1;
         for (int i = start; i < end - 1; i++) {
-            if (data[i] == '\r' && i + 3 < end && data[i + 1] == '\n' && data[i + 2] == '\r' && data[i + 3] == '\n') {
+            if (data.getByte(i) == '\r' && i + 3 < end && data.getByte(i + 1) == '\n' && data.getByte(i + 2) == '\r' && data.getByte(i + 3) == '\n') {
                 headerEnd = i;
                 bodyStart = i + 4;
                 break;
-            } else if (data[i] == '\n' && i + 1 < end && data[i + 1] == '\n') {
+            } else if (data.getByte(i) == '\n' && i + 1 < end && data.getByte(i + 1) == '\n') {
                 headerEnd = i;
                 bodyStart = i + 2;
                 break;
@@ -167,7 +164,7 @@ public final class MultipartDecoder {
             return null;
         }
 
-        // Parse headers directly from bytes (avoids String allocation for header section)
+        // Parse headers directly from ByteBuf (avoids copying header section to byte[])
         Map<String, String> headers = parseHeaders(data, start, headerEnd, charset);
 
         // Parse Content-Disposition
@@ -184,21 +181,21 @@ public final class MultipartDecoder {
 
         String contentType = headers.get(HttpHeaderNames.CONTENT_TYPE);
 
-        // Extract body bytes — use ByteBuf.wrap for lightweight wrapping (avoids allocator overhead)
+        // Extract body bytes — copy directly from ByteBuf to a new ByteBuf via getBuffer
         int bodyLen = end - bodyStart;
         ByteBuf content;
         if (bodyLen > 0) {
-            byte[] partBytes = new byte[bodyLen];
-            System.arraycopy(data, bodyStart, partBytes, 0, bodyLen);
-            content = ByteBuf.wrap(partBytes);
+            content = ByteBufAllocator.DEFAULT.buffer(bodyLen);
+            data.getBuffer(bodyStart, content, bodyLen);
+            content.markWriter();
         } else {
-            content = ByteBuf.wrap(new byte[0]);
+            content = ByteBuf.EMPTY;
         }
 
         return new DefaultFileUpload(fieldName, filename, contentType, content, headers);
     }
 
-    private static Map<String, String> parseHeaders(byte[] data, int start, int end, Charset charset) {
+    private static Map<String, String> parseHeaders(ByteBuf data, int start, int end, Charset charset) {
         Map<String, String> headers = new LinkedHashMap<>(4, 1.0f);
         int pos = start;
         while (pos < end) {
@@ -206,11 +203,11 @@ public final class MultipartDecoder {
             int lineEnd = -1;
             int nextStart = -1;
             for (int i = pos; i < end; i++) {
-                if (data[i] == '\r' && i + 1 < end && data[i + 1] == '\n') {
+                if (data.getByte(i) == '\r' && i + 1 < end && data.getByte(i + 1) == '\n') {
                     lineEnd = i;
                     nextStart = i + 2;
                     break;
-                } else if (data[i] == '\n') {
+                } else if (data.getByte(i) == '\n') {
                     lineEnd = i;
                     nextStart = i + 1;
                     break;
@@ -225,7 +222,7 @@ public final class MultipartDecoder {
             if (lineEnd > pos) {
                 int colon = -1;
                 for (int i = pos; i < lineEnd; i++) {
-                    if (data[i] == ':') {
+                    if (data.getByte(i) == ':') {
                         colon = i;
                         break;
                     }
@@ -233,40 +230,35 @@ public final class MultipartDecoder {
                 if (colon > pos) {
                     // Trim key boundaries
                     int keyEnd = colon;
-                    while (keyEnd > pos && data[keyEnd - 1] <= ' ') {
+                    while (keyEnd > pos && data.getByte(keyEnd - 1) <= ' ') {
                         keyEnd--;
                     }
                     int keyStart = pos;
-                    while (keyStart < keyEnd && data[keyStart] <= ' ') {
+                    while (keyStart < keyEnd && data.getByte(keyStart) <= ' ') {
                         keyStart++;
                     }
                     int keyLen = keyEnd - keyStart;
 
                     // Reuse constants for common header names (avoids String allocation)
                     String key;
-                    if (keyLen == 19 && regionMatchesBytes(data, keyStart, HttpHeaderNames.CONTENT_DISPOSITION)) {
+                    if (keyLen == 19 && regionMatchesBuf(data, keyStart, HttpHeaderNames.CONTENT_DISPOSITION)) {
                         key = HttpHeaderNames.CONTENT_DISPOSITION;
-                    } else if (keyLen == 12 && regionMatchesBytes(data, keyStart, HttpHeaderNames.CONTENT_TYPE)) {
+                    } else if (keyLen == 12 && regionMatchesBuf(data, keyStart, HttpHeaderNames.CONTENT_TYPE)) {
                         key = HttpHeaderNames.CONTENT_TYPE;
                     } else {
-                        char[] keyChars = new char[keyLen];
-                        for (int i = 0; i < keyLen; i++) {
-                            byte b = data[keyStart + i];
-                            keyChars[i] = (b >= 'A' && b <= 'Z') ? (char) (b + 32) : (char) (b & 0xFF);
-                        }
-                        key = new String(keyChars);
+                        key = data.getString(keyStart, keyLen, StandardCharsets.US_ASCII).toLowerCase();
                     }
 
-                    // Trim value and create String directly from bytes
+                    // Trim value and extract String directly from ByteBuf
                     int valStart = colon + 1;
-                    while (valStart < lineEnd && data[valStart] <= ' ') {
+                    while (valStart < lineEnd && data.getByte(valStart) <= ' ') {
                         valStart++;
                     }
                     int valEnd = lineEnd;
-                    while (valEnd > valStart && data[valEnd - 1] <= ' ') {
+                    while (valEnd > valStart && data.getByte(valEnd - 1) <= ' ') {
                         valEnd--;
                     }
-                    String value = new String(data, valStart, valEnd - valStart, charset);
+                    String value = (valEnd > valStart) ? data.getString(valStart, valEnd - valStart, charset) : "";
 
                     headers.put(key, value);
                 }
@@ -314,31 +306,25 @@ public final class MultipartDecoder {
         return -1;
     }
 
-    private static byte[] readAllBytes(ByteBuf buf) {
-        int len = buf.readableBytes();
-        byte[] result = new byte[len];
-        buf.readBytes(result, 0, len);
-        return result;
-    }
-
-    /** Optimized brute-force indexOf for byte arrays with first-byte fast skip. */
-    private static int indexOf(byte[] haystack, byte[] needle, int fromIndex) {
+    /** Optimized brute-force indexOf for a byte sequence within a ByteBuf, using first-byte fast skip. */
+    private static int indexOfInBuf(ByteBuf buf, byte[] needle, int fromIndex) {
         if (needle.length == 0) {
             return fromIndex;
         }
         byte first = needle[0];
-        int maxI = haystack.length - needle.length;
+        int bufLen = buf.readableBytes();
+        int maxI = bufLen - needle.length;
         for (int i = fromIndex; i <= maxI; i++) {
             // Fast-skip until first byte matches
-            if (haystack[i] != first) {
-                while (++i <= maxI && haystack[i] != first) {
+            if (buf.getByte(i) != first) {
+                while (++i <= maxI && buf.getByte(i) != first) {
                 }
             }
             if (i <= maxI) {
                 // Verify remaining bytes
                 boolean match = true;
                 for (int j = 1; j < needle.length; j++) {
-                    if (haystack[i + j] != needle[j]) {
+                    if (buf.getByte(i + j) != needle[j]) {
                         match = false;
                         break;
                     }
@@ -351,10 +337,10 @@ public final class MultipartDecoder {
         return -1;
     }
 
-    /** Case-insensitive match of byte array region against a lowercase ASCII string constant. */
-    private static boolean regionMatchesBytes(byte[] data, int offset, String expected) {
+    /** Case-insensitive match of a ByteBuf region against a lowercase ASCII string constant. */
+    private static boolean regionMatchesBuf(ByteBuf buf, int offset, String expected) {
         for (int i = 0; i < expected.length(); i++) {
-            byte b = data[offset + i];
+            byte b = buf.getByte(offset + i);
             char c = (b >= 'A' && b <= 'Z') ? (char) (b + 32) : (char) (b & 0xFF);
             if (c != expected.charAt(i)) {
                 return false;

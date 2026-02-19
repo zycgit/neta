@@ -69,7 +69,6 @@ import net.hasor.neta.codec.http.constant.HttpVersion;
  * @see CorsUtil
  */
 public class CorsHandler implements ProtoHandler<FullHttpRequest, Object> {
-
     private final CorsConfig config;
 
     /**

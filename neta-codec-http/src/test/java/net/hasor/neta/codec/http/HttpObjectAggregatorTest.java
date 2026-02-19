@@ -344,7 +344,7 @@ public class HttpObjectAggregatorTest {
         assertEquals(1, rcvData.size());
         FullHttpRequest fullReq = (FullHttpRequest) rcvData.poll();
         // Transfer-Encoding should be removed after aggregation
-        assertTrue("Transfer-Encoding should be removed", fullReq.headers().get("transfer-encoding") == null);
+        assertNull("Transfer-Encoding should be removed", fullReq.headers().get("transfer-encoding"));
         // Content-Length should be set
         assertEquals("5", fullReq.headers().get("content-length"));
 
@@ -375,7 +375,7 @@ public class HttpObjectAggregatorTest {
         ByteBuf content = fullResp.content();
         assertEquals("Chunk-1Chunk-2", content.readString(content.readableBytes(), StandardCharsets.US_ASCII));
         // Transfer-Encoding should be removed
-        assertTrue(fullResp.headers().get("transfer-encoding") == null);
+        assertNull(fullResp.headers().get("transfer-encoding"));
         // Content-Length should be auto-set
         assertEquals("14", fullResp.headers().get("content-length"));
 
@@ -465,7 +465,7 @@ public class HttpObjectAggregatorTest {
         client.sendData(toByteBuf(request)).get();
 
         assertNotNull("Should have caught content length exceeded error", aggregator.lastError);
-        assertTrue("Should be HttpContentTooLargeException", aggregator.lastError instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException);
+        assertTrue("Should be HttpContentTooLargeException", aggregator.lastError instanceof HttpContentTooLargeException);
         assertTrue(aggregator.lastError.getMessage().contains("content length exceeds maximum"));
 
         neta.shutdown();
@@ -493,7 +493,7 @@ public class HttpObjectAggregatorTest {
         client.sendData(toByteBuf(request)).get();
 
         assertNotNull("Should have caught content length exceeded error", aggregator.lastError);
-        assertTrue("Should be HttpContentTooLargeException", aggregator.lastError instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException);
+        assertTrue("Should be HttpContentTooLargeException", aggregator.lastError instanceof HttpContentTooLargeException);
         assertTrue(aggregator.lastError.getMessage().contains("content length exceeds maximum"));
 
         neta.shutdown();

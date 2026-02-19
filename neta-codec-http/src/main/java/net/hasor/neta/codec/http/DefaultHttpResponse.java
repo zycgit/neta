@@ -21,9 +21,9 @@ import net.hasor.neta.codec.http.constant.HttpVersion;
  * Default implementation of {@link HttpResponse}.
  */
 public class DefaultHttpResponse implements HttpResponse {
-    private HttpVersion version;
-    private HttpStatus  status;
-    private HttpHeaders headers;
+    private final HttpHeaders headers;
+    private       HttpVersion version;
+    private       HttpStatus  status;
 
     /**
      * Creates a new HTTP response.

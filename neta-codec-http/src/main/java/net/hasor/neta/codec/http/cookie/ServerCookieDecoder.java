@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import java.nio.charset.StandardCharsets;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Decodes the value of an HTTP <b>response</b> {@code Set-Cookie} header into a
@@ -30,8 +32,139 @@ package net.hasor.neta.codec.http.cookie;
  * </pre>
  */
 public final class ServerCookieDecoder {
+    // pre-computed lowercase attribute names for byte-level comparison
+    private static final byte[] SECURE   = "secure".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] HTTPONLY = "httponly".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] DOMAIN   = "domain".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] PATH     = "path".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] MAX_AGE  = "max-age".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] EXPIRES  = "expires".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] SAMESITE = "samesite".getBytes(StandardCharsets.US_ASCII);
 
-    private ServerCookieDecoder() {
+    /**
+     * Decodes one {@code Set-Cookie} response header value from a {@link ByteBuf}.
+     * The buffer's readerIndex is not modified.
+     * @param buf the buffer containing the raw {@code Set-Cookie} header value; may be {@code null}
+     * @return the decoded {@link DefaultCookie}, or {@code null} if the input is null or empty
+     * @throws IllegalArgumentException if the header does not contain a valid {@code name=value} pair
+     */
+    public static DefaultCookie decode(ByteBuf buf) {
+        if (buf == null || buf.readableBytes() == 0) {
+            return null;
+        }
+
+        final int length = buf.readableBytes();
+
+        // find first ';' to isolate name=value pair
+        int firstSemi = CookieUtils.indexOf(buf, 0, length, (byte) ';');
+        int firstEnd = firstSemi < 0 ? length : firstSemi;
+
+        // find '='
+        int eqIdx = CookieUtils.indexOf(buf, 0, firstEnd, (byte) '=');
+        if (eqIdx <= 0) {
+            throw new IllegalArgumentException("Invalid Set-Cookie header: missing '=' in name=value pair: " + buf.getString(0, firstEnd, StandardCharsets.US_ASCII));
+        }
+
+        // trim name
+        int nameStart = 0;
+        while (nameStart < eqIdx && buf.getByte(nameStart) <= ' ') {
+            nameStart++;
+        }
+        int nameEnd = eqIdx;
+        while (nameEnd > nameStart && buf.getByte(nameEnd - 1) <= ' ') {
+            nameEnd--;
+        }
+
+        // trim value
+        int valStart = eqIdx + 1;
+        while (valStart < firstEnd && buf.getByte(valStart) <= ' ') {
+            valStart++;
+        }
+        int valEnd = firstEnd;
+        while (valEnd > valStart && buf.getByte(valEnd - 1) <= ' ') {
+            valEnd--;
+        }
+
+        // unquote
+        if (valEnd - valStart >= 2 && buf.getByte(valStart) == '"' && buf.getByte(valEnd - 1) == '"') {
+            valStart++;
+            valEnd--;
+        }
+
+        String name = buf.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
+        String value = buf.getString(valStart, valEnd - valStart, StandardCharsets.US_ASCII);
+        DefaultCookie cookie = new DefaultCookie(name, value);
+
+        // parse attributes
+        int pos = firstSemi < 0 ? length : firstSemi + 1;
+        while (pos < length) {
+            int nextSemi = CookieUtils.indexOf(buf, pos, length, (byte) ';');
+            int end = nextSemi < 0 ? length : nextSemi;
+
+            int start = pos;
+            while (start < end && buf.getByte(start) <= ' ') {
+                start++;
+            }
+            int attrEnd = end;
+            while (attrEnd > start && buf.getByte(attrEnd - 1) <= ' ') {
+                attrEnd--;
+            }
+
+            if (start < attrEnd) {
+                int attrEq = CookieUtils.indexOf(buf, start, attrEnd, (byte) '=');
+                if (attrEq < 0 || attrEq >= attrEnd) {
+                    // flag attribute
+                    int attrLen = attrEnd - start;
+                    if (attrLen == 6 && CookieUtils.equalsIgnoreCase(buf, start, SECURE)) {
+                        cookie.setSecure(true);
+                    } else if (attrLen == 8 && CookieUtils.equalsIgnoreCase(buf, start, HTTPONLY)) {
+                        cookie.setHttpOnly(true);
+                    }
+                } else {
+                    // key=value attribute
+                    int keyLen = attrEq - start;
+                    int aValStart = attrEq + 1;
+                    while (aValStart < attrEnd && buf.getByte(aValStart) <= ' ') {
+                        aValStart++;
+                    }
+
+                    if (keyLen == 6 && CookieUtils.equalsIgnoreCase(buf, start, DOMAIN)) {
+                        cookie.setDomain(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                    } else if (keyLen == 4 && CookieUtils.equalsIgnoreCase(buf, start, PATH)) {
+                        cookie.setPath(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                    } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, MAX_AGE)) {
+                        // parse long directly from bytes
+                        long maxAge = 0;
+                        boolean negative = false;
+                        int mi = aValStart;
+                        if (mi < attrEnd && buf.getByte(mi) == '-') {
+                            negative = true;
+                            mi++;
+                        }
+                        boolean valid = false;
+                        for (; mi < attrEnd; mi++) {
+                            byte mc = buf.getByte(mi);
+                            if (mc < '0' || mc > '9') {
+                                break;
+                            }
+                            maxAge = maxAge * 10 + (mc - '0');
+                            valid = true;
+                        }
+                        if (valid) {
+                            cookie.setMaxAge(negative ? -maxAge : maxAge);
+                        }
+                    } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, EXPIRES)) {
+                        cookie.setExpires(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                    } else if (keyLen == 8 && CookieUtils.equalsIgnoreCase(buf, start, SAMESITE)) {
+                        cookie.setSameSite(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                    }
+                }
+            }
+
+            pos = nextSemi < 0 ? length : nextSemi + 1;
+        }
+
+        return cookie;
     }
 
     /**

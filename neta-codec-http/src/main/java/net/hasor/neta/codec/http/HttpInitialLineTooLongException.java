@@ -1,4 +1,4 @@
-package net.hasor.neta.codec.http.exception;
+package net.hasor.neta.codec.http;
 
 /**
  * HTTP 请求行/响应行超长时抛出。

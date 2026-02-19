@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cors;
+import java.util.Collections;
 import java.util.Set;
 import net.hasor.neta.codec.http.DefaultFullHttpRequest;
 import net.hasor.neta.codec.http.DefaultFullHttpResponse;
@@ -636,8 +637,7 @@ public class CorsTest {
 
         @Override
         public int offerMessage(T[] offerList) {
-            for (T t : offerList)
-                list.add(t);
+            Collections.addAll(list, offerList);
             return offerList.length;
         }
 

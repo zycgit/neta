@@ -170,7 +170,7 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
             return Collections.emptyList();
         }
         List<String> values = headers.get(name.toLowerCase(Locale.ROOT));
-        return values != null ? Collections.unmodifiableList(values) : Collections.<String>emptyList();
+        return values != null ? Collections.unmodifiableList(values) : Collections.emptyList();
     }
 
     /**
@@ -274,6 +274,54 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
         return headers.isEmpty();
     }
 
+    /**
+     * Invokes the given callback for each header name-value pair, avoiding
+     * the allocation of {@code Map.Entry} wrapper objects that the iterator creates.
+     * @param callback the callback to invoke for each header pair
+     */
+    public void forEachHeader(HeaderConsumer callback) {
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            String name = entry.getKey();
+            for (String value : entry.getValue()) {
+                callback.accept(name, value);
+            }
+        }
+    }
+
+    /**
+     * Composes all header lines ("name: value\r\n") into the given byte buffer.
+     * Returns the new offset after all headers, or -1 if the buffer is too small.
+     * @param buf the target byte buffer
+     * @param offset the starting position in the buffer
+     * @param limit the maximum position (exclusive) in the buffer
+     * @return the position after the last byte written, or -1 on overflow
+     */
+    public int composeHeadersTo(byte[] buf, int offset, int limit) {
+        int pos = offset;
+        for (Map.Entry<String, List<String>> entry : headers.entrySet()) {
+            String name = entry.getKey();
+            int nameLen = name.length();
+            for (String value : entry.getValue()) {
+                int valueLen = value.length();
+                int lineLen = nameLen + 2 + valueLen + 2; // "name: value\r\n"
+                if (pos + lineLen > limit) {
+                    return -1; // overflow
+                }
+                for (int i = 0; i < nameLen; i++) {
+                    buf[pos++] = (byte) name.charAt(i);
+                }
+                buf[pos++] = ':';
+                buf[pos++] = ' ';
+                for (int i = 0; i < valueLen; i++) {
+                    buf[pos++] = (byte) value.charAt(i);
+                }
+                buf[pos++] = '\r';
+                buf[pos++] = '\n';
+            }
+        }
+        return pos;
+    }
+
     /** Returns the total number of header name-value pairs. */
     public int size() {
         int count = 0;
@@ -304,7 +352,7 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
     @Override
     public Iterator<Map.Entry<String, String>> iterator() {
         if (headers.isEmpty()) {
-            return Collections.<Map.Entry<String, String>>emptyList().iterator();
+            return Collections.emptyIterator();
         }
         return new Iterator<Map.Entry<String, String>>() {
             private final Iterator<Map.Entry<String, List<String>>> outer = headers.entrySet().iterator();
@@ -393,5 +441,12 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
     @Override
     public int hashCode() {
         return headers.hashCode();
+    }
+
+    /**
+     * Functional interface for consuming header name-value pairs without allocation.
+     */
+    public interface HeaderConsumer {
+        void accept(String name, String value);
     }
 }

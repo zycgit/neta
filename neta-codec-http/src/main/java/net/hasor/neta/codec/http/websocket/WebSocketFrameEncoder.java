@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
@@ -36,16 +38,9 @@ import net.hasor.neta.channel.*;
  */
 public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteBuf> {
 
-    private static byte[] readPayload(ByteBuf content) {
-        if (content == null || content.readableBytes() == 0) {
-            return new byte[0];
-        }
-        int len = content.readableBytes();
-        byte[] bytes = new byte[len];
-        // Bulk read without advancing the reader index of the original buffer
-        content.getBytes(content.readerIndex(), bytes, 0, len);
-        return bytes;
-    }
+    private static final int                 XOR_SCRATCH_SIZE    = 4096;
+    private static final int                 COMPOSITE_THRESHOLD = 4096;
+    private static final ThreadLocal<byte[]> XOR_SCRATCH         = ThreadLocal.withInitial(() -> new byte[XOR_SCRATCH_SIZE]);
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<WebSocketFrame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
@@ -75,8 +70,9 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
             headerSize += 4;
         }
 
-        int totalSize = headerSize + payloadLen;
-        ByteBuf out = context.byteBufAllocator().buffer(totalSize, Integer.MAX_VALUE);
+        boolean useComposite = !masked && payloadLen >= COMPOSITE_THRESHOLD;
+        int allocSize = useComposite ? headerSize : (headerSize + payloadLen);
+        ByteBuf out = context.byteBufAllocator().buffer(allocSize, Integer.MAX_VALUE);
 
         // Byte 0: FIN + opcode
         byte byte0 = (byte) ((frame.isFinalFragment() ? 0x80 : 0x00) | (frame.opcode().code() & 0x0F));
@@ -110,23 +106,41 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
         // Payload
         if (payloadLen > 0) {
             if (masked) {
-                // For masked frames, we need a byte array for XOR
-                byte[] payload = readPayload(content);
-                int i = 0;
-                int len4 = payloadLen & ~3;
-                for (; i < len4; i += 4) {
-                    payload[i] ^= maskKey[0];
-                    payload[i + 1] ^= maskKey[1];
-                    payload[i + 2] ^= maskKey[2];
-                    payload[i + 3] ^= maskKey[3];
+                // Read payload in fixed-size chunks, apply XOR mask, write into output ByteBuf
+                // This avoids allocating a payload-sized byte[] for large frames
+                byte[] scratch = XOR_SCRATCH.get();
+                int remaining = payloadLen;
+                int srcOff = 0;
+                while (remaining > 0) {
+                    int chunk = Math.min(remaining, XOR_SCRATCH_SIZE);
+                    content.getBytes(srcOff, scratch, 0, chunk);
+                    // Unrolled XOR mask (XOR_SCRATCH_SIZE is multiple of 4, alignment guaranteed per chunk)
+                    int j = 0;
+                    int chunk4 = chunk & ~3;
+                    for (; j < chunk4; j += 4) {
+                        scratch[j] ^= maskKey[0];
+                        scratch[j + 1] ^= maskKey[1];
+                        scratch[j + 2] ^= maskKey[2];
+                        scratch[j + 3] ^= maskKey[3];
+                    }
+                    for (; j < chunk; j++) {
+                        scratch[j] ^= maskKey[j & 3];
+                    }
+                    out.writeBytes(scratch, 0, chunk);
+                    srcOff += chunk;
+                    remaining -= chunk;
                 }
-                for (; i < payloadLen; i++) {
-                    payload[i] ^= maskKey[i & 3];
-                }
-                out.writeBytes(payload, 0, payloadLen);
+            } else if (useComposite) {
+                // Zero-copy: compose header + content without copying payload data
+                out.markWriter();
+                CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
+                composite.addComponent(out);
+                composite.addComponent(content);
+                content.release(); // transfer ownership to composite
+                return composite;
             } else {
-                // Direct ByteBuf-to-ByteBuf copy (avoids intermediate byte array)
-                content.getBuffer(0, out, payloadLen);
+                // Direct copy for small payloads (cheaper than composite overhead)
+                content.getBuffer(content.readerIndex(), out, payloadLen);
             }
         }
 

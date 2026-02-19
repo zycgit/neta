@@ -336,7 +336,7 @@ public class HttpResponseEncoderTest {
         ByteBuf content = decoded.content();
         assertEquals("Hello World", content.readString(content.readableBytes(), StandardCharsets.US_ASCII));
         // After aggregation, Transfer-Encoding should be removed and Content-Length set
-        assertTrue(decoded.headers().get("transfer-encoding") == null);
+        assertNull(decoded.headers().get("transfer-encoding"));
         assertEquals("11", decoded.headers().get("content-length"));
 
         neta.shutdown();

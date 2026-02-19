@@ -38,7 +38,6 @@ import net.hasor.neta.codec.http.constant.HttpMethod;
  * </pre>
  */
 public final class CorsUtil {
-
     private CorsUtil() {
     }
 

@@ -14,9 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Decodes the value of the HTTP <b>request</b> {@code Cookie} header into a list of
@@ -31,8 +33,68 @@ import java.util.List;
  * </pre>
  */
 public final class CookieDecoder {
+    /**
+     * Decodes the value of an HTTP {@code Cookie} request header from a {@link ByteBuf}.
+     * The buffer's readerIndex is not modified.
+     * @param buf the buffer containing the raw {@code Cookie} header value; may be {@code null}
+     * @return an unmodifiable list of decoded cookies; empty if input is null or has no readable bytes
+     */
+    public static List<Cookie> decode(ByteBuf buf) {
+        if (buf == null || buf.readableBytes() == 0) {
+            return Collections.emptyList();
+        }
 
-    private CookieDecoder() {
+        final int len = buf.readableBytes();
+        List<Cookie> cookies = new ArrayList<>();
+        int pos = 0;
+
+        while (pos < len) {
+            int semiIdx = CookieUtils.indexOf(buf, pos, len, (byte) ';');
+            if (semiIdx < 0) {
+                semiIdx = len;
+            }
+
+            int segStart = pos;
+            while (segStart < semiIdx && buf.getByte(segStart) == ' ') {
+                segStart++;
+            }
+
+            int eqIdx = CookieUtils.indexOf(buf, segStart, semiIdx, (byte) '=');
+            if (eqIdx < 0 || eqIdx == segStart) {
+                pos = semiIdx + 1;
+                continue;
+            }
+
+            int nameEnd = eqIdx;
+            while (nameEnd > segStart && buf.getByte(nameEnd - 1) == ' ') {
+                nameEnd--;
+            }
+            if (nameEnd <= segStart) {
+                pos = semiIdx + 1;
+                continue;
+            }
+
+            int valStart = eqIdx + 1;
+            while (valStart < semiIdx && buf.getByte(valStart) == ' ') {
+                valStart++;
+            }
+            int valEnd = semiIdx;
+            while (valEnd > valStart && buf.getByte(valEnd - 1) == ' ') {
+                valEnd--;
+            }
+
+            if (valEnd - valStart >= 2 && buf.getByte(valStart) == '"' && buf.getByte(valEnd - 1) == '"') {
+                valStart++;
+                valEnd--;
+            }
+
+            String name = buf.getString(segStart, nameEnd - segStart, StandardCharsets.US_ASCII);
+            String value = buf.getString(valStart, valEnd - valStart, StandardCharsets.US_ASCII);
+            cookies.add(new DefaultCookie(name, value));
+            pos = semiIdx + 1;
+        }
+
+        return Collections.unmodifiableList(cookies);
     }
 
     /**
@@ -45,29 +107,64 @@ public final class CookieDecoder {
             return Collections.emptyList();
         }
 
+        final int len = cookieHeader.length();
         List<Cookie> cookies = new ArrayList<>();
-        // Pairs are separated by "; " (semicolon + optional whitespace)
-        String[] pairs = cookieHeader.split(";");
-        for (String pair : pairs) {
-            pair = pair.trim();
-            if (pair.isEmpty()) {
+
+        int pos = 0;
+        while (pos < len) {
+            // find ';' for segment boundary (or end of string)
+            int semiIdx = cookieHeader.indexOf(';', pos);
+            if (semiIdx < 0) {
+                semiIdx = len;
+            }
+
+            // skip leading whitespace in this segment
+            int segStart = pos;
+            while (segStart < semiIdx && cookieHeader.charAt(segStart) == ' ') {
+                segStart++;
+            }
+
+            // find '=' within this segment
+            int eqIdx = cookieHeader.indexOf('=', segStart);
+            if (eqIdx < 0 || eqIdx >= semiIdx || eqIdx == segStart) {
+                // No '=' in this segment, or name is empty – skip
+                pos = semiIdx + 1;
                 continue;
             }
-            int eqIdx = pair.indexOf('=');
-            if (eqIdx <= 0) {
-                // No '=' or name is empty – skip malformed token
+
+            // extract name (trim trailing spaces)
+            int nameEnd = eqIdx;
+            while (nameEnd > segStart && cookieHeader.charAt(nameEnd - 1) == ' ') {
+                nameEnd--;
+            }
+            if (nameEnd <= segStart) {
+                pos = semiIdx + 1;
                 continue;
             }
-            String name = pair.substring(0, eqIdx).trim();
-            String value = pair.substring(eqIdx + 1).trim();
+
+            // extract value (trim leading/trailing spaces, strip optional quotes)
+            int valStart = eqIdx + 1;
+            while (valStart < semiIdx && cookieHeader.charAt(valStart) == ' ') {
+                valStart++;
+            }
+            int valEnd = semiIdx;
+            while (valEnd > valStart && cookieHeader.charAt(valEnd - 1) == ' ') {
+                valEnd--;
+            }
+
             // RFC 6265: cookie-value may optionally be enclosed in double quotes
-            if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
-                value = value.substring(1, value.length() - 1);
+            if (valEnd - valStart >= 2 && cookieHeader.charAt(valStart) == '"' && cookieHeader.charAt(valEnd - 1) == '"') {
+                valStart++;
+                valEnd--;
             }
-            if (!name.isEmpty()) {
-                cookies.add(new DefaultCookie(name, value));
-            }
+
+            String name = cookieHeader.substring(segStart, nameEnd);
+            String value = cookieHeader.substring(valStart, valEnd);
+            cookies.add(new DefaultCookie(name, value));
+
+            pos = semiIdx + 1;
         }
+
         return Collections.unmodifiableList(cookies);
     }
 }

@@ -22,7 +22,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * Default mutable implementation of {@link FileUpload}.
  */
 public class DefaultFileUpload implements FileUpload {
-
     private final String              name;
     private final String              filename;
     private final String              contentType;
