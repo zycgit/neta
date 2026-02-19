@@ -72,6 +72,10 @@
             <artifactId>neta-core</artifactId>
         </dependency>
         <dependency>
+            <groupId>net.hasor</groupId>
+            <artifactId>neta-codec-http</artifactId>
+        </dependency>
+        <dependency>
             <groupId>io.netty</groupId>
             <artifactId>netty-all</artifactId>
             <version>4.1.107.Final</version>
