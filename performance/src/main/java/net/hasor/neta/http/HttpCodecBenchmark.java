@@ -146,6 +146,7 @@ public class HttpCodecBenchmark {
             ByteBuf buf = dst.takeMessage();
             buf.free();
         }
+        body.free();
         dst.rcvSubmit();
     }
 
@@ -188,6 +189,7 @@ public class HttpCodecBenchmark {
             ByteBuf buf = dst.takeMessage();
             buf.free();
         }
+        body.free();
         dst.rcvSubmit();
     }
 
@@ -224,9 +226,13 @@ public class HttpCodecBenchmark {
         decoder.onMessage(StubProtoContext.INSTANCE, src, dst);
         dst.sndSubmit();
         while (dst.hasMore()) {
-            dst.takeMessage();
+            HttpObject obj = dst.takeMessage();
+            if (obj instanceof HttpContent) {
+                ((HttpContent) obj).content().free();
+            }
         }
         dst.rcvSubmit();
+        decoder.onClose(StubProtoContext.INSTANCE);
         input.free();
     }
 
@@ -257,9 +263,13 @@ public class HttpCodecBenchmark {
         decoder.onMessage(StubProtoContext.INSTANCE, src, dst);
         dst.sndSubmit();
         while (dst.hasMore()) {
-            dst.takeMessage();
+            HttpObject obj = dst.takeMessage();
+            if (obj instanceof HttpContent) {
+                ((HttpContent) obj).content().free();
+            }
         }
         dst.rcvSubmit();
+        decoder.onClose(StubProtoContext.INSTANCE);
         input.free();
     }
 
@@ -290,9 +300,13 @@ public class HttpCodecBenchmark {
         decoder.onMessage(StubProtoContext.INSTANCE, src, dst);
         dst.sndSubmit();
         while (dst.hasMore()) {
-            dst.takeMessage();
+            HttpObject obj = dst.takeMessage();
+            if (obj instanceof HttpContent) {
+                ((HttpContent) obj).content().free();
+            }
         }
         dst.rcvSubmit();
+        decoder.onClose(StubProtoContext.INSTANCE);
         input.free();
     }
 
@@ -323,9 +337,13 @@ public class HttpCodecBenchmark {
         decoder.onMessage(StubProtoContext.INSTANCE, src, dst);
         dst.sndSubmit();
         while (dst.hasMore()) {
-            dst.takeMessage();
+            HttpObject obj = dst.takeMessage();
+            if (obj instanceof HttpContent) {
+                ((HttpContent) obj).content().free();
+            }
         }
         dst.rcvSubmit();
+        decoder.onClose(StubProtoContext.INSTANCE);
         input.free();
     }
 

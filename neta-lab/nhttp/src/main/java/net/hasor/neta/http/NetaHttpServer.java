@@ -497,7 +497,7 @@ public class NetaHttpServer {
         @Override
         public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
             // Handle HTTP protocol exceptions with appropriate error responses
-            if (e instanceof net.hasor.neta.codec.http.exception.HttpProtocolException) {
+            if (e instanceof HttpProtocolException) {
                 NetChannel channel = (NetChannel) context.getChannel();
                 int statusCode = mapProtocolExceptionToStatusCode(e);
                 String statusMessage = mapProtocolExceptionToMessage(e);
@@ -528,11 +528,11 @@ public class NetaHttpServer {
          * </ul>
          */
         private int mapProtocolExceptionToStatusCode(Throwable e) {
-            if (e instanceof net.hasor.neta.codec.http.exception.HttpInitialLineTooLongException) {
+            if (e instanceof HttpInitialLineTooLongException) {
                 return 414; // URI Too Long
-            } else if (e instanceof net.hasor.neta.codec.http.exception.HttpHeaderTooLargeException) {
+            } else if (e instanceof HttpHeaderTooLargeException) {
                 return 431; // Request Header Fields Too Large
-            } else if (e instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException) {
+            } else if (e instanceof HttpContentTooLargeException) {
                 return 413; // Content Too Large
             } else {
                 return 400; // Bad Request
@@ -540,11 +540,11 @@ public class NetaHttpServer {
         }
 
         private String mapProtocolExceptionToMessage(Throwable e) {
-            if (e instanceof net.hasor.neta.codec.http.exception.HttpInitialLineTooLongException) {
+            if (e instanceof HttpInitialLineTooLongException) {
                 return "URI Too Long";
-            } else if (e instanceof net.hasor.neta.codec.http.exception.HttpHeaderTooLargeException) {
+            } else if (e instanceof HttpHeaderTooLargeException) {
                 return "Request Header Fields Too Large";
-            } else if (e instanceof net.hasor.neta.codec.http.exception.HttpContentTooLargeException) {
+            } else if (e instanceof HttpContentTooLargeException) {
                 return "Content Too Large";
             } else {
                 return "Bad Request";

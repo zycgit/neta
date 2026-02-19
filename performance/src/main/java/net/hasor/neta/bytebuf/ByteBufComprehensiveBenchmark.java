@@ -30,7 +30,7 @@ import org.openjdk.jmh.runner.RunnerException;
 import org.openjdk.jmh.runner.options.Options;
 import org.openjdk.jmh.runner.options.OptionsBuilder;
 
-@Fork(value = 1, jvmArgsAppend = {"-Xms512m", "-Xmx512m", "-XX:+UseG1GC"})
+@Fork(value = 1, jvmArgsAppend = { "-Xms512m", "-Xmx512m", "-XX:+UseG1GC" })
 @State(Scope.Thread)
 @OutputTimeUnit(TimeUnit.MICROSECONDS)
 @BenchmarkMode(Mode.Throughput)
@@ -38,18 +38,18 @@ import org.openjdk.jmh.runner.options.OptionsBuilder;
 @Measurement(iterations = 5, time = 3)
 public class ByteBufComprehensiveBenchmark {
 
-    private static final int SIZE_256  = 256;
-    private static final int SIZE_4K   = 4096;
+    private static final int SIZE_256 = 256;
+    private static final int SIZE_4K  = 4096;
 
     private byte[] payload256;
     private byte[] payload4k;
 
     public static void main(String[] args) throws RunnerException {
-        Options opt = new OptionsBuilder()
-                .include(ByteBufComprehensiveBenchmark.class.getSimpleName())
-                .addProfiler("gc")
-                .resultFormat(ResultFormatType.TEXT)
-                .result("benchmark-comprehensive-results.txt")
+        Options opt = new OptionsBuilder()//
+                .include(ByteBufComprehensiveBenchmark.class.getSimpleName())//
+                .addProfiler("gc")//
+                .resultFormat(ResultFormatType.TEXT)//
+                .result("benchmark-comprehensive-results.txt")//
                 .build();
         new Runner(opt).run();
     }

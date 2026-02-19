@@ -63,13 +63,17 @@ public class MultipartBenchmark {
     }
 
     @Benchmark
-    public List<FileUpload> neta_decodeSimpleMultipart() {
+    public int neta_decodeSimpleMultipart() {
         ByteBuf body = ByteBufAllocator.DEFAULT.buffer(SIMPLE_BODY_BYTES.length, Integer.MAX_VALUE);
         body.writeBytes(SIMPLE_BODY_BYTES, 0, SIMPLE_BODY_BYTES.length);
         body.markWriter();
         List<FileUpload> parts = MultipartDecoder.decode(body, BOUNDARY);
+        int size = parts.size();
+        for (FileUpload part : parts) {
+            part.content().free();
+        }
         body.free();
-        return parts;
+        return size;
     }
 
     @Benchmark
@@ -87,13 +91,17 @@ public class MultipartBenchmark {
     }
 
     @Benchmark
-    public List<FileUpload> neta_decodeComplexMultipart() {
+    public int neta_decodeComplexMultipart() {
         ByteBuf body = ByteBufAllocator.DEFAULT.buffer(COMPLEX_BODY_BYTES.length, Integer.MAX_VALUE);
         body.writeBytes(COMPLEX_BODY_BYTES, 0, COMPLEX_BODY_BYTES.length);
         body.markWriter();
         List<FileUpload> parts = MultipartDecoder.decode(body, BOUNDARY);
+        int size = parts.size();
+        for (FileUpload part : parts) {
+            part.content().free();
+        }
         body.free();
-        return parts;
+        return size;
     }
 
     // ========================= Neta Multipart Encode =========================

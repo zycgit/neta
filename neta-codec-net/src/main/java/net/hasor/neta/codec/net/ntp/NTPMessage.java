@@ -20,7 +20,6 @@ package net.hasor.neta.codec.net.ntp;
  * This class defines the common fields shared by standard NTP packets and control messages,
  * such as Leap Indicator, Version Number, Mode, and Authenticator.
  * </p>
- *
  * @see NTPPacket
  * @see NTPControlPacket
  */

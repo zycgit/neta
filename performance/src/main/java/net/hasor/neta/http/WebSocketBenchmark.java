@@ -115,6 +115,7 @@ public class WebSocketBenchmark {
             ByteBuf buf = dst.takeMessage();
             buf.free();
         }
+        frame.content().free();
         dst.rcvSubmit();
     }
 
@@ -142,6 +143,7 @@ public class WebSocketBenchmark {
             ByteBuf buf = dst.takeMessage();
             buf.free();
         }
+        frame.content().free();
         dst.rcvSubmit();
     }
 
@@ -171,6 +173,7 @@ public class WebSocketBenchmark {
             ByteBuf buf = dst.takeMessage();
             buf.free();
         }
+        frame.content().free();
         dst.rcvSubmit();
     }
 
@@ -198,6 +201,7 @@ public class WebSocketBenchmark {
             ByteBuf buf = dst.takeMessage();
             buf.free();
         }
+        frame.content().free();
         dst.rcvSubmit();
     }
 
@@ -227,9 +231,11 @@ public class WebSocketBenchmark {
         decoder.onMessage(StubProtoContext.INSTANCE, src, dst);
         dst.sndSubmit();
         while (dst.hasMore()) {
-            dst.takeMessage();
+            WebSocketFrame frame = dst.takeMessage();
+            frame.content().free();
         }
         dst.rcvSubmit();
+        decoder.onClose(StubProtoContext.INSTANCE);
         input.free();
     }
 
@@ -260,9 +266,11 @@ public class WebSocketBenchmark {
         decoder.onMessage(StubProtoContext.INSTANCE, src, dst);
         dst.sndSubmit();
         while (dst.hasMore()) {
-            dst.takeMessage();
+            WebSocketFrame frame = dst.takeMessage();
+            frame.content().free();
         }
         dst.rcvSubmit();
+        decoder.onClose(StubProtoContext.INSTANCE);
         input.free();
     }
 
@@ -293,9 +301,11 @@ public class WebSocketBenchmark {
         decoder.onMessage(StubProtoContext.INSTANCE, src, dst);
         dst.sndSubmit();
         while (dst.hasMore()) {
-            dst.takeMessage();
+            WebSocketFrame frame = dst.takeMessage();
+            frame.content().free();
         }
         dst.rcvSubmit();
+        decoder.onClose(StubProtoContext.INSTANCE);
         input.free();
     }
 
