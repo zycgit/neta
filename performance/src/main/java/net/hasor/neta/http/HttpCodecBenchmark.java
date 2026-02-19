@@ -41,10 +41,10 @@ public class HttpCodecBenchmark {
 
     // Large response with many headers
     private static final String LARGE_RESPONSE_RAW;
-    private static final byte[] SIMPLE_REQUEST_BYTES  = SIMPLE_REQUEST_RAW.getBytes(StandardCharsets.US_ASCII);
-    private static final byte[] POST_REQUEST_BYTES    = POST_REQUEST_RAW.getBytes(StandardCharsets.US_ASCII);
-    private static final byte[] SIMPLE_RESPONSE_BYTES = SIMPLE_RESPONSE_RAW.getBytes(StandardCharsets.US_ASCII);
-    private static final byte[] LARGE_RESPONSE_BYTES  = LARGE_RESPONSE_RAW.getBytes(StandardCharsets.US_ASCII);
+    private static final byte[] SIMPLE_REQUEST_BYTES;
+    private static final byte[] POST_REQUEST_BYTES;
+    private static final byte[] SIMPLE_RESPONSE_BYTES;
+    private static final byte[] LARGE_RESPONSE_BYTES;
 
     static {
         StringBuilder sb = new StringBuilder();
@@ -73,6 +73,10 @@ public class HttpCodecBenchmark {
         sb.append("\r\n");
         sb.append(body);
         LARGE_RESPONSE_RAW = sb.toString();
+        SIMPLE_REQUEST_BYTES = SIMPLE_REQUEST_RAW.getBytes(StandardCharsets.US_ASCII);
+        POST_REQUEST_BYTES = POST_REQUEST_RAW.getBytes(StandardCharsets.US_ASCII);
+        SIMPLE_RESPONSE_BYTES = SIMPLE_RESPONSE_RAW.getBytes(StandardCharsets.US_ASCII);
+        LARGE_RESPONSE_BYTES = LARGE_RESPONSE_RAW.getBytes(StandardCharsets.US_ASCII);
     }
 
     // ========================= Neta Encode Benchmarks =========================

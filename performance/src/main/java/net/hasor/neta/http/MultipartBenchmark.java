@@ -39,8 +39,8 @@ public class MultipartBenchmark {
     // Complex multipart body with text + file
     private static final byte[] FILE_CONTENT;
     private static final String COMPLEX_MULTIPART_BODY;
-    private static final byte[] SIMPLE_BODY_BYTES  = SIMPLE_MULTIPART_BODY.getBytes(StandardCharsets.UTF_8);
-    private static final byte[] COMPLEX_BODY_BYTES = COMPLEX_MULTIPART_BODY.getBytes(StandardCharsets.UTF_8);
+    private static final byte[] SIMPLE_BODY_BYTES;
+    private static final byte[] COMPLEX_BODY_BYTES;
 
     static {
         // 4KB file content
@@ -51,6 +51,8 @@ public class MultipartBenchmark {
         FILE_CONTENT = fc.toString().getBytes(StandardCharsets.UTF_8);
 
         COMPLEX_MULTIPART_BODY = "------WebKitFormBoundaryABC123\r\n" + "Content-Disposition: form-data; name=\"title\"\r\n" + "\r\n" + "My Document\r\n" + "------WebKitFormBoundaryABC123\r\n" + "Content-Disposition: form-data; name=\"description\"\r\n" + "\r\n" + "This is a test file upload for benchmarking purposes.\r\n" + "------WebKitFormBoundaryABC123\r\n" + "Content-Disposition: form-data; name=\"file\"; filename=\"test.txt\"\r\n" + "Content-Type: text/plain\r\n" + "\r\n" + new String(FILE_CONTENT, StandardCharsets.UTF_8) + "\r\n" + "------WebKitFormBoundaryABC123--\r\n";
+        SIMPLE_BODY_BYTES = SIMPLE_MULTIPART_BODY.getBytes(StandardCharsets.UTF_8);
+        COMPLEX_BODY_BYTES = COMPLEX_MULTIPART_BODY.getBytes(StandardCharsets.UTF_8);
     }
 
     // ========================= Neta Multipart Decode =========================

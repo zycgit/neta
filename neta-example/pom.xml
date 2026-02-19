@@ -42,5 +42,6 @@
 
     <modules>
         <module>telnetEcho</module>
+        <module>httpExample</module>
     </modules>
 </project>

@@ -12,6 +12,7 @@
 
     <modules>
         <module>tconsole</module>
+        <module>nhttp</module>
         <!-- <module>raft</module>-->
     </modules>
 </project>
