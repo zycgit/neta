@@ -58,7 +58,12 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     @Override
     public synchronized ProtoRcvQueue<T> rcvSubmit() {
-        this.linkedList.subList(0, this.takeCount).clear();
+        if (this.takeCount == 1) {
+            // Fast path for the common single-element case: avoid SubList allocation
+            this.linkedList.remove(0);
+        } else if (this.takeCount > 1) {
+            this.linkedList.subList(0, this.takeCount).clear();
+        }
         this.takeCount = 0;
         return this;
     }
@@ -71,7 +76,13 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     @Override
     public synchronized ProtoSndQueue<T> sndSubmit() {
-        this.linkedList.addAll(this.offerTemp);
+        int size = this.offerTemp.size();
+        if (size == 1) {
+            // Fast path: avoid addAll overhead for single element
+            this.linkedList.add(this.offerTemp.get(0));
+        } else if (size > 1) {
+            this.linkedList.addAll(this.offerTemp);
+        }
         this.offerTemp.clear();
         return this;
     }
@@ -98,10 +109,31 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return size;
     }
 
+    /** Single-element fast path: avoid Collections.singletonList allocation */
+    @Override
+    public synchronized boolean offerMessage(T offerMessage) {
+        if (this.slotSize() <= 0) {
+            return false;
+        }
+        this.offerTemp.add(offerMessage);
+        return true;
+    }
+
     @Override
     public synchronized int offerMessage(ProtoRcvQueue<T> offerList) {
         int size = Math.min(offerList.queueSize(), this.slotSize());
         return this.offerMessage(offerList.takeMessage(size));
+    }
+
+    /** Single-element fast path: avoid ArrayList allocation */
+    @Override
+    public synchronized T takeMessage() {
+        if (this.queueSize() <= 0) {
+            return null;
+        }
+        T result = this.linkedList.get(this.takeCount);
+        this.takeCount++;
+        return result;
     }
 
     @Override
@@ -123,6 +155,15 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
         this.takeCount += fixCnt;
         return result;
+    }
+
+    /** Single-element fast path: avoid ArrayList allocation */
+    @Override
+    public synchronized T peekMessage() {
+        if (this.queueSize() <= 0) {
+            return null;
+        }
+        return this.linkedList.get(this.takeCount);
     }
 
     @Override

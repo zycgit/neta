@@ -161,8 +161,10 @@ class WrapByteBuffer extends AbstractByteBuf {
         ((Buffer) this.target).position(offset);
         srcLen = Math.min(src.remaining(), srcLen);
 
-        this.target.put(src.duplicate().limit(src.position() + srcLen));
-        src.position(src.position() + srcLen);
+        ByteBuffer slice = src.duplicate();
+        ((Buffer) slice).limit(src.position() + srcLen);
+        this.target.put(slice);
+        ((Buffer) src).position(src.position() + srcLen);
         return srcLen;
     }
 

@@ -40,7 +40,7 @@ final class WrapArrayBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    byte[]                          target;
+    byte[] target;
 
     private WrapArrayBuffer() {
     }

@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
+import net.hasor.cobble.ObjectUtils;
 
 /**
  * 数组自动扩缩容 {@link ByteBuf} 实现
@@ -33,10 +34,10 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    byte[]                           target;
-    private      int                              extensionSize;
+    byte[] target;
+    private int extensionSize;
     /** Cached effective write limit = Math.min(target.length, maxCapacity). */
-    private      int                              writeLimit;
+    private int writeLimit;
 
     // ------------------------------------------------------------------------
 
@@ -389,8 +390,8 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     @Override
     public int readBytes(byte[] dst, int off, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(off, "off");
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(off, "off");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int minLen = Math.min(len, this.markedWriterIndex - this.readerIndex);
         int idx = nextReadableN(minLen);
         System.arraycopy(this.target, idx, dst, off, minLen);
@@ -400,7 +401,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     @Override
     public int writeBytes(byte[] src, int off, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int minLen = Math.min(len, this.getMaxCapacity() - (this.writerIndex - this.markedReaderIndex));
         int idx = this.writerIndex;
         if (idx + minLen <= this.writeLimit) {
@@ -416,14 +417,14 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     @Override
     public byte getByte(int offset) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
         return this.target[offsetReadable(offset, 1)];
     }
 
     @Override
     public void setByte(int offset, byte n) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(offset, "offset");
+        ObjectUtils.checkPositiveOrZero(offset, "offset");
         int idx = offsetWritable(offset, 1);
         byte[] t = this.target;
         if (idx >= t.length) {
@@ -436,7 +437,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     @Override
     public int readBuffer(java.nio.ByteBuffer dst, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int minLen = Math.min(len, this.markedWriterIndex - this.readerIndex);
         int idx = nextReadableN(minLen);
         dst.put(this.target, idx, minLen);
@@ -446,7 +447,7 @@ final class AutoArrayByteBuf extends AbstractByteBuf {
     @Override
     public int writeBuffer(java.nio.ByteBuffer src, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int srcLen = Math.min(src.remaining(), len);
         int minLen = Math.min(srcLen, this.getMaxCapacity() - (this.writerIndex - this.markedReaderIndex));
         int idx = this.writerIndex;

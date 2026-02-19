@@ -34,10 +34,10 @@ class PageChunkPool {
     private final    PageChunk[]             chunksHeads;
     private final    ReentrantLock[]         chunksLock;
     //
+    private final    AtomicInteger           used;
+    //
     private volatile Object                  owner;
     private volatile Consumer<PageChunkPool> notify;
-    //
-    private final    AtomicInteger           used;
 
     public PageChunkPool(int memAddress, int pageSize, int treeHeight) {
         this.memAddress = memAddress;

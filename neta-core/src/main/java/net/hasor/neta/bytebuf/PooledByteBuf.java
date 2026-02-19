@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
+import net.hasor.cobble.ObjectUtils;
 
 /**
  * 基于 {@link Buffer} 池化的的窗口 {@link ByteBuf} 实现，同时如果容量不足它会自动扩缩容
@@ -36,13 +38,13 @@ final class PooledByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    Buffer                                    target;
-    private              BufferPool                                pool;
+    Buffer target;
+    private BufferPool pool;
     // Cached heap array + offset for fast-path access (null for direct buffers)
-    private              byte[]                                    heapArray;
-    private              int                                       heapOffset;
+    private byte[]     heapArray;
+    private int        heapOffset;
     // Cached direct buffer base address for Unsafe off-heap access (0 for heap buffers)
-    private              long                                      directAddress;
+    private long       directAddress;
 
     // ------------------------------------------------------------------------
     private int initSize;
@@ -577,8 +579,8 @@ final class PooledByteBuf extends AbstractByteBuf {
     @Override
     public int readBytes(byte[] dst, int off, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(off, "off");
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(off, "off");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int minLen = Math.min(len, this.markedWriterIndex - this.readerIndex);
         int idx = nextReadableN(minLen);
         byte[] arr = this.heapArray;
@@ -593,7 +595,7 @@ final class PooledByteBuf extends AbstractByteBuf {
     @Override
     public int writeBytes(byte[] src, int off, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int minLen = Math.min(len, this.getMaxCapacity() - (this.writerIndex - this.markedReaderIndex));
         int idx = nextWritableN(minLen);
         checkExtension(idx, minLen);
@@ -611,7 +613,7 @@ final class PooledByteBuf extends AbstractByteBuf {
         try {
             Buffer t = this.target;
             if (t != null) {
-                java.util.ArrayDeque<Buffer> cache = BUFFER_CACHE.get();
+                ArrayDeque<Buffer> cache = BUFFER_CACHE.get();
                 if (cache.size() < MAX_BUFFER_CACHE) {
                     cache.push(t); // Cache the memory, pages stay allocated
                 } else {

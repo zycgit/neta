@@ -34,8 +34,8 @@ final class RingByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    ByteBuffer                     target;
-    private      int                            capacityMask;
+    ByteBuffer target;
+    private int capacityMask;
 
     private RingByteBuffer() {
     }
@@ -137,8 +137,10 @@ final class RingByteBuffer extends AbstractByteBuf {
         if ((offsetSize + srcLen) <= maxCap) {
             ((Buffer) this.target).clear();
             ((Buffer) this.target).position(offsetSize);
-            this.target.put(src.duplicate().limit(src.position() + srcLen));
-            src.position(src.position() + srcLen);
+            ByteBuffer slice = src.duplicate();
+            ((Buffer) slice).limit(src.position() + srcLen);
+            this.target.put(slice);
+            ((Buffer) src).position(src.position() + srcLen);
             return srcLen;
         } else {
             int partA = maxCap - offsetSize;
@@ -146,13 +148,17 @@ final class RingByteBuffer extends AbstractByteBuf {
 
             ((Buffer) this.target).clear();
             ((Buffer) this.target).position(offsetSize);
-            this.target.put(src.duplicate().limit(src.position() + partA));
-            src.position(src.position() + partA);
+            ByteBuffer sliceA = src.duplicate();
+            ((Buffer) sliceA).limit(src.position() + partA);
+            this.target.put(sliceA);
+            ((Buffer) src).position(src.position() + partA);
 
             if (partB > 0) {
                 ((Buffer) this.target).clear();
-                this.target.put(src.duplicate().limit(src.position() + partB));
-                src.position(src.position() + partB);
+                ByteBuffer sliceB = src.duplicate();
+                ((Buffer) sliceB).limit(src.position() + partB);
+                this.target.put(sliceB);
+                ((Buffer) src).position(src.position() + partB);
             }
 
             return partA + partB;

@@ -34,8 +34,8 @@ final class AutoByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    ByteBuffer                     target;
-    private      int                            extensionSize;
+    ByteBuffer target;
+    private int extensionSize;
 
     // ------------------------------------------------------------------------
 
@@ -145,8 +145,10 @@ final class AutoByteBuffer extends AbstractByteBuf {
         checkExtension(offset, srcLen);
 
         ((Buffer) this.target).clear().position(offset);
-        this.target.put(src.duplicate().limit(src.position() + srcLen));
-        src.position(src.position() + srcLen);
+        ByteBuffer slice = src.duplicate();
+        ((Buffer) slice).limit(src.position() + srcLen);
+        this.target.put(slice);
+        ((Buffer) src).position(src.position() + srcLen);
         return srcLen;
     }
 

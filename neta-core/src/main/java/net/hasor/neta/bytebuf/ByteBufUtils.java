@@ -19,6 +19,7 @@ import java.nio.ByteBuffer;
 import java.util.List;
 import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.channel.ProtoRcvQueue;
 
 /**
  * @author 赵永春 (zyc@hasor.net)
@@ -152,6 +153,22 @@ public class ByteBufUtils {
         byte[] bytes = new byte[available];
         buf.readBytes(bytes);
         return bytes;
+    }
+
+    /**
+     * Create a read-only {@link ByteBuf} that presents all queued {@link ByteBuf}
+     * messages in the given {@link net.hasor.neta.channel.ProtoRcvQueue ProtoRcvQueue}
+     * as a single contiguous readable buffer.
+     * <p>
+     * The returned buffer is a zero-copy composite view over the queue's messages.
+     * Call {@link ByteBuf#markReader()} to consume fully-read messages from the queue.
+     * Write operations are not supported.
+     * @param queue the receive queue to wrap (must not be null)
+     * @return a new read-only ByteBuf wrapping the queue
+     * @throws NullPointerException if queue is null
+     */
+    public static ByteBuf queueBuffer(ProtoRcvQueue<ByteBuf> queue) {
+        return new QueueByteBuf(queue);
     }
 
     /**

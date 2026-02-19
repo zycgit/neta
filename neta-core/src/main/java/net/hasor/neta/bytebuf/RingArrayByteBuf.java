@@ -34,8 +34,8 @@ final class RingArrayByteBuf extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    byte[]                           target;
-    private      int                              capacityMask;
+    byte[] target;
+    private int capacityMask;
 
     private RingArrayByteBuf() {
     }
