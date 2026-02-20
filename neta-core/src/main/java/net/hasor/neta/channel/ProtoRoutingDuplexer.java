@@ -20,9 +20,16 @@ import net.hasor.cobble.logging.Logger;
 /**
  * A routing duplexer that forks the pipeline into multiple sub-pipeline branches.
  * <p>
- * On the first RCV data arrival, the {@link ProtoRouting} predicate is evaluated to select
- * which branch should handle the connection. The routing decision is cached for the
- * connection's lifetime.
+ * On the first RCV (inbound) onMessage invocation, the {@link ProtoRouting} predicate is
+ * evaluated to select which branch should handle the connection. The routing decision is
+ * cached for the connection's lifetime. Routing does NOT require data to be present —
+ * decisions can be based purely on protocol context state (e.g. ALPN negotiation result
+ * from {@code SslContext}).
+ * </p>
+ * <p>
+ * Routing happens exclusively during the RCV phase because protocol handshakes
+ * (SSL/TLS, ALPN, WebSocket upgrade, etc.) are completed during inbound processing.
+ * SND (outbound) data arriving before route determination is passed through as-is.
  * </p>
  * <p>
  * Lifecycle events (onInit, onActive, onClose) are propagated to ALL branches.
@@ -111,6 +118,17 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
     @SuppressWarnings("unchecked")
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<T> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<T> sndDown) throws Throwable {
         if (isRcv) {
+            // Route determination happens only during RCV phase — protocol handshakes
+            // (SSL/ALPN, WebSocket, etc.) complete during inbound processing
+            if (this.selectedRoute == null) {
+                this.selectedRoute = this.routing.route(context, rcvUp, rcvDown);
+                if (this.selectedRoute == null) {
+                    return ProtoStatus.Stop; // routing cannot determine yet, wait for more RCV data
+                }
+                if (!this.branches.containsKey(this.selectedRoute)) {
+                    throw new IllegalStateException("Routing returned unknown branch: '" + this.selectedRoute + "', available: " + this.branches.keySet());
+                }
+            }
             return this.doRcvRoute(context, rcvUp, rcvDown, sndDown);
         } else {
             return this.doSndRoute(context, sndUp, sndDown);
@@ -121,21 +139,6 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
     private ProtoStatus doRcvRoute(ProtoContext context, ProtoRcvQueue<T> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<T> sndDown) throws Throwable {
         if (!rcvUp.hasMore()) {
             return ProtoStatus.Next;
-        }
-
-        // Determine route (once per connection)
-        if (this.selectedRoute == null) {
-            T firstData = rcvUp.peekMessage();
-            if (firstData == null) {
-                return ProtoStatus.Stop; // wait for more data
-            }
-            this.selectedRoute = this.routing.route(context, firstData);
-            if (this.selectedRoute == null) {
-                return ProtoStatus.Stop; // routing cannot determine yet, wait
-            }
-            if (!this.branches.containsKey(this.selectedRoute)) {
-                throw new IllegalStateException("Routing returned unknown branch: '" + this.selectedRoute + "', available: " + this.branches.keySet());
-            }
         }
 
         BranchEntry branch = this.branches.get(this.selectedRoute);
@@ -245,8 +248,8 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
 
     /**
      * Create a new builder for constructing a {@link ProtoRoutingDuplexer}.
-     * @param routing the routing predicate
-     * @param <T> the data type for routing evaluation
+     * @param routing the routing predicate (receives full onMessage parameters)
+     * @param <T> the data type flowing through the routing node
      * @return the builder
      */
     public static <T> Builder<T> newBuilder(ProtoRouting<T> routing) {
@@ -255,7 +258,7 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
 
     /**
      * Builder for constructing a {@link ProtoRoutingDuplexer} with registered branches.
-     * @param <T> the data type for routing evaluation
+     * @param <T> the data type flowing through the routing node
      */
     public static class Builder<T> {
         private final ProtoRouting<T>               routing;

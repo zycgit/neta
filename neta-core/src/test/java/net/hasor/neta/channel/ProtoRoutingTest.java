@@ -42,16 +42,15 @@ public class ProtoRoutingTest extends AbstractStackTest {
 
         ProtoInitializer initializer = ctx -> {
             // Router: even numbers go to "even", odd numbers go to "odd"
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> (data % 2 == 0) ? "even" : "odd"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                Integer data = rcvUp.peekMessage();
+                return (data != null && data % 2 == 0) ? "even" : "odd";
+            });
             builder.branch("even", branch -> {
-                branch.addLast("evenDec", doNextHandler("Even", decoderLog, decoderErr),
-                               doNextHandler("Even", encoderLog, encoderErr));
+                branch.addLast("evenDec", doNextHandler("Even", decoderLog, decoderErr), doNextHandler("Even", encoderLog, encoderErr));
             });
             builder.branch("odd", branch -> {
-                branch.addLast("oddDec", doNextHandler("Odd", decoderLog, decoderErr),
-                               doNextHandler("Odd", encoderLog, encoderErr));
+                branch.addLast("oddDec", doNextHandler("Odd", decoderLog, decoderErr), doNextHandler("Odd", encoderLog, encoderErr));
             });
             ctx.addLast("router", builder.build(ctx));
         };
@@ -79,16 +78,15 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> encoderErr = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> (data % 2 == 0) ? "even" : "odd"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                Integer data = rcvUp.peekMessage();
+                return (data != null && data % 2 == 0) ? "even" : "odd";
+            });
             builder.branch("even", branch -> {
-                branch.addLast("evenDec", doNextHandler("Even", decoderLog, decoderErr),
-                               doNextHandler("Even", encoderLog, encoderErr));
+                branch.addLast("evenDec", doNextHandler("Even", decoderLog, decoderErr), doNextHandler("Even", encoderLog, encoderErr));
             });
             builder.branch("odd", branch -> {
-                branch.addLast("oddDec", doNextHandler("Odd", decoderLog, decoderErr),
-                               doNextHandler("Odd", encoderLog, encoderErr));
+                branch.addLast("oddDec", doNextHandler("Odd", decoderLog, decoderErr), doNextHandler("Odd", encoderLog, encoderErr));
             });
             ctx.addLast("router", builder.build(ctx));
         };
@@ -116,16 +114,15 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> encoderErr = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> (data % 2 == 0) ? "even" : "odd"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                Integer data = rcvUp.peekMessage();
+                return (data != null && data % 2 == 0) ? "even" : "odd";
+            });
             builder.branch("even", branch -> {
-                branch.addLast("evenDec", doNextHandler("Even", decoderLog, decoderErr),
-                               doNextHandler("Even", encoderLog, encoderErr));
+                branch.addLast("evenDec", doNextHandler("Even", decoderLog, decoderErr), doNextHandler("Even", encoderLog, encoderErr));
             });
             builder.branch("odd", branch -> {
-                branch.addLast("oddDec", doNextHandler("Odd", decoderLog, decoderErr),
-                               doNextHandler("Odd", encoderLog, encoderErr));
+                branch.addLast("oddDec", doNextHandler("Odd", decoderLog, decoderErr), doNextHandler("Odd", encoderLog, encoderErr));
             });
             ctx.addLast("router", builder.build(ctx));
         };
@@ -158,16 +155,11 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> encoderErr = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "main"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "main");
             builder.branch("main", branch -> {
-                branch.addLast("layer1", doNextHandler("L1", decoderLog, decoderErr),
-                               doNextHandler("L1", encoderLog, encoderErr));
-                branch.addLast("layer2", doNextHandler("L2", decoderLog, decoderErr),
-                               doNextHandler("L2", encoderLog, encoderErr));
-                branch.addLast("layer3", doNextHandler("L3", decoderLog, decoderErr),
-                               doNextHandler("L3", encoderLog, encoderErr));
+                branch.addLast("layer1", doNextHandler("L1", decoderLog, decoderErr), doNextHandler("L1", encoderLog, encoderErr));
+                branch.addLast("layer2", doNextHandler("L2", decoderLog, decoderErr), doNextHandler("L2", encoderLog, encoderErr));
+                branch.addLast("layer3", doNextHandler("L3", decoderLog, decoderErr), doNextHandler("L3", encoderLog, encoderErr));
             });
             ctx.addLast("router", builder.build(ctx));
         };
@@ -198,22 +190,17 @@ public class ProtoRoutingTest extends AbstractStackTest {
 
         ProtoInitializer initializer = ctx -> {
             // Pre-router handler in main pipeline
-            ctx.addLast("pre", doNextHandler("Pre", decoderLog, decoderErr),
-                         doNextHandler("Pre", encoderLog, encoderErr));
+            ctx.addLast("pre", doNextHandler("Pre", decoderLog, decoderErr), doNextHandler("Pre", encoderLog, encoderErr));
 
             // Router
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "branch1"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "branch1");
             builder.branch("branch1", branch -> {
-                branch.addLast("branchHandler", doNextHandler("BR", decoderLog, decoderErr),
-                               doNextHandler("BR", encoderLog, encoderErr));
+                branch.addLast("branchHandler", doNextHandler("BR", decoderLog, decoderErr), doNextHandler("BR", encoderLog, encoderErr));
             });
             ctx.addLast("router", builder.build(ctx));
 
             // Post-router handler in main pipeline
-            ctx.addLast("post", doNextHandler("Post", decoderLog, decoderErr),
-                         doNextHandler("Post", encoderLog, encoderErr));
+            ctx.addLast("post", doNextHandler("Post", decoderLog, decoderErr), doNextHandler("Post", encoderLog, encoderErr));
         };
 
         NetManager neta = new NetManager();
@@ -239,9 +226,7 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> lifecycleLog = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "branchA"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "branchA");
             builder.branch("branchA", branch -> {
                 branch.addLast("a", new LifecycleTracker("A", lifecycleLog));
             });
@@ -284,16 +269,11 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> encoderErr = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "main"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "main");
             builder.branch("main", branch -> {
-                branch.addLast("layer1", doNextHandler("L1", decoderLog, decoderErr),
-                               doNextHandler("L1", encoderLog, encoderErr));
-                branch.addLast("layer2", doThrowHandler("L2", decoderLog, decoderErr),
-                               doNextHandler("L2", encoderLog, encoderErr));
-                branch.addLast("layer3", doNextHandler("L3", decoderLog, decoderErr),
-                               doNextHandler("L3", encoderLog, encoderErr));
+                branch.addLast("layer1", doNextHandler("L1", decoderLog, decoderErr), doNextHandler("L1", encoderLog, encoderErr));
+                branch.addLast("layer2", doThrowHandler("L2", decoderLog, decoderErr), doNextHandler("L2", encoderLog, encoderErr));
+                branch.addLast("layer3", doNextHandler("L3", decoderLog, decoderErr), doNextHandler("L3", encoderLog, encoderErr));
             });
             ctx.addLast("router", builder.build(ctx));
         };
@@ -325,21 +305,17 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> encoderLog = new ArrayList<>();
         List<String> encoderErr = new ArrayList<>();
 
-        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)
-                .nextDecoder("pre", doNextHandler("Pre", decoderLog, decoderErr))
-                .nextRoute("router",
-                           (ctx, data) -> ((Integer) data) > 0 ? "positive" : "negative",
-                           r -> {
-                               r.branch("positive", branch -> {
-                                   branch.addLast("pos", doNextHandler("Pos", decoderLog, decoderErr),
-                                                  doNextHandler("Pos", encoderLog, encoderErr));
-                               });
-                               r.branch("negative", branch -> {
-                                   branch.addLast("neg", doNextHandler("Neg", decoderLog, decoderErr),
-                                                  doNextHandler("Neg", encoderLog, encoderErr));
-                               });
-                           })
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextDecoder("pre", doNextHandler("Pre", decoderLog, decoderErr)).nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+            Integer data = rcvUp.peekMessage();
+            return (data != null && data > 0) ? "positive" : "negative";
+        }, r -> {
+            r.branch("positive", branch -> {
+                branch.addLast("pos", doNextHandler("Pos", decoderLog, decoderErr), doNextHandler("Pos", encoderLog, encoderErr));
+            });
+            r.branch("negative", branch -> {
+                branch.addLast("neg", doNextHandler("Neg", decoderLog, decoderErr), doNextHandler("Neg", encoderLog, encoderErr));
+            });
+        }).build();
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
@@ -361,20 +337,17 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> encoderLog = new ArrayList<>();
         List<String> encoderErr = new ArrayList<>();
 
-        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)
-                .nextRoute("router",
-                           (ctx, data) -> ((Integer) data) > 0 ? "positive" : "negative",
-                           r -> {
-                               r.branch("positive", branch -> {
-                                   branch.addLast("pos", doNextHandler("Pos", decoderLog, decoderErr),
-                                                  doNextHandler("Pos", encoderLog, encoderErr));
-                               });
-                               r.branch("negative", branch -> {
-                                   branch.addLast("neg", doNextHandler("Neg", decoderLog, decoderErr),
-                                                  doNextHandler("Neg", encoderLog, encoderErr));
-                               });
-                           })
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+            Integer data = rcvUp.peekMessage();
+            return (data != null && data > 0) ? "positive" : "negative";
+        }, r -> {
+            r.branch("positive", branch -> {
+                branch.addLast("pos", doNextHandler("Pos", decoderLog, decoderErr), doNextHandler("Pos", encoderLog, encoderErr));
+            });
+            r.branch("negative", branch -> {
+                branch.addLast("neg", doNextHandler("Neg", decoderLog, decoderErr), doNextHandler("Neg", encoderLog, encoderErr));
+            });
+        }).build();
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
@@ -394,12 +367,9 @@ public class ProtoRoutingTest extends AbstractStackTest {
     @Test
     public void routing_unknownBranch() throws Throwable {
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "nonexistent"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "nonexistent");
             builder.branch("branchA", branch -> {
-                branch.addLast("a", doNextHandler("A", new ArrayList<>(), new ArrayList<>()),
-                               doNextHandler("A", new ArrayList<>(), new ArrayList<>()));
+                branch.addLast("a", doNextHandler("A", new ArrayList<>(), new ArrayList<>()), doNextHandler("A", new ArrayList<>(), new ArrayList<>()));
             });
             ctx.addLast("router", builder.build(ctx));
         };
@@ -424,20 +394,18 @@ public class ProtoRoutingTest extends AbstractStackTest {
     /** Test: duplicate branch name in builder -> exception */
     @Test(expected = IllegalArgumentException.class)
     public void routing_duplicateBranch() {
-        ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                (context, data) -> "a"
-        );
-        builder.branch("a", branch -> {});
-        builder.branch("a", branch -> {}); // should throw
+        ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "a");
+        builder.branch("a", branch -> {
+        });
+        builder.branch("a", branch -> {
+        }); // should throw
     }
 
     /** Test: no branches registered -> exception */
     @Test(expected = IOException.class)
     public void routing_noBranches() throws Throwable {
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "a"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "a");
             builder.build(ctx); // should throw - no branches
         };
 
@@ -456,12 +424,9 @@ public class ProtoRoutingTest extends AbstractStackTest {
         List<String> encoderErr = new ArrayList<>();
 
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "main"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "main");
             builder.branch("main", branch -> {
-                branch.addLast("handler", doNextHandler("BR", decoderLog, decoderErr),
-                               doNextHandler("BR", encoderLog, encoderErr));
+                branch.addLast("handler", doNextHandler("BR", decoderLog, decoderErr), doNextHandler("BR", encoderLog, encoderErr));
             });
             ctx.addLast("router", builder.build(ctx));
         };
@@ -491,9 +456,7 @@ public class ProtoRoutingTest extends AbstractStackTest {
     @Test
     public void routing_rcv_dataTransformation() throws Throwable {
         ProtoInitializer initializer = ctx -> {
-            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder(
-                    (context, data) -> "doubler"
-            );
+            ProtoRoutingDuplexer.Builder<Integer> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> "doubler");
             builder.branch("doubler", branch -> {
                 // Handler that doubles the value
                 branch.addLast("double", new ProtoHandler<Integer, Integer>() {
@@ -560,9 +523,7 @@ public class ProtoRoutingTest extends AbstractStackTest {
         }
 
         @Override
-        public ProtoStatus onMessage(ProtoContext context, boolean isRcv,
-                                      ProtoRcvQueue<Object> rcvUp, ProtoSndQueue<Object> rcvDown,
-                                      ProtoRcvQueue<Object> sndUp, ProtoSndQueue<Object> sndDown) {
+        public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Object> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<Object> sndDown) {
             if (isRcv) {
                 rcvDown.offerMessage(rcvUp.takeMessage(rcvUp.queueSize()));
             } else {

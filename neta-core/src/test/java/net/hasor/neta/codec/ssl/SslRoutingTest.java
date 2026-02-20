@@ -535,8 +535,9 @@ public class SslRoutingTest extends AbstractSslTest {
     private static ProtoInitializer createPortUnificationStack(SslConfig sslConf) {
         return ctx -> {
             // Route based on first byte: 0x16 = TLS ClientHello
-            ProtoRoutingDuplexer.Builder<ByteBuf> builder = ProtoRoutingDuplexer.newBuilder((context, data) -> {
-                if (data.readableBytes() > 0) {
+            ProtoRoutingDuplexer.Builder<ByteBuf> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                ByteBuf data = rcvUp.peekMessage();
+                if (data != null && data.readableBytes() > 0) {
                     byte firstByte = data.getByte(data.readerIndex());
                     return (firstByte == 0x16) ? "tls" : "plain";
                 }
@@ -577,15 +578,16 @@ public class SslRoutingTest extends AbstractSslTest {
             ctx.addLast("SSL", new SslDuplexer(sslConf));
 
             // ALPN-based router: after SSL decryption, route by negotiated protocol
-            ProtoRoutingDuplexer.Builder<ByteBuf> builder = ProtoRoutingDuplexer.newBuilder((context, data) -> {
+            ProtoRoutingDuplexer.Builder<ByteBuf> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
                 SslContext sslContext = context.context(SslContext.class);
                 if (sslContext != null && sslContext.isReady()) {
                     String proto = sslContext.getApplicationProtocol();
                     if ("http/2".equals(proto)) {
                         return "http/2";
                     }
+                    return "http/1.1"; // ALPN negotiated non-h2 protocol
                 }
-                return "http/1.1"; // default fallback
+                return null; // SSL not ready yet, defer routing
             });
 
             builder.branch("http/2", branch -> {
@@ -611,8 +613,9 @@ public class SslRoutingTest extends AbstractSslTest {
     // =================================================================
     private static ProtoInitializer createFullStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
         return ctx -> {
-            ProtoRoutingDuplexer.Builder<ByteBuf> outerBuilder = ProtoRoutingDuplexer.newBuilder((context, data) -> {
-                if (data.readableBytes() > 0) {
+            ProtoRoutingDuplexer.Builder<ByteBuf> outerBuilder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                ByteBuf data = rcvUp.peekMessage();
+                if (data != null && data.readableBytes() > 0) {
                     byte firstByte = data.getByte(data.readerIndex());
                     return (firstByte == 0x16) ? "tls" : "plain";
                 }
@@ -624,15 +627,16 @@ public class SslRoutingTest extends AbstractSslTest {
                 branch.addLast("SSL", new SslDuplexer(sslConf));
 
                 // Nested ALPN router within the TLS branch
-                ProtoRoutingDuplexer.Builder<ByteBuf> alpnBuilder = ProtoRoutingDuplexer.newBuilder((context, data) -> {
+                ProtoRoutingDuplexer.Builder<ByteBuf> alpnBuilder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
                     SslContext sslContext = context.context(SslContext.class);
                     if (sslContext != null && sslContext.isReady()) {
                         String proto = sslContext.getApplicationProtocol();
                         if ("http/2".equals(proto)) {
                             return "http/2";
                         }
+                        return "http/1.1"; // ALPN negotiated non-h2 protocol
                     }
-                    return "http/1.1";
+                    return null; // SSL not ready yet, defer routing
                 });
 
                 alpnBuilder.branch("http/2", b -> {

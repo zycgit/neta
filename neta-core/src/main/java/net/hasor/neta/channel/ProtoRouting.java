@@ -15,13 +15,23 @@
  */
 package net.hasor.neta.channel;
 /**
- * Routing predicate for branching pipeline. Evaluates incoming data to determine
- * which sub-pipeline branch should handle the connection.
+ * Routing predicate for branching pipeline. Evaluates pipeline state and/or
+ * incoming data to determine which sub-pipeline branch should handle the connection.
  * <p>
- * The routing decision is typically made once on the first data arrival and cached
- * for the lifetime of the connection.
+ * The routing decision is made during the RCV (inbound) phase only — typically once
+ * on the first inbound onMessage invocation — and cached for the lifetime of the connection.
  * </p>
- * @param <T> the type of data to evaluate for routing
+ * <p>
+ * Routing decisions can be based on:
+ * <ul>
+ *   <li>Protocol context state — e.g. {@code context.context(SslContext.class)} for ALPN</li>
+ *   <li>Data inspection — e.g. peeking at the first byte in rcvUp for TLS detection</li>
+ *   <li>Any combination of context state and data</li>
+ * </ul>
+ * Note: routing does NOT require data to be present. For protocol-state-based routing
+ * (such as SSL/ALPN or WebSocket sub-protocol), the decision is made from context alone.
+ * </p>
+ * @param <T> the data type flowing through the routing node
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
@@ -29,9 +39,16 @@ package net.hasor.neta.channel;
 public interface ProtoRouting<T> {
     /**
      * Evaluate routing condition and return the selected branch key.
-     * @param context the pipeline context
-     * @param data the first data element to inspect (peeked, not consumed)
+     * <p>
+     * This method is called only during the RCV (inbound) phase. Data in the queue
+     * should be inspected (peek) but NOT consumed — the routing node will forward
+     * queued data to the selected branch after routing is determined.
+     * </p>
+     * @param context the pipeline context (use {@code context.context(Class)} to access protocol state)
+     * @param rcvUp inbound data queue (upstream → this node), use {@code peekMessage()} for data-based routing
+     * @param rcvDown outbound response queue (this node → downstream), use to send protocol negotiation
+     * responses (e.g. HTTP 101 upgrade) before the branch is selected
      * @return the branch key matching a registered branch name, or null if routing cannot be determined yet
      */
-    String route(ProtoContext context, T data);
+    String route(ProtoContext context, ProtoRcvQueue<T> rcvUp, ProtoSndQueue<Object> rcvDown);
 }
