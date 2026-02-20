@@ -58,6 +58,11 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private boolean prefaceSent;
     private int     currentStreamId = 0;
 
+    /** Sets the stream ID to use for the next response encoding. Called by Http2ServerDuplexe. */
+    void setResponseStreamId(int streamId) {
+        this.currentStreamId = streamId;
+    }
+
     /**
      * Creates a new HTTP/2 frame encoder with default HPACK settings.
      * @param serverMode true for server-side, false for client-side

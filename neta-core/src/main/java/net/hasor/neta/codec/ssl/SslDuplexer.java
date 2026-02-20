@@ -16,6 +16,8 @@
 package net.hasor.neta.codec.ssl;
 import java.io.IOException;
 import java.util.Objects;
+import javax.net.ssl.SSLHandshakeException;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
@@ -23,7 +25,8 @@ import net.hasor.neta.channel.*;
  * SSL 网络协议层
  */
 public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
-    private final SslConfig config;
+    private static final Logger    logger = Logger.getLogger(SslDuplexer.class);
+    private final        SslConfig config;
 
     public SslDuplexer(SslConfig config) {
         this.config = Objects.requireNonNull(config);
@@ -50,10 +53,17 @@ public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, Byt
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
-        if (isRcv) {
-            return ((SslContextBasic) context.context(SslContext.class)).handRcv(rcvUp, rcvDown, sndUp, sndDown);
-        } else {
-            return ((SslContextBasic) context.context(SslContext.class)).handSnd(rcvUp, rcvDown, sndUp, sndDown);
+        try {
+            if (isRcv) {
+                return ((SslContextBasic) context.context(SslContext.class)).handRcv(rcvUp, rcvDown, sndUp, sndDown);
+            } else {
+                return ((SslContextBasic) context.context(SslContext.class)).handSnd(rcvUp, rcvDown, sndUp, sndDown);
+            }
+        } catch (SSLHandshakeException e) {
+            long channelId = context.getChannel().getChannelId();
+            logger.warn("ssl(" + channelId + ") handshake failed: " + e.getMessage());
+            context.getChannel().close();
+            return ProtoStatus.Stop;
         }
     }
 

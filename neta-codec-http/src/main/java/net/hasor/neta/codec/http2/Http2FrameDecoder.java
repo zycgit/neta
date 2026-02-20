@@ -71,6 +71,7 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
     private ByteBuf accumulator;
     private boolean prefaceReceived;
+    private boolean pendingSettingsAck;
 
     /** Reusable frame header buffer to avoid per-frame byte[9] allocation. */
     private final byte[] frameHeaderBuf  = new byte[FRAME_HEADER_SIZE];
@@ -324,7 +325,15 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
      *   <li>{@code :status} → HttpResponse.status()</li>
      * </ul>
      */
+    private int lastEmittedStreamId = 0;
+
+    /** Returns the stream ID of the last emitted HTTP message. Used by the encoder to set the response stream. */
+    int getLastEmittedStreamId() {
+        return this.lastEmittedStreamId;
+    }
+
     private void emitHttpMessage(ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
+        this.lastEmittedStreamId = streamId;
         String status = headers.get(":status");
         headers.remove(":status");
 
@@ -403,6 +412,9 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
         // Update HPACK decoder table size if changed
         hpackDecoder.setMaxHeaderTableSize((int) remoteSettings.headerTableSize());
+
+        // Signal that a SETTINGS ACK should be sent back to the peer
+        this.pendingSettingsAck = true;
     }
 
     /** Processes GOAWAY frame. */
@@ -434,6 +446,18 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     // ========================= Package-private accessors for Http2ContextImpl =========================
+
+    /**
+     * Checks and consumes the pending SETTINGS ACK flag.
+     * Returns true if a SETTINGS frame was received and an ACK should be sent.
+     */
+    boolean consumeSettingsAck() {
+        if (this.pendingSettingsAck) {
+            this.pendingSettingsAck = false;
+            return true;
+        }
+        return false;
+    }
 
     /** Creates a live {@link Http2Context} backed by this decoder's state. */
     public Http2Context createContext() {

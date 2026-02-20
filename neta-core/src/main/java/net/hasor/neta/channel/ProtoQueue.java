@@ -57,7 +57,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public synchronized ProtoRcvQueue<T> rcvSubmit() {
+    public ProtoRcvQueue<T> rcvSubmit() {
         if (this.takeCount == 1) {
             // Fast path for the common single-element case: avoid SubList allocation
             this.linkedList.remove(0);
@@ -69,13 +69,13 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public synchronized ProtoRcvQueue<T> rcvReset() {
+    public ProtoRcvQueue<T> rcvReset() {
         this.takeCount = 0;
         return this;
     }
 
     @Override
-    public synchronized ProtoSndQueue<T> sndSubmit() {
+    public ProtoSndQueue<T> sndSubmit() {
         int size = this.offerTemp.size();
         if (size == 1) {
             // Fast path: avoid addAll overhead for single element
@@ -88,20 +88,20 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public synchronized ProtoSndQueue<T> sndReset() {
+    public ProtoSndQueue<T> sndReset() {
         this.offerTemp.clear();
         return this;
     }
 
     @Override
-    public synchronized int offerMessage(T[] offerList) {
+    public int offerMessage(T[] offerList) {
         int size = Math.min(this.slotSize(), offerList.length);
         this.offerTemp.addAll(Arrays.asList(offerList).subList(0, size));
         return size;
     }
 
     @Override
-    public synchronized int offerMessage(List<T> offerList) {
+    public int offerMessage(List<T> offerList) {
         int size = Math.min(this.slotSize(), offerList.size());
         for (int i = 0; i < size; i++) {
             this.offerTemp.add(offerList.get(i));
@@ -111,7 +111,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     /** Single-element fast path: avoid Collections.singletonList allocation */
     @Override
-    public synchronized boolean offerMessage(T offerMessage) {
+    public boolean offerMessage(T offerMessage) {
         if (this.slotSize() <= 0) {
             return false;
         }
@@ -120,14 +120,14 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public synchronized int offerMessage(ProtoRcvQueue<T> offerList) {
+    public int offerMessage(ProtoRcvQueue<T> offerList) {
         int size = Math.min(offerList.queueSize(), this.slotSize());
         return this.offerMessage(offerList.takeMessage(size));
     }
 
     /** Single-element fast path: avoid ArrayList allocation */
     @Override
-    public synchronized T takeMessage() {
+    public T takeMessage() {
         if (this.queueSize() <= 0) {
             return null;
         }
@@ -137,7 +137,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public synchronized List<T> takeMessage(int cnt) {
+    public List<T> takeMessage(int cnt) {
         if (cnt == 0) {
             return Collections.emptyList();
         }
@@ -159,7 +159,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     /** Single-element fast path: avoid ArrayList allocation */
     @Override
-    public synchronized T peekMessage() {
+    public T peekMessage() {
         if (this.queueSize() <= 0) {
             return null;
         }
@@ -167,7 +167,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public synchronized List<T> peekMessage(int cnt) {
+    public List<T> peekMessage(int cnt) {
         if (cnt < 0) {
             cnt = this.queueSize();
         }
@@ -177,10 +177,29 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     @Override
-    public synchronized void skipMessage(int cnt) {
+    public void skipMessage(int cnt) {
         int fixCnt = Math.min(cnt, this.queueSize());
         this.takeCount += fixCnt;
     }
+
+    /** Direct Object[] return to avoid intermediate ArrayList + toArray() */
+    public Object[] takeMessageToArray(int cnt) {
+        if (cnt <= 0) {
+            return EMPTY_ARRAY;
+        }
+        int fixCnt = Math.min(cnt, this.queueSize());
+        if (fixCnt == 0) {
+            return EMPTY_ARRAY;
+        }
+        Object[] result = new Object[fixCnt];
+        for (int i = 0; i < fixCnt; i++) {
+            result[i] = this.linkedList.get(this.takeCount + i);
+        }
+        this.takeCount += fixCnt;
+        return result;
+    }
+
+    private static final Object[] EMPTY_ARRAY = new Object[0];
 
     @Override
     public String toString() {

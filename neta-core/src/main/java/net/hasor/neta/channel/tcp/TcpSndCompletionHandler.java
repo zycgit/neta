@@ -65,10 +65,8 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         }
 
         if (this.writing.compareAndSet(false, true)) {
-            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-                this.copyData(wContext);
-                this.writeData(wContext);
-            });
+            this.copyData(wContext);
+            this.writeData(wContext);
         }
     }
 
@@ -95,13 +93,11 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
             logger.debug("snd(" + this.channelId + ") size:" + result);
         }
 
-        // when sndData finish, use async task to completed.
+        // when sndData finish, complete inline (no thread dispatch needed)
         SoSndData sndData = wContext.peekData();
         if (!sndData.hasReadable()) {
             wContext.popData();
-            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-                sndData.completed();
-            });
+            sndData.completed();
         }
 
         this.monitor.updateSndCounter(result);
@@ -176,9 +172,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
     private void purgeSndData(Throwable e, SoSndContext context) {
         while (!context.isEmpty()) {
             SoSndData sndData = context.popData();
-            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-                sndData.failed(e);
-            });
+            sndData.failed(e);
         }
     }
 

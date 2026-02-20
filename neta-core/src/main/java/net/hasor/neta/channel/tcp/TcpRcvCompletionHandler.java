@@ -43,6 +43,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
     private final        ByteBufAllocator allocator;
     private final        ByteBuffer       rcvSwapBuffer;
     private final        int              connectTimeoutMs;
+    private              NetChannel       netChannel; // direct reference for fast path
 
     public TcpRcvCompletionHandler(TcpAsyncChannel channel, SoContext context, NetMonitor monitor) {
         this.channelId = channel.getChannelId();
@@ -54,6 +55,11 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
         this.rTimeoutMs = channel.getSoConfig().getSoReadTimeoutMs();
         this.allocator = context.getByteBufAllocator();
         this.rcvSwapBuffer = this.allocator.jvmBuffer(channel.getSoConfig().getSwapRcvBuf());
+    }
+
+    /** Set the NetChannel reference for direct RCV notification (bypasses ConcurrentHashMap lookup) */
+    void setNetChannel(NetChannel netChannel) {
+        this.netChannel = netChannel;
     }
 
     /** Reads a sequence of bytes from this channel into the given buffer. */
@@ -81,7 +87,18 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             byteBuf.markWriter();
 
             this.monitor.updateRcvCounter(result);
-            this.context.notifyRcvChannelData(this.channelId, byteBuf);
+
+            // fast path: direct call bypasses ConcurrentHashMap lookup + varargs allocation
+            if (this.netChannel != null) {
+                try {
+                    this.netChannel.notifyRcvSingle(byteBuf);
+                } catch (Throwable e) {
+                    SoException ee = e instanceof SoException ? (SoException) e : new SoRcvException(e.getMessage(), e);
+                    this.context.notifyRcvChannelException(this.channelId, true, ee);
+                }
+            } else {
+                this.context.notifyRcvChannelData(this.channelId, byteBuf);
+            }
 
             this.read();
         } else if (result == 0) {

@@ -36,6 +36,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     private              ProtoInvocation<?, ?, ?, ?> tail;
     private              long                        channelID;
     private final        boolean                     branchMode;
+    private final        ArrayList<Object[]>         cachedRcvReturnData;
+    private final        ArrayList<Object[]>         cachedSndReturnData;
 
     ProtoChainRoot(SoConfig protoConf) {
         this(protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), false);
@@ -45,6 +47,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
         this.tailRcvDown = new ProtoQueue<>(rcvSlotSize < 0 ? -1 : rcvSlotSize);
         this.headSndDown = new ProtoQueue<>(sndSlotSize < 0 ? -1 : sndSlotSize);
         this.branchMode = branchMode;
+        this.cachedRcvReturnData = new ArrayList<>();
+        this.cachedSndReturnData = new ArrayList<>();
     }
 
     public ProtoQueue<?> getTailRcvDown() {
@@ -194,7 +198,11 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
     private int takeSndDownToArray(ProtoInvocation<?, ?, ?, ?> current, List<Object[]> array) {
         if (current.previous == null) {
-            Object[] take = this.headSndDown.takeMessage(this.headSndDown.queueSize()).toArray();
+            int queueSize = this.headSndDown.queueSize();
+            if (queueSize == 0) {
+                return 0;
+            }
+            Object[] take = this.headSndDown.takeMessageToArray(queueSize);
             array.add(take);
             this.headSndDown.rcvSubmit();
             return take.length;
@@ -263,7 +271,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     private Object[] onRcvLife(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
-        ArrayList<Object[]> returnData = new ArrayList<>();
+        ArrayList<Object[]> returnData = this.cachedRcvReturnData;
+        returnData.clear();
         int arraySize = 0;
 
         boolean found = false;
@@ -293,7 +302,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
                         arraySize += takeSndDownToArray(current, returnData);
 
                         // when last then snd life result.
-                        if (current.next == null) {
+                        // skip for main pipeline single handler (doSndLife would be a no-op)
+                        if (current.next == null && (this.head != this.tail || this.branchMode)) {
                             Object[] objects = this.doSndLife(protoCtx, stackName, null);
                             arraySize += objects.length;
                             returnData.add(objects);
@@ -307,10 +317,12 @@ class ProtoChainRoot implements ProtoStack<Object> {
                             break;
                         }
 
-                        // snd life result.
-                        Object[] objects = this.doSndLife(protoCtx, current.getName(), null);
-                        arraySize += objects.length;
-                        returnData.add(objects);
+                        // snd life result (skip for main pipeline single handler)
+                        if (this.head != this.tail || this.branchMode) {
+                            Object[] sndObjects = this.doSndLife(protoCtx, current.getName(), null);
+                            arraySize += sndObjects.length;
+                            returnData.add(sndObjects);
+                        }
                         break;
                     } else {
                         throw new UnsupportedOperationException("unsupported status = " + status);
@@ -330,6 +342,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
         try {
             if (arraySize == 0) {
                 return EMPTY;
+            } else if (returnData.size() == 1) {
+                return returnData.get(0);
             } else {
                 Object[] result = new Object[arraySize];
                 int dstPos = 0;
@@ -409,7 +423,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     private Object[] doSndLife(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
-        ArrayList<Object[]> returnData = new ArrayList<>();
+        ArrayList<Object[]> returnData = this.cachedSndReturnData;
+        returnData.clear();
         int arraySize = 0;
 
         boolean found = false;
@@ -460,6 +475,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
         try {
             if (arraySize == 0) {
                 return EMPTY;
+            } else if (returnData.size() == 1) {
+                return returnData.get(0);
             } else {
                 Object[] result = new Object[arraySize];
                 int dstPos = 0;

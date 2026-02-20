@@ -19,6 +19,7 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.LockSupport;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
@@ -37,12 +38,14 @@ class SoEventExecutor implements Closeable {
     //
     private final        AtomicBoolean        runTag;
     private final        Thread[]             workerThreads;
+    private final        AtomicInteger        wakeIndex;
 
     public SoEventExecutor(ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads, HashedWheelTimer timer) {
         this.timer = timer;
         this.tasks = new ConcurrentLinkedQueue<>();
         this.runTag = new AtomicBoolean(false);
         this.workerThreads = new Thread[taskThreads];
+        this.wakeIndex = new AtomicInteger(0);
 
         if (this.runTag.compareAndSet(false, true)) {
             ThreadFactory workerThreadFactory = soThreadFactory.newFactory(classLoader, "Neta-Worker-%s");
@@ -138,9 +141,9 @@ class SoEventExecutor implements Closeable {
     }
 
     private void wakeUp() {
-        for (Thread workerThread : this.workerThreads) {
-            LockSupport.unpark(workerThread);
-        }
+        int len = this.workerThreads.length;
+        int idx = (this.wakeIndex.getAndIncrement() & 0x7FFFFFFF) % len;
+        LockSupport.unpark(this.workerThreads[idx]);
     }
 
     private static class TaskWorker<T> implements Runnable {

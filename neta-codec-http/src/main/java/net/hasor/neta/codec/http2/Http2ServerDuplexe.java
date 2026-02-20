@@ -35,9 +35,10 @@ import net.hasor.neta.codec.http.HttpObject;
  * </pre>
  */
 public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-
-    private final Http2FrameDecoder decoder;
-    private final Http2FrameEncoder encoder;
+    private static final int               FRAME_HEADER_SIZE = 9;
+    private final        Http2FrameDecoder decoder;
+    private final        Http2FrameEncoder encoder;
+    private              boolean           serverPrefaceSent;
 
     /** Creates a server-side HTTP/2 codec with default HPACK settings (tableSize=4096, maxHeaderListSize=8192). */
     public Http2ServerDuplexe() {
@@ -73,10 +74,90 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
-            return this.decoder.onMessage(context, rcvUp, rcvDown);
+            // Send server connection preface (SETTINGS frame) on first receive
+            if (!serverPrefaceSent) {
+                ByteBuf settingsFrame = buildServerSettingsFrame(context);
+                StringBuilder hex = new StringBuilder();
+                for (int i = 0; i < settingsFrame.readableBytes(); i++) {
+                    if (i > 0) hex.append(' ');
+                    hex.append(String.format("%02x", settingsFrame.getByte(i) & 0xFF));
+                }
+                System.out.println("[H2-DEBUG] SETTINGS frame (" + settingsFrame.readableBytes() + " bytes): " + hex);
+                sndDown.offerMessage(settingsFrame);
+                serverPrefaceSent = true;
+            }
+
+            System.out.println("[H2-DEBUG] Calling decoder.onMessage, rcvUp.hasMore=" + rcvUp.hasMore());
+            ProtoStatus status = this.decoder.onMessage(context, rcvUp, rcvDown);
+            System.out.println("[H2-DEBUG] decoder returned status=" + status);
+
+            // If the decoder received a client SETTINGS frame, send SETTINGS ACK
+            if (this.decoder.consumeSettingsAck()) {
+                ByteBuf ackFrame = buildSettingsAckFrame(context);
+                System.out.println("[H2-DEBUG] Built SETTINGS ACK frame: " + ackFrame.readableBytes() + " bytes");
+                sndDown.offerMessage(ackFrame);
+            }
+
+            return status;
         } else {
+            // Set the response stream ID to match the last decoded request's stream
+            int lastStreamId = this.decoder.getLastEmittedStreamId();
+            if (lastStreamId > 0) {
+                this.encoder.setResponseStreamId(lastStreamId);
+            }
             return this.encoder.onMessage(context, sndUp, sndDown);
         }
+    }
+
+    /**
+     * Builds the server SETTINGS frame (connection preface).
+     * Sends: MAX_CONCURRENT_STREAMS=100, INITIAL_WINDOW_SIZE=65535, ENABLE_PUSH=0
+     */
+    private ByteBuf buildServerSettingsFrame(ProtoContext context) {
+        // 3 settings x 6 bytes each = 18 bytes payload
+        int payloadLength = 18;
+        ByteBuf buf = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + payloadLength);
+
+        // Frame header: length=18, type=SETTINGS(0x04), flags=0, streamId=0
+        buf.writeByte((byte) ((payloadLength >>> 16) & 0xFF));
+        buf.writeByte((byte) ((payloadLength >>> 8) & 0xFF));
+        buf.writeByte((byte) (payloadLength & 0xFF));
+        buf.writeByte((byte) Http2FrameType.SETTINGS);
+        buf.writeByte((byte) 0); // no flags
+        buf.writeInt32(0); // stream 0
+
+        // SETTINGS_MAX_CONCURRENT_STREAMS (0x03) = 100
+        buf.writeInt16((short) Http2Settings.SETTINGS_MAX_CONCURRENT_STREAMS);
+        buf.writeInt32(100);
+
+        // SETTINGS_INITIAL_WINDOW_SIZE (0x04) = 65535
+        buf.writeInt16((short) Http2Settings.SETTINGS_INITIAL_WINDOW_SIZE);
+        buf.writeInt32(65535);
+
+        // SETTINGS_ENABLE_PUSH (0x02) = 0 (disabled for server)
+        buf.writeInt16((short) Http2Settings.SETTINGS_ENABLE_PUSH);
+        buf.writeInt32(0);
+
+        buf.markWriter();
+        return buf;
+    }
+
+    /**
+     * Builds a SETTINGS ACK frame (empty SETTINGS with ACK flag).
+     */
+    private ByteBuf buildSettingsAckFrame(ProtoContext context) {
+        ByteBuf buf = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE);
+
+        // Frame header: length=0, type=SETTINGS(0x04), flags=ACK(0x01), streamId=0
+        buf.writeByte((byte) 0);
+        buf.writeByte((byte) 0);
+        buf.writeByte((byte) 0);
+        buf.writeByte((byte) Http2FrameType.SETTINGS);
+        buf.writeByte((byte) Http2Flags.ACK);
+        buf.writeInt32(0); // stream 0
+
+        buf.markWriter();
+        return buf;
     }
 
     @Override

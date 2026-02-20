@@ -37,6 +37,9 @@ public class TcpChannel extends NetChannel {
         this.readHandler = readHandler;
         this.writeHandler = writeHandler;
 
+        // set direct reference for fast RCV path (bypasses ConcurrentHashMap lookup)
+        this.readHandler.setNetChannel(this);
+
         this.onClose(c -> {
             IOUtils.closeQuietly(this.readHandler);
             IOUtils.closeQuietly(this.writeHandler);
