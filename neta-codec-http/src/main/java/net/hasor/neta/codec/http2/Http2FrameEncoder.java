@@ -59,12 +59,21 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private int     currentStreamId = 0;
 
     /**
-     * Creates a new HTTP/2 frame encoder.
+     * Creates a new HTTP/2 frame encoder with default HPACK settings.
      * @param serverMode true for server-side, false for client-side
      */
     public Http2FrameEncoder(boolean serverMode) {
+        this(serverMode, 4096);
+    }
+
+    /**
+     * Creates a new HTTP/2 frame encoder with custom HPACK settings.
+     * @param serverMode true for server-side, false for client-side
+     * @param maxHeaderTableSize maximum HPACK dynamic table size in bytes
+     */
+    public Http2FrameEncoder(boolean serverMode, int maxHeaderTableSize) {
         this.serverMode = serverMode;
-        this.hpackEncoder = new HpackEncoder(4096);
+        this.hpackEncoder = new HpackEncoder(maxHeaderTableSize);
         // Client uses odd stream IDs starting from 1, server uses even starting from 2
         this.nextStreamId = new AtomicInteger(serverMode ? 2 : 1);
         this.prefaceSent = serverMode; // Server doesn't send the connection preface

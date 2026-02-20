@@ -56,12 +56,21 @@ public class Http3FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private       boolean      settingsSent;
 
     /**
-     * Creates a new HTTP/3 frame encoder.
+     * Creates a new HTTP/3 frame encoder with default QPACK settings.
      * @param serverMode true for server-side, false for client-side
      */
     public Http3FrameEncoder(boolean serverMode) {
+        this(serverMode, 4096);
+    }
+
+    /**
+     * Creates a new HTTP/3 frame encoder with custom QPACK settings.
+     * @param serverMode true for server-side, false for client-side
+     * @param maxTableSize maximum QPACK dynamic table size in bytes
+     */
+    public Http3FrameEncoder(boolean serverMode, int maxTableSize) {
         this.serverMode = serverMode;
-        this.qpackEncoder = new QpackEncoder();
+        this.qpackEncoder = new QpackEncoder(maxTableSize, false);
         // Client-initiated bidi streams: 0, 4, 8, ... Server-initiated: 1, 5, 9, ...
         this.nextStreamId = new AtomicLong(serverMode ? 1 : 0);
         this.currentStreamId = 0;

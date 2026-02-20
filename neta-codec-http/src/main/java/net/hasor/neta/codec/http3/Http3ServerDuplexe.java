@@ -51,11 +51,23 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     private final Http3FrameEncoder h3Encoder;
     private final QuicFrameEncoder  quicEncoder;
 
-    /** Creates a server-side HTTP/3 codec. */
+    /** Creates a server-side HTTP/3 codec with default QPACK settings (tableSize=4096, maxHeaderListSize=65536). */
     public Http3ServerDuplexe() {
         this.quicDecoder = new QuicFrameDecoder(true);
         this.h3Decoder = new Http3FrameDecoder(true);
         this.h3Encoder = new Http3FrameEncoder(true);
+        this.quicEncoder = new QuicFrameEncoder(true);
+    }
+
+    /**
+     * Creates a server-side HTTP/3 codec with custom QPACK settings.
+     * @param maxTableSize maximum QPACK dynamic table size in bytes (default: 4096)
+     * @param maxHeaderListSize maximum total size of all decoded headers (default: 65536)
+     */
+    public Http3ServerDuplexe(int maxTableSize, int maxHeaderListSize) {
+        this.quicDecoder = new QuicFrameDecoder(true);
+        this.h3Decoder = new Http3FrameDecoder(true, maxTableSize, maxHeaderListSize);
+        this.h3Encoder = new Http3FrameEncoder(true, maxTableSize);
         this.quicEncoder = new QuicFrameEncoder(true);
     }
 

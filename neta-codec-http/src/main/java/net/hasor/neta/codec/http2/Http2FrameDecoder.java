@@ -78,12 +78,22 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private final byte[] prefaceCheckBuf = new byte[CONNECTION_PREFACE.length];
 
     /**
-     * Creates a new HTTP/2 frame decoder.
+     * Creates a new HTTP/2 frame decoder with default HPACK settings.
      * @param serverMode true for server-side (expects client preface), false for client-side
      */
     public Http2FrameDecoder(boolean serverMode) {
+        this(serverMode, 4096, 8192);
+    }
+
+    /**
+     * Creates a new HTTP/2 frame decoder with custom HPACK settings.
+     * @param serverMode true for server-side (expects client preface), false for client-side
+     * @param maxHeaderTableSize maximum HPACK dynamic table size in bytes
+     * @param maxHeaderListSize maximum total size of all decoded headers
+     */
+    public Http2FrameDecoder(boolean serverMode, int maxHeaderTableSize, int maxHeaderListSize) {
         this.serverMode = serverMode;
-        this.hpackDecoder = new HpackDecoder(4096, 8192);
+        this.hpackDecoder = new HpackDecoder(maxHeaderTableSize, maxHeaderListSize);
         this.streams = new HashMap<>();
         this.localSettings = new Http2Settings();
         this.remoteSettings = new Http2Settings();

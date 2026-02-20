@@ -27,8 +27,7 @@ public class WebSocketContextTest {
 
     @Test
     public void fromHandshake_basic() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake(
-            "/chat", "graphql-transport-ws", null);
+        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/chat", "graphql-transport-ws", null);
 
         assertTrue("Should be ready after handshake", ctx.isReady());
         assertTrue("fromHandshake creates server-side context", ctx.isServer());
@@ -41,34 +40,29 @@ public class WebSocketContextTest {
 
     @Test
     public void fromHandshake_withExtensions() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake(
-            "/ws", null, "permessage-deflate, x-webkit-deflate-frame");
+        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/ws", null, "permessage-deflate, x-webkit-deflate-frame");
 
         assertNull("No sub-protocol", ctx.subProtocol());
-        assertEquals("Extensions should be comma-separated",
-            "permessage-deflate, x-webkit-deflate-frame", ctx.extensions());
+        assertEquals("Extensions should be comma-separated", "permessage-deflate, x-webkit-deflate-frame", ctx.extensions());
     }
 
     @Test
     public void fromHandshake_emptyExtensions() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake(
-            "/ws", null, "");
+        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/ws", null, "");
 
         assertNull("Empty extensions should return null", ctx.extensions());
     }
 
     @Test
     public void fromHandshake_nullExtensions() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake(
-            "/ws", null, null);
+        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/ws", null, null);
 
         assertNull("Null extensions should return null", ctx.extensions());
     }
 
     @Test
     public void constructor_clientSide() {
-        WebSocketContextImpl ctx = new WebSocketContextImpl(
-            false, "mqtt", 13, "/mqtt", Collections.emptyList());
+        WebSocketContextImpl ctx = new WebSocketContextImpl(false, "mqtt", 13, "/mqtt", Collections.emptyList());
 
         assertFalse("Client-side should report isServer=false", ctx.isServer());
         assertTrue("Client-side should report isClient=true", ctx.isClient());
@@ -78,17 +72,14 @@ public class WebSocketContextTest {
 
     @Test
     public void constructor_withExtensionList() {
-        WebSocketContextImpl ctx = new WebSocketContextImpl(
-            true, null, 13, "/ws",
-            Arrays.asList("permessage-deflate", "x-ext"));
+        WebSocketContextImpl ctx = new WebSocketContextImpl(true, null, 13, "/ws", Arrays.asList("permessage-deflate", "x-ext"));
 
         assertEquals("permessage-deflate, x-ext", ctx.extensions());
     }
 
     @Test
     public void constructor_nullExtensionList() {
-        WebSocketContextImpl ctx = new WebSocketContextImpl(
-            true, null, 13, "/ws", null);
+        WebSocketContextImpl ctx = new WebSocketContextImpl(true, null, 13, "/ws", null);
 
         assertNull("Null extension list should return null", ctx.extensions());
     }
@@ -96,8 +87,7 @@ public class WebSocketContextTest {
     @Test
     public void alwaysReady() {
         // WebSocketContext is only created after handshake, so it's always ready
-        WebSocketContextImpl ctx = new WebSocketContextImpl(
-            true, null, 13, "/", Collections.emptyList());
+        WebSocketContextImpl ctx = new WebSocketContextImpl(true, null, 13, "/", Collections.emptyList());
         assertTrue("Should always be ready", ctx.isReady());
     }
 

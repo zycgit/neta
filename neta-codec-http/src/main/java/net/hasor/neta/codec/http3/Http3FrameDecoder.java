@@ -57,12 +57,22 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private       boolean                settingsReceived;
 
     /**
-     * Creates a new HTTP/3 frame decoder.
+     * Creates a new HTTP/3 frame decoder with default QPACK settings.
      * @param serverMode true for server-side (expects requests), false for client-side (expects responses)
      */
     public Http3FrameDecoder(boolean serverMode) {
+        this(serverMode, 4096, 65536);
+    }
+
+    /**
+     * Creates a new HTTP/3 frame decoder with custom QPACK settings.
+     * @param serverMode true for server-side (expects requests), false for client-side (expects responses)
+     * @param maxTableSize maximum QPACK dynamic table size in bytes
+     * @param maxHeaderListSize maximum total size of all decoded headers
+     */
+    public Http3FrameDecoder(boolean serverMode, int maxTableSize, int maxHeaderListSize) {
         this.serverMode = serverMode;
-        this.qpackDecoder = new QpackDecoder();
+        this.qpackDecoder = new QpackDecoder(maxTableSize, maxHeaderListSize);
         this.streams = new HashMap<>();
         this.localSettings = new Http3Settings();
         this.remoteSettings = new Http3Settings();

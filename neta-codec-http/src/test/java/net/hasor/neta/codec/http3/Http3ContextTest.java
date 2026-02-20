@@ -31,25 +31,22 @@ public class Http3ContextTest {
 
     private static ProtoContext mockContext() {
         Map<Class<?>, Object> contextMap = new ConcurrentHashMap<>();
-        return (ProtoContext) java.lang.reflect.Proxy.newProxyInstance(
-            ProtoContext.class.getClassLoader(),
-            new Class[] { ProtoContext.class },
-            (proxy, method, args) -> {
-                if ("byteBufAllocator".equals(method.getName())) {
-                    return ByteBufAllocator.DEFAULT;
-                }
-                if ("context".equals(method.getName())) {
-                    if (args.length == 1) {
-                        return contextMap.get(args[0]);
-                    } else if (args.length == 2) {
-                        if (args[1] != null) {
-                            contextMap.put((Class<?>) args[0], args[1]);
-                        }
-                        return args[1];
+        return (ProtoContext) java.lang.reflect.Proxy.newProxyInstance(ProtoContext.class.getClassLoader(), new Class[] { ProtoContext.class }, (proxy, method, args) -> {
+            if ("byteBufAllocator".equals(method.getName())) {
+                return ByteBufAllocator.DEFAULT;
+            }
+            if ("context".equals(method.getName())) {
+                if (args.length == 1) {
+                    return contextMap.get(args[0]);
+                } else if (args.length == 2) {
+                    if (args[1] != null) {
+                        contextMap.put((Class<?>) args[0], args[1]);
                     }
+                    return args[1];
                 }
-                return null;
-            });
+            }
+            return null;
+        });
     }
 
     // ==================== Http3Context Tests ====================
@@ -214,8 +211,7 @@ public class Http3ContextTest {
         assertNotNull("QuicContext should be available", ctx.context(QuicContext.class));
 
         // They should be independent
-        assertNotSame("Http3Context and QuicContext should be different objects",
-            ctx.context(Http3Context.class), ctx.context(QuicContext.class));
+        assertNotSame("Http3Context and QuicContext should be different objects", ctx.context(Http3Context.class), ctx.context(QuicContext.class));
     }
 
     @Test

@@ -39,10 +39,20 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     private final Http2FrameDecoder decoder;
     private final Http2FrameEncoder encoder;
 
-    /** Creates a server-side HTTP/2 codec. */
+    /** Creates a server-side HTTP/2 codec with default HPACK settings (tableSize=4096, maxHeaderListSize=8192). */
     public Http2ServerDuplexe() {
         this.decoder = new Http2FrameDecoder(true);
         this.encoder = new Http2FrameEncoder(true);
+    }
+
+    /**
+     * Creates a server-side HTTP/2 codec with custom HPACK settings.
+     * @param maxHeaderTableSize maximum HPACK dynamic table size in bytes (default: 4096)
+     * @param maxHeaderListSize maximum total size of all decoded headers (default: 8192)
+     */
+    public Http2ServerDuplexe(int maxHeaderTableSize, int maxHeaderListSize) {
+        this.decoder = new Http2FrameDecoder(true, maxHeaderTableSize, maxHeaderListSize);
+        this.encoder = new Http2FrameEncoder(true, maxHeaderTableSize);
     }
 
     @Override
