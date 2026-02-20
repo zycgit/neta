@@ -15,8 +15,8 @@
  */
 package net.hasor.neta.codec.http2;
 
-import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
@@ -69,6 +69,66 @@ public class HpackEncoder {
         byte[] result = new byte[pos];
         System.arraycopy(buf, 0, result, 0, pos);
         return result;
+    }
+
+    /**
+     * Encodes HTTP headers directly into a ByteBuf, avoiding the intermediate
+     * byte[] allocation of {@link #encode(HttpHeaders)}.
+     * @param headers the HTTP headers to encode
+     * @param dst the destination ByteBuf to write the encoded bytes into
+     * @return the number of bytes written
+     */
+    public int encodeTo(HttpHeaders headers, ByteBuf dst) {
+        pos = 0;
+
+        for (Map.Entry<String, String> entry : headers) {
+            String name = entry.getKey().toLowerCase();
+            String value = entry.getValue();
+            encodeHeader(name, value);
+        }
+
+        dst.writeBytes(buf, 0, pos);
+        return pos;
+    }
+
+    /**
+     * Begins a direct encode session. Header fields are added individually via
+     * {@link #encodeHeaderDirect(String, String)}, then the result is retrieved
+     * via {@link #encodedBuffer()} and {@link #encodedLength()}.
+     * <p>
+     * This avoids creating an intermediate {@link HttpHeaders} object and the
+     * {@code byte[]} copy performed by {@link #encode(HttpHeaders)}.
+     */
+    public void beginEncode() {
+        pos = 0;
+    }
+
+    /**
+     * Encodes a single header field directly into the internal buffer.
+     * Must be called between {@link #beginEncode()} and reading {@link #encodedLength()}.
+     * @param name the header name (must be lowercase for HTTP/2)
+     * @param value the header value
+     */
+    public void encodeHeaderDirect(String name, String value) {
+        encodeHeader(name, value);
+    }
+
+    /**
+     * Returns the number of bytes written since {@link #beginEncode()}.
+     * @return the encoded byte count
+     */
+    public int encodedLength() {
+        return pos;
+    }
+
+    /**
+     * Returns a reference to the internal encode buffer. The content is valid from
+     * index 0 to {@link #encodedLength()} - 1. The reference is only valid until
+     * the next encode operation.
+     * @return the internal byte buffer
+     */
+    public byte[] encodedBuffer() {
+        return buf;
     }
 
     /**
@@ -177,13 +237,19 @@ public class HpackEncoder {
     /**
      * Encodes an HPACK string literal (RFC 7541, Section 5.2).
      * Uses raw encoding (no Huffman) for simplicity.
+     * Writes string bytes directly into the internal buffer to avoid
+     * intermediate byte[] allocation from String.getBytes().
      * @param s the string to encode
      */
     private void encodeString(String s) {
-        byte[] bytes = s.getBytes(StandardCharsets.ISO_8859_1);
+        int len = s.length();
         // Raw string (no Huffman): H=0
-        encodeInteger(bytes.length, 7, 0x00);
-        writeBytes(bytes, 0, bytes.length);
+        encodeInteger(len, 7, 0x00);
+        ensureCapacity(len);
+        // Write ISO-8859-1 bytes directly - avoids s.getBytes() allocation
+        for (int i = 0; i < len; i++) {
+            buf[pos++] = (byte) s.charAt(i);
+        }
     }
 
     /** Updates the dynamic table maximum size. */

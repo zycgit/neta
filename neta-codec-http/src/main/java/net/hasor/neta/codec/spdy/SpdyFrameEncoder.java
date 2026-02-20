@@ -202,105 +202,71 @@ public class SpdyFrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
 
     /**
      * Writes a SYN_STREAM control frame.
-     * <pre>
-     *   Control header: 1|version(15)|type=1(16)
-     *   flags(8)|length(24)
-     *   streamId(32)|assocStreamId(32)|priority(3)|unused(5)|slot(8)
-     *   header block
-     * </pre>
+     * Writes directly to ByteBuf, avoiding intermediate byte[] allocation.
      */
     private void writeSynStream(ProtoContext context, ProtoSndQueue<ByteBuf> dst, int streamId, int flags, byte[] headerBlock) {
         int payloadLen = 10 + headerBlock.length; // 4+4+2 = 10 bytes of SYN_STREAM-specific fields
         ByteBuf frame = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + payloadLen);
 
-        byte[] buf = new byte[FRAME_HEADER_SIZE + payloadLen];
-        // Control frame header
-        buf[0] = (byte) (0x80 | ((SPDY_VERSION >>> 8) & 0x7F));
-        buf[1] = (byte) (SPDY_VERSION & 0xFF);
-        buf[2] = (byte) ((SpdyFrameType.SYN_STREAM >>> 8) & 0xFF);
-        buf[3] = (byte) (SpdyFrameType.SYN_STREAM & 0xFF);
-        buf[4] = (byte) flags;
-        buf[5] = (byte) ((payloadLen >>> 16) & 0xFF);
-        buf[6] = (byte) ((payloadLen >>> 8) & 0xFF);
-        buf[7] = (byte) (payloadLen & 0xFF);
+        // Control frame header - write directly to ByteBuf
+        frame.writeByte((byte) (0x80 | ((SPDY_VERSION >>> 8) & 0x7F)));
+        frame.writeByte((byte) (SPDY_VERSION & 0xFF));
+        frame.writeByte((byte) ((SpdyFrameType.SYN_STREAM >>> 8) & 0xFF));
+        frame.writeByte((byte) (SpdyFrameType.SYN_STREAM & 0xFF));
+        frame.writeByte((byte) flags);
+        frame.writeInt24(payloadLen);
 
         // Stream ID
-        buf[8] = (byte) ((streamId >>> 24) & 0x7F);
-        buf[9] = (byte) ((streamId >>> 16) & 0xFF);
-        buf[10] = (byte) ((streamId >>> 8) & 0xFF);
-        buf[11] = (byte) (streamId & 0xFF);
-
-        // Associated-To-Stream-ID (0 = no association)
-        buf[12] = 0;
-        buf[13] = 0;
-        buf[14] = 0;
-        buf[15] = 0;
-
+        frame.writeInt32(streamId & 0x7FFFFFFF);
+        // Associated-To-Stream-ID (0)
+        frame.writeInt32(0);
         // Priority (3 bits) + unused (5 bits) + slot (8 bits)
-        buf[16] = 0; // default priority
-        buf[17] = 0; // no credential slot
+        frame.writeByte((byte) 0);
+        frame.writeByte((byte) 0);
 
         // Header block
-        System.arraycopy(headerBlock, 0, buf, 18, headerBlock.length);
-
-        frame.writeBytes(buf, 0, buf.length);
+        frame.writeBytes(headerBlock, 0, headerBlock.length);
         frame.markWriter();
         dst.offerMessage(frame);
     }
 
     /**
      * Writes a SYN_REPLY control frame.
-     * <pre>
-     *   Control header: 1|version(15)|type=2(16)
-     *   flags(8)|length(24)
-     *   streamId(32)
-     *   header block
-     * </pre>
+     * Writes directly to ByteBuf.
      */
     private void writeSynReply(ProtoContext context, ProtoSndQueue<ByteBuf> dst, int streamId, int flags, byte[] headerBlock) {
         int payloadLen = 4 + headerBlock.length;
         ByteBuf frame = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + payloadLen);
 
-        byte[] buf = new byte[FRAME_HEADER_SIZE + payloadLen];
-        buf[0] = (byte) (0x80 | ((SPDY_VERSION >>> 8) & 0x7F));
-        buf[1] = (byte) (SPDY_VERSION & 0xFF);
-        buf[2] = (byte) ((SpdyFrameType.SYN_REPLY >>> 8) & 0xFF);
-        buf[3] = (byte) (SpdyFrameType.SYN_REPLY & 0xFF);
-        buf[4] = (byte) flags;
-        buf[5] = (byte) ((payloadLen >>> 16) & 0xFF);
-        buf[6] = (byte) ((payloadLen >>> 8) & 0xFF);
-        buf[7] = (byte) (payloadLen & 0xFF);
+        // Control frame header
+        frame.writeByte((byte) (0x80 | ((SPDY_VERSION >>> 8) & 0x7F)));
+        frame.writeByte((byte) (SPDY_VERSION & 0xFF));
+        frame.writeByte((byte) ((SpdyFrameType.SYN_REPLY >>> 8) & 0xFF));
+        frame.writeByte((byte) (SpdyFrameType.SYN_REPLY & 0xFF));
+        frame.writeByte((byte) flags);
+        frame.writeInt24(payloadLen);
 
-        buf[8] = (byte) ((streamId >>> 24) & 0x7F);
-        buf[9] = (byte) ((streamId >>> 16) & 0xFF);
-        buf[10] = (byte) ((streamId >>> 8) & 0xFF);
-        buf[11] = (byte) (streamId & 0xFF);
+        // Stream ID
+        frame.writeInt32(streamId & 0x7FFFFFFF);
 
-        System.arraycopy(headerBlock, 0, buf, 12, headerBlock.length);
-
-        frame.writeBytes(buf, 0, buf.length);
+        // Header block
+        frame.writeBytes(headerBlock, 0, headerBlock.length);
         frame.markWriter();
         dst.offerMessage(frame);
     }
 
     /**
      * Writes a SPDY data frame.
+     * Writes directly to ByteBuf.
      */
     private void writeDataFrame(ProtoContext context, ProtoSndQueue<ByteBuf> dst, int streamId, int flags, byte[] data, int offset, int length) {
         ByteBuf frame = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + length);
 
-        byte[] header = new byte[FRAME_HEADER_SIZE];
-        // Data frame: C=0
-        header[0] = (byte) ((streamId >>> 24) & 0x7F);
-        header[1] = (byte) ((streamId >>> 16) & 0xFF);
-        header[2] = (byte) ((streamId >>> 8) & 0xFF);
-        header[3] = (byte) (streamId & 0xFF);
-        header[4] = (byte) flags;
-        header[5] = (byte) ((length >>> 16) & 0xFF);
-        header[6] = (byte) ((length >>> 8) & 0xFF);
-        header[7] = (byte) (length & 0xFF);
+        // Data frame header: C=0 + streamId
+        frame.writeInt32(streamId & 0x7FFFFFFF);
+        frame.writeByte((byte) flags);
+        frame.writeInt24(length);
 
-        frame.writeBytes(header, 0, FRAME_HEADER_SIZE);
         if (length > 0) {
             frame.writeBytes(data, offset, length);
         }

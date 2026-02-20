@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.spdy;
 
-import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 import net.hasor.neta.codec.http.HttpHeaders;
@@ -44,6 +43,9 @@ import net.hasor.neta.codec.http.HttpProtocolException;
  * In the SPDY/3.1 specification, these header blocks are typically
  * compressed with zlib/deflate. This implementation supports both
  * raw and compressed modes for flexibility.
+ * <p>
+ * Uses a direct byte buffer instead of {@code ByteArrayOutputStream}
+ * to avoid synchronized write overhead.
  */
 public final class SpdyHeaderBlockCodec {
 
@@ -52,11 +54,14 @@ public final class SpdyHeaderBlockCodec {
 
     /**
      * Encodes HTTP headers into SPDY header block format (uncompressed).
+     * Uses a direct byte buffer to avoid ByteArrayOutputStream synchronization.
      * @param headers the HTTP headers to encode
      * @return the serialized header block bytes
      */
     public static byte[] encode(HttpHeaders headers) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(256);
+        // Estimate initial buffer size
+        byte[] buf = new byte[256];
+        int pos = 0;
 
         // Count pairs
         int count = 0;
@@ -65,23 +70,35 @@ public final class SpdyHeaderBlockCodec {
         }
 
         // Write number of pairs
-        writeInt32(out, count);
+        pos = ensureAndWriteInt32(buf, pos, count);
+        buf = ensureCapacity(buf, pos, 0);
 
         // Write each pair
         for (Map.Entry<String, String> entry : headers) {
             String name = entry.getKey().toLowerCase();
             String value = entry.getValue();
+            int nameLen = name.length();
+            int valueLen = value.length();
 
-            byte[] nameBytes = name.getBytes(StandardCharsets.US_ASCII);
-            byte[] valueBytes = value.getBytes(StandardCharsets.US_ASCII);
+            // Ensure space for: nameLen(4) + name + valueLen(4) + value
+            buf = ensureCapacity(buf, pos, 8 + nameLen + valueLen);
 
-            writeInt32(out, nameBytes.length);
-            out.write(nameBytes, 0, nameBytes.length);
-            writeInt32(out, valueBytes.length);
-            out.write(valueBytes, 0, valueBytes.length);
+            // Write name length + name bytes directly (ASCII = char cast)
+            pos = writeInt32At(buf, pos, nameLen);
+            for (int i = 0; i < nameLen; i++) {
+                buf[pos++] = (byte) name.charAt(i);
+            }
+
+            // Write value length + value bytes directly
+            pos = writeInt32At(buf, pos, valueLen);
+            for (int i = 0; i < valueLen; i++) {
+                buf[pos++] = (byte) value.charAt(i);
+            }
         }
 
-        return out.toByteArray();
+        byte[] result = new byte[pos];
+        System.arraycopy(buf, 0, result, 0, pos);
+        return result;
     }
 
     /**
@@ -141,12 +158,29 @@ public final class SpdyHeaderBlockCodec {
         return headers;
     }
 
-    /** Writes a 32-bit big-endian integer. */
-    private static void writeInt32(ByteArrayOutputStream out, int value) {
-        out.write((value >>> 24) & 0xFF);
-        out.write((value >>> 16) & 0xFF);
-        out.write((value >>> 8) & 0xFF);
-        out.write(value & 0xFF);
+    /** Ensures buffer has capacity for additional bytes, growing if needed. */
+    private static byte[] ensureCapacity(byte[] buf, int pos, int needed) {
+        if (pos + needed > buf.length) {
+            byte[] newBuf = new byte[Math.max(buf.length << 1, pos + needed)];
+            System.arraycopy(buf, 0, newBuf, 0, pos);
+            return newBuf;
+        }
+        return buf;
+    }
+
+    /** Ensures capacity and writes a 32-bit big-endian integer. Returns new position. */
+    private static int ensureAndWriteInt32(byte[] buf, int pos, int value) {
+        buf = ensureCapacity(buf, pos, 4);
+        return writeInt32At(buf, pos, value);
+    }
+
+    /** Writes a 32-bit big-endian integer at the given position. Returns new position. */
+    private static int writeInt32At(byte[] buf, int pos, int value) {
+        buf[pos] = (byte) ((value >>> 24) & 0xFF);
+        buf[pos + 1] = (byte) ((value >>> 16) & 0xFF);
+        buf[pos + 2] = (byte) ((value >>> 8) & 0xFF);
+        buf[pos + 3] = (byte) (value & 0xFF);
+        return pos + 4;
     }
 
     /** Reads a 32-bit big-endian integer. */

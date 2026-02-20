@@ -15,14 +15,24 @@
  */
 package net.hasor.neta.codec.http3;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * QPACK static table as defined in RFC 9204, Appendix A.
  * <p>
  * The static table contains 99 pre-defined header fields that are commonly
  * used in HTTP/3. This table is identical for all connections and never changes.
  * Unlike HPACK's static table, QPACK's table is 0-indexed.
+ * <p>
+ * Uses HashMap-based lookup for O(1) name and name+value matching
+ * instead of O(99) linear scans.
  */
 public final class QpackStaticTable {
+    /** Map from header name to first matching index (0-based). */
+    private static final Map<String, Integer> NAME_INDEX_MAP;
+    /** Map from name+value key to exact matching index (0-based). */
+    private static final Map<Long, Integer>   NAME_VALUE_INDEX_MAP;
 
     /** The static table entries (0-indexed, per RFC 9204 Appendix A). */
     private static final QpackHeaderField[] STATIC_TABLE = { new QpackHeaderField(":authority", ""),                                  // 0
@@ -126,6 +136,21 @@ public final class QpackStaticTable {
             new QpackHeaderField("x-frame-options", "sameorigin"),                     // 98
     };
 
+    static {
+        // Build HashMap indexes for O(1) lookup
+        NAME_INDEX_MAP = new HashMap<>(128);
+        NAME_VALUE_INDEX_MAP = new HashMap<>(128);
+        for (int i = 0; i < STATIC_TABLE.length; i++) {
+            QpackHeaderField f = STATIC_TABLE[i];
+            NAME_INDEX_MAP.putIfAbsent(f.name(), i);
+            NAME_VALUE_INDEX_MAP.putIfAbsent(nameValueKey(f.name(), f.value()), i);
+        }
+    }
+
+    private static long nameValueKey(String name, String value) {
+        return ((long) name.hashCode() << 32) | (value.hashCode() & 0xFFFFFFFFL);
+    }
+
     private QpackStaticTable() {
     }
 
@@ -146,14 +171,24 @@ public final class QpackStaticTable {
 
     /**
      * Finds the index of a header field in the static table.
+     * O(1) via HashMap; falls back to linear scan on hash collision.
      * @param name the header name (lowercase)
      * @param value the header value
      * @return the index, or -1 if not found
      */
     public static int findIndex(String name, String value) {
-        for (int i = 0; i < STATIC_TABLE.length; i++) {
-            if (STATIC_TABLE[i].name().equals(name) && STATIC_TABLE[i].value().equals(value)) {
-                return i;
+        long key = nameValueKey(name, value);
+        Integer idx = NAME_VALUE_INDEX_MAP.get(key);
+        if (idx != null) {
+            QpackHeaderField f = STATIC_TABLE[idx];
+            if (f.name().equals(name) && f.value().equals(value)) {
+                return idx;
+            }
+            // Hash collision - fallback to linear scan (extremely rare)
+            for (int i = 0; i < STATIC_TABLE.length; i++) {
+                if (STATIC_TABLE[i].name().equals(name) && STATIC_TABLE[i].value().equals(value)) {
+                    return i;
+                }
             }
         }
         return -1;
@@ -161,15 +196,12 @@ public final class QpackStaticTable {
 
     /**
      * Finds the index of a header name in the static table (name-only match).
+     * O(1) via HashMap.
      * @param name the header name (lowercase)
      * @return the index of the first match, or -1 if not found
      */
     public static int findNameIndex(String name) {
-        for (int i = 0; i < STATIC_TABLE.length; i++) {
-            if (STATIC_TABLE[i].name().equals(name)) {
-                return i;
-            }
-        }
-        return -1;
+        Integer idx = NAME_INDEX_MAP.get(name);
+        return idx != null ? idx : -1;
     }
 }

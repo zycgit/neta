@@ -115,25 +115,24 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         ByteBuf body = response.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
 
-        // Build pseudo-headers + regular headers for HPACK
-        HttpHeaders h2Headers = new HttpHeaders();
-        h2Headers.add(":status", String.valueOf(response.status().code()));
-        copyHeaders(response.headers(), h2Headers);
+        // Encode pseudo-headers + regular headers directly into HPACK encoder
+        // Avoids creating intermediate HttpHeaders object (LinkedHashMap allocation)
+        hpackEncoder.beginEncode();
+        hpackEncoder.encodeHeaderDirect(":status", String.valueOf(response.status().code()));
+        encodeHeadersDirect(response.headers());
 
-        byte[] headerBlock = hpackEncoder.encode(h2Headers);
+        int headerBlockLen = hpackEncoder.encodedLength();
+        byte[] headerBlock = hpackEncoder.encodedBuffer();
 
         if (!hasBody) {
             // HEADERS frame with END_STREAM + END_HEADERS
-            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_STREAM | Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlock.length);
+            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_STREAM | Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlockLen);
         } else {
             // HEADERS frame with END_HEADERS (no END_STREAM)
-            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlock.length);
+            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlockLen);
 
-            // DATA frame with END_STREAM
-            int bodyLen = body.readableBytes();
-            byte[] bodyBytes = new byte[bodyLen];
-            body.getBytes(0, bodyBytes, 0, bodyLen);
-            writeFrame(context, dst, Http2FrameType.DATA, Http2Flags.END_STREAM, currentStreamId, bodyBytes, 0, bodyLen);
+            // DATA frame with END_STREAM - write body directly from source ByteBuf
+            writeDataFrameDirect(context, dst, Http2Flags.END_STREAM, currentStreamId, body);
         }
     }
 
@@ -146,27 +145,27 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         ByteBuf body = request.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
 
-        HttpHeaders h2Headers = new HttpHeaders();
-        h2Headers.add(":method", request.method().name());
-        h2Headers.add(":path", request.uri());
+        // Encode pseudo-headers + regular headers directly into HPACK encoder
+        hpackEncoder.beginEncode();
+        hpackEncoder.encodeHeaderDirect(":method", request.method().name());
+        hpackEncoder.encodeHeaderDirect(":path", request.uri());
         String host = request.headers().get("host");
         if (host != null) {
-            h2Headers.add(":authority", host);
+            hpackEncoder.encodeHeaderDirect(":authority", host);
         }
-        h2Headers.add(":scheme", "https"); // HTTP/2 typically uses "https"
-        copyHeaders(request.headers(), h2Headers);
+        hpackEncoder.encodeHeaderDirect(":scheme", "https");
+        encodeHeadersDirect(request.headers());
 
-        byte[] headerBlock = hpackEncoder.encode(h2Headers);
+        int headerBlockLen = hpackEncoder.encodedLength();
+        byte[] headerBlock = hpackEncoder.encodedBuffer();
 
         if (!hasBody) {
-            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_STREAM | Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlock.length);
+            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_STREAM | Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlockLen);
         } else {
-            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlock.length);
+            writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlockLen);
 
-            int bodyLen = body.readableBytes();
-            byte[] bodyBytes = new byte[bodyLen];
-            body.getBytes(0, bodyBytes, 0, bodyLen);
-            writeFrame(context, dst, Http2FrameType.DATA, Http2Flags.END_STREAM, currentStreamId, bodyBytes, 0, bodyLen);
+            // DATA frame with END_STREAM - write body directly from source ByteBuf
+            writeDataFrameDirect(context, dst, Http2Flags.END_STREAM, currentStreamId, body);
         }
     }
 
@@ -174,12 +173,12 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
      * Encodes HTTP response headers as a HEADERS frame.
      */
     private void encodeResponseHeaders(ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
-        HttpHeaders h2Headers = new HttpHeaders();
-        h2Headers.add(":status", String.valueOf(response.status().code()));
-        copyHeaders(response.headers(), h2Headers);
+        hpackEncoder.beginEncode();
+        hpackEncoder.encodeHeaderDirect(":status", String.valueOf(response.status().code()));
+        encodeHeadersDirect(response.headers());
 
-        byte[] headerBlock = hpackEncoder.encode(h2Headers);
-        writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlock.length);
+        int headerBlockLen = hpackEncoder.encodedLength();
+        writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, hpackEncoder.encodedBuffer(), 0, headerBlockLen);
     }
 
     /**
@@ -188,18 +187,18 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private void encodeRequestHeaders(ProtoContext context, HttpRequest request, ProtoSndQueue<ByteBuf> dst) {
         currentStreamId = nextStreamId.getAndAdd(2);
 
-        HttpHeaders h2Headers = new HttpHeaders();
-        h2Headers.add(":method", request.method().name());
-        h2Headers.add(":path", request.uri());
+        hpackEncoder.beginEncode();
+        hpackEncoder.encodeHeaderDirect(":method", request.method().name());
+        hpackEncoder.encodeHeaderDirect(":path", request.uri());
         String host = request.headers().get("host");
         if (host != null) {
-            h2Headers.add(":authority", host);
+            hpackEncoder.encodeHeaderDirect(":authority", host);
         }
-        h2Headers.add(":scheme", "https");
-        copyHeaders(request.headers(), h2Headers);
+        hpackEncoder.encodeHeaderDirect(":scheme", "https");
+        encodeHeadersDirect(request.headers());
 
-        byte[] headerBlock = hpackEncoder.encode(h2Headers);
-        writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, headerBlock, 0, headerBlock.length);
+        int headerBlockLen = hpackEncoder.encodedLength();
+        writeFrame(context, dst, Http2FrameType.HEADERS, Http2Flags.END_HEADERS, currentStreamId, hpackEncoder.encodedBuffer(), 0, headerBlockLen);
     }
 
     /**
@@ -210,11 +209,7 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         if (body == null || body.readableBytes() == 0) {
             return;
         }
-
-        int bodyLen = body.readableBytes();
-        byte[] bodyBytes = new byte[bodyLen];
-        body.getBytes(0, bodyBytes, 0, bodyLen);
-        writeFrame(context, dst, Http2FrameType.DATA, Http2Flags.NONE, currentStreamId, bodyBytes, 0, bodyLen);
+        writeDataFrameDirect(context, dst, Http2Flags.NONE, currentStreamId, body);
     }
 
     /**
@@ -225,9 +220,7 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         int bodyLen = (body != null) ? body.readableBytes() : 0;
 
         if (bodyLen > 0) {
-            byte[] bodyBytes = new byte[bodyLen];
-            body.getBytes(0, bodyBytes, 0, bodyLen);
-            writeFrame(context, dst, Http2FrameType.DATA, Http2Flags.END_STREAM, currentStreamId, bodyBytes, 0, bodyLen);
+            writeDataFrameDirect(context, dst, Http2Flags.END_STREAM, currentStreamId, body);
         } else {
             // Empty DATA frame with END_STREAM
             writeFrame(context, dst, Http2FrameType.DATA, Http2Flags.END_STREAM, currentStreamId, new byte[0], 0, 0);
@@ -243,22 +236,17 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
 
     /**
      * Writes a single HTTP/2 frame to the output.
+     * Writes the 9-byte frame header directly to ByteBuf using writeByte/writeInt24/writeInt32,
+     * eliminating the intermediate byte[9] allocation.
      */
     private void writeFrame(ProtoContext context, ProtoSndQueue<ByteBuf> dst, int type, int flags, int streamId, byte[] payload, int offset, int length) {
         ByteBuf frame = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + length);
 
-        // Write frame header (9 bytes)
-        byte[] header = new byte[FRAME_HEADER_SIZE];
-        header[0] = (byte) ((length >>> 16) & 0xFF);
-        header[1] = (byte) ((length >>> 8) & 0xFF);
-        header[2] = (byte) (length & 0xFF);
-        header[3] = (byte) type;
-        header[4] = (byte) flags;
-        header[5] = (byte) ((streamId >>> 24) & 0x7F);
-        header[6] = (byte) ((streamId >>> 16) & 0xFF);
-        header[7] = (byte) ((streamId >>> 8) & 0xFF);
-        header[8] = (byte) (streamId & 0xFF);
-        frame.writeBytes(header, 0, FRAME_HEADER_SIZE);
+        // Write frame header (9 bytes) directly to ByteBuf
+        frame.writeInt24(length);
+        frame.writeByte((byte) type);
+        frame.writeByte((byte) flags);
+        frame.writeInt32(streamId & 0x7FFFFFFF);
 
         // Write payload
         if (length > 0) {
@@ -270,9 +258,35 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     /**
-     * Copies regular headers (non-pseudo, non-connection) from source to target.
+     * Writes a DATA frame directly from a source ByteBuf, avoiding intermediate byte[] copy.
+     * Reads body bytes from the source ByteBuf and writes them directly into the frame.
      */
-    private void copyHeaders(HttpHeaders source, HttpHeaders target) {
+    private void writeDataFrameDirect(ProtoContext context, ProtoSndQueue<ByteBuf> dst, int flags, int streamId, ByteBuf body) {
+        int bodyLen = body.readableBytes();
+        ByteBuf frame = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + bodyLen);
+
+        // Write frame header directly
+        frame.writeInt24(bodyLen);
+        frame.writeByte((byte) Http2FrameType.DATA);
+        frame.writeByte((byte) flags);
+        frame.writeInt32(streamId & 0x7FFFFFFF);
+
+        // Copy body data directly from source ByteBuf via getBytes
+        if (bodyLen > 0) {
+            byte[] bodyBytes = new byte[bodyLen];
+            body.getBytes(0, bodyBytes, 0, bodyLen);
+            frame.writeBytes(bodyBytes, 0, bodyLen);
+        }
+
+        frame.markWriter();
+        dst.offerMessage(frame);
+    }
+
+    /**
+     * Copies regular headers (non-pseudo, non-connection) directly into the HPACK encoder.
+     * Avoids creating an intermediate HttpHeaders object.
+     */
+    private void encodeHeadersDirect(HttpHeaders source) {
         if (source == null || source.isEmpty()) {
             return;
         }
@@ -282,7 +296,7 @@ public class Http2FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
             if ("connection".equals(name) || "transfer-encoding".equals(name) || "keep-alive".equals(name) || "proxy-connection".equals(name) || "upgrade".equals(name) || "host".equals(name)) {
                 continue;
             }
-            target.add(name, entry.getValue());
+            hpackEncoder.encodeHeaderDirect(name, entry.getValue());
         }
     }
 

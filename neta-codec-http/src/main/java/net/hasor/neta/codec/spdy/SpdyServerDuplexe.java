@@ -49,6 +49,7 @@ public class SpdyServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     public void onInit(ProtoContext context) throws Throwable {
         this.decoder.onInit(context);
         this.encoder.onInit(context);
+        context.context(SpdyContext.class, this.decoder.createContext());
     }
 
     @Override

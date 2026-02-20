@@ -21,6 +21,7 @@ import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.quic.QuicContext;
 import net.hasor.neta.codec.quic.QuicFrameDecoder;
 import net.hasor.neta.codec.quic.QuicFrameEncoder;
 
@@ -64,6 +65,8 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         this.h3Decoder.onInit(context);
         this.h3Encoder.onInit(context);
         this.quicEncoder.onInit(context);
+        context.context(Http3Context.class, this.h3Decoder.createContext());
+        context.context(QuicContext.class, this.quicDecoder.createContext());
     }
 
     @Override

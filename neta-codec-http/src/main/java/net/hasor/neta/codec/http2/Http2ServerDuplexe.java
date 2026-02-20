@@ -49,6 +49,7 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     public void onInit(ProtoContext context) throws Throwable {
         this.decoder.onInit(context);
         this.encoder.onInit(context);
+        context.context(Http2Context.class, this.decoder.createContext());
     }
 
     @Override

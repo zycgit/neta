@@ -15,13 +15,24 @@
  */
 package net.hasor.neta.codec.http2;
 
+import java.util.HashMap;
+import java.util.Map;
+
 /**
  * HPACK static table as defined in RFC 7541, Appendix A.
  * <p>
  * The static table consists of 61 pre-defined header field entries
  * that are always available to the decoder.
+ * <p>
+ * Uses HashMap-based lookup for O(1) name and name+value matching
+ * instead of O(61) linear scans.
  */
 public final class HpackStaticTable {
+    /** Map from header name to first matching index (1-based). */
+    private static final Map<String, Integer> NAME_INDEX_MAP;
+    /** Map from name+value key to exact matching index (1-based). */
+    private static final Map<Long, Integer>   NAME_VALUE_INDEX_MAP;
+
     /** The static table entries (1-indexed; entry 0 is unused). */
     private static final HpackHeaderField[] STATIC_TABLE = {
             /* 0  */ null, // placeholder (HPACK is 1-indexed)
@@ -90,6 +101,23 @@ public final class HpackStaticTable {
     /** Number of entries in the static table (1..61). */
     public static final int LENGTH = STATIC_TABLE.length - 1;
 
+    static {
+        // Build HashMap indexes for O(1) lookup
+        NAME_INDEX_MAP = new HashMap<>(64);
+        NAME_VALUE_INDEX_MAP = new HashMap<>(64);
+        for (int i = 1; i < STATIC_TABLE.length; i++) {
+            HpackHeaderField f = STATIC_TABLE[i];
+            NAME_INDEX_MAP.putIfAbsent(f.name, i);
+            NAME_VALUE_INDEX_MAP.putIfAbsent(nameValueKey(f.name, f.value), i);
+        }
+    }
+
+    private static long nameValueKey(String name, String value) {
+        // Combine name and value hash codes into a single long key.
+        // Use 64-bit to minimize collision probability.
+        return ((long) name.hashCode() << 32) | (value.hashCode() & 0xFFFFFFFFL);
+    }
+
     private HpackStaticTable() {
     }
 
@@ -109,24 +137,31 @@ public final class HpackStaticTable {
     /**
      * Finds the index of a header name in the static table.
      * Returns the first matching index (1-based), or -1 if not found.
+     * O(1) via HashMap.
      */
     public static int findName(String name) {
-        for (int i = 1; i < STATIC_TABLE.length; i++) {
-            if (STATIC_TABLE[i].name.equals(name)) {
-                return i;
-            }
-        }
-        return -1;
+        Integer idx = NAME_INDEX_MAP.get(name);
+        return idx != null ? idx : -1;
     }
 
     /**
      * Finds the index of a header name+value pair in the static table.
      * Returns the 1-based index if both name and value match, or -1.
+     * O(1) via HashMap; falls back to linear scan on hash collision.
      */
     public static int findNameValue(String name, String value) {
-        for (int i = 1; i < STATIC_TABLE.length; i++) {
-            if (STATIC_TABLE[i].name.equals(name) && STATIC_TABLE[i].value.equals(value)) {
-                return i;
+        long key = nameValueKey(name, value);
+        Integer idx = NAME_VALUE_INDEX_MAP.get(key);
+        if (idx != null) {
+            HpackHeaderField f = STATIC_TABLE[idx];
+            if (f.name.equals(name) && f.value.equals(value)) {
+                return idx;
+            }
+            // Hash collision - fallback to linear scan (extremely rare)
+            for (int i = 1; i < STATIC_TABLE.length; i++) {
+                if (STATIC_TABLE[i].name.equals(name) && STATIC_TABLE[i].value.equals(value)) {
+                    return i;
+                }
             }
         }
         return -1;

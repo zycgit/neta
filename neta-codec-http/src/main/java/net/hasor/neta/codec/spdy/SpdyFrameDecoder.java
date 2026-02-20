@@ -311,6 +311,28 @@ public class SpdyFrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
     }
 
+    // ========================= Package-private accessors for SpdyContextImpl =========================
+
+    /** Creates a live {@link SpdyContext} backed by this decoder's state. */
+    public SpdyContext createContext() {
+        return new SpdyContextImpl(this);
+    }
+
+    /** Returns true if this is server mode. */
+    boolean isServerMode() {
+        return this.serverMode;
+    }
+
+    /** Returns the highest stream ID currently tracked. */
+    int lastStreamId() {
+        int max = 0;
+        for (Integer id : this.streams.keySet()) {
+            if (id > max)
+                max = id;
+        }
+        return max;
+    }
+
     @Override
     public void onClose(ProtoContext context) {
         if (accumulator != null) {

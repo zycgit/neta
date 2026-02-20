@@ -72,6 +72,11 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private ByteBuf accumulator;
     private boolean prefaceReceived;
 
+    /** Reusable frame header buffer to avoid per-frame byte[9] allocation. */
+    private final byte[] frameHeaderBuf  = new byte[FRAME_HEADER_SIZE];
+    /** Reusable preface buffer. */
+    private final byte[] prefaceCheckBuf = new byte[CONNECTION_PREFACE.length];
+
     /**
      * Creates a new HTTP/2 frame decoder.
      * @param serverMode true for server-side (expects client preface), false for client-side
@@ -98,7 +103,7 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 accumulator.markReader();
                 return ProtoStatus.Next;
             }
-            byte[] prefaceBytes = new byte[CONNECTION_PREFACE.length];
+            byte[] prefaceBytes = this.prefaceCheckBuf;
             accumulator.getBytes(0, prefaceBytes, 0, prefaceBytes.length);
             for (int i = 0; i < CONNECTION_PREFACE.length; i++) {
                 if (prefaceBytes[i] != CONNECTION_PREFACE[i]) {
@@ -111,14 +116,15 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
         // Decode frames
         while (accumulator.readableBytes() >= FRAME_HEADER_SIZE) {
-            // Read frame header
-            byte[] header = new byte[FRAME_HEADER_SIZE];
-            accumulator.getBytes(0, header, 0, FRAME_HEADER_SIZE);
+            // Read frame header directly from ByteBuf (no byte[] allocation)
+            // Peek at header without consuming - use getBytes for read-ahead
+            byte[] headerBuf = this.frameHeaderBuf;
+            accumulator.getBytes(0, headerBuf, 0, FRAME_HEADER_SIZE);
 
-            int payloadLength = ((header[0] & 0xFF) << 16) | ((header[1] & 0xFF) << 8) | (header[2] & 0xFF);
-            int type = header[3] & 0xFF;
-            int flags = header[4] & 0xFF;
-            int streamId = ((header[5] & 0x7F) << 24) | ((header[6] & 0xFF) << 16) | ((header[7] & 0xFF) << 8) | (header[8] & 0xFF);
+            int payloadLength = ((headerBuf[0] & 0xFF) << 16) | ((headerBuf[1] & 0xFF) << 8) | (headerBuf[2] & 0xFF);
+            int type = headerBuf[3] & 0xFF;
+            int flags = headerBuf[4] & 0xFF;
+            int streamId = ((headerBuf[5] & 0x7F) << 24) | ((headerBuf[6] & 0xFF) << 16) | ((headerBuf[7] & 0xFF) << 8) | (headerBuf[8] & 0xFF);
 
             // Validate frame size
             if (payloadLength > localSettings.maxFrameSize()) {
@@ -415,6 +421,38 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             }
         }
         // Connection-level window update (streamId == 0) handled implicitly
+    }
+
+    // ========================= Package-private accessors for Http2ContextImpl =========================
+
+    /** Creates a live {@link Http2Context} backed by this decoder's state. */
+    public Http2Context createContext() {
+        return new Http2ContextImpl(this);
+    }
+
+    /** Returns true if this is server mode. */
+    boolean isServerMode() {
+        return this.serverMode;
+    }
+
+    /** Returns true if the HTTP/2 connection preface has been received. */
+    boolean isPrefaceReceived() {
+        return this.prefaceReceived;
+    }
+
+    /** Returns the peer's (remote) HTTP/2 settings. */
+    Http2Settings peerSettings() {
+        return this.remoteSettings;
+    }
+
+    /** Returns the highest stream ID currently tracked. */
+    int lastStreamId() {
+        int max = 0;
+        for (Integer id : this.streams.keySet()) {
+            if (id > max)
+                max = id;
+        }
+        return max;
     }
 
     @Override

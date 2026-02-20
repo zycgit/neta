@@ -107,53 +107,56 @@ public class Http3FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private void encodeFullRequest(ProtoContext context, FullHttpRequest request, ProtoSndQueue<ByteBuf> dst) {
         currentStreamId = nextStreamId.getAndAdd(4);
 
-        HttpHeaders pseudoHeaders = new HttpHeaders();
-        pseudoHeaders.add(":method", request.method().name());
-        pseudoHeaders.add(":path", request.uri());
-        pseudoHeaders.add(":scheme", "https");
+        // Encode headers directly into QPACK encoder, avoiding intermediate HttpHeaders allocation
+        qpackEncoder.beginEncode();
+        qpackEncoder.encodeHeaderDirect(":method", request.method().name());
+        qpackEncoder.encodeHeaderDirect(":path", request.uri());
+        qpackEncoder.encodeHeaderDirect(":scheme", "https");
         String host = request.headers().get("host");
         if (host != null) {
-            pseudoHeaders.add(":authority", host);
+            qpackEncoder.encodeHeaderDirect(":authority", host);
         }
-        copyNonPseudoHeaders(request.headers(), pseudoHeaders);
+        encodeNonPseudoHeadersDirect(request.headers());
 
-        byte[] headerBlock = qpackEncoder.encode(pseudoHeaders);
+        int headerBlockLen = qpackEncoder.encodedLength();
+        byte[] headerBlock = qpackEncoder.encodedBuffer();
 
         ByteBuf body = request.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
 
         if (!hasBody) {
-            writeStreamData(context, dst, currentStreamId, true, buildHeadersFrame(headerBlock));
+            writeHeadersStreamData(context, dst, currentStreamId, true, headerBlock, 0, headerBlockLen);
         } else {
-            writeStreamData(context, dst, currentStreamId, false, buildHeadersFrame(headerBlock));
+            writeHeadersStreamData(context, dst, currentStreamId, false, headerBlock, 0, headerBlockLen);
 
             int bodyLen = body.readableBytes();
             byte[] bodyBytes = new byte[bodyLen];
             body.getBytes(0, bodyBytes, 0, bodyLen);
-            writeStreamData(context, dst, currentStreamId, true, buildDataFrame(bodyBytes, 0, bodyLen));
+            writeDataStreamData(context, dst, currentStreamId, true, bodyBytes, 0, bodyLen);
         }
     }
 
     /** Encodes a complete HTTP response (headers + body). */
     private void encodeFullResponse(ProtoContext context, FullHttpResponse response, ProtoSndQueue<ByteBuf> dst) {
-        HttpHeaders pseudoHeaders = new HttpHeaders();
-        pseudoHeaders.add(":status", String.valueOf(response.status().code()));
-        copyNonPseudoHeaders(response.headers(), pseudoHeaders);
+        qpackEncoder.beginEncode();
+        qpackEncoder.encodeHeaderDirect(":status", String.valueOf(response.status().code()));
+        encodeNonPseudoHeadersDirect(response.headers());
 
-        byte[] headerBlock = qpackEncoder.encode(pseudoHeaders);
+        int headerBlockLen = qpackEncoder.encodedLength();
+        byte[] headerBlock = qpackEncoder.encodedBuffer();
 
         ByteBuf body = response.content();
         boolean hasBody = body != null && body.readableBytes() > 0;
 
         if (!hasBody) {
-            writeStreamData(context, dst, currentStreamId, true, buildHeadersFrame(headerBlock));
+            writeHeadersStreamData(context, dst, currentStreamId, true, headerBlock, 0, headerBlockLen);
         } else {
-            writeStreamData(context, dst, currentStreamId, false, buildHeadersFrame(headerBlock));
+            writeHeadersStreamData(context, dst, currentStreamId, false, headerBlock, 0, headerBlockLen);
 
             int bodyLen = body.readableBytes();
             byte[] bodyBytes = new byte[bodyLen];
             body.getBytes(0, bodyBytes, 0, bodyLen);
-            writeStreamData(context, dst, currentStreamId, true, buildDataFrame(bodyBytes, 0, bodyLen));
+            writeDataStreamData(context, dst, currentStreamId, true, bodyBytes, 0, bodyLen);
         }
     }
 
@@ -161,28 +164,28 @@ public class Http3FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private void encodeRequest(ProtoContext context, HttpRequest request, ProtoSndQueue<ByteBuf> dst) {
         currentStreamId = nextStreamId.getAndAdd(4);
 
-        HttpHeaders pseudoHeaders = new HttpHeaders();
-        pseudoHeaders.add(":method", request.method().name());
-        pseudoHeaders.add(":path", request.uri());
-        pseudoHeaders.add(":scheme", "https");
+        qpackEncoder.beginEncode();
+        qpackEncoder.encodeHeaderDirect(":method", request.method().name());
+        qpackEncoder.encodeHeaderDirect(":path", request.uri());
+        qpackEncoder.encodeHeaderDirect(":scheme", "https");
         String host = request.headers().get("host");
         if (host != null) {
-            pseudoHeaders.add(":authority", host);
+            qpackEncoder.encodeHeaderDirect(":authority", host);
         }
-        copyNonPseudoHeaders(request.headers(), pseudoHeaders);
+        encodeNonPseudoHeadersDirect(request.headers());
 
-        byte[] headerBlock = qpackEncoder.encode(pseudoHeaders);
-        writeStreamData(context, dst, currentStreamId, false, buildHeadersFrame(headerBlock));
+        int headerBlockLen = qpackEncoder.encodedLength();
+        writeHeadersStreamData(context, dst, currentStreamId, false, qpackEncoder.encodedBuffer(), 0, headerBlockLen);
     }
 
     /** Encodes an HTTP response (headers only). */
     private void encodeResponse(ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
-        HttpHeaders pseudoHeaders = new HttpHeaders();
-        pseudoHeaders.add(":status", String.valueOf(response.status().code()));
-        copyNonPseudoHeaders(response.headers(), pseudoHeaders);
+        qpackEncoder.beginEncode();
+        qpackEncoder.encodeHeaderDirect(":status", String.valueOf(response.status().code()));
+        encodeNonPseudoHeadersDirect(response.headers());
 
-        byte[] headerBlock = qpackEncoder.encode(pseudoHeaders);
-        writeStreamData(context, dst, currentStreamId, false, buildHeadersFrame(headerBlock));
+        int headerBlockLen = qpackEncoder.encodedLength();
+        writeHeadersStreamData(context, dst, currentStreamId, false, qpackEncoder.encodedBuffer(), 0, headerBlockLen);
     }
 
     /** Encodes body content as an HTTP/3 DATA frame. */
@@ -194,7 +197,7 @@ public class Http3FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         int bodyLen = body.readableBytes();
         byte[] bodyBytes = new byte[bodyLen];
         body.getBytes(0, bodyBytes, 0, bodyLen);
-        writeStreamData(context, dst, currentStreamId, false, buildDataFrame(bodyBytes, 0, bodyLen));
+        writeDataStreamData(context, dst, currentStreamId, false, bodyBytes, 0, bodyLen);
     }
 
     /** Encodes last content as an HTTP/3 DATA frame with FIN. */
@@ -205,87 +208,74 @@ public class Http3FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         if (bodyLen > 0) {
             byte[] bodyBytes = new byte[bodyLen];
             body.getBytes(0, bodyBytes, 0, bodyLen);
-            writeStreamData(context, dst, currentStreamId, true, buildDataFrame(bodyBytes, 0, bodyLen));
+            writeDataStreamData(context, dst, currentStreamId, true, bodyBytes, 0, bodyLen);
         } else {
-            // Send empty DATA frame with FIN
-            writeStreamData(context, dst, currentStreamId, true, buildDataFrame(new byte[0], 0, 0));
+            writeDataStreamData(context, dst, currentStreamId, true, new byte[0], 0, 0);
         }
     }
 
-    /**
-     * Builds an HTTP/3 HEADERS frame.
-     * <pre>
-     *   HEADERS Frame {
-     *     Type (i) = 0x01,
-     *     Length (i),
-     *     Encoded Field Section (..),
-     *   }
-     * </pre>
-     */
-    private byte[] buildHeadersFrame(byte[] headerBlock) {
-        byte[] typeBytes = QuicVarInt.encode(Http3FrameType.HEADERS);
-        byte[] lenBytes = QuicVarInt.encode(headerBlock.length);
-        byte[] frame = new byte[typeBytes.length + lenBytes.length + headerBlock.length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(lenBytes, 0, frame, pos, lenBytes.length);
-        pos += lenBytes.length;
-        System.arraycopy(headerBlock, 0, frame, pos, headerBlock.length);
-        return frame;
-    }
+    /** Reusable varint buffer (max 8 bytes per varint, 2 varints for type+length). */
+    private final byte[] varintBuf   = new byte[16];
+    /** Reusable stream ID buffer. */
+    private final byte[] streamIdBuf = new byte[8];
 
     /**
-     * Builds an HTTP/3 DATA frame.
-     * <pre>
-     *   DATA Frame {
-     *     Type (i) = 0x00,
-     *     Length (i),
-     *     Data (..),
-     *   }
-     * </pre>
+     * Writes an HTTP/3 HEADERS frame wrapped in stream metadata directly to output.
+     * Avoids intermediate byte[] allocations from buildHeadersFrame + writeStreamData.
      */
-    private byte[] buildDataFrame(byte[] data, int offset, int length) {
-        byte[] typeBytes = QuicVarInt.encode(Http3FrameType.DATA);
-        byte[] lenBytes = QuicVarInt.encode(length);
-        byte[] frame = new byte[typeBytes.length + lenBytes.length + length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(lenBytes, 0, frame, pos, lenBytes.length);
-        pos += lenBytes.length;
-        if (length > 0) {
-            System.arraycopy(data, offset, frame, pos, length);
-        }
-        return frame;
-    }
+    private void writeHeadersStreamData(ProtoContext context, ProtoSndQueue<ByteBuf> dst, long streamId, boolean fin, byte[] headerBlock, int offset, int length) {
+        // Encode varint type and length into reusable buffer
+        int typeLen = QuicVarInt.encodeTo(varintBuf, 0, Http3FrameType.HEADERS);
+        int lenLen = QuicVarInt.encodeTo(varintBuf, typeLen, length);
+        int frameHeaderLen = typeLen + lenLen;
 
-    /**
-     * Wraps HTTP/3 frame data with QUIC stream metadata header and writes to the output.
-     * Format: streamId(8) + fin(1) + data
-     */
-    private void writeStreamData(ProtoContext context, ProtoSndQueue<ByteBuf> dst, long streamId, boolean fin, byte[] frameData) {
-        ByteBuf output = context.byteBufAllocator().buffer(9 + frameData.length);
-        byte[] streamIdBytes = new byte[8];
-        long sid = streamId;
-        for (int i = 7; i >= 0; i--) {
-            streamIdBytes[i] = (byte) (sid & 0xFF);
-            sid >>>= 8;
-        }
-        output.writeBytes(streamIdBytes, 0, 8);
-        output.writeBytes(new byte[] { (byte) (fin ? 1 : 0) }, 0, 1);
-        output.writeBytes(frameData, 0, frameData.length);
+        // Write directly to ByteBuf: streamId(8) + fin(1) + varint_type + varint_len + header_block
+        ByteBuf output = context.byteBufAllocator().buffer(9 + frameHeaderLen + length);
+        writeStreamId(output, streamId);
+        output.writeByte((byte) (fin ? 1 : 0));
+        output.writeBytes(varintBuf, 0, frameHeaderLen);
+        output.writeBytes(headerBlock, offset, length);
         output.markWriter();
         dst.offerMessage(output);
     }
 
-    /** Copies non-pseudo headers from source to destination. */
-    private void copyNonPseudoHeaders(HttpHeaders src, HttpHeaders dst) {
-        for (String name : src.names()) {
+    /**
+     * Writes an HTTP/3 DATA frame wrapped in stream metadata directly to output.
+     */
+    private void writeDataStreamData(ProtoContext context, ProtoSndQueue<ByteBuf> dst, long streamId, boolean fin, byte[] data, int offset, int length) {
+        int typeLen = QuicVarInt.encodeTo(varintBuf, 0, Http3FrameType.DATA);
+        int lenLen = QuicVarInt.encodeTo(varintBuf, typeLen, length);
+        int frameHeaderLen = typeLen + lenLen;
+
+        ByteBuf output = context.byteBufAllocator().buffer(9 + frameHeaderLen + length);
+        writeStreamId(output, streamId);
+        output.writeByte((byte) (fin ? 1 : 0));
+        output.writeBytes(varintBuf, 0, frameHeaderLen);
+        if (length > 0) {
+            output.writeBytes(data, offset, length);
+        }
+        output.markWriter();
+        dst.offerMessage(output);
+    }
+
+    /**
+     * Writes stream ID (8 bytes big-endian) directly to ByteBuf.
+     */
+    private void writeStreamId(ByteBuf output, long streamId) {
+        long sid = streamId;
+        for (int i = 7; i >= 0; i--) {
+            streamIdBuf[i] = (byte) (sid & 0xFF);
+            sid >>>= 8;
+        }
+        output.writeBytes(streamIdBuf, 0, 8);
+    }
+
+    /** Encodes non-pseudo headers directly into the QPACK encoder. */
+    private void encodeNonPseudoHeadersDirect(HttpHeaders src) {
+        for (java.util.Map.Entry<String, String> entry : src) {
+            String name = entry.getKey();
             if (!name.startsWith(":") && !name.equalsIgnoreCase("host")) {
-                for (String value : src.getAll(name)) {
-                    dst.add(name.toLowerCase(), value);
-                }
+                qpackEncoder.encodeHeaderDirect(name.toLowerCase(), entry.getValue());
             }
         }
     }

@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http3;
 
-import java.nio.charset.StandardCharsets;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
@@ -119,6 +118,46 @@ public class QpackEncoder {
     }
 
     /**
+     * Begins a direct encode session. The QPACK prefix (Required Insert Count + Delta Base)
+     * is written automatically. Header fields are added via {@link #encodeHeaderDirect(String, String)},
+     * then the result is retrieved via {@link #encodedBuffer()} and {@link #encodedLength()}.
+     */
+    public void beginEncode() {
+        pos = 0;
+        // Required Insert Count = 0
+        encodePrefixedInt(0, 8, 0);
+        // S=0, Delta Base = 0
+        encodePrefixedInt(0, 7, 0);
+    }
+
+    /**
+     * Encodes a single header field directly into the internal buffer.
+     * Must be called between {@link #beginEncode()} and reading {@link #encodedLength()}.
+     * @param name the header name (must be lowercase)
+     * @param value the header value
+     */
+    public void encodeHeaderDirect(String name, String value) {
+        encodeHeaderField(name, value);
+    }
+
+    /**
+     * Returns the number of bytes written since {@link #beginEncode()}.
+     * @return the encoded byte count
+     */
+    public int encodedLength() {
+        return pos;
+    }
+
+    /**
+     * Returns a reference to the internal encode buffer. The content is valid from
+     * index 0 to {@link #encodedLength()} - 1. Valid until next encode operation.
+     * @return the internal byte buffer
+     */
+    public byte[] encodedBuffer() {
+        return buf;
+    }
+
+    /**
      * Encodes a single header field.
      */
     private void encodeHeaderField(String name, String value) {
@@ -142,23 +181,32 @@ public class QpackEncoder {
 
         // Literal Field Line Without Name Reference
         // 001 N H NameLen(3+) - all in the first byte per RFC 9204, Section 4.5.6
-        byte[] nameBytes = name.getBytes(StandardCharsets.UTF_8);
         // prefix = 0x20 (001 + N=0), H=0 (no Huffman)
-        encodePrefixedInt(0x20, 3, nameBytes.length);
-        writeBytes(nameBytes, 0, nameBytes.length);
+        encodePrefixedInt(0x20, 3, name.length());
+        writeStringDirect(name);
         encodeStringLiteral(value, 7);
     }
 
     /**
      * Encodes a string literal.
+     * Writes string bytes directly to avoid intermediate byte[] allocation.
      * @param value the string value
      * @param prefixBits the prefix bits for the length integer
      */
     private void encodeStringLiteral(String value, int prefixBits) {
-        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        int len = value.length();
         // H=0 (no Huffman encoding in simple mode)
-        encodePrefixedInt(0, prefixBits, bytes.length);
-        writeBytes(bytes, 0, bytes.length);
+        encodePrefixedInt(0, prefixBits, len);
+        writeStringDirect(value);
+    }
+
+    /** Writes string chars directly as bytes, avoiding String.getBytes() allocation. */
+    private void writeStringDirect(String s) {
+        int len = s.length();
+        ensureCapacity(len);
+        for (int i = 0; i < len; i++) {
+            buf[pos++] = (byte) s.charAt(i);
+        }
     }
 
     /**

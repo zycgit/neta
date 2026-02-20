@@ -59,6 +59,43 @@ public final class QuicVarInt {
     }
 
     /**
+     * Encodes a value as a QUIC variable-length integer into the provided buffer.
+     * Zero-allocation version.
+     * @param dst the destination buffer (must have at least 8 bytes available from dstOffset)
+     * @param dstOffset the offset in the dst buffer
+     * @param value the value to encode (must be non-negative and at most 2^62-1)
+     * @return the number of bytes written
+     */
+    public static int encodeTo(byte[] dst, int dstOffset, long value) {
+        if (value <= 63) {
+            dst[dstOffset] = (byte) value;
+            return 1;
+        } else if (value <= 16383) {
+            dst[dstOffset] = (byte) (0x40 | (value >>> 8));
+            dst[dstOffset + 1] = (byte) (value & 0xFF);
+            return 2;
+        } else if (value <= 1073741823L) {
+            dst[dstOffset] = (byte) (0x80 | (value >>> 24));
+            dst[dstOffset + 1] = (byte) ((value >>> 16) & 0xFF);
+            dst[dstOffset + 2] = (byte) ((value >>> 8) & 0xFF);
+            dst[dstOffset + 3] = (byte) (value & 0xFF);
+            return 4;
+        } else if (value <= 4611686018427387903L) {
+            dst[dstOffset] = (byte) (0xC0 | (value >>> 56));
+            dst[dstOffset + 1] = (byte) ((value >>> 48) & 0xFF);
+            dst[dstOffset + 2] = (byte) ((value >>> 40) & 0xFF);
+            dst[dstOffset + 3] = (byte) ((value >>> 32) & 0xFF);
+            dst[dstOffset + 4] = (byte) ((value >>> 24) & 0xFF);
+            dst[dstOffset + 5] = (byte) ((value >>> 16) & 0xFF);
+            dst[dstOffset + 6] = (byte) ((value >>> 8) & 0xFF);
+            dst[dstOffset + 7] = (byte) (value & 0xFF);
+            return 8;
+        } else {
+            throw new IllegalArgumentException("Value too large for varint encoding: " + value);
+        }
+    }
+
+    /**
      * Encodes a value as a QUIC variable-length integer.
      * @param value the value to encode (must be non-negative and at most 2^62-1)
      * @return the encoded bytes

@@ -329,6 +329,38 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         settingsReceived = true;
     }
 
+    // ========================= Package-private accessors for Http3ContextImpl =========================
+
+    /** Creates a live {@link Http3Context} backed by this decoder's state. */
+    public Http3Context createContext() {
+        return new Http3ContextImpl(this);
+    }
+
+    /** Returns true if this is server mode. */
+    boolean isServerMode() {
+        return this.serverMode;
+    }
+
+    /** Returns true if the initial SETTINGS frame has been received. */
+    boolean isSettingsReceived() {
+        return this.settingsReceived;
+    }
+
+    /** Returns the peer's (remote) HTTP/3 settings. */
+    Http3Settings peerSettings() {
+        return this.remoteSettings;
+    }
+
+    /** Returns the highest stream ID currently tracked. */
+    long lastStreamId() {
+        long max = 0;
+        for (Long id : this.streams.keySet()) {
+            if (id > max)
+                max = id;
+        }
+        return max;
+    }
+
     @Override
     public void onClose(ProtoContext context) {
         for (Http3Stream stream : streams.values()) {

@@ -151,9 +151,8 @@ public class QpackDecoder {
                 int nameLength = decodedInt;
                 pos = decodedPos;
 
-                byte[] nameBytes = new byte[nameLength];
-                System.arraycopy(data, pos, nameBytes, 0, nameLength);
-                String name = new String(nameBytes, StandardCharsets.UTF_8);
+                // Read name directly from source array, avoiding intermediate byte[] copy
+                String name = new String(data, pos, nameLength, StandardCharsets.UTF_8);
                 pos += nameLength;
 
                 decodeStringLiteral(data, pos);
@@ -226,9 +225,9 @@ public class QpackDecoder {
 
     /**
      * Decodes a string literal at the given offset.
+     * Reads directly from the source byte[] to avoid intermediate byte[] allocation.
      * @param data the encoded bytes
      * @param offset the offset
-     * @return the decoded string
      */
     private void decodeStringLiteral(byte[] data, int offset) {
         boolean huffman = (data[offset] & 0x80) != 0;
@@ -236,15 +235,8 @@ public class QpackDecoder {
         int strLen = this.decodedInt;
         int dataStart = this.decodedPos;
 
-        byte[] strBytes = new byte[strLen];
-        System.arraycopy(data, dataStart, strBytes, 0, strLen);
-
-        if (huffman) {
-            // Huffman decoding would go here; for simplicity we treat as raw
-            this.decodedString = new String(strBytes, StandardCharsets.UTF_8);
-        } else {
-            this.decodedString = new String(strBytes, StandardCharsets.UTF_8);
-        }
+        // Read directly from source array, avoiding intermediate byte[] copy
+        this.decodedString = new String(data, dataStart, strLen, StandardCharsets.UTF_8);
         this.decodedPos = dataStart + strLen;
     }
 }

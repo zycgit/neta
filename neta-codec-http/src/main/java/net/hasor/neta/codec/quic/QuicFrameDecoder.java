@@ -337,6 +337,28 @@ public class QuicFrameDecoder implements ProtoHandler<ByteBuf, ByteBuf> {
         streams.clear();
     }
 
+    // ========================= Package-private accessors for QuicContextImpl =========================
+
+    /** Creates a live {@link QuicContext} backed by this decoder's state. */
+    public QuicContext createContext() {
+        return new QuicContextImpl(this);
+    }
+
+    /** Returns true if this is server mode. */
+    boolean isServerMode() {
+        return this.serverMode;
+    }
+
+    /** Returns the peer connection ID (placeholder for simplified codec). */
+    String peerConnectionId() {
+        return "";
+    }
+
+    /** Returns the local connection ID (placeholder for simplified codec). */
+    String localConnectionId() {
+        return "";
+    }
+
     @Override
     public void onClose(ProtoContext context) {
         for (QuicStream stream : streams.values()) {
