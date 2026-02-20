@@ -44,6 +44,19 @@ class ProtoContextService implements ProtoContext {
         this.namedHandlerMap = new HashMap<>();
     }
 
+    /**
+     * Creates a branch-mode ProtoContext that shares contextData and flash with the parent.
+     * Each branch has its own namedHandlerMap since branches have independent pipeline chains.
+     */
+    ProtoContextService(ProtoContextService parent, int rcvSlotSize, int sndSlotSize) {
+        this.channel = parent.channel;
+        this.soContext = parent.soContext;
+        this.contextData = parent.contextData;
+        this.chainRoot = new ProtoChainRoot(rcvSlotSize, sndSlotSize, true);
+        this.flash = parent.flash;
+        this.namedHandlerMap = new HashMap<>();
+    }
+
     ProtoChainRoot getChainRoot() {
         return this.chainRoot;
     }

@@ -35,12 +35,16 @@ class ProtoChainRoot implements ProtoStack<Object> {
     private              ProtoInvocation<?, ?, ?, ?> head;
     private              ProtoInvocation<?, ?, ?, ?> tail;
     private              long                        channelID;
+    private final        boolean                     branchMode;
 
     ProtoChainRoot(SoConfig protoConf) {
-        int rcvSize = protoConf.getRcvSlotSize();
-        int sndSize = protoConf.getSndSlotSize();
-        this.tailRcvDown = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
-        this.headSndDown = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
+        this(protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), false);
+    }
+
+    ProtoChainRoot(int rcvSlotSize, int sndSlotSize, boolean branchMode) {
+        this.tailRcvDown = new ProtoQueue<>(rcvSlotSize < 0 ? -1 : rcvSlotSize);
+        this.headSndDown = new ProtoQueue<>(sndSlotSize < 0 ? -1 : sndSlotSize);
+        this.branchMode = branchMode;
     }
 
     public ProtoQueue<?> getTailRcvDown() {
@@ -341,6 +345,10 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     private void triggerRcv(ProtoContext protoCtx) {
+        if (this.branchMode) {
+            return; // in branch mode, data stays in tailRcvDown for the routing node to collect
+        }
+
         // 1st onReceive
         if (this.tailRcvDown.hasMore()) {
             while (this.tailRcvDown.hasMore()) {
@@ -467,6 +475,10 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     private void triggerSend(ProtoContext protoCtx) {
+        if (this.branchMode) {
+            return; // in branch mode, errors are handled by the routing node
+        }
+
         Throwable ctxError = protoCtx.flash(ProtoInvocation.SND_ERROR_TAG);
         if (ctxError != null) {
             PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, false, true);

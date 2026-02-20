@@ -101,6 +101,21 @@ public final class ProtoHelper {
         }
 
         @Override
+        public ProtoBuilder<Object, Object> nextRoute(String name, ProtoConfig protoConf, ProtoRouting<RCV_DOWN> routing, Consumer<ProtoRoutingDuplexer.Builder<RCV_DOWN>> branches) {
+            Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(routing, "routing is null.");
+            Objects.requireNonNull(branches, "branches is null.");
+
+            this.taskAppend.add(c -> {
+                ProtoRoutingDuplexer.Builder<RCV_DOWN> builder = ProtoRoutingDuplexer.newBuilder(routing);
+                branches.accept(builder);
+                ProtoRoutingDuplexer<RCV_DOWN> routingDuplexer = builder.build(c);
+                c.addLast(name, routingDuplexer);
+            });
+            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
+        }
+
+        @Override
         public ProtoInitializer build() {
             return ctx -> {
                 for (Consumer<ProtoContext> consumer : taskAppend) {

@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel;
 import java.util.Objects;
+import java.util.function.Consumer;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
@@ -219,6 +220,29 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     <SND_UP> ProtoBuilder<RCV_UP, SND_UP> nextEncoder(String name, ProtoConfig protoConf, ProtoHandler<SND_UP, SND_DOWN> encoder);
+
+    /**
+     * Add a routing fork point to the pipeline. The routing predicate evaluates incoming data
+     * to select a branch sub-pipeline. All branches receive lifecycle events; data events are
+     * routed only through the selected branch.
+     * @param name the router name in the pipeline
+     * @param routing the routing predicate
+     * @param branches a consumer to register branches via {@link ProtoRoutingDuplexer.Builder}
+     * @return a new builder for the next stage after routing (types become Object)
+     */
+    default ProtoBuilder<Object, Object> nextRoute(String name, ProtoRouting<RCV_UP> routing, Consumer<ProtoRoutingDuplexer.Builder<RCV_UP>> branches) {
+        return this.nextRoute(name, ProtoConfig.DEFAULT, routing, branches);
+    }
+
+    /**
+     * Add a routing fork point to the pipeline with custom config.
+     * @param name the router name in the pipeline
+     * @param protoConf the protocol config
+     * @param routing the routing predicate
+     * @param branches a consumer to register branches via {@link ProtoRoutingDuplexer.Builder}
+     * @return a new builder for the next stage after routing (types become Object)
+     */
+    ProtoBuilder<Object, Object> nextRoute(String name, ProtoConfig protoConf, ProtoRouting<RCV_UP> routing, Consumer<ProtoRoutingDuplexer.Builder<RCV_UP>> branches);
 
     /** build {@link ProtoStack} */
     ProtoInitializer build();

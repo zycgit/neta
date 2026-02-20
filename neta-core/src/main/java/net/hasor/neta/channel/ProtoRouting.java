@@ -15,9 +15,23 @@
  */
 package net.hasor.neta.channel;
 /**
- * Application stack builder
+ * Routing predicate for branching pipeline. Evaluates incoming data to determine
+ * which sub-pipeline branch should handle the connection.
+ * <p>
+ * The routing decision is typically made once on the first data arrival and cached
+ * for the lifetime of the connection.
+ * </p>
+ * @param <T> the type of data to evaluate for routing
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
-public interface ProtoRouting {
+@FunctionalInterface
+public interface ProtoRouting<T> {
+    /**
+     * Evaluate routing condition and return the selected branch key.
+     * @param context the pipeline context
+     * @param data the first data element to inspect (peeked, not consumed)
+     * @return the branch key matching a registered branch name, or null if routing cannot be determined yet
+     */
+    String route(ProtoContext context, T data);
 }
