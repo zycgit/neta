@@ -17,8 +17,7 @@ package net.hasor.neta.http;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
-import java.util.logging.Level;
-import java.util.logging.Logger;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
@@ -49,7 +48,7 @@ import net.hasor.neta.http.internal.*;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class NetaHttpServer {
-    private static final Logger logger = Logger.getLogger(NetaHttpServer.class.getName());
+    private static final Logger logger = Logger.getLogger(NetaHttpServer.class);
 
     private final NetManager            netManager     = new NetManager();
     private final ServletDispatcher     dispatcher     = new ServletDispatcher();
@@ -223,7 +222,7 @@ public class NetaHttpServer {
             }
             this.netManager.shutdown();
         } catch (Exception e) {
-            logger.log(Level.WARNING, "Error closing server", e);
+            logger.warn("Error closing server", e);
         }
 
         this.dispatcher.destroy();
@@ -354,7 +353,7 @@ public class NetaHttpServer {
                 handleKeepAlive(request, channel);
 
             } catch (Exception e) {
-                logger.log(Level.WARNING, "Error handling HTTP request: " + request.uri(), e);
+                logger.warn("Error handling HTTP request: " + request.uri(), e);
                 sendErrorResponse(channel, 500, "Internal Server Error");
             }
         }
@@ -401,7 +400,7 @@ public class NetaHttpServer {
                 wsHandler.onOpen(wsSession);
 
             } catch (Exception e) {
-                logger.log(Level.WARNING, "WebSocket upgrade failed", e);
+                logger.warn("WebSocket upgrade failed", e);
                 sendErrorResponse(channel, 500, "WebSocket upgrade failed");
             }
         }
@@ -450,7 +449,7 @@ public class NetaHttpServer {
                         break;
                 }
             } catch (Exception e) {
-                logger.log(Level.WARNING, "Error handling WebSocket frame", e);
+                logger.warn("Error handling WebSocket frame", e);
                 wsHandler.onError(wsSession, e);
             }
         }
@@ -479,7 +478,7 @@ public class NetaHttpServer {
                 response.headers().set(HttpHeaderNames.SERVER, serverName);
                 channel.sendData(response);
             } catch (Exception e) {
-                logger.log(Level.WARNING, "Failed to send error response", e);
+                logger.warn("Failed to send error response", e);
             }
         }
 
@@ -501,7 +500,7 @@ public class NetaHttpServer {
                 NetChannel channel = (NetChannel) context.getChannel();
                 int statusCode = mapProtocolExceptionToStatusCode(e);
                 String statusMessage = mapProtocolExceptionToMessage(e);
-                logger.log(Level.WARNING, "HTTP protocol error: " + e.getMessage());
+                logger.warn("HTTP protocol error: " + e.getMessage());
                 sendErrorResponse(channel, statusCode, statusMessage);
                 channel.close(); // close connection on protocol error
                 eh.clear();

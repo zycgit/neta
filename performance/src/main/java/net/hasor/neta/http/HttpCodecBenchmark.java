@@ -4,7 +4,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.concurrent.TimeUnit;
 import io.netty.channel.embedded.EmbeddedChannel;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.ProtoQueue;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.constant.HttpMethod;
@@ -214,9 +213,7 @@ public class HttpCodecBenchmark {
 
     @Benchmark
     public void neta_decodeSimpleRequest() throws Throwable {
-        ByteBuf input = ByteBufAllocator.DEFAULT.buffer(SIMPLE_REQUEST_BYTES.length, Integer.MAX_VALUE);
-        input.writeBytes(SIMPLE_REQUEST_BYTES, 0, SIMPLE_REQUEST_BYTES.length);
-        input.markWriter();
+        ByteBuf input = ByteBuf.wrap(SIMPLE_REQUEST_BYTES);
 
         HttpRequestDecoder decoder = new HttpRequestDecoder();
         ProtoQueue<ByteBuf> src = new ProtoQueue<>(-1);
@@ -251,9 +248,7 @@ public class HttpCodecBenchmark {
 
     @Benchmark
     public void neta_decodePostRequest() throws Throwable {
-        ByteBuf input = ByteBufAllocator.DEFAULT.buffer(POST_REQUEST_BYTES.length, Integer.MAX_VALUE);
-        input.writeBytes(POST_REQUEST_BYTES, 0, POST_REQUEST_BYTES.length);
-        input.markWriter();
+        ByteBuf input = ByteBuf.wrap(POST_REQUEST_BYTES);
 
         HttpRequestDecoder decoder = new HttpRequestDecoder();
         ProtoQueue<ByteBuf> src = new ProtoQueue<>(-1);
@@ -288,9 +283,7 @@ public class HttpCodecBenchmark {
 
     @Benchmark
     public void neta_decodeSimpleResponse() throws Throwable {
-        ByteBuf input = ByteBufAllocator.DEFAULT.buffer(SIMPLE_RESPONSE_BYTES.length, Integer.MAX_VALUE);
-        input.writeBytes(SIMPLE_RESPONSE_BYTES, 0, SIMPLE_RESPONSE_BYTES.length);
-        input.markWriter();
+        ByteBuf input = ByteBuf.wrap(SIMPLE_RESPONSE_BYTES);
 
         HttpResponseDecoder decoder = new HttpResponseDecoder();
         ProtoQueue<ByteBuf> src = new ProtoQueue<>(-1);
@@ -325,9 +318,7 @@ public class HttpCodecBenchmark {
 
     @Benchmark
     public void neta_decodeLargeResponse() throws Throwable {
-        ByteBuf input = ByteBufAllocator.DEFAULT.buffer(LARGE_RESPONSE_BYTES.length, Integer.MAX_VALUE);
-        input.writeBytes(LARGE_RESPONSE_BYTES, 0, LARGE_RESPONSE_BYTES.length);
-        input.markWriter();
+        ByteBuf input = ByteBuf.wrap(LARGE_RESPONSE_BYTES);
 
         HttpResponseDecoder decoder = new HttpResponseDecoder();
         ProtoQueue<ByteBuf> src = new ProtoQueue<>(-1);

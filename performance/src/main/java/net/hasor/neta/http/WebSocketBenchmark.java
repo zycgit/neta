@@ -161,7 +161,7 @@ public class WebSocketBenchmark {
 
     @Benchmark
     public void neta_encodeBinaryFrame1K() throws Throwable {
-        WebSocketFrame frame = DefaultWebSocketFrame.binary(BINARY_1K);
+        WebSocketFrame frame = new DefaultWebSocketFrame(WebSocketOpcode.BINARY, true, false, null, ByteBuf.wrap(BINARY_1K));
         WebSocketFrameEncoder encoder = new WebSocketFrameEncoder();
         ProtoQueue<WebSocketFrame> src = new ProtoQueue<>(-1);
         ProtoQueue<ByteBuf> dst = new ProtoQueue<>(-1);
@@ -189,7 +189,7 @@ public class WebSocketBenchmark {
 
     @Benchmark
     public void neta_encodeBinaryFrame64K() throws Throwable {
-        WebSocketFrame frame = DefaultWebSocketFrame.binary(BINARY_64K);
+        WebSocketFrame frame = new DefaultWebSocketFrame(WebSocketOpcode.BINARY, true, false, null, ByteBuf.wrap(BINARY_64K));
         WebSocketFrameEncoder encoder = new WebSocketFrameEncoder();
         ProtoQueue<WebSocketFrame> src = new ProtoQueue<>(-1);
         ProtoQueue<ByteBuf> dst = new ProtoQueue<>(-1);
@@ -219,9 +219,7 @@ public class WebSocketBenchmark {
 
     @Benchmark
     public void neta_decodeTextFrame() throws Throwable {
-        ByteBuf input = ByteBufAllocator.DEFAULT.buffer(encodedTextFrame.length, Integer.MAX_VALUE);
-        input.writeBytes(encodedTextFrame, 0, encodedTextFrame.length);
-        input.markWriter();
+        ByteBuf input = ByteBuf.wrap(encodedTextFrame);
 
         WebSocketFrameDecoder decoder = new WebSocketFrameDecoder();
         ProtoQueue<ByteBuf> src = new ProtoQueue<>(-1);
@@ -254,9 +252,7 @@ public class WebSocketBenchmark {
 
     @Benchmark
     public void neta_decodeBinaryFrame1K() throws Throwable {
-        ByteBuf input = ByteBufAllocator.DEFAULT.buffer(encodedBinaryFrame1K.length, Integer.MAX_VALUE);
-        input.writeBytes(encodedBinaryFrame1K, 0, encodedBinaryFrame1K.length);
-        input.markWriter();
+        ByteBuf input = ByteBuf.wrap(encodedBinaryFrame1K);
 
         WebSocketFrameDecoder decoder = new WebSocketFrameDecoder();
         ProtoQueue<ByteBuf> src = new ProtoQueue<>(-1);
@@ -289,9 +285,7 @@ public class WebSocketBenchmark {
 
     @Benchmark
     public void neta_decodeBinaryFrame64K() throws Throwable {
-        ByteBuf input = ByteBufAllocator.DEFAULT.buffer(encodedBinaryFrame64K.length, Integer.MAX_VALUE);
-        input.writeBytes(encodedBinaryFrame64K, 0, encodedBinaryFrame64K.length);
-        input.markWriter();
+        ByteBuf input = ByteBuf.wrap(encodedBinaryFrame64K);
 
         WebSocketFrameDecoder decoder = new WebSocketFrameDecoder();
         ProtoQueue<ByteBuf> src = new ProtoQueue<>(-1);

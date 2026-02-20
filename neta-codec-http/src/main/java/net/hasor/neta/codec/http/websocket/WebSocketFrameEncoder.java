@@ -15,8 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
@@ -38,9 +36,8 @@ import net.hasor.neta.channel.*;
  */
 public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteBuf> {
 
-    private static final int                 XOR_SCRATCH_SIZE    = 4096;
-    private static final int                 COMPOSITE_THRESHOLD = 4096;
-    private static final ThreadLocal<byte[]> XOR_SCRATCH         = ThreadLocal.withInitial(() -> new byte[XOR_SCRATCH_SIZE]);
+    private static final int                 XOR_SCRATCH_SIZE = 4096;
+    private static final ThreadLocal<byte[]> XOR_SCRATCH      = ThreadLocal.withInitial(() -> new byte[XOR_SCRATCH_SIZE]);
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<WebSocketFrame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
@@ -70,8 +67,8 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
             headerSize += 4;
         }
 
-        boolean useComposite = !masked && payloadLen >= COMPOSITE_THRESHOLD;
-        int allocSize = useComposite ? headerSize : (headerSize + payloadLen);
+        boolean useComposite = false; // direct copy is faster than composite lifecycle overhead
+        int allocSize = headerSize + payloadLen;
         ByteBuf out = context.byteBufAllocator().buffer(allocSize, Integer.MAX_VALUE);
 
         // Byte 0: FIN + opcode
@@ -130,17 +127,9 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, ByteB
                     srcOff += chunk;
                     remaining -= chunk;
                 }
-            } else if (useComposite) {
-                // Zero-copy: compose header + content without copying payload data
-                out.markWriter();
-                CompositeByteBuf composite = ByteBufUtils.compositeBuffer();
-                composite.addComponent(out);
-                composite.addComponent(content);
-                content.release(); // transfer ownership to composite
-                return composite;
             } else {
-                // Direct copy for small payloads (cheaper than composite overhead)
-                content.getBuffer(content.readerIndex(), out, payloadLen);
+                // Direct copy — faster than CompositeByteBuf lifecycle overhead for all sizes
+                content.getBuffer(0, out, payloadLen);
             }
         }
 

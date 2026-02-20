@@ -32,6 +32,15 @@ public final class HttpVersion {
     /** HTTP/1.1 - connection is kept alive by default (RFC 7230). */
     public static final HttpVersion HTTP_1_1 = new HttpVersion("HTTP", 1, 1, true);
 
+    /** HTTP/2.0 - binary framing, multiplexed streams (RFC 7540 / RFC 9113). */
+    public static final HttpVersion HTTP_2_0 = new HttpVersion("HTTP", 2, 0, true);
+
+    /** HTTP/3.0 - QUIC-based transport (RFC 9114). */
+    public static final HttpVersion HTTP_3_0 = new HttpVersion("HTTP", 3, 0, true);
+
+    /** SPDY/3.1 - predecessor of HTTP/2, binary framing with multiplexed streams. */
+    public static final HttpVersion SPDY_3_1 = new HttpVersion("SPDY", 3, 1, true);
+
     private final String  protocolName;
     private final int     majorVersion;
     private final int     minorVersion;
