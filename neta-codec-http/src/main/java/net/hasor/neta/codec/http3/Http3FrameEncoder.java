@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http3;
-
 import java.util.concurrent.atomic.AtomicLong;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.quic.QuicVarInt;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.quic.QuicVarInt;
 
 /**
  * HTTP/3 frame encoder that converts standard {@link HttpObject} instances into

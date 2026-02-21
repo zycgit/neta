@@ -19,9 +19,8 @@ package net.hasor.neta.codec.http3;
  * Default implementation of {@link Http3Context} backed by the state
  * managed in {@link Http3FrameDecoder}.
  * <p>
- * Registered on {@link net.hasor.neta.channel.ProtoContext} by
- * {@link Http3ServerDuplexe} or {@link Http3ClientDuplexe} during
- * {@code onInit()}, providing live access to the HTTP/3 connection state.
+ * Created via {@link Http3FrameDecoder#createContext()}, providing live
+ * access to the HTTP/3 connection state.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15
  */
