@@ -530,124 +530,125 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
     }
 
-    private boolean doRcvUserEvent (ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-            boolean continueStatus = true;
-            boolean found = false;
-            ProtoInvocation<?, ?, ?, ?> current = this.head;
-            while (current != null) {
-                try {
-                    if (!found) {
-                        if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
-                            found = true;
-                        } else {
-                            continue;
-                        }
+    private boolean doRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        boolean continueStatus = true;
+        boolean found = false;
+        ProtoInvocation<?, ?, ?, ?> current = this.head;
+        while (current != null) {
+            try {
+                if (!found) {
+                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                        found = true;
+                    } else {
+                        continue;
                     }
-
-                    if (continueStatus) {
-                        continueStatus = current.onEvent(protoCtx, event, true);
-                    }
-                } finally {
-                    current = current.next;
                 }
-            }
-            return continueStatus;
-        }
 
-        private boolean doSndUserEvent (ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-            boolean continueStatus = true;
-            boolean found = false;
-            ProtoInvocation<?, ?, ?, ?> current = this.tail;
-            while (current != null) {
-                try {
-                    if (!found) {
-                        if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
-                            found = true;
-                        } else {
-                            continue;
-                        }
-                    }
-
-                    if (continueStatus) {
-                        continueStatus = current.onEvent(protoCtx, event, false);
-                    }
-                } finally {
-                    current = current.previous;
+                if (continueStatus) {
+                    continueStatus = current.onEvent(protoCtx, event, true);
                 }
-            }
-            return continueStatus;
-        }
-
-        // ------------------------------------------------------------
-        // Statistical
-        // ------------------------------------------------------------
-
-        @Override public String toString () {
-            List<String> layerNames = new ArrayList<>();
-            List<String> monitorRcv = new ArrayList<>();
-            List<String> monitorSnd = new ArrayList<>();
-            String rootRcv = rootMonitorRcvString() + " (RCV)";
-            String rootSnd = rootMonitorSndString() + " (SND)";
-
-            // nameLength
-            int maxNameLength = 0;
-            int rcvMaxLength = rootRcv.length() + 1;
-            int sndMaxLength = rootSnd.length();
-
-            ProtoInvocation<?, ?, ?, ?> layer = this.head;
-            int layerCount = 0;
-            while (layer != null) {
-                String layerName = layer.getName();
-                layerName = StringUtils.isBlank(layerName) ? ("Layer@" + Integer.toHexString(layer.hashCode())) : layerName;
-                layerNames.add(layerName);
-                maxNameLength = Math.max(maxNameLength, layerName.length());
-
-                monitorRcv.add(layer.toMonitorRcvString() + ",");
-                monitorSnd.add(layer.toMonitorSndString());
-                layerCount++;
-
-                layer = layer.next;
-            }
-
-            // bodyLength
-            for (int i = 0; i < layerCount; i++) {
-                rcvMaxLength = Math.max(rcvMaxLength, monitorRcv.get(i).length());
-                sndMaxLength = Math.max(sndMaxLength, monitorSnd.get(i).length());
-            }
-
-            // build string
-            StringBuilder sb = new StringBuilder();
-            String nameBorder = StringUtils.repeat("━", maxNameLength);
-            String rcvBorder = StringUtils.repeat("━", rcvMaxLength);
-            String sndBorder = StringUtils.repeat("━", sndMaxLength);
-
-            sb.append(String.format("┏━%s━━━━%s ↓ %s ━┓\n", nameBorder, rcvBorder, rootSnd));
-            for (int i = 0; i < layerCount; i++) {
-                String layerName = StringUtils.rightPad(layerNames.get(i), maxNameLength, " ");
-                String rcvPart = StringUtils.rightPad(monitorRcv.get(i), rcvMaxLength, " ");
-                String sndPart = StringUtils.rightPad(monitorSnd.get(i), sndMaxLength, " ");
-                sb.append(String.format("┃ %s [↑ %s ↓ %s] ┃\n", layerName, rcvPart, sndPart));
-            }
-            sb.append(String.format("┗━%s━ ↑ %s ━━━%s━━┛", nameBorder, rootRcv, sndBorder));
-
-            return sb.toString();
-        }
-
-        private String rootMonitorRcvString () {
-            int capacity = this.tailRcvDown.getCapacity();
-            if (capacity > 500) {
-                return this.tailRcvDown.queueSize() + "/500+";
-            } else {
-                return this.tailRcvDown.queueSize() + "/" + capacity;
+            } finally {
+                current = current.next;
             }
         }
+        return continueStatus;
+    }
 
-        private String rootMonitorSndString () {
-            int capacity = this.headSndDown.getCapacity();
-            if (capacity > 500) {
-                return this.headSndDown.queueSize() + "/500+";
-            } else {
-                return this.headSndDown.queueSize() + "/" + capacity;
+    private boolean doSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        boolean continueStatus = true;
+        boolean found = false;
+        ProtoInvocation<?, ?, ?, ?> current = this.tail;
+        while (current != null) {
+            try {
+                if (!found) {
+                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                        found = true;
+                    } else {
+                        continue;
+                    }
+                }
+
+                if (continueStatus) {
+                    continueStatus = current.onEvent(protoCtx, event, false);
+                }
+            } finally {
+                current = current.previous;
             }
+        }
+        return continueStatus;
+    }
+
+    // ------------------------------------------------------------
+    // Statistical
+    // ------------------------------------------------------------
+
+    @Override
+    public String toString() {
+        List<String> layerNames = new ArrayList<>();
+        List<String> monitorRcv = new ArrayList<>();
+        List<String> monitorSnd = new ArrayList<>();
+        String rootRcv = rootMonitorRcvString() + " (RCV)";
+        String rootSnd = rootMonitorSndString() + " (SND)";
+
+        // nameLength
+        int maxNameLength = 0;
+        int rcvMaxLength = rootRcv.length() + 1;
+        int sndMaxLength = rootSnd.length();
+
+        ProtoInvocation<?, ?, ?, ?> layer = this.head;
+        int layerCount = 0;
+        while (layer != null) {
+            String layerName = layer.getName();
+            layerName = StringUtils.isBlank(layerName) ? ("Layer@" + Integer.toHexString(layer.hashCode())) : layerName;
+            layerNames.add(layerName);
+            maxNameLength = Math.max(maxNameLength, layerName.length());
+
+            monitorRcv.add(layer.toMonitorRcvString() + ",");
+            monitorSnd.add(layer.toMonitorSndString());
+            layerCount++;
+
+            layer = layer.next;
+        }
+
+        // bodyLength
+        for (int i = 0; i < layerCount; i++) {
+            rcvMaxLength = Math.max(rcvMaxLength, monitorRcv.get(i).length());
+            sndMaxLength = Math.max(sndMaxLength, monitorSnd.get(i).length());
+        }
+
+        // build string
+        StringBuilder sb = new StringBuilder();
+        String nameBorder = StringUtils.repeat("━", maxNameLength);
+        String rcvBorder = StringUtils.repeat("━", rcvMaxLength);
+        String sndBorder = StringUtils.repeat("━", sndMaxLength);
+
+        sb.append(String.format("┏━%s━━━━%s ↓ %s ━┓\n", nameBorder, rcvBorder, rootSnd));
+        for (int i = 0; i < layerCount; i++) {
+            String layerName = StringUtils.rightPad(layerNames.get(i), maxNameLength, " ");
+            String rcvPart = StringUtils.rightPad(monitorRcv.get(i), rcvMaxLength, " ");
+            String sndPart = StringUtils.rightPad(monitorSnd.get(i), sndMaxLength, " ");
+            sb.append(String.format("┃ %s [↑ %s ↓ %s] ┃\n", layerName, rcvPart, sndPart));
+        }
+        sb.append(String.format("┗━%s━ ↑ %s ━━━%s━━┛", nameBorder, rootRcv, sndBorder));
+
+        return sb.toString();
+    }
+
+    private String rootMonitorRcvString() {
+        int capacity = this.tailRcvDown.getCapacity();
+        if (capacity > 500) {
+            return this.tailRcvDown.queueSize() + "/500+";
+        } else {
+            return this.tailRcvDown.queueSize() + "/" + capacity;
         }
     }
+
+    private String rootMonitorSndString() {
+        int capacity = this.headSndDown.getCapacity();
+        if (capacity > 500) {
+            return this.headSndDown.queueSize() + "/500+";
+        } else {
+            return this.headSndDown.queueSize() + "/" + capacity;
+        }
+    }
+}

@@ -233,7 +233,7 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     /**
      * a new accept socket
      */
-    final void notifyAccept(NetChannel channel) {
+    protected final void notifyAccept(NetChannel channel) {
         if (channel.getListen() == this) {
             this.lastActiveTime = System.currentTimeMillis();
             this.lastAcceptTime = System.currentTimeMillis();

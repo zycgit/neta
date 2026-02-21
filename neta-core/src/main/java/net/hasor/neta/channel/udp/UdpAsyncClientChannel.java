@@ -19,16 +19,11 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.nio.channels.SelectionKey;
-import java.nio.channels.Selector;
-import java.util.Iterator;
 import java.util.concurrent.ExecutorService;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
@@ -43,17 +38,15 @@ import net.hasor.neta.channel.*;
  */
 class UdpAsyncClientChannel extends UdpAsyncChannel {
     private static final Logger           logger = Logger.getLogger(UdpAsyncClientChannel.class);
-    private final        Selector         readSelector;
-    //
+    private final        UdpTransport     transport;
     private final        ByteBufAllocator bufAllocator;
-    private final        ByteBuffer       receiveBuffer;
 
     UdpAsyncClientChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
         super(channelId, channel, context, remoteAddress, soConfig);
-        this.readSelector = Selector.open();
 
         this.bufAllocator = this.context.getByteBufAllocator();
-        this.receiveBuffer = this.bufAllocator.jvmBuffer(UdpSoConfigUtils.getRcvPacketSize(this.soConfig));
+        int rcvPacketSize = UdpSoConfigUtils.getRcvPacketSize(this.soConfig);
+        this.transport = UdpTransport.wrap(channelId, channel, this.context, rcvPacketSize, this);
     }
 
     @Override
@@ -61,11 +54,7 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
         if (this.context.getConfig().isPrintLog()) {
             logger.info("udpClientSide(" + this.getChannelId() + ") close.");
         }
-        IOUtils.closeQuietly(this.readSelector);
-        if (ByteBufUtils.CLEANER != null) {
-            ByteBufUtils.CLEANER.freeDirectBuffer(this.receiveBuffer);
-        }
-        super.close();
+        this.transport.close();
     }
 
     //
@@ -74,9 +63,7 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
         // connect to
         try {
-            this.channel.connect(this.remoteAddress);
-            this.channel.configureBlocking(false);
-            this.channel.register(this.readSelector, SelectionKey.OP_READ);
+            this.transport.connect(this.remoteAddress);
         } catch (Throwable e) {
             logger.error("ERROR: ConnectFailed, " + e.getMessage(), e);
             future.failed(e);
@@ -100,9 +87,13 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
             this.context.initChannel(channel, true);
             future.completed(channel);
 
-            // start read loop
-            this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-                this.receiveLoop(channel);
+            // start read loop via transport
+            this.transport.startReceiveLoop((remoteAddr, data) -> this.onDatagram(channel, remoteAddr, data), () -> {
+                logger.info("rcv(" + this.channelId + ") close form local.");
+                this.context.notifyChannelClose(channel.getChannelId(), false);
+            }, (e) -> {
+                SoRcvException err = new SoRcvException(e.getMessage(), e);
+                this.context.notifyRcvChannelException(channel.getChannelId(), false, err);
             });
         } catch (Throwable e) {
             logger.error("ERROR: ConnectFailed, " + e.getMessage(), e);
@@ -112,57 +103,15 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
         }
     }
 
-    private void receiveLoop(UdpChannel channel) {
-        if (!this.channel.isOpen()) {
-            logger.info("rcv(" + this.channelId + ") close form local.");
-            this.context.notifyChannelClose(channel.getChannelId(), false);
+    private void onDatagram(UdpChannel channel, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
+        InetSocketAddress inetRemoteAddr = (InetSocketAddress) remoteAddr;
+        if (this.soConfig.isRcvRemoteOnly() && !inetRemoteAddr.equals(this.remoteAddress)) {
             return;
         }
 
-        try {
-            if (this.readSelector.select(100) > 0) {
-                this.receiveData(channel);
-            }
-        } catch (IOException e) {
-            SoRcvException err = new SoRcvException(e.getMessage(), e);
-            this.context.notifyRcvChannelException(channel.getChannelId(), false, err);
-        }
-
-        this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-            this.receiveLoop(channel);
-        });
-    }
-
-    private void receiveData(UdpChannel channel) throws IOException {
-        Iterator<SelectionKey> it = this.readSelector.selectedKeys().iterator();
-        while (it.hasNext()) {
-            // pull key
-            SelectionKey key = it.next();
-            it.remove();
-
-            // process
-            if (key.isReadable()) {
-                try {
-                    this.readSocket(channel, (DatagramChannel) key.channel());
-                } catch (Throwable e) {
-                    SoRcvException err = e instanceof SoRcvException ? (SoRcvException) e : new SoRcvException(e.getMessage(), e);
-                    this.context.notifyRcvChannelException(channel.getChannelId(), false, err);
-                    return;
-                }
-            }
-        }
-    }
-
-    private void readSocket(UdpChannel channel, DatagramChannel socket) throws IOException {
-        this.receiveBuffer.clear();
-        InetSocketAddress remoteAddr = (InetSocketAddress) socket.receive(this.receiveBuffer);
-        if (this.soConfig.isRcvRemoteOnly() && !remoteAddr.equals(this.remoteAddress)) {
-            return;
-        }
-
-        ByteBuf byteBuf = this.bufAllocator.buffer(this.receiveBuffer.position());
-        this.receiveBuffer.flip();
-        byteBuf.writeBuffer(this.receiveBuffer);
+        int remaining = data.remaining();
+        ByteBuf byteBuf = this.bufAllocator.buffer(remaining);
+        byteBuf.writeBuffer(data);
         byteBuf.markWriter();
         int readableBytes = byteBuf.readableBytes();
         if (logger.isDebugEnabled()) {
@@ -186,9 +135,5 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
 
         channel.setAttribute(UdpIdentifier.class.getName(), new UdpIdentifier(remoteID));
         return channel;
-    }
-
-    private Future<?> submitTask(DefaultSoTask task) {
-        return this.context.submitSoTask(task, this);
     }
 }

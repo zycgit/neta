@@ -232,7 +232,13 @@ public class SoWriteTest extends AbstractSoTest {
     @Test
     public void sndThrowTest_01() throws Throwable {
         AtomicBoolean sndErr1 = new AtomicBoolean(false);
-        ProtoInitializer initializer = ProtoHelper.standard().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
+        ProtoInitializer initializer = ProtoHelper.standard().nextDecoder("D0", new ProtoHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
+                return ProtoStatus.Next;
+            }
+        }).nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 throw new IllegalStateException("L1 Throw");
@@ -256,14 +262,15 @@ public class SoWriteTest extends AbstractSoTest {
         SoContext context = server.getContext();
         NetListen listen = server.bind(address, initializer, tcpConf);
 
-        // client: send a lot of pack
+        // client: connect to server
         Socket client = new Socket("127.0.0.1", safePort);
+        listen.waitAnyAccept();
+        NetChannel channel = (NetChannel) context.findChannel(2);
+
+        // client sends data, server receives it and pipeline rcv processing triggers encoder exception
         OutputStream soOut = client.getOutputStream();
         soOut.write(1);
         soOut.flush();
-
-        listen.waitAnyAccept();
-        NetChannel channel = (NetChannel) context.findChannel(2);
         ThreadUtils.sleep(500);
 
         assert channel == null || channel.isClose();

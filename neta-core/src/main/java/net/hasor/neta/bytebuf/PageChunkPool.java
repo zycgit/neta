@@ -179,10 +179,15 @@ class PageChunkPool {
             if (isFree(look)) {
                 if (tryLock(look, true)) {
                     try {
-                        this.used(look);
-                        PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.RECYCLE_INDEX, PageChunkSplit.RECYCLE_HANDLER);
-                        chunk.initPageChunk(this, look.getFromPage(), look.getToPage(), new AtomicInteger(1));
-                        return chunk;
+                        // Re-check after lock acquisition to prevent TOCTOU race condition.
+                        // Between the unlocked isFree() check and tryLock(), another thread at
+                        // a different buddy level may have allocated overlapping pages.
+                        if (isFree(look)) {
+                            this.used(look);
+                            PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.RECYCLE_INDEX, PageChunkSplit.RECYCLE_HANDLER);
+                            chunk.initPageChunk(this, look.getFromPage(), look.getToPage(), new AtomicInteger(1));
+                            return chunk;
+                        }
                     } finally {
                         this.unLock(look);
                     }

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.channel.quic.QuicSoConfig;
 import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.channel.udp.UdpSoConfig;
 
@@ -49,6 +50,10 @@ public class SoConfig {
 
     public static UdpSoConfig UDP() {
         return new UdpSoConfig();
+    }
+
+    public static QuicSoConfig QUIC() {
+        return new QuicSoConfig();
     }
 
     public int getRcvSlotSize() {

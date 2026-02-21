@@ -29,6 +29,7 @@ import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.channel.quic.QuicSoConfig;
 import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.channel.udp.UdpSoConfig;
 
@@ -146,6 +147,34 @@ public class AbstractSoTest {
                 Thread.sleep(50);
             }
         });
+    }
+
+    public static QuicSoConfig quicConfig() {
+        QuicSoConfig config = SoConfig.QUIC();
+        config.setSslEnabled(false);
+        config.setRcvPacketSize(65535);
+        return config;
+    }
+
+    /** Wait for a condition to become true within timeoutMs milliseconds. */
+    public static void waitFor(java.util.function.BooleanSupplier condition, long timeoutMs) {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        while (!condition.getAsBoolean() && System.currentTimeMillis() < deadline) {
+            ThreadUtils.sleep(50);
+        }
+    }
+
+    /** Find the server-side channel (typically channelId > listen.getChannelId()). */
+    public static NetChannel findServerChannel(NetManager neta, NetListen listen) {
+        SoContext ctx = neta.getContext();
+        long listenId = listen.getChannelId();
+        for (long id = listenId + 1; id < listenId + 20; id++) {
+            SoChannel<?> ch = ctx.findChannel(id);
+            if (ch instanceof NetChannel) {
+                return (NetChannel) ch;
+            }
+        }
+        return null;
     }
 
 }
