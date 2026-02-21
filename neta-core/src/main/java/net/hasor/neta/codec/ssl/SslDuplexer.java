@@ -45,7 +45,7 @@ public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, Byt
     }
 
     @Override
-    public void onActive(ProtoContext context) throws Exception {
+    public void onActive(ProtoContext context, ProtoSndQueue<ByteBuf> rcvDown, ProtoSndQueue<ByteBuf> sndDown) throws Exception {
         if (context.getChannel().isClient()) {
             context.sendData(ByteBuf.EMPTY);// make sure to trigger the handshake
         }

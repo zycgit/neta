@@ -220,7 +220,7 @@ public class ProtoRoutingTest extends AbstractStackTest {
 
     // ==================== Lifecycle Tests ====================
 
-    /** Test: onInit and onActive are called for ALL branches */
+    /** Test: onInit is called for all branches, onActive only for selected branch after routing */
     @Test
     public void routing_lifecycle_allBranches() throws Throwable {
         List<String> lifecycleLog = new ArrayList<>();
@@ -242,13 +242,23 @@ public class ProtoRoutingTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
-        // onInit and onActive should have been called for all branches
+        // onInit should have been called for all branches
         assert lifecycleLog.contains("A:onInit") : "missing A:onInit, log=" + lifecycleLog;
         assert lifecycleLog.contains("B:onInit") : "missing B:onInit, log=" + lifecycleLog;
         assert lifecycleLog.contains("C:onInit") : "missing C:onInit, log=" + lifecycleLog;
-        assert lifecycleLog.contains("A:onActive") : "missing A:onActive, log=" + lifecycleLog;
-        assert lifecycleLog.contains("B:onActive") : "missing B:onActive, log=" + lifecycleLog;
-        assert lifecycleLog.contains("C:onActive") : "missing C:onActive, log=" + lifecycleLog;
+
+        // onActive is deferred — no branch should be active before routing
+        assert !lifecycleLog.contains("A:onActive") : "A:onActive should NOT be called before routing, log=" + lifecycleLog;
+        assert !lifecycleLog.contains("B:onActive") : "B:onActive should NOT be called before routing, log=" + lifecycleLog;
+        assert !lifecycleLog.contains("C:onActive") : "C:onActive should NOT be called before routing, log=" + lifecycleLog;
+
+        // Trigger routing by sending data
+        channel.onReceive(42);
+
+        // Only selected branch A should have onActive
+        assert lifecycleLog.contains("A:onActive") : "missing A:onActive after routing, log=" + lifecycleLog;
+        assert !lifecycleLog.contains("B:onActive") : "B:onActive should NOT be called (not selected), log=" + lifecycleLog;
+        assert !lifecycleLog.contains("C:onActive") : "C:onActive should NOT be called (not selected), log=" + lifecycleLog;
 
         channel.close();
         Thread.sleep(100);
@@ -518,7 +528,7 @@ public class ProtoRoutingTest extends AbstractStackTest {
         }
 
         @Override
-        public void onActive(ProtoContext context) {
+        public void onActive(ProtoContext context, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<Object> sndDown) {
             log.add(name + ":onActive");
         }
 

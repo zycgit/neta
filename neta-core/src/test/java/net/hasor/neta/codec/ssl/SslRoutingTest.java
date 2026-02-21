@@ -475,7 +475,7 @@ public class SslRoutingTest extends AbstractSslTest {
                     }
 
                     @Override
-                    public void onActive(ProtoContext context) {
+                    public void onActive(ProtoContext context, ProtoSndQueue<String> rcvDown, ProtoSndQueue<ByteBuf> sndDown) {
                     }
 
                     @Override
@@ -677,7 +677,7 @@ public class SslRoutingTest extends AbstractSslTest {
             }
 
             @Override
-            public void onActive(ProtoContext context) {
+            public void onActive(ProtoContext context, ProtoSndQueue<ByteBuf> rcvDown, ProtoSndQueue<ByteBuf> sndDown) {
                 events.add("active");
             }
 

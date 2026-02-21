@@ -34,7 +34,7 @@ public class ProtoStackTest extends AbstractStackTest {
             }
 
             @Override
-            public void onActive(ProtoContext context) {
+            public void onActive(ProtoContext context, ProtoSndQueue<Integer> dst) {
                 record.add(tag + "-OnActive");
             }
 
@@ -73,7 +73,7 @@ public class ProtoStackTest extends AbstractStackTest {
                 }
 
                 @Override
-                public void onActive(ProtoContext context) {
+                public void onActive(ProtoContext context, ProtoSndQueue<Integer> dst) {
                     record.add("s1-OnActive");
                 }
 
@@ -114,7 +114,7 @@ public class ProtoStackTest extends AbstractStackTest {
                 }
 
                 @Override
-                public void onActive(ProtoContext context) {
+                public void onActive(ProtoContext context, ProtoSndQueue<Integer> dst) {
                     record.add("s1-OnActive");
                     ProtoHandler<Integer, Integer> decode = recordHandler("s2", record);
                     context.addLastDecoder("s2", decode);
@@ -156,7 +156,7 @@ public class ProtoStackTest extends AbstractStackTest {
                 }
 
                 @Override
-                public void onActive(ProtoContext context) {
+                public void onActive(ProtoContext context, ProtoSndQueue<Integer> dst) {
                     record.add("s1-OnActive");
                 }
 
@@ -198,7 +198,7 @@ public class ProtoStackTest extends AbstractStackTest {
                 }
 
                 @Override
-                public void onActive(ProtoContext context) {
+                public void onActive(ProtoContext context, ProtoSndQueue<Integer> dst) {
                     record.add("s1-OnActive");
                 }
 

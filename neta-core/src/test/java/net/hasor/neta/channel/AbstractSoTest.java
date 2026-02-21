@@ -30,6 +30,7 @@ import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.quic.QuicSoConfig;
+import net.hasor.neta.channel.quic.QuicStreamCodec;
 import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.channel.udp.UdpSoConfig;
 
@@ -86,7 +87,7 @@ public class AbstractSoTest {
     public static ProtoHandler counter(AtomicInteger counter) {
         return new ProtoHandler() {
             @Override
-            public void onActive(ProtoContext context) throws Throwable {
+            public void onActive(ProtoContext context, ProtoSndQueue dst) throws Throwable {
                 counter.incrementAndGet();
             }
 
@@ -175,6 +176,18 @@ public class AbstractSoTest {
             }
         }
         return null;
+    }
+
+    /**
+     * Wraps a ProtoInitializer with QuicStreamCodec as the first handler.
+     * This strips the stream metadata prefix (streamId+fin) that the QUIC transport
+     * prepends, so downstream handlers receive raw data.
+     */
+    public static ProtoInitializer quicWrap(ProtoInitializer inner) {
+        return ctx -> {
+            ctx.addLast("stream-codec", new QuicStreamCodec());
+            inner.config(ctx);
+        };
     }
 
 }

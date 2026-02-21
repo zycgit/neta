@@ -30,8 +30,12 @@ public interface ProtoHandler<IN, OUT> {
 
     /**
      * when the Connected.
+     * <p>The dst queue allows the handler to produce initial data during activation.
+     * For a decoder, dst is the RCV downstream queue; for an encoder, dst is the SND downstream queue.</p>
+     * @param context the protocol context
+     * @param dst the output queue for producing initial data during activation
      */
-    default void onActive(ProtoContext context) throws Throwable {
+    default void onActive(ProtoContext context, ProtoSndQueue<OUT> dst) throws Throwable {
     }
 
     default boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {

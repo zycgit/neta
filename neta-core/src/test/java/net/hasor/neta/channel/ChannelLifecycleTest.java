@@ -162,7 +162,7 @@ public class ChannelLifecycleTest extends AbstractStackTest {
             }
 
             @Override
-            public void onActive(ProtoContext context) {
+            public void onActive(ProtoContext context, ProtoSndQueue<Integer> dst) {
                 lifecycle.add("active");
             }
 

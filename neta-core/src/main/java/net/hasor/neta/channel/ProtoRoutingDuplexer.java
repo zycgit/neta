@@ -84,16 +84,9 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
     }
 
     @Override
-    public void onActive(ProtoContext context) throws Throwable {
-        // Activate ALL branches
-        for (String name : this.branchOrder) {
-            BranchEntry branch = this.branches.get(name);
-            try {
-                branch.chainRoot.onActive(branch.branchCtx);
-            } catch (Throwable e) {
-                logger.error("Branch '" + name + "' onActive error: " + e.getMessage(), e);
-            }
-        }
+    public void onActive(ProtoContext context, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<T> sndDown) throws Throwable {
+        // Do NOT activate branches here — branch activation is deferred
+        // until the route is determined during onMessage(isRcv=true).
     }
 
     @Override
@@ -127,6 +120,17 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
                 }
                 if (!this.branches.containsKey(this.selectedRoute)) {
                     throw new IllegalStateException("Routing returned unknown branch: '" + this.selectedRoute + "', available: " + this.branches.keySet());
+                }
+
+                // Activate the selected branch now that route is determined
+                BranchEntry branch = this.branches.get(this.selectedRoute);
+                Object[] activeData = branch.chainRoot.onActive(branch.branchCtx);
+
+                // Write branch onActive data (e.g. SETTINGS frame) to sndDown immediately
+                if (activeData != null && activeData.length > 0) {
+                    for (Object obj : activeData) {
+                        sndDown.offerMessage((T) obj);
+                    }
                 }
             }
             return this.doRcvRoute(context, rcvUp, rcvDown, sndDown);

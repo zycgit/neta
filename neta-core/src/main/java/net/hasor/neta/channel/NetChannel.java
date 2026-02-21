@@ -195,6 +195,13 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.monitor.getSndCounterBytes();
     }
 
+    /* Write data produced during onActive to socket */
+    void notifyActiveData(Object[] activeData) {
+        if (activeData != null && activeData.length > 0) {
+            appendSoSndTask(toSoSndData(NOOP_FUTURE, activeData));
+        }
+    }
+
     /* Receive data without concurrency */
     protected void notifyRcv(Object[] rcvBytes) throws Throwable {
         if (this.readWaiters > 0) {

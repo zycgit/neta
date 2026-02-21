@@ -47,8 +47,13 @@ public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     /**
      * when the Connected.
+     * <p>The rcvDown and sndDown queues allow handlers to produce data during activation.
+     * Data written to sndDown will be collected and sent to the remote peer before any RCV processing.</p>
+     * @param context the protocol context
+     * @param rcvDown the RCV downstream queue (output towards next handler in RCV direction)
+     * @param sndDown the SND downstream queue (output towards previous handler / socket in SND direction)
      */
-    default void onActive(ProtoContext context) throws Throwable {
+    default void onActive(ProtoContext context, ProtoSndQueue<RCV_DOWN> rcvDown, ProtoSndQueue<SND_DOWN> sndDown) throws Throwable {
     }
 
     default boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {

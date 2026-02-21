@@ -178,7 +178,10 @@ public class SoContextService implements SoContext {
             try {
                 protoStack.onInit(protoCtx);
                 if (!channel.isClose()) {
-                    protoStack.onActive(protoCtx);
+                    Object[] activeData = protoStack.onActive(protoCtx);
+                    if (activeData != null && activeData.length > 0) {
+                        netChannel.notifyActiveData(activeData);
+                    }
                 }
             } catch (Throwable e) {
                 // rollback: remove channel from maps on init failure

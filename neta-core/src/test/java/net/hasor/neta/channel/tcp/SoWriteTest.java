@@ -70,7 +70,7 @@ public class SoWriteTest extends AbstractSoTest {
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.bind(address, ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onActive(ProtoContext context) throws Throwable {
+            public void onActive(ProtoContext context, ProtoSndQueue<ByteBuf> dst) throws Throwable {
                 context.sendData(ByteBuf.wrap("Hello this message form server.\n".getBytes()));
             }
 
