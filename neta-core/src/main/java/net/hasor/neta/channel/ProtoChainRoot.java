@@ -217,60 +217,60 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
     @Override
     public Object[] onRcvMessage(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
+                ctx.setRcvMode();
 
                 if (this.head == null) {
-                    return this.triggerRcvWithEmpty(protoCtx, rcvData);
+                    return this.triggerRcvWithEmpty(ctx, rcvData);
                 } else {
-                    return this.onRcvLife(protoCtx, stackName, rcvData);
+                    return this.onRcvLife(ctx, stackName, rcvData);
                 }
             } finally {
-                ((ProtoContextService) protoCtx).clearFlash();
+                ctx.clearFlash();
             }
         }
     }
 
     @Override
     public Object[] onRcvError(ProtoContext protoCtx, String stackName, Throwable rcvError) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG, rcvError);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, true);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, false);
+                ctx.setRcvError(rcvError);
+                ctx.setRcvMode();
 
                 if (this.head == null) {
-                    return this.triggerRcvWithEmpty(protoCtx, EMPTY);
+                    return this.triggerRcvWithEmpty(ctx, EMPTY);
                 } else {
-                    return this.onRcvLife(protoCtx, stackName, null);
+                    return this.onRcvLife(ctx, stackName, null);
                 }
             } finally {
-                ((ProtoContextService) protoCtx).clearFlash();
+                ctx.clearFlash();
             }
         }
     }
 
-    private Object[] triggerRcvWithEmpty(ProtoContext protoCtx, Object[] sndData) {
+    private Object[] triggerRcvWithEmpty(ProtoContextService ctx, Object[] sndData) {
         // 1st onReceive
         if (sndData != null) {
             for (Object obj : sndData) {
-                PlayLoad playLoad = PlayLoadObject.of(protoCtx.getChannel(), obj, true, false);
-                ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
+                PlayLoad playLoad = PlayLoadObject.of(ctx.getChannel(), obj, true, false);
+                ((SoContextService) ctx.getSoContext()).trigger(playLoad);
             }
         }
 
         // 2st onError
-        Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
+        Throwable ctxError = ctx.getRcvError();
         if (ctxError != null) {
-            PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, true, false);
-            ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
+            PlayLoad playLoad = PlayLoadObject.ofError(ctx.getChannel(), ctxError, true, false);
+            ((SoContextService) ctx.getSoContext()).trigger(playLoad);
         }
         return EMPTY;
     }
 
-    private Object[] onRcvLife(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
+    private Object[] onRcvLife(ProtoContextService ctx, String stackName, Object[] rcvData) throws Throwable {
         ArrayList<Object[]> returnData = this.cachedRcvReturnData;
         returnData.clear();
         int arraySize = 0;
@@ -290,9 +290,9 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
                 ProtoStatus status;
                 while (true) {
-                    status = current.doLayer(protoCtx, true);
+                    status = current.doLayer(ctx, true);
                     if (status == ProtoStatus.Retry) {
-                        if (protoCtx.getSoContext().getConfig().isPrintLog()) {
+                        if (ctx.getSoContext().getConfig().isPrintLog()) {
                             this.printLog(true, "Stack " + current.getName() + " doRetry");
                         }
 
@@ -304,7 +304,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
                         // when last then snd life result.
                         // skip for main pipeline single handler (doSndLife would be a no-op)
                         if (current.next == null && (this.head != this.tail || this.branchMode)) {
-                            Object[] objects = this.doSndLife(protoCtx, stackName, null);
+                            Object[] objects = this.doSndLife(ctx, stackName, null);
                             arraySize += objects.length;
                             returnData.add(objects);
                         }
@@ -313,13 +313,13 @@ class ProtoChainRoot implements ProtoStack<Object> {
                         // rcv life result.
                         arraySize += takeSndDownToArray(current, returnData);
 
-                        if (Boolean.TRUE.equals(protoCtx.flash(ProtoInvocation.SKIP_SND_LIFE))) {
+                        if (ctx.isSkipSndLife()) {
                             break;
                         }
 
                         // snd life result (skip for main pipeline single handler)
                         if (this.head != this.tail || this.branchMode) {
-                            Object[] sndObjects = this.doSndLife(protoCtx, current.getName(), null);
+                            Object[] sndObjects = this.doSndLife(ctx, current.getName(), null);
                             arraySize += sndObjects.length;
                             returnData.add(sndObjects);
                         }
@@ -330,7 +330,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
                 }
 
                 if (status == ProtoStatus.Stop) {
-                    protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG, null);
+                    ctx.setRcvError(null);
                     break;
                 }
             } finally {
@@ -354,11 +354,11 @@ class ProtoChainRoot implements ProtoStack<Object> {
                 return result;
             }
         } finally {
-            this.triggerRcv(protoCtx);
+            this.triggerRcv(ctx);
         }
     }
 
-    private void triggerRcv(ProtoContext protoCtx) {
+    private void triggerRcv(ProtoContextService ctx) {
         if (this.branchMode) {
             return; // in branch mode, data stays in tailRcvDown for the routing node to collect
         }
@@ -366,17 +366,17 @@ class ProtoChainRoot implements ProtoStack<Object> {
         // 1st onReceive
         if (this.tailRcvDown.hasMore()) {
             while (this.tailRcvDown.hasMore()) {
-                PlayLoad playLoad = PlayLoadObject.of(protoCtx.getChannel(), this.tailRcvDown.takeMessage(), true, false);
-                ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
+                PlayLoad playLoad = PlayLoadObject.of(ctx.getChannel(), this.tailRcvDown.takeMessage(), true, false);
+                ((SoContextService) ctx.getSoContext()).trigger(playLoad);
             }
             this.tailRcvDown.rcvSubmit();
         }
 
         // 2st onError
-        Throwable ctxError = protoCtx.flash(ProtoInvocation.RCV_ERROR_TAG);
+        Throwable ctxError = ctx.getRcvError();
         if (ctxError != null) {
-            PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, true, false);
-            ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
+            PlayLoad playLoad = PlayLoadObject.ofError(ctx.getChannel(), ctxError, true, false);
+            ((SoContextService) ctx.getSoContext()).trigger(playLoad);
         }
     }
 
@@ -386,43 +386,43 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
     @Override
     public Object[] onSndMessage(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
+                ctx.setSndMode();
 
                 if (this.tail == null) {
                     return sndData;
                 } else {
-                    return this.doSndLife(protoCtx, stackName, sndData);
+                    return this.doSndLife(ctx, stackName, sndData);
                 }
             } finally {
-                ((ProtoContextService) protoCtx).clearFlash();
+                ctx.clearFlash();
             }
         }
     }
 
     @Override
     public Object[] onSndError(ProtoContext protoCtx, String stackName, Throwable sndError) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                protoCtx.flash(ProtoInvocation.SND_ERROR_TAG, sndError);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_RCV, false);
-                protoCtx.flash(ProtoContext.CURRENT_PROTO_IN_SND, true);
+                ctx.setSndError(sndError);
+                ctx.setSndMode();
 
                 if (this.tail == null) {
-                    this.triggerSend(protoCtx);
+                    this.triggerSend(ctx);
                     return EMPTY;
                 } else {
-                    return this.doSndLife(protoCtx, stackName, null);
+                    return this.doSndLife(ctx, stackName, null);
                 }
             } finally {
-                ((ProtoContextService) protoCtx).clearFlash();
+                ctx.clearFlash();
             }
         }
     }
 
-    private Object[] doSndLife(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
+    private Object[] doSndLife(ProtoContextService ctx, String stackName, Object[] sndData) throws Throwable {
         ArrayList<Object[]> returnData = this.cachedSndReturnData;
         returnData.clear();
         int arraySize = 0;
@@ -442,9 +442,9 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
                 ProtoStatus status;
                 while (true) {
-                    status = current.doLayer(protoCtx, false);
+                    status = current.doLayer(ctx, false);
                     if (status == ProtoStatus.Retry) {
-                        if (protoCtx.getSoContext().getConfig().isPrintLog()) {
+                        if (ctx.getSoContext().getConfig().isPrintLog()) {
                             this.printLog(false, "Stack " + current.getName() + " doRetry");
                         }
 
@@ -463,7 +463,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
                 }
 
                 if (status == ProtoStatus.Stop) {
-                    protoCtx.flash(ProtoInvocation.SND_ERROR_TAG, null);
+                    ctx.setSndError(null);
                     break;
                 }
             } finally {
@@ -487,19 +487,19 @@ class ProtoChainRoot implements ProtoStack<Object> {
                 return result;
             }
         } finally {
-            this.triggerSend(protoCtx);
+            this.triggerSend(ctx);
         }
     }
 
-    private void triggerSend(ProtoContext protoCtx) {
+    private void triggerSend(ProtoContextService ctx) {
         if (this.branchMode) {
             return; // in branch mode, errors are handled by the routing node
         }
 
-        Throwable ctxError = protoCtx.flash(ProtoInvocation.SND_ERROR_TAG);
+        Throwable ctxError = ctx.getSndError();
         if (ctxError != null) {
-            PlayLoad playLoad = PlayLoadObject.ofError(protoCtx.getChannel(), ctxError, false, true);
-            ((SoContextService) protoCtx.getSoContext()).trigger(playLoad);
+            PlayLoad playLoad = PlayLoadObject.ofError(ctx.getChannel(), ctxError, false, true);
+            ((SoContextService) ctx.getSoContext()).trigger(playLoad);
         }
     }
 
@@ -508,143 +508,146 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // ------------------------------------------------------------
     @Override
     public void onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-        try {
-            if (this.doRcvUserEvent(protoCtx, stackName, event)) {
-                this.doSndUserEvent(protoCtx, null, event);
+        synchronized (this.pipeLock) {
+            try {
+                if (this.doRcvUserEvent(protoCtx, stackName, event)) {
+                    this.doSndUserEvent(protoCtx, null, event);
+                }
+            } finally {
+                ((ProtoContextService) protoCtx).clearFlash();
             }
-        } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
         }
     }
 
     @Override
     public void onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-        try {
-            this.doSndUserEvent(protoCtx, stackName, event);
-        } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
-        }
-    }
-
-    private boolean doRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-        boolean continueStatus = true;
-        boolean found = false;
-        ProtoInvocation<?, ?, ?, ?> current = this.head;
-        while (current != null) {
+        synchronized (this.pipeLock) {
             try {
-                if (!found) {
-                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
-                        found = true;
-                    } else {
-                        continue;
-                    }
-                }
-
-                if (continueStatus) {
-                    continueStatus = current.onEvent(protoCtx, event, true);
-                }
+                this.doSndUserEvent(protoCtx, stackName, event);
             } finally {
-                current = current.next;
+                ((ProtoContextService) protoCtx).clearFlash();
             }
         }
-        return continueStatus;
     }
 
-    private boolean doSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-        boolean continueStatus = true;
-        boolean found = false;
-        ProtoInvocation<?, ?, ?, ?> current = this.tail;
-        while (current != null) {
-            try {
-                if (!found) {
-                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
-                        found = true;
-                    } else {
-                        continue;
+    private boolean doRcvUserEvent (ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+            boolean continueStatus = true;
+            boolean found = false;
+            ProtoInvocation<?, ?, ?, ?> current = this.head;
+            while (current != null) {
+                try {
+                    if (!found) {
+                        if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                            found = true;
+                        } else {
+                            continue;
+                        }
                     }
-                }
 
-                if (continueStatus) {
-                    continueStatus = current.onEvent(protoCtx, event, false);
+                    if (continueStatus) {
+                        continueStatus = current.onEvent(protoCtx, event, true);
+                    }
+                } finally {
+                    current = current.next;
                 }
-            } finally {
-                current = current.previous;
+            }
+            return continueStatus;
+        }
+
+        private boolean doSndUserEvent (ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+            boolean continueStatus = true;
+            boolean found = false;
+            ProtoInvocation<?, ?, ?, ?> current = this.tail;
+            while (current != null) {
+                try {
+                    if (!found) {
+                        if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                            found = true;
+                        } else {
+                            continue;
+                        }
+                    }
+
+                    if (continueStatus) {
+                        continueStatus = current.onEvent(protoCtx, event, false);
+                    }
+                } finally {
+                    current = current.previous;
+                }
+            }
+            return continueStatus;
+        }
+
+        // ------------------------------------------------------------
+        // Statistical
+        // ------------------------------------------------------------
+
+        @Override public String toString () {
+            List<String> layerNames = new ArrayList<>();
+            List<String> monitorRcv = new ArrayList<>();
+            List<String> monitorSnd = new ArrayList<>();
+            String rootRcv = rootMonitorRcvString() + " (RCV)";
+            String rootSnd = rootMonitorSndString() + " (SND)";
+
+            // nameLength
+            int maxNameLength = 0;
+            int rcvMaxLength = rootRcv.length() + 1;
+            int sndMaxLength = rootSnd.length();
+
+            ProtoInvocation<?, ?, ?, ?> layer = this.head;
+            int layerCount = 0;
+            while (layer != null) {
+                String layerName = layer.getName();
+                layerName = StringUtils.isBlank(layerName) ? ("Layer@" + Integer.toHexString(layer.hashCode())) : layerName;
+                layerNames.add(layerName);
+                maxNameLength = Math.max(maxNameLength, layerName.length());
+
+                monitorRcv.add(layer.toMonitorRcvString() + ",");
+                monitorSnd.add(layer.toMonitorSndString());
+                layerCount++;
+
+                layer = layer.next;
+            }
+
+            // bodyLength
+            for (int i = 0; i < layerCount; i++) {
+                rcvMaxLength = Math.max(rcvMaxLength, monitorRcv.get(i).length());
+                sndMaxLength = Math.max(sndMaxLength, monitorSnd.get(i).length());
+            }
+
+            // build string
+            StringBuilder sb = new StringBuilder();
+            String nameBorder = StringUtils.repeat("━", maxNameLength);
+            String rcvBorder = StringUtils.repeat("━", rcvMaxLength);
+            String sndBorder = StringUtils.repeat("━", sndMaxLength);
+
+            sb.append(String.format("┏━%s━━━━%s ↓ %s ━┓\n", nameBorder, rcvBorder, rootSnd));
+            for (int i = 0; i < layerCount; i++) {
+                String layerName = StringUtils.rightPad(layerNames.get(i), maxNameLength, " ");
+                String rcvPart = StringUtils.rightPad(monitorRcv.get(i), rcvMaxLength, " ");
+                String sndPart = StringUtils.rightPad(monitorSnd.get(i), sndMaxLength, " ");
+                sb.append(String.format("┃ %s [↑ %s ↓ %s] ┃\n", layerName, rcvPart, sndPart));
+            }
+            sb.append(String.format("┗━%s━ ↑ %s ━━━%s━━┛", nameBorder, rootRcv, sndBorder));
+
+            return sb.toString();
+        }
+
+        private String rootMonitorRcvString () {
+            int capacity = this.tailRcvDown.getCapacity();
+            if (capacity > 500) {
+                return this.tailRcvDown.queueSize() + "/500+";
+            } else {
+                return this.tailRcvDown.queueSize() + "/" + capacity;
             }
         }
-        return continueStatus;
-    }
 
-    // ------------------------------------------------------------
-    // Statistical
-    // ------------------------------------------------------------
-
-    @Override
-    public String toString() {
-        List<String> layerNames = new ArrayList<>();
-        List<String> monitorRcv = new ArrayList<>();
-        List<String> monitorSnd = new ArrayList<>();
-        String rootRcv = rootMonitorRcvString() + " (RCV)";
-        String rootSnd = rootMonitorSndString() + " (SND)";
-
-        // nameLength
-        int maxNameLength = 0;
-        int rcvMaxLength = rootRcv.length() + 1;
-        int sndMaxLength = rootSnd.length();
-
-        ProtoInvocation<?, ?, ?, ?> layer = this.head;
-        int layerCount = 0;
-        while (layer != null) {
-            String layerName = layer.getName();
-            layerName = StringUtils.isBlank(layerName) ? ("Layer@" + Integer.toHexString(layer.hashCode())) : layerName;
-            layerNames.add(layerName);
-            maxNameLength = Math.max(maxNameLength, layerName.length());
-
-            monitorRcv.add(layer.toMonitorRcvString() + ",");
-            monitorSnd.add(layer.toMonitorSndString());
-            layerCount++;
-
-            layer = layer.next;
-        }
-
-        // bodyLength
-        for (int i = 0; i < layerCount; i++) {
-            rcvMaxLength = Math.max(rcvMaxLength, monitorRcv.get(i).length());
-            sndMaxLength = Math.max(sndMaxLength, monitorSnd.get(i).length());
-        }
-
-        // build string
-        StringBuilder sb = new StringBuilder();
-        String nameBorder = StringUtils.repeat("━", maxNameLength);
-        String rcvBorder = StringUtils.repeat("━", rcvMaxLength);
-        String sndBorder = StringUtils.repeat("━", sndMaxLength);
-
-        sb.append(String.format("┏━%s━━━━%s ↓ %s ━┓\n", nameBorder, rcvBorder, rootSnd));
-        for (int i = 0; i < layerCount; i++) {
-            String layerName = StringUtils.rightPad(layerNames.get(i), maxNameLength, " ");
-            String rcvPart = StringUtils.rightPad(monitorRcv.get(i), rcvMaxLength, " ");
-            String sndPart = StringUtils.rightPad(monitorSnd.get(i), sndMaxLength, " ");
-            sb.append(String.format("┃ %s [↑ %s ↓ %s] ┃\n", layerName, rcvPart, sndPart));
-        }
-        sb.append(String.format("┗━%s━ ↑ %s ━━━%s━━┛", nameBorder, rootRcv, sndBorder));
-
-        return sb.toString();
-    }
-
-    private String rootMonitorRcvString() {
-        int capacity = this.tailRcvDown.getCapacity();
-        if (capacity > 500) {
-            return this.tailRcvDown.queueSize() + "/500+";
-        } else {
-            return this.tailRcvDown.queueSize() + "/" + capacity;
+        private String rootMonitorSndString () {
+            int capacity = this.headSndDown.getCapacity();
+            if (capacity > 500) {
+                return this.headSndDown.queueSize() + "/500+";
+            } else {
+                return this.headSndDown.queueSize() + "/" + capacity;
+            }
         }
     }
-
-    private String rootMonitorSndString() {
-        int capacity = this.headSndDown.getCapacity();
-        if (capacity > 500) {
-            return this.headSndDown.queueSize() + "/500+";
-        } else {
-            return this.headSndDown.queueSize() + "/" + capacity;
-        }
-    }
-}

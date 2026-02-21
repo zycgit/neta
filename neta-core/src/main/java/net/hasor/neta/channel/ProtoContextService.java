@@ -28,6 +28,16 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @version : 2023-09-24
  */
 class ProtoContextService implements ProtoContext {
+    // Internal flash indices — replaces HashMap for hot-path internal keys
+    static final  int                   F_IN_RCV        = 0;
+    static final  int                   F_IN_SND        = 1;
+    static final  int                   F_STACK_NAME    = 2;
+    static final  int                   F_RCV_ERROR     = 3;
+    static final  int                   F_SND_ERROR     = 4;
+    static final  int                   F_SKIP_SND_LIFE = 5;
+    static final  int                   F_SIZE          = 6;
+    final         Object[]              _flash; // internal flash array (shared in branch mode)
+    //
     private final SoChannel<?>          channel;
     private final SoContext             soContext;
     private final Map<Class<?>, Object> contextData;
@@ -42,6 +52,7 @@ class ProtoContextService implements ProtoContext {
         this.chainRoot = new ProtoChainRoot(channel.getConfig());
         this.flash = new HashMap<>();
         this.namedHandlerMap = new HashMap<>();
+        this._flash = new Object[F_SIZE];
     }
 
     /**
@@ -55,6 +66,7 @@ class ProtoContextService implements ProtoContext {
         this.chainRoot = new ProtoChainRoot(rcvSlotSize, sndSlotSize, true);
         this.flash = parent.flash;
         this.namedHandlerMap = new HashMap<>();
+        this._flash = parent._flash; // shared with parent
     }
 
     ProtoChainRoot getChainRoot() {
@@ -78,7 +90,7 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public String getStackName() {
-        return this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+        return (String) this._flash[F_STACK_NAME];
     }
 
     @Override
@@ -103,7 +115,56 @@ class ProtoContextService implements ProtoContext {
     }
 
     void clearFlash() {
-        this.flash.clear();
+        Object[] f = this._flash;
+        f[0] = null;
+        f[1] = null;
+        f[2] = null;
+        f[3] = null;
+        f[4] = null;
+        f[5] = null;
+        if (!this.flash.isEmpty()) {
+            this.flash.clear();
+        }
+    }
+
+    // --- Package-private fast internal flash accessors (bypass HashMap) ---
+
+    void setRcvMode() {
+        this._flash[F_IN_RCV] = Boolean.TRUE;
+        this._flash[F_IN_SND] = null;
+    }
+
+    void setSndMode() {
+        this._flash[F_IN_RCV] = null;
+        this._flash[F_IN_SND] = Boolean.TRUE;
+    }
+
+    void setStackName(String name) {
+        this._flash[F_STACK_NAME] = name;
+    }
+
+    Throwable getRcvError() {
+        return (Throwable) this._flash[F_RCV_ERROR];
+    }
+
+    void setRcvError(Throwable t) {
+        this._flash[F_RCV_ERROR] = t;
+    }
+
+    Throwable getSndError() {
+        return (Throwable) this._flash[F_SND_ERROR];
+    }
+
+    void setSndError(Throwable t) {
+        this._flash[F_SND_ERROR] = t;
+    }
+
+    boolean isSkipSndLife() {
+        return this._flash[F_SKIP_SND_LIFE] != null;
+    }
+
+    void setSkipSndLife() {
+        this._flash[F_SKIP_SND_LIFE] = Boolean.TRUE;
     }
 
     @Override
@@ -124,7 +185,7 @@ class ProtoContextService implements ProtoContext {
     @Override
     public Future<?> sendData(Object writeData) {
         if (this.channel instanceof NetChannel) {
-            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+            String current = (String) this._flash[F_STACK_NAME];
             if (StringUtils.isNotBlank(current)) {
                 return ((NetChannel) this.channel).sendData(writeData, current);
             } else {
@@ -138,7 +199,7 @@ class ProtoContextService implements ProtoContext {
     @Override
     public <T> void fireUserEvent(Class<T> eventType, T event) {
         if (this.channel instanceof NetChannel) {
-            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+            String current = (String) this._flash[F_STACK_NAME];
             current = StringUtils.isBlank(current) ? null : current;
 
             if (this.isRcv()) {
@@ -156,7 +217,7 @@ class ProtoContextService implements ProtoContext {
     @Override
     public Future<?> flush() {
         if (this.channel instanceof NetChannel) {
-            String current = this.flash(ProtoContext.CURRENT_PROTO_STACK_NAME);
+            String current = (String) this._flash[F_STACK_NAME];
             return ((NetChannel) this.channel).flush(current);
         } else {
             throw new UnsupportedOperationException("only NetChannel support flush.");
@@ -170,14 +231,12 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public boolean isRcv() {
-        Object flash = this.flash(ProtoContext.CURRENT_PROTO_IN_RCV);
-        return flash != null && (boolean) flash;
+        return this._flash[F_IN_RCV] != null;
     }
 
     @Override
     public boolean isSnd() {
-        Object flash = this.flash(ProtoContext.CURRENT_PROTO_IN_SND);
-        return flash != null && (boolean) flash;
+        return this._flash[F_IN_SND] != null;
     }
 
     @Override

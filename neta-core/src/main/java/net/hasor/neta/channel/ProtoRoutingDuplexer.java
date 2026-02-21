@@ -148,9 +148,7 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
         Object[] rcvArray = rcvData.toArray();
 
         // Execute branch RCV chain (which may also trigger branch SND chain internally)
-        System.out.println("[ROUTE-DEBUG] doRcvRoute: branch=" + this.selectedRoute + ", rcvArray.length=" + rcvArray.length);
         Object[] sndResult = branch.chainRoot.onRcvMessage(branch.branchCtx, null, rcvArray);
-        System.out.println("[ROUTE-DEBUG] doRcvRoute: sndResult=" + (sndResult != null ? sndResult.length : "null"));
 
         // Collect RCV output from branch tailRcvDown
         ProtoQueue<Object> branchTailRcvDown = (ProtoQueue<Object>) branch.chainRoot.getTailRcvDown();
@@ -158,13 +156,11 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
             List<Object> branchRcvOutput = branchTailRcvDown.takeMessage(branchTailRcvDown.queueSize());
             branchTailRcvDown.rcvSubmit();
             rcvDown.offerMessage(branchRcvOutput);
-            System.out.println("[ROUTE-DEBUG] doRcvRoute: branchRcvOutput.size=" + branchRcvOutput.size());
         }
 
         // Forward branch SND results to main pipeline sndDown
         if (sndResult != null) {
             for (Object obj : sndResult) {
-                System.out.println("[ROUTE-DEBUG] doRcvRoute: forwarding sndResult object: " + obj.getClass().getSimpleName() + " to sndDown");
                 sndDown.offerMessage((T) obj);
             }
         }

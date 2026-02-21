@@ -19,14 +19,11 @@ import java.io.PrintStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Objects;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.concurrent.future.FutureListener;
 import net.hasor.cobble.concurrent.timer.Timeout;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.logging.Logger;
@@ -208,21 +205,6 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
         Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, rcvBytes);
         if (dataArray != null && dataArray.length > 0) {
-            for (int i = 0; i < dataArray.length; i++) {
-                Object item = dataArray[i];
-                if (item instanceof net.hasor.neta.bytebuf.ByteBuf) {
-                    net.hasor.neta.bytebuf.ByteBuf b = (net.hasor.neta.bytebuf.ByteBuf) item;
-                    StringBuilder hex = new StringBuilder();
-                    int dumpLen = Math.min(b.readableBytes(), 40);
-                    for (int j = 0; j < dumpLen; j++) {
-                        if (j > 0) hex.append(' ');
-                        hex.append(String.format("%02x", b.getByte(j) & 0xFF));
-                    }
-                    System.out.println("[SND-DEBUG] notifyRcv sndData[" + i + "]: ByteBuf(" + b.readableBytes() + " bytes): " + hex);
-                } else {
-                    System.out.println("[SND-DEBUG] notifyRcv sndData[" + i + "]: " + (item != null ? item.getClass().getSimpleName() : "null"));
-                }
-            }
             appendSoSndTask(toSoSndData(NOOP_FUTURE, dataArray));
         }
     }
@@ -239,24 +221,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         try {
             Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, this.singleRcvBuf);
             if (dataArray != null && dataArray.length > 0) {
-                for (int i = 0; i < dataArray.length; i++) {
-                    Object item = dataArray[i];
-                    if (item instanceof net.hasor.neta.bytebuf.ByteBuf) {
-                        net.hasor.neta.bytebuf.ByteBuf b = (net.hasor.neta.bytebuf.ByteBuf) item;
-                        StringBuilder hex = new StringBuilder();
-                        int dumpLen = Math.min(b.readableBytes(), 40);
-                        for (int j = 0; j < dumpLen; j++) {
-                            if (j > 0) hex.append(' ');
-                            hex.append(String.format("%02x", b.getByte(j) & 0xFF));
-                        }
-                        System.out.println("[SND-DEBUG-SINGLE] sndData[" + i + "]: ByteBuf(" + b.readableBytes() + " bytes): " + hex);
-                    } else {
-                        System.out.println("[SND-DEBUG-SINGLE] sndData[" + i + "]: " + (item != null ? item.getClass().getSimpleName() : "null"));
-                    }
-                }
                 appendSoSndTask(toSoSndData(NOOP_FUTURE, dataArray));
-            } else {
-                System.out.println("[SND-DEBUG-SINGLE] No snd data from RCV processing (dataArray.length=" + (dataArray != null ? dataArray.length : "null") + ")");
             }
         } finally {
             this.singleRcvBuf[0] = null; // avoid retaining reference
@@ -422,7 +387,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return future;
     }
 
-    private synchronized void appendSoSndTask(SoSndData wTask) {
+    private void appendSoSndTask(SoSndData wTask) {
         if (this.soContext.getConfig().isPrintLog()) {
             logger.info("snd(" + this.channelId + ") appendSoSndTask, dataSize is " + wTask.getDataSize() + ", closeStatus is " + this.closeStatus.get());
         }

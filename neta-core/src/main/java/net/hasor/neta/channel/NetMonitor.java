@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * A tcp network channel
@@ -23,11 +22,11 @@ import java.util.concurrent.atomic.AtomicLong;
  * @version : 2023-09-24
  */
 public class NetMonitor {
-    private final    long       createdTime     = System.currentTimeMillis();
-    private final    AtomicLong rcvCounterBytes = new AtomicLong();
-    private final    AtomicLong sndCounterBytes = new AtomicLong();
-    private volatile long       lastSndTime;
-    private volatile long       lastRcvTime;
+    private final    long createdTime = System.currentTimeMillis();
+    private          long rcvCounterBytes;
+    private          long sndCounterBytes;
+    private volatile long lastSndTime;
+    private volatile long lastRcvTime;
 
     public long getCreatedTime() {
         return this.createdTime;
@@ -46,20 +45,20 @@ public class NetMonitor {
     }
 
     public long getRcvCounterBytes() {
-        return this.rcvCounterBytes.get();
+        return this.rcvCounterBytes;
     }
 
     public long getSndCounterBytes() {
-        return this.sndCounterBytes.get();
+        return this.sndCounterBytes;
     }
 
     public void updateRcvCounter(long update) {
-        this.rcvCounterBytes.addAndGet(update);
+        this.rcvCounterBytes += update;
         this.lastRcvTime = System.currentTimeMillis();
     }
 
     public void updateSndCounter(long update) {
-        this.sndCounterBytes.addAndGet(update);
+        this.sndCounterBytes += update;
         this.lastSndTime = System.currentTimeMillis();
     }
 }

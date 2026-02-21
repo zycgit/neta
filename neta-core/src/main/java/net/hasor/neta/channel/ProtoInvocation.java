@@ -90,29 +90,32 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     }
 
     public void onInit(ProtoContext protoCtx) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
+            ctx.setStackName(this.name);
             this.handler.onInit(protoCtx);
         } finally {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
+            ctx.setStackName(null);
         }
     }
 
     public void onActive(ProtoContext protoCtx) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
+            ctx.setStackName(this.name);
             this.handler.onActive(protoCtx);
         } finally {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
+            ctx.setStackName(null);
         }
     }
 
     public void onClose(ProtoContext protoCtx) {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
+            ctx.setStackName(this.name);
             this.handler.onClose(protoCtx);
         } finally {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
+            ctx.setStackName(null);
         }
     }
 
@@ -121,23 +124,23 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     }
 
     public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         ProtoRcvQueue<RCV_UP> rcvUp = (ProtoRcvQueue<RCV_UP>) this.rcvUp;
         ProtoSndQueue<RCV_DOWN> rcvDown = (ProtoSndQueue<RCV_DOWN>) (this.next == null ? this.chainRoot.getTailRcvDown() : this.next.rcvUp);
         ProtoRcvQueue<SND_UP> sndUp = (ProtoRcvQueue<SND_UP>) this.sndUp;
         ProtoSndQueue<SND_DOWN> sndDown = (ProtoSndQueue<SND_DOWN>) (this.previous == null ? this.chainRoot.getHeadSndDown() : this.previous.sndUp);
 
-        String errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
-        Throwable ctxError = protoCtx.flash(errorTag);
+        Throwable ctxError = isRcv ? ctx.getRcvError() : ctx.getSndError();
         try {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, this.name);
+            ctx.setStackName(this.name);
             if (ctxError == null) {
                 return this.handler.onMessage(protoCtx, isRcv, rcvUp, rcvDown, sndUp, sndDown);
             } else {
                 try {
-                    return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, protoCtx));
+                    return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, ctx));
                 } catch (Throwable e) {
                     protoCtx.getChannel().close();
-                    protoCtx.flash(SKIP_SND_LIFE, true);
+                    ctx.setSkipSndLife();
                     return ProtoStatus.Stop;
                 }
             }
@@ -151,19 +154,23 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
                     logger.error(msgTag + "(" + channelID + ") " + this.handler.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage());
                 }
 
-                protoCtx.flash(errorTag, e);
+                if (isRcv) {
+                    ctx.setRcvError(e);
+                } else {
+                    ctx.setSndError(e);
+                }
                 try {
-                    return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, protoCtx));
+                    return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, ctx));
                 } catch (Throwable ex2) {
                     protoCtx.getChannel().close();
-                    protoCtx.flash(SKIP_SND_LIFE, true);
+                    ctx.setSkipSndLife();
                     return ProtoStatus.Stop;
                 }
             } else {
                 throw e;
             }
         } finally {
-            protoCtx.flash(ProtoContext.CURRENT_PROTO_STACK_NAME, null);
+            ctx.setStackName(null);
             rcvUp.rcvSubmit();
             rcvDown.sndSubmit();
             sndUp.rcvSubmit();
@@ -171,22 +178,26 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    private ProtoExceptionHolder createExceptionHandler(boolean isRcv, ProtoContext protoCtx) {
-        return new ProtoExceptionHolderImpl(isRcv, protoCtx);
+    private ProtoExceptionHolder createExceptionHandler(boolean isRcv, ProtoContextService ctx) {
+        return new ProtoExceptionHolderImpl(isRcv, ctx);
     }
 
     private static class ProtoExceptionHolderImpl implements ProtoExceptionHolder {
-        private final String       errorTag;
-        private final ProtoContext context;
+        private final boolean             isRcv;
+        private final ProtoContextService context;
 
-        public ProtoExceptionHolderImpl(boolean isRcv, ProtoContext context) {
-            this.errorTag = isRcv ? RCV_ERROR_TAG : SND_ERROR_TAG;
+        public ProtoExceptionHolderImpl(boolean isRcv, ProtoContextService context) {
+            this.isRcv = isRcv;
             this.context = context;
         }
 
         @Override
         public void clear() {
-            this.context.flash(this.errorTag, null);
+            if (this.isRcv) {
+                this.context.setRcvError(null);
+            } else {
+                this.context.setSndError(null);
+            }
         }
     }
 }

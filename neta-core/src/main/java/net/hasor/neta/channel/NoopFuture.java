@@ -14,9 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.future.FutureListener;
 
@@ -33,47 +31,76 @@ import net.hasor.cobble.concurrent.future.FutureListener;
 final class NoopFuture implements Future<Object> {
     static final NoopFuture INSTANCE = new NoopFuture();
 
-    private NoopFuture() {}
+    private NoopFuture() {
+    }
 
     @Override
-    public boolean completed(Object result) { return false; }
+    public boolean completed(Object result) {
+        return false;
+    }
 
     @Override
-    public boolean failed(Throwable exception) { return false; }
+    public boolean failed(Throwable exception) {
+        return false;
+    }
 
     @Override
-    public boolean cancel(boolean mayInterruptIfRunning) { return false; }
+    public boolean cancel(boolean mayInterruptIfRunning) {
+        return false;
+    }
 
     @Override
-    public boolean cancel() { return false; }
+    public boolean cancel() {
+        return false;
+    }
 
     @Override
-    public boolean isCancelled() { return false; }
+    public boolean isCancelled() {
+        return false;
+    }
 
     @Override
-    public boolean isDone() { return true; }
+    public boolean isDone() {
+        return true;
+    }
 
     @Override
-    public Object getResult() { return null; }
+    public Object getResult() {
+        return null;
+    }
 
     @Override
-    public Throwable getCause() { return null; }
+    public Throwable getCause() {
+        return null;
+    }
 
     @Override
-    public Object get() { return null; }
+    public Object get() {
+        return null;
+    }
 
     @Override
-    public Object get(long timeout, TimeUnit unit) { return null; }
+    public Object get(long timeout, TimeUnit unit) {
+        return null;
+    }
 
     @Override
-    public Future<Object> onCompleted(FutureListener<Future<Object>> listener) { return this; }
+    public Future<Object> onCompleted(FutureListener<Future<Object>> listener) {
+        return this;
+    }
 
     @Override
-    public Future<Object> onFailed(FutureListener<Future<Object>> listener) { return this; }
+    public Future<Object> onFailed(FutureListener<Future<Object>> listener) {
+        return this;
+    }
 
     @Override
-    public Future<Object> onCancel(FutureListener<Future<Object>> listener) { return this; }
+    public Future<Object> onCancel(FutureListener<Future<Object>> listener) {
+        return this;
+    }
 
     @Override
-    public Future<Object> onFinal(FutureListener<Future<Object>> listener) { return this; }
+    public Future<Object> onFinal(FutureListener<Future<Object>> listener) {
+        return this;
+    }
 }
