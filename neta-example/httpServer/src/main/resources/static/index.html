@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Neta Full-Protocol HTTP Server</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <link rel="icon" href="/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>🌐 Neta Full-Protocol HTTP Server</h1>
+            <p class="subtitle">A multi-protocol HTTP server built on the Neta AIO framework</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Protocol Status Panel -->
+        <section class="panel protocol-panel">
+            <h2>Protocol Status</h2>
+            <div class="protocol-grid">
+                <div class="protocol-card" id="card-http11">
+                    <div class="protocol-icon">📡</div>
+                    <h3>HTTP/1.1</h3>
+                    <p class="port">TCP :8080</p>
+                    <span class="badge badge-active">Active</span>
+                </div>
+                <div class="protocol-card" id="card-h2">
+                    <div class="protocol-icon">⚡</div>
+                    <h3>HTTP/2 (h2)</h3>
+                    <p class="port">TCP :8443 (TLS+ALPN)</p>
+                    <span class="badge badge-active">Active</span>
+                </div>
+                <div class="protocol-card" id="card-h3">
+                    <div class="protocol-icon">🚀</div>
+                    <h3>HTTP/3 (h3)</h3>
+                    <p class="port">UDP :8443 (QUIC)</p>
+                    <span class="badge badge-active">Active</span>
+                </div>
+                <div class="protocol-card" id="card-https">
+                    <div class="protocol-icon">🔒</div>
+                    <h3>HTTPS</h3>
+                    <p class="port">TCP :8443 (TLS 1.2/1.3)</p>
+                    <span class="badge badge-active">Active</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Current Connection Info -->
+        <section class="panel">
+            <h2>Current Connection</h2>
+            <div class="info-grid" id="connection-info">
+                <div class="info-item">
+                    <span class="info-label">Protocol</span>
+                    <span class="info-value" id="info-protocol">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Scheme</span>
+                    <span class="info-value" id="info-scheme">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Secure</span>
+                    <span class="info-value" id="info-secure">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Host</span>
+                    <span class="info-value" id="info-host">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Remote Address</span>
+                    <span class="info-value" id="info-remote">Loading...</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Server Time</span>
+                    <span class="info-value" id="info-time">Loading...</span>
+                </div>
+            </div>
+            <button class="btn" id="btn-refresh" onclick="loadProtocolInfo()">Refresh</button>
+        </section>
+
+        <!-- Architecture Diagram -->
+        <section class="panel">
+            <h2>Protocol Architecture</h2>
+            <div class="architecture">
+                <pre class="arch-diagram">
+┌──────────────────────────────────────────────────────────────────┐
+│                     Neta HTTP Server                             │
+├──────────────┬───────────────────────────────────────────────────┤
+│              │                                                   │
+│   TCP :8080  │  TCP :8443 (TLS + ALPN)      UDP :8443            │
+│   ┌────────┐ │  ┌───────────────┐         ┌────────────────────┐ │
+│   │HTTP/1.1│ │  │ SslDuplexer   │         │ Http3ServerDuplexe │ │
+│   └───┬────┘ │  │ (TLS 1.2/1.3) │         │ (QUIC+HTTP/3)      │ │
+│       │      │  └──────┬────────┘         └──────┬─────────────┘ │
+│       │      │         │                         │               │
+│       │      │  ┌──────┴──────┐                  │               │
+│       │      │  │ ALPN Router │                  │               │
+│       │      │  └─┬─────┬─────┘                  │               │
+│       │      │    │     │                        │               │
+│       │      │  ┌─▼─┐ ┌─▼────────┐               │               │
+│       │      │  │H2 │ │ HTTP/1.1 │               │               │
+│       │      │  └─┬─┘ └─┬────────┘               │               │
+│       │      │    │     │                        │               │
+│       └──────┼────┴─────┴───┬────────────────────┘               │
+│              │              │                                    │
+│              │    ┌─────────▼────────────┐                       │
+│              │    │ HttpObjectAggregator │                       │
+│              │    └─────────┬────────────┘                       │
+│              │    ┌─────────▼────────────┐                       │
+│              │    │  Dispatch Handler    │                       │
+│              │    └─────────┬────────────┘                       │
+│              │    ┌─────────▼────────────┐                       │
+│              │    │  Servlet/Filter      │                       │
+│              │    │   + WebSocket        │                       │
+│              │    └──────────────────────┘                       │
+└──────────────┴───────────────────────────────────────────────────┘
+                </pre>
+            </div>
+        </section>
+
+        <!-- Quick Links -->
+        <section class="panel">
+            <h2>Quick Links</h2>
+            <div class="link-grid">
+                <a href="/" class="link-card">
+                    <span class="link-icon">🏠</span>
+                    <span>Home</span>
+                </a>
+                <a href="/api/info" class="link-card">
+                    <span class="link-icon">📊</span>
+                    <span>Protocol API</span>
+                </a>
+                <a href="/pages/about.html" class="link-card">
+                    <span class="link-icon">ℹ️</span>
+                    <span>About</span>
+                </a>
+                <a href="/pages/protocols.html" class="link-card">
+                    <span class="link-icon">📋</span>
+                    <span>Protocol Details</span>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Powered by <strong>Neta Framework</strong> — High-performance async network application framework for Java AIO</p>
+        </div>
+    </footer>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>

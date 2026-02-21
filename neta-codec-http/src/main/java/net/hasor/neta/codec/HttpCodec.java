@@ -25,14 +25,12 @@ import net.hasor.neta.codec.http2.Http2ClientDuplexe;
 import net.hasor.neta.codec.http2.Http2ServerDuplexe;
 import net.hasor.neta.codec.http3.Http3ClientDuplexe;
 import net.hasor.neta.codec.http3.Http3ServerDuplexe;
-import net.hasor.neta.codec.spdy.SpdyClientDuplexe;
-import net.hasor.neta.codec.spdy.SpdyServerDuplexe;
 
 /**
  * Quick entry point for building HTTP-family protocol pipelines.
  * <p>
  * Provides static factory methods that return ready-to-use {@link ProtoInitializer}
- * for all HTTP-related protocols: HTTP/1.1, HTTP/2, HTTP/3, SPDY, and WebSocket.
+ * for all HTTP-related protocols: HTTP/1.1, HTTP/2, HTTP/3, and WebSocket.
  * </p>
  * <h3>Usage examples:</h3>
  * <pre>{@code
@@ -134,26 +132,6 @@ public final class HttpCodec {
     public static ProtoInitializer http3Client() {
         return ctx -> {
             ctx.addLast("http3", new Http3ClientDuplexe());
-        };
-    }
-
-    // ========================= SPDY =========================
-
-    /**
-     * Creates a SPDY/3.1 server pipeline.
-     */
-    public static ProtoInitializer spdyServer() {
-        return ctx -> {
-            ctx.addLast("spdy", new SpdyServerDuplexe());
-        };
-    }
-
-    /**
-     * Creates a SPDY/3.1 client pipeline.
-     */
-    public static ProtoInitializer spdyClient() {
-        return ctx -> {
-            ctx.addLast("spdy", new SpdyClientDuplexe());
         };
     }
 

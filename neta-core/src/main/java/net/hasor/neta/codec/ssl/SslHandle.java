@@ -350,41 +350,51 @@ class SslHandle {
         // rcvUp to inNetData.
         int rcvTotal = this.queueToBuffer(rcvUp, this.inNetData);
 
-        // Process incoming data
-        this.inNetData.flip();
-        SSLEngineResult result = this.engine.unwrap(this.inNetData, this.inAppData);
-        // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
-        if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            // try resizing Buf size.
-            this.resizingBufOverflowForUnwrap("sslRcv");
-            this.handlerRcv(rcvUp, rcvDown, sndUp, sndDown);
-            return;
-        }
+        // Process ALL TLS records in the buffer (a single AIO read may contain
+        // multiple TLS records, e.g. SETTINGS_ACK + HEADERS for HTTP/2 multiplexing).
+        // Previously only one unwrap() call was made, leaving subsequent TLS records
+        // stuck in inNetData and causing HTTP/2 streams to hang indefinitely.
+        int totalConsumed = 0;
+        int totalProduced = 0;
 
-        // has AppData
-        int consumedBytes = result.bytesConsumed();
-        int producedBytes = result.bytesProduced();
-        if (this.sslLog) {
-            logger.info("sslRcv(" + this.channelID + ") " + rcvTotal + "/" + consumedBytes + "/" + producedBytes + " (rcv > decode > data)");
-        }
-
-        this.inAppData.flip();
-        if (producedBytes > 0) {
-            this.bufferToQueue(this.inAppData, rcvDown);
-        }
-
-        this.inAppData.compact();
-        this.inNetData.compact();
-
-        switch (result.getStatus()) {
-            case BUFFER_UNDERFLOW: // need more data
-            case OK:
+        while (true) {
+            this.inNetData.flip();
+            if (!this.inNetData.hasRemaining()) {
+                this.inNetData.compact();
                 break;
-            case CLOSED:
+            }
+
+            SSLEngineResult result = this.engine.unwrap(this.inNetData, this.inAppData);
+            if (result.getStatus() == Status.BUFFER_OVERFLOW) {
+                this.inNetData.compact();
+                this.resizingBufOverflowForUnwrap("sslRcv");
+                continue; // retry with larger buffer
+            }
+
+            totalConsumed += result.bytesConsumed();
+            totalProduced += result.bytesProduced();
+
+            this.inAppData.flip();
+            if (result.bytesProduced() > 0) {
+                this.bufferToQueue(this.inAppData, rcvDown);
+            }
+            this.inAppData.compact();
+            this.inNetData.compact();
+
+            if (result.getStatus() == Status.CLOSED) {
                 this.afterClose();
+                return;
+            }
+
+            // BUFFER_UNDERFLOW means incomplete TLS record — wait for more network data.
+            // bytesConsumed == 0 is a safety guard against infinite loops.
+            if (result.getStatus() == Status.BUFFER_UNDERFLOW || result.bytesConsumed() == 0) {
                 break;
-            default:
-                break;
+            }
+        }
+
+        if (this.sslLog) {
+            logger.info("sslRcv(" + this.channelID + ") " + rcvTotal + "/" + totalConsumed + "/" + totalProduced + " (rcv > decode > data)");
         }
     }
 
@@ -393,38 +403,47 @@ class SslHandle {
         // read data to outAppData
         int sndTotal = this.queueToBuffer(sndUp, this.outAppData);
 
-        // Process out data
-        this.outAppData.flip();
-        SSLEngineResult result = this.engine.wrap(this.outAppData, this.outNetData);
-        // To handle the BUFFER_OVERFLOW case, some SSL implementations do not fully follow the standard fixed Buffer size for splitting packets
-        if (result.getStatus() == Status.BUFFER_OVERFLOW) {
-            this.resizingBufOverflowForWrap("sslSnd");
-            this.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
-            return;
-        }
+        // Process ALL application data — wrap() produces at most one TLS record per call,
+        // so we must loop when the plaintext exceeds the maximum TLS record size (~16 KB).
+        int totalConsumed = 0;
+        int totalProduced = 0;
 
-        // has AppData
-        int consumedBytes = result.bytesConsumed();
-        int producedBytes = result.bytesProduced();
-        if (this.sslLog) {
-            logger.info("sslSnd(" + this.channelID + ") " + sndTotal + "/" + consumedBytes + "/" + producedBytes + " (data > decode > snd)");
-        }
-
-        this.outNetData.flip();
-        if (producedBytes > 0) {
-            this.bufferToQueue(this.outNetData, sndDown);
-        }
-
-        this.outNetData.compact();
-        this.outAppData.compact();
-
-        switch (result.getStatus()) {
-            case BUFFER_UNDERFLOW: // need more data
-            case OK:
+        while (true) {
+            this.outAppData.flip();
+            if (!this.outAppData.hasRemaining()) {
+                this.outAppData.compact();
                 break;
-            case CLOSED:
+            }
+
+            SSLEngineResult result = this.engine.wrap(this.outAppData, this.outNetData);
+            if (result.getStatus() == Status.BUFFER_OVERFLOW) {
+                this.outAppData.compact();
+                this.resizingBufOverflowForWrap("sslSnd");
+                continue; // retry with larger buffer
+            }
+
+            totalConsumed += result.bytesConsumed();
+            totalProduced += result.bytesProduced();
+
+            this.outNetData.flip();
+            if (result.bytesProduced() > 0) {
+                this.bufferToQueue(this.outNetData, sndDown);
+            }
+            this.outNetData.compact();
+            this.outAppData.compact();
+
+            if (result.getStatus() == Status.CLOSED) {
                 this.afterClose();
+                return;
+            }
+
+            if (result.getStatus() == Status.BUFFER_UNDERFLOW || result.bytesConsumed() == 0) {
                 break;
+            }
+        }
+
+        if (this.sslLog) {
+            logger.info("sslSnd(" + this.channelID + ") " + sndTotal + "/" + totalConsumed + "/" + totalProduced + " (data > encode > snd)");
         }
     }
 }

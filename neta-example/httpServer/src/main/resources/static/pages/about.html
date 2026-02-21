@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>About - Neta HTTP Server</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>About Neta HTTP Server</h1>
+            <p class="subtitle">Built with the Neta AIO Framework</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="panel">
+            <h2>What is Neta?</h2>
+            <p style="color:var(--text-secondary); margin-bottom:16px;">
+                Neta is a high-performance, asynchronous network application framework built on Java AIO.
+                It provides a bidirectional programming model with its own unique abstractions
+                for protocol stack processing and data flow control.
+            </p>
+            <p style="color:var(--text-secondary); margin-bottom:16px;">
+                The framework features a pipeline architecture where data flows through
+                <strong style="color:var(--text-primary)">ProtoHandler</strong> and
+                <strong style="color:var(--text-primary)">ProtoDuplexer</strong> components,
+                enabling flexible protocol composition through a declarative API.
+            </p>
+        </section>
+
+        <section class="panel">
+            <h2>Key Features</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Architecture</span>
+                    <span class="info-value">Java AIO (NIO2)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Pipeline Model</span>
+                    <span class="info-value">Bidirectional Duplex</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Protocols</span>
+                    <span class="info-value">HTTP/1.1, HTTP/2, HTTP/3</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">TLS Support</span>
+                    <span class="info-value">TLS 1.2 / 1.3 + ALPN</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Concurrency</span>
+                    <span class="info-value">Non-blocking / Event-driven</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Routing</span>
+                    <span class="info-value">ALPN Protocol Negotiation</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Navigation</h2>
+            <div class="link-grid">
+                <a href="/" class="link-card">
+                    <span class="link-icon">🏠</span>
+                    <span>Home</span>
+                </a>
+                <a href="/pages/protocols.html" class="link-card">
+                    <span class="link-icon">📋</span>
+                    <span>Protocol Details</span>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Powered by <strong>Neta Framework</strong></p>
+        </div>
+    </footer>
+</body>
+</html>

@@ -32,9 +32,9 @@ public class MockServletRequest implements ServletRequest {
     private final String                    method;
     private final Map<String, List<String>> headers    = new LinkedHashMap<>();
     private final Map<String, List<String>> parameters = new LinkedHashMap<>();
-    private final Map<String, Object> attributes = new LinkedHashMap<>();
-    private final String              queryString;
-    private       byte[]              body       = new byte[0];
+    private final Map<String, Object>       attributes = new LinkedHashMap<>();
+    private final String                    queryString;
+    private       byte[]                    body       = new byte[0];
 
     public MockServletRequest(String path, String method) {
         int idx = path.indexOf('?');

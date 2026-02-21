@@ -74,36 +74,42 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
-            // Send server connection preface (SETTINGS frame) on first receive
+            // Decode inbound HTTP/2 frames (preface, SETTINGS, HEADERS, DATA, etc.)
+            ProtoStatus status = this.decoder.onMessage(context, rcvUp, rcvDown);
+            return status;
+        } else {
+            // SND direction: prepend server connection preface (SETTINGS + SETTINGS_ACK)
+            // before encoding the first response. This ensures correct wire ordering:
+            // the server SETTINGS frame MUST be the first frame sent (RFC 9113 §3.4).
+            //
+            // Sending SETTINGS here (in SND) rather than during RCV processing avoids
+            // a write-ordering bug: channel.sendData() called from application handlers
+            // during RCV processing queues response bytes BEFORE the RCV pipeline's
+            // sndResult (which would carry SETTINGS) reaches the socket.
             if (!serverPrefaceSent) {
-                ByteBuf settingsFrame = buildServerSettingsFrame(context);
-                StringBuilder hex = new StringBuilder();
-                for (int i = 0; i < settingsFrame.readableBytes(); i++) {
-                    if (i > 0) hex.append(' ');
-                    hex.append(String.format("%02x", settingsFrame.getByte(i) & 0xFF));
-                }
-                System.out.println("[H2-DEBUG] SETTINGS frame (" + settingsFrame.readableBytes() + " bytes): " + hex);
-                sndDown.offerMessage(settingsFrame);
+                sndDown.offerMessage(buildServerSettingsFrame(context));
                 serverPrefaceSent = true;
             }
 
-            System.out.println("[H2-DEBUG] Calling decoder.onMessage, rcvUp.hasMore=" + rcvUp.hasMore());
-            ProtoStatus status = this.decoder.onMessage(context, rcvUp, rcvDown);
-            System.out.println("[H2-DEBUG] decoder returned status=" + status);
-
-            // If the decoder received a client SETTINGS frame, send SETTINGS ACK
+            // Always check for pending SETTINGS ACK (client may send SETTINGS at any time)
             if (this.decoder.consumeSettingsAck()) {
-                ByteBuf ackFrame = buildSettingsAckFrame(context);
-                System.out.println("[H2-DEBUG] Built SETTINGS ACK frame: " + ackFrame.readableBytes() + " bytes");
-                sndDown.offerMessage(ackFrame);
+                sndDown.offerMessage(buildSettingsAckFrame(context));
             }
 
-            return status;
-        } else {
-            // Set the response stream ID to match the last decoded request's stream
-            int lastStreamId = this.decoder.getLastEmittedStreamId();
-            if (lastStreamId > 0) {
-                this.encoder.setResponseStreamId(lastStreamId);
+            // Always check for pending PING ACK (connection health, RFC 9113 §6.7)
+            byte[] pingPayload;
+            while ((pingPayload = this.decoder.pollPendingPingAck()) != null) {
+                sndDown.offerMessage(buildPingAckFrame(context, pingPayload));
+            }
+
+            // Poll the correct stream ID from the FIFO queue to ensure
+            // responses are associated with their matching request stream.
+            // This fixes multiplexing: when multiple requests arrive in one TCP segment,
+            // the old getLastEmittedStreamId() returned only the LAST decoded stream ID,
+            // causing all responses to be sent on the wrong stream.
+            int nextStreamId = this.decoder.pollResponseStreamId();
+            if (nextStreamId > 0) {
+                this.encoder.setResponseStreamId(nextStreamId);
             }
             return this.encoder.onMessage(context, sndUp, sndDown);
         }
@@ -137,6 +143,29 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         // SETTINGS_ENABLE_PUSH (0x02) = 0 (disabled for server)
         buf.writeInt16((short) Http2Settings.SETTINGS_ENABLE_PUSH);
         buf.writeInt32(0);
+
+        buf.markWriter();
+        return buf;
+    }
+
+    /**
+     * Builds a PING ACK frame with the specified opaque data (RFC 9113 §6.7).
+     * Must echo back the exact 8-byte payload received in the PING frame.
+     */
+    private ByteBuf buildPingAckFrame(ProtoContext context, byte[] opaqueData) {
+        int payloadLength = 8;
+        ByteBuf buf = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + payloadLength);
+
+        // Frame header: length=8, type=PING(0x06), flags=ACK(0x01), streamId=0
+        buf.writeByte((byte) 0);
+        buf.writeByte((byte) 0);
+        buf.writeByte((byte) payloadLength);
+        buf.writeByte((byte) Http2FrameType.PING);
+        buf.writeByte((byte) Http2Flags.ACK);
+        buf.writeInt32(0); // stream 0
+
+        // Echo opaque data
+        buf.writeBytes(opaqueData, 0, 8);
 
         buf.markWriter();
         return buf;

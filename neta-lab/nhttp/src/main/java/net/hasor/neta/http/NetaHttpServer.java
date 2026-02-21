@@ -17,9 +17,11 @@ package net.hasor.neta.http;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Objects;
+import java.util.concurrent.CountDownLatch;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.udp.UdpSoConfig;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.constant.HttpHeaderNames;
 import net.hasor.neta.codec.http.constant.HttpHeaderValues;
@@ -27,13 +29,25 @@ import net.hasor.neta.codec.http.cors.CorsConfig;
 import net.hasor.neta.codec.http.cors.CorsUtil;
 import net.hasor.neta.codec.http.websocket.WebSocketFrame;
 import net.hasor.neta.codec.http.websocket.WebSocketServerHandshaker;
+import net.hasor.neta.codec.http2.Http2ServerDuplexe;
+import net.hasor.neta.codec.http3.Http3ServerDuplexe;
 import net.hasor.neta.codec.ssl.SslConfig;
+import net.hasor.neta.codec.ssl.SslContext;
 import net.hasor.neta.codec.ssl.SslDuplexer;
 import net.hasor.neta.http.internal.*;
 
 /**
  * Main HTTP server class built on the Neta AIO framework.
- * Supports HTTP, HTTPS (TLS/SSL), WebSocket, and CORS.
+ * Supports HTTP/1.1, HTTP/2 (h2), HTTP/3, QUIC, HTTPS (TLS/SSL), WebSocket, and CORS.
+ * <p>
+ * Multi-protocol support is achieved via TLS ALPN (Application-Layer Protocol Negotiation).
+ * When HTTPS is enabled, the server automatically negotiates the best protocol with the client:
+ * <ul>
+ *   <li>{@code h2} → HTTP/2 (RFC 9113)</li>
+ *   <li>{@code http/1.1} → HTTP/1.1 (default fallback)</li>
+ * </ul>
+ * HTTP/3 over QUIC (UDP) can be started separately on the same port, advertised via {@code Alt-Svc} header.
+ * </p>
  * <h3>Usage Example:</h3>
  * <pre>{@code
  * NetaHttpServer server = new NetaHttpServer();
@@ -43,32 +57,36 @@ import net.hasor.neta.http.internal.*;
  *         resp.write("Hello, World!");
  *     }
  * });
- * server.start(8080);
+ * server.start(8080);              // HTTP/1.1 + h2c (HTTP/2 Prior Knowledge)
+ * server.startSSL(8443);           // HTTPS with ALPN (h2, http/1.1)
+ * server.startHttp3(8443);         // HTTP/3 over QUIC (UDP)
  * }</pre>
  * @author 赵永春 (zyc@hasor.net)
  */
 public class NetaHttpServer {
-    private static final Logger logger = Logger.getLogger(NetaHttpServer.class);
-
-    private final NetManager            netManager     = new NetManager();
-    private final ServletDispatcher     dispatcher     = new ServletDispatcher();
-    private final DefaultSessionManager sessionManager = new DefaultSessionManager();
-    private       DefaultServletContext servletContext;
-
+    private static final Logger                logger               = Logger.getLogger(NetaHttpServer.class);
+    private final        NetManager            netManager           = new NetManager();
+    private final        ServletDispatcher     dispatcher           = new ServletDispatcher();
+    private final        DefaultSessionManager sessionManager       = new DefaultSessionManager();
+    private              DefaultServletContext servletContext;
     // Configuration
-    private String     serverName           = "Neta-HTTP";
-    private String     contextPath          = "";
-    private int        maxContentLength     = 1048576; // 1MB
-    private int        maxInitialLineLength = 4096;
-    private int        maxHeaderSize        = 8192;
-    private int        maxChunkSize         = 8192;
-    private SslConfig  sslConfig;
-    private CorsConfig corsConfig;
-
+    private              String                serverName           = "Neta-HTTP";
+    private              String                contextPath          = "";
+    private              int                   maxContentLength     = 1048576; // 1MB
+    private              int                   maxInitialLineLength = 4096;
+    private              int                   maxHeaderSize        = 8192;
+    private              int                   maxChunkSize         = 8192;
+    private              SslConfig             sslConfig;
+    private              CorsConfig            corsConfig;
+    private              boolean               http2Enabled         = true;
+    private              boolean               http3Enabled         = true;
+    private              int                   http3Port            = -1;       // for Alt-Svc header
     // State
-    private          NetListen httpListen;
-    private          NetListen httpsListen;
-    private volatile boolean   running = false;
+    private final        CountDownLatch        stopLatch            = new CountDownLatch(1);
+    private              NetListen             httpListen;
+    private              NetListen             httpsListen;
+    private              NetListen             http3Listen;
+    private volatile     boolean               running              = false;
 
     // ================================
     //  Configuration Methods
@@ -128,6 +146,18 @@ public class NetaHttpServer {
         return this;
     }
 
+    /** Enables or disables HTTP/2 support over HTTPS (default: enabled) */
+    public NetaHttpServer http2(boolean enabled) {
+        this.http2Enabled = enabled;
+        return this;
+    }
+
+    /** Enables or disables HTTP/3 over QUIC support (default: enabled) */
+    public NetaHttpServer http3(boolean enabled) {
+        this.http3Enabled = enabled;
+        return this;
+    }
+
     // ================================
     //  Registration Methods
     // ================================
@@ -171,16 +201,15 @@ public class NetaHttpServer {
             throw new IllegalStateException("Server is already running");
         }
 
-        // initialize context
-        this.servletContext = new DefaultServletContext(this.serverName, this.contextPath, this.corsConfig, this.sessionManager);
-        this.dispatcher.init(this.servletContext);
+        initServletContext();
 
         // create HTTP pipeline initializer
         ProtoInitializer httpInitializer = createHttpInitializer(false);
         this.httpListen = this.netManager.bind(address, httpInitializer, SoConfig.TCP());
         this.running = true;
 
-        logger.info("Neta HTTP server started on " + address);
+        String httpProtos = this.http2Enabled ? "http/1.1, h2c" : "http/1.1";
+        logger.info("Neta HTTP server started on " + address + " (protocols: " + httpProtos + ")");
         return this;
     }
 
@@ -189,20 +218,41 @@ public class NetaHttpServer {
         return startSSL(new InetSocketAddress(port));
     }
 
-    /** Starts the HTTPS server on the given address */
+    /** Starts the HTTPS server on the given address with ALPN multi-protocol support */
     public NetaHttpServer startSSL(InetSocketAddress address) throws Exception {
         Objects.requireNonNull(this.sslConfig, "SSL configuration is required for HTTPS. Call ssl() first.");
 
-        if (this.servletContext == null) {
-            this.servletContext = new DefaultServletContext(this.serverName, this.contextPath, this.corsConfig, this.sessionManager);
-            this.dispatcher.init(this.servletContext);
-        }
+        initServletContext();
 
-        ProtoInitializer httpsInitializer = createHttpInitializer(true);
+        // Configure ALPN protocols and selector on SslConfig
+        configureAlpn();
+
+        ProtoInitializer httpsInitializer = createHttpsAlpnInitializer();
         this.httpsListen = this.netManager.bind(address, httpsInitializer, SoConfig.TCP());
         this.running = true;
 
-        logger.info("Neta HTTPS server started on " + address);
+        logger.info("Neta HTTPS server started on " + address + " (protocols: " + getEnabledProtocols() + ")");
+        return this;
+    }
+
+    /** Starts the HTTP/3 server over QUIC (UDP) on the given port */
+    public NetaHttpServer startHttp3(int port) throws Exception {
+        return startHttp3(new InetSocketAddress(port));
+    }
+
+    /** Starts the HTTP/3 server over QUIC (UDP) on the given address */
+    public NetaHttpServer startHttp3(InetSocketAddress address) throws Exception {
+        initServletContext();
+
+        this.http3Port = address.getPort();
+
+        ProtoInitializer http3Initializer = createHttp3Initializer();
+        UdpSoConfig udpConfig = SoConfig.UDP();
+        udpConfig.setRcvPacketSize(65535); // max UDP packet size for QUIC
+        this.http3Listen = this.netManager.bind(address, http3Initializer, udpConfig);
+        this.running = true;
+
+        logger.info("Neta HTTP/3 (QUIC) server started on UDP " + address);
         return this;
     }
 
@@ -212,6 +262,7 @@ public class NetaHttpServer {
             return;
         }
         this.running = false;
+        this.stopLatch.countDown();
 
         try {
             if (this.httpListen != null) {
@@ -219,6 +270,9 @@ public class NetaHttpServer {
             }
             if (this.httpsListen != null) {
                 this.httpsListen.close();
+            }
+            if (this.http3Listen != null) {
+                this.http3Listen.close();
             }
             this.netManager.shutdown();
         } catch (Exception e) {
@@ -231,12 +285,7 @@ public class NetaHttpServer {
 
     /** Blocks the current thread until the server is stopped */
     public void await() throws InterruptedException {
-        if (this.httpListen != null) {
-            this.httpListen.waitIdle();
-        }
-        if (this.httpsListen != null) {
-            this.httpsListen.waitIdle();
-        }
+        this.stopLatch.await();
     }
 
     /** Returns true if the server is running */
@@ -258,21 +307,242 @@ public class NetaHttpServer {
     //  Internal Pipeline Setup
     // ================================
 
-    private ProtoInitializer createHttpInitializer(boolean secure) {
+    /** Initialize servlet context without starting any listeners. Package-private for testing. */
+    void initServletContext() throws Exception {
+        if (this.servletContext == null) {
+            this.servletContext = new DefaultServletContext(this.serverName, this.contextPath, this.corsConfig, this.sessionManager);
+            this.dispatcher.init(this.servletContext);
+        }
+    }
+
+    /** Configures ALPN protocols and selector on the SslConfig */
+    void configureAlpn() {
+        java.util.List<String> protocols = new java.util.ArrayList<>();
+        if (this.http2Enabled) {
+            protocols.add("h2");
+        }
+        protocols.add("http/1.1"); // always available as fallback
+
+        this.sslConfig.setAppProtocol(protocols.toArray(new String[0]));
+        this.sslConfig.setAppProtocolSelector((channel, sslEngine, clientProtocols) -> {
+            // Prefer h2 > http/1.1
+            if (this.http2Enabled && clientProtocols.contains("h2")) {
+                return "h2";
+            }
+            return "http/1.1";
+        });
+    }
+
+    /** Returns a human-readable list of enabled protocols */
+    private String getEnabledProtocols() {
+        java.util.List<String> list = new java.util.ArrayList<>();
+        if (this.http2Enabled)
+            list.add("h2");
+        if (this.http3Enabled) {
+            list.add("h3(UDP)");
+        }
+        list.add("http/1.1");
+        return String.join(", ", list);
+    }
+
+    /** Creates pipeline initializer for plain HTTP/1.1 (no TLS), with h2c (HTTP/2 cleartext) support */
+    ProtoInitializer createHttpInitializer(boolean secure) {
         return ctx -> {
             // SSL layer (for HTTPS only)
             if (secure && this.sslConfig != null) {
                 ctx.addLast("ssl", new SslDuplexer(this.sslConfig));
             }
 
-            // HTTP codec layer
-            ctx.addLast("http-codec", new HttpServerDuplexe(this.maxInitialLineLength, this.maxHeaderSize, this.maxChunkSize));
+            // Protocol detection: route h2c (HTTP/2 Prior Knowledge) vs HTTP/1.1 vs invalid data
+            // h2c preface starts with "PRI " (0x50 0x52 0x49 0x20), per RFC 9113 §3.4
+            ProtoRoutingDuplexer.Builder<ByteBuf> httpDetect = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                ByteBuf first = rcvUp.peekMessage();
+                if (first != null && first.readableBytes() > 0) {
+                    int firstByte = first.getByte(0) & 0xFF;
 
-            // HTTP aggregator (combines chunked messages into full requests)
-            ctx.addLastDecoder("http-aggregator", new HttpObjectAggregator(this.maxContentLength));
+                    // Not an uppercase ASCII letter (A-Z) — reject
+                    if (firstByte < 0x41 || firstByte > 0x5A) {
+                        return "reject";
+                    }
 
-            // Application handler (dispatches to servlets/websockets)
-            ctx.addLastDecoder("http-handler", new HttpDispatchHandler(secure));
+                    // Check for h2c prior knowledge: "PRI " (0x50 0x52 0x49 0x20)
+                    if (this.http2Enabled && firstByte == 0x50 && first.readableBytes() >= 4) {
+                        if ((first.getByte(1) & 0xFF) == 0x52           // R
+                                && (first.getByte(2) & 0xFF) == 0x49    // I
+                                && (first.getByte(3) & 0xFF) == 0x20) { // <space>
+                            return "h2c";
+                        }
+                    }
+
+                    // Regular HTTP method (GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, CONNECT, TRACE)
+                    return "http";
+                }
+                return null; // no data yet, wait
+            });
+
+            // h2c branch: HTTP/2 over cleartext (Prior Knowledge, RFC 9113 §3.4)
+            if (this.http2Enabled) {
+                httpDetect.branch("h2c", h2cBranch -> {
+                    h2cBranch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize));
+                    h2cBranch.addLastDecoder("h2-aggregator", new HttpObjectAggregator(this.maxContentLength));
+                    h2cBranch.addLastDecoder("h2-handler", new HttpDispatchHandler(secure));
+                });
+            }
+
+            // HTTP/1.1 branch
+            httpDetect.branch("http", httpBranch -> {
+                httpBranch.addLast("http-codec", new HttpServerDuplexe(this.maxInitialLineLength, this.maxHeaderSize, this.maxChunkSize));
+                httpBranch.addLastDecoder("http-aggregator", new HttpObjectAggregator(this.maxContentLength));
+                httpBranch.addLastDecoder("http-handler", new HttpDispatchHandler(secure));
+            });
+
+            // Invalid data: log hex dump and close
+            httpDetect.branch("reject", rejectBranch -> {
+                rejectBranch.addLastDecoder("close", new ProtoHandler<ByteBuf, Object>() {
+                    @Override
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<Object> dst) {
+                        if (src.hasMore()) {
+                            ByteBuf buf = src.peekMessage();
+                            int len = Math.min(buf.readableBytes(), 32);
+                            StringBuilder hex = new StringBuilder();
+                            for (int i = 0; i < len; i++) {
+                                if (i > 0)
+                                    hex.append(' ');
+                                hex.append(String.format("%02x", buf.getByte(i) & 0xFF));
+                            }
+                            long chId = context.getChannel().getChannelId();
+                            logger.warn("reject(" + chId + ") unknown protocol, first " + len + " bytes: [" + hex + "]");
+                        }
+                        context.getChannel().close();
+                        return ProtoStatus.Stop;
+                    }
+                });
+            });
+
+            ctx.addLast("http-detect", httpDetect.build(ctx));
+        };
+    }
+
+    /**
+     * Creates HTTPS pipeline initializer with TLS detection and ALPN-based protocol routing.
+     * <p>
+     * First detects whether the incoming connection is TLS or plaintext HTTP.
+     * Plaintext requests receive a 301 redirect to HTTPS. TLS connections proceed
+     * ALPN-based protocol negotiation (h2, http/1.1).
+     * </p>
+     * <pre>
+     * [TLS Detect] ─── "tls"       ── [SslDuplexer] → [ALPN Router] ─── "h2"        ── [Http2] → [Agg] → [Handler]
+     *              │                                                 └── "http/1.1" ── [Http]  → [Agg] → [Handler]
+     *              └── "plaintext" ── [HttpCodec] → [Agg] → [RedirectHandler]
+     * </pre>
+     */
+    ProtoInitializer createHttpsAlpnInitializer() {
+        return ctx -> {
+            // Outer routing: detect TLS vs plaintext by inspecting the first byte
+            ProtoRoutingDuplexer.Builder<ByteBuf> tlsDetect = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                ByteBuf first = rcvUp.peekMessage();
+                if (first != null && first.readableBytes() > 0) {
+                    int firstByte = first.getByte(0) & 0xFF;
+                    // TLS record types: 0x14=ChangeCipherSpec, 0x15=Alert, 0x16=Handshake, 0x17=AppData
+                    if (firstByte >= 0x14 && firstByte <= 0x17) {
+                        return "tls";
+                    }
+                    // HTTP methods start with uppercase ASCII letters (A-Z: 0x41-0x5A)
+                    if (firstByte >= 0x41 && firstByte <= 0x5A) {
+                        return "plaintext";
+                    }
+                    // Unknown protocol (port scanner, garbage data, etc.) — close connection
+                    return "unknown";
+                }
+                return null; // no data yet, wait
+            });
+
+            // TLS branch: SSL + ALPN routing
+            tlsDetect.branch("tls", tlsBranch -> {
+                tlsBranch.addLast("ssl", new SslDuplexer(this.sslConfig));
+
+                // ALPN routing — select protocol based on negotiation result
+                ProtoRoutingDuplexer.Builder<ByteBuf> alpnBuilder = ProtoRoutingDuplexer.newBuilder((context, rcvUp2, rcvDown2) -> {
+                    SslContext sslCtx = context.context(SslContext.class);
+                    if (sslCtx != null && sslCtx.isReady()) {
+                        String proto = sslCtx.getApplicationProtocol();
+                        if ("h2".equals(proto) && this.http2Enabled) {
+                            return "h2";
+                        }
+                        return "http/1.1";
+                    }
+                    return null; // SSL handshake not complete, wait
+                });
+
+                // HTTP/2 branch
+                if (this.http2Enabled) {
+                    alpnBuilder.branch("h2", branch -> {
+                        branch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize));
+                        branch.addLastDecoder("h2-aggregator", new HttpObjectAggregator(this.maxContentLength));
+                        branch.addLastDecoder("h2-handler", new HttpDispatchHandler(true));
+                    });
+                }
+
+                // HTTP/1.1 fallback branch (always present)
+                alpnBuilder.branch("http/1.1", branch -> {
+                    branch.addLast("http-codec", new HttpServerDuplexe(this.maxInitialLineLength, this.maxHeaderSize, this.maxChunkSize));
+                    branch.addLastDecoder("http-aggregator", new HttpObjectAggregator(this.maxContentLength));
+                    branch.addLastDecoder("http-handler", new HttpDispatchHandler(true));
+                });
+
+                tlsBranch.addLast("alpn-router", alpnBuilder.build(tlsBranch));
+            });
+
+            // Plaintext branch: decode HTTP and redirect to HTTPS
+            tlsDetect.branch("plaintext", plainBranch -> {
+                plainBranch.addLast("http-codec", new HttpServerDuplexe(this.maxInitialLineLength, this.maxHeaderSize, this.maxChunkSize));
+                plainBranch.addLastDecoder("http-aggregator", new HttpObjectAggregator(this.maxContentLength));
+                plainBranch.addLastDecoder("redirect-handler", new HttpsRedirectHandler());
+            });
+
+            // Unknown protocol branch: log hex dump and close connection
+            tlsDetect.branch("unknown", unknownBranch -> {
+                unknownBranch.addLastDecoder("close", new ProtoHandler<ByteBuf, Object>() {
+                    @Override
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<Object> dst) {
+                        if (src.hasMore()) {
+                            ByteBuf buf = src.peekMessage();
+                            int len = Math.min(buf.readableBytes(), 32);
+                            StringBuilder hex = new StringBuilder();
+                            for (int i = 0; i < len; i++) {
+                                if (i > 0)
+                                    hex.append(' ');
+                                hex.append(String.format("%02x", buf.getByte(i) & 0xFF));
+                            }
+                            long chId = context.getChannel().getChannelId();
+                            logger.warn("reject(" + chId + ") unknown protocol on HTTPS port, first " + len + " bytes: [" + hex + "]");
+                        }
+                        context.getChannel().close();
+                        return ProtoStatus.Stop;
+                    }
+                });
+            });
+
+            ctx.addLast("tls-detect", tlsDetect.build(ctx));
+        };
+    }
+
+    /**
+     * Creates HTTP/3 over QUIC (UDP) pipeline initializer.
+     * <pre>
+     * [Http3ServerDuplexe (QUIC+HTTP/3)] → [Aggregator] → [Handler]
+     * </pre>
+     */
+    ProtoInitializer createHttp3Initializer() {
+        return ctx -> {
+            // HTTP/3 codec (includes QUIC framing internally)
+            ctx.addLast("h3-codec", new Http3ServerDuplexe(4096, this.maxHeaderSize));
+
+            // HTTP aggregator
+            ctx.addLastDecoder("h3-aggregator", new HttpObjectAggregator(this.maxContentLength));
+
+            // Application handler
+            ctx.addLastDecoder("h3-handler", new HttpDispatchHandler(true));
         };
     }
 
@@ -345,6 +615,10 @@ public class NetaHttpServer {
                         if (origin != null) {
                             applyCorsToServletResponse(request, servletResponse);
                         }
+                    }
+                    // advertise HTTP/3 via Alt-Svc header
+                    if (http3Enabled && http3Port > 0) {
+                        servletResponse.addHeader("Alt-Svc", "h3=\":" + http3Port + "\"; ma=86400");
                     }
                     servletResponse.commit();
                 }
@@ -548,6 +822,50 @@ public class NetaHttpServer {
             } else {
                 return "Bad Request";
             }
+        }
+    }
+
+    // ================================
+    //  HTTPS Redirect Handler
+    // ================================
+
+    /**
+     * Handler that responds to plaintext HTTP requests on the HTTPS port with a 301
+     * redirect to the same URL using the HTTPS scheme. This handles the case where a
+     * browser sends a plaintext HTTP request to an HTTPS port (e.g., navigating to
+     * {@code http://localhost:8443/} instead of {@code https://localhost:8443/}).
+     */
+    private class HttpsRedirectHandler implements ProtoHandler<HttpObject, Object> {
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Object> dst) {
+            while (src.hasMore()) {
+                HttpObject msg = src.takeMessage();
+                if (msg instanceof FullHttpRequest) {
+                    FullHttpRequest request = (FullHttpRequest) msg;
+                    NetChannel channel = (NetChannel) context.getChannel();
+
+                    // Build the HTTPS redirect URL
+                    String host = request.headers().get("host");
+                    if (host == null) {
+                        host = "localhost";
+                    }
+                    String redirectUrl = "https://" + host + request.uri();
+
+                    // Send 301 Moved Permanently
+                    String body = "<html><body><h1>301 Moved Permanently</h1><p>Redirecting to <a href=\"" + redirectUrl + "\">" + redirectUrl + "</a></p></body></html>";
+                    ByteBuf content = ByteBuf.wrap(body.getBytes(StandardCharsets.UTF_8));
+                    DefaultFullHttpResponse response = new DefaultFullHttpResponse(net.hasor.neta.codec.http.constant.HttpVersion.HTTP_1_1, net.hasor.neta.codec.http.constant.HttpStatus.MOVED_PERMANENTLY, content);
+                    response.headers().set("Location", redirectUrl);
+                    response.headers().set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML + "; charset=UTF-8");
+                    response.headers().set(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(content.readableBytes()));
+                    response.headers().set(HttpHeaderNames.CONNECTION, "close");
+                    response.headers().set(HttpHeaderNames.SERVER, serverName);
+
+                    channel.sendData(response);
+                    channel.close();
+                }
+            }
+            return ProtoStatus.Stop;
         }
     }
 }

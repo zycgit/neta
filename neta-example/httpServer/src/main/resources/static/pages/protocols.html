@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Protocol Details - Neta HTTP Server</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Protocol Details</h1>
+            <p class="subtitle">Supported HTTP protocols and their specifications</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="panel">
+            <h2>HTTP/1.1</h2>
+            <p style="color:var(--text-secondary); margin-bottom:12px;">
+                The classic text-based HTTP protocol. Uses a request-response model over TCP.
+            </p>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">RFC</span>
+                    <span class="info-value">RFC 9110, 9112</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Transport</span>
+                    <span class="info-value">TCP (plain / TLS)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Multiplexing</span>
+                    <span class="info-value">No (pipelining limited)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Neta Codec</span>
+                    <span class="info-value">HttpServerDuplexe</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>HTTP/2 (h2)</h2>
+            <p style="color:var(--text-secondary); margin-bottom:12px;">
+                Binary framing protocol with multiplexing, server push, and header compression (HPACK).
+                Negotiated via TLS ALPN with the "h2" identifier.
+            </p>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">RFC</span>
+                    <span class="info-value">RFC 9113</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Transport</span>
+                    <span class="info-value">TCP + TLS (ALPN "h2")</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Multiplexing</span>
+                    <span class="info-value">Yes (stream-based)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Neta Codec</span>
+                    <span class="info-value">Http2ServerDuplexe</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>HTTP/3 (h3)</h2>
+            <p style="color:var(--text-secondary); margin-bottom:12px;">
+                The latest HTTP version running over QUIC (UDP). Features built-in encryption,
+                faster connection setup (0-RTT), and improved head-of-line blocking resistance.
+            </p>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">RFC</span>
+                    <span class="info-value">RFC 9114</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Transport</span>
+                    <span class="info-value">UDP (QUIC)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Multiplexing</span>
+                    <span class="info-value">Yes (no HOL blocking)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Neta Codec</span>
+                    <span class="info-value">Http3ServerDuplexe</span>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel">
+            <h2>Navigation</h2>
+            <div class="link-grid">
+                <a href="/" class="link-card">
+                    <span class="link-icon">🏠</span>
+                    <span>Home</span>
+                </a>
+                <a href="/pages/about.html" class="link-card">
+                    <span class="link-icon">ℹ️</span>
+                    <span>About</span>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Powered by <strong>Neta Framework</strong></p>
+        </div>
+    </footer>
+</body>
+</html>

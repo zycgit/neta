@@ -41,7 +41,6 @@ import net.hasor.neta.codec.http.websocket.WebSocketOpcode;
 import net.hasor.neta.codec.http2.Http2Context;
 import net.hasor.neta.codec.http3.Http3Context;
 import net.hasor.neta.codec.quic.QuicContext;
-import net.hasor.neta.codec.spdy.SpdyContext;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -381,31 +380,6 @@ public class HttpCodecTest {
         assertTrue("QUIC should be client mode", quicCtx.isClient());
     }
 
-    // ========================= SPDY Context Registration Tests =========================
-
-    @Test
-    public void spdyServer_registersContext() throws Throwable {
-        ProtoContext ctx = mockContextWithStore();
-        net.hasor.neta.codec.spdy.SpdyServerDuplexe duplexe = new net.hasor.neta.codec.spdy.SpdyServerDuplexe();
-        duplexe.onInit(ctx);
-
-        SpdyContext spdyCtx = ctx.context(SpdyContext.class);
-        assertNotNull("SpdyContext should be registered", spdyCtx);
-        assertTrue("Should be server mode", spdyCtx.isServer());
-        assertEquals("Version should be 3", 3, spdyCtx.version());
-    }
-
-    @Test
-    public void spdyClient_registersContext() throws Throwable {
-        ProtoContext ctx = mockContextWithStore();
-        net.hasor.neta.codec.spdy.SpdyClientDuplexe duplexe = new net.hasor.neta.codec.spdy.SpdyClientDuplexe();
-        duplexe.onInit(ctx);
-
-        SpdyContext spdyCtx = ctx.context(SpdyContext.class);
-        assertNotNull("SpdyContext should be registered", spdyCtx);
-        assertTrue("Should be client mode", spdyCtx.isClient());
-    }
-
     // ========================= WebSocket Tests =========================
 
     @Test
@@ -504,8 +478,6 @@ public class HttpCodecTest {
         assertNotNull(HttpCodec.http2Client());
         assertNotNull(HttpCodec.http3Server());
         assertNotNull(HttpCodec.http3Client());
-        assertNotNull(HttpCodec.spdyServer());
-        assertNotNull(HttpCodec.spdyClient());
         assertNotNull(HttpCodec.websocketServer());
         assertNotNull(HttpCodec.websocketClient());
     }

@@ -17,7 +17,9 @@ package net.hasor.neta.codec.http2;
 
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.Map;
+import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
@@ -69,9 +71,13 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private final Http2Settings             localSettings;
     private final Http2Settings             remoteSettings;
 
-    private ByteBuf accumulator;
-    private boolean prefaceReceived;
-    private boolean pendingSettingsAck;
+    private       ByteBuf        accumulator;
+    private       boolean        prefaceReceived;
+    private       boolean        pendingSettingsAck;
+    /** FIFO queue of stream IDs for completed requests — consumed by the encoder in SND direction. */
+    private final Queue<Integer> responseStreamIdQueue = new LinkedList<>();
+    /** Pending PING payloads that need ACK responses. */
+    private final Queue<byte[]>  pendingPingAcks       = new LinkedList<>();
 
     /** Reusable frame header buffer to avoid per-frame byte[9] allocation. */
     private final byte[] frameHeaderBuf  = new byte[FRAME_HEADER_SIZE];
@@ -190,7 +196,7 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 // Server push is rarely used; skip for now
                 break;
             case Http2FrameType.PING:
-                // PING handled at connection level; skip in decoder
+                processPing(flags, payload);
                 break;
             case Http2FrameType.GOAWAY:
                 processGoaway(payload);
@@ -235,6 +241,8 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             if (endStream) {
                 dst.offerMessage(new DefaultLastHttpContent(content));
+                // Record stream ID for response association (DATA with END_STREAM completes the request)
+                this.responseStreamIdQueue.offer(streamId);
                 Http2Stream stream = streams.get(streamId);
                 if (stream != null) {
                     stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
@@ -325,15 +333,32 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
      *   <li>{@code :status} → HttpResponse.status()</li>
      * </ul>
      */
-    private int lastEmittedStreamId = 0;
+    /**
+     * Polls the next response stream ID from the FIFO queue.
+     * Each complete request (LastHttpContent emitted) pushes its stream ID;
+     * the encoder pops one per response to maintain correct stream association.
+     * @return the stream ID, or -1 if the queue is empty
+     */
+    int pollResponseStreamId() {
+        Integer id = this.responseStreamIdQueue.poll();
+        return id != null ? id : -1;
+    }
 
-    /** Returns the stream ID of the last emitted HTTP message. Used by the encoder to set the response stream. */
+    /** Returns the stream ID of the last emitted HTTP message (for diagnostics). */
     int getLastEmittedStreamId() {
+        // kept for backward compatibility / diagnostics; use pollResponseStreamId() for encoding
         return this.lastEmittedStreamId;
     }
 
+    private int lastEmittedStreamId = 0;
+
     private void emitHttpMessage(ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
         this.lastEmittedStreamId = streamId;
+        // When a complete request is emitted (endStream), record its stream ID
+        // so the encoder can associate the response with the correct stream.
+        if (endStream) {
+            this.responseStreamIdQueue.offer(streamId);
+        }
         String status = headers.get(":status");
         headers.remove(":status");
 
@@ -381,6 +406,28 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
             }
         }
+    }
+
+    /**
+     * Processes PING frame. If it's not an ACK, queue the opaque data for sending back a PING ACK.
+     * PING frames are connection-level (stream 0) and must be responded to promptly (RFC 9113 §6.7).
+     */
+    private void processPing(int flags, byte[] payload) {
+        if (payload.length != 8) {
+            throw new HttpProtocolException("HTTP/2: PING frame must be 8 bytes, got " + payload.length);
+        }
+        if (!Http2Flags.ack(flags)) {
+            // Not an ACK - we need to respond with PING ACK containing the same opaque data
+            byte[] copy = new byte[8];
+            System.arraycopy(payload, 0, copy, 0, 8);
+            this.pendingPingAcks.offer(copy);
+        }
+        // If ACK flag is set, it's a response to our PING — nothing to do
+    }
+
+    /** Polls the next pending PING ACK payload, or null if none pending. */
+    byte[] pollPendingPingAck() {
+        return this.pendingPingAcks.poll();
     }
 
     /** Processes RST_STREAM frame - terminates a stream. */
