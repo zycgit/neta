@@ -20,7 +20,7 @@ package net.hasor.neta.codec.http2;
  * <p>
  * Flags are specific to individual frame types and occupy 8 bits.
  */
-public final class Http2Flags {
+final class Http2Flags {
     /** No flags set. */
     public static final int NONE        = 0x00;
     /** ACK flag (0x01) - used with SETTINGS and PING frames. */

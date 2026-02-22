@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
@@ -67,6 +66,11 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     public void onActive(ProtoContext context) throws Throwable {
         this.decoder.onActive(context);
         this.encoder.onActive(context);
+        // Server connection preface (SETTINGS frame) is NOT sent here.
+        // In routed pipelines (branch mode), context.sendData() goes through the main
+        // pipeline's SND lifecycle which cannot resolve branch handler stackNames.
+        // To guarantee correct ordering (SETTINGS before any response), SETTINGS is deferred
+        // to the first SND lifecycle that carries actual response data (see onMessage SND path).
     }
 
     @Override
@@ -78,17 +82,20 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             ProtoStatus status = this.decoder.onMessage(context, rcvUp, rcvDown);
             return status;
         } else {
-            // SND direction: prepend server connection preface (SETTINGS + SETTINGS_ACK)
-            // before encoding the first response. This ensures correct wire ordering:
-            // the server SETTINGS frame MUST be the first frame sent (RFC 9113 §3.4).
-            //
-            // Sending SETTINGS here (in SND) rather than during RCV processing avoids
-            // a write-ordering bug: channel.sendData() called from application handlers
-            // during RCV processing queues response bytes BEFORE the RCV pipeline's
-            // sndResult (which would carry SETTINGS) reaches the socket.
-            if (!serverPrefaceSent) {
+            // SND lifecycle without response data (triggered during RCV processing):
+            // Skip all SND output to avoid write ordering issues in routed pipelines.
+            // SETTINGS, SETTINGS_ACK, PING_ACK will be sent with the first response.
+            if (!sndUp.hasMore()) {
+                return ProtoStatus.Next;
+            }
+
+            // Server connection preface: SETTINGS frame (RFC 9113 §3.4)
+            // Sent alongside the first response to ensure correct write ordering.
+            // In routed pipelines, this guarantees SETTINGS reaches the socket
+            // in the same write batch as the response, before HEADERS/DATA.
+            if (!this.serverPrefaceSent) {
                 sndDown.offerMessage(buildServerSettingsFrame(context));
-                serverPrefaceSent = true;
+                this.serverPrefaceSent = true;
             }
 
             // Always check for pending SETTINGS ACK (client may send SETTINGS at any time)

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 import java.nio.charset.StandardCharsets;
 import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.HttpProtocolException;
@@ -26,14 +25,13 @@ import net.hasor.neta.codec.http.HttpProtocolException;
  * Supports indexed header field, literal header field with/without indexing,
  * and dynamic table size updates.
  */
-public class HpackDecoder {
+class HpackDecoder {
     private final HpackDynamicTable dynamicTable;
     private final int               maxHeaderListSize;
-
     // Reusable decode result fields to avoid array allocations in hot paths
-    private int    decodedPos;
-    private int    decodedInt;
-    private String decodedString;
+    private       int               decodedPos;
+    private       int               decodedInt;
+    private       String            decodedString;
 
     /**
      * Creates a new HPACK decoder.

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.LinkedList;

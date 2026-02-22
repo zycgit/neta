@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 /**
  * Represents a header field entry in the HPACK dynamic/static table.
  * <p>
@@ -24,7 +23,7 @@ package net.hasor.neta.codec.http2;
  *   its value's length in octets, and 32.
  * </pre>
  */
-public final class HpackHeaderField {
+final class HpackHeaderField {
     /** Overhead per entry in the HPACK dynamic table (RFC 7541, Section 4.1). */
     static final int ENTRY_OVERHEAD = 32;
 

@@ -17,6 +17,8 @@ package net.hasor.neta.codec.http;
 
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.websocket.WebSocketFrameDecoder;
+import net.hasor.neta.codec.http.websocket.WebSocketFrameEncoder;
 
 /**
  * A server-side HTTP codec that combines {@link HttpRequestDecoder} and
@@ -24,6 +26,10 @@ import net.hasor.neta.channel.*;
  * <p>
  * RCV direction: ByteBuf → HttpObject (request decoding)
  * SND direction: HttpObject → ByteBuf (response encoding)
+ * <p>
+ * After a WebSocket upgrade (101 Switching Protocols), this codec automatically
+ * switches to {@link WebSocketFrameDecoder} / {@link WebSocketFrameEncoder}
+ * for subsequent frame-based communication.
  * <p>
  * This is the Neta equivalent of Netty's {@code HttpServerCodec}.
  * <p>Pipeline usage:</p>
@@ -35,6 +41,10 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
 
     private final HttpRequestDecoder  decoder;
     private final HttpResponseEncoder encoder;
+    // WebSocket upgrade state
+    private       WebSocketFrameDecoder wsDecoder;
+    private       WebSocketFrameEncoder wsEncoder;
+    private       boolean               upgraded = false;
 
     /** Creates a server codec with default decoder limits. */
     public HttpServerDuplexe() {
@@ -66,13 +76,42 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     }
 
     @Override
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
+            if (this.upgraded) {
+                // WebSocket mode: decode raw bytes into WebSocketFrame objects
+                return ((ProtoHandler) this.wsDecoder).onMessage(context, rcvUp, rcvDown);
+            }
             return this.decoder.onMessage(context, rcvUp, rcvDown);
         } else {
-            return this.encoder.onMessage(context, sndUp, sndDown);
+            if (this.upgraded) {
+                // WebSocket mode: encode WebSocketFrame objects into raw bytes
+                return ((ProtoHandler) this.wsEncoder).onMessage(context, sndUp, sndDown);
+            }
+            // Check if the outgoing message is a WebSocket upgrade (101 Switching Protocols)
+            boolean shouldUpgrade = false;
+            Object peek = sndUp.peekMessage();
+            if (peek instanceof FullHttpResponse) {
+                FullHttpResponse resp = (FullHttpResponse) peek;
+                if (resp.status().code() == 101) {
+                    String upgradeHeader = resp.headers().get("Upgrade");
+                    if (upgradeHeader != null && upgradeHeader.equalsIgnoreCase("websocket")) {
+                        shouldUpgrade = true;
+                    }
+                }
+            }
+            // Encode the response with the HTTP encoder
+            ProtoStatus status = this.encoder.onMessage(context, sndUp, sndDown);
+            // Switch to WebSocket codec after the 101 response has been encoded
+            if (shouldUpgrade) {
+                this.upgraded = true;
+                this.wsDecoder = new WebSocketFrameDecoder();
+                this.wsEncoder = new WebSocketFrameEncoder();
+            }
+            return status;
         }
     }
 
@@ -89,5 +128,13 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     public void onClose(ProtoContext context) {
         this.decoder.onClose(context);
         this.encoder.onClose(context);
+        if (this.wsDecoder != null) {
+            this.wsDecoder.onClose(context);
+        }
+    }
+
+    /** Returns true if this codec has been upgraded to WebSocket mode. */
+    public boolean isUpgraded() {
+        return this.upgraded;
     }
 }

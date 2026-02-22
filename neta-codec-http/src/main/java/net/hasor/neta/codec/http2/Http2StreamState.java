@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 /**
  * HTTP/2 stream state machine as defined in RFC 9113, Section 5.1.
  * <p>

@@ -25,7 +25,7 @@ package net.hasor.neta.codec.http2;
  * Index calculation: dynamic table entries have indices starting at
  * {@code STATIC_TABLE_LENGTH + 1}.
  */
-public class HpackDynamicTable {
+class HpackDynamicTable {
     private HpackHeaderField[] table;
     private int                head;
     private int                tail;

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 import net.hasor.neta.codec.http.HttpProtocolException;
 
 /**
@@ -23,8 +22,7 @@ import net.hasor.neta.codec.http.HttpProtocolException;
  * Provides decoding of Huffman-encoded HPACK string literals.
  * The Huffman code table is a static mapping of byte values to variable-length bit sequences.
  */
-public final class HpackHuffman {
-
+final class HpackHuffman {
     // Huffman code table from RFC 7541, Appendix B.
     // Each entry is: [code, bitLength]
     // @formatter:off

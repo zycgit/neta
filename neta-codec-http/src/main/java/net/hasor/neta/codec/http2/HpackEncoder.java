@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 import java.util.Map;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpHeaders;
@@ -29,7 +28,7 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * Uses a reusable internal byte buffer instead of {@code ByteArrayOutputStream}
  * to eliminate synchronized write overhead and reduce GC pressure.
  */
-public class HpackEncoder {
+class HpackEncoder {
     private final HpackDynamicTable dynamicTable;
     private final boolean           useIndexing;
 

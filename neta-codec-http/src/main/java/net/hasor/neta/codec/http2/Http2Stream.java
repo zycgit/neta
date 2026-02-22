@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpHeaders;
 
@@ -24,7 +23,7 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * Each HTTP/2 connection can have multiple concurrent streams,
  * each identified by a unique stream ID.
  */
-public class Http2Stream {
+class Http2Stream {
     private final int              streamId;
     private       Http2StreamState state;
     private       HttpHeaders      accumulatedHeaders;

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,7 +26,7 @@ import java.util.Map;
  * Uses HashMap-based lookup for O(1) name and name+value matching
  * instead of O(61) linear scans.
  */
-public final class HpackStaticTable {
+final class HpackStaticTable {
     /** Map from header name to first matching index (1-based). */
     private static final Map<String, Integer> NAME_INDEX_MAP;
     /** Map from name+value key to exact matching index (1-based). */

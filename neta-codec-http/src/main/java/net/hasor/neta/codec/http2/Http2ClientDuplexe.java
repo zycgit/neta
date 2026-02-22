@@ -35,7 +35,6 @@ import net.hasor.neta.codec.http.HttpObject;
  * </pre>
  */
 public class Http2ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-
     private final Http2FrameDecoder decoder;
     private final Http2FrameEncoder encoder;
 

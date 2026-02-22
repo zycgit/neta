@@ -61,16 +61,25 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
     }
 
     @Override
+    @SuppressWarnings({ "unchecked", "rawtypes" })
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         while (src.hasMore()) {
-            HttpObject msg = src.takeMessage();
+            // Use Object type to avoid ClassCastException for non-HttpObject messages
+            // (e.g., WebSocketFrame after protocol upgrade). Type erasure makes this safe.
+            Object msg = src.takeMessage();
             if (msg == null) {
+                continue;
+            }
+
+            // Pass through non-HTTP objects (e.g., WebSocketFrame after WebSocket upgrade)
+            if (!(msg instanceof HttpObject)) {
+                ((ProtoSndQueue) dst).offerMessage(msg);
                 continue;
             }
 
             if (msg instanceof FullHttpRequest || msg instanceof FullHttpResponse) {
                 // Already aggregated, pass through
-                dst.offerMessage(msg);
+                dst.offerMessage((HttpObject) msg);
                 continue;
             }
 

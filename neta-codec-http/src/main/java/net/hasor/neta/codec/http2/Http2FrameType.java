@@ -20,7 +20,7 @@ package net.hasor.neta.codec.http2;
  * <p>
  * Each frame type is identified by an 8-bit type code.
  */
-public final class Http2FrameType {
+final class Http2FrameType {
     /** DATA frame (type=0x00) - conveys arbitrary, variable-length sequences of octets. */
     public static final int DATA          = 0x00;
     /** HEADERS frame (type=0x01) - opens a stream and carries header block fragment. */

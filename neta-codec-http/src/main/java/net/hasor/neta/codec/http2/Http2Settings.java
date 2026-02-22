@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http2;
-
 /**
  * HTTP/2 connection settings as defined in RFC 9113, Section 6.5.2.
  * <p>
