@@ -50,47 +50,33 @@ import net.hasor.neta.codec.http.*;
  * </pre>
  */
 public class Http3FrameEncoder implements ProtoHandler<HttpObject, ByteBuf> {
-    private final boolean      serverMode;
     private final QpackEncoder qpackEncoder;
     private final AtomicLong   nextStreamId;
-    private final HttpScheme   scheme;
+    private final HttpScheme   scheme = HttpScheme.HTTPS;
     private       long         currentStreamId;
     private       long         responseStreamId;
     private       boolean      settingsSent;
 
     /**
-     * Creates a new HTTP/3 frame encoder with default QPACK settings and HTTPS scheme.
+     * Creates a new HTTP/3 frame encoder with default QPACK settings.
      * @param serverMode true for server-side, false for client-side
      */
     public Http3FrameEncoder(boolean serverMode) {
-        this(serverMode, 4096, HttpScheme.HTTPS);
+        this(serverMode, 4096);
     }
 
     /**
-     * Creates a new HTTP/3 frame encoder with custom QPACK settings and HTTPS scheme.
+     * Creates a new HTTP/3 frame encoder with custom QPACK settings.
      * @param serverMode true for server-side, false for client-side
      * @param maxTableSize maximum QPACK dynamic table size in bytes
      */
     public Http3FrameEncoder(boolean serverMode, int maxTableSize) {
-        this(serverMode, maxTableSize, HttpScheme.HTTPS);
-    }
-
-    /**
-     * Creates a new HTTP/3 frame encoder with custom QPACK settings and scheme.
-     * @param serverMode true for server-side, false for client-side
-     * @param maxTableSize maximum QPACK dynamic table size in bytes
-     * @param scheme the URI scheme to use for the {@code :scheme} pseudo-header
-     * (use {@link HttpScheme#HTTP} for h3 over cleartext, {@link HttpScheme#HTTPS} normally)
-     */
-    public Http3FrameEncoder(boolean serverMode, int maxTableSize, HttpScheme scheme) {
-        this.serverMode = serverMode;
         this.qpackEncoder = new QpackEncoder(maxTableSize, false);
         // Client-initiated bidi streams: 0, 4, 8, ... Server-initiated: 1, 5, 9, ...
         this.nextStreamId = new AtomicLong(serverMode ? 1 : 0);
         this.currentStreamId = 0;
         this.responseStreamId = -1;
         this.settingsSent = false;
-        this.scheme = scheme != null ? scheme : HttpScheme.HTTPS;
     }
 
     @Override

@@ -36,12 +36,10 @@ import net.hasor.neta.codec.http.*;
  */
 public class HttpObjectToHttp2FrameEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     /** HTTP/2 connection preface sent by the client */
-    private static final byte[] CLIENT_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
-
-    private final boolean       serverMode;
-    private final HpackEncoder  hpackEncoder;
-    private final AtomicInteger nextStreamId;
-    private final HttpScheme    scheme;
+    private static final byte[]        CLIENT_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private final        HpackEncoder  hpackEncoder;
+    private final        AtomicInteger nextStreamId;
+    private final        HttpScheme    scheme         = HttpScheme.HTTPS;
 
     private boolean prefaceSent;
     private int     currentStreamId = 0;
@@ -52,35 +50,22 @@ public class HttpObjectToHttp2FrameEncoder implements ProtoHandler<HttpObject, H
     }
 
     /**
-     * Creates a new HttpObject-to-Http2Frame encoder with default HPACK settings and HTTPS scheme.
+     * Creates a new HttpObject-to-Http2Frame encoder with default HPACK settings.
      * @param serverMode true for server-side, false for client-side
      */
     public HttpObjectToHttp2FrameEncoder(boolean serverMode) {
-        this(serverMode, 4096, HttpScheme.HTTPS);
+        this(serverMode, 4096);
     }
 
     /**
-     * Creates a new HttpObject-to-Http2Frame encoder with custom HPACK settings and HTTPS scheme.
+     * Creates a new HttpObject-to-Http2Frame encoder with custom HPACK settings.
      * @param serverMode true for server-side, false for client-side
      * @param maxHeaderTableSize maximum HPACK dynamic table size in bytes
      */
     public HttpObjectToHttp2FrameEncoder(boolean serverMode, int maxHeaderTableSize) {
-        this(serverMode, maxHeaderTableSize, HttpScheme.HTTPS);
-    }
-
-    /**
-     * Creates a new HttpObject-to-Http2Frame encoder with custom HPACK settings and scheme.
-     * @param serverMode true for server-side, false for client-side
-     * @param maxHeaderTableSize maximum HPACK dynamic table size in bytes
-     * @param scheme the URI scheme to use for the {@code :scheme} pseudo-header
-     * (use {@link HttpScheme#HTTP} for h2c, {@link HttpScheme#HTTPS} for h2)
-     */
-    public HttpObjectToHttp2FrameEncoder(boolean serverMode, int maxHeaderTableSize, HttpScheme scheme) {
-        this.serverMode = serverMode;
         this.hpackEncoder = new HpackEncoder(maxHeaderTableSize);
         this.nextStreamId = new AtomicInteger(serverMode ? 2 : 1);
         this.prefaceSent = serverMode; // Server doesn't send the connection preface
-        this.scheme = scheme != null ? scheme : HttpScheme.HTTPS;
     }
 
     @Override
