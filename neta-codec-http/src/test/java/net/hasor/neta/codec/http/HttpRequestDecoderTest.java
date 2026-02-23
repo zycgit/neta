@@ -13,8 +13,6 @@ import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.virtual.VrtTransfer;
-import net.hasor.neta.codec.http.constant.HttpMethod;
-import net.hasor.neta.codec.http.constant.HttpVersion;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -724,7 +722,7 @@ public class HttpRequestDecoderTest {
         client.sendData(toByteBuf(request)).get();
 
         assertNotNull("Should have caught invalid request line error", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
         assertTrue(decoder.lastError.getMessage().contains("invalid request line"));
 
         neta.shutdown();
@@ -749,7 +747,7 @@ public class HttpRequestDecoderTest {
         client.sendData(toByteBuf(request)).get();
 
         assertNotNull("Should have caught invalid request line error", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
         assertTrue(decoder.lastError.getMessage().contains("invalid request line"));
 
         neta.shutdown();
@@ -774,7 +772,7 @@ public class HttpRequestDecoderTest {
         client.sendData(toByteBuf(request)).get();
 
         assertNotNull("Should have caught invalid chunk size error", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
         assertTrue(decoder.lastError.getMessage().contains("invalid chunk size"));
 
         neta.shutdown();
@@ -932,7 +930,7 @@ public class HttpRequestDecoderTest {
         client.sendData(toByteBuf(request)).get();
 
         assertNotNull("Should have caught invalid header line error", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
         assertTrue(decoder.lastError.getMessage().contains("invalid header line"));
 
         neta.shutdown();
@@ -957,7 +955,7 @@ public class HttpRequestDecoderTest {
         client.sendData(toByteBuf(request)).get();
 
         assertNotNull("Should have caught empty chunk size error", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
         assertTrue(decoder.lastError.getMessage().contains("empty chunk size"));
 
         neta.shutdown();

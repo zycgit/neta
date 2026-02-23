@@ -13,8 +13,6 @@ import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.virtual.VrtTransfer;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -688,7 +686,7 @@ public class HttpResponseDecoderTest {
         client.sendData(toByteBuf(response)).get();
 
         assertNotNull("Should have caught invalid status code error", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
         assertTrue(decoder.lastError.getMessage().contains("invalid status code"));
 
         neta.shutdown();
@@ -712,7 +710,7 @@ public class HttpResponseDecoderTest {
         client.sendData(toByteBuf(response)).get();
 
         assertNotNull("Should have caught invalid chunk size error", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
         assertTrue(decoder.lastError.getMessage().contains("invalid chunk size"));
 
         neta.shutdown();

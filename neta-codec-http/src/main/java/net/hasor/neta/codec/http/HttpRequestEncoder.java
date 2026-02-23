@@ -15,10 +15,9 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
 
 /**
  * Encodes {@link HttpObject} instances into raw bytes for HTTP request messages.
@@ -187,7 +186,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private void encodeRequestHead(ProtoContext context, HttpRequest request, ProtoSndQueue<ByteBuf> dst) {
         // Determine if chunked
         String te = request.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-        chunkedEncoding = te != null && HttpHeaders.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
+        chunkedEncoding = StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
 
         int headLen = composeRequestHead(request);
         ByteBuf buf;

@@ -36,13 +36,11 @@ import net.hasor.neta.channel.*;
  * </pre>
  */
 public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFrame> {
-
-    private static final int XOR_SCRATCH_SIZE = 4096;
-
-    private final byte[]  maskKeyBuf = new byte[4]; // Reusable mask key buffer (avoids per-frame allocation)
-    private final byte[]  headerBuf  = new byte[14]; // Reusable header buffer (2 base + 8 ext-len + 4 mask-key)
-    private final byte[]  xorScratch = new byte[XOR_SCRATCH_SIZE]; // Reusable scratch for chunked XOR unmask
-    private       ByteBuf accumulator;
+    private static final int     XOR_SCRATCH_SIZE = 4096;
+    private final        byte[]  maskKeyBuf       = new byte[4]; // Reusable mask key buffer (avoids per-frame allocation)
+    private final        byte[]  headerBuf        = new byte[14]; // Reusable header buffer (2 base + 8 ext-len + 4 mask-key)
+    private final        byte[]  xorScratch       = new byte[XOR_SCRATCH_SIZE]; // Reusable scratch for chunked XOR unmask
+    private              ByteBuf accumulator;
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {

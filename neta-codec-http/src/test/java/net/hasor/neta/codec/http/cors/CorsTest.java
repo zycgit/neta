@@ -16,14 +16,7 @@
 package net.hasor.neta.codec.http.cors;
 import java.util.Collections;
 import java.util.Set;
-import net.hasor.neta.codec.http.DefaultFullHttpRequest;
-import net.hasor.neta.codec.http.DefaultFullHttpResponse;
-import net.hasor.neta.codec.http.FullHttpRequest;
-import net.hasor.neta.codec.http.FullHttpResponse;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpMethod;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
+import net.hasor.neta.codec.http.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

@@ -2,6 +2,7 @@ package net.hasor.neta.codec.http;
 
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
@@ -9,8 +10,6 @@ import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.virtual.VrtTransfer;
-import net.hasor.neta.codec.http.constant.HttpMethod;
-import net.hasor.neta.codec.http.constant.HttpStatus;
 import net.hasor.neta.codec.http.websocket.WebSocketOpcode;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -221,37 +220,37 @@ public class PerformanceAndBugFixTest {
 
     @Test
     public void testContainsIgnoreCaseBasic() {
-        assertTrue(HttpHeaders.containsIgnoreCase("chunked", "chunked"));
-        assertTrue(HttpHeaders.containsIgnoreCase("Chunked", "chunked"));
-        assertTrue(HttpHeaders.containsIgnoreCase("CHUNKED", "chunked"));
-        assertTrue(HttpHeaders.containsIgnoreCase("chUnKeD", "chunked"));
+        assertTrue(StringUtils.containsIgnoreCase("chunked", "chunked"));
+        assertTrue(StringUtils.containsIgnoreCase("Chunked", "chunked"));
+        assertTrue(StringUtils.containsIgnoreCase("CHUNKED", "chunked"));
+        assertTrue(StringUtils.containsIgnoreCase("chUnKeD", "chunked"));
     }
 
     @Test
     public void testContainsIgnoreCaseSubstring() {
-        assertTrue(HttpHeaders.containsIgnoreCase("gzip, chunked", "chunked"));
-        assertTrue(HttpHeaders.containsIgnoreCase("Gzip, Chunked", "chunked"));
-        assertTrue(HttpHeaders.containsIgnoreCase("Chunked, gzip", "chunked"));
+        assertTrue(StringUtils.containsIgnoreCase("gzip, chunked", "chunked"));
+        assertTrue(StringUtils.containsIgnoreCase("Gzip, Chunked", "chunked"));
+        assertTrue(StringUtils.containsIgnoreCase("Chunked, gzip", "chunked"));
     }
 
     @Test
     public void testContainsIgnoreCaseNotFound() {
-        assertFalse(HttpHeaders.containsIgnoreCase("gzip", "chunked"));
-        assertFalse(HttpHeaders.containsIgnoreCase("chunk", "chunked"));
-        assertFalse(HttpHeaders.containsIgnoreCase("", "chunked"));
+        assertFalse(StringUtils.containsIgnoreCase("gzip", "chunked"));
+        assertFalse(StringUtils.containsIgnoreCase("chunk", "chunked"));
+        assertFalse(StringUtils.containsIgnoreCase("", "chunked"));
     }
 
     @Test
     public void testContainsIgnoreCaseEmptyTarget() {
-        assertTrue(HttpHeaders.containsIgnoreCase("anything", ""));
-        assertTrue(HttpHeaders.containsIgnoreCase("", ""));
+        assertTrue(StringUtils.containsIgnoreCase("anything", ""));
+        assertTrue(StringUtils.containsIgnoreCase("", ""));
     }
 
     @Test
     public void testContainsIgnoreCaseClose() {
-        assertTrue(HttpHeaders.containsIgnoreCase("Close", "close"));
-        assertTrue(HttpHeaders.containsIgnoreCase("keep-alive, close", "close"));
-        assertFalse(HttpHeaders.containsIgnoreCase("keep-alive", "close"));
+        assertTrue(StringUtils.containsIgnoreCase("Close", "close"));
+        assertTrue(StringUtils.containsIgnoreCase("keep-alive, close", "close"));
+        assertFalse(StringUtils.containsIgnoreCase("keep-alive", "close"));
     }
 
     // =========================================================================

@@ -18,13 +18,8 @@ import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
-import net.hasor.neta.codec.http.DefaultFullHttpResponse;
-import net.hasor.neta.codec.http.FullHttpRequest;
-import net.hasor.neta.codec.http.FullHttpResponse;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
+import net.hasor.cobble.StringUtils;
+import net.hasor.neta.codec.http.*;
 
 /**
  * Utility class for performing the WebSocket server-side opening handshake as
@@ -49,7 +44,6 @@ import net.hasor.neta.codec.http.constant.HttpVersion;
  * </pre>
  */
 public final class WebSocketServerHandshaker {
-
     /**
      * The concatenation magic string defined in
      * <a href="https://tools.ietf.org/html/rfc6455#section-1.3">RFC 6455 §1.3</a>.
@@ -74,7 +68,10 @@ public final class WebSocketServerHandshaker {
         String wsKey = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_KEY);
         String wsVersion = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
 
-        return HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains(HttpHeaderValues.UPGRADE) && wsKey != null && !wsKey.isEmpty() && "13".equals(wsVersion);
+        return StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, upgrade)       //
+                && StringUtils.containsIgnoreCase(connection, HttpHeaderValues.UPGRADE)//
+                && !StringUtils.isEmpty(wsKey)                                         //
+                && StringUtils.equals("13", wsVersion);
     }
 
     /**
@@ -92,7 +89,7 @@ public final class WebSocketServerHandshaker {
      */
     public static FullHttpResponse handshakeResponse(FullHttpRequest request) {
         String wsKey = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_KEY);
-        if (wsKey == null || wsKey.isEmpty()) {
+        if (StringUtils.isBlank(wsKey)) {
             throw new IllegalArgumentException("Missing Sec-WebSocket-Key header");
         }
 
@@ -105,7 +102,7 @@ public final class WebSocketServerHandshaker {
 
         // Honour requested sub-protocol if any
         String subProtocol = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
-        if (subProtocol != null && !subProtocol.isEmpty()) {
+        if (StringUtils.isNotBlank(subProtocol)) {
             response.headers().set(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, subProtocol);
         }
 

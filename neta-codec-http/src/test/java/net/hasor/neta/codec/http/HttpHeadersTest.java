@@ -126,18 +126,17 @@ public class HttpHeadersTest {
     public void testContainsWithValue() {
         HttpHeaders h = new HttpHeaders();
         h.add("Connection", "keep-alive");
-        assertTrue(h.contains("Connection", "keep-alive", false));
-        assertTrue(h.contains("Connection", "Keep-Alive", true));
-        assertFalse(h.contains("Connection", "Keep-Alive", false));
-        assertFalse(h.contains("Connection", "close", false));
+        assertTrue(h.contains("Connection", "keep-alive"));
+        assertTrue(h.contains("Connection", "Keep-Alive"));
+        assertFalse(h.contains("Connection", "close"));
     }
 
     @Test
     public void testContainsWithValueNull() {
         HttpHeaders h = new HttpHeaders();
         h.add("Host", "example.com");
-        assertFalse(h.contains(null, "value", false));
-        assertFalse(h.contains("Host", null, false));
+        assertFalse(h.contains(null, "value"));
+        assertFalse(h.contains("Host", null));
     }
 
     @Test

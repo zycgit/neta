@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.cors;
 import java.util.*;
+import net.hasor.cobble.StringUtils;
 
 /**
  * Immutable configuration for the CORS handler.
@@ -93,7 +94,7 @@ public final class CorsConfig {
         if (anyOrigin) {
             return true;
         }
-        if (origin == null || origin.isEmpty()) {
+        if (StringUtils.isBlank(origin)) {
             return false;
         }
         return allowedOrigins.contains(origin);

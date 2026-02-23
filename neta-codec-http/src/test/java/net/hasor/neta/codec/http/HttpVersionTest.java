@@ -1,6 +1,5 @@
 package net.hasor.neta.codec.http;
 
-import net.hasor.neta.codec.http.constant.HttpVersion;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

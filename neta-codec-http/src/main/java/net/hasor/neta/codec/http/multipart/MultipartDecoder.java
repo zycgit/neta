@@ -17,10 +17,11 @@ package net.hasor.neta.codec.http.multipart;
 import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
+import net.hasor.neta.codec.http.HttpHeaderNames;
+import net.hasor.neta.codec.http.HttpHeaderValues;
 
 /**
  * Decodes a {@code multipart/form-data} body into a list of {@link FileUpload} parts.
@@ -29,7 +30,7 @@ import net.hasor.neta.codec.http.constant.HttpHeaderValues;
  * from the {@code Content-Type} header.
  * <h3>Usage</h3>
  * <pre>
- *   String boundary = MultipartDecoder.extractBoundary(request.headers().get("content-type"));
+ *   String boundary = MultipartDecoder.extractBoundary(request.headers().get(HttpHeaderNames.CONTENT_TYPE));
  *   List&lt;FileUpload&gt; parts = MultipartDecoder.decode(request.content(), boundary);
  * </pre>
  */
@@ -41,13 +42,13 @@ public final class MultipartDecoder {
      * @return the boundary string, or {@code null} if not found
      */
     public static String extractBoundary(String contentType) {
-        if (contentType == null) {
+        if (StringUtils.isBlank(contentType)) {
             return null;
         }
         for (String token : contentType.split(";")) {
             token = token.trim();
             String lower = token.toLowerCase();
-            if (lower.startsWith("boundary=")) {
+            if (StringUtils.startsWith(lower, "boundary=")) {
                 String boundary = token.substring("boundary=".length()).trim();
                 // Strip surrounding quotes if present
                 if (boundary.length() >= 2 && boundary.charAt(0) == '"' && boundary.charAt(boundary.length() - 1) == '"') {

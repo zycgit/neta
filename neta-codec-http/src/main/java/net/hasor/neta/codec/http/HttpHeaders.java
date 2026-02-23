@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.*;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
+import net.hasor.cobble.StringUtils;
 
 /**
  * HTTP headers container with case-insensitive header name matching.
@@ -32,11 +32,10 @@ import net.hasor.neta.codec.http.constant.HttpHeaderNames;
  */
 public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<String, String>> {
     /** An empty, unmodifiable {@link HttpHeaders} instance. */
-    public static final HttpHeaders EMPTY = new HttpHeaders(Collections.emptyMap(), true);
-
+    public static final HttpHeaders               EMPTY = new HttpHeaders(Collections.emptyMap(), true);
     // Use a LinkedHashMap to preserve insertion order, with lowercase keys
-    private final Map<String, List<String>> headers;
-    private final boolean                   readOnly;
+    private final       Map<String, List<String>> headers;
+    private final       boolean                   readOnly;
 
     /** Creates a new, empty {@link HttpHeaders} instance. */
     public HttpHeaders() {
@@ -47,31 +46,6 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
     private HttpHeaders(Map<String, List<String>> headers, boolean readOnly) {
         this.headers = headers;
         this.readOnly = readOnly;
-    }
-
-    /**
-     * Case-insensitive substring check without creating a temporary lowercase copy.
-     * @param source the source string to search in
-     * @param target the target substring to search for (must be lowercase)
-     * @return true if source contains target (case-insensitive)
-     */
-    static boolean containsIgnoreCase(String source, String target) {
-        int targetLen = target.length();
-        int sourceLen = source.length();
-        int maxStart = sourceLen - targetLen;
-        for (int i = 0; i <= maxStart; i++) {
-            boolean found = true;
-            for (int j = 0; j < targetLen; j++) {
-                if (Character.toLowerCase(source.charAt(i + j)) != target.charAt(j)) {
-                    found = false;
-                    break;
-                }
-            }
-            if (found) {
-                return true;
-            }
-        }
-        return false;
     }
 
     private void checkReadOnly() {
@@ -226,9 +200,8 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
      * Returns {@code true} if a header with the specified name and value exists.
      * @param name the header name (case-insensitive)
      * @param value the expected value
-     * @param ignoreCase whether to compare values case-insensitively
      */
-    public boolean contains(String name, String value, boolean ignoreCase) {
+    public boolean contains(String name, String value) {
         if (name == null || value == null) {
             return false;
         }
@@ -237,7 +210,7 @@ public class HttpHeaders extends HttpHeaderNames implements Iterable<Map.Entry<S
             return false;
         }
         for (String v : values) {
-            if (ignoreCase ? value.equalsIgnoreCase(v) : value.equals(v)) {
+            if (StringUtils.equalsIgnoreCase(value, v)) {
                 return true;
             }
         }

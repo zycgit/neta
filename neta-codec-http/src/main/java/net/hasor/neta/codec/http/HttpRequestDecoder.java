@@ -15,13 +15,10 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
-import net.hasor.neta.codec.http.constant.HttpMethod;
-import net.hasor.neta.codec.http.constant.HttpVersion;
 
 /**
  * Decodes raw bytes into HTTP request objects ({@link HttpObject}).
@@ -169,17 +166,17 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
 
         if (line.length() > maxInitialLineLength) {
-            throw new HttpInitialLineTooLongException("request line too long: " + line.length() + " > " + maxInitialLineLength);
+            throw new HttpInitialLineTooLongException("request line too long: " + line.length() + " > " + maxInitialLineLength, maxInitialLineLength, line.length());
         }
 
         // Parse: METHOD SP URI SP VERSION
         int firstSpace = line.indexOf(' ');
         if (firstSpace < 0) {
-            throw new HttpMalformedRequestException("invalid request line: " + line);
+            throw new HttpBadRequestException("invalid request line: " + line);
         }
         int secondSpace = line.indexOf(' ', firstSpace + 1);
         if (secondSpace < 0) {
-            throw new HttpMalformedRequestException("invalid request line: " + line);
+            throw new HttpBadRequestException("invalid request line: " + line);
         }
 
         String methodStr = line.substring(0, firstSpace);
@@ -231,7 +228,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             headerBytes += line.length() + 2; // +2 for CRLF
             if (headerBytes > maxHeaderSize) {
-                throw new HttpHeaderTooLargeException("HTTP headers too large: " + headerBytes + " > " + maxHeaderSize);
+                throw new HttpHeaderTooLargeException("HTTP headers too large: " + headerBytes + " > " + maxHeaderSize, maxHeaderSize, headerBytes);
             }
 
             // Handle header line folding (obs-fold, RFC 7230 §3.2.4)
@@ -249,14 +246,14 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             // Parse header: name ":" value
             int colonIdx = line.indexOf(':');
             if (colonIdx < 0) {
-                throw new HttpMalformedRequestException("invalid header line (no colon): " + line);
+                throw new HttpBadRequestException("invalid header line (no colon): " + line);
             }
 
             String name = line.substring(0, colonIdx).trim();
             String value = line.substring(colonIdx + 1).trim();
 
             if (name.isEmpty()) {
-                throw new HttpMalformedRequestException("empty header name");
+                throw new HttpBadRequestException("empty header name");
             }
 
             headers.add(name, value);
@@ -282,21 +279,21 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
         // Check Transfer-Encoding
         String te = headers.get(HttpHeaderNames.TRANSFER_ENCODING);
-        if (te != null && HttpHeaders.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
+        if (StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
             chunked = true;
             return;
         }
 
         // Check Content-Length
         String cl = headers.get(HttpHeaderNames.CONTENT_LENGTH);
-        if (cl != null) {
+        if (StringUtils.isNotBlank(cl)) {
             try {
                 contentLength = Long.parseLong(cl.trim());
                 if (contentLength < 0) {
                     throw new HttpContentTooLargeException("negative Content-Length: " + contentLength);
                 }
             } catch (NumberFormatException e) {
-                throw new HttpMalformedRequestException("invalid Content-Length: " + cl, e);
+                throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
             }
         }
     }
@@ -353,17 +350,17 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         String sizeStr = semiIdx >= 0 ? line.substring(0, semiIdx).trim() : line.trim();
 
         if (sizeStr.isEmpty()) {
-            throw new HttpMalformedRequestException("empty chunk size");
+            throw new HttpBadRequestException("empty chunk size");
         }
 
         try {
             currentChunkSize = Integer.parseInt(sizeStr, 16);
         } catch (NumberFormatException e) {
-            throw new HttpMalformedRequestException("invalid chunk size: " + sizeStr, e);
+            throw new HttpBadRequestException("invalid chunk size: " + sizeStr, e);
         }
 
         if (currentChunkSize < 0) {
-            throw new IllegalStateException("negative chunk size: " + currentChunkSize);
+            throw new HttpBadRequestException("negative chunk size: " + currentChunkSize);
         }
 
         if (currentChunkSize == 0) {

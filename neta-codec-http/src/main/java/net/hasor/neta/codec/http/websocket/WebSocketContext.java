@@ -45,7 +45,6 @@ package net.hasor.neta.codec.http.websocket;
  * @version : 2024-01-15
  */
 public interface WebSocketContext {
-
     /** Returns {@code true} when the WebSocket opening handshake is complete. */
     boolean isReady();
 

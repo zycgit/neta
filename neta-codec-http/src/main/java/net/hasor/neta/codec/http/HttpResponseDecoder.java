@@ -15,13 +15,10 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
 
 /**
  * Decodes raw bytes into HTTP response objects ({@link HttpObject}).
@@ -178,13 +175,13 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
 
         if (line.length() > maxInitialLineLength) {
-            throw new HttpInitialLineTooLongException("status line too long: " + line.length() + " > " + maxInitialLineLength);
+            throw new HttpInitialLineTooLongException("status line too long: " + line.length() + " > " + maxInitialLineLength, maxInitialLineLength, line.length());
         }
 
         // Parse: VERSION SP STATUS SP REASON
         int firstSpace = line.indexOf(' ');
         if (firstSpace < 0) {
-            throw new HttpMalformedRequestException("invalid status line: " + line);
+            throw new HttpBadRequestException("invalid status line: " + line);
         }
 
         String versionStr = line.substring(0, firstSpace);
@@ -200,14 +197,14 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             char c = line.charAt(i);
             if (c < '0' || c > '9') {
                 if (c != ' ' && c != '\t') {
-                    throw new HttpMalformedRequestException("invalid status code in: " + line);
+                    throw new HttpBadRequestException("invalid status code in: " + line);
                 }
                 continue; // skip whitespace
             }
             statusCode = statusCode * 10 + (c - '0');
         }
         if (statusCode < 100 || statusCode > 999) {
-            throw new HttpMalformedRequestException("invalid status code: " + statusCode);
+            throw new HttpBadRequestException("invalid status code: " + statusCode);
         }
 
         String reasonPhrase = secondSpace >= 0 ? line.substring(secondSpace + 1) : "";
@@ -255,7 +252,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     // For HTTP/1.1 without body indication, assume no body
                     HttpVersion version = currentResponse.protocolVersion();
                     String connection = headers.get(HttpHeaderNames.CONNECTION);
-                    boolean isClose = HttpVersion.HTTP_1_0.equals(version) || (connection != null && HttpHeaders.containsIgnoreCase(connection, HttpHeaderValues.CLOSE));
+                    boolean isClose = HttpVersion.HTTP_1_0.equals(version) || StringUtils.containsIgnoreCase(connection, HttpHeaderValues.CLOSE);
 
                     if (isClose) {
                         currentState = State.READ_VARIABLE_LENGTH_CONTENT;
@@ -269,7 +266,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
             headerBytes += line.length() + 2; // +2 for CRLF
             if (headerBytes > maxHeaderSize) {
-                throw new HttpHeaderTooLargeException("HTTP headers too large: " + headerBytes + " > " + maxHeaderSize);
+                throw new HttpHeaderTooLargeException("HTTP headers too large: " + headerBytes + " > " + maxHeaderSize, maxHeaderSize, headerBytes);
             }
 
             // Handle obs-fold (RFC 7230 §3.2.4)
@@ -286,14 +283,14 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             // Parse header: name ":" value
             int colonIdx = line.indexOf(':');
             if (colonIdx < 0) {
-                throw new HttpMalformedRequestException("invalid header line (no colon): " + line);
+                throw new HttpBadRequestException("invalid header line (no colon): " + line);
             }
 
             String name = line.substring(0, colonIdx).trim();
             String value = line.substring(colonIdx + 1).trim();
 
             if (name.isEmpty()) {
-                throw new HttpMalformedRequestException("empty header name");
+                throw new HttpBadRequestException("empty header name");
             }
 
             headers.add(name, value);
@@ -308,20 +305,20 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         contentLength = -1;
 
         String te = headers.get(HttpHeaderNames.TRANSFER_ENCODING);
-        if (te != null && HttpHeaders.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
+        if (StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
             chunked = true;
             return;
         }
 
         String cl = headers.get(HttpHeaderNames.CONTENT_LENGTH);
-        if (cl != null) {
+        if (StringUtils.isNotBlank(cl)) {
             try {
                 contentLength = Long.parseLong(cl.trim());
                 if (contentLength < 0) {
                     throw new HttpContentTooLargeException("negative Content-Length: " + contentLength);
                 }
             } catch (NumberFormatException e) {
-                throw new HttpMalformedRequestException("invalid Content-Length: " + cl, e);
+                throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
             }
         }
     }
@@ -384,13 +381,13 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         String sizeStr = semiIdx >= 0 ? line.substring(0, semiIdx).trim() : line.trim();
 
         if (sizeStr.isEmpty()) {
-            throw new HttpMalformedRequestException("empty chunk size");
+            throw new HttpBadRequestException("empty chunk size");
         }
 
         try {
             currentChunkSize = Integer.parseInt(sizeStr, 16);
         } catch (NumberFormatException e) {
-            throw new HttpMalformedRequestException("invalid chunk size: " + sizeStr, e);
+            throw new HttpBadRequestException("invalid chunk size: " + sizeStr, e);
         }
 
         if (currentChunkSize < 0) {

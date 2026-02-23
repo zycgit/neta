@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.cookie;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
@@ -174,7 +175,7 @@ public final class ServerCookieDecoder {
      * @throws IllegalArgumentException if the header does not contain a valid {@code name=value} pair
      */
     public static DefaultCookie decode(String setCookieHeader) {
-        if (setCookieHeader == null || setCookieHeader.isEmpty()) {
+        if (StringUtils.isBlank(setCookieHeader)) {
             return null;
         }
 

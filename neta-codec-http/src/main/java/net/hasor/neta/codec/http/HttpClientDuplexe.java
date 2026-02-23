@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
@@ -32,7 +31,6 @@ import net.hasor.neta.channel.*;
  * </pre>
  */
 public class HttpClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-
     private final HttpResponseDecoder decoder;
     private final HttpRequestEncoder  encoder;
 

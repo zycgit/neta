@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
-
 /**
  * An HTTP cookie, as defined by
  * <a href="https://tools.ietf.org/html/rfc6265">RFC 6265</a>.

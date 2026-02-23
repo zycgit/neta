@@ -18,6 +18,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
@@ -103,7 +104,7 @@ public final class CookieDecoder {
      * @return an unmodifiable list of decoded cookies; empty if input is null or blank
      */
     public static List<Cookie> decode(String cookieHeader) {
-        if (cookieHeader == null || cookieHeader.isEmpty()) {
+        if (StringUtils.isBlank(cookieHeader)) {
             return Collections.emptyList();
         }
 

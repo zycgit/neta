@@ -15,8 +15,6 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.codec.http.constant.HttpMethod;
-import net.hasor.neta.codec.http.constant.HttpVersion;
 
 /**
  * Default implementation of {@link FullHttpRequest}.

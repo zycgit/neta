@@ -15,10 +15,9 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
 
 /**
  * Encodes {@link HttpObject} instances into raw bytes for HTTP response messages.
@@ -48,7 +47,6 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private static final byte[]              ZERO_CRLF_CRLF  = { '0', '\r', '\n', '\r', '\n' };
     private static final int                 SCRATCH_SIZE    = 2048;
     private static final ThreadLocal<byte[]> SCRATCH_BUF     = ThreadLocal.withInitial(() -> new byte[SCRATCH_SIZE]);
-    //
     private              boolean             chunkedEncoding = false;
 
     /**
@@ -180,7 +178,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private void encodeResponseHead(ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
         // Determine if chunked
         String te = response.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-        chunkedEncoding = te != null && HttpHeaders.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
+        chunkedEncoding = StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
 
         int headLen = composeResponseHead(response);
         ByteBuf buf;

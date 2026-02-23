@@ -20,6 +20,7 @@ import java.util.Collections;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.codec.http.HttpHeaders;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -509,7 +510,7 @@ public class CookieTest {
 
     @Test
     public void testIntegrationReadCookieFromHeader() {
-        net.hasor.neta.codec.http.HttpHeaders headers = new net.hasor.neta.codec.http.HttpHeaders();
+        HttpHeaders headers = new HttpHeaders();
         headers.add("Cookie", "user=bob; role=admin");
 
         String cookieHeader = headers.get("cookie");
@@ -528,7 +529,7 @@ public class CookieTest {
 
     @Test
     public void testIntegrationWriteSetCookieToHeader() {
-        net.hasor.neta.codec.http.HttpHeaders headers = new net.hasor.neta.codec.http.HttpHeaders();
+        HttpHeaders headers = new HttpHeaders();
         DefaultCookie c = new DefaultCookie("session", "tok").setPath("/").setHttpOnly(true).setMaxAge(1800);
         headers.add("Set-Cookie", ServerCookieEncoder.encode(c));
 
@@ -544,7 +545,7 @@ public class CookieTest {
 
     @Test
     public void testIntegrationMultipleSetCookieHeaders() {
-        net.hasor.neta.codec.http.HttpHeaders headers = new net.hasor.neta.codec.http.HttpHeaders();
+        HttpHeaders headers = new HttpHeaders();
         headers.add("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("a", "1").setPath("/")));
         headers.add("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("b", "2").setSecure(true)));
 

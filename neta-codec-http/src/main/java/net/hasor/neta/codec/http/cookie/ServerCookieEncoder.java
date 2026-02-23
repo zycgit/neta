@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.cookie;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
@@ -62,13 +63,13 @@ public final class ServerCookieEncoder {
         dst.writeString(cookie.value(), StandardCharsets.US_ASCII);
 
         String domain = cookie.domain();
-        if (domain != null && !domain.isEmpty()) {
+        if (StringUtils.isNotBlank(domain)) {
             dst.writeBytes(PFX_DOMAIN);
             dst.writeString(domain, StandardCharsets.US_ASCII);
         }
 
         String path = cookie.path();
-        if (path != null && !path.isEmpty()) {
+        if (StringUtils.isNotBlank(path)) {
             dst.writeBytes(PFX_PATH);
             dst.writeString(path, StandardCharsets.US_ASCII);
         }
@@ -80,7 +81,7 @@ public final class ServerCookieEncoder {
         }
 
         String expires = cookie.expires();
-        if (expires != null && !expires.isEmpty()) {
+        if (StringUtils.isNotBlank(expires)) {
             dst.writeBytes(PFX_EXPIRES);
             dst.writeString(expires, StandardCharsets.US_ASCII);
         }
@@ -94,7 +95,7 @@ public final class ServerCookieEncoder {
         }
 
         String sameSite = cookie.sameSite();
-        if (sameSite != null && !sameSite.isEmpty()) {
+        if (StringUtils.isNotBlank(sameSite)) {
             dst.writeBytes(PFX_SAMESITE);
             dst.writeString(sameSite, StandardCharsets.US_ASCII);
         }
@@ -132,11 +133,11 @@ public final class ServerCookieEncoder {
         final String PFX_SAMESITE = "; SameSite=";
 
         int len = name.length() + 1 + value.length();
-        boolean hasDomain = domain != null && !domain.isEmpty();
-        boolean hasPath = path != null && !path.isEmpty();
+        boolean hasDomain = StringUtils.isNotBlank(domain);
+        boolean hasPath = StringUtils.isNotBlank(path);
         boolean hasMaxAge = maxAge != DefaultCookie.UNDEFINED_MAX_AGE;
-        boolean hasExpires = expires != null && !expires.isEmpty();
-        boolean hasSameSite = sameSite != null && !sameSite.isEmpty();
+        boolean hasExpires = StringUtils.isNotBlank(expires);
+        boolean hasSameSite = StringUtils.isNotBlank(sameSite);
         String maxAgeStr = null;
 
         if (hasDomain) {

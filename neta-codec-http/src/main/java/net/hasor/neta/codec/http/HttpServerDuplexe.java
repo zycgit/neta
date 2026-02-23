@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.websocket.WebSocketFrameDecoder;
@@ -38,9 +38,8 @@ import net.hasor.neta.codec.http.websocket.WebSocketFrameEncoder;
  * </pre>
  */
 public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-
-    private final HttpRequestDecoder  decoder;
-    private final HttpResponseEncoder encoder;
+    private final HttpRequestDecoder    decoder;
+    private final HttpResponseEncoder   encoder;
     // WebSocket upgrade state
     private       WebSocketFrameDecoder wsDecoder;
     private       WebSocketFrameEncoder wsEncoder;
@@ -97,10 +96,8 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
             if (peek instanceof FullHttpResponse) {
                 FullHttpResponse resp = (FullHttpResponse) peek;
                 if (resp.status().code() == 101) {
-                    String upgradeHeader = resp.headers().get("Upgrade");
-                    if (upgradeHeader != null && upgradeHeader.equalsIgnoreCase("websocket")) {
-                        shouldUpgrade = true;
-                    }
+                    String upgradeHeader = resp.headers().get(HttpHeaderNames.UPGRADE);
+                    shouldUpgrade = StringUtils.equalsIgnoreCase(upgradeHeader, HttpHeaderValues.WEBSOCKET);
                 }
             }
             // Encode the response with the HTTP encoder

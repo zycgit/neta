@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.neta.codec.http.constant.HttpVersion;
-
 /**
  * An HTTP message that has a protocol version and headers.
  * This is the common base for {@link HttpRequest} and {@link HttpResponse}.

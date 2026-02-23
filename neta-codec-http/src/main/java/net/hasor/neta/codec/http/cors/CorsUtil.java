@@ -15,11 +15,8 @@
  */
 package net.hasor.neta.codec.http.cors;
 import java.util.Set;
-import net.hasor.neta.codec.http.HttpHeaders;
-import net.hasor.neta.codec.http.HttpRequest;
-import net.hasor.neta.codec.http.HttpResponse;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpMethod;
+import net.hasor.cobble.StringUtils;
+import net.hasor.neta.codec.http.*;
 
 /**
  * Utility methods for applying CORS response headers based on a {@link CorsConfig}.
@@ -53,11 +50,11 @@ public final class CorsUtil {
         if (request == null) {
             return false;
         }
-        if (!HttpMethod.OPTIONS.name().equalsIgnoreCase(request.method().name())) {
+        if (!StringUtils.equalsIgnoreCase(HttpMethod.OPTIONS.name(), request.method().name())) {
             return false;
         }
         String acrm = request.headers().get(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD);
-        return acrm != null && !acrm.isEmpty();
+        return StringUtils.isNotBlank(acrm);
     }
 
     /**
@@ -136,7 +133,7 @@ public final class CorsUtil {
             headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, requestOrigin);
             // When a specific origin is echoed back, the response must vary by Origin
             String vary = headers.get(HttpHeaderNames.VARY);
-            if (vary == null || vary.isEmpty()) {
+            if (StringUtils.isBlank(vary)) {
                 headers.set(HttpHeaderNames.VARY, HttpHeaderNames.ORIGIN);
             } else {
                 headers.set(HttpHeaderNames.VARY, vary + ", " + HttpHeaderNames.ORIGIN);
@@ -172,7 +169,7 @@ public final class CorsUtil {
         } else {
             // Echo back the requested headers if no explicit allow-headers configured
             String requested = request.headers().get(HttpHeaderNames.ACCESS_CONTROL_REQUEST_HEADERS);
-            if (requested != null && !requested.isEmpty()) {
+            if (StringUtils.isNotBlank(requested)) {
                 headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, requested);
             }
         }

@@ -14,9 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 import java.util.Collections;
 import java.util.List;
+import net.hasor.cobble.StringUtils;
 
 /**
  * Default implementation of {@link WebSocketContext}.
@@ -61,8 +61,8 @@ public class WebSocketContextImpl implements WebSocketContext {
      * FullHttpResponse resp = WebSocketServerHandshaker.handshakeResponse(request);
      * context.context(WebSocketContext.class,
      *     WebSocketContextImpl.fromHandshake(request.uri(),
-     *         request.headers().get("Sec-WebSocket-Protocol"),
-     *         request.headers().get("Sec-WebSocket-Extensions")));
+     *         request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL),
+     *         request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS)));
      * }</pre>
      * @param requestPath the request URI path
      * @param subProtocol the negotiated sub-protocol (may be null)
@@ -71,12 +71,12 @@ public class WebSocketContextImpl implements WebSocketContext {
      */
     public static WebSocketContextImpl fromHandshake(String requestPath, String subProtocol, String extensions) {
         List<String> extList;
-        if (extensions != null && !extensions.isEmpty()) {
+        if (StringUtils.isNotBlank(extensions)) {
             String[] parts = extensions.split(",");
             extList = new java.util.ArrayList<>(parts.length);
             for (String part : parts) {
                 String trimmed = part.trim();
-                if (!trimmed.isEmpty()) {
+                if (StringUtils.isNotBlank(trimmed)) {
                     extList.add(trimmed);
                 }
             }

@@ -14,12 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cors;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.DefaultFullHttpResponse;
-import net.hasor.neta.codec.http.FullHttpRequest;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
+import net.hasor.neta.codec.http.*;
 
 /**
  * Pipeline handler that provides CORS (Cross-Origin Resource Sharing) support.
@@ -104,7 +101,7 @@ public class CorsHandler implements ProtoHandler<FullHttpRequest, Object> {
         String origin = request.headers().get(HttpHeaderNames.ORIGIN);
 
         // No Origin header — not a cross-origin request; forward as-is
-        if (origin == null || origin.isEmpty()) {
+        if (StringUtils.isBlank(origin)) {
             dst.offerMessage(request);
             return ProtoStatus.Next;
         }

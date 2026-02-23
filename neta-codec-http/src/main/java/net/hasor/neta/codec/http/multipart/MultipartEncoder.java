@@ -19,9 +19,10 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
+import net.hasor.neta.codec.http.HttpHeaderValues;
 
 /**
  * Encodes a collection of {@link FileUpload} parts into a {@code multipart/form-data} body.
@@ -54,7 +55,7 @@ public class MultipartEncoder {
      * @param charset charset used for encoding field names, filenames and text values
      */
     public MultipartEncoder(String boundary, Charset charset) {
-        if (boundary == null || boundary.isEmpty()) {
+        if (StringUtils.isBlank(boundary)) {
             throw new IllegalArgumentException("boundary must not be null or empty");
         }
         this.boundary = boundary;

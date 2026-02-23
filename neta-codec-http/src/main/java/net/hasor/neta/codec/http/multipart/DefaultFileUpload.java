@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http.multipart;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
@@ -44,7 +45,7 @@ public class DefaultFileUpload implements FileUpload {
      * @param headers extra part headers (may be empty, not null)
      */
     public DefaultFileUpload(String name, String filename, String contentType, ByteBuf content, Map<String, String> headers) {
-        if (name == null || name.isEmpty()) {
+        if (StringUtils.isBlank(name)) {
             throw new IllegalArgumentException("part name must not be null or empty");
         }
         if (content == null) {

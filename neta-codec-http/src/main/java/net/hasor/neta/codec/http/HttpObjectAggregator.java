@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
 
 /**
  * Aggregates a sequence of {@link HttpObject}s (an {@link HttpMessage} followed by
@@ -142,13 +141,13 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         }
 
         if (currentMessage == null) {
-            throw new HttpMalformedRequestException("received HttpContent without preceding HttpMessage");
+            throw new HttpBadRequestException("received HttpContent without preceding HttpMessage");
         }
 
         int readable = content.readableBytes();
         int newLength = currentContentLength + readable;
         if (newLength > maxContentLength) {
-            throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + maxContentLength);
+            throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + maxContentLength, maxContentLength, newLength);
         }
 
         int written = aggregatedContent.writeBuffer(content, readable);

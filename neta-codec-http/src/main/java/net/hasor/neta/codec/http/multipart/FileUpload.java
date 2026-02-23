@@ -32,7 +32,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * </pre>
  */
 public interface FileUpload {
-
     /**
      * Returns the {@code name} parameter of the {@code Content-Disposition} header,
      * i.e. the HTML form field name.

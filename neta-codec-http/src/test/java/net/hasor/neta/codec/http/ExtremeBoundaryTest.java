@@ -13,7 +13,6 @@ import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import net.hasor.neta.channel.virtual.VrtTransfer;
-import net.hasor.neta.codec.http.constant.HttpMethod;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -481,7 +480,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull("Should have error for garbage data", decoder.lastError);
-        assertTrue("Should be HttpMalformedRequestException", decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue("Should be HttpBadRequestException", decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -505,7 +504,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -533,7 +532,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -561,7 +560,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -585,7 +584,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -633,7 +632,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -657,7 +656,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -681,7 +680,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -705,7 +704,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(100);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         neta.shutdown();
     }
@@ -1236,7 +1235,7 @@ public class ExtremeBoundaryTest {
         Thread.sleep(50);
 
         assertNotNull(decoder.lastError);
-        assertTrue(decoder.lastError instanceof HttpMalformedRequestException);
+        assertTrue(decoder.lastError instanceof HttpBadRequestException);
 
         // Since onError returns Stop, the decoder won't receive more data through pipeline.
         // The error was caught and data flow stopped.
@@ -1265,10 +1264,10 @@ public class ExtremeBoundaryTest {
         HttpContentTooLargeException contentEx = new HttpContentTooLargeException("content");
         assertTrue(contentEx instanceof HttpProtocolException);
 
-        HttpMalformedRequestException malformedEx = new HttpMalformedRequestException("malformed");
+        HttpBadRequestException malformedEx = new HttpBadRequestException("malformed");
         assertTrue(malformedEx instanceof HttpProtocolException);
 
-        HttpMalformedRequestException malformedWithCause = new HttpMalformedRequestException("msg", new Exception("cause"));
+        HttpBadRequestException malformedWithCause = new HttpBadRequestException("msg", new Exception("cause"));
         assertNotNull(malformedWithCause.getCause());
         assertTrue(malformedWithCause.getCause() instanceof Exception);
     }

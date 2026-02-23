@@ -14,8 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-
 /**
  * Represents an HTTP response message as defined in
  * <a href="https://tools.ietf.org/html/rfc7230#section-3.1.2">RFC 7230, Section 3.1.2</a>.

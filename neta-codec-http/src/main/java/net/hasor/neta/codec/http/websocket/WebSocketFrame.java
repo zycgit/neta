@@ -34,7 +34,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * </pre>
  */
 public interface WebSocketFrame {
-
     /** Returns the opcode of this frame. */
     WebSocketOpcode opcode();
 

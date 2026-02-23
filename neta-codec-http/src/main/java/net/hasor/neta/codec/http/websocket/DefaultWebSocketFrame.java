@@ -30,7 +30,6 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * </pre>
  */
 public class DefaultWebSocketFrame implements WebSocketFrame {
-
     private final WebSocketOpcode opcode;
     private final boolean         finalFragment;
     private final boolean         masked;
