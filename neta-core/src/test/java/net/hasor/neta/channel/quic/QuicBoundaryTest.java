@@ -19,11 +19,9 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicReference;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.codec.HandlerUtils;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import org.junit.Test;
@@ -51,7 +49,6 @@ public class QuicBoundaryTest extends AbstractSoTest {
 
         // Sending empty ByteBuf should not crash
         ch.sendData(ByteBuf.wrap(new byte[0]));
-        ThreadUtils.sleep(500);
 
         assert !ch.isClose() : "channel should still be open after sending empty data";
 
@@ -116,7 +113,7 @@ public class QuicBoundaryTest extends AbstractSoTest {
         // Send immediately without any delay
         ch.sendData("Immediate\n");
 
-        waitFor(() -> !serverRcvData.isEmpty(), 5000);
+        waitFor(() -> !serverRcvData.isEmpty(), 3000);
         assert serverRcvData.get(0).equals("Immediate") : "data mismatch: " + serverRcvData.get(0);
 
         neta.shutdown();
@@ -142,7 +139,7 @@ public class QuicBoundaryTest extends AbstractSoTest {
         ch.sendData("Before close\n");
         ch.close();
 
-        ThreadUtils.sleep(1000);
+        waitFor(() -> ch.isClose(), 3000);
         assert ch.isClose() : "channel should be closed";
         // Data might or might not arrive - just ensure no crash
 
@@ -163,11 +160,11 @@ public class QuicBoundaryTest extends AbstractSoTest {
         Future<NetChannel> connect = neta.connectAsync(address, proto, quicConf);
         NetChannel ch = connect.get();
 
+        // First close
         ch.close();
-        ThreadUtils.sleep(200);
+        waitFor(() -> ch.isClose(), 3000);
         // Second close should not throw
         ch.close();
-        ThreadUtils.sleep(200);
 
         assert ch.isClose() : "channel should be closed";
 

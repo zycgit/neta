@@ -16,10 +16,11 @@
 package net.hasor.neta.channel.quic;
 import java.security.PrivateKey;
 import java.security.cert.X509Certificate;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.udp.UdpSoConfig;
 
 /**
- * QUIC-specific configuration options.
+ * QUIC-specific configuration options, extending {@link UdpSoConfig} since
+ * QUIC is built on top of UDP.
  * <ul>
  *   <li>sslEnabled: when true, full TLS 1.3 + QUIC encryption is used;
  *       when false, raw unencrypted QUIC frames are sent (useful for testing).</li>
@@ -28,18 +29,21 @@ import net.hasor.neta.channel.SoConfig;
  * </ul>
  * @author 赵永春 (zyc@hasor.net)
  */
-public class QuicSoConfig extends SoConfig {
+public class QuicSoConfig extends UdpSoConfig {
     private boolean           sslEnabled         = true;
     private X509Certificate[] certChain;
     private PrivateKey        privateKey;
     private QuicSettings      transportParams;
     private int               maxStreams         = 100;
-    private int               rcvPacketSize      = 65535;
     private int               connectionIdLength = 8;
+    /** Selector poll interval in milliseconds (default 100). Reduce for low-latency tests. */
+    private int               selectorPollMs     = 100;
 
     public QuicSoConfig() {
         super(QuicProvider.NAME);
         this.transportParams = defaultSettings();
+        // QUIC default rcvPacketSize
+        this.setRcvPacketSize(65535);
     }
 
     private static QuicSettings defaultSettings() {
@@ -104,18 +108,6 @@ public class QuicSoConfig extends SoConfig {
         return this;
     }
 
-    // ── UDP Datagram Settings ──────────────────────────────────────────
-
-    /** UDP receive buffer size for incoming datagrams (default 65535). */
-    public int getRcvPacketSize() {
-        return this.rcvPacketSize;
-    }
-
-    public QuicSoConfig setRcvPacketSize(int rcvPacketSize) {
-        this.rcvPacketSize = rcvPacketSize;
-        return this;
-    }
-
     // ── Connection ID Settings ─────────────────────────────────────────
 
     /** Length of generated QUIC connection IDs in bytes (default 8, range 0-20). */
@@ -125,6 +117,23 @@ public class QuicSoConfig extends SoConfig {
 
     public QuicSoConfig setConnectionIdLength(int connectionIdLength) {
         this.connectionIdLength = connectionIdLength;
+        return this;
+    }
+
+    // ── Selector Poll Settings ─────────────────────────────────────────
+
+    /**
+     * UDP selector poll interval in milliseconds (default 100ms).
+     * Reducing this value (e.g. to 5ms) makes the QUIC receive loop check for
+     * new packets more frequently, which reduces handshake and RTT latency at
+     * the cost of slightly higher CPU usage. Useful for unit tests.
+     */
+    public int getSelectorPollMs() {
+        return this.selectorPollMs;
+    }
+
+    public QuicSoConfig setSelectorPollMs(int selectorPollMs) {
+        this.selectorPollMs = selectorPollMs;
         return this;
     }
 }

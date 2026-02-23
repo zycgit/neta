@@ -16,13 +16,15 @@
 package net.hasor.neta.channel.quic;
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.nio.channels.DatagramChannel;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * QUIC transport provider.
+ * QUIC transport provider. Creates QUIC server and client channels
+ * that are built on top of UDP (DatagramChannel).
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicProvider implements AsyncChannelProvider {
@@ -36,14 +38,16 @@ public class QuicProvider implements AsyncChannelProvider {
 
     @Override
     public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
-        QuicAsyncServerChannel channel = new QuicAsyncServerChannel(channelId, context, listenAddr, soConfig);
-        this.serverChannels.put(channelId, channel);
-        return channel;
+        DatagramChannel channel = DatagramChannel.open();
+        QuicAsyncServerChannel serverChannel = new QuicAsyncServerChannel(channelId, channel, context, listenAddr, soConfig);
+        this.serverChannels.put(channelId, serverChannel);
+        return serverChannel;
     }
 
     @Override
     public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
-        return new QuicAsyncClientChannel(channelId, context, remoteAddr, soConfig);
+        DatagramChannel channel = DatagramChannel.open();
+        return new QuicAsyncClientChannel(channelId, channel, context, remoteAddr, soConfig);
     }
 
     @Override

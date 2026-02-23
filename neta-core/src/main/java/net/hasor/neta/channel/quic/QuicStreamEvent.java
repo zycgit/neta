@@ -14,28 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 /**
  * User event fired on a {@link QuicChannel} when a QUIC stream is opened or closed.
  * <p>
  * Similar to {@link net.hasor.neta.codec.ssl.SslEvent} for SSL handshake events,
  * this event allows pipeline handlers to react to stream lifecycle changes
  * via the {@code onUserEvent} callback.
- * <p>
- * Usage in a handler:
- * <pre>{@code
- * public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
- *     if (event.getEventType() == QuicStreamEvent.class) {
- *         QuicStreamEvent streamEvent = (QuicStreamEvent) event.getData();
- *         if (streamEvent.isOpened()) {
- *             // stream opened
- *         } else {
- *             // stream closed
- *         }
- *     }
- *     return true;
- * }
- * }</pre>
  * @author 赵永春 (zyc@hasor.net)
  * @see QuicChannel
  */

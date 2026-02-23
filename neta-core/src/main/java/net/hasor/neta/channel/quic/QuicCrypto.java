@@ -25,7 +25,7 @@ import javax.crypto.spec.SecretKeySpec;
  * and Initial/Handshake/1-RTT key derivation.
  * @author 赵永春 (zyc@hasor.net)
  */
-public final class QuicCrypto {
+final class QuicCrypto {
     private QuicCrypto() {
     }
 

@@ -49,6 +49,11 @@ public final class QuicFrameType {
     public static final int CONNECTION_CLOSE_APP = 0x1d;
     public static final int HANDSHAKE_DONE       = 0x1e;
 
+    /** DATAGRAM frame without Length field (RFC 9221). */
+    public static final int DATAGRAM     = 0x30;
+    /** DATAGRAM frame with Length field (RFC 9221). */
+    public static final int DATAGRAM_LEN = 0x31;
+
     private QuicFrameType() {
     }
 
@@ -66,5 +71,15 @@ public final class QuicFrameType {
 
     public static boolean streamOff(int type) {
         return (type & 0x04) != 0;
+    }
+
+    /** Returns true if the frame type is a DATAGRAM frame (0x30 or 0x31). */
+    public static boolean isDatagram(int type) {
+        return type == DATAGRAM || type == DATAGRAM_LEN;
+    }
+
+    /** Returns true if the DATAGRAM frame has a Length field (0x31). */
+    public static boolean datagramHasLen(int type) {
+        return (type & 0x01) != 0;
     }
 }

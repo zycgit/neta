@@ -16,143 +16,111 @@
 package net.hasor.neta.channel.quic;
 import java.io.IOException;
 import java.net.SocketAddress;
+import java.nio.channels.DatagramChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.udp.UdpTransport;
+import net.hasor.neta.channel.udp.UdpAsyncClientChannel;
+import net.hasor.neta.channel.udp.UdpChannel;
+import net.hasor.neta.channel.udp.UdpSoConfigUtils;
 
 /**
- * QUIC client-side {@link AsyncChannel}.
+ * QUIC client channel extending {@link UdpAsyncClientChannel}.
  * <p>
- * Uses {@link UdpTransport} for the underlying UDP I/O, performs the QUIC handshake
- * with the remote server, creates a {@link QuicChannel} (connection-level), and
- * starts a task-driven receive loop.
- * <p>
- * The connection handshake is asynchronous — {@code connectTo()} initiates the handshake
- * and the provided {@link Future} completes when ESTABLISHED state is reached.
+ * Inherits the UDP transport layer and overrides the connection flow
+ * to perform QUIC handshake:
+ * <ol>
+ *   <li>Creates UDP transport and connects</li>
+ *   <li>Creates {@link QuicChannel} (client mode)</li>
+ *   <li>Sends Initial packet to start handshake</li>
+ *   <li>Starts receive loop — handshake completes asynchronously</li>
+ * </ol>
  * @author 赵永春 (zyc@hasor.net)
  */
-class QuicAsyncClientChannel implements AsyncChannel {
-    private static final Logger           logger = Logger.getLogger(QuicAsyncClientChannel.class);
-    private final        long             channelId;
-    private final        SoContextService context;
-    private final        SocketAddress    remoteAddr;
-    private final        QuicSoConfig     soConfig;
-    private final        AtomicBoolean    closed = new AtomicBoolean(false);
-    private              UdpTransport     transport;
-    private              QuicConnection   quicConn;
+class QuicAsyncClientChannel extends UdpAsyncClientChannel {
+    private static final Logger      logger = Logger.getLogger(QuicAsyncClientChannel.class);
+    private              QuicChannel quicChannel;
 
-    public QuicAsyncClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) {
-        this.channelId = channelId;
-        this.context = (SoContextService) context;
-        this.remoteAddr = remoteAddr;
-        this.soConfig = (QuicSoConfig) soConfig;
-    }
-
-    @Override
-    public long getChannelId() {
-        return this.channelId;
-    }
-
-    @Override
-    public SoConfig getSoConfig() {
-        return this.soConfig;
-    }
-
-    @Override
-    public SocketAddress getLocalAddress() {
-        try {
-            return this.transport != null ? this.transport.getLocalAddress() : null;
-        } catch (Exception e) {
-            return null;
-        }
-    }
-
-    @Override
-    public SocketAddress getRemoteAddress() {
-        return this.remoteAddr;
-    }
-
-    @Override
-    public boolean isOpen() {
-        return !this.closed.get() && this.transport != null && this.transport.isOpen();
+    protected QuicAsyncClientChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
+        super(channelId, channel, context, remoteAddress, soConfig);
     }
 
     @Override
     public void close() throws IOException {
-        if (this.closed.compareAndSet(false, true)) {
-            if (this.quicConn != null) {
-                this.quicConn.close();
-            }
-            if (this.transport != null) {
-                this.transport.close();
-            }
+        if (this.quicChannel != null) {
+            this.quicChannel.close();
         }
+        super.close();
     }
 
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
         // Writing is handled by QuicAsyncConnectionChannel, not this class.
-        // This should not be called directly.
         wContext.purge(new IOException("Write via QuicAsyncConnectionChannel, not QuicAsyncClientChannel"));
     }
 
     @Override
-    public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) throws Throwable {
+    public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
+        QuicSoConfig quicConfig = (QuicSoConfig) this.soConfig;
+
         try {
-            // 1. Create UDP transport and connect
-            this.transport = UdpTransport.open(this.channelId, this.context, this.soConfig.getRcvPacketSize(), this);
-            this.transport.connect(this.remoteAddr);
+            // 1. Connect UDP transport
+            this.transport.connect(this.remoteAddress);
+            UdpSoConfigUtils.configSocket(this.soConfig, this.transport.getChannel());
 
             SocketAddress localAddr = this.transport.getLocalAddress();
 
-            // 2. Create QUIC connection (client mode)
-            byte[] srcConnId = QuicConnection.generateConnectionId(this.soConfig.getConnectionIdLength());
-            this.quicConn = new QuicConnection(srcConnId, this.remoteAddr, localAddr, this.transport.getChannel(), this.soConfig, this.context, null,          // no listen for client
-                    true,          // client mode
-                    initializer    // stored for channel creation
-            );
+            // 2. Create QUIC channel (client mode with owned transport)
+            byte[] srcConnId = QuicChannel.generateConnectionId(quicConfig.getConnectionIdLength());
+            this.quicChannel = new QuicChannel(srcConnId, this.remoteAddress, localAddr, this.transport, quicConfig, this.context, initializer);
 
             // 3. Send Initial packet to start handshake
-            this.quicConn.sendClientInitial();
+            this.quicChannel.sendClientInitial();
 
             // 4. Start task-driven receive loop — handshake completes asynchronously
             final AtomicBoolean channelReported = new AtomicBoolean(false);
+            this.transport.setSelectorPollMs(quicConfig.getSelectorPollMs());
             this.transport.startReceiveLoop((remoteAddr, data) -> {
                 int len = data.remaining();
                 byte[] bytes = new byte[len];
                 data.get(bytes);
-                this.quicConn.processPacket(bytes, 0, len);
+                this.quicChannel.processPacket(bytes, 0, len);
                 // Check if handshake just completed
                 if (!channelReported.get() && tryReportChannel(future)) {
                     channelReported.set(true);
                 }
             }, () -> {
-                if (!this.closed.get()) {
-                    logger.info("QUIC client transport closed for " + this.remoteAddr);
-                }
+                logger.info("QUIC client transport closed for " + this.remoteAddress);
+                this.context.notifyChannelClose(this.quicChannel.getChannelId(), false);
             }, (e) -> {
-                if (!this.closed.get()) {
-                    logger.error("QUIC client receive error: " + e.getMessage());
-                }
+                logger.error("QUIC client receive error: " + e.getMessage());
+                this.context.notifyRcvChannelException(this.channelId, false, new SoRcvException(e.getMessage(), e));
             });
 
         } catch (Throwable e) {
             logger.error("QUIC client connect failed: " + e.getMessage(), e);
-            close();
-            future.failed(e);
+            try {
+                close();
+            } catch (IOException ignored) {
+            }
+            SoConnectException connErr = e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
+            this.context.notifyConnectChannelException(this.channelId, true, connErr);
+            future.failed(connErr);
         }
     }
 
     private boolean tryReportChannel(Future<NetChannel> future) {
-        if (this.quicConn.getHandshakeState() == QuicConnection.HandshakeState.ESTABLISHED) {
-            QuicChannel ch = this.quicConn.getQuicChannel();
-            if (ch != null) {
-                future.completed(ch);
-                return true;
-            }
+        if (this.quicChannel.getHandshakeState() == QuicChannel.HandshakeState.ESTABLISHED) {
+            future.completed(this.quicChannel);
+            return true;
         }
         return false;
+    }
+
+    @Override
+    protected UdpChannel newChannel(String remoteID, net.hasor.neta.channel.udp.UdpAsyncChannel realChannel, ProtoInitializer initializer) throws IOException {
+        // Not used in QUIC — QuicChannel is created directly in connectTo
+        throw new UnsupportedOperationException("QUIC does not use UDP newChannel");
     }
 }

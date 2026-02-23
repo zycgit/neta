@@ -21,7 +21,6 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.AbstractSoTest;
 import org.junit.Test;
 
 /**
@@ -64,7 +63,7 @@ public class QuicJvm2NetaTest extends AbstractSoTest {
         // 1. Send raw Initial packet to trigger handshake
         byte[] srcConnId = new byte[] { 0x01, 0x02, 0x03, 0x04 };
         byte[] dstConnId = new byte[] { 0x05, 0x06, 0x07, 0x08 };
-        byte[] initialPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicConnection.QUIC_VERSION_1, dstConnId, srcConnId, new byte[0], 0, new byte[0]);
+        byte[] initialPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicChannel.QUIC_VERSION_1, dstConnId, srcConnId, new byte[0], 0, new byte[0]);
         socket.send(new DatagramPacket(initialPacket, initialPacket.length, address));
 
         // 2. Receive server's Initial ACK response and extract server's SCID
@@ -86,7 +85,7 @@ public class QuicJvm2NetaTest extends AbstractSoTest {
         socket.send(new DatagramPacket(dataPacket, dataPacket.length, address));
 
         // 4. Wait for server to receive and process
-        waitFor(() -> !serverRcvData.isEmpty(), 5000);
+        waitFor(() -> !serverRcvData.isEmpty(), 3000);
         assert !serverRcvData.isEmpty() : "server should receive at least 1 message";
         assert new String(serverRcvData.get(0)).equals("Hello from JVM QUIC client") : "data mismatch: " + new String(serverRcvData.get(0));
 
@@ -129,7 +128,7 @@ public class QuicJvm2NetaTest extends AbstractSoTest {
             byte[] dstConnId = new byte[] { (byte) (0x50 + c), 0x06, 0x07, 0x08 };
 
             // Send Initial
-            byte[] initialPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicConnection.QUIC_VERSION_1, dstConnId, srcConnId, new byte[0], 0, new byte[0]);
+            byte[] initialPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicChannel.QUIC_VERSION_1, dstConnId, srcConnId, new byte[0], 0, new byte[0]);
             sockets[c].send(new DatagramPacket(initialPacket, initialPacket.length, address));
 
             // Receive server ACK and extract server CID
@@ -149,7 +148,7 @@ public class QuicJvm2NetaTest extends AbstractSoTest {
             sockets[c].send(new DatagramPacket(dataPacket, dataPacket.length, address));
         }
 
-        waitFor(() -> serverRcvData.size() >= clientCount, 5000);
+        waitFor(() -> serverRcvData.size() >= clientCount, 3000);
         assert serverRcvData.size() >= clientCount : "expected " + clientCount + " messages, got: " + serverRcvData.size();
 
         for (DatagramSocket s : sockets) {

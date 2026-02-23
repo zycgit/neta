@@ -14,166 +14,169 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.nio.channels.DatagramChannel;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.udp.UdpTransport;
+import net.hasor.neta.channel.udp.UdpAsyncServerChannel;
+import net.hasor.neta.channel.udp.UdpChannel;
+import net.hasor.neta.channel.udp.UdpSoConfigUtils;
 
 /**
- * QUIC server channel. Uses {@link UdpTransport} for the underlying UDP
- * datagram I/O and manages per-client {@link QuicConnection} instances.
+ * QUIC server channel extending {@link UdpAsyncServerChannel}.
  * <p>
- * bind() creates a UdpTransport and starts a task-driven receive loop that:
- * <ol>
- *   <li>Reads UDP datagrams (via UdpTransport)</li>
- *   <li>Looks up (or creates) a QuicConnection for the remote peer</li>
- *   <li>Delegates packet processing to the QuicConnection</li>
- * </ol>
+ * Inherits the UDP transport layer (bind, receive loop, socket configuration)
+ * and overrides datagram handling to support QUIC protocol:
+ * <ul>
+ *   <li>Manages per-remote-peer {@link QuicChannel} instances</li>
+ *   <li>Delegates packet processing to QuicChannel</li>
+ *   <li>Performs accept filtering before creating connections</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  */
-class QuicAsyncServerChannel implements AsyncServerChannel {
-    private static final Logger           logger = Logger.getLogger(QuicAsyncServerChannel.class);
-    private final        long             channelId;
-    private final        SoContextService context;
-    private final        SocketAddress    listenAddr;
-    private final        QuicSoConfig     soConfig;
-    private final        AtomicBoolean    closed = new AtomicBoolean(false);
-    // Underlying UDP transport (replaces raw DatagramChannel + Selector + Thread)
-    private              UdpTransport     transport;
+class QuicAsyncServerChannel extends UdpAsyncServerChannel {
+    private static final Logger logger = Logger.getLogger(QuicAsyncServerChannel.class);
 
-    // Per-remote-peer QUIC connections
-    private final Map<SocketAddress, QuicConnection> connections = new ConcurrentHashMap<>();
+    // Per-remote-peer QUIC channels (replaces the UDP channelMap)
+    private final Map<SocketAddress, QuicChannel> connections = new ConcurrentHashMap<>();
 
-    // The QuicListen created by bind()
-    private QuicListen quicListen;
-
-    public QuicAsyncServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
-        this.channelId = channelId;
-        this.context = (SoContextService) context;
-        this.listenAddr = listenAddr;
-        this.soConfig = (QuicSoConfig) soConfig;
-    }
-
-    @Override
-    public long getChannelId() {
-        return this.channelId;
-    }
-
-    @Override
-    public SoConfig getSoConfig() {
-        return this.soConfig;
-    }
-
-    @Override
-    public boolean isOpen() {
-        return !this.closed.get() && this.transport != null && this.transport.isOpen();
-    }
-
-    @Override
-    public synchronized NetListen bind(ProtoInitializer initializer) throws IOException {
-        if (this.quicListen != null) {
-            return this.quicListen;
-        }
-
-        // Create UDP transport
-        this.transport = UdpTransport.open(this.channelId, this.context, this.soConfig.getRcvPacketSize(), this);
-
-        // Configure socket options before binding
-        this.transport.getChannel().socket().setReuseAddress(true);
-
-        // Bind + configureBlocking(false) + register selector
-        this.transport.bind(this.listenAddr);
-
-        SocketAddress actualAddr = this.transport.getLocalAddress();
-        int listenPort = (actualAddr instanceof InetSocketAddress) ? ((InetSocketAddress) actualAddr).getPort() : 0;
-
-        this.quicListen = new QuicListen(this.channelId, actualAddr, listenPort, this, initializer, this.context, this.soConfig);
-
-        // Register listen with the framework (like TCP/UDP do)
-        try {
-            this.context.initChannel(this.quicListen, false);
-        } catch (Throwable e) {
-            throw new IOException("Failed to register QUIC listen channel", e);
-        }
-
-        // Start task-driven receive loop via UdpTransport
-        this.transport.startReceiveLoop((remoteAddr, data) -> this.onDatagram(remoteAddr, data), () -> {
-            if (!this.closed.get()) {
-                logger.info("QUIC server transport closed on " + this.listenAddr);
-            }
-        }, (e) -> {
-            if (!this.closed.get()) {
-                logger.error("QUIC receive loop error: " + e.getMessage());
-            }
-        });
-
-        logger.info("QUIC server listening on " + actualAddr + " (SSL=" + this.soConfig.isSslEnabled() + ")");
-        return this.quicListen;
+    protected QuicAsyncServerChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
+        super(channelId, channel, context, listenAddr, soConfig);
     }
 
     @Override
     public void close() throws IOException {
-        if (this.closed.compareAndSet(false, true)) {
-            // Close all connections
-            for (QuicConnection conn : this.connections.values()) {
-                conn.close();
-            }
-            this.connections.clear();
-
-            // Close the UDP transport (handles DatagramChannel + Selector + buffer cleanup)
-            if (this.transport != null) {
-                this.transport.close();
-            }
-
-            logger.info("QUIC server closed on " + this.listenAddr);
+        // Close all QUIC connections before closing the transport
+        for (QuicChannel conn : this.connections.values()) {
+            conn.close();
         }
+        this.connections.clear();
+        super.close();
     }
 
-    // ── Datagram Handling ──────────────────────────────────────────────
+    @Override
+    public NetListen bind(ProtoInitializer initializer) throws IOException {
+        // Configure socket
+        UdpSoConfigUtils.configListen(this.soConfig, this.transport.getChannel());
 
-    private void onDatagram(SocketAddress remoteAddr, ByteBuffer data) throws IOException {
+        // Create QUIC-specific listen
+        QuicSoConfig quicConfig = (QuicSoConfig) this.soConfig;
+        SocketAddress actualAddr;
+        int listenPort;
+
+        try {
+            this.transport.bind(this.listenAddr);
+            actualAddr = this.transport.getLocalAddress();
+            listenPort = (actualAddr instanceof InetSocketAddress) ? ((InetSocketAddress) actualAddr).getPort() : 0;
+        } catch (Throwable e) {
+            SoBindException bindErr = e instanceof SoBindException ? (SoBindException) e : new SoBindException(e.getMessage(), e);
+            this.context.notifyBindChannelException(this.channelId, bindErr);
+            throw new IOException("Failed to bind QUIC server on " + this.listenAddr, bindErr);
+        }
+
+        QuicListen listen = new QuicListen(//
+                this.channelId,     //
+                actualAddr,         //
+                listenPort,         //
+                this,               //
+                initializer,        //
+                this.context,       //
+                this.soConfig);
+
+        try {
+            this.context.initChannel(listen, false);
+        } catch (Throwable e) {
+            SoBindException bindErr = e instanceof SoBindException ? (SoBindException) e : new SoBindException(e.getMessage(), e);
+            this.context.notifyBindChannelException(this.channelId, bindErr);
+            throw new IOException("Failed to init QUIC listen on " + this.listenAddr, bindErr);
+        }
+
+        // Start task-driven receive loop via UdpTransport
+        this.transport.setSelectorPollMs(quicConfig.getSelectorPollMs());
+        final SocketAddress finalLocalAddr = actualAddr;
+        this.transport.startReceiveLoop(//
+                (remoteAddr, data) -> this.onQuicDatagram(listen, finalLocalAddr, remoteAddr, data),//
+                () -> {
+                    logger.info("QUIC server transport closed on " + this.listenAddr);
+                    this.context.notifyChannelClose(this.channelId, false);
+                },//
+                (e) -> {
+                    logger.error("QUIC receive loop error: " + e.getMessage());
+                    this.context.notifyRcvChannelException(this.channelId, false, new SoRcvException(e.getMessage(), e));
+                });
+
+        logger.info("QUIC server listening on " + actualAddr + " (SSL=" + quicConfig.isSslEnabled() + ")");
+        return listen;
+    }
+
+    // ── QUIC Datagram Handling ─────────────────────────────────────────
+
+    private void onQuicDatagram(QuicListen listen, SocketAddress localAddr, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
         int len = data.remaining();
         byte[] bytes = new byte[len];
         data.get(bytes);
 
-        processIncoming(remoteAddr, bytes, 0, len);
+        processIncoming(listen, localAddr, remoteAddr, bytes, 0, len);
     }
 
-    private void processIncoming(SocketAddress remoteAddr, byte[] data, int offset, int length) {
-        QuicConnection conn = this.connections.get(remoteAddr);
+    private void processIncoming(QuicListen listen, SocketAddress localAddr, SocketAddress remoteAddr, byte[] data, int offset, int length) {
+        QuicChannel conn = this.connections.get(remoteAddr);
 
         if (conn == null) {
-            // New connection — create one
-            byte[] srcConnId = QuicConnection.generateConnectionId(this.soConfig.getConnectionIdLength());
-            SocketAddress localAddr = this.quicListen != null ? getLocalAddress() : this.listenAddr;
-            conn = new QuicConnection(srcConnId, remoteAddr, localAddr, this.transport.getChannel(), this.soConfig, this.context, this.quicListen);
+            // Check if listen is suspended
+            if (listen.isSuspend()) {
+                printLog("AcceptFailed, listen is suspended. R:" + remoteAddr);
+                return;
+            }
 
-            QuicConnection existing = this.connections.putIfAbsent(remoteAddr, conn);
+            // Apply accept filter
+            if (!acceptChannel(listen, localAddr, remoteAddr)) {
+                return;
+            }
+
+            // New connection — create one
+            QuicSoConfig quicConfig = (QuicSoConfig) this.soConfig;
+            byte[] srcConnId = QuicChannel.generateConnectionId(quicConfig.getConnectionIdLength());
+            long newChannelId;
+            try {
+                conn = new QuicChannel(srcConnId, remoteAddr, localAddr, this.transport.getChannel(), quicConfig, this.context, listen);
+                newChannelId = conn.getChannelId();
+            } catch (IOException e) {
+                long tmpId = this.context.nextID();
+                SoConnectException err = new SoConnectException(e.getMessage(), e);
+                this.context.notifyConnectChannelException(tmpId, true, err);
+                logger.error("Failed to create QuicChannel for " + remoteAddr + ": " + e.getMessage());
+                return;
+            }
+
+            QuicChannel existing = this.connections.putIfAbsent(remoteAddr, conn);
             if (existing != null) {
                 conn = existing;
+            } else {
+                // Register cleanup (mirrors UDP)
+                final SocketAddress closedRemoteAddr = remoteAddr;
+                conn.onClose(c -> this.connections.remove(closedRemoteAddr));
             }
         }
 
         conn.processPacket(data, offset, length);
     }
 
-    private SocketAddress getLocalAddress() {
-        try {
-            return this.transport.getLocalAddress();
-        } catch (Exception e) {
-            return this.listenAddr;
-        }
+    /** Get the map of active connections (for testing/monitoring). */
+    public Map<SocketAddress, QuicChannel> getConnections() {
+        return this.connections;
     }
 
-    /** Get the map of active connections (for testing/monitoring). */
-    public Map<SocketAddress, QuicConnection> getConnections() {
-        return this.connections;
+    // ── Overrides that are not used in QUIC mode ──────────────────────
+
+    @Override
+    protected UdpChannel newChannel(String remoteID, NetListen forListen, net.hasor.neta.channel.udp.UdpAsyncChannel realChannel) throws IOException {
+        // Not used in QUIC — connections are created via processIncoming
+        throw new UnsupportedOperationException("QUIC does not use UDP newChannel");
     }
 }

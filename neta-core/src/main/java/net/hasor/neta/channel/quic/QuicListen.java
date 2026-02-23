@@ -15,18 +15,19 @@
  */
 package net.hasor.neta.channel.quic;
 import java.net.SocketAddress;
-import net.hasor.neta.channel.NetListen;
+import net.hasor.neta.channel.AsyncServerChannel;
 import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.channel.SoContextService;
+import net.hasor.neta.channel.udp.UdpNetListen;
 
 /**
- * QUIC listen endpoint. Holds a reference to the {@link QuicAsyncServerChannel}
- * that manages the underlying UDP socket.
+ * QUIC listen endpoint. Extends {@link UdpNetListen} since QUIC is built on UDP.
  * @author 赵永春 (zyc@hasor.net)
  */
-public class QuicListen extends NetListen {
-    QuicListen(long channelId, SocketAddress listenAddr, int listenPort, QuicAsyncServerChannel channel, ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
+class QuicListen extends UdpNetListen {
+    QuicListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
+            ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
         super(channelId, listenAddr, listenPort, channel, initializer, context, soConfig);
     }
 }

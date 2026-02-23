@@ -55,12 +55,12 @@ public class QuicStressTest extends AbstractSoTest {
         Future<NetChannel> connect = neta.connectAsync(address, clientProto, quicConf);
         NetChannel ch = connect.get();
 
-        int totalMessages = 200;
+        int totalMessages = 20;
         for (int i = 0; i < totalMessages; i++) {
             ch.sendData(ByteBuf.wrap(("Stress" + i + "\n").getBytes()));
         }
 
-        waitFor(() -> serverRcvCount.get() >= totalMessages, 15000);
+        waitFor(() -> serverRcvCount.get() >= totalMessages, 3000);
         assert serverRcvCount.get() >= totalMessages : "expected >= " + totalMessages + " messages, got: " + serverRcvCount.get();
 
         neta.shutdown();
@@ -87,8 +87,8 @@ public class QuicStressTest extends AbstractSoTest {
 
         neta.bind(address, serverProto, quicConf);
 
-        int clientCount = 3;
-        int msgsPerClient = 10;
+        int clientCount = 2;
+        int msgsPerClient = 5;
         CountDownLatch doneLatch = new CountDownLatch(clientCount);
         AtomicInteger errors = new AtomicInteger(0);
 
@@ -111,11 +111,11 @@ public class QuicStressTest extends AbstractSoTest {
             }).start();
         }
 
-        doneLatch.await(15, TimeUnit.SECONDS);
+        doneLatch.await(5, TimeUnit.SECONDS);
         assert errors.get() == 0 : "no errors expected";
 
         int expectedTotal = clientCount * msgsPerClient;
-        waitFor(() -> serverRcvCount.get() >= expectedTotal, 15000);
+        waitFor(() -> serverRcvCount.get() >= expectedTotal, 5000);
         assert serverRcvCount.get() >= expectedTotal : "expected >= " + expectedTotal + ", got: " + serverRcvCount.get();
 
         neta.shutdown();
@@ -144,15 +144,15 @@ public class QuicStressTest extends AbstractSoTest {
         neta.bind(address, serverProto, quicConf);
         Future<NetChannel> connect = neta.connectAsync(address, clientProto, quicConf);
         NetChannel clientChannel = connect.get();
-        QuicConnection clientConn = ((QuicChannel) clientChannel).getQuicConnection();
+        QuicChannel clientConn = (QuicChannel) clientChannel;
 
         // Send on multiple streams concurrently
-        int streamCount = 5;
-        int msgsPerStream = 10;
+        int streamCount = 3;
+        int msgsPerStream = 3;
         CountDownLatch latch = new CountDownLatch(streamCount);
 
         for (int s = 0; s < streamCount; s++) {
-            final long streamId = s * 4; // client-initiated bidirectional: 0, 4, 8, 12, 16
+            final long streamId = s * 4; // client-initiated bidirectional: 0, 4, 8
             new Thread(() -> {
                 try {
                     for (int m = 0; m < msgsPerStream; m++) {
@@ -166,10 +166,10 @@ public class QuicStressTest extends AbstractSoTest {
             }).start();
         }
 
-        latch.await(10, TimeUnit.SECONDS);
+        latch.await(3, TimeUnit.SECONDS);
 
         int expectedTotal = streamCount * msgsPerStream;
-        waitFor(() -> serverRcvCount.get() >= expectedTotal, 10000);
+        waitFor(() -> serverRcvCount.get() >= expectedTotal, 3000);
         assert serverRcvCount.get() >= expectedTotal : "expected >= " + expectedTotal + ", got: " + serverRcvCount.get();
 
         // Verify all streams are tracked

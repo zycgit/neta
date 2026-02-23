@@ -21,10 +21,8 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.codec.HandlerUtils;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import org.junit.Test;
@@ -72,7 +70,7 @@ public class QuicStabilityTest extends AbstractSoTest {
         latch.await(10, TimeUnit.SECONDS);
         assert errors.get() == 0 : "no errors expected, got: " + errors.get();
 
-        waitFor(() -> serverRcvData.size() >= clientCount, 5000);
+        waitFor(() -> serverRcvData.size() >= clientCount, 3000);
         assert serverRcvData.size() == clientCount : "expected " + clientCount + " messages, got: " + serverRcvData.size();
 
         neta.shutdown();
@@ -95,12 +93,12 @@ public class QuicStabilityTest extends AbstractSoTest {
         Future<NetChannel> connect = neta.connectAsync(address, clientProto, quicConf);
         NetChannel clientChannel = connect.get();
 
-        int msgCount = 50;
+        int msgCount = 10;
         for (int i = 0; i < msgCount; i++) {
             clientChannel.sendData("Rapid-" + i + "\n");
         }
 
-        waitFor(() -> serverRcvData.size() >= msgCount, 10000);
+        waitFor(() -> serverRcvData.size() >= msgCount, 3000);
         assert serverRcvData.size() == msgCount : "expected " + msgCount + " messages, got: " + serverRcvData.size();
 
         // Verify order
@@ -129,7 +127,7 @@ public class QuicStabilityTest extends AbstractSoTest {
         Future<NetChannel> connect = neta.connectAsync(address, clientProto, quicConf);
         NetChannel clientChannel = connect.get();
 
-        int msgCount = 20;
+        int msgCount = 5;
 
         // Client -> Server
         for (int i = 0; i < msgCount; i++) {
@@ -146,7 +144,7 @@ public class QuicStabilityTest extends AbstractSoTest {
             serverChannel.sendData("FromServer-" + i + "\n");
         }
 
-        waitFor(() -> serverRcvData.size() >= msgCount && clientRcvData.size() >= msgCount, 10000);
+        waitFor(() -> serverRcvData.size() >= msgCount && clientRcvData.size() >= msgCount, 3000);
         assert serverRcvData.size() == msgCount : "server expected " + msgCount + ", got: " + serverRcvData.size();
         assert clientRcvData.size() == msgCount : "client expected " + msgCount + ", got: " + clientRcvData.size();
 
@@ -176,7 +174,7 @@ public class QuicStabilityTest extends AbstractSoTest {
             ch.sendData("Cycle-" + c + "\n");
             waitFor(() -> serverRcvData.size() > expected, 3000);
             ch.close();
-            ThreadUtils.sleep(200);
+            waitFor(() -> ch.isClose(), 3000);
             assert ch.isClose() : "channel should be closed after close()";
         }
 

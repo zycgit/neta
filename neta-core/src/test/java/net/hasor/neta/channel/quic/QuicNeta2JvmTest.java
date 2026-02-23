@@ -19,11 +19,9 @@ import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.AbstractSoTest;
 import org.junit.Test;
 
 /**
@@ -77,13 +75,10 @@ public class QuicNeta2JvmTest extends AbstractSoTest {
                     for (int i = 0; i < CID_LEN; i++) {
                         serverSrcConnId[i] = (byte) (0xA0 + i);
                     }
-                    byte[] ackPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicConnection.QUIC_VERSION_1, parsed.scid, // dst = client's src
+                    byte[] ackPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicChannel.QUIC_VERSION_1, parsed.scid, // dst = client's src
                             serverSrcConnId, // src = server's own
                             new byte[0], 0, ackFrame);
                     serverSocket.send(new DatagramPacket(ackPacket, ackPacket.length, rcvPkt.getSocketAddress()));
-
-                    // Small delay to let client process handshake
-                    ThreadUtils.sleep(200);
 
                     // 3. Send STREAM frame with payload to client
                     byte[] message = "Hello from JVM server".getBytes();
@@ -122,7 +117,7 @@ public class QuicNeta2JvmTest extends AbstractSoTest {
             assert !clientChannel.isClose() : "client channel should be open";
 
             // Wait for client to receive data from server
-            waitFor(() -> clientRcvRef.get() != null, 5000);
+            waitFor(() -> clientRcvRef.get() != null, 3000);
             byte[] received = clientRcvRef.get();
             assert received != null : "client should receive data from server";
             assert new String(received).equals("Hello from JVM server") : "data mismatch: " + new String(received);
@@ -170,7 +165,7 @@ public class QuicNeta2JvmTest extends AbstractSoTest {
                     for (int i = 0; i < CID_LEN; i++) {
                         serverSrcConnId[i] = (byte) (0xB0 + i);
                     }
-                    byte[] ackPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicConnection.QUIC_VERSION_1, parsed.scid, serverSrcConnId, new byte[0], 0, ackFrame);
+                    byte[] ackPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QuicChannel.QUIC_VERSION_1, parsed.scid, serverSrcConnId, new byte[0], 0, ackFrame);
                     serverSocket.send(new DatagramPacket(ackPacket, ackPacket.length, rcvPkt.getSocketAddress()));
 
                     // 3. Receive data packet from Neta client (short header with STREAM frame)
@@ -217,7 +212,7 @@ public class QuicNeta2JvmTest extends AbstractSoTest {
             clientChannel.sendData(ByteBuf.wrap("Hello from Neta client".getBytes()));
 
             // Wait for JVM server to receive
-            waitFor(() -> serverRcvRef.get() != null, 5000);
+            waitFor(() -> serverRcvRef.get() != null, 3000);
             byte[] received = serverRcvRef.get();
             assert received != null : "server should receive data from Neta client";
             assert new String(received).equals("Hello from Neta client") : "data mismatch: " + new String(received);

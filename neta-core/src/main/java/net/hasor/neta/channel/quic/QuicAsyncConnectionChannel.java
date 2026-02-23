@@ -18,34 +18,38 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
  * Connection-level {@link AsyncChannel} for QUIC.
  * <p>
- * Handles the write path for a QUIC connection. When the pipeline's
- * outbound data reaches this channel, it is sent as QUIC STREAM frames
- * on the default stream (stream 0).
- * <p>
- * For stream-specific sends, use {@link QuicConnection#sendStreamData(long, byte[], boolean)} directly.
+ * Handles the write path for the connection-level {@link QuicChannel}.
+ * In the two-layer model, most application data flows through per-stream
+ * {@link QuicAsyncStreamChannel} instances. This connection-level channel
+ * sends data on stream 0 (default) without FIN.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncConnectionChannel implements AsyncChannel {
-    private static final Logger         logger = Logger.getLogger(QuicAsyncConnectionChannel.class);
-    private final        long           channelId;
-    private final        QuicConnection quicConn;
-    private final        SoConfig       soConfig;
-    private final        SocketAddress  localAddress;
-    private final        SocketAddress  remoteAddress;
-    private final        AtomicBoolean  closed = new AtomicBoolean(false);
+    private final    long             channelId;
+    private final    SoConfig         soConfig;
+    private final    SocketAddress    localAddress;
+    private final    SocketAddress    remoteAddress;
+    private final    AtomicBoolean    closed  = new AtomicBoolean(false);
+    private final    AtomicBoolean    writing = new AtomicBoolean(false);
+    private final    SoContextService context;
+    private volatile QuicChannel      quicChannel;
 
-    QuicAsyncConnectionChannel(long channelId, QuicConnection quicConn, SoConfig soConfig, SocketAddress localAddress, SocketAddress remoteAddress) {
+    QuicAsyncConnectionChannel(long channelId, SoConfig soConfig, SocketAddress localAddress, SocketAddress remoteAddress, SoContextService context) {
         this.channelId = channelId;
-        this.quicConn = quicConn;
         this.soConfig = soConfig;
         this.localAddress = localAddress;
         this.remoteAddress = remoteAddress;
+        this.context = context;
+    }
+
+    /** Set the back-reference to the owning QuicChannel (called after construction). */
+    void setQuicChannel(QuicChannel quicChannel) {
+        this.quicChannel = quicChannel;
     }
 
     @Override
@@ -70,37 +74,32 @@ class QuicAsyncConnectionChannel implements AsyncChannel {
 
     @Override
     public boolean isOpen() {
-        return !this.closed.get() && this.quicConn.isOpen();
+        return !this.closed.get() && this.quicChannel != null && this.quicChannel.isConnectionOpen();
     }
 
     @Override
     public void close() throws IOException {
-        if (this.closed.compareAndSet(false, true)) {
-            this.quicConn.close();
-        }
+        this.closed.compareAndSet(false, true);
     }
 
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
         if (!isOpen()) {
-            wContext.purge(new IOException("QUIC connection is closed"));
+            SoUnfinishedSndException err = new SoUnfinishedSndException("QUIC connection is closed.");
+            this.context.notifySndChannelException(this.channelId, true, err);
+            wContext.purge(err);
             return;
         }
-        SoSndData data;
-        while ((data = wContext.popData()) != null) {
-            try {
-                byte[] payload;
-                while ((payload = data.transferPull()) != null) {
-                    if (payload.length > 0) {
-                        // Default write target is stream 0
-                        this.quicConn.sendStreamData(0, payload, false);
-                    }
-                }
-                data.completed();
-            } catch (Exception e) {
-                data.failed(e);
-                logger.error("QUIC connection write error: " + e.getMessage());
-            }
+        if (wContext.isEmpty()) {
+            return;
+        }
+        if (this.writing.compareAndSet(false, true)) {
+            QuicChannel qc = (QuicChannel) channel;
+            // Connection-level stream ID is 0
+            QuicWriteTask task = new QuicWriteTask(channel, 0L, qc, wContext, this.context);
+            this.context.submitSoTask(task, this).onFinal(f -> {
+                this.writing.set(false);
+            });
         }
     }
 

@@ -16,12 +16,10 @@
 package net.hasor.neta.channel.quic;
 import java.net.InetSocketAddress;
 import java.util.List;
-import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.AbstractSoTest;
 import org.junit.Test;
 
 /**
@@ -69,7 +67,7 @@ public class QuicStreamLifecycleTest extends AbstractSoTest {
         // Send data on default stream 0
         clientChannel.sendData(ByteBuf.wrap("stream data\n".getBytes()));
 
-        waitFor(() -> !serverEvents.isEmpty(), 5000);
+        waitFor(() -> !serverEvents.isEmpty(), 3000);
 
         // Verify OPENED event for stream 0
         boolean foundOpened = false;
@@ -122,7 +120,7 @@ public class QuicStreamLifecycleTest extends AbstractSoTest {
         listen.waitAnyAccept();
         NetChannel serverCh = findServerChannel(neta, listen);
         assert serverCh instanceof QuicChannel : "server channel should be QuicChannel";
-        QuicConnection serverConn = ((QuicChannel) serverCh).getQuicConnection();
+        QuicChannel serverConn = (QuicChannel) serverCh;
 
         // Open and then close stream 4 from server side
         serverConn.sendStreamData(4, "hello stream 4".getBytes(), true); // with FIN
@@ -138,7 +136,7 @@ public class QuicStreamLifecycleTest extends AbstractSoTest {
                 }
             }
             return hasOpen && hasClose;
-        }, 5000);
+        }, 3000);
 
         boolean foundOpened = false, foundClosed = false;
         for (QuicStreamEvent evt : serverEvents) {
@@ -180,7 +178,7 @@ public class QuicStreamLifecycleTest extends AbstractSoTest {
         NetChannel clientChannel = connect.get();
         assert clientChannel instanceof QuicChannel : "client channel should be QuicChannel";
 
-        QuicConnection clientConn = ((QuicChannel) clientChannel).getQuicConnection();
+        QuicChannel clientConn = (QuicChannel) clientChannel;
 
         // Initially no open streams
         assert clientConn.getOpenStreams().isEmpty() : "initially no open streams";
@@ -224,7 +222,7 @@ public class QuicStreamLifecycleTest extends AbstractSoTest {
         NetChannel clientChannel = connect.get();
         assert clientChannel instanceof QuicChannel;
 
-        QuicConnection clientConn = ((QuicChannel) clientChannel).getQuicConnection();
+        QuicChannel clientConn = (QuicChannel) clientChannel;
 
         // Open several streams
         clientConn.sendStreamData(0, "data".getBytes(), false);
@@ -237,7 +235,7 @@ public class QuicStreamLifecycleTest extends AbstractSoTest {
 
         // All streams should be cleaned up
         assert clientConn.getOpenStreams().isEmpty() : "all streams should be cleaned up after connection close, got: " + clientConn.getOpenStreams();
-        assert !clientConn.isOpen() : "connection should be closed";
+        assert !clientConn.isConnectionOpen() : "connection should be closed";
 
         neta.shutdown();
     }

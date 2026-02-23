@@ -21,7 +21,7 @@ import java.util.Arrays;
  * Handles Long Header (Initial, Handshake) and Short Header (1-RTT) packets.
  * @author 赵永春 (zyc@hasor.net)
  */
-public final class QuicPacket {
+final class QuicPacket {
     private QuicPacket() {
     }
 

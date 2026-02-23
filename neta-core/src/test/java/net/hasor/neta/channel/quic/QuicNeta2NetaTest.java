@@ -20,11 +20,9 @@ import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.AbstractSoTest;
 import net.hasor.neta.codec.HandlerUtils;
 import net.hasor.neta.codec.MyRcvToListProtoHandler;
 import org.junit.Test;
@@ -63,7 +61,7 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
         clientChannel.sendData("Hello QUIC Server\n");
 
         // wait for server to receive
-        waitFor(() -> !serverRcvData.isEmpty(), 5000);
+        waitFor(() -> !serverRcvData.isEmpty(), 3000);
         assert serverRcvData.size() >= 1 : "server should receive data, got: " + serverRcvData.size();
         assert serverRcvData.get(0).equals("Hello QUIC Server") : "data mismatch: " + serverRcvData.get(0);
 
@@ -99,7 +97,7 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
         serverChannel.sendData("Hello QUIC Client\n");
 
         // wait for client to receive
-        waitFor(() -> !clientRcvData.isEmpty(), 5000);
+        waitFor(() -> !clientRcvData.isEmpty(), 3000);
         assert clientRcvData.size() >= 1 : "client should receive data, got: " + clientRcvData.size();
         assert clientRcvData.get(0).equals("Hello QUIC Client") : "data mismatch: " + clientRcvData.get(0);
 
@@ -139,7 +137,7 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
         serverChannel.sendData("Hello Client, this message from server.\n");
 
         // wait for both sides to receive
-        waitFor(() -> !serverRcvData.isEmpty() && !clientRcvData.isEmpty(), 5000);
+        waitFor(() -> !serverRcvData.isEmpty() && !clientRcvData.isEmpty(), 3000);
 
         assert serverRcvData.get(0).equals("Hello Server, this message from client.") : "server got: " + serverRcvData.get(0);
         assert clientRcvData.get(0).equals("Hello Client, this message from server.") : "client got: " + clientRcvData.get(0);
@@ -171,7 +169,7 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
             clientChannel.sendData("Message-" + i + "\n");
         }
 
-        waitFor(() -> serverRcvData.size() >= msgCount, 5000);
+        waitFor(() -> serverRcvData.size() >= msgCount, 3000);
         assert serverRcvData.size() == msgCount : "expected " + msgCount + " messages, got: " + serverRcvData.size();
         for (int i = 0; i < msgCount; i++) {
             assert serverRcvData.get(i).equals("Message-" + i) : "message " + i + " mismatch: " + serverRcvData.get(i);
@@ -199,8 +197,8 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
         assert !clientChannel.isClose() : "client channel should be open";
 
         clientChannel.close();
-        ThreadUtils.sleep(500);
 
+        waitFor(() -> clientChannel.isClose(), 3000);
         assert clientChannel.isClose() : "client channel should be closed after close()";
 
         neta.shutdown();
@@ -224,8 +222,8 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
         NetChannel serverChannel = findServerChannel(neta, listen);
 
         neta.shutdown();
-        ThreadUtils.sleep(500);
 
+        waitFor(() -> clientChannel.isClose(), 3000);
         assert clientChannel.isClose() : "client channel should be closed after shutdown";
         assert listen.isClose() : "listen should be closed after shutdown";
     }
@@ -262,7 +260,7 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
 
         clientChannel.sendData("Echo this message\n");
 
-        waitFor(() -> !clientRcvData.isEmpty(), 5000);
+        waitFor(() -> !clientRcvData.isEmpty(), 3000);
         assert clientRcvData.get(0).equals("Echo this message") : "echo mismatch: " + clientRcvData.get(0);
 
         neta.shutdown();
@@ -357,7 +355,7 @@ public class QuicNeta2NetaTest extends AbstractSoTest {
         }
         clientChannel.sendData(ByteBuf.wrap(largeData));
 
-        waitFor(() -> receivedRef.get() != null, 5000);
+        waitFor(() -> receivedRef.get() != null, 3000);
         byte[] received = receivedRef.get();
         assert received != null : "should receive data";
         assert received.length == largeData.length : "length mismatch: expected " + largeData.length + ", got " + received.length;
