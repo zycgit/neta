@@ -23,12 +23,15 @@ import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufInputStream;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.codec.http.FullHttpRequest;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
+import net.hasor.neta.codec.http.HttpHeaderNames;
+import net.hasor.neta.codec.http.HttpHeaderValues;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.cookie.DefaultCookie;
+import net.hasor.neta.codec.http.multipart.FileUpload;
+import net.hasor.neta.codec.http.multipart.MultipartDecoder;
 import net.hasor.neta.http.HttpSession;
 import net.hasor.neta.http.ServletRequest;
 import net.hasor.neta.http.SessionManager;
@@ -47,10 +50,12 @@ public class DefaultServletRequest implements ServletRequest {
     // Lazily parsed fields
     private String                    requestPath;
     private String                    queryString;
-    private boolean                   pathParsed = false;
+    private boolean                   pathParsed      = false;
     private Map<String, List<String>> parameterMap;
     private List<Cookie>              cookies;
     private HttpSession               session;
+    private List<FileUpload>          fileUploads;
+    private boolean                   multipartParsed = false;
 
     public DefaultServletRequest(FullHttpRequest httpRequest, NetChannel channel, boolean secure, SessionManager sessionManager) {
         this.httpRequest = Objects.requireNonNull(httpRequest);
@@ -219,6 +224,16 @@ public class DefaultServletRequest implements ServletRequest {
                     parseParams(formBody, this.parameterMap);
                 }
             }
+            // also parse plain text fields from multipart/form-data
+            if (isMultipart()) {
+                for (FileUpload part : getFileUploads()) {
+                    if (part.filename() == null) {
+                        // plain form field (not a file)
+                        String value = part.content().getString(part.content().readerIndex(), part.content().readableBytes(), StandardCharsets.UTF_8);
+                        this.parameterMap.computeIfAbsent(part.name(), k -> new ArrayList<>()).add(value);
+                    }
+                }
+            }
         }
         return Collections.unmodifiableMap(this.parameterMap);
     }
@@ -245,6 +260,52 @@ public class DefaultServletRequest implements ServletRequest {
         return null;
     }
 
+    // --- Multipart / File Upload ---
+
+    @Override
+    public boolean isMultipart() {
+        String ct = getContentType();
+        return ct != null && ct.toLowerCase().contains(HttpHeaderValues.MULTIPART_FORM_DATA);
+    }
+
+    @Override
+    public List<FileUpload> getFileUploads() {
+        parseMultipart();
+        return this.fileUploads;
+    }
+
+    @Override
+    public FileUpload getFileUpload(String fieldName) {
+        for (FileUpload part : getFileUploads()) {
+            if (part.name().equals(fieldName)) {
+                return part;
+            }
+        }
+        return null;
+    }
+
+    private void parseMultipart() {
+        if (this.multipartParsed) {
+            return;
+        }
+        this.multipartParsed = true;
+        if (!isMultipart()) {
+            this.fileUploads = Collections.emptyList();
+            return;
+        }
+        String boundary = MultipartDecoder.extractBoundary(getContentType());
+        if (boundary == null || boundary.isEmpty()) {
+            this.fileUploads = Collections.emptyList();
+            return;
+        }
+        ByteBuf body = this.httpRequest.content();
+        if (body == null || body.readableBytes() == 0) {
+            this.fileUploads = Collections.emptyList();
+            return;
+        }
+        this.fileUploads = MultipartDecoder.decode(body, boundary);
+    }
+
     // --- Body ---
 
     @Override
@@ -258,7 +319,7 @@ public class DefaultServletRequest implements ServletRequest {
         if (content == null || content.readableBytes() == 0) {
             return new ByteArrayInputStream(new byte[0]);
         }
-        return new ByteArrayInputStream(content.asByteArray());
+        return new ByteBufInputStream(content);
     }
 
     @Override

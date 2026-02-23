@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Upload - Neta HTTP Server</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; color: var(--text-secondary); margin-bottom: 6px; font-size: 14px; }
+        .form-group input {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+            border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary);
+            font-size: 14px; box-sizing: border-box;
+        }
+        .form-group input[type="file"] { padding: 8px; }
+        .form-group input:focus { outline: none; border-color: var(--accent); }
+        .btn-upload {
+            background: var(--accent); color: #fff; border: none; padding: 10px 24px;
+            border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;
+        }
+        .btn-upload:hover { opacity: 0.9; }
+        .result-box {
+            margin-top: 20px; padding: 16px; border-radius: 8px;
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            font-family: 'Courier New', monospace; font-size: 13px;
+            white-space: pre-wrap; word-break: break-all; display: none;
+            color: var(--text-primary);
+        }
+        .progress-bar {
+            margin-top: 12px; height: 6px; border-radius: 3px;
+            background: var(--border); overflow: hidden; display: none;
+        }
+        .progress-bar .fill {
+            height: 100%; background: var(--accent); width: 0;
+            transition: width 0.3s ease;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>File Upload Example</h1>
+            <p class="subtitle">multipart/form-data POST</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="panel">
+            <h2>Upload Files</h2>
+            <form id="uploadForm">
+                <div class="form-group">
+                    <label for="description">Description</label>
+                    <input type="text" id="description" name="description" placeholder="Describe your upload" />
+                </div>
+                <div class="form-group">
+                    <label for="file1">File 1</label>
+                    <input type="file" id="file1" name="file1" />
+                </div>
+                <div class="form-group">
+                    <label for="file2">File 2 (optional)</label>
+                    <input type="file" id="file2" name="file2" />
+                </div>
+                <button type="submit" class="btn-upload">Upload</button>
+            </form>
+            <div class="progress-bar" id="progressBar"><div class="fill" id="progressFill"></div></div>
+            <div id="result" class="result-box"></div>
+        </section>
+
+        <section class="panel">
+            <h2>cURL Example</h2>
+            <pre style="color:var(--text-secondary); margin:0; font-size:13px;">curl -X POST http://localhost:8080/api/upload \
+     -F "description=My files" \
+     -F "file1=@/path/to/readme.txt" \
+     -F "file2=@/path/to/photo.png"</pre>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('uploadForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new FormData(this);
+            var resultBox = document.getElementById('result');
+            var progressBar = document.getElementById('progressBar');
+            var progressFill = document.getElementById('progressFill');
+
+            resultBox.style.display = 'none';
+            progressBar.style.display = 'block';
+            progressFill.style.width = '30%';
+
+            fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            })
+            .then(function(res) {
+                progressFill.style.width = '90%';
+                return res.text();
+            })
+            .then(function(text) {
+                progressFill.style.width = '100%';
+                setTimeout(function() { progressBar.style.display = 'none'; }, 400);
+                resultBox.style.display = 'block';
+                try {
+                    resultBox.textContent = JSON.stringify(JSON.parse(text), null, 2);
+                } catch(ex) {
+                    resultBox.textContent = text;
+                }
+            })
+            .catch(function(err) {
+                progressBar.style.display = 'none';
+                resultBox.style.display = 'block';
+                resultBox.textContent = 'Error: ' + err.message;
+            });
+        });
+    </script>
+</body>
+</html>

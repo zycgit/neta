@@ -18,7 +18,9 @@ import java.io.InputStream;
 import java.net.SocketAddress;
 import java.util.List;
 import java.util.Map;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.cookie.Cookie;
+import net.hasor.neta.codec.http.multipart.FileUpload;
 
 /**
  * Servlet-like HTTP request interface. Wraps a FullHttpRequest from the neta HTTP codec.
@@ -88,10 +90,21 @@ public interface ServletRequest {
     /** Returns the first cookie with the given name, or null */
     Cookie getCookie(String name);
 
+    // --- Multipart / File Upload ---
+
+    /** Returns true if the request is a multipart/form-data request */
+    boolean isMultipart();
+
+    /** Returns the parsed file upload parts from a multipart/form-data request, or empty list if not multipart */
+    List<FileUpload> getFileUploads();
+
+    /** Returns the first file upload part with the given field name, or null */
+    FileUpload getFileUpload(String fieldName);
+
     // --- Body ---
 
     /** Returns the request body as a ByteBuf */
-    net.hasor.neta.bytebuf.ByteBuf getBody();
+    ByteBuf getBody();
 
     /** Returns the request body as an InputStream */
     InputStream getBodyAsStream();

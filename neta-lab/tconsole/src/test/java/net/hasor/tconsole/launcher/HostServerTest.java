@@ -14,15 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.tconsole.launcher;
+import java.io.*;
+import java.util.Arrays;
+import java.util.LinkedList;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.tconsole.launcher.hosts.HostTelService;
 import net.hasor.test.tconsole.TestExecutor;
 import org.junit.Test;
-
-import java.io.*;
-import java.util.Arrays;
-import java.util.LinkedList;
 
 public class HostServerTest {
     protected void threeCommandToWriter(Writer writer) {

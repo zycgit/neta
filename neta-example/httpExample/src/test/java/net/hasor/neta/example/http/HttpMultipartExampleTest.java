@@ -16,8 +16,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
 import net.hasor.neta.codec.http.multipart.DefaultFileUpload;
 import net.hasor.neta.codec.http.multipart.FileUpload;
 import net.hasor.neta.codec.http.multipart.MultipartDecoder;

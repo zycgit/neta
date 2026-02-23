@@ -14,21 +14,25 @@
  * limitations under the License.
  */
 package net.hasor.tconsole.commands;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import net.hasor.tconsole.client.TelClient;
 import net.hasor.tconsole.launcher.telnet.SocketTelService;
 import net.hasor.test.tconsole.TestExecutor;
 import org.junit.Test;
 
-import java.net.InetSocketAddress;
-
 public class GetSetCmdTest {
     @Test
     public void getsetTest_1() throws Exception {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
             server.addCommand("test", new TestExecutor());
 
-            server.start(8082);
-            client.connectTo(new InetSocketAddress(8082));
+            server.start(port);
+            client.connectTo(new InetSocketAddress(port));
 
             String vat_a = client.sendCommand("get a");
             assert vat_a.equals("");
@@ -41,11 +45,15 @@ public class GetSetCmdTest {
 
     @Test
     public void getsetTest_2() throws Exception {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
             server.addCommand("test", new TestExecutor());
 
-            server.start(8082);
-            client.connectTo(new InetSocketAddress(8082));
+            server.start(port);
+            client.connectTo(new InetSocketAddress(port));
 
             String setResult = client.sendCommand("set a");
             assert setResult.contains("java.lang.Exception: args count error.");

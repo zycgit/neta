@@ -33,12 +33,18 @@ public class ProtocolInfoServlet extends HttpServlet {
         response.setContentType("application/json; charset=UTF-8");
         response.setStatus(200);
 
+        // Respect reverse proxy forwarded headers (Caddy automatically sets these)
+        String fwdProto = request.getHeader("X-Forwarded-Proto");
+        String fwdHost = request.getHeader("X-Forwarded-Host");
+        String fwdFor = request.getHeader("X-Forwarded-For");
+
         String protocol = request.getProtocol();
-        String scheme = request.getScheme();
+        String scheme = (fwdProto != null && !fwdProto.isEmpty()) ? fwdProto : request.getScheme();
         String method = request.getMethod();
-        String host = request.getHost();
+        String host = (fwdHost != null && !fwdHost.isEmpty()) ? fwdHost : request.getHost();
         String uri = request.getRequestURI();
-        String remoteAddr = String.valueOf(request.getRemoteAddress());
+        String remoteAddr = (fwdFor != null && !fwdFor.isEmpty()) ? fwdFor : String.valueOf(request.getRemoteAddress());
+        boolean secure = "https".equalsIgnoreCase(scheme);
         String timestamp = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
 
         String json = "{\n"                                                                     //
@@ -47,7 +53,7 @@ public class ProtocolInfoServlet extends HttpServlet {
                 + "  \"method\": \"" + escapeJson(method) + "\",\n"             //
                 + "  \"host\": \"" + escapeJson(host) + "\",\n"                 //
                 + "  \"uri\": \"" + escapeJson(uri) + "\",\n"                   //
-                + "  \"secure\": " + request.isSecure() + ",\n"                 //
+                + "  \"secure\": " + secure + ",\n"                             //
                 + "  \"remoteAddress\": \"" + escapeJson(remoteAddr) + "\",\n"  //
                 + "  \"serverTime\": \"" + timestamp + "\",\n"                  //
                 + "  \"serverConfig\": {\n"                                                 //
@@ -57,8 +63,8 @@ public class ProtocolInfoServlet extends HttpServlet {
                 + "  \"serverProtocols\": {\n"                                              //
                 + "    \"http1.1\": { \"port\": 8080, \"transport\": \"TCP\" },\n"          //
                 + "    \"h2c\": { \"port\": 8080, \"transport\": \"TCP (Prior Knowledge)\" },\n" //
-                + "    \"h2\": { \"port\": 8443, \"transport\": \"TCP+TLS+ALPN\" },\n"      //
-                + "    \"h3\": { \"port\": 8443, \"transport\": \"UDP+QUIC\" }\n"           //
+                + "    \"h2\": { \"port\": 9443, \"transport\": \"TCP+TLS+ALPN (via Caddy)\" },\n" //
+                + "    \"h3\": { \"port\": 9443, \"transport\": \"UDP+QUIC (via Caddy)\" }\n" //
                 + "  }\n"                                                                   //
                 + "}";                                                                       //
 

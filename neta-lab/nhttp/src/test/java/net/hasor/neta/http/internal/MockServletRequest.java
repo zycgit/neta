@@ -21,6 +21,7 @@ import java.net.SocketAddress;
 import java.util.*;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.cookie.Cookie;
+import net.hasor.neta.codec.http.multipart.FileUpload;
 import net.hasor.neta.http.HttpSession;
 import net.hasor.neta.http.ServletRequest;
 
@@ -150,6 +151,22 @@ public class MockServletRequest implements ServletRequest {
 
     @Override
     public Cookie getCookie(String name) {
+        return null;
+    }
+
+    @Override
+    public boolean isMultipart() {
+        String ct = getContentType();
+        return ct != null && ct.toLowerCase().contains("multipart/form-data");
+    }
+
+    @Override
+    public List<FileUpload> getFileUploads() {
+        return Collections.emptyList();
+    }
+
+    @Override
+    public FileUpload getFileUpload(String fieldName) {
         return null;
     }
 

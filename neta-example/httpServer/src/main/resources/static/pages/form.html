@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Form Submit - Neta HTTP Server</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; color: var(--text-secondary); margin-bottom: 6px; font-size: 14px; }
+        .form-group input, .form-group textarea {
+            width: 100%; padding: 10px 12px; border: 1px solid var(--border);
+            border-radius: 6px; background: var(--bg-secondary); color: var(--text-primary);
+            font-size: 14px; box-sizing: border-box;
+        }
+        .form-group textarea { resize: vertical; min-height: 80px; font-family: inherit; }
+        .form-group input:focus, .form-group textarea:focus {
+            outline: none; border-color: var(--accent);
+        }
+        .btn-submit {
+            background: var(--accent); color: #fff; border: none; padding: 10px 24px;
+            border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600;
+        }
+        .btn-submit:hover { opacity: 0.9; }
+        .result-box {
+            margin-top: 20px; padding: 16px; border-radius: 8px;
+            background: var(--bg-secondary); border: 1px solid var(--border);
+            font-family: 'Courier New', monospace; font-size: 13px;
+            white-space: pre-wrap; word-break: break-all; display: none;
+            color: var(--text-primary);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>Form Submit Example</h1>
+            <p class="subtitle">application/x-www-form-urlencoded POST</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="panel">
+            <h2>Submit a Form</h2>
+            <form id="demoForm">
+                <div class="form-group">
+                    <label for="username">Username</label>
+                    <input type="text" id="username" name="username" placeholder="Enter your name" />
+                </div>
+                <div class="form-group">
+                    <label for="email">Email</label>
+                    <input type="email" id="email" name="email" placeholder="you@example.com" />
+                </div>
+                <div class="form-group">
+                    <label for="message">Message</label>
+                    <textarea id="message" name="message" placeholder="Write something..."></textarea>
+                </div>
+                <button type="submit" class="btn-submit">Submit</button>
+            </form>
+            <div id="result" class="result-box"></div>
+        </section>
+
+        <section class="panel">
+            <h2>cURL Example</h2>
+            <pre style="color:var(--text-secondary); margin:0; font-size:13px;">curl -X POST http://localhost:8080/api/form \
+     -d "username=alice&amp;email=alice@example.com&amp;message=Hello+World"</pre>
+        </section>
+    </main>
+
+    <script>
+        document.getElementById('demoForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+            var formData = new URLSearchParams(new FormData(this)).toString();
+            var resultBox = document.getElementById('result');
+
+            fetch('/api/form', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+                body: formData
+            })
+            .then(function(res) { return res.text(); })
+            .then(function(text) {
+                resultBox.style.display = 'block';
+                try {
+                    resultBox.textContent = JSON.stringify(JSON.parse(text), null, 2);
+                } catch(ex) {
+                    resultBox.textContent = text;
+                }
+            })
+            .catch(function(err) {
+                resultBox.style.display = 'block';
+                resultBox.textContent = 'Error: ' + err.message;
+            });
+        });
+    </script>
+</body>
+</html>

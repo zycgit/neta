@@ -14,21 +14,25 @@
  * limitations under the License.
  */
 package net.hasor.tconsole.commands;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import net.hasor.tconsole.client.TelClient;
 import net.hasor.tconsole.launcher.telnet.SocketTelService;
 import net.hasor.test.tconsole.TestExecutor;
 import org.junit.Test;
 
-import java.net.InetSocketAddress;
-
 public class QuitCmdTest {
     @Test
     public void autoexit_test_1() throws Exception {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
             server.addCommand("test", new TestExecutor());
 
-            server.start(8082);
-            client.connectTo(new InetSocketAddress(8082));
+            server.start(port);
+            client.connectTo(new InetSocketAddress(port));
 
             client.sendCommand("set a=asd");
             client.sendCommand("exit -next");
@@ -40,11 +44,15 @@ public class QuitCmdTest {
 
     @Test
     public void exit_n_test_1() throws Exception {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
             server.addCommand("test", new TestExecutor());
 
-            server.start(8082);
-            client.connectTo(new InetSocketAddress(8082));
+            server.start(port);
+            client.connectTo(new InetSocketAddress(port));
 
             client.sendCommand("exit -n3");
 

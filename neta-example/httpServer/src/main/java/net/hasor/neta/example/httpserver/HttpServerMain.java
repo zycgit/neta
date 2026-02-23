@@ -56,8 +56,9 @@ public class HttpServerMain {
         System.out.println("  Neta Full-Protocol HTTP Server");
         System.out.println("==========================================================");
 
-        // Step 1: Generate TLS certificate (signed by persistent local CA)
-        System.out.println("[1/4] Generating TLS certificate...");
+        // Step 1: Load or generate TLS certificate (signed by persistent local CA)
+        //   To force renewal, replace generate() with SelfSignedCertGenerator.renew("localhost")
+        System.out.println("[1/4] Loading TLS certificate...");
         SelfSignedCertGenerator.CertFiles certs = SelfSignedCertGenerator.generate("localhost");
         System.out.println("  Server Cert: " + certs.certFile.getAbsolutePath());
         System.out.println("  Private Key: " + certs.keyFile.getAbsolutePath());
@@ -123,6 +124,15 @@ public class HttpServerMain {
         // Register API servlet for protocol info
         server.addServlet("/api/info", new ProtocolInfoServlet());
 
+        // Register form submission servlet
+        server.addServlet("/api/form", new FormSubmitServlet());
+
+        // Register file upload servlet
+        server.addServlet("/api/upload", new FileUploadServlet());
+
+        // Register WebSocket echo handler
+        server.addWebSocket("/ws/echo", new EchoWebSocketHandler());
+
         // Step 5: Start all protocol listeners
         System.out.println("[4/4] Starting server...");
 
@@ -150,7 +160,11 @@ public class HttpServerMain {
         System.out.println("      - http/1.1  (fallback)");
         System.out.println("    - h3        (HTTP/3 over QUIC, UDP port " + HTTPS_PORT + ")");
         System.out.println();
-        System.out.println("  API endpoint: /api/info");
+        System.out.println("  API endpoint:      /api/info");
+        System.out.println("  Form submit:       /api/form");
+        System.out.println("  File upload:       /api/upload");
+        System.out.println("  WebSocket echo:    /ws/echo");
+        System.out.println("  WebSocket chat UI: /pages/chat.html");
         System.out.println();
         System.out.println("  Tip: If Chrome shows a cert warning, type 'thisisunsafe'");
         System.out.println("==========================================================");

@@ -14,12 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.tconsole.client;
-import net.hasor.tconsole.launcher.telnet.SocketTelService;
-import org.junit.Test;
-
 import java.io.IOException;
 import java.net.InetSocketAddress;
-
+import java.net.ServerSocket;
+import net.hasor.tconsole.launcher.telnet.SocketTelService;
+import org.junit.Test;
 import static net.hasor.tconsole.TelOptions.ENDCODE_OF_SILENT;
 import static net.hasor.tconsole.TelOptions.SILENT;
 
@@ -27,11 +26,15 @@ public class ClientTest {
 
     @Test
     public void attribute_test_1() throws IOException {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
-            server.start(new InetSocketAddress("127.0.0.1", 8082), s -> true);
+            server.start(new InetSocketAddress("127.0.0.1", port), s -> true);
             //
             client.setAttribute("abc", "cba");
-            client.connectTo(new InetSocketAddress("127.0.0.1", 8082));
+            client.connectTo(new InetSocketAddress("127.0.0.1", port));
             //
             assert "cba".equals(client.sendCommand("get abc"));
         }

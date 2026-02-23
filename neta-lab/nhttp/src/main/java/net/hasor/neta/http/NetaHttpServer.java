@@ -23,16 +23,15 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.udp.UdpSoConfig;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
 import net.hasor.neta.codec.http.cors.CorsConfig;
 import net.hasor.neta.codec.http.cors.CorsUtil;
+import net.hasor.neta.codec.http.h2.Http2ServerDuplexe;
+import net.hasor.neta.codec.http.h3.Http3ServerDuplexe;
+import net.hasor.neta.codec.http.routing.Http2PrefaceRouting;
+import net.hasor.neta.codec.http.routing.HttpsAlpnRouting;
 import net.hasor.neta.codec.http.websocket.WebSocketFrame;
 import net.hasor.neta.codec.http.websocket.WebSocketServerHandshaker;
-import net.hasor.neta.codec.http2.Http2ServerDuplexe;
-import net.hasor.neta.codec.http3.Http3ServerDuplexe;
 import net.hasor.neta.codec.ssl.SslConfig;
-import net.hasor.neta.codec.ssl.SslContext;
 import net.hasor.neta.codec.ssl.SslDuplexer;
 import net.hasor.neta.http.internal.*;
 
@@ -353,70 +352,25 @@ public class NetaHttpServer {
                 ctx.addLast("ssl", new SslDuplexer(this.sslConfig));
             }
 
-            // Protocol detection: route h2c (HTTP/2 Prior Knowledge) vs HTTP/1.1 vs invalid data
+            // Protocol detection: route h2c (HTTP/2 Prior Knowledge) vs HTTP/1.1
             // h2c preface starts with "PRI " (0x50 0x52 0x49 0x20), per RFC 9113 §3.4
-            ProtoRoutingDuplexer.Builder<ByteBuf> httpDetect = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
-                ByteBuf first = rcvUp.peekMessage();
-                if (first != null && first.readableBytes() > 0) {
-                    int firstByte = first.getByte(0) & 0xFF;
-
-                    // Not an uppercase ASCII letter (A-Z) — reject
-                    if (firstByte < 0x41 || firstByte > 0x5A) {
-                        return "reject";
-                    }
-
-                    // Check for h2c prior knowledge: "PRI " (0x50 0x52 0x49 0x20)
-                    if (this.http2Enabled && firstByte == 0x50 && first.readableBytes() >= 4) {
-                        if ((first.getByte(1) & 0xFF) == 0x52           // R
-                                && (first.getByte(2) & 0xFF) == 0x49    // I
-                                && (first.getByte(3) & 0xFF) == 0x20) { // <space>
-                            return "h2c";
-                        }
-                    }
-
-                    // Regular HTTP method (GET, POST, PUT, DELETE, HEAD, OPTIONS, PATCH, CONNECT, TRACE)
-                    return "http";
-                }
-                return null; // no data yet, wait
-            });
+            Http2PrefaceRouting h2cRouting = new Http2PrefaceRouting("http");
+            ProtoRoutingDuplexer.Builder<ByteBuf> httpDetect = ProtoRoutingDuplexer.newBuilder(h2cRouting);
 
             // h2c branch: HTTP/2 over cleartext (Prior Knowledge, RFC 9113 §3.4)
             if (this.http2Enabled) {
-                httpDetect.branch("h2c", h2cBranch -> {
-                    h2cBranch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize));
+                httpDetect.branch(Http2PrefaceRouting.BRANCH_H2C, h2cBranch -> {
+                    h2cBranch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize, this.maxContentLength));
                     h2cBranch.addLastDecoder("h2-aggregator", new HttpObjectAggregator(this.maxContentLength));
                     h2cBranch.addLastDecoder("h2-handler", new HttpDispatchHandler(secure));
                 });
             }
 
-            // HTTP/1.1 branch
+            // HTTP/1.1 branch (default)
             httpDetect.branch("http", httpBranch -> {
                 httpBranch.addLast("http-codec", new HttpServerDuplexe(this.maxInitialLineLength, this.maxHeaderSize, this.maxChunkSize));
                 httpBranch.addLastDecoder("http-aggregator", new HttpObjectAggregator(this.maxContentLength));
                 httpBranch.addLastDecoder("http-handler", new HttpDispatchHandler(secure));
-            });
-
-            // Invalid data: log hex dump and close
-            httpDetect.branch("reject", rejectBranch -> {
-                rejectBranch.addLastDecoder("close", new ProtoHandler<ByteBuf, Object>() {
-                    @Override
-                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<Object> dst) {
-                        if (src.hasMore()) {
-                            ByteBuf buf = src.peekMessage();
-                            int len = Math.min(buf.readableBytes(), 32);
-                            StringBuilder hex = new StringBuilder();
-                            for (int i = 0; i < len; i++) {
-                                if (i > 0)
-                                    hex.append(' ');
-                                hex.append(String.format("%02x", buf.getByte(i) & 0xFF));
-                            }
-                            long chId = context.getChannel().getChannelId();
-                            logger.warn("reject(" + chId + ") unknown protocol, first " + len + " bytes: [" + hex + "]");
-                        }
-                        context.getChannel().close();
-                        return ProtoStatus.Stop;
-                    }
-                });
             });
 
             ctx.addLast("http-detect", httpDetect.build(ctx));
@@ -440,6 +394,9 @@ public class NetaHttpServer {
         return ctx -> {
             // Outer routing: detect TLS vs plaintext by inspecting the first byte
             ProtoRoutingDuplexer.Builder<ByteBuf> tlsDetect = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
+                if (rcvUp == null) {
+                    return null; // onActive phase, no data yet
+                }
                 ByteBuf first = rcvUp.peekMessage();
                 if (first != null && first.readableBytes() > 0) {
                     int firstByte = first.getByte(0) & 0xFF;
@@ -461,23 +418,14 @@ public class NetaHttpServer {
             tlsDetect.branch("tls", tlsBranch -> {
                 tlsBranch.addLast("ssl", new SslDuplexer(this.sslConfig));
 
-                // ALPN routing — select protocol based on negotiation result
-                ProtoRoutingDuplexer.Builder<ByteBuf> alpnBuilder = ProtoRoutingDuplexer.newBuilder((context, rcvUp2, rcvDown2) -> {
-                    SslContext sslCtx = context.context(SslContext.class);
-                    if (sslCtx != null && sslCtx.isReady()) {
-                        String proto = sslCtx.getApplicationProtocol();
-                        if ("h2".equals(proto) && this.http2Enabled) {
-                            return "h2";
-                        }
-                        return "http/1.1";
-                    }
-                    return null; // SSL handshake not complete, wait
-                });
+                // ALPN routing — select protocol based on TLS negotiation result
+                HttpsAlpnRouting alpnRouting = new HttpsAlpnRouting("http/1.1");
+                ProtoRoutingDuplexer.Builder<ByteBuf> alpnBuilder = ProtoRoutingDuplexer.newBuilder(alpnRouting);
 
                 // HTTP/2 branch
                 if (this.http2Enabled) {
-                    alpnBuilder.branch("h2", branch -> {
-                        branch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize));
+                    alpnBuilder.branch(HttpsAlpnRouting.BRANCH_H2, branch -> {
+                        branch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize, this.maxContentLength));
                         branch.addLastDecoder("h2-aggregator", new HttpObjectAggregator(this.maxContentLength));
                         branch.addLastDecoder("h2-handler", new HttpDispatchHandler(true));
                     });
@@ -562,9 +510,12 @@ public class NetaHttpServer {
         }
 
         @Override
+        @SuppressWarnings({ "unchecked", "rawtypes" })
         public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Object> dst) {
             while (src.hasMore()) {
-                HttpObject msg = src.takeMessage();
+                // Use Object type to avoid ClassCastException for non-HttpObject messages
+                // (e.g., WebSocketFrame after protocol upgrade). Type erasure makes this safe.
+                Object msg = ((ProtoRcvQueue) src).takeMessage();
                 if (msg instanceof FullHttpRequest) {
                     handleRequest(context, (FullHttpRequest) msg);
                 } else if (msg instanceof WebSocketFrame) {
@@ -593,7 +544,7 @@ public class NetaHttpServer {
                 // CORS preflight handling
                 if (corsConfig != null && corsConfig.isEnabled()) {
                     if (CorsUtil.isPreflightRequest(request)) {
-                        FullHttpResponse corsResponse = new DefaultFullHttpResponse(request.protocolVersion(), net.hasor.neta.codec.http.constant.HttpStatus.NO_CONTENT);
+                        FullHttpResponse corsResponse = new DefaultFullHttpResponse(request.protocolVersion(), HttpStatus.NO_CONTENT);
                         CorsUtil.applyPreflightCorsHeaders(request, corsResponse, corsConfig);
                         corsResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);
                         channel.sendData(corsResponse);
@@ -712,8 +663,11 @@ public class NetaHttpServer {
                         ByteBuf closeContent = frame.content();
                         if (closeContent != null && closeContent.readableBytes() >= 2) {
                             statusCode = closeContent.readUInt16();
-                            if (closeContent.readableBytes() > 0) {
-                                reason = closeContent.getString(closeContent.readerIndex(), closeContent.readableBytes(), StandardCharsets.UTF_8);
+                            int remaining = closeContent.readableBytes();
+                            if (remaining > 0) {
+                                byte[] reasonBytes = new byte[remaining];
+                                closeContent.readBytes(reasonBytes);
+                                reason = new String(reasonBytes, StandardCharsets.UTF_8);
                             }
                         }
                         wsSession.markClosed();
@@ -746,7 +700,7 @@ public class NetaHttpServer {
             try {
                 String body = "<html><body><h1>" + code + " " + message + "</h1></body></html>";
                 ByteBuf content = ByteBuf.wrap(body.getBytes(StandardCharsets.UTF_8));
-                DefaultFullHttpResponse response = new DefaultFullHttpResponse(net.hasor.neta.codec.http.constant.HttpVersion.HTTP_1_1, net.hasor.neta.codec.http.constant.HttpStatus.valueOf(code), content);
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.valueOf(code), content);
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML + "; charset=UTF-8");
                 response.headers().set(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(content.readableBytes()));
                 response.headers().set(HttpHeaderNames.SERVER, serverName);
@@ -854,7 +808,7 @@ public class NetaHttpServer {
                     // Send 301 Moved Permanently
                     String body = "<html><body><h1>301 Moved Permanently</h1><p>Redirecting to <a href=\"" + redirectUrl + "\">" + redirectUrl + "</a></p></body></html>";
                     ByteBuf content = ByteBuf.wrap(body.getBytes(StandardCharsets.UTF_8));
-                    DefaultFullHttpResponse response = new DefaultFullHttpResponse(net.hasor.neta.codec.http.constant.HttpVersion.HTTP_1_1, net.hasor.neta.codec.http.constant.HttpStatus.MOVED_PERMANENTLY, content);
+                    DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.MOVED_PERMANENTLY, content);
                     response.headers().set("Location", redirectUrl);
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML + "; charset=UTF-8");
                     response.headers().set(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(content.readableBytes()));

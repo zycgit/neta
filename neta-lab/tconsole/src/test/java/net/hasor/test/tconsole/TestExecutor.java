@@ -14,17 +14,16 @@
  * limitations under the License.
  */
 package net.hasor.test.tconsole;
+import java.util.HashMap;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import net.hasor.cobble.StringUtils;
 import net.hasor.tconsole.TelCommand;
 import net.hasor.tconsole.TelExecutor;
 
-import java.util.HashMap;
-
 /**
  * Hello Word
- * @version : 2016年4月3日
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2016年4月3日
  */
 public class TestExecutor implements TelExecutor {
     private boolean doCommand;

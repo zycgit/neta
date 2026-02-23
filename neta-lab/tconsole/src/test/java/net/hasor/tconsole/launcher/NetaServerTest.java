@@ -14,24 +14,28 @@
  * limitations under the License.
  */
 package net.hasor.tconsole.launcher;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import net.hasor.tconsole.client.TelClient;
 import net.hasor.tconsole.launcher.telnet.SocketTelService;
 import net.hasor.test.tconsole.TestExecutor;
 import org.junit.Test;
 
-import java.net.InetSocketAddress;
-
 public class NetaServerTest {
     @Test
     public void server_test_1() throws Exception {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
             // server
             server.addCommand("test", new TestExecutor());
-            server.start(8082);
+            server.start(port);
 
             // client
-            client.connectTo(new InetSocketAddress(8082));
-            assert ((InetSocketAddress) client.remoteAddress()).getPort() == 8082;
+            client.connectTo(new InetSocketAddress(port));
+            assert ((InetSocketAddress) client.remoteAddress()).getPort() == port;
 
             // test 1
             String help = client.sendCommand("help");

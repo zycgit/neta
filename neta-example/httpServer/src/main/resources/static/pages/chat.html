@@ -1,0 +1,350 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>WebSocket Chat - Neta HTTP Server</title>
+    <link rel="stylesheet" href="/css/style.css">
+    <style>
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 500px;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            margin-bottom: 16px;
+            font-family: 'Menlo', 'Courier New', monospace;
+            font-size: 0.88rem;
+            line-height: 1.6;
+        }
+
+        .chat-messages .msg {
+            margin-bottom: 6px;
+            word-wrap: break-word;
+        }
+
+        .msg-system {
+            color: var(--warning);
+        }
+
+        .msg-sent {
+            color: var(--accent);
+        }
+
+        .msg-received {
+            color: var(--success);
+        }
+
+        .msg-error {
+            color: var(--danger);
+        }
+
+        .msg-time {
+            color: var(--text-secondary);
+            font-size: 0.75rem;
+            margin-right: 8px;
+        }
+
+        .chat-input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input {
+            flex: 1;
+            background: var(--bg-primary);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 0.95rem;
+            font-family: inherit;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: var(--accent);
+        }
+
+        .chat-input::placeholder {
+            color: var(--text-secondary);
+        }
+
+        .status-bar {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 16px;
+        }
+
+        .status-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .status-dot.connected {
+            background: var(--success);
+            box-shadow: 0 0 6px var(--success);
+        }
+
+        .status-dot.disconnected {
+            background: var(--danger);
+            box-shadow: 0 0 6px var(--danger);
+        }
+
+        .status-text {
+            font-size: 0.85rem;
+            color: var(--text-secondary);
+        }
+
+        .btn-group {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn-sm {
+            background: var(--bg-card-hover);
+            color: var(--text-primary);
+            border: 1px solid var(--border);
+            padding: 6px 16px;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            cursor: pointer;
+            transition: background 0.2s, border-color 0.2s;
+        }
+
+        .btn-sm:hover {
+            border-color: var(--accent);
+            background: var(--bg-secondary);
+        }
+
+        .btn-danger {
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .btn-danger:hover {
+            background: rgba(248, 113, 113, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="container">
+            <h1>💬 WebSocket Echo Chat</h1>
+            <p class="subtitle">Real-time echo chat powered by Neta WebSocket</p>
+        </div>
+    </header>
+
+    <main class="container">
+        <section class="panel">
+            <h2>Chat</h2>
+
+            <!-- Status Bar -->
+            <div class="status-bar">
+                <span class="status-dot disconnected" id="status-dot"></span>
+                <span class="status-text" id="status-text">Disconnected</span>
+                <div style="flex:1"></div>
+                <div class="btn-group">
+                    <button class="btn-sm" id="btn-connect" onclick="wsConnect()">Connect</button>
+                    <button class="btn-sm btn-danger" id="btn-disconnect" onclick="wsDisconnect()" disabled>Disconnect</button>
+                    <button class="btn-sm" onclick="clearMessages()">Clear</button>
+                </div>
+            </div>
+
+            <!-- Chat Area -->
+            <div class="chat-container">
+                <div class="chat-messages" id="chat-messages"></div>
+                <div class="chat-input-row">
+                    <input type="text" class="chat-input" id="chat-input"
+                           placeholder="Type a message and press Enter..."
+                           onkeydown="if(event.key==='Enter') sendMessage()"
+                           disabled>
+                    <button class="btn" id="btn-send" onclick="sendMessage()" disabled>Send</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Info -->
+        <section class="panel">
+            <h2>How It Works</h2>
+            <div class="info-grid">
+                <div class="info-item">
+                    <span class="info-label">Protocol</span>
+                    <span class="info-value">WebSocket (RFC 6455)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Endpoint</span>
+                    <span class="info-value" id="ws-endpoint">/ws/echo</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Mode</span>
+                    <span class="info-value">Echo (server replies same message)</span>
+                </div>
+                <div class="info-item">
+                    <span class="info-label">Upgrade</span>
+                    <span class="info-value">HTTP → WebSocket</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Navigation -->
+        <section class="panel">
+            <h2>Navigation</h2>
+            <div class="link-grid">
+                <a href="/" class="link-card">
+                    <span class="link-icon">🏠</span>
+                    <span>Home</span>
+                </a>
+                <a href="/pages/about.html" class="link-card">
+                    <span class="link-icon">ℹ️</span>
+                    <span>About</span>
+                </a>
+                <a href="/pages/protocols.html" class="link-card">
+                    <span class="link-icon">📋</span>
+                    <span>Protocol Details</span>
+                </a>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <div class="container">
+            <p>Powered by <strong>Neta Framework</strong> — High-performance async network application framework for Java AIO</p>
+        </div>
+    </footer>
+
+    <script>
+    (function () {
+        'use strict';
+
+        var ws = null;
+        var messagesDiv = document.getElementById('chat-messages');
+        var inputEl = document.getElementById('chat-input');
+        var btnConnect = document.getElementById('btn-connect');
+        var btnDisconnect = document.getElementById('btn-disconnect');
+        var btnSend = document.getElementById('btn-send');
+        var statusDot = document.getElementById('status-dot');
+        var statusText = document.getElementById('status-text');
+
+        function getWsUrl() {
+            var protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+            return protocol + '//' + location.host + '/ws/echo';
+        }
+
+        function formatTime() {
+            var d = new Date();
+            var h = ('0' + d.getHours()).slice(-2);
+            var m = ('0' + d.getMinutes()).slice(-2);
+            var s = ('0' + d.getSeconds()).slice(-2);
+            return h + ':' + m + ':' + s;
+        }
+
+        function appendMessage(text, type) {
+            var div = document.createElement('div');
+            div.className = 'msg msg-' + type;
+
+            var timeSpan = document.createElement('span');
+            timeSpan.className = 'msg-time';
+            timeSpan.textContent = '[' + formatTime() + ']';
+            div.appendChild(timeSpan);
+
+            var textNode = document.createTextNode(text);
+            div.appendChild(textNode);
+
+            messagesDiv.appendChild(div);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function setConnected(connected) {
+            if (connected) {
+                statusDot.className = 'status-dot connected';
+                statusText.textContent = 'Connected';
+                btnConnect.disabled = true;
+                btnDisconnect.disabled = false;
+                inputEl.disabled = false;
+                btnSend.disabled = false;
+                inputEl.focus();
+            } else {
+                statusDot.className = 'status-dot disconnected';
+                statusText.textContent = 'Disconnected';
+                btnConnect.disabled = false;
+                btnDisconnect.disabled = true;
+                inputEl.disabled = true;
+                btnSend.disabled = true;
+            }
+        }
+
+        window.wsConnect = function () {
+            if (ws && ws.readyState === WebSocket.OPEN) {
+                return;
+            }
+
+            var url = getWsUrl();
+            appendMessage('Connecting to ' + url + ' ...', 'system');
+
+            try {
+                ws = new WebSocket(url);
+            } catch (e) {
+                appendMessage('Failed to create WebSocket: ' + e.message, 'error');
+                return;
+            }
+
+            ws.onopen = function () {
+                setConnected(true);
+                appendMessage('Connection established.', 'system');
+            };
+
+            ws.onmessage = function (event) {
+                appendMessage(event.data, 'received');
+            };
+
+            ws.onclose = function (event) {
+                setConnected(false);
+                appendMessage('Connection closed (code=' + event.code + ', reason=' + (event.reason || 'N/A') + ').', 'system');
+                ws = null;
+            };
+
+            ws.onerror = function () {
+                appendMessage('WebSocket error occurred.', 'error');
+            };
+        };
+
+        window.wsDisconnect = function () {
+            if (ws) {
+                ws.close();
+            }
+        };
+
+        window.sendMessage = function () {
+            var text = inputEl.value.trim();
+            if (!text) return;
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                appendMessage('Not connected!', 'error');
+                return;
+            }
+
+            ws.send(text);
+            appendMessage('You: ' + text, 'sent');
+            inputEl.value = '';
+            inputEl.focus();
+        };
+
+        window.clearMessages = function () {
+            messagesDiv.innerHTML = '';
+        };
+
+    })();
+    </script>
+</body>
+</html>

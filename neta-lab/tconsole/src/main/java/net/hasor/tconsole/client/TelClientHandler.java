@@ -16,6 +16,8 @@
 package net.hasor.tconsole.client;
 import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.cobble.logging.LoggerFactory;
@@ -44,11 +46,13 @@ class TelClientHandler implements PlayLoadListener {
         this.telAttribute = telAttribute;
     }
 
-    public void waitActive() {
+    public void waitActive(long timeout) {
         try {
-            this.activeFuture.get();
+            this.activeFuture.get(timeout, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
+        } catch (TimeoutException e) {
+            throw new RuntimeException("TelClient initialize timeout (" + timeout + "ms), server did not respond.", e);
         }
     }
 

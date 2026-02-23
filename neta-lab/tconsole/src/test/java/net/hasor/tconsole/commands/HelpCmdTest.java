@@ -14,21 +14,25 @@
  * limitations under the License.
  */
 package net.hasor.tconsole.commands;
+import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import net.hasor.tconsole.client.TelClient;
 import net.hasor.tconsole.launcher.telnet.SocketTelService;
 import net.hasor.test.tconsole.TestExecutor;
 import org.junit.Test;
 
-import java.net.InetSocketAddress;
-
 public class HelpCmdTest {
     @Test
     public void helpTest_1() throws Exception {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
             server.addCommand("test", new TestExecutor());
 
-            server.start(8082);
-            client.connectTo(new InetSocketAddress(8082));
+            server.start(port);
+            client.connectTo(new InetSocketAddress(port));
 
             String help = client.sendCommand("help");
             assert help.contains("- exit  out of console.");
@@ -42,11 +46,15 @@ public class HelpCmdTest {
 
     @Test
     public void helpTest_2() throws Exception {
+        ServerSocket ss = new ServerSocket(0);
+        int port = ss.getLocalPort();
+        ss.close();
+
         try (SocketTelService server = new SocketTelService(); TelClient client = new TelClient()) {
             server.addCommand("test", new TestExecutor());
 
-            server.start(8082);
-            client.connectTo(new InetSocketAddress(8082));
+            server.start(port);
+            client.connectTo(new InetSocketAddress(port));
 
             String help1 = client.sendCommand("help test");
             assert help1.contains("hello help.");

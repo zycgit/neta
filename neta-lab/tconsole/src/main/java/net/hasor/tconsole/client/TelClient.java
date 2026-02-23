@@ -20,6 +20,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
@@ -45,7 +47,8 @@ import static net.hasor.tconsole.TelOptions.SILENT;
  * @version : 2019年10月30日
  */
 public class TelClient implements TelAttribute, AutoCloseable {
-    private static final Logger          logger = LoggerFactory.getLogger(TelClient.class);
+    private static final Logger          logger          = LoggerFactory.getLogger(TelClient.class);
+    private static final long            DEFAULT_TIMEOUT = 15_000;
     private final        AttributeObject attributeObject;
     private              NetManager      netManager;
     private              NetChannel      channel;
@@ -71,6 +74,10 @@ public class TelClient implements TelAttribute, AutoCloseable {
     }
 
     public void connectTo(SocketAddress remote) {
+        this.connectTo(remote, DEFAULT_TIMEOUT);
+    }
+
+    public void connectTo(SocketAddress remote, long timeout) {
         this.netManager = new NetManager();
 
         // 1. 注册事件
@@ -80,14 +87,14 @@ public class TelClient implements TelAttribute, AutoCloseable {
         // 2. 连接到服务端
         Future<NetChannel> connected = this.netManager.connectAsync(remote, ctx -> {
             //split according to \r\n, max line is 4K
-            ctx.addLastDecoder("max length", new LineBasedFrameHandler(4096, false));
+            ctx.addLastDecoder("max length", new LineBasedFrameHandler(4096, true));
             // encoder/decoder string
             ctx.addLast("string", new StringDuplexer());
         }, SoConfig.TCP());
 
         // 3. 等待连接成功
         try {
-            this.channel = connected.get();
+            this.channel = connected.get(timeout, TimeUnit.MILLISECONDS);
             logger.info("tConsole -> TelClient connect to " + remote);
 
             // 设置属性
@@ -106,8 +113,11 @@ public class TelClient implements TelAttribute, AutoCloseable {
             sendBuffer.append(String.format("set %s=%s\n", TelOptions.ENDCODE_OF_SILENT, this.getAttribute(ENDCODE_OF_SILENT)));
             this.channel.sendData(sendBuffer.toString());
 
-            handler.waitActive();
+            handler.waitActive(timeout);
             logger.info("tConsole -> TelClient initialize ok.");
+        } catch (TimeoutException e) {
+            logger.error("tConsole -> TelClient connect timeout (" + timeout + "ms) -> " + remote, e);
+            this.close();
         } catch (Throwable e) {
             if (e instanceof ExecutionException) {
                 e = e.getCause();
@@ -121,12 +131,17 @@ public class TelClient implements TelAttribute, AutoCloseable {
      * 发送命令
      */
     public String sendCommand(String message) {
+        return this.sendCommand(message, DEFAULT_TIMEOUT);
+    }
+
+    public String sendCommand(String message, long timeout) {
         if (!this.isConnected()) {
             throw new IllegalStateException("the TelClient has been closed or not init.");
         }
 
         String endcodeOfSilent = TelUtils.aString(this, ENDCODE_OF_SILENT);
         this.channel.sendData(message.trim() + "\n");
+        long deadline = System.currentTimeMillis() + timeout;
         while (this.isConnected()) {
             this.receiveDataBuffer.resetReader();
             int readLength = TelUtils.waitString(this.receiveDataBuffer, endcodeOfSilent);
@@ -135,6 +150,10 @@ public class TelClient implements TelAttribute, AutoCloseable {
                 this.receiveDataBuffer.clear();// 完全释放
                 this.receiveDataBuffer.markReader();
                 return StringUtils.trimBlankEnd(dat);
+            }
+            if (System.currentTimeMillis() > deadline) {
+                this.close();
+                throw new IllegalStateException("sendCommand timeout (" + timeout + "ms), server did not respond to: " + message.trim());
             }
             try {
                 Thread.sleep(10);

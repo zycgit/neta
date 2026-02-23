@@ -22,14 +22,9 @@ import java.util.Collection;
 import java.util.Objects;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetChannel;
-import net.hasor.neta.codec.http.DefaultFullHttpResponse;
-import net.hasor.neta.codec.http.FullHttpResponse;
-import net.hasor.neta.codec.http.HttpHeaders;
-import net.hasor.neta.codec.http.constant.HttpHeaderNames;
-import net.hasor.neta.codec.http.constant.HttpHeaderValues;
-import net.hasor.neta.codec.http.constant.HttpStatus;
-import net.hasor.neta.codec.http.constant.HttpVersion;
+import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.Cookie;
+import net.hasor.neta.codec.http.cookie.DefaultCookie;
 import net.hasor.neta.codec.http.cookie.ServerCookieEncoder;
 import net.hasor.neta.http.HttpSession;
 import net.hasor.neta.http.ServletResponse;
@@ -232,7 +227,7 @@ public class DefaultServletResponse implements ServletResponse {
 
         // session cookie
         if (this.session != null && this.session.isNew()) {
-            net.hasor.neta.codec.http.cookie.DefaultCookie sessionCookie = new net.hasor.neta.codec.http.cookie.DefaultCookie("NSESSIONID", this.session.getId());
+            DefaultCookie sessionCookie = new DefaultCookie("NSESSIONID", this.session.getId());
             sessionCookie.setPath("/");
             sessionCookie.setHttpOnly(true);
             response.headers().add(HttpHeaderNames.SET_COOKIE, ServerCookieEncoder.encode(sessionCookie));
