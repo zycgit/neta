@@ -219,7 +219,7 @@ public class JdkSslContext extends SslContextBasic {
                 SSLContext context = SSLContext.getInstance(p);
                 context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
 
-                if (this.sslLog) {
+                if (this.protoCtx.getConfig().isPrintLog()) {
                     logger.info("ssl(" + this.channelId + ") create JdkSslContext with protocol " + p);
                 }
                 return context;
@@ -233,7 +233,8 @@ public class JdkSslContext extends SslContextBasic {
 
     @Override
     protected SSLEngine configSslEngine(SSLContext sslContext, SSLEngine sslEngine) {
-        if (this.sslLog) {
+        boolean printLog = this.protoCtx.getConfig().isPrintLog();
+        if (printLog) {
             logger.info("ssl(" + this.channelId + ") create SSLEngine on " + (isClient() ? "client" : "server"));
         }
         //        SSLParameters sslParameters = SSLContext.getDefault().getSupportedSSLParameters();
@@ -254,7 +255,7 @@ public class JdkSslContext extends SslContextBasic {
             ciphers = (ciphers == null) ? DEFAULT_CIPHERS_NON_TLSV13 : ciphers;
             ciphers = filterCipherSuites(Arrays.asList(ciphers), DEFAULT_CIPHERS_NON_TLSV13, SUPPORTED_CIPHERS_NON_TLSV13);
         }
-        if (this.sslLog) {
+        if (printLog) {
             logger.info("ssl(" + this.channelId + ") enabled CipherSuites [" + StringUtils.join(ciphers, ", ") + "]");
         }
         sslEngine.setEnabledCipherSuites(ciphers);
@@ -262,7 +263,7 @@ public class JdkSslContext extends SslContextBasic {
         // ClientAuth
         SslClientAuth clientAuth = this.sslConfig.getClientAuth();
         if (this.isServer() && clientAuth != null) {
-            if (this.sslLog) {
+            if (printLog) {
                 logger.info("ssl(" + this.channelId + ") clientAuth = " + clientAuth);
             }
             switch (clientAuth) {

@@ -16,7 +16,8 @@
 package net.hasor.neta.codec.ssl;
 import java.util.ArrayDeque;
 import java.util.Queue;
-import net.hasor.cobble.concurrent.ThreadUtils;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtListen;
@@ -39,23 +40,38 @@ public class SslAuthTypeTest extends AbstractSslTest {
             sslConf.setPemPrivate("ssl/ca/server.pem");
             sslConf.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
 
+            CountDownLatch handshakeDone = new CountDownLatch(2); // server + client
+            // Use synchronous VRT so the SSL handshake completes inline without competing for
+            // worker threads — this makes the test deterministic in the full suite environment.
+            VrtSoConfig config = VrtSoConfig.asDefault();
+            config.setAsynchronous(false);
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStackWithHandshakeLatch(sslConf, handshakeDone), config);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStackWithHandshakeLatch(sslConf, handshakeDone), config);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 
+            // Wait for SSL handshake on both sides — no sleep needed
+            assert handshakeDone.await(10, TimeUnit.SECONDS) : "SSL handshake did not complete in time (byPemCert)";
+
             // transfer
+            CountDownLatch dataReceived = new CountDownLatch(2);
             Queue<Object> serverRcvData = new ArrayDeque<>();
             Queue<Object> clientRcvData = new ArrayDeque<>();
-            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.offer(d.getData()));
-            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.offer(d.getData()));
+            server.subscribe(PlayLoad::isInbound, d -> {
+                serverRcvData.offer(d.getData());
+                dataReceived.countDown();
+            });
+            client.subscribe(PlayLoad::isInbound, d -> {
+                clientRcvData.offer(d.getData());
+                dataReceived.countDown();
+            });
             System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
             //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            ThreadUtils.sleep(500);
+            assert dataReceived.await(5, TimeUnit.SECONDS) : "Data was not received in time";
             assert clientRcvData.poll().equals("Hello Client, this message form server.");
             assert serverRcvData.poll().equals("Hello Server, this message form client.");
         });
@@ -70,23 +86,38 @@ public class SslAuthTypeTest extends AbstractSslTest {
             sslConf.setKeyPassword("123456");
             sslConf.setProtocols(new String[] { SslProtocol.TLS_v1_2 });
 
+            CountDownLatch handshakeDone = new CountDownLatch(2); // server + client
+            // Use synchronous VRT so the SSL handshake completes inline without competing for
+            // worker threads — this makes the test deterministic in the full suite environment.
+            VrtSoConfig config = VrtSoConfig.asDefault();
+            config.setAsynchronous(false);
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), VrtSoConfig.asDefault());
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStackWithHandshakeLatch(sslConf, handshakeDone), config);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStackWithHandshakeLatch(sslConf, handshakeDone), config);
             VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
 
+            // Wait for SSL handshake on both sides — no sleep needed
+            assert handshakeDone.await(10, TimeUnit.SECONDS) : "SSL handshake did not complete in time (byJks)";
+
             // transfer
+            CountDownLatch dataReceived = new CountDownLatch(2);
             Queue<Object> serverRcvData = new ArrayDeque<>();
             Queue<Object> clientRcvData = new ArrayDeque<>();
-            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.offer(d.getData()));
-            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.offer(d.getData()));
+            server.subscribe(PlayLoad::isInbound, d -> {
+                serverRcvData.offer(d.getData());
+                dataReceived.countDown();
+            });
+            client.subscribe(PlayLoad::isInbound, d -> {
+                clientRcvData.offer(d.getData());
+                dataReceived.countDown();
+            });
             System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
 
             //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            ThreadUtils.sleep(500);
+            assert dataReceived.await(5, TimeUnit.SECONDS) : "Data was not received in time";
             assert clientRcvData.poll().equals("Hello Client, this message form server.");
             assert serverRcvData.poll().equals("Hello Server, this message form client.");
         });

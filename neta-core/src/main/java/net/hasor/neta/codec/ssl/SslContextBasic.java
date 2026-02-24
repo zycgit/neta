@@ -40,8 +40,6 @@ public abstract class SslContextBasic implements SslContext {
     protected final        String        stackName;
     protected final        ProtoContext  protoCtx;
     protected final        SoContext     soContext;
-    protected final        boolean       sslLog;
-    protected final        boolean       netLog;
     //
     protected final        SslConfig     sslConfig;
     private final          boolean       clientMode;
@@ -57,8 +55,6 @@ public abstract class SslContextBasic implements SslContext {
         this.protoCtx = protoCtx;
         this.soContext = protoCtx.getSoContext();
         this.clientMode = clientMode;
-        this.sslLog = protoCtx.getSoContext().getConfig().isPrintLog();
-        this.netLog = this.soContext.getConfig().isPrintLog();
 
         this.sslConfig = config;
         this.sslEnable = true;
@@ -113,7 +109,7 @@ public abstract class SslContextBasic implements SslContext {
         KeyStore ks = this.sslConfig.getKeyStore();
         if (ks == null) {
             String defaultType = KeyStore.getDefaultType();
-            if (this.sslLog) {
+            if (this.protoCtx.getConfig().isPrintLog()) {
                 logger.info("ssl(" + this.channelId + ") create KeyStore using '" + defaultType + "'");
             }
             ks = KeyStore.getInstance(defaultType);
@@ -125,10 +121,11 @@ public abstract class SslContextBasic implements SslContext {
     protected KeyManagerFactory createKeyManagerFactory(KeyStore keyStore) throws GeneralSecurityException, IOException {
         String password = this.sslConfig.getKeyPassword();
         char[] passwordChars = (password == null) ? ArrayUtils.EMPTY_CHAR_ARRAY : password.toCharArray();
+        boolean printLog = this.protoCtx.getConfig().isPrintLog();
 
         if (this.sslConfig.getAuthType() == SslAuthKeyType.JKS) {
             String jskResource = Objects.requireNonNull(this.sslConfig.getJksResource());
-            if (this.sslLog) {
+            if (printLog) {
                 logger.info("ssl(" + this.channelId + ") loadKeyStore by JKS, " + jskResource);
             }
 
@@ -138,7 +135,7 @@ public abstract class SslContextBasic implements SslContext {
         } else if (this.sslConfig.getAuthType() == SslAuthKeyType.PEM) {
             String pemPrivate = Objects.requireNonNull(this.sslConfig.getPemPrivate(), "key required for servers");
             String pemCertChain = Objects.requireNonNull(this.sslConfig.getPemCertChain(), "keyCertChain");
-            if (this.sslLog) {
+            if (printLog) {
                 logger.info("ssl(" + this.channelId + ") loadKeyStore by PEM pemPrivate = " + pemPrivate + ", pemCertChain = " + pemCertChain);
             }
 
@@ -153,7 +150,7 @@ public abstract class SslContextBasic implements SslContext {
 
             SslUtils.loadKeyStore(keyStore, certChain, privateKey, passwordChars);
         } else {
-            if (this.sslLog) {
+            if (printLog) {
                 logger.info("ssl(" + this.channelId + ") loadKeyStore ignore.");
             }
         }
@@ -189,7 +186,7 @@ public abstract class SslContextBasic implements SslContext {
     public ProtoStatus handRcv(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslEnable) {
             if (!sndDown.hasSlot()) {
-                if (this.netLog) {
+                if (this.protoCtx.getConfig().isPrintLog()) {
                     logger.info("sslRcv(" + this.channelId + ") rcvDown or sndDown Buffer is full.");
                 }
                 return ProtoStatus.Next;
@@ -210,13 +207,14 @@ public abstract class SslContextBasic implements SslContext {
     public ProtoStatus handSnd(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
         if (this.sslEnable) {
             if (!sndDown.hasSlot()) {
-                if (this.netLog) {
+                if (this.protoCtx.getConfig().isPrintLog()) {
                     logger.info("sslSnd(" + this.channelId + ") rcvDown or sndDown Buffer is full.");
                 }
                 return ProtoStatus.Next;
             }
 
-            if (this.sslHandler.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown)) {
+            boolean hsReady = this.sslHandler.tryHandshake(false, rcvUp, rcvDown, sndUp, sndDown);
+            if (hsReady) {
                 this.sslHandler.handlerSnd(rcvUp, rcvDown, sndUp, sndDown);
             }
             return ProtoStatus.Next;

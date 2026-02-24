@@ -17,6 +17,7 @@ package net.hasor.neta.codec.ssl;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CountDownLatch;
 import net.hasor.cobble.function.EConsumer;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
@@ -39,6 +40,65 @@ public class AbstractSslTest {
                 .nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1)
                 // create Stack
                 .build();
+    }
+
+    /**
+     * Creates a protocol stack whose String codec layer listens for {@link SslEvent} and counts
+     * down {@code handshakeLatch} as soon as TLS negotiation succeeds on that side.
+     * <p>
+     * {@link SslDuplexer} already calls {@code fireUserEvent(SslEvent.class, …)} the moment the
+     * handshake finishes. That event propagates to every downstream handler in the pipeline, so
+     * the String codec — which sits directly after the SSL layer — can intercept it without any
+     * extra passthrough handler.
+     * <pre>{@code
+     * CountDownLatch handshakeDone = new CountDownLatch(2); // server side + client side
+     * neta.bind(addr,        createProtoStackWithHandshakeLatch(serverConf, handshakeDone), config);
+     * neta.connectSync(addr, createProtoStackWithHandshakeLatch(clientConf, handshakeDone), config);
+     * handshakeDone.await(10, TimeUnit.SECONDS); // precise wait — no sleep needed
+     * }</pre>
+     */
+    public static ProtoInitializer createProtoStackWithHandshakeLatch(SslConfig sslConf, CountDownLatch handshakeLatch) {
+        return ctx -> {
+            // SSL encryption/decryption layer — fires SslEvent when handshake completes
+            ctx.addLast("SSL", new SslDuplexer(sslConf));
+            // String codec layer — intercepts SslEvent to signal handshake completion,
+            // then lets the event continue propagating (return false)
+            ctx.addLast("String", new ProtoDuplexer<ByteBuf, String, String, ByteBuf>() {
+                @Override
+                public void onInit(ProtoContext context) {
+                }
+
+                @Override
+                public void onActive(ProtoContext context) {
+                }
+
+                @Override
+                public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
+                    if (event.getEventType() == SslEvent.class && ((SslEvent) event.getData()).isHandshake()) {
+                        handshakeLatch.countDown();
+                    }
+                    return false; // continue propagating
+                }
+
+                @Override
+                public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<String> rcvDown, ProtoRcvQueue<String> sndUp, ProtoSndQueue<ByteBuf> sndDown) {
+                    if (isRcv) {
+                        return doDecoder1(context, rcvUp, rcvDown);
+                    } else {
+                        return doEncoder1(context, sndUp, sndDown);
+                    }
+                }
+
+                @Override
+                public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) {
+                    return ProtoStatus.Next;
+                }
+
+                @Override
+                public void onClose(ProtoContext context) {
+                }
+            });
+        };
     }
 
     /**

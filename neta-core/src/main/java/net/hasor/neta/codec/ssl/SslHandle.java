@@ -41,7 +41,6 @@ class SslHandle {
     private final        SslContext         sslContext;
     private final        SslEngineWrap      engine;
     private final        ByteBufAllocator   bufAllocator;
-    private final        boolean            sslLog;
     private final        Runnable           closeCallBack;
     //
     private volatile     SslHandshakeStatus handshake;
@@ -57,7 +56,6 @@ class SslHandle {
         this.sslContext = sslContext;
         this.engine = engine;
         this.bufAllocator = protoCtx.getSoContext().getByteBufAllocator();
-        this.sslLog = protoCtx.getSoContext().getConfig().isPrintLog();
         this.handshake = SslHandshakeStatus.NotHandshaking;
         this.closeCallBack = closeCallBack;
     }
@@ -125,7 +123,7 @@ class SslHandle {
                 this.doHandshake(rcvUp, rcvDown, sndUp, sndDown);
             } catch (IOException e) {
                 String type = isRcv ? "rcv" : "snd";
-                if (this.sslLog) {
+                if (this.protoCtx.getConfig().isPrintLog()) {
                     logger.error("sslHandshake(" + this.channelID + ") " + type + "Failed: " + e.getMessage(), e);
                 } else {
                     logger.error("sslHandshake(" + this.channelID + ") " + type + "Failed: " + e.getMessage());
@@ -245,7 +243,7 @@ class SslHandle {
                 && producedBytes == 0);                     // no produced any data, continue SslHandshake.
 
         // has AppData
-        if (this.sslLog) {
+        if (this.protoCtx.getConfig().isPrintLog()) {
             logger.info("sslHandshake(" + this.channelID + ") Unwrap, " + rcvTotal + "/" + consumedBytes + "/" + producedBytes + " (rcv > decode > data)");
         }
 
@@ -276,7 +274,7 @@ class SslHandle {
         // has NetData
         int bytesConsumed = result.bytesConsumed();
         int bytesProduced = result.bytesProduced();
-        if (this.sslLog) {
+        if (this.protoCtx.getConfig().isPrintLog()) {
             logger.info("sslHandshake(" + this.channelID + ") WRAP, " + dataTotal + "/" + bytesConsumed + "/" + bytesProduced + " (data > encode > snd)");
         }
 
@@ -347,54 +345,68 @@ class SslHandle {
 
     /** After the handshake, receive data */
     public void handlerRcv(ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws IOException {
-        // rcvUp to inNetData.
-        int rcvTotal = this.queueToBuffer(rcvUp, this.inNetData);
-
-        // Process ALL TLS records in the buffer (a single AIO read may contain
-        // multiple TLS records, e.g. SETTINGS_ACK + HEADERS for HTTP/2 multiplexing).
-        // Previously only one unwrap() call was made, leaving subsequent TLS records
-        // stuck in inNetData and causing HTTP/2 streams to hang indefinitely.
+        // Process ALL available data from rcvUp, not just one inNetData-buffer's worth.
+        // A single AIO read may bring multiple TLS records (e.g. 32KB = 2 TLS records).
+        // The inNetData buffer (~16KB) can only hold one TLS record at a time, so we
+        // must loop: fill inNetData from rcvUp → unwrap → repeat until rcvUp is drained.
+        int totalReceived = 0;
         int totalConsumed = 0;
         int totalProduced = 0;
 
-        while (true) {
-            this.inNetData.flip();
-            if (!this.inNetData.hasRemaining()) {
-                this.inNetData.compact();
+        boolean keepReading = true;
+        while (keepReading) {
+            // Fill inNetData from the rcvUp queue
+            int rcvBatch = this.queueToBuffer(rcvUp, this.inNetData);
+            totalReceived += rcvBatch;
+
+            // If no new data was read AND inNetData is empty, we're done
+            if (rcvBatch == 0 && this.inNetData.position() == 0) {
                 break;
             }
 
-            SSLEngineResult result = this.engine.unwrap(this.inNetData, this.inAppData);
-            if (result.getStatus() == Status.BUFFER_OVERFLOW) {
+            // Unwrap all complete TLS records from inNetData
+            while (true) {
+                this.inNetData.flip();
+                if (!this.inNetData.hasRemaining()) {
+                    this.inNetData.compact();
+                    break;
+                }
+
+                SSLEngineResult result = this.engine.unwrap(this.inNetData, this.inAppData);
+                if (result.getStatus() == Status.BUFFER_OVERFLOW) {
+                    this.inNetData.compact();
+                    this.resizingBufOverflowForUnwrap("sslRcv");
+                    continue; // retry with larger buffer
+                }
+
+                totalConsumed += result.bytesConsumed();
+                totalProduced += result.bytesProduced();
+
+                this.inAppData.flip();
+                if (result.bytesProduced() > 0) {
+                    this.bufferToQueue(this.inAppData, rcvDown);
+                }
+                this.inAppData.compact();
                 this.inNetData.compact();
-                this.resizingBufOverflowForUnwrap("sslRcv");
-                continue; // retry with larger buffer
+
+                if (result.getStatus() == Status.CLOSED) {
+                    this.afterClose();
+                    return;
+                }
+
+                // BUFFER_UNDERFLOW means incomplete TLS record — need more cipher data.
+                // Try to read more from rcvUp in the outer loop.
+                if (result.getStatus() == Status.BUFFER_UNDERFLOW || result.bytesConsumed() == 0) {
+                    break;
+                }
             }
 
-            totalConsumed += result.bytesConsumed();
-            totalProduced += result.bytesProduced();
-
-            this.inAppData.flip();
-            if (result.bytesProduced() > 0) {
-                this.bufferToQueue(this.inAppData, rcvDown);
-            }
-            this.inAppData.compact();
-            this.inNetData.compact();
-
-            if (result.getStatus() == Status.CLOSED) {
-                this.afterClose();
-                return;
-            }
-
-            // BUFFER_UNDERFLOW means incomplete TLS record — wait for more network data.
-            // bytesConsumed == 0 is a safety guard against infinite loops.
-            if (result.getStatus() == Status.BUFFER_UNDERFLOW || result.bytesConsumed() == 0) {
-                break;
-            }
+            // Continue outer loop if rcvUp still has data to feed into inNetData
+            keepReading = rcvUp.hasMore();
         }
 
-        if (this.sslLog) {
-            logger.info("sslRcv(" + this.channelID + ") " + rcvTotal + "/" + totalConsumed + "/" + totalProduced + " (rcv > decode > data)");
+        if (this.protoCtx.getConfig().isPrintLog()) {
+            logger.info("sslRcv(" + this.channelID + ") [SSL-UNWRAP] cipher=" + totalReceived + " consumed=" + totalConsumed + " plaintext=" + totalProduced);
         }
     }
 
@@ -437,13 +449,23 @@ class SslHandle {
                 return;
             }
 
-            if (result.getStatus() == Status.BUFFER_UNDERFLOW || result.bytesConsumed() == 0) {
+            if (result.getStatus() == Status.BUFFER_UNDERFLOW) {
+                break;
+            }
+
+            if (result.bytesConsumed() == 0) {
+                // TLS 1.3 post-handshake: SSLEngine may produce NewSessionTicket or
+                // KeyUpdate records that consume 0 application bytes but produce TLS output.
+                // If application data is still pending, continue wrapping to encrypt it.
+                if (result.bytesProduced() > 0 && this.outAppData.position() > 0) {
+                    continue; // retry — engine may now consume application data
+                }
                 break;
             }
         }
 
-        if (this.sslLog) {
-            logger.info("sslSnd(" + this.channelID + ") " + sndTotal + "/" + totalConsumed + "/" + totalProduced + " (data > encode > snd)");
+        if (this.protoCtx.getConfig().isPrintLog()) {
+            logger.info("sslSnd(" + this.channelID + ") [SSL-WRAP] plaintext=" + sndTotal + " consumed=" + totalConsumed + " cipher=" + totalProduced);
         }
     }
 }
