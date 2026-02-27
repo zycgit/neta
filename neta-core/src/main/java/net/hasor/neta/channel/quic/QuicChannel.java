@@ -16,264 +16,192 @@
 package net.hasor.neta.channel.quic;
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
-import java.nio.channels.DatagramChannel;
-import java.security.SecureRandom;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicLong;
+import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.NetMonitor;
+import net.hasor.neta.channel.ProtoInitializer;
 import net.hasor.neta.channel.udp.UdpChannel;
-import net.hasor.neta.channel.udp.UdpTransport;
+import net.hasor.neta.codec.ssl.SslCertConfig;
+import net.hasor.neta.codec.ssl.SslContext;
 
 /**
  * Connection-level QUIC channel, extending {@link UdpChannel}.
  * <p>
- * QUIC is built on top of UDP, so this channel inherits the UDP channel
- * infrastructure and adds QUIC-specific protocol logic:
+ * This channel is created <b>only after the QUIC handshake has completed</b>.
+ * All handshake processing (Initial, Handshake packets, TLS, transport-parameter
+ * negotiation) is handled by {@link QuicChannelAsync} before this
+ * object comes into existence.
+ * <p>
+ * Once created, this channel handles:
  * <ul>
- *   <li>Handshake state machine (INITIAL→HANDSHAKE→ESTABLISHED→CLOSED)</li>
- *   <li>TLS 1.3 encryption/decryption (when SSL is enabled)</li>
- *   <li>QUIC packet parsing and building</li>
+ *   <li>Application-level (1-RTT) packet processing</li>
  *   <li>Stream management (multiplexed streams over a single connection)</li>
- *   <li>Connection ID management</li>
+ *   <li>DATAGRAM support (RFC 9221)</li>
+ *   <li>Connection-level flow control (RFC 9000 §4)</li>
+ *   <li>Connection lifecycle (close, closeNow, closeWithError)</li>
  * </ul>
  * <p>
- * Two stream creation modes are supported:
+ * Stream creation is supported via:
  * <ul>
- *   <li>{@link #newStream(long)} — <b>Inherit mode</b>: the stream inherits the
- *       connection's pipeline configuration.</li>
- *   <li>{@link #newStream(long, ProtoInitializer)} — <b>Custom mode</b>: the stream
- *       gets its own pipeline with full lifecycle management.</li>
+ *   <li>{@link #newBidiStream()} / {@link #newUniStream()} — asynchronously creates a stream
+ *       with an automatically allocated ID, using the connection's default pipeline.</li>
  * </ul>
  * @author 赵永春 (zyc@hasor.net)
+ * @see QuicChannelAsync
  * @see QuicStreamChannel
- * @see QuicStreamEvent
  */
 public class QuicChannel extends UdpChannel {
-    private static final Logger logger = Logger.getLogger(QuicChannel.class);
+    private final QuicSoConfig   quicSoConfig;
+    private final boolean        clientMode;
+    private final AtomicLong     nextBidiStreamId;   // client: 0,4,8,…  server: 1,5,9,…
+    private final AtomicLong     nextUniStreamId;    // client: 2,6,10,… server: 3,7,11,…
+    private final AtomicLong     localMaxStreamsBidi;// max bidi streams we allow peer to open
+    private final AtomicLong     localMaxStreamsUni; // max uni streams we allow peer to open
+    private final QuicSslContext sslContext;         // SSL context from completed handshake
 
-    // ── QUIC version ───────────────────────────────────────────────────
-    public static final int QUIC_VERSION_1 = 0x00000001;
+    /**
+     * Creates a QuicChannel from a completed handshake.
+     * All handshake negotiation results are read from the given
+     * {@link QuicChannelAsync}.
+     */
+    QuicChannel(QuicChannelAsync connCh) throws Throwable {
+        super(connCh.getChannelId(), new NetMonitor(), connCh.getForListen(), connCh.getInitializer(), connCh, connCh.getContext());
+        this.quicSoConfig = connCh.getSoConfig();
+        this.clientMode = connCh.isClientMode();
+        this.nextBidiStreamId = new AtomicLong(this.clientMode ? 0 : 1);
+        this.nextUniStreamId = new AtomicLong(this.clientMode ? 2 : 3);
+        this.localMaxStreamsBidi = new AtomicLong(this.quicSoConfig.getTpInitialMaxStreamsBidi());
+        this.localMaxStreamsUni = new AtomicLong(this.quicSoConfig.getTpInitialMaxStreamsUni());
 
-    /** Handshake state machine */
-    public enum HandshakeState {
-        INITIAL,
-        HANDSHAKE,
-        ESTABLISHED,
-        CLOSED
-    }
-
-    // ── Connection identity ────────────────────────────────────────────
-    private final byte[]        srcConnectionId;
-    private       byte[]        dstConnectionId;
-    private final SocketAddress remoteAddress;
-
-    // ── State ──────────────────────────────────────────────────────────
-    private volatile HandshakeState handshakeState = HandshakeState.INITIAL;
-    private volatile boolean        activated      = false;
-
-    // ── SSL/TLS ────────────────────────────────────────────────────────
-    private final boolean       sslEnabled;
-    private       QuicTlsEngine tlsEngine;
-
-    // Encryption keys: [key, iv, hp] for each level
-    private byte[][] initialClientKeys;
-    private byte[][] initialServerKeys;
-    private byte[][] handshakeClientKeys;
-    private byte[][] handshakeServerKeys;
-    private byte[][] appClientKeys;
-    private byte[][] appServerKeys;
-
-    // ── Packet numbers ─────────────────────────────────────────────────
-    private final AtomicLong initialPn          = new AtomicLong(0);
-    private final AtomicLong handshakePn        = new AtomicLong(0);
-    private final AtomicLong appPn              = new AtomicLong(0);
-    private       long       largestInitialPn   = -1;
-    private       long       largestHandshakePn = -1;
-    private       long       largestAppPn       = -1;
-
-    // ── Protocol-level stream tracking ─────────────────────────────────
-    private final Set<Long> openStreams = ConcurrentHashMap.newKeySet();
-
-    // ── Flow control (connection level, RFC 9000 §4) ───────────────────
-    private volatile long       localMaxData;       // max data we allow peer to send
-    private volatile long       peerMaxData;        // max data peer allows us to send
-    private final    AtomicLong dataSent     = new AtomicLong(0);
-    private final    AtomicLong dataReceived = new AtomicLong(0);
-
-    // ── Stream limits (RFC 9000 §4.6) ──────────────────────────────────
-    private volatile long       peerMaxStreamsBidi;  // max bidi streams peer allows us to open
-    private volatile long       peerMaxStreamsUni;    // max uni streams peer allows us to open
-    private volatile long       localMaxStreamsBidi; // max bidi streams we allow peer to open
-    private volatile long       localMaxStreamsUni;   // max uni streams we allow peer to open
-    private final    AtomicLong nextClientBidiStreamId = new AtomicLong(0);  // 0, 4, 8, ...
-    private final    AtomicLong nextServerBidiStreamId = new AtomicLong(1);  // 1, 5, 9, ...
-    private final    AtomicLong nextClientUniStreamId  = new AtomicLong(2);  // 2, 6, 10, ...
-    private final    AtomicLong nextServerUniStreamId  = new AtomicLong(3);  // 3, 7, 11, ...
-
-    // ── DATAGRAM support (RFC 9221) ────────────────────────────────────
-    private volatile QuicStreamChannel datagramChannel;
-
-    // ── Transport ──────────────────────────────────────────────────────
-    private final DatagramChannel udpChannel;
-    private final UdpTransport    ownedTransport; // non-null for client-mode channels; null for server-side
-    private final QuicSoConfig    quicSoConfig;
-    private final boolean         clientMode;
-
-    // ── Stream management ──────────────────────────────────────────────
-    private final ProtoInitializer                           defaultStreamInitializer;
-    private final ConcurrentHashMap<Long, QuicStreamChannel> streams = new ConcurrentHashMap<>();
-
-    // ── Constructors (package-private) ──────────────────────────────────
-
-    /** Server mode: incoming connection from a remote peer. */
-    QuicChannel(byte[] srcConnId, SocketAddress remoteAddr, SocketAddress localAddr, DatagramChannel udpChannel, QuicSoConfig soConfig, SoContextService context, QuicListen listen) throws IOException {
-        this(context.nextID(), listen, listen.getInitializer(), srcConnId, remoteAddr, localAddr, udpChannel, null, soConfig, context, false);
-    }
-
-    /** Client mode: outgoing connection. Caller is responsible for closing the UDP channel. */
-    QuicChannel(byte[] srcConnId, SocketAddress remoteAddr, SocketAddress localAddr, DatagramChannel udpChannel, QuicSoConfig soConfig, SoContextService context, ProtoInitializer initializer) throws IOException {
-        this(context.nextID(), null, initializer, srcConnId, remoteAddr, localAddr, udpChannel, null, soConfig, context, true);
-    }
-
-    /** Client mode: takes ownership of the given {@link UdpTransport} (closed when this channel closes). */
-    QuicChannel(byte[] srcConnId, SocketAddress remoteAddr, SocketAddress localAddr, UdpTransport transport, QuicSoConfig soConfig, SoContextService context, ProtoInitializer initializer) throws IOException {
-        this(context.nextID(), null, initializer, srcConnId, remoteAddr, localAddr, transport.getChannel(), transport, soConfig, context, true);
-    }
-
-    private QuicChannel(long channelId, NetListen forListen, ProtoInitializer initializer, byte[] srcConnId, SocketAddress remoteAddr, SocketAddress localAddr, DatagramChannel udpChannel, UdpTransport ownedTransport, QuicSoConfig soConfig, SoContextService context, boolean clientMode) throws IOException {
-        super(channelId, new NetMonitor(), forListen, initializer, new QuicAsyncConnectionChannel(channelId, soConfig, localAddr, remoteAddr, context), context);
-        this.srcConnectionId = srcConnId;
-        this.remoteAddress = remoteAddr;
-        this.defaultStreamInitializer = initializer;
-        this.udpChannel = udpChannel;
-        this.ownedTransport = ownedTransport;
-        this.quicSoConfig = soConfig;
-        this.sslEnabled = soConfig.isSslEnabled();
-        this.clientMode = clientMode;
-        ((QuicAsyncConnectionChannel) this.asyncChannel).setQuicChannel(this);
-
-        // Initialize flow control from transport parameters
-        QuicSettings tp = soConfig.getTransportParams();
-        this.localMaxData = tp.initialMaxData();
-        this.peerMaxData = tp.initialMaxData();
-        this.localMaxStreamsBidi = tp.initialMaxStreamsBidi();
-        this.localMaxStreamsUni = tp.initialMaxStreamsUni();
-        this.peerMaxStreamsBidi = tp.initialMaxStreamsBidi();
-        this.peerMaxStreamsUni = tp.initialMaxStreamsUni();
-
-        // In client mode, generate a random DCID for the Initial packet
-        if (clientMode) {
-            this.dstConnectionId = generateConnectionId(soConfig.getConnectionIdLength());
-        }
-
-        if (this.sslEnabled && !clientMode) {
-            try {
-                this.tlsEngine = new QuicTlsEngine(soConfig.getCertChain(), soConfig.getPrivateKey(), soConfig.getTransportParams());
-                // Derive initial keys from the client's DCID (which is our SCID)
-                byte[][] initialSecrets = QuicCrypto.deriveInitialSecrets(srcConnId);
-                this.initialClientKeys = QuicCrypto.derivePacketKeys(initialSecrets[0]);
-                this.initialServerKeys = QuicCrypto.derivePacketKeys(initialSecrets[1]);
-            } catch (Exception e) {
-                throw new IOException("Failed to initialize QUIC TLS engine", e);
+        // Build QuicSslContext from handshake results
+        QuicAsyncChannelHandshake handshake = connCh.getHandshake();
+        QuicTlsEngine tlsEngine = (handshake != null) ? handshake.getTlsEngine() : null;
+        if (tlsEngine != null) {
+            SslCertConfig certConfig = this.quicSoConfig.getSslConfig();
+            String negotiatedAlpn = tlsEngine.getNegotiatedAlpn();
+            // Prefer SNI hostname from TLS ClientHello; fall back to socket address
+            String sniHost = tlsEngine.getPeerSniHost();
+            SocketAddress remote = connCh.getRemoteAddress();
+            String peerHost = (sniHost != null && !sniHost.isEmpty()) ? sniHost : null;
+            int peerPort = 0;
+            if (remote instanceof java.net.InetSocketAddress) {
+                java.net.InetSocketAddress inet = (java.net.InetSocketAddress) remote;
+                if (peerHost == null) {
+                    peerHost = inet.getHostString();
+                }
+                peerPort = inet.getPort();
+            } else if (peerHost == null && remote != null) {
+                peerHost = remote.toString();
             }
+            String sniHostName = tlsEngine.getPeerSniHost();
+            this.sslContext = new QuicSslContext(this, certConfig, this.clientMode, negotiatedAlpn, peerHost, peerPort, sniHostName);
+        } else {
+            this.sslContext = null;
         }
+
+        connCh.setQuicChannel(this);
     }
 
-    // ── Public API ─────────────────────────────────────────────────────
-
-    /** Returns {@code true} if the QUIC connection is open (not closed and not in CLOSED state). */
-    public boolean isConnectionOpen() {
-        return this.handshakeState != HandshakeState.CLOSED;
+    protected QuicChannelAsync asyncChannel() {
+        return (QuicChannelAsync) this.asyncChannel;
     }
 
-    public HandshakeState getHandshakeState() {
-        return this.handshakeState;
-    }
-
-    public byte[] getSrcConnectionId() {
-        return this.srcConnectionId;
-    }
-
-    /** Set the destination connection ID (used by client mode). */
-    public void setDstConnectionId(byte[] dcid) {
-        this.dstConnectionId = dcid;
+    /** Returns the {@link SslContext} for this QUIC connection, or {@code null} if SSL is disabled. */
+    public SslContext getSslContext() {
+        return this.sslContext;
     }
 
     /** Returns the set of currently open stream IDs (protocol-level tracking). */
     public Set<Long> getOpenStreams() {
-        return this.openStreams;
-    }
-
-    // ── Flow control API (RFC 9000 §4) ─────────────────────────────────
-
-    /** Returns the maximum amount of data the peer is allowed to send to us. */
-    public long getLocalMaxData() {
-        return this.localMaxData;
-    }
-
-    /** Returns the maximum amount of data we are allowed to send to the peer. */
-    public long getPeerMaxData() {
-        return this.peerMaxData;
-    }
-
-    /** Returns the total bytes sent at the connection level. */
-    public long getDataSent() {
-        return this.dataSent.get();
-    }
-
-    /** Returns the total bytes received at the connection level. */
-    public long getDataReceived() {
-        return this.dataReceived.get();
+        return this.asyncChannel().getStreamIds();
     }
 
     /**
-     * Sends a MAX_DATA frame to the peer, increasing the connection-level flow control limit.
-     * @param maxData the new maximum data limit
+     * Returns the effective connection-level data limit currently in use.
+     * Initially {@code min(localConfig, peerAnnounced)}, and can only <b>increase</b>
+     * via {@link #sendMaxDataSize(long)}.
+     * @return current effective data limit
      */
-    public void sendMaxData(long maxData) throws Exception {
-        this.localMaxData = maxData;
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_DATA);
-        byte[] valBytes = QuicVarInt.encode(maxData);
-        byte[] frame = concat(typeBytes, valBytes);
-        sendApplicationData(frame);
+    public long getMaxDataSize() {
+        return this.asyncChannel().getNegotiationMaxData();
     }
 
     /**
-     * Sends a MAX_STREAM_DATA frame to increase the flow control limit for a specific stream.
-     * @param streamId the stream to update
-     * @param maxStreamData the new maximum stream data limit
+     * Sends a MAX_DATA frame (RFC 9000 §19.9) to the peer, increasing the connection-level
+     * flow control limit. The new limit must be <b>greater than or equal to</b> the current
+     * {@link #getMaxDataSize()} — smaller values are rejected.
+     * <p>
+     * After the frame has been successfully transmitted over UDP, the local
+     * {@code useMaxDataSize} is updated to {@code newMaxDataSize}.
+     * @param newMaxDataSize the new maximum data limit (must be &ge; current {@code useMaxDataSize})
+     * @return a {@link Future} that completes with this {@link QuicChannel} on success
+     * @throws IllegalArgumentException if {@code newMaxDataSize} is less than the current limit
      */
-    public void sendMaxStreamData(long streamId, long maxStreamData) throws Exception {
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAM_DATA);
-        byte[] sidBytes = QuicVarInt.encode(streamId);
-        byte[] valBytes = QuicVarInt.encode(maxStreamData);
-        byte[] frame = new byte[typeBytes.length + sidBytes.length + valBytes.length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
-        pos += sidBytes.length;
-        System.arraycopy(valBytes, 0, frame, pos, valBytes.length);
-        sendApplicationData(frame);
+    public Future<QuicChannel> sendMaxDataSize(long newMaxDataSize) {
+        long currentDataSize = this.asyncChannel().getNegotiationMaxData();
+        if (newMaxDataSize < currentDataSize) {
+            throw new IllegalArgumentException("maxDataSize can only increase: current=" + currentDataSize + ", requested=" + newMaxDataSize);
+        }
+
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        ByteBuf frame = null;
+        try {
+            byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_DATA);
+            byte[] valBytes = QuicVarInt.encode(newMaxDataSize);
+            frame = ByteBufAllocator.DEFAULT.buffer(typeBytes.length + valBytes.length);
+            frame.writeBytes(typeBytes);
+            frame.writeBytes(valBytes);
+            future.onCompleted(f -> {
+                this.asyncChannel().updateGlobalMaxDataSize(newMaxDataSize);
+            });
+            this.asyncChannel().sendDataFrame(frame, future);
+        } catch (Throwable e) {
+            IOUtils.closeQuietly(frame);
+            future.failed(e);
+        }
+        return future;
     }
 
     // ── Keep-alive / Probe API ─────────────────────────────────────────
 
     /**
-     * Sends a PING frame to keep the connection alive.
-     * The peer must acknowledge receipt of this frame.
+     * Sends a PING frame and returns a {@link Future} that completes with the
+     * round-trip time in <b>milliseconds</b> when the peer's ACK is received.
+     * <p>Equivalent to {@code ping(0)} — waits indefinitely for the ACK.
      */
-    public void sendPing() throws Exception {
-        byte[] frame = QuicVarInt.encode(QuicFrameType.PING);
-        sendApplicationData(frame);
+    public Future<Long> ping() {
+        return this.asyncChannel().sendPingRtt(0);
+    }
+
+    /**
+     * Sends a PING frame and returns a {@link Future} that completes with the
+     * round-trip time in <b>milliseconds</b> when the peer's ACK is received.
+     * @param timeoutMs how long to wait before failing with
+     * {@link java.util.concurrent.TimeoutException}; {@code 0} = no timeout
+     */
+    public Future<Long> ping(long timeoutMs) {
+        return this.asyncChannel().sendPingRtt(timeoutMs);
+    }
+
+    /**
+     * Initiates an active connection migration to probe a new network path (RFC 9000 §9).
+     * <p>
+     * The method issues a fresh local Connection ID, rotates to a new remote CID, resets
+     * the congestion controller, and sends a PATH_CHALLENGE frame.  The returned
+     * {@link Future} resolves with the measured path RTT (milliseconds) once the peer
+     * replies with a matching PATH_RESPONSE, or fails with a
+     * {@link java.util.concurrent.TimeoutException} if no response arrives in time.
+     * </p>
+     * @return future completing with path RTT in milliseconds
+     * @throws IOException if the underlying send fails
+     */
+    public Future<Long> migrate() throws IOException {
+        return this.asyncChannel().migrate();
     }
 
     /**
@@ -281,1110 +209,243 @@ public class QuicChannel extends UdpChannel {
      * The peer should respond with a PATH_RESPONSE containing the same data.
      * @param data exactly 8 bytes of challenge data
      */
-    public void sendPathChallenge(byte[] data) throws Exception {
+    public Future<QuicChannel> pathChallenge(byte[] data) {
         if (data == null || data.length != 8) {
             throw new IllegalArgumentException("PATH_CHALLENGE data must be exactly 8 bytes");
         }
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.PATH_CHALLENGE);
-        byte[] frame = new byte[typeBytes.length + 8];
-        System.arraycopy(typeBytes, 0, frame, 0, typeBytes.length);
-        System.arraycopy(data, 0, frame, typeBytes.length, 8);
-        sendApplicationData(frame);
+
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        ByteBuf frame = null;
+        try {
+            byte[] typeBytes = QuicVarInt.encode(QuicFrameType.PATH_CHALLENGE);
+            frame = ByteBufAllocator.DEFAULT.buffer(typeBytes.length + 8);
+            frame.writeBytes(typeBytes);
+            frame.writeBytes(data);
+            this.asyncChannel().sendDataFrame(frame, future);
+        } catch (Throwable e) {
+            IOUtils.closeQuietly(frame);
+            future.failed(e);
+        }
+        return future;
     }
 
-    // ── Stream management API (RFC 9000 §2.1, §4.6) ───────────────────
+    // ── Connection lifecycle ───────────────────────────────────────────
+
+    /**
+     * Sends a {@code CONNECTION_CLOSE} frame with the given RFC 9000 transport
+     * error code and reason phrase, then immediately tears down the connection.
+     * <p>Use this when a protocol violation is detected locally — the peer will
+     * receive the error code and can log or report it accordingly.
+     * @param errorCode one of the constants in {@link QuicErrorCode}
+     * @param reason human-readable reason phrase (may be {@code null})
+     * @see QuicErrorCode
+     */
+    public Future<QuicChannel> closeWithError(long errorCode, String reason) {
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        this.asyncChannel().closeWithError(errorCode, reason, future);
+        return future;
+    }
+
+    /**
+     * Gracefully closes this QUIC connection by sending a {@code CONNECTION_CLOSE}
+     * frame with error code {@link QuicErrorCode#NO_ERROR} (0x00).
+     * <p>This is the preferred way to close a QUIC connection when no error has occurred.
+     * @return a {@link Future} that completes once the close frame has been sent
+     * @see QuicErrorCode#NO_ERROR
+     */
+    public Future<QuicChannel> closeGracefully() {
+        return closeWithError(QuicErrorCode.NO_ERROR, "");
+    }
+
+    /**
+     * Returns the {@link QuicStreamChannel} for the given stream ID, or {@code null} if none exists.
+     * @param streamId the QUIC stream ID to look up (per RFC 9000 §2.1)
+     * @return the existing {@link QuicStreamChannel}, or {@code null} if no stream with that ID is open
+     */
+    public QuicStreamChannel findStream(long streamId) {
+        return this.asyncChannel().findStream(streamId);
+    }
+
+    // ── Bidi Stream ────────────────────────────────────────────────
 
     /** Returns the maximum number of bidirectional streams the peer allows us to open. */
-    public long getPeerMaxStreamsBidi() {
-        return this.peerMaxStreamsBidi;
+    public long getBidiMaxStreams() {
+        return this.asyncChannel().getPeerMaxStreamsBidi();
     }
+
+    /**
+     * Asynchronously creates a new <b>bidirectional</b> stream channel, automatically
+     * allocating the next stream ID for this endpoint.
+     * The pipeline is initialized using the connection's default {@link ProtoInitializer}.
+     * @return a {@link Future} that completes with the newly opened {@link QuicStreamChannel}
+     * @throws IllegalStateException if the peer-advertised bidirectional stream limit is exceeded
+     */
+    public Future<QuicStreamChannel> newBidiStream() {
+        return this.asyncChannel().newStreamChannel(nextBidiStreamId());
+    }
+
+    /** the next bidirectional stream ID */
+    private long nextBidiStreamId() {
+        long id = this.nextBidiStreamId.getAndAdd(4);
+        long streamIndex = id / 4;
+        long peerMax = this.asyncChannel().getPeerMaxStreamsBidi();
+        if (streamIndex >= peerMax) {
+            this.nextBidiStreamId.addAndGet(-4); // rollback
+            throw new IllegalStateException("Bidirectional stream limit exceeded: " + peerMax);
+        }
+
+        return id;
+    }
+
+    /**
+     * Sends a MAX_STREAMS (bidirectional) frame (RFC 9000 §19.11) to increase the limit on
+     * the number of bidirectional streams the peer is allowed to open.
+     * The returned {@link Future} completes normally on success or fails with the send exception.
+     * @param upgradeIncr the number of <em>additional</em> bidirectional streams to allow
+     * @return a {@link Future} that completes with this {@link QuicChannel} on success
+     */
+    public Future<QuicChannel> upgradeBidiStreams(long upgradeIncr) {
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        ByteBuf frame = null;
+        try {
+            long newMax = this.localMaxStreamsBidi.addAndGet(upgradeIncr);
+            byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAMS_BIDI);
+            byte[] valBytes = QuicVarInt.encode(newMax);
+            frame = ByteBufAllocator.DEFAULT.buffer(typeBytes.length + valBytes.length);
+            frame.writeBytes(typeBytes);
+            frame.writeBytes(valBytes);
+            future.onFailed(f -> this.localMaxStreamsBidi.addAndGet(-upgradeIncr));
+            this.asyncChannel().sendDataFrame(frame, future);
+        } catch (Throwable e) {
+            this.localMaxStreamsBidi.addAndGet(-upgradeIncr);
+            IOUtils.closeQuietly(frame);
+            future.failed(e);
+        }
+        return future;
+    }
+
+    // ── Uni Stream ────────────────────────────────────────────────
 
     /** Returns the maximum number of unidirectional streams the peer allows us to open. */
-    public long getPeerMaxStreamsUni() {
-        return this.peerMaxStreamsUni;
+    public long getUniMaxStreams() {
+        return this.asyncChannel().getPeerMaxStreamsUni();
     }
 
     /**
-     * Sends a MAX_STREAMS frame to allow the peer to open more bidirectional streams.
-     * @param maxStreams new maximum number of bidirectional streams
+     * Asynchronously creates a new <b>unidirectional</b> stream channel, automatically
+     * allocating the next stream ID for this endpoint.
+     * The pipeline is initialized using the connection's default {@link ProtoInitializer}.
+     * @return a {@link Future} that completes with the newly opened {@link QuicStreamChannel}
+     * @throws IllegalStateException if the peer-advertised unidirectional stream limit is exceeded
      */
-    public void sendMaxStreamsBidi(long maxStreams) throws Exception {
-        this.localMaxStreamsBidi = maxStreams;
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAMS_BIDI);
-        byte[] valBytes = QuicVarInt.encode(maxStreams);
-        byte[] frame = concat(typeBytes, valBytes);
-        sendApplicationData(frame);
+    public Future<QuicStreamChannel> newUniStream() {
+        return this.asyncChannel().newStreamChannel(nextUniStreamId());
     }
 
-    /**
-     * Sends a MAX_STREAMS frame to allow the peer to open more unidirectional streams.
-     * @param maxStreams new maximum number of unidirectional streams
-     */
-    public void sendMaxStreamsUni(long maxStreams) throws Exception {
-        this.localMaxStreamsUni = maxStreams;
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAMS_UNI);
-        byte[] valBytes = QuicVarInt.encode(maxStreams);
-        byte[] frame = concat(typeBytes, valBytes);
-        sendApplicationData(frame);
-    }
-
-    /**
-     * Allocates the next bidirectional stream ID for the local endpoint.
-     * Client-initiated: 0, 4, 8, ...  Server-initiated: 1, 5, 9, ...
-     * @throws IllegalStateException if the stream limit is exceeded
-     */
-    public long nextBidiStreamId() {
-        AtomicLong counter = this.clientMode ? this.nextClientBidiStreamId : this.nextServerBidiStreamId;
-        long id = counter.getAndAdd(4);
+    /** the next unidirectional stream ID */
+    private long nextUniStreamId() {
+        long id = this.nextUniStreamId.getAndAdd(4);
         long streamIndex = id / 4;
-        if (streamIndex >= this.peerMaxStreamsBidi) {
-            counter.addAndGet(-4); // rollback
-            throw new IllegalStateException("Bidirectional stream limit exceeded: " + this.peerMaxStreamsBidi);
+        long peerMax = this.asyncChannel().getPeerMaxStreamsUni();
+        if (streamIndex >= peerMax) {
+            this.nextUniStreamId.addAndGet(-4); // rollback
+            throw new IllegalStateException("Unidirectional stream limit exceeded: " + peerMax);
         }
+
         return id;
     }
 
     /**
-     * Allocates the next unidirectional stream ID for the local endpoint.
-     * Client-initiated: 2, 6, 10, ...  Server-initiated: 3, 7, 11, ...
-     * @throws IllegalStateException if the stream limit is exceeded
+     * Sends a MAX_STREAMS (unidirectional) frame (RFC 9000 §19.11) to increase the limit on
+     * the number of unidirectional streams the peer is allowed to open.
+     * The returned {@link Future} completes normally on success or fails with the send exception.
+     * @param upgradeIncr the number of <em>additional</em> unidirectional streams to allow
+     * @return a {@link Future} that completes with this {@link QuicChannel} on success
      */
-    public long nextUniStreamId() {
-        AtomicLong counter = this.clientMode ? this.nextClientUniStreamId : this.nextServerUniStreamId;
-        long id = counter.getAndAdd(4);
-        long streamIndex = id / 4;
-        if (streamIndex >= this.peerMaxStreamsUni) {
-            counter.addAndGet(-4); // rollback
-            throw new IllegalStateException("Unidirectional stream limit exceeded: " + this.peerMaxStreamsUni);
+    public Future<QuicChannel> upgradeUniStreams(long upgradeIncr) {
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        ByteBuf frame = null;
+        try {
+            long newMax = this.localMaxStreamsUni.addAndGet(upgradeIncr);
+            byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAMS_UNI);
+            byte[] valBytes = QuicVarInt.encode(newMax);
+            frame = ByteBufAllocator.DEFAULT.buffer(typeBytes.length + valBytes.length);
+            frame.writeBytes(typeBytes);
+            frame.writeBytes(valBytes);
+            future.onFailed(f -> this.localMaxStreamsUni.addAndGet(-upgradeIncr));
+            this.asyncChannel().sendDataFrame(frame, future);
+        } catch (Throwable e) {
+            this.localMaxStreamsUni.addAndGet(-upgradeIncr);
+            IOUtils.closeQuietly(frame);
+            future.failed(e);
         }
-        return id;
-    }
-
-    /**
-     * Sends a RESET_STREAM frame to abruptly terminate a stream.
-     * @param streamId the stream to reset
-     * @param errorCode application error code
-     * @param finalSize the total number of bytes sent on this stream before reset
-     */
-    public void sendResetStream(long streamId, long errorCode, long finalSize) throws Exception {
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.RESET_STREAM);
-        byte[] sidBytes = QuicVarInt.encode(streamId);
-        byte[] errBytes = QuicVarInt.encode(errorCode);
-        byte[] sizeBytes = QuicVarInt.encode(finalSize);
-        byte[] frame = new byte[typeBytes.length + sidBytes.length + errBytes.length + sizeBytes.length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
-        pos += sidBytes.length;
-        System.arraycopy(errBytes, 0, frame, pos, errBytes.length);
-        pos += errBytes.length;
-        System.arraycopy(sizeBytes, 0, frame, pos, sizeBytes.length);
-        sendApplicationData(frame);
-    }
-
-    /**
-     * Sends a STOP_SENDING frame to request that the peer stop sending on a stream.
-     * @param streamId the stream to stop receiving on
-     * @param errorCode application error code
-     */
-    public void sendStopSending(long streamId, long errorCode) throws Exception {
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.STOP_SENDING);
-        byte[] sidBytes = QuicVarInt.encode(streamId);
-        byte[] errBytes = QuicVarInt.encode(errorCode);
-        byte[] frame = new byte[typeBytes.length + sidBytes.length + errBytes.length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
-        pos += sidBytes.length;
-        System.arraycopy(errBytes, 0, frame, pos, errBytes.length);
-        sendApplicationData(frame);
-    }
-
-    /**
-     * Sends a CONNECTION_CLOSE frame to close the connection.
-     * @param errorCode transport error code
-     * @param reason human-readable reason phrase
-     */
-    public void sendConnectionClose(long errorCode, String reason) throws Exception {
-        byte[] reasonBytes = (reason != null) ? reason.getBytes(java.nio.charset.StandardCharsets.UTF_8) : new byte[0];
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.CONNECTION_CLOSE);
-        byte[] errBytes = QuicVarInt.encode(errorCode);
-        byte[] frameTypeBytes = QuicVarInt.encode(0); // frame type that triggered the error (0 = unknown)
-        byte[] reasonLenBytes = QuicVarInt.encode(reasonBytes.length);
-        byte[] frame = new byte[typeBytes.length + errBytes.length + frameTypeBytes.length + reasonLenBytes.length + reasonBytes.length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(errBytes, 0, frame, pos, errBytes.length);
-        pos += errBytes.length;
-        System.arraycopy(frameTypeBytes, 0, frame, pos, frameTypeBytes.length);
-        pos += frameTypeBytes.length;
-        System.arraycopy(reasonLenBytes, 0, frame, pos, reasonLenBytes.length);
-        pos += reasonLenBytes.length;
-        System.arraycopy(reasonBytes, 0, frame, pos, reasonBytes.length);
-        sendApplicationData(frame);
+        return future;
     }
 
     // ── DATAGRAM API (RFC 9221) ────────────────────────────────────────
 
     /**
-     * Creates or returns the DATAGRAM channel for this connection.
-     * <p>
-     * DATAGRAM channels use a special stream ID ({@link QuicStreamChannel#DATAGRAM_STREAM_ID})
-     * and are not bound to any QUIC stream. Use {@link QuicStreamChannel#isDatagram()} to
-     * check if a stream channel is a DATAGRAM channel.
-     * @return the DATAGRAM channel
+     * Returns {@code true} if DATAGRAM frames are supported on this connection.
+     * <p>Support is determined entirely by the handshake negotiation result:
+     * <ul>
+     *   <li>The local side must have configured a non-zero {@code max_datagram_frame_size}
+     *       via {@link QuicSoConfig#setTpInitialDatagramFrameMaxData(long)} before the connection
+     *       is established.</li>
+     *   <li>The remote peer must have advertised a non-zero {@code max_datagram_frame_size}
+     *       transport parameter during the TLS handshake (RFC 9221 §3).</li>
+     * </ul>
+     * @return {@code true} if both the local and remote sides have negotiated DATAGRAM support
+     * @see #getDatagramFrameSize()
      */
-    public QuicStreamChannel getOrCreateDatagramChannel() throws IOException {
-        if (this.datagramChannel != null) {
-            return this.datagramChannel;
-        }
-        synchronized (this) {
-            if (this.datagramChannel != null) {
-                return this.datagramChannel;
-            }
-            try {
-                long channelId = this.soContext.nextID();
-                NetMonitor monitor = new NetMonitor();
-                QuicAsyncStreamChannel asyncCh = new QuicAsyncStreamChannel(//
-                        channelId,                          //
-                        QuicStreamChannel.DATAGRAM_STREAM_ID,//
-                        this,                               //
-                        this.asyncChannel.getSoConfig(),    //
-                        this.asyncChannel.getLocalAddress(),//
-                        this.asyncChannel.getRemoteAddress(),//
-                        this.soContext);
-                QuicStreamChannel dgCh = new QuicStreamChannel(//
-                        channelId,                          //
-                        QuicStreamChannel.DATAGRAM_STREAM_ID,//
-                        monitor,                            //
-                        this.forListen,                     //
-                        this.defaultStreamInitializer,      //
-                        asyncCh,                            //
-                        this.soContext,                      //
-                        this);
-                this.soContext.initChannel(dgCh, false);
-                this.datagramChannel = dgCh;
-                return dgCh;
-            } catch (Throwable e) {
-                throw new IOException("Failed to create datagram channel", e);
-            }
-        }
+    public boolean isSupportDatagram() {
+        return this.getDatagramFrameSize() > 0;
     }
 
     /**
-     * Sends a DATAGRAM frame with the given payload (RFC 9221).
-     * @param payload the datagram payload data
-     * @return the number of bytes written to the UDP transport
+     * Returns the effective maximum DATAGRAM frame payload size for this connection.
+     * <p>This is {@code min(localMax, peerMax)} and is fixed once the TLS handshake
+     * completes. Returns {@code 0} if DATAGRAM is not supported by either side.
+     * Use {@link #isSupportDatagram()} to test support before sending.
+     * @return the negotiated max DATAGRAM frame payload size in bytes, or {@code 0} if unsupported
      */
-    public int sendDatagram(byte[] payload) throws Exception {
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.DATAGRAM_LEN);
-        byte[] lenBytes = QuicVarInt.encode(payload.length);
-        byte[] frame = new byte[typeBytes.length + lenBytes.length + payload.length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(lenBytes, 0, frame, pos, lenBytes.length);
-        pos += lenBytes.length;
-        System.arraycopy(payload, 0, frame, pos, payload.length);
-        return sendApplicationData(frame);
-    }
-
-    // ── Stream creation ────────────────────────────────────────────────
-
-    /**
-     * Creates a new stream channel that <strong>inherits</strong> the connection's
-     * default pipeline configuration.
-     */
-    public QuicStreamChannel newStream(long streamId) throws IOException {
-        return newStreamLocked(streamId, this.defaultStreamInitializer, false);
+    public long getDatagramFrameSize() {
+        return this.asyncChannel().getPeerDatagramMaxData();
     }
 
     /**
-     * Creates a new stream channel with a <strong>custom</strong> pipeline.
+     * Returns the existing DATAGRAM channel, or {@code null} if none has been opened yet.
+     * <p>This is a pure lookup — it never creates or initializes a channel.
+     * Use it when you need to check whether the datagram channel is already open
+     * without triggering creation side-effects.  To open the channel, use
+     * {@link #openDatagramChannel()}.
+     * @return the current {@link QuicDatagramChannel}, or {@code null} if not yet opened
      */
-    public QuicStreamChannel newStream(long streamId, ProtoInitializer initializer) throws IOException {
-        return newStreamLocked(streamId, initializer, true);
+    public QuicDatagramChannel getDatagramChannel() {
+        return this.asyncChannel().onlyGetDatagramChannel();
     }
 
     /**
-     * Returns the {@link QuicStreamChannel} for the given stream ID, or {@code null} if none exists.
+     * Asynchronously opens (or returns) the DATAGRAM channel for this connection.
+     * <p>On the first call the channel is created with its own independent pipeline,
+     * initialized using the connection's default {@link ProtoInitializer} (the same one
+     * used when binding or connecting). Subsequent calls return a {@link Future} that
+     * resolves to the same instance.
+     * <p>If DATAGRAM is not supported by the connection (either side did not advertise
+     * {@code max_datagram_frame_size}), or if it is administratively disabled via
+     * {@link QuicSoConfig#setDisableDatagram}, this method throws synchronously.
+     * @return a {@link Future} that completes with the {@link QuicDatagramChannel}, never {@code null}
+     * @throws IllegalStateException if DATAGRAM is administratively disabled, or if the
+     * negotiated {@code datagramFrameSize} is zero (neither side supports DATAGRAM)
+     * @throws IOException if channel initialization fails
      */
-    public QuicStreamChannel findStream(long streamId) {
-        return this.streams.get(streamId);
-    }
-
-    /**
-     * Returns an unmodifiable view of all active stream channels.
-     */
-    public Collection<QuicStreamChannel> getStreams() {
-        return Collections.unmodifiableCollection(this.streams.values());
-    }
-
-    // ── Internal: get-or-create (inherit mode) ─────────────────────────
-
-    QuicStreamChannel getOrNewStream(long streamId) {
-        QuicStreamChannel existing = this.streams.get(streamId);
-        if (existing != null) {
-            return existing;
+    public Future<QuicDatagramChannel> openDatagramChannel() throws IOException {
+        if (this.quicSoConfig.isDisableDatagram()) {
+            throw new IllegalStateException("DATAGRAM is administratively disabled by QuicSoConfig.disableDatagram=true");
         }
-        synchronized (this.streams) {
-            existing = this.streams.get(streamId);
-            if (existing != null) {
-                return existing;
-            }
-
-            try {
-                return createStream(streamId, this.defaultStreamInitializer, false);
-            } catch (Throwable e) {
-                logger.error("Failed to create stream channel for stream " + streamId + ": " + e.getMessage(), e);
-                return null;
-            }
-        }
-    }
-
-    private QuicStreamChannel createStream(long streamId, ProtoInitializer initializer, boolean initLifecycle) throws Throwable {
-        long channelId = this.soContext.nextID();
-        NetMonitor monitor = new NetMonitor();
-
-        QuicAsyncStreamChannel asyncCh = new QuicAsyncStreamChannel(//
-                channelId,                          //
-                streamId,                           //
-                this,                               //
-                this.asyncChannel.getSoConfig(),    //
-                this.asyncChannel.getLocalAddress(),//
-                this.asyncChannel.getRemoteAddress(),//
-                this.soContext);
-        QuicStreamChannel streamCh = new QuicStreamChannel(//
-                channelId,                          //
-                streamId,                           //
-                monitor,                            //
-                this.forListen,                     //
-                initializer,                        //
-                asyncCh,                            //
-                this.soContext,                      //
-                this);
-
-        this.soContext.initChannel(streamCh, initLifecycle);
-        this.streams.put(streamId, streamCh);
-
-        // Fire OPENED event on the connection-level channel
-        try {
-            this.fireUserEvent(QuicStreamEvent.class, new QuicStreamEvent(streamId, true));
-        } catch (Exception e) {
-            logger.error("Failed to fire stream OPENED event for stream " + streamId + ": " + e.getMessage());
+        if (!isSupportDatagram()) {
+            throw new IllegalStateException("DATAGRAM not supported: negotiated datagramFrameSize=0");
         }
 
-        return streamCh;
-    }
-
-    private QuicStreamChannel newStreamLocked(long streamId, ProtoInitializer initializer, boolean initLifecycle) throws IOException {
-        synchronized (this.streams) {
-            if (this.streams.containsKey(streamId)) {
-                throw new IllegalStateException("Stream " + streamId + " already exists");
-            }
-            try {
-                return createStream(streamId, initializer, initLifecycle);
-            } catch (IOException e) {
-                throw e;
-            } catch (Throwable e) {
-                throw new IOException("Failed to create stream " + streamId, e);
-            }
-        }
-    }
-
-    // ── Stream removal ─────────────────────────────────────────────────
-
-    public void closeStream(long streamId) {
-        removeStream(streamId);
-    }
-
-    void removeStream(long streamId) {
-        this.openStreams.remove(streamId);
-        QuicStreamChannel removed = this.streams.remove(streamId);
-        if (removed != null) {
-            try {
-                this.fireUserEvent(QuicStreamEvent.class, new QuicStreamEvent(streamId, false));
-            } catch (Exception e) {
-                logger.error("Failed to fire stream CLOSED event for stream " + streamId + ": " + e.getMessage());
-            }
-        }
-    }
-
-    // ── Packet processing ──────────────────────────────────────────────
-
-    public void processPacket(byte[] data, int offset, int length) {
-        try {
-            if (this.sslEnabled) {
-                processEncryptedPacket(data, offset, length);
-            } else {
-                processRawPacket(data, offset, length);
-            }
-        } catch (Exception e) {
-            logger.error("QUIC processPacket error from " + this.remoteAddress + ": " + e.getMessage());
-            this.soContext.notifyRcvChannelException(this.getChannelId(), false, new SoRcvException(e.getMessage(), e));
-        }
-    }
-
-    // ── Encrypted packet processing (SSL mode) ────────────────────────
-
-    private void processEncryptedPacket(byte[] data, int offset, int length) throws Exception {
-        if (QuicPacket.isLongHeader(data)) {
-            QuicPacket.ParsedPacket parsed = QuicPacket.parseLongHeader(data, offset, length);
-            if (parsed == null) {
-                return;
-            }
-
-            switch (parsed.packetType) {
-                case QuicPacket.TYPE_INITIAL:
-                    processInitialPacket(data, offset, parsed);
-                    break;
-                case QuicPacket.TYPE_HANDSHAKE:
-                    processHandshakePacket(data, offset, parsed);
-                    break;
-                default:
-                    logger.warn("Unsupported long header packet type: " + parsed.packetType);
-                    break;
-            }
-        } else {
-            processShortHeaderPacket(data, offset, length);
-        }
-    }
-
-    private void processInitialPacket(byte[] data, int offset, QuicPacket.ParsedPacket parsed) throws Exception {
-        if (this.dstConnectionId == null) {
-            this.dstConnectionId = parsed.scid;
-        }
-
-        byte[] key = this.initialClientKeys[0];
-        byte[] iv = this.initialClientKeys[1];
-        byte[] hp = this.initialClientKeys[2];
-        if (!QuicPacket.decryptLongHeaderPacket(data, offset, parsed, key, iv, hp, this.largestInitialPn)) {
-            logger.error("Failed to decrypt Initial packet");
-            return;
-        }
-        if (parsed.packetNumber > this.largestInitialPn) {
-            this.largestInitialPn = parsed.packetNumber;
-        }
-
-        processFrames(parsed.payload, true);
-
-        if (this.handshakeState == HandshakeState.INITIAL && this.tlsEngine != null) {
-            respondToClientHello(parsed);
-        }
-    }
-
-    private void respondToClientHello(QuicPacket.ParsedPacket parsed) throws Exception {
-        byte[] serverHello = this.tlsEngine.getServerHelloBytes();
-        byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, serverHello);
-        byte[] ackFrame = QuicPacket.buildAckFrame(parsed.packetNumber, parsed.packetNumber);
-        byte[] initialPayload = concat(ackFrame, cryptoFrame);
-
-        byte[] sKey = this.initialServerKeys[0];
-        byte[] sIv = this.initialServerKeys[1];
-        byte[] sHp = this.initialServerKeys[2];
-        long pn = this.initialPn.getAndIncrement();
-
-        byte[] initialPacket = QuicPacket.buildLongHeaderPacket(QuicPacket.TYPE_INITIAL, QUIC_VERSION_1, this.dstConnectionId, this.srcConnectionId, new byte[0], pn, initialPayload, sKey, sIv, sHp, 1200);
-
-        this.handshakeClientKeys = this.tlsEngine.getClientHandshakeKeys();
-        this.handshakeServerKeys = this.tlsEngine.getServerHandshakeKeys();
-
-        byte[] handshakeMessages = this.tlsEngine.getHandshakeBytes();
-        byte[] hsCryptoFrame = QuicPacket.buildCryptoFrame(0, handshakeMessages);
-
-        byte[] hsKey = this.handshakeServerKeys[0];
-        byte[] hsIv = this.handshakeServerKeys[1];
-        byte[] hsHp = this.handshakeServerKeys[2];
-        long hsPn = this.handshakePn.getAndIncrement();
-
-        byte[] handshakePacket = QuicPacket.buildLongHeaderPacket(QuicPacket.TYPE_HANDSHAKE, QUIC_VERSION_1, this.dstConnectionId, this.srcConnectionId, null, hsPn, hsCryptoFrame, hsKey, hsIv, hsHp, 0);
-
-        byte[] coalesced = concat(initialPacket, handshakePacket);
-        sendUdpDatagram(coalesced);
-
-        this.handshakeState = HandshakeState.HANDSHAKE;
-    }
-
-    private void processHandshakePacket(byte[] data, int offset, QuicPacket.ParsedPacket parsed) throws Exception {
-        byte[] key = this.handshakeClientKeys[0];
-        byte[] iv = this.handshakeClientKeys[1];
-        byte[] hp = this.handshakeClientKeys[2];
-
-        if (!QuicPacket.decryptLongHeaderPacket(data, offset, parsed, key, iv, hp, this.largestHandshakePn)) {
-            logger.error("Failed to decrypt Handshake packet");
-            return;
-        }
-        if (parsed.packetNumber > this.largestHandshakePn) {
-            this.largestHandshakePn = parsed.packetNumber;
-        }
-
-        processFrames(parsed.payload, false);
-
-        if (this.handshakeState == HandshakeState.HANDSHAKE) {
-            this.appClientKeys = this.tlsEngine.getClientAppKeys();
-            this.appServerKeys = this.tlsEngine.getServerAppKeys();
-
-            byte[] hdFrame = QuicPacket.buildHandshakeDoneFrame();
-            sendApplicationData(hdFrame);
-
-            this.handshakeState = HandshakeState.ESTABLISHED;
-            activate();
-            logger.info("QUIC handshake completed with " + this.remoteAddress);
-        }
-    }
-
-    private void processShortHeaderPacket(byte[] data, int offset, int length) throws Exception {
-        if (this.appClientKeys == null) {
-            logger.warn("Received 1-RTT packet but no app keys available yet");
-            return;
-        }
-
-        int dcidLen = this.srcConnectionId.length;
-        byte[] key = this.appClientKeys[0];
-        byte[] iv = this.appClientKeys[1];
-        byte[] hp = this.appClientKeys[2];
-
-        QuicPacket.ParsedPacket parsed = QuicPacket.decryptShortHeaderPacket(data, offset, length, dcidLen, key, iv, hp, this.largestAppPn);
-        if (parsed == null) {
-            logger.error("Failed to decrypt 1-RTT packet");
-            return;
-        }
-        if (parsed.packetNumber > this.largestAppPn) {
-            this.largestAppPn = parsed.packetNumber;
-        }
-
-        processApplicationFrames(parsed.payload);
-    }
-
-    // ── Raw packet processing (non-SSL mode) ──────────────────────────
-
-    private void processRawPacket(byte[] data, int offset, int length) throws Exception {
-        if (QuicPacket.isLongHeader(data)) {
-            QuicPacket.ParsedPacket parsed = QuicPacket.parseRawLongHeaderPacket(data, offset, length);
-            if (parsed == null) {
-                return;
-            }
-
-            if (this.dstConnectionId == null) {
-                this.dstConnectionId = parsed.scid;
-            }
-
-            switch (parsed.packetType) {
-                case QuicPacket.TYPE_INITIAL:
-                    if (this.handshakeState == HandshakeState.INITIAL) {
-                        if (!this.clientMode) {
-                            byte[] ackFrame = QuicPacket.buildAckFrame(parsed.packetNumber, parsed.packetNumber);
-                            byte[] responsePacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QUIC_VERSION_1, this.dstConnectionId, this.srcConnectionId, new byte[0], this.initialPn.getAndIncrement(), ackFrame);
-                            sendUdpDatagram(responsePacket);
-                        }
-
-                        this.handshakeState = HandshakeState.ESTABLISHED;
-                        activate();
-                        logger.info("QUIC raw handshake completed with " + this.remoteAddress);
-                    }
-                    if (parsed.payload != null && parsed.payload.length > 0) {
-                        processApplicationFrames(parsed.payload);
-                    }
-                    break;
-
-                case QuicPacket.TYPE_HANDSHAKE:
-                    if (parsed.payload != null && parsed.payload.length > 0) {
-                        processApplicationFrames(parsed.payload);
-                    }
-                    break;
-
-                default:
-                    break;
-            }
-        } else {
-            int dcidLen = this.srcConnectionId.length;
-            int headerLen = 1 + dcidLen;
-            int pnLen = (data[offset] & 0x03) + 1;
-            headerLen += pnLen;
-            if (headerLen < length) {
-                int payloadLen = length - headerLen;
-                byte[] payload = new byte[payloadLen];
-                System.arraycopy(data, offset + headerLen, payload, 0, payloadLen);
-                processApplicationFrames(payload);
-            }
-        }
-    }
-
-    // ── Frame processing ───────────────────────────────────────────────
-
-    private void processFrames(byte[] payload, boolean isInitial) throws Exception {
-        int pos = 0;
-        while (pos < payload.length) {
-            long[] typeResult = QuicVarInt.decode(payload, pos);
-            int frameType = (int) typeResult[0];
-
-            if (frameType == QuicFrameType.PADDING) {
-                pos++;
-                continue;
-            }
-            if (frameType == QuicFrameType.PING) {
-                pos += (int) typeResult[1];
-                continue;
-            }
-            if (frameType == QuicFrameType.ACK || frameType == QuicFrameType.ACK_ECN) {
-                pos += (int) typeResult[1];
-                long[] largest = QuicVarInt.decode(payload, pos);
-                pos += (int) largest[1];
-                long[] delay = QuicVarInt.decode(payload, pos);
-                pos += (int) delay[1];
-                long[] count = QuicVarInt.decode(payload, pos);
-                pos += (int) count[1];
-                long[] firstRange = QuicVarInt.decode(payload, pos);
-                pos += (int) firstRange[1];
-                for (long i = 0; i < count[0]; i++) {
-                    long[] gap = QuicVarInt.decode(payload, pos);
-                    pos += (int) gap[1];
-                    long[] ackRange = QuicVarInt.decode(payload, pos);
-                    pos += (int) ackRange[1];
-                }
-                if (frameType == QuicFrameType.ACK_ECN) {
-                    long[] ect0 = QuicVarInt.decode(payload, pos);
-                    pos += (int) ect0[1];
-                    long[] ect1 = QuicVarInt.decode(payload, pos);
-                    pos += (int) ect1[1];
-                    long[] ecnCe = QuicVarInt.decode(payload, pos);
-                    pos += (int) ecnCe[1];
-                }
-                continue;
-            }
-            if (frameType == QuicFrameType.CRYPTO) {
-                long[] cryptoResult = QuicPacket.parseCryptoFrame(payload, pos);
-                if (cryptoResult != null) {
-                    int dataStart = (int) cryptoResult[1];
-                    int dataLen = (int) cryptoResult[2];
-                    byte[] cryptoData = new byte[dataLen];
-                    System.arraycopy(payload, dataStart, cryptoData, 0, dataLen);
-
-                    if (this.tlsEngine != null) {
-                        if (isInitial) {
-                            this.tlsEngine.processClientHello(cryptoData);
-                        } else {
-                            this.tlsEngine.verifyClientFinished(cryptoData);
-                        }
-                    }
-
-                    pos = dataStart + dataLen;
-                } else {
-                    break;
-                }
-                continue;
-            }
-
-            break;
-        }
-    }
-
-    private void processApplicationFrames(byte[] payload) {
-        int pos = 0;
-        while (pos < payload.length) {
-            long[] typeResult = QuicVarInt.decode(payload, pos);
-            int frameType = (int) typeResult[0];
-            pos += (int) typeResult[1];
-
-            // ── PADDING (0x00) ─────────────────────────────────────────
-            if (frameType == QuicFrameType.PADDING) {
-                continue;
-            }
-            // ── PING (0x01) ────────────────────────────────────────────
-            if (frameType == QuicFrameType.PING) {
-                continue;
-            }
-            // ── HANDSHAKE_DONE (0x1e) ──────────────────────────────────
-            if (frameType == QuicFrameType.HANDSHAKE_DONE) {
-                continue;
-            }
-
-            // ── ACK / ACK_ECN (0x02, 0x03) ─────────────────────────────
-            if (frameType == QuicFrameType.ACK || frameType == QuicFrameType.ACK_ECN) {
-                long[] largest = QuicVarInt.decode(payload, pos);
-                pos += (int) largest[1];
-                long[] delay = QuicVarInt.decode(payload, pos);
-                pos += (int) delay[1];
-                long[] count = QuicVarInt.decode(payload, pos);
-                pos += (int) count[1];
-                long[] firstRange = QuicVarInt.decode(payload, pos);
-                pos += (int) firstRange[1];
-                for (long i = 0; i < count[0]; i++) {
-                    long[] gap = QuicVarInt.decode(payload, pos);
-                    pos += (int) gap[1];
-                    long[] ackRange = QuicVarInt.decode(payload, pos);
-                    pos += (int) ackRange[1];
-                }
-                if (frameType == QuicFrameType.ACK_ECN) {
-                    long[] ect0 = QuicVarInt.decode(payload, pos);
-                    pos += (int) ect0[1];
-                    long[] ect1 = QuicVarInt.decode(payload, pos);
-                    pos += (int) ect1[1];
-                    long[] ecnCe = QuicVarInt.decode(payload, pos);
-                    pos += (int) ecnCe[1];
-                }
-                continue;
-            }
-
-            // ── RESET_STREAM (0x04) ────────────────────────────────────
-            if (frameType == QuicFrameType.RESET_STREAM) {
-                long[] sidResult = QuicVarInt.decode(payload, pos);
-                long streamId = sidResult[0];
-                pos += (int) sidResult[1];
-                long[] errResult = QuicVarInt.decode(payload, pos);
-                pos += (int) errResult[1];
-                long[] sizeResult = QuicVarInt.decode(payload, pos);
-                pos += (int) sizeResult[1];
-
-                // Close the stream abruptly
-                QuicStreamChannel streamCh = this.streams.get(streamId);
-                if (streamCh != null) {
-                    streamCh.setRcvFinReceived();
-                    removeStream(streamId);
-                }
-                continue;
-            }
-
-            // ── STOP_SENDING (0x05) ────────────────────────────────────
-            if (frameType == QuicFrameType.STOP_SENDING) {
-                long[] sidResult = QuicVarInt.decode(payload, pos);
-                long streamId = sidResult[0];
-                pos += (int) sidResult[1];
-                long[] errResult = QuicVarInt.decode(payload, pos);
-                pos += (int) errResult[1];
-
-                // Peer requests us to stop sending on this stream
-                QuicStreamChannel streamCh = this.streams.get(streamId);
-                if (streamCh != null) {
-                    removeStream(streamId);
-                }
-                continue;
-            }
-
-            // ── NEW_TOKEN (0x07) ───────────────────────────────────────
-            if (frameType == QuicFrameType.NEW_TOKEN) {
-                long[] lenResult = QuicVarInt.decode(payload, pos);
-                int tokenLen = (int) lenResult[0];
-                pos += (int) lenResult[1];
-                pos += tokenLen; // skip token data
-                continue;
-            }
-
-            // ── STREAM frames (0x08-0x0F) ──────────────────────────────
-            if (QuicFrameType.isStream(frameType)) {
-                boolean hasFin = QuicFrameType.streamFin(frameType);
-                boolean hasLen = QuicFrameType.streamLen(frameType);
-                boolean hasOff = QuicFrameType.streamOff(frameType);
-
-                long[] streamIdResult = QuicVarInt.decode(payload, pos);
-                long streamId = streamIdResult[0];
-                pos += (int) streamIdResult[1];
-
-                long streamOffset = 0;
-                if (hasOff) {
-                    long[] offResult = QuicVarInt.decode(payload, pos);
-                    streamOffset = offResult[0];
-                    pos += (int) offResult[1];
-                }
-
-                int dataLen;
-                if (hasLen) {
-                    long[] lenResult = QuicVarInt.decode(payload, pos);
-                    dataLen = (int) lenResult[0];
-                    pos += (int) lenResult[1];
-                } else {
-                    dataLen = payload.length - pos;
-                }
-
-                byte[] streamData = new byte[dataLen];
-                System.arraycopy(payload, pos, streamData, 0, dataLen);
-                pos += dataLen;
-
-                // Update connection-level flow control
-                this.dataReceived.addAndGet(dataLen);
-
-                deliverStreamData(streamId, streamData, hasFin);
-                continue;
-            }
-
-            // ── MAX_DATA (0x10) ────────────────────────────────────────
-            if (frameType == QuicFrameType.MAX_DATA) {
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                long newMaxData = valResult[0];
-                pos += (int) valResult[1];
-                // Peer increases the limit of data we can send
-                if (newMaxData > this.peerMaxData) {
-                    this.peerMaxData = newMaxData;
-                }
-                continue;
-            }
-
-            // ── MAX_STREAM_DATA (0x11) ─────────────────────────────────
-            if (frameType == QuicFrameType.MAX_STREAM_DATA) {
-                long[] sidResult = QuicVarInt.decode(payload, pos);
-                long streamId = sidResult[0];
-                pos += (int) sidResult[1];
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                pos += (int) valResult[1];
-                // Stream-level flow control update (logged, actual enforcement is best-effort)
-                continue;
-            }
-
-            // ── MAX_STREAMS_BIDI (0x12) ────────────────────────────────
-            if (frameType == QuicFrameType.MAX_STREAMS_BIDI) {
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                long newMax = valResult[0];
-                pos += (int) valResult[1];
-                if (newMax > this.peerMaxStreamsBidi) {
-                    this.peerMaxStreamsBidi = newMax;
-                }
-                continue;
-            }
-
-            // ── MAX_STREAMS_UNI (0x13) ─────────────────────────────────
-            if (frameType == QuicFrameType.MAX_STREAMS_UNI) {
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                long newMax = valResult[0];
-                pos += (int) valResult[1];
-                if (newMax > this.peerMaxStreamsUni) {
-                    this.peerMaxStreamsUni = newMax;
-                }
-                continue;
-            }
-
-            // ── DATA_BLOCKED (0x14) ────────────────────────────────────
-            if (frameType == QuicFrameType.DATA_BLOCKED) {
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                pos += (int) valResult[1];
-                // Peer is blocked — consider sending MAX_DATA
-                logger.info("Peer is DATA_BLOCKED at offset " + valResult[0]);
-                continue;
-            }
-
-            // ── STREAM_DATA_BLOCKED (0x15) ─────────────────────────────
-            if (frameType == QuicFrameType.STREAM_DATA_BLOCKED) {
-                long[] sidResult = QuicVarInt.decode(payload, pos);
-                pos += (int) sidResult[1];
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                pos += (int) valResult[1];
-                // Peer is blocked on a specific stream — consider sending MAX_STREAM_DATA
-                continue;
-            }
-
-            // ── STREAMS_BLOCKED_BIDI (0x16) ────────────────────────────
-            if (frameType == QuicFrameType.STREAMS_BLOCKED_BIDI) {
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                pos += (int) valResult[1];
-                // Peer wants to open more bidi streams — consider sending MAX_STREAMS_BIDI
-                continue;
-            }
-
-            // ── STREAMS_BLOCKED_UNI (0x17) ─────────────────────────────
-            if (frameType == QuicFrameType.STREAMS_BLOCKED_UNI) {
-                long[] valResult = QuicVarInt.decode(payload, pos);
-                pos += (int) valResult[1];
-                // Peer wants to open more uni streams — consider sending MAX_STREAMS_UNI
-                continue;
-            }
-
-            // ── NEW_CONNECTION_ID (0x18) ───────────────────────────────
-            if (frameType == QuicFrameType.NEW_CONNECTION_ID) {
-                long[] seqResult = QuicVarInt.decode(payload, pos);
-                pos += (int) seqResult[1];
-                long[] retireResult = QuicVarInt.decode(payload, pos);
-                pos += (int) retireResult[1];
-                int cidLen = payload[pos] & 0xFF;
-                pos += 1;
-                pos += cidLen; // skip CID bytes
-                pos += 16;    // skip Stateless Reset Token (16 bytes)
-                continue;
-            }
-
-            // ── RETIRE_CONNECTION_ID (0x19) ────────────────────────────
-            if (frameType == QuicFrameType.RETIRE_CONNECTION_ID) {
-                long[] seqResult = QuicVarInt.decode(payload, pos);
-                pos += (int) seqResult[1];
-                continue;
-            }
-
-            // ── PATH_CHALLENGE (0x1a) ──────────────────────────────────
-            if (frameType == QuicFrameType.PATH_CHALLENGE) {
-                byte[] challengeData = new byte[8];
-                System.arraycopy(payload, pos, challengeData, 0, 8);
-                pos += 8;
-                // Respond with PATH_RESPONSE containing the same 8 bytes
-                try {
-                    sendPathResponse(challengeData);
-                } catch (Exception e) {
-                    logger.error("Failed to send PATH_RESPONSE: " + e.getMessage());
-                }
-                continue;
-            }
-
-            // ── PATH_RESPONSE (0x1b) ───────────────────────────────────
-            if (frameType == QuicFrameType.PATH_RESPONSE) {
-                pos += 8; // skip 8-byte response data
-                continue;
-            }
-
-            // ── CONNECTION_CLOSE (0x1c) ────────────────────────────────
-            if (frameType == QuicFrameType.CONNECTION_CLOSE) {
-                long[] errResult = QuicVarInt.decode(payload, pos);
-                pos += (int) errResult[1];
-                long[] ftResult = QuicVarInt.decode(payload, pos);
-                pos += (int) ftResult[1];
-                long[] reasonLenResult = QuicVarInt.decode(payload, pos);
-                int reasonLen = (int) reasonLenResult[0];
-                pos += (int) reasonLenResult[1];
-                pos += reasonLen; // skip reason phrase
-                this.handshakeState = HandshakeState.CLOSED;
-                logger.info("Received CONNECTION_CLOSE from " + this.remoteAddress + " (error=" + errResult[0] + ")");
-                continue;
-            }
-
-            // ── CONNECTION_CLOSE_APP (0x1d) ────────────────────────────
-            if (frameType == QuicFrameType.CONNECTION_CLOSE_APP) {
-                long[] errResult = QuicVarInt.decode(payload, pos);
-                pos += (int) errResult[1];
-                long[] reasonLenResult = QuicVarInt.decode(payload, pos);
-                int reasonLen = (int) reasonLenResult[0];
-                pos += (int) reasonLenResult[1];
-                pos += reasonLen; // skip reason phrase
-                this.handshakeState = HandshakeState.CLOSED;
-                logger.info("Received CONNECTION_CLOSE(app) from " + this.remoteAddress + " (error=" + errResult[0] + ")");
-                continue;
-            }
-
-            // ── DATAGRAM / DATAGRAM_LEN (0x30, 0x31) ──────────────────
-            if (QuicFrameType.isDatagram(frameType)) {
-                int dataLen;
-                if (QuicFrameType.datagramHasLen(frameType)) {
-                    long[] lenResult = QuicVarInt.decode(payload, pos);
-                    dataLen = (int) lenResult[0];
-                    pos += (int) lenResult[1];
-                } else {
-                    dataLen = payload.length - pos;
-                }
-                byte[] dgData = new byte[dataLen];
-                System.arraycopy(payload, pos, dgData, 0, dataLen);
-                pos += dataLen;
-
-                deliverDatagramData(dgData);
-                continue;
-            }
-
-            // Unknown frame type — skip remaining payload
-            logger.warn("Unknown QUIC frame type 0x" + Integer.toHexString(frameType) + " — skipping remaining payload");
-            break;
-        }
-    }
-
-    private void deliverStreamData(long streamId, byte[] data, boolean fin) {
-        QuicStreamChannel streamCh = getOrNewStream(streamId);
-        if (streamCh == null) {
-            return;
-        }
-
-        this.openStreams.add(streamId);
-
-        if (fin) {
-            streamCh.setRcvFinReceived();
-        }
-
-        streamCh.getMonitor().updateRcvCounter(data.length);
-        this.soContext.notifyRcvChannelData(streamCh.getChannelId(), ByteBuf.wrap(data));
-
-        if (fin) {
-            this.openStreams.remove(streamId);
-        }
-    }
-
-    private void deliverDatagramData(byte[] data) {
-        try {
-            QuicStreamChannel dgCh = getOrCreateDatagramChannel();
-            dgCh.getMonitor().updateRcvCounter(data.length);
-            this.soContext.notifyRcvChannelData(dgCh.getChannelId(), ByteBuf.wrap(data));
-        } catch (Exception e) {
-            logger.error("Failed to deliver DATAGRAM data: " + e.getMessage());
-        }
-    }
-
-    private void sendPathResponse(byte[] data) throws Exception {
-        byte[] typeBytes = QuicVarInt.encode(QuicFrameType.PATH_RESPONSE);
-        byte[] frame = new byte[typeBytes.length + 8];
-        System.arraycopy(typeBytes, 0, frame, 0, typeBytes.length);
-        System.arraycopy(data, 0, frame, typeBytes.length, 8);
-        sendApplicationData(frame);
-    }
-
-    // ── Packet sending ─────────────────────────────────────────────────
-
-    public int sendStreamData(long streamId, byte[] payload, boolean fin) throws Exception {
-        if (this.openStreams.add(streamId)) {
-            getOrNewStream(streamId);
-        }
-
-        // Track connection-level flow control
-        this.dataSent.addAndGet(payload.length);
-
-        int frameType = QuicFrameType.STREAM_BASE | QuicFrameType.STREAM_LEN_BIT;
-        if (fin) {
-            frameType |= QuicFrameType.STREAM_FIN_BIT;
-        }
-        byte[] typeBytes = QuicVarInt.encode(frameType);
-        byte[] sidBytes = QuicVarInt.encode(streamId);
-        byte[] lenBytes = QuicVarInt.encode(payload.length);
-
-        byte[] frame = new byte[typeBytes.length + sidBytes.length + lenBytes.length + payload.length];
-        int pos = 0;
-        System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
-        pos += typeBytes.length;
-        System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
-        pos += sidBytes.length;
-        System.arraycopy(lenBytes, 0, frame, pos, lenBytes.length);
-        pos += lenBytes.length;
-        System.arraycopy(payload, 0, frame, pos, payload.length);
-
-        int written = sendApplicationData(frame);
-
-        if (fin && written > 0) {
-            this.openStreams.remove(streamId);
-            removeStream(streamId);
-        }
-        return written;
-    }
-
-    public void sendClientInitial() throws Exception {
-        if (!this.clientMode) {
-            throw new IllegalStateException("sendClientInitial() is only for client mode");
-        }
-        byte[] initialPayload = new byte[0];
-        byte[] initialPacket = QuicPacket.buildRawLongHeaderPacket(QuicPacket.TYPE_INITIAL, QUIC_VERSION_1, this.dstConnectionId, this.srcConnectionId, new byte[0], this.initialPn.getAndIncrement(), initialPayload);
-        sendUdpDatagram(initialPacket);
-    }
-
-    int sendApplicationData(byte[] framePayload) throws Exception {
-        if (this.sslEnabled) {
-            byte[] key = this.appServerKeys[0];
-            byte[] iv = this.appServerKeys[1];
-            byte[] hp = this.appServerKeys[2];
-            long pn = this.appPn.getAndIncrement();
-
-            byte[] packet = QuicPacket.buildShortHeaderPacket(this.dstConnectionId, pn, framePayload, key, iv, hp);
-            return sendUdpDatagram(packet);
-        } else {
-            int dcidLen = (this.dstConnectionId != null) ? this.dstConnectionId.length : 0;
-            long pn = this.appPn.getAndIncrement();
-            int pnLen = 1;
-            int headerLen = 1 + dcidLen + pnLen;
-            byte[] packet = new byte[headerLen + framePayload.length];
-
-            packet[0] = (byte) (0x40 | (pnLen - 1));
-            if (this.dstConnectionId != null) {
-                System.arraycopy(this.dstConnectionId, 0, packet, 1, dcidLen);
-            }
-            packet[1 + dcidLen] = (byte) (pn & 0xFF);
-            System.arraycopy(framePayload, 0, packet, headerLen, framePayload.length);
-            return sendUdpDatagram(packet);
-        }
-    }
-
-    int sendUdpDatagram(byte[] data) throws IOException {
-        ByteBuffer buf = ByteBuffer.wrap(data);
-        return this.udpChannel.send(buf, this.remoteAddress);
-    }
-
-    // ── Activation ─────────────────────────────────────────────────────
-
-    private synchronized void activate() {
-        if (this.activated) {
-            return;
-        }
-        try {
-            this.soContext.initChannel(this, true);
-            this.activated = true;
-        } catch (Throwable e) {
-            logger.error("Failed to activate QUIC channel: " + e.getMessage(), e);
-        }
-    }
-
-    // ── Connection lifecycle ───────────────────────────────────────────
-
-    @Override
-    public Future<NetChannel> close() {
-        this.handshakeState = HandshakeState.CLOSED;
-        this.openStreams.clear();
-
-        // Close datagram channel if present
-        QuicStreamChannel dgCh = this.datagramChannel;
-        if (dgCh != null) {
-            try {
-                dgCh.closeNow();
-            } catch (Exception e) {
-                logger.error("Error closing datagram channel: " + e.getMessage());
-            }
-            this.datagramChannel = null;
-        }
-
-        for (QuicStreamChannel streamCh : this.streams.values()) {
-            try {
-                streamCh.closeNow();
-            } catch (Exception e) {
-                logger.error("Error closing stream " + streamCh.getStreamId() + ": " + e.getMessage());
-            }
-        }
-        this.streams.clear();
-
-        IOUtils.closeQuietly(this.ownedTransport);
-
-        return super.close();
-    }
-
-    @Override
-    public void closeNow() {
-        this.handshakeState = HandshakeState.CLOSED;
-        this.openStreams.clear();
-
-        // Close datagram channel if present
-        QuicStreamChannel dgCh = this.datagramChannel;
-        if (dgCh != null) {
-            try {
-                dgCh.closeNow();
-            } catch (Exception e) {
-                logger.error("Error closing datagram channel: " + e.getMessage());
-            }
-            this.datagramChannel = null;
-        }
-
-        for (QuicStreamChannel streamCh : this.streams.values()) {
-            try {
-                streamCh.closeNow();
-            } catch (Exception e) {
-                logger.error("Error closing stream " + streamCh.getStreamId() + ": " + e.getMessage());
-            }
-        }
-        this.streams.clear();
-
-        IOUtils.closeQuietly(this.ownedTransport);
-
-        super.closeNow();
-    }
-
-    // ── Utility ────────────────────────────────────────────────────────
-
-    public static byte[] generateConnectionId(int length) {
-        byte[] cid = new byte[length];
-        new SecureRandom().nextBytes(cid);
-        return cid;
-    }
-
-    private static byte[] concat(byte[] a, byte[] b) {
-        byte[] result = new byte[a.length + b.length];
-        System.arraycopy(a, 0, result, 0, a.length);
-        System.arraycopy(b, 0, result, a.length, b.length);
-        return result;
+        return this.asyncChannel().getOrCreateDatagramChannel();
     }
 }

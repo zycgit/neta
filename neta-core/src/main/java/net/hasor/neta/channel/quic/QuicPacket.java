@@ -22,27 +22,13 @@ import java.util.Arrays;
  * @author 赵永春 (zyc@hasor.net)
  */
 final class QuicPacket {
-    private QuicPacket() {
-    }
-
     public static final int TYPE_INITIAL   = 0x00;
     public static final int TYPE_0RTT      = 0x01;
     public static final int TYPE_HANDSHAKE = 0x02;
     public static final int TYPE_RETRY     = 0x03;
     public static final int TYPE_1RTT      = 0x10;
 
-    public static class ParsedPacket {
-        public int    packetType;
-        public int    version;
-        public byte[] dcid;
-        public byte[] scid;
-        public byte[] token;
-        public long   packetNumber;
-        public int    pnLength;
-        public byte[] payload;
-        public byte[] headerBytes;
-        public int    headerLength;
-        public int    payloadLength;
+    private QuicPacket() {
     }
 
     public static boolean isLongHeader(byte[] data) {
@@ -51,6 +37,18 @@ final class QuicPacket {
 
     public static int longHeaderType(byte firstByte) {
         return (firstByte & 0x30) >> 4;
+    }
+
+    /**
+     * Returns the logical packet type from a Long Header first byte, converting
+     * from the version-specific wire encoding.
+     * @param firstByte the first byte of the QUIC packet
+     * @param version the QUIC version for wire→logical type mapping
+     * @return the logical packet type (one of {@link #TYPE_INITIAL}, etc.)
+     */
+    public static int longHeaderType(byte firstByte, QuicVersion version) {
+        int wireType = (firstByte & 0x30) >> 4;
+        return version.wireToLogicalType(wireType);
     }
 
     public static ParsedPacket parseLongHeader(byte[] data, int offset, int length) {
@@ -63,6 +61,11 @@ final class QuicPacket {
         pkt.packetType = longHeaderType(firstByte);
         pkt.version = ((data[pos] & 0xFF) << 24) | ((data[pos + 1] & 0xFF) << 16) | ((data[pos + 2] & 0xFF) << 8) | (data[pos + 3] & 0xFF);
         pos += 4;
+        // Convert wire packet type to logical type based on QUIC version (v2 has rotated mapping)
+        QuicVersion ver = QuicVersion.fromVersion(pkt.version);
+        if (ver != null) {
+            pkt.packetType = ver.wireToLogicalType(pkt.packetType);
+        }
         int dcidLen = data[pos++] & 0xFF;
         if (pos + dcidLen > offset + length) {
             return null;
@@ -173,8 +176,6 @@ final class QuicPacket {
         }
     }
 
-    // ── Building Packets ───────────────────────────────────────────────
-
     public static byte[] buildLongHeaderPacket(int packetType, int version, byte[] dcid, byte[] scid, byte[] token, long packetNumber, byte[] payload, byte[] key, byte[] iv, byte[] hp, int minSize) throws Exception {
         int pnLength = packetNumberLength(packetNumber);
         byte[] pnBytes = encodePacketNumber(packetNumber, pnLength);
@@ -232,6 +233,16 @@ final class QuicPacket {
         return packet;
     }
 
+    /**
+     * Version-aware overload of {@link #buildLongHeaderPacket(int, int, byte[], byte[], byte[], long, byte[], byte[], byte[], byte[], int)}.
+     * Automatically maps the logical packet type to the wire encoding for the given QUIC version
+     * and fills in the correct version number.
+     */
+    public static byte[] buildLongHeaderPacket(QuicVersion version, int packetType, byte[] dcid, byte[] scid, byte[] token, long packetNumber, byte[] payload, byte[] key, byte[] iv, byte[] hp, int minSize) throws Exception {
+        return buildLongHeaderPacket(version.logicalToWireType(packetType), version.getVersion(), dcid, scid, token, packetNumber, payload, key, iv, hp, minSize);
+    }
+    // ── Building Packets ───────────────────────────────────────────────
+
     public static byte[] buildShortHeaderPacket(byte[] dcid, long packetNumber, byte[] payload, byte[] key, byte[] iv, byte[] hp) throws Exception {
         int pnLength = packetNumberLength(packetNumber);
         byte[] pnBytes = encodePacketNumber(packetNumber, pnLength);
@@ -254,8 +265,6 @@ final class QuicPacket {
         return packet;
     }
 
-    // ── Packet Number Encoding/Decoding ────────────────────────────────
-
     static long decodePacketNumber(long truncatedPn, int pnLength, long largestPn) {
         long expectedPn = largestPn + 1;
         long pnWin = 1L << (pnLength * 8);
@@ -270,6 +279,8 @@ final class QuicPacket {
         }
         return candidatePn;
     }
+
+    // ── Packet Number Encoding/Decoding ────────────────────────────────
 
     static int packetNumberLength(long pn) {
         if (pn <= 0xFF) {
@@ -293,8 +304,6 @@ final class QuicPacket {
         return result;
     }
 
-    // ── QUIC Frame building utilities ──────────────────────────────────
-
     public static byte[] buildCryptoFrame(long offset, byte[] data) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.CRYPTO);
         byte[] offsetBytes = QuicVarInt.encode(offset);
@@ -310,6 +319,8 @@ final class QuicPacket {
         System.arraycopy(data, 0, frame, pos, data.length);
         return frame;
     }
+
+    // ── QUIC Frame building utilities ──────────────────────────────────
 
     public static byte[] buildAckFrame(long largestAcked, long firstRange) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.ACK);
@@ -335,20 +346,89 @@ final class QuicPacket {
         return QuicVarInt.encode(QuicFrameType.HANDSHAKE_DONE);
     }
 
+    /**
+     * Scans through QUIC frames in {@code data} starting at {@code offset}
+     * to find the first CRYPTO frame. Non-CRYPTO frames (PADDING, PING, ACK,
+     * NEW_CONNECTION_ID, etc.) are skipped automatically.
+     * @return {@code long[]{cryptoOffset, dataPos, dataLength}} or {@code null} if not found
+     */
     public static long[] parseCryptoFrame(byte[] data, int offset) {
         int pos = offset;
-        long[] typeResult = QuicVarInt.decode(data, pos);
-        if ((int) typeResult[0] != QuicFrameType.CRYPTO) {
-            return null;
+        while (pos < data.length) {
+            long[] typeResult = QuicVarInt.decode(data, pos);
+            int frameType = (int) typeResult[0];
+            pos += (int) typeResult[1];
+
+            // Found CRYPTO frame — parse offset + length and return
+            if (frameType == QuicFrameType.CRYPTO) {
+                long[] offsetResult = QuicVarInt.decode(data, pos);
+                long cryptoOffset = offsetResult[0];
+                pos += (int) offsetResult[1];
+                long[] lengthResult = QuicVarInt.decode(data, pos);
+                long dataLength = lengthResult[0];
+                pos += (int) lengthResult[1];
+                return new long[] { cryptoOffset, pos, dataLength };
+            }
+
+            // Zero-length frames: PADDING, PING
+            if (frameType == QuicFrameType.PADDING || frameType == QuicFrameType.PING) {
+                continue;
+            }
+
+            // ACK / ACK_ECN (RFC 9000 §19.3)
+            if (frameType == QuicFrameType.ACK || frameType == QuicFrameType.ACK_ECN) {
+                long[] tmp = QuicVarInt.decode(data, pos);
+                pos += (int) tmp[1]; // Largest Acknowledged
+                tmp = QuicVarInt.decode(data, pos);
+                pos += (int) tmp[1]; // ACK Delay
+                tmp = QuicVarInt.decode(data, pos);
+                long rangeCount = tmp[0];
+                pos += (int) tmp[1]; // ACK Range Count
+                tmp = QuicVarInt.decode(data, pos);
+                pos += (int) tmp[1]; // First ACK Range
+                for (long i = 0; i < rangeCount; i++) {
+                    tmp = QuicVarInt.decode(data, pos);
+                    pos += (int) tmp[1]; // Gap
+                    tmp = QuicVarInt.decode(data, pos);
+                    pos += (int) tmp[1]; // ACK Range
+                }
+                if (frameType == QuicFrameType.ACK_ECN) {
+                    for (int i = 0; i < 3; i++) {
+                        tmp = QuicVarInt.decode(data, pos);
+                        pos += (int) tmp[1]; // ECT(0), ECT(1), ECN-CE
+                    }
+                }
+                continue;
+            }
+
+            // NEW_CONNECTION_ID (RFC 9000 §19.15)
+            if (frameType == QuicFrameType.NEW_CONNECTION_ID) {
+                long[] tmp = QuicVarInt.decode(data, pos);
+                pos += (int) tmp[1]; // Sequence Number
+                tmp = QuicVarInt.decode(data, pos);
+                pos += (int) tmp[1]; // Retire Prior To
+                int cidLen = data[pos++] & 0xFF;
+                pos += cidLen + 16; // Connection ID + Stateless Reset Token
+                continue;
+            }
+
+            // CONNECTION_CLOSE / CONNECTION_CLOSE_APP (RFC 9000 §19.19)
+            if (frameType == QuicFrameType.CONNECTION_CLOSE || frameType == QuicFrameType.CONNECTION_CLOSE_APP) {
+                long[] tmp = QuicVarInt.decode(data, pos);
+                pos += (int) tmp[1]; // Error Code
+                if (frameType == QuicFrameType.CONNECTION_CLOSE) {
+                    tmp = QuicVarInt.decode(data, pos);
+                    pos += (int) tmp[1]; // Frame Type
+                }
+                tmp = QuicVarInt.decode(data, pos);
+                pos += (int) tmp[1] + (int) tmp[0]; // Reason Length + Reason
+                continue;
+            }
+
+            // Unknown frame type: can't determine length, stop scanning
+            break;
         }
-        pos += (int) typeResult[1];
-        long[] offsetResult = QuicVarInt.decode(data, pos);
-        long cryptoOffset = offsetResult[0];
-        pos += (int) offsetResult[1];
-        long[] lengthResult = QuicVarInt.decode(data, pos);
-        long dataLength = lengthResult[0];
-        pos += (int) lengthResult[1];
-        return new long[] { cryptoOffset, pos, dataLength };
+        return null;
     }
 
     /** Build a raw (unencrypted) Long Header packet for non-SSL mode. */
@@ -391,6 +471,14 @@ final class QuicPacket {
         return packet;
     }
 
+    /**
+     * Version-aware overload of {@link #buildRawLongHeaderPacket(int, int, byte[], byte[], byte[], long, byte[])}.
+     * Automatically maps the logical packet type to the wire encoding for the given QUIC version.
+     */
+    public static byte[] buildRawLongHeaderPacket(QuicVersion version, int packetType, byte[] dcid, byte[] scid, byte[] token, long packetNumber, byte[] payload) {
+        return buildRawLongHeaderPacket(version.logicalToWireType(packetType), version.getVersion(), dcid, scid, token, packetNumber, payload);
+    }
+
     /** Parse a raw (unencrypted) Long Header packet for non-SSL mode. */
     public static ParsedPacket parseRawLongHeaderPacket(byte[] data, int offset, int length) {
         ParsedPacket pkt = parseLongHeader(data, offset, length);
@@ -413,5 +501,19 @@ final class QuicPacket {
             pkt.payload = new byte[0];
         }
         return pkt;
+    }
+
+    public static class ParsedPacket {
+        public int    packetType;
+        public int    version;
+        public byte[] dcid;
+        public byte[] scid;
+        public byte[] token;
+        public long   packetNumber;
+        public int    pnLength;
+        public byte[] payload;
+        public byte[] headerBytes;
+        public int    headerLength;
+        public int    payloadLength;
     }
 }

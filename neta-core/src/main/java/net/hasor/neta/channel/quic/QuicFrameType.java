@@ -28,7 +28,6 @@ public final class QuicFrameType {
     public static final int STOP_SENDING         = 0x05;
     public static final int CRYPTO               = 0x06;
     public static final int NEW_TOKEN            = 0x07;
-    public static final int STREAM               = 0x08;
     public static final int STREAM_BASE          = 0x08;
     public static final int STREAM_FIN_BIT       = 0x01;
     public static final int STREAM_LEN_BIT       = 0x02;
@@ -58,7 +57,7 @@ public final class QuicFrameType {
     }
 
     public static boolean isStream(int type) {
-        return (type & 0xF8) == STREAM;
+        return (type & 0xF8) == STREAM_BASE;
     }
 
     public static boolean streamFin(int type) {

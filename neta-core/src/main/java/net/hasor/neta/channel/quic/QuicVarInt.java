@@ -85,6 +85,9 @@ public final class QuicVarInt {
     }
 
     public static int encodedLength(long value) {
+        if (value < 0) {
+            throw new IllegalArgumentException("Negative varint value: " + value);
+        }
         if (value <= 63) {
             return 1;
         }
@@ -94,6 +97,9 @@ public final class QuicVarInt {
         if (value <= 1073741823L) {
             return 4;
         }
-        return 8;
+        if (value <= 4611686018427387903L) {
+            return 8;
+        }
+        throw new IllegalArgumentException("Value too large for varint encoding: " + value);
     }
 }

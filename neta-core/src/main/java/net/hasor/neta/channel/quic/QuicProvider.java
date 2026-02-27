@@ -17,44 +17,33 @@ package net.hasor.neta.channel.quic;
 import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.channels.DatagramChannel;
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * QUIC transport provider. Creates QUIC server and client channels
- * that are built on top of UDP (DatagramChannel).
+ * QUIC transport provider.
+ * Creates QUIC server and client channels that are built on top of UDP (DatagramChannel).
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicProvider implements AsyncChannelProvider {
     public static final String NAME = "QUIC";
 
-    private final Map<Long, QuicAsyncServerChannel> serverChannels = new ConcurrentHashMap<>();
-
     public QuicProvider(NetManager neta) {
-        // reserved for future initialization
     }
 
     @Override
     public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
-        QuicAsyncServerChannel serverChannel = new QuicAsyncServerChannel(channelId, channel, context, listenAddr, soConfig);
-        this.serverChannels.put(channelId, serverChannel);
-        return serverChannel;
+        return new QuicAsyncServerChannel(channelId, channel, context, listenAddr, (QuicSoConfig) soConfig);
     }
 
     @Override
     public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
-        return new QuicAsyncClientChannel(channelId, channel, context, remoteAddr, soConfig);
+        return new QuicAsyncClientChannel(channelId, channel, context, remoteAddr, (QuicSoConfig) soConfig);
     }
 
     @Override
     public void shutdown() {
-        for (QuicAsyncServerChannel server : this.serverChannels.values()) {
-            IOUtils.closeQuietly(server);
-        }
-        this.serverChannels.clear();
+
     }
 }

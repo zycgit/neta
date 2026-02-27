@@ -26,21 +26,11 @@ import javax.crypto.spec.SecretKeySpec;
  * @author 赵永春 (zyc@hasor.net)
  */
 final class QuicCrypto {
+    public static final  int GCM_TAG_LENGTH      = 16;
+    private static final int GCM_TAG_LENGTH_BITS = 128;
+
     private QuicCrypto() {
     }
-
-    /** QUIC v1 Initial Salt (RFC 9001 §5.2). */
-    static final byte[] INITIAL_SALT_V1 = {                     //
-            (byte) 0x38, (byte) 0x76, (byte) 0x2c, (byte) 0xf7, //
-            (byte) 0xf5, (byte) 0x59, (byte) 0x34, (byte) 0xb3, //
-            (byte) 0x4d, (byte) 0x17, (byte) 0x9a, (byte) 0xe6, //
-            (byte) 0xa4, (byte) 0xc8, (byte) 0x0c, (byte) 0xad, //
-            (byte) 0xcc, (byte) 0xbb, (byte) 0x7f, (byte) 0x0a  //
-    };
-
-    public static final  int QUIC_VERSION_1      = 0x00000001;
-    private static final int GCM_TAG_LENGTH_BITS = 128;
-    public static final  int GCM_TAG_LENGTH      = 16;
 
     // ── HKDF (RFC 5869) ────────────────────────────────────────────────
 
@@ -95,8 +85,21 @@ final class QuicCrypto {
 
     // ── Initial Keys (RFC 9001 §5.2) ───────────────────────────────────
 
+    /** Derives Initial secrets for QUIC v1. For version-aware derivation, use {@link #deriveInitialSecrets(byte[], QuicVersion)}. */
     public static byte[][] deriveInitialSecrets(byte[] dcid) throws Exception {
-        byte[] initialSecret = hkdfExtract(INITIAL_SALT_V1, dcid);
+        return deriveInitialSecrets(dcid, QuicVersion.V1);
+    }
+
+    /**
+     * Derives Initial secrets using the version-specific Initial Salt.
+     * @param dcid the Destination Connection ID from the client's Initial packet
+     * @param version the QUIC version determining which Initial Salt to use
+     * @return {@code [clientSecret, serverSecret]}, each 32 bytes
+     * @see <a href="https://www.rfc-editor.org/rfc/rfc9001#section-5.2">RFC 9001 §5.2</a>
+     * @see <a href="https://www.rfc-editor.org/rfc/rfc9369#section-4.1">RFC 9369 §4.1</a>
+     */
+    public static byte[][] deriveInitialSecrets(byte[] dcid, QuicVersion version) throws Exception {
+        byte[] initialSecret = hkdfExtract(version.getInitialSalt(), dcid);
         byte[] clientSecret = tlsExpandLabel(initialSecret, "client in", new byte[0], 32);
         byte[] serverSecret = tlsExpandLabel(initialSecret, "server in", new byte[0], 32);
         return new byte[][] { clientSecret, serverSecret };
@@ -104,10 +107,23 @@ final class QuicCrypto {
 
     // ── Packet Protection Keys (RFC 9001 §5.1) ────────────────────────
 
+    /** Derives packet protection keys for QUIC v1. For version-aware derivation, use {@link #derivePacketKeys(byte[], QuicVersion)}. */
     public static byte[][] derivePacketKeys(byte[] secret) throws Exception {
-        byte[] key = tlsExpandLabel(secret, "quic key", new byte[0], 16);
-        byte[] iv = tlsExpandLabel(secret, "quic iv", new byte[0], 12);
-        byte[] hp = tlsExpandLabel(secret, "quic hp", new byte[0], 16);
+        return derivePacketKeys(secret, QuicVersion.V1);
+    }
+
+    /**
+     * Derives QUIC packet protection keys using version-specific HKDF labels.
+     * <p>QUIC v1 uses labels {@code "quic key/iv/hp"}; v2 uses {@code "quicv2 key/iv/hp"} (RFC 9369 §4.1).
+     * @param secret the traffic secret from which to derive keys
+     * @param version the QUIC version determining the HKDF label prefix
+     * @return {@code [key(16), iv(12), hp(16)]}
+     */
+    public static byte[][] derivePacketKeys(byte[] secret, QuicVersion version) throws Exception {
+        String prefix = version.getKeyLabelPrefix();
+        byte[] key = tlsExpandLabel(secret, prefix + " key", new byte[0], 16);
+        byte[] iv = tlsExpandLabel(secret, prefix + " iv", new byte[0], 12);
+        byte[] hp = tlsExpandLabel(secret, prefix + " hp", new byte[0], 16);
         return new byte[][] { key, iv, hp };
     }
 

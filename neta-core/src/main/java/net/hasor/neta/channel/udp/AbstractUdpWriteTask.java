@@ -13,77 +13,107 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel.quic;
+package net.hasor.neta.channel.udp;
+import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.InterruptedByTimeoutException;
 import java.nio.channels.ShutdownChannelGroupException;
 import java.util.concurrent.TimeUnit;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.udp.UdpSoConfig;
 
 /**
- * Task for writing data to a QUIC stream.
- * <p>
- * Mirrors the behavior of {@link net.hasor.neta.channel.udp.UdpWriteTask}:
- * task-driven, handles write=0 back-pressure via {@code delayTask}, retries
- * on {@link InterruptedByTimeoutException}, and routes all exceptions through
- * the framework's {@code notifySndChannelException} notification chain.
+ * Abstract base class for UDP-style write tasks that provides the complete
+ * doWork loop (prepare → send → finish → continue), retry on timeout, and
+ * exception handling. Subclasses only need to implement:
+ * <ul>
+ *   <li>{@link #isChannelOpen()} — whether the underlying transport is still usable</li>
+ *   <li>{@link #doSend(byte[])} — the actual send operation, returning bytes written</li>
+ * </ul>
+ * And may optionally override:
+ * <ul>
+ *   <li>{@link #wrapSendData(byte[])} — to transform raw bytes before sending (e.g. framing)</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-09-24
  */
-class QuicWriteTask extends DefaultSoTask {
+public abstract class AbstractUdpWriteTask extends DefaultSoTask {
     protected final SoContextService context;
     private final   NetChannel       netChannel;
     private final   NetMonitor       monitor;
-    private final   long             streamId;
-    private final   QuicChannel      quicChannel;
     private final   SoSndContext     wContext;
     private         byte[]           sendData;
     private         int              timeoutRetryCnt = 0;
 
-    QuicWriteTask(NetChannel netChannel, long streamId, QuicChannel quicChannel, SoSndContext wContext, SoContextService context) {
+    public AbstractUdpWriteTask(NetChannel netChannel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;
         this.monitor = netChannel.getMonitor();
-        this.streamId = streamId;
-        this.quicChannel = quicChannel;
         this.wContext = wContext;
         this.context = context;
     }
 
+    /** Returns the {@link NetChannel} associated with this write task. */
+    protected NetChannel getNetChannel() {
+        return this.netChannel;
+    }
+
+    /** Subclass must report whether the underlying transport channel is open. */
+    protected abstract boolean isChannelOpen();
+
+    /**
+     * Performs the actual send. The data has already been processed by {@link #wrapSendData}.
+     * @param data the ready-to-send buffer
+     * @return number of bytes written; 0 means the channel was not ready (will retry after delay)
+     * @throws IOException on transport-level errors
+     */
+    protected abstract int doSend(byte[] data) throws IOException;
+
+    /**
+     * Hook to transform raw application bytes before sending. Default implementation
+     * wraps them into a {@link ByteBuffer} with no transformation.
+     * <p>
+     * Subclasses can override this to add framing (e.g. QUIC STREAM / DATAGRAM frames).
+     * @param sendData the raw application bytes
+     * @return a {@link ByteBuffer} ready for {@link #doSend}
+     */
+    protected byte[] wrapSendData(byte[] sendData) {
+        return sendData;
+    }
+
     @Override
     protected void doWork(int retryCnt) {
-        // exit if nothing to send
+        // test exit
         if (this.wContext.isEmpty()) {
             this.finishTask();
             return;
         }
-        if (!this.quicChannel.isConnectionOpen()) {
-            SoUnfinishedSndException err = new SoUnfinishedSndException("QUIC connection is closed.");
-            this.context.notifySndChannelException(this.netChannel.getChannelId(), true, err);
+        if (!this.isChannelOpen()) {
+            SoUnfinishedSndException err = new SoUnfinishedSndException("channel is closed.");
+            context.notifySndChannelException(this.netChannel.getChannelId(), true, err);
             this.wContext.purge(err);
             this.finishTask();
             return;
         }
 
-        // prepare next chunk
+        // prepare
         if (this.sendData == null) {
             SoSndData sndData = this.wContext.peekData();
             byte[] bytes = sndData.transferPull();
             if (bytes != null) {
-                this.sendData = bytes;
+                this.sendData = wrapSendData(bytes);
             }
         }
 
         // send
         if (this.sendData != null) {
             try {
-                int written = this.quicChannel.sendStreamData(this.streamId, this.sendData, false);
-                if (written == 0) {
-                    // send buffer full — back off and retry
+                int write = this.doSend(this.sendData);
+                if (write == 0) {
                     this.delayTask(50, TimeUnit.MILLISECONDS);
                     return;
                 } else {
-                    this.monitor.updateSndCounter(written);
+                    this.monitor.updateSndCounter(write);
                     this.sendData = null;
                 }
             } catch (Exception e) {
@@ -93,22 +123,26 @@ class QuicWriteTask extends DefaultSoTask {
             }
         }
 
-        // advance to next SoSndData if current one is fully consumed
+        // try finish
         if (this.sendData == null) {
             SoSndData sndData = this.wContext.peekData();
             if (!sndData.hasReadable()) {
                 this.wContext.popData();
-                // complete asynchronously (not on the caller's thread)
                 this.submitTask(new SoDelayTask(0)).onFinal(f -> {
                     sndData.completed();
                 });
             }
         }
 
-        // loop to process next data item
+        // loop
         this.continueTask();
     }
 
+    /**
+     * Handle send exception.
+     * @return true if doWork should return immediately (retry scheduled or fatal),
+     * false to fall through to try-finish and continueTask.
+     */
     private boolean handleException(Throwable e, SoSndContext wContext) {
         long channelId = this.netChannel.getChannelId();
 
@@ -118,14 +152,15 @@ class QuicWriteTask extends DefaultSoTask {
             if (maxRetry > 0 && this.timeoutRetryCnt < maxRetry) {
                 this.timeoutRetryCnt++;
                 this.delayTask(cfg.getSndWriteRetryIntervalMs(), TimeUnit.MILLISECONDS);
-                return true;
+                return true; // retry after delay
             }
+            // retries exhausted (or maxRetry = 0): notify and discard this packet
             String retryInfo = maxRetry > 0 ? ", tried " + this.timeoutRetryCnt + " time(s)" : "";
             this.timeoutRetryCnt = 0;
             this.sendData = null;
-            String errorMsg = "QUIC send data timeout with " + this.netChannel.getConfig().getSoWriteTimeoutMs() + " milliseconds" + retryInfo + ".";
+            String errorMsg = "send data timeout with " + this.netChannel.getConfig().getSoWriteTimeoutMs() + " milliseconds" + retryInfo + ".";
             this.context.notifySndChannelException(channelId, false, new SoWriteTimeoutException(errorMsg));
-            return false;
+            return false; // fall through: try-finish will pop the discarded item
         }
 
         SoException finalErr;
@@ -140,11 +175,11 @@ class QuicWriteTask extends DefaultSoTask {
         return false;
     }
 
-    private void purgeSndData(Throwable cause, SoSndContext wContext) {
+    private void purgeSndData(Throwable e, SoSndContext wContext) {
         while (!wContext.isEmpty()) {
             SoSndData sndData = wContext.popData();
             this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-                sndData.failed(cause);
+                sndData.failed(e);
             });
         }
     }
