@@ -134,6 +134,12 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
 
             // Emit Http2Frame
             dst.offerMessage(new Http2Frame(type, flags, streamId, payload));
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-RCV-FRAME] ch=" + channelID + " " + Http2FrameType.name(type)//
+                        + " flags=" + Http2Flags.describe(type, flags)//
+                        + " stream=" + streamId + " len=" + payloadLength);
+            }
         }
 
         this.accumulator.markReader();

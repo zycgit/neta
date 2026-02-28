@@ -65,4 +65,42 @@ final class Http2Flags {
     public static boolean ack(int flags) {
         return hasFlag(flags, ACK);
     }
+
+    /**
+     * Returns a human-readable description of the flags for the given frame type.
+     * Example: {@code "END_STREAM|END_HEADERS"} for HEADERS frame with 0x05.
+     */
+    public static String describe(int frameType, int flags) {
+        if (flags == 0) {
+            return "NONE";
+        }
+        StringBuilder sb = new StringBuilder();
+        // 0x01: END_STREAM (DATA/HEADERS/CONTINUATION) or ACK (SETTINGS/PING)
+        if (hasFlag(flags, 0x01)) {
+            if (frameType == Http2FrameType.SETTINGS || frameType == Http2FrameType.PING) {
+                sb.append("ACK|");
+            } else {
+                sb.append("END_STREAM|");
+            }
+        }
+        if (hasFlag(flags, END_HEADERS)) {
+            sb.append("END_HEADERS|");
+        }
+        if (hasFlag(flags, PADDED)) {
+            sb.append("PADDED|");
+        }
+        if (hasFlag(flags, PRIORITY)) {
+            sb.append("PRIORITY|");
+        }
+        // report any unknown bits
+        int known = 0x01 | END_HEADERS | PADDED | PRIORITY;
+        int unknown = flags & ~known;
+        if (unknown != 0) {
+            sb.append("0x").append(Integer.toHexString(unknown)).append("|");
+        }
+        if (sb.length() > 0 && sb.charAt(sb.length() - 1) == '|') {
+            sb.setLength(sb.length() - 1);
+        }
+        return sb.toString();
+    }
 }

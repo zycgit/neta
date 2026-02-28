@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
@@ -45,10 +46,12 @@ import net.hasor.neta.channel.*;
  * @see Http2HttpToFrameEncoder
  */
 public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
-    private static final int FRAME_HEADER_SIZE = 9;
+    private static final Logger logger            = Logger.getLogger(Http2FrameEncoder.class);
+    private static final int    FRAME_HEADER_SIZE = 9;
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http2Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
+        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
         while (src.hasMore()) {
             Http2Frame frame = src.takeMessage();
             if (frame == null) {
@@ -64,6 +67,10 @@ public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
                 buf.writeBytes(payload, offset, length);
                 buf.markWriter();
                 dst.offerMessage(buf);
+                if (isPrintLog) {
+                    long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                    logger.info("[H2-SND-FRAME] ch=" + channelID + " PREFACE len=" + length);
+                }
             } else {
                 writeFrame(context, dst, frame);
             }
@@ -93,6 +100,11 @@ public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
 
         buf.markWriter();
         dst.offerMessage(buf);
+        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        if (isPrintLog) {
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[H2-SND-FRAME] ch=" + channelID + " " + Http2FrameType.name(frame.type()) + " flags=" + Http2Flags.describe(frame.type(), frame.flags()) + " stream=" + frame.streamId() + " len=" + payloadLength);
+        }
     }
 
     @Override

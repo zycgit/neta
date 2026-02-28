@@ -104,7 +104,10 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
      */
     private void processFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, int type, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
         if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            logger.info("[H2-FRAME] type=" + type + " flags=" + flags + " streamId=" + streamId + " payloadLen=" + payloadLength);
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[H2-RCV] ch=" + channelID + " " + Http2FrameType.name(type)//
+                    + " flags=" + Http2Flags.describe(type, flags)//
+                    + " stream=" + streamId + " len=" + payloadLength);
         }
         switch (type) {
             case Http2FrameType.DATA:
@@ -117,7 +120,7 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
                 // Priority is advisory; we acknowledge but don't act on it
                 break;
             case Http2FrameType.RST_STREAM:
-                processRstStream(state, streamId, payload, payloadOffset, payloadLength);
+                processRstStream(state, context, streamId, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.SETTINGS:
                 processSettings(state, context, flags, payload, payloadOffset, payloadLength);
@@ -129,10 +132,10 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
                 processPing(state, flags, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.GOAWAY:
-                processGoaway(payload, payloadOffset, payloadLength);
+                processGoaway(context, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.WINDOW_UPDATE:
-                processWindowUpdate(state, streamId, payload, payloadOffset, payloadLength);
+                processWindowUpdate(state, context, streamId, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.CONTINUATION:
                 processContinuationFrame(state, context, dst, flags, streamId, payload, payloadOffset, payloadLength);
@@ -179,10 +182,20 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
                 if (stream != null) {
                     stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
                 }
+                if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                    long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                    logger.info("[H2-RCV] ch=" + channelID + " DATA stream=" + streamId//
+                            + " dataLen=" + dataLength + " END_STREAM streamState=HALF_CLOSED_REMOTE");
+                }
             } else {
                 DefaultHttpContent chunk = new DefaultHttpContent(content);
                 chunk.streamId(streamId);
                 dst.offerMessage(chunk);
+                if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                    long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                    logger.info("[H2-RCV] ch=" + channelID + " DATA stream=" + streamId//
+                            + " dataLen=" + dataLength);
+                }
             }
 
             // RFC 9113 §6.9: Send WINDOW_UPDATE to replenish flow control windows
@@ -236,7 +249,7 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
         if (Http2Flags.endHeaders(flags)) {
             // Complete header block - decode immediately
             HttpHeaders headers = state.decodeHeaders(payload, offset, headerBlockLength);
-            emitHttpMessage(state, dst, streamId, headers, Http2Flags.endStream(flags));
+            emitHttpMessage(state, context, dst, streamId, headers, Http2Flags.endStream(flags));
         } else {
             // Need CONTINUATION frames - accumulate.
             // Save the END_STREAM flag now: the HEADERS frame determines whether the
@@ -245,6 +258,10 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             headerBlock.writeBytes(payload, offset, headerBlockLength);
             stream.accumulatedHeaderBlock(headerBlock);
             stream.setEndStreamPending(Http2Flags.endStream(flags));
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-RCV] ch=" + channelID + " HEADERS stream=" + streamId + " headerBlockLen=" + headerBlockLength + " waitingCONTINUATION endStreamPending=" + Http2Flags.endStream(flags));
+            }
         }
     }
 
@@ -271,8 +288,13 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             headerBlock.free();
             stream.accumulatedHeaderBlock(null);
 
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-RCV] ch=" + channelID + " CONTINUATION stream=" + streamId//
+                        + " totalHeaderBlockLen=" + readable + " endStream=" + endStream);
+            }
             HttpHeaders headers = state.decodeHeaders(allHeaders, 0, allHeaders.length);
-            emitHttpMessage(state, dst, streamId, headers, endStream);
+            emitHttpMessage(state, context, dst, streamId, headers, endStream);
         }
     }
 
@@ -288,7 +310,7 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
      *   <li>{@code :status} → HttpResponse.status()</li>
      * </ul>
      */
-    private void emitHttpMessage(Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
+    private void emitHttpMessage(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
         state.setLastEmittedStreamId(streamId);
         // When a complete request is emitted (endStream), record its stream ID
         // so the encoder can associate the response with the correct stream.
@@ -310,6 +332,10 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_2_0, httpStatus, headers);
             response.streamId(streamId);
             dst.offerMessage(response);
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-RCV] ch=" + channelID + " HEADERS stream=" + streamId + " RESPONSE status=" + statusCode + " endStream=" + endStream);
+            }
         } else {
             // This is a request
             String method = headers.get(":method");
@@ -338,6 +364,10 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_2_0, httpMethod, path, headers);
             request.streamId(streamId);
             dst.offerMessage(request);
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-RCV] ch=" + channelID + " HEADERS stream=" + streamId + " REQUEST " + method + " " + path + " endStream=" + endStream);
+            }
         }
 
         if (endStream) {
@@ -347,6 +377,10 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             Http2Stream stream = state.getStream(streamId);
             if (stream != null) {
                 stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
+            }
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-RCV] ch=" + channelID + " LastHttpContent stream=" + streamId + " streamState=HALF_CLOSED_REMOTE");
             }
         }
     }
@@ -366,11 +400,16 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
     }
 
     /** Processes RST_STREAM frame - terminates a stream. */
-    private void processRstStream(Http2DecoderContent state, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processRstStream(Http2DecoderContent state, ProtoContext context, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
         if (payloadLength != 4) {
             throw new HttpProtocolViolationException("HTTP/2: RST_STREAM frame must be 4 bytes, got " + payloadLength);
         }
+        int errorCode = ((payload[payloadOffset] & 0xFF) << 24) | ((payload[payloadOffset + 1] & 0xFF) << 16) | ((payload[payloadOffset + 2] & 0xFF) << 8) | (payload[payloadOffset + 3] & 0xFF);
         state.closeStream(streamId);
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[H2-RCV] ch=" + channelID + " RST_STREAM stream=" + streamId + " errorCode=0x" + Integer.toHexString(errorCode));
+        }
     }
 
     /** Processes SETTINGS frame - updates connection parameters. */
@@ -384,24 +423,31 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
         for (int i = payloadOffset; i < payloadOffset + payloadLength; i += 6) {
             int id = ((payload[i] & 0xFF) << 8) | (payload[i + 1] & 0xFF);
             long value = ((long) (payload[i + 2] & 0xFF) << 24) | ((payload[i + 3] & 0xFF) << 16) | ((payload[i + 4] & 0xFF) << 8) | (payload[i + 5] & 0xFF);
-            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-                logger.info("[H2-REMOTE-SETTING] id=" + id + " value=" + value);
-            }
             state.applyRemoteSetting(id, value);
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-RCV] ch=" + channelID + " SETTINGS id=" + id + " value=" + value);
+            }
         }
 
         state.markSettingsAckPending();
     }
 
     /** Processes GOAWAY frame. */
-    private void processGoaway(byte[] payload, int payloadOffset, int payloadLength) {
+    private void processGoaway(ProtoContext context, byte[] payload, int payloadOffset, int payloadLength) {
         if (payloadLength < 8) {
             throw new HttpProtocolViolationException("HTTP/2: GOAWAY frame too short");
+        }
+        int lastStreamId = ((payload[payloadOffset] & 0x7F) << 24) | ((payload[payloadOffset + 1] & 0xFF) << 16) | ((payload[payloadOffset + 2] & 0xFF) << 8) | (payload[payloadOffset + 3] & 0xFF);
+        int errorCode = ((payload[payloadOffset + 4] & 0xFF) << 24) | ((payload[payloadOffset + 5] & 0xFF) << 16) | ((payload[payloadOffset + 6] & 0xFF) << 8) | (payload[payloadOffset + 7] & 0xFF);
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[H2-RCV] ch=" + channelID + " GOAWAY lastStream=" + lastStreamId + " errorCode=0x" + Integer.toHexString(errorCode));
         }
     }
 
     /** Processes WINDOW_UPDATE frame - adjusts flow control window. */
-    private void processWindowUpdate(Http2DecoderContent state, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processWindowUpdate(Http2DecoderContent state, ProtoContext context, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
         if (payloadLength != 4) {
             throw new HttpProtocolViolationException("HTTP/2: WINDOW_UPDATE frame must be 4 bytes");
         }
@@ -411,6 +457,10 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
         }
         if (streamId > 0) {
             state.adjustStreamSendWindow(streamId, increment);
+        }
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[H2-RCV] ch=" + channelID + " WINDOW_UPDATE " + (streamId == 0 ? "conn" : "stream=" + streamId) + " increment=" + increment);
         }
     }
 
