@@ -99,16 +99,6 @@ class JdkAlpnSslUtils {
         return GET_APPLICATION_PROTOCOL != null;
     }
 
-    //    public static String getHandshakeApplicationProtocol(SSLEngine sslEngine) {
-    //        try {
-    //            return (String) GET_HANDSHAKE_APPLICATION_PROTOCOL.invoke(sslEngine);
-    //        } catch (UnsupportedOperationException ex) {
-    //            throw ex;
-    //        } catch (Exception ex) {
-    //            throw new IllegalStateException(ex);
-    //        }
-    //    }
-
     public static String getApplicationProtocol(SSLEngine sslEngine) {
         try {
             return (String) GET_APPLICATION_PROTOCOL.invoke(sslEngine);
@@ -141,15 +131,4 @@ class JdkAlpnSslUtils {
             throw new IllegalStateException(ex);
         }
     }
-
-    //    @SuppressWarnings("unchecked")
-    //    public static BiFunction<SSLEngine, List<String>, String> getHandshakeApplicationProtocolSelector(SSLEngine engine) {
-    //        try {
-    //            return (BiFunction<SSLEngine, List<String>, String>) GET_HANDSHAKE_APPLICATION_PROTOCOL_SELECTOR.invoke(engine);
-    //        } catch (UnsupportedOperationException ex) {
-    //            throw ex;
-    //        } catch (Exception ex) {
-    //            throw new IllegalStateException(ex);
-    //        }
-    //    }
 }

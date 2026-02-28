@@ -24,8 +24,8 @@ import net.hasor.neta.channel.SoChannel;
  */
 public interface SslContext {
 
-    /** return ssl config. */
-    SslConfig getConfig();
+    /** return ssl cert config. */
+    SslCertConfig getConfig();
 
     SoChannel<?> getChannel();
 
@@ -49,6 +49,9 @@ public interface SslContext {
 
     /** Returns the host name of the peer of this session. The host port is not authenticated. */
     int getPeerPort();
+
+    /** Returns the SNI (Server Name Indication) host name. */
+    String getSniHostName();
 
     /** switch to no encryption, there is keep connect, close SSL. */
     void closeSSL();

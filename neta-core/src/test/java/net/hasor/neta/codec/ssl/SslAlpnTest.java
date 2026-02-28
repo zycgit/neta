@@ -44,7 +44,7 @@ public class SslAlpnTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig sslConf = sslConfig();
             sslConf.setAppProtocol(new String[] { "HTTP", "HTTPS" });
-            sslConf.setAppProtocolSelector((channel, sslEngine, protocols) -> {
+            sslConf.setAppProtocolSelector((channel, protocols) -> {
                 return "HTTPS";
             });
 

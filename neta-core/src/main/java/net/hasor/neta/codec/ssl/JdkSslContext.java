@@ -19,10 +19,7 @@ import java.security.GeneralSecurityException;
 import java.security.KeyStore;
 import java.util.*;
 import java.util.stream.Collectors;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.SSLEngine;
-import javax.net.ssl.TrustManagerFactory;
+import javax.net.ssl.*;
 import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
@@ -180,11 +177,12 @@ public class JdkSslContext extends SslContextBasic {
         SSLEngine unwrap = this.getEngine().unwrap();
         if (unwrap != null && JdkAlpnSslUtils.supportsAlpn()) {
             String appProtocol = JdkAlpnSslUtils.getApplicationProtocol(unwrap);
-            if (appProtocol != null) {
-                return appProtocol.isEmpty() ? null : appProtocol;
+            if (appProtocol != null && !appProtocol.isEmpty()) {
+                return appProtocol;
             }
         }
-        return null;
+        // fallback to configured default when negotiation didn't produce a result
+        return this.sslConfig.resolveDefaultProtocol();
     }
 
     @Override
@@ -279,15 +277,44 @@ public class JdkSslContext extends SslContextBasic {
             }
         }
 
+        // SNI (Server Name Indication)
+        if (this.isClient()) {
+            // Client mode: send server_name in ClientHello SNI extension
+            String sniHost = this.sslConfig.getSniHostName();
+            if (sniHost == null || sniHost.isEmpty()) {
+                // Fallback: use SSLEngine's peer host (typically set at SSLEngine creation time)
+                sniHost = sslEngine.getPeerHost();
+            }
+            if (sniHost != null && !sniHost.isEmpty()) {
+                SSLParameters params = sslEngine.getSSLParameters();
+                params.setServerNames(Collections.singletonList(new SNIHostName(sniHost)));
+                sslEngine.setSSLParameters(params);
+                if (printLog) {
+                    logger.info("ssl(" + this.channelId + ") SNI server_name = " + sniHost);
+                }
+            }
+        } else {
+            // Server mode: optionally set SNI matchers for virtual hosting
+            String expectedSni = this.sslConfig.getSniHostName();
+            if (expectedSni != null && !expectedSni.isEmpty()) {
+                SSLParameters params = sslEngine.getSSLParameters();
+                params.setSNIMatchers(Collections.singleton(SNIHostName.createSNIMatcher(expectedSni.replace(".", "\\\\."))));
+                sslEngine.setSSLParameters(params);
+                if (printLog) {
+                    logger.info("ssl(" + this.channelId + ") SNI matcher = " + expectedSni);
+                }
+            }
+        }
+
         // NPN/ALPN
         String[] appProtocol = this.sslConfig.getAppProtocol();
         appProtocol = (appProtocol == null) ? ArrayUtils.EMPTY_STRING_ARRAY : appProtocol;
         JdkAlpnSslUtils.setApplicationProtocols(sslEngine, appProtocol);
-        final SslAppProtocolSelector protocolSelector = this.sslConfig.getAppProtocolSelector();
-        if (protocolSelector != null) {
-            JdkAlpnSslUtils.setHandshakeApplicationProtocolSelector(sslEngine, (engine, strings) -> {
+        if (this.isServer()) {
+            // Use unified negotiation: selector -> defaultAppProtocol -> intersection -> null
+            JdkAlpnSslUtils.setHandshakeApplicationProtocolSelector(sslEngine, (engine, peerProtocols) -> {
                 SoChannel<?> channel = this.soContext.findChannel(this.channelId);
-                return protocolSelector.selector(channel, engine, strings);
+                return this.sslConfig.negotiateAlpn(channel, peerProtocols);
             });
         }
 

@@ -15,15 +15,11 @@
  */
 package net.hasor.neta.codec.ssl;
 import java.io.IOException;
-import java.io.InputStream;
 import java.security.GeneralSecurityException;
 import java.security.KeyStore;
-import java.security.PrivateKey;
-import java.security.cert.X509Certificate;
-import java.util.Objects;
+import java.util.List;
 import javax.net.ssl.*;
-import net.hasor.cobble.ArrayUtils;
-import net.hasor.cobble.ResourcesUtils;
+import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
@@ -100,80 +96,51 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     @Override
-    public SslConfig getConfig() {
+    public String getSniHostName() {
+        // On server side: read the SNI from the client's TLS handshake via ExtendedSSLSession
+        SSLEngine engine = this.sslEngine.unwrap();
+        if (engine != null) {
+            SSLSession session = engine.getHandshakeSession();
+            if (session == null) {
+                session = engine.getSession();
+            }
+            if (session instanceof ExtendedSSLSession) {
+                List<SNIServerName> serverNames = ((ExtendedSSLSession) session).getRequestedServerNames();
+                if (serverNames != null) {
+                    for (SNIServerName sn : serverNames) {
+                        if (sn.getType() == StandardConstants.SNI_HOST_NAME && sn instanceof SNIHostName) {
+                            return ((SNIHostName) sn).getAsciiName();
+                        }
+                    }
+                }
+            }
+        }
+        // Fallback: return configured SNI host name
+        String configured = this.sslConfig.getSniHostName();
+        if (StringUtils.isNotBlank(configured)) {
+            return configured;
+        }
+        return null;
+    }
+
+    @Override
+    public SslCertConfig getConfig() {
         return this.sslConfig;
     }
 
     /** create KeyStore */
     protected KeyStore createKeyStore() throws GeneralSecurityException {
-        KeyStore ks = this.sslConfig.getKeyStore();
-        if (ks == null) {
-            String defaultType = KeyStore.getDefaultType();
-            if (this.protoCtx.getConfig().isPrintLog()) {
-                logger.info("ssl(" + this.channelId + ") create KeyStore using '" + defaultType + "'");
-            }
-            ks = KeyStore.getInstance(defaultType);
-        }
-        return ks;
+        return SslCertHelper.createKeyStore(this.sslConfig);
     }
 
     /** create KeyManagerFactory */
     protected KeyManagerFactory createKeyManagerFactory(KeyStore keyStore) throws GeneralSecurityException, IOException {
-        String password = this.sslConfig.getKeyPassword();
-        char[] passwordChars = (password == null) ? ArrayUtils.EMPTY_CHAR_ARRAY : password.toCharArray();
-        boolean printLog = this.protoCtx.getConfig().isPrintLog();
-
-        if (this.sslConfig.getAuthType() == SslAuthKeyType.JKS) {
-            String jskResource = Objects.requireNonNull(this.sslConfig.getJksResource());
-            if (printLog) {
-                logger.info("ssl(" + this.channelId + ") loadKeyStore by JKS, " + jskResource);
-            }
-
-            try (InputStream in = ResourcesUtils.getResourceAsStream(jskResource)) {
-                SslUtils.loadKeyStore(keyStore, in, passwordChars);
-            }
-        } else if (this.sslConfig.getAuthType() == SslAuthKeyType.PEM) {
-            String pemPrivate = Objects.requireNonNull(this.sslConfig.getPemPrivate(), "key required for servers");
-            String pemCertChain = Objects.requireNonNull(this.sslConfig.getPemCertChain(), "keyCertChain");
-            if (printLog) {
-                logger.info("ssl(" + this.channelId + ") loadKeyStore by PEM pemPrivate = " + pemPrivate + ", pemCertChain = " + pemCertChain);
-            }
-
-            X509Certificate[] certChain;
-            PrivateKey privateKey;
-            try (InputStream in = ResourcesUtils.getResourceAsStream(pemCertChain)) {
-                certChain = SslUtils.toX509Certificates(in);
-            }
-            try (InputStream in = ResourcesUtils.getResourceAsStream(pemPrivate)) {
-                privateKey = SslUtils.toPrivateKey(in, password);
-            }
-
-            SslUtils.loadKeyStore(keyStore, certChain, privateKey, passwordChars);
-        } else {
-            if (printLog) {
-                logger.info("ssl(" + this.channelId + ") loadKeyStore ignore.");
-            }
-        }
-
-        KeyManagerFactory kmf = this.sslConfig.getKeyManagerFactory();
-        return SslUtils.buildKeyManagerFactory(keyStore, passwordChars, kmf);
+        return SslCertHelper.createKeyManagerFactory(this.sslConfig, keyStore);
     }
 
     /** create TrustManagerFactory */
     protected TrustManagerFactory getTrustManagers(KeyStore keyStore) throws GeneralSecurityException, IOException {
-        TrustManagerFactory tmf = this.sslConfig.getTrustManagerFactory();
-        TrustManager[] tm = this.sslConfig.getTrustManagers();
-
-        if (tmf == null) {
-            if (tm != null && tm.length > 0) {
-                tmf = new SslTmfWrapper(tm);
-            } else {
-                tmf = TrustManagerFactory.getInstance(TrustManagerFactory.getDefaultAlgorithm());
-            }
-        }
-        SslUtils.buildTrustManagerFactory(keyStore, tmf);
-        tmf.init(keyStore);
-        return tmf;
+        return SslCertHelper.createTrustManagerFactory(this.sslConfig, keyStore);
     }
 
     /** create SSLContext */

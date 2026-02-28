@@ -14,39 +14,20 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import java.security.KeyStore;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
-import javax.net.ssl.TrustManager;
-import javax.net.ssl.TrustManagerFactory;
-import net.hasor.neta.channel.ProtoConfig;
 
 /**
- * SSL 配置
+ * SSL configuration for SSLEngine-based TLS/DTLS pipelines.
+ * <p>
+ * Extends {@link SslCertConfig} to inherit shared certificate and ALPN settings,
+ * and adds SSLEngine-specific fields: provider, clientAuth, ciphers, protocols.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-public class SslConfig extends ProtoConfig {
-    private SslProvider    provider     = SslProvider.JSSE;     // default is JDK
-    private SslClientAuth  clientAuth   = SslClientAuth.NONE;   //
-    private String[]       appProtocol  = null;                 // TLS 扩展，NPN/ALPN（应用层协议协商）
-    private String[]       ciphers      = null;                 // JSSE Cipher Suite Names 使用的密钥套件
-    private String[]       protocols    = null;                 // The TLS protocol versions to enable.
-    //
-    private SslAuthKeyType authType     = null;
-    private String         jksResource  = null;                 // JKS File
-    private String         pemCertChain = null;                 // X.509 certificate chain in PEM format.
-    private String         pemPrivate   = null;                 // PKCS#8 private key in PEM format.
-    private String         keyPassword  = null;
-    //
-
-    private SSLContext             sslContext          = null;
-    private KeyStore               keyStore            = null;
-    //    private KeyManager[]           keyManagers;
-    private KeyManagerFactory      keyManagerFactory   = null;
-    private TrustManager[]         trustManagers;
-    private TrustManagerFactory    trustManagerFactory = null;
-    private SslAppProtocolSelector appProtocolSelector = null;                // 用于 NPN/ALPN
+public class SslConfig extends SslCertConfig {
+    private SslProvider   provider   = SslProvider.JSSE;       // default is JDK
+    private SslClientAuth clientAuth = SslClientAuth.NONE;
+    private String[]      ciphers    = null;                   // JSSE Cipher Suite Names
+    private String[]      protocols  = null;                   // TLS protocol versions to enable
 
     public SslProvider getProvider() {
         return this.provider;
@@ -64,14 +45,6 @@ public class SslConfig extends ProtoConfig {
         this.clientAuth = clientAuth;
     }
 
-    public String[] getAppProtocol() {
-        return this.appProtocol;
-    }
-
-    public void setAppProtocol(String[] appProtocol) {
-        this.appProtocol = appProtocol;
-    }
-
     public String[] getCiphers() {
         return this.ciphers;
     }
@@ -86,93 +59,5 @@ public class SslConfig extends ProtoConfig {
 
     public void setProtocols(String[] protocols) {
         this.protocols = protocols;
-    }
-
-    public SslAuthKeyType getAuthType() {
-        return this.authType;
-    }
-
-    public void setAuthType(SslAuthKeyType authType) {
-        this.authType = authType;
-    }
-
-    public String getJksResource() {
-        return this.jksResource;
-    }
-
-    public void setJksResource(String jksResource) {
-        this.jksResource = jksResource;
-    }
-
-    public String getPemCertChain() {
-        return this.pemCertChain;
-    }
-
-    public void setPemCertChain(String pemCertChain) {
-        this.pemCertChain = pemCertChain;
-    }
-
-    public String getPemPrivate() {
-        return this.pemPrivate;
-    }
-
-    public void setPemPrivate(String pemPrivate) {
-        this.pemPrivate = pemPrivate;
-    }
-
-    public String getKeyPassword() {
-        return this.keyPassword;
-    }
-
-    public void setKeyPassword(String keyPassword) {
-        this.keyPassword = keyPassword;
-    }
-
-    public SSLContext getSslContext() {
-        return this.sslContext;
-    }
-
-    public void setSslContext(SSLContext sslContext) {
-        this.sslContext = sslContext;
-    }
-
-    public KeyStore getKeyStore() {
-        return this.keyStore;
-    }
-
-    public void setKeyStore(KeyStore keyStore) {
-        this.keyStore = keyStore;
-    }
-
-    public KeyManagerFactory getKeyManagerFactory() {
-        return this.keyManagerFactory;
-    }
-
-    public void setKeyManagerFactory(KeyManagerFactory keyManagerFactory) {
-        this.keyManagerFactory = keyManagerFactory;
-    }
-
-    public TrustManager[] getTrustManagers() {
-        return this.trustManagers;
-    }
-
-    public void setTrustManagers(TrustManager[] trustManagers) {
-        this.trustManagers = trustManagers;
-    }
-
-    public TrustManagerFactory getTrustManagerFactory() {
-        return this.trustManagerFactory;
-    }
-
-    public void setTrustManagerFactory(TrustManagerFactory trustManagerFactory) {
-        this.trustManagerFactory = trustManagerFactory;
-    }
-
-    public SslAppProtocolSelector getAppProtocolSelector() {
-        return this.appProtocolSelector;
-    }
-
-    public void setAppProtocolSelector(SslAppProtocolSelector appProtocolSelector) {
-        this.appProtocolSelector = appProtocolSelector;
     }
 }

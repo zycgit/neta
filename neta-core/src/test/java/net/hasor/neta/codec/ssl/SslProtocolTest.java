@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.ssl;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.neta.channel.PlayLoad;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtListen;
@@ -45,10 +46,13 @@ public class SslProtocolTest extends AbstractSslTest {
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
             VrtSoConfig soConfig = VrtSoConfig.asDefault();
             soConfig.setAsynchronous(false);
+            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
             VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
             VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
+            VrtChannel server = serverRef.get();
+            assert server != null : "Server channel was not accepted";
 
             // transfer
             List<Object> serverRcvData = new ArrayList<>();
@@ -72,10 +76,13 @@ public class SslProtocolTest extends AbstractSslTest {
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
             VrtSoConfig soConfig = VrtSoConfig.asDefault();
             soConfig.setAsynchronous(false);
+            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
             VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
             VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
+            VrtChannel server = serverRef.get();
+            assert server != null : "Server channel was not accepted";
 
             // transfer
             List<Object> serverRcvData = new ArrayList<>();
@@ -99,10 +106,13 @@ public class SslProtocolTest extends AbstractSslTest {
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
             VrtSoConfig soConfig = VrtSoConfig.asDefault();
             soConfig.setAsynchronous(false);
+            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
             VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
             VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
+            VrtChannel server = serverRef.get();
+            assert server != null : "Server channel was not accepted";
 
             // transfer
             List<Object> serverRcvData = new ArrayList<>();
@@ -126,10 +136,13 @@ public class SslProtocolTest extends AbstractSslTest {
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
             VrtSoConfig soConfig = VrtSoConfig.asDefault();
             soConfig.setAsynchronous(false);
+            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
             VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
             VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
+            VrtChannel server = serverRef.get();
+            assert server != null : "Server channel was not accepted";
 
             // transfer
             List<Object> serverRcvData = new ArrayList<>();
@@ -153,10 +166,13 @@ public class SslProtocolTest extends AbstractSslTest {
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
             VrtSoConfig soConfig = VrtSoConfig.asDefault();
             soConfig.setAsynchronous(false);
+            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
             VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
+            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
             VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            VrtChannel server = (VrtChannel) neta.findChannel(3);
             listen.waitAnyAccept();
+            VrtChannel server = serverRef.get();
+            assert server != null : "Server channel was not accepted";
 
             // transfer
             List<Object> serverRcvData = new ArrayList<>();
