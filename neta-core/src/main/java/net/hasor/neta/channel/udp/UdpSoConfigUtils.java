@@ -26,7 +26,7 @@ import net.hasor.cobble.logging.Logger;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
-class UdpSoConfigUtils {
+public class UdpSoConfigUtils {
     private static final Logger                logger       = Logger.getLogger(UdpSoConfigUtils.class);
     private static final SocketOption<Integer> SO_SNDBUF    = StandardSocketOptions.SO_SNDBUF;
     private static final SocketOption<Integer> SO_RCVBUF    = StandardSocketOptions.SO_RCVBUF;

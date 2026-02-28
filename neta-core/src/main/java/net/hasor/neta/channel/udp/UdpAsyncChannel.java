@@ -40,7 +40,7 @@ import net.hasor.neta.channel.*;
  * @see java.nio.channels.DatagramChannel
  * @see java.util.concurrent.ExecutorService
  */
-class UdpAsyncChannel implements AsyncChannel {
+public class UdpAsyncChannel implements AsyncChannel {
     private static final Logger            logger = Logger.getLogger(UdpAsyncChannel.class);
     protected final      long              channelId;
     protected final      DatagramChannel   channel;
@@ -49,9 +49,9 @@ class UdpAsyncChannel implements AsyncChannel {
     protected final      SoContextService  context;
     protected final      UdpSoConfig       soConfig;
     //
-    private final        AtomicBoolean     writing;
+    protected final      AtomicBoolean     writing;
 
-    UdpAsyncChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
+    protected UdpAsyncChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
         this.channelId = channelId;
         this.channel = channel;
         this.localAddress = (InetSocketAddress) channel.getLocalAddress();
@@ -109,7 +109,7 @@ class UdpAsyncChannel implements AsyncChannel {
         }
     }
 
-    private void asyncWrite(NetChannel channel, SoSndContext wContext) {
+    protected void asyncWrite(NetChannel channel, SoSndContext wContext) {
         UdpWriteTask task = new UdpWriteTask(channel, this.channel, wContext, this.context);
         this.context.submitSoTask(task, this).onFinal(f -> {
             this.writing.set(false);

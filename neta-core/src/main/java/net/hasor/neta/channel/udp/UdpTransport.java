@@ -26,7 +26,6 @@ import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.DefaultSoTask;
 import net.hasor.neta.channel.SoContextService;
@@ -50,37 +49,33 @@ import net.hasor.neta.channel.SoDelayTask;
  * @version 2026-02-21
  */
 public class UdpTransport implements Closeable {
-    private static final Logger           logger = Logger.getLogger(UdpTransport.class);
-    private final        long             ownerChannelId;
-    private final        DatagramChannel  channel;
-    private final        Selector         selector;
-    private final        SoContextService context;
-    private final        ByteBuffer       receiveBuffer;
-    private final        Object           taskOwner;
-    private final        AtomicBoolean    closed = new AtomicBoolean(false);
+    private final    DatagramChannel  channel;
+    private final    Selector         selector;
+    private final    SoContextService context;
+    private final    ByteBuffer       receiveBuffer;
+    private final    Object           taskOwner;
+    private final    AtomicBoolean    closed         = new AtomicBoolean(false);
+    private volatile int              selectorPollMs = 100;
 
-    /**
-     * Callback interface for received datagrams.
-     * The {@code data} ByteBuffer is positioned at 0 with the limit set to the
-     * number of bytes received. Implementations must consume or copy the data
-     * before returning, as the buffer will be reused for the next read.
-     */
-    public interface DatagramReceiver {
-        void onDatagram(SocketAddress remoteAddr, ByteBuffer data) throws IOException;
+    private UdpTransport(DatagramChannel channel, SoContextService context, int receiveBufferSize, Object taskOwner) throws IOException {
+        this.channel = channel;
+        this.selector = Selector.open();
+        this.context = context;
+        this.receiveBuffer = ByteBuffer.allocateDirect(receiveBufferSize);
+        this.taskOwner = taskOwner;
     }
 
     // ── Factory Methods ────────────────────────────────────────────────
 
     /**
      * Opens a new DatagramChannel-based transport.
-     * @param ownerChannelId channel ID of the owning server/client channel
      * @param context the SoContextService for task scheduling
      * @param receiveBufferSize size of the internal receive buffer (bytes)
      * @param taskOwner object passed to {@code submitSoTask} as the task owner
      */
-    public static UdpTransport open(long ownerChannelId, SoContextService context, int receiveBufferSize, Object taskOwner) throws IOException {
+    public static UdpTransport open(SoContextService context, int receiveBufferSize, Object taskOwner) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
-        return new UdpTransport(ownerChannelId, channel, context, receiveBufferSize, taskOwner);
+        return new UdpTransport(channel, context, receiveBufferSize, taskOwner);
     }
 
     /**
@@ -92,19 +87,8 @@ public class UdpTransport implements Closeable {
      * @param taskOwner object passed to {@code submitSoTask} as the task owner
      */
     public static UdpTransport wrap(long ownerChannelId, DatagramChannel channel, SoContextService context, int receiveBufferSize, Object taskOwner) throws IOException {
-        return new UdpTransport(ownerChannelId, channel, context, receiveBufferSize, taskOwner);
+        return new UdpTransport(channel, context, receiveBufferSize, taskOwner);
     }
-
-    private UdpTransport(long ownerChannelId, DatagramChannel channel, SoContextService context, int receiveBufferSize, Object taskOwner) throws IOException {
-        this.ownerChannelId = ownerChannelId;
-        this.channel = channel;
-        this.selector = Selector.open();
-        this.context = context;
-        this.receiveBuffer = ByteBuffer.allocateDirect(receiveBufferSize);
-        this.taskOwner = taskOwner;
-    }
-
-    // ── Setup ──────────────────────────────────────────────────────────
 
     /**
      * Binds the underlying DatagramChannel to the given address,
@@ -116,6 +100,8 @@ public class UdpTransport implements Closeable {
         this.channel.register(this.selector, SelectionKey.OP_READ);
     }
 
+    // ── Setup ──────────────────────────────────────────────────────────
+
     /**
      * Connects the underlying DatagramChannel to the given remote address,
      * sets it to non-blocking mode, and registers it with the Selector for reading.
@@ -124,6 +110,15 @@ public class UdpTransport implements Closeable {
         this.channel.connect(addr);
         this.channel.configureBlocking(false);
         this.channel.register(this.selector, SelectionKey.OP_READ);
+    }
+
+    /**
+     * Sets the selector poll interval in milliseconds (default 100ms).
+     * Lower values reduce packet latency at the cost of slightly more CPU usage.
+     * Must be called before {@link #startReceiveLoop}.
+     */
+    public void setSelectorPollMs(int ms) {
+        this.selectorPollMs = Math.max(1, ms);
     }
 
     // ── Receive Loop ───────────────────────────────────────────────────
@@ -136,6 +131,7 @@ public class UdpTransport implements Closeable {
      * @param onClose called when the transport closes (channel no longer open)
      * @param onError called when a receive error occurs
      */
+
     public void startReceiveLoop(DatagramReceiver receiver, Runnable onClose, Consumer<IOException> onError) {
         this.submitTask(new SoDelayTask(0)).onFinal(f -> {
             this.doReceiveLoop(receiver, onClose, onError);
@@ -149,7 +145,7 @@ public class UdpTransport implements Closeable {
         }
 
         try {
-            if (this.selector.select(100) > 0) {
+            if (this.selector.select(this.selectorPollMs) > 0) {
                 this.processSelectedKeys(receiver);
             }
         } catch (IOException e) {
@@ -180,8 +176,6 @@ public class UdpTransport implements Closeable {
         }
     }
 
-    // ── Accessors ──────────────────────────────────────────────────────
-
     /** Returns the underlying DatagramChannel (for write operations and socket configuration). */
     public DatagramChannel getChannel() {
         return this.channel;
@@ -196,8 +190,6 @@ public class UdpTransport implements Closeable {
     public boolean isOpen() {
         return !this.closed.get() && this.channel.isOpen();
     }
-
-    // ── Close ──────────────────────────────────────────────────────────
 
     @Override
     public void close() throws IOException {
@@ -219,7 +211,19 @@ public class UdpTransport implements Closeable {
         }
     }
 
+    // ── Close ──────────────────────────────────────────────────────────
+
     private Future<?> submitTask(DefaultSoTask task) {
         return this.context.submitSoTask(task, this.taskOwner);
+    }
+
+    /**
+     * Callback interface for received datagrams.
+     * The {@code data} ByteBuffer is positioned at 0 with the limit set to the
+     * number of bytes received. Implementations must consume or copy the data
+     * before returning, as the buffer will be reused for the next read.
+     */
+    public interface DatagramReceiver {
+        void onDatagram(SocketAddress remoteAddr, ByteBuffer data) throws IOException;
     }
 }

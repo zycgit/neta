@@ -38,6 +38,11 @@ public class UdpSoConfig extends SoConfig {
         super(UdpProvider.NAME);
     }
 
+    /** Protected constructor for subclasses that use a different provider name. */
+    protected UdpSoConfig(String providerName) {
+        super(providerName);
+    }
+
     public Integer getRcvPacketSize() {
         return this.rcvPacketSize;
     }

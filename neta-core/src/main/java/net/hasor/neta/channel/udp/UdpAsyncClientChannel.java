@@ -36,12 +36,12 @@ import net.hasor.neta.channel.*;
  * @see DatagramChannel
  * @see ExecutorService
  */
-class UdpAsyncClientChannel extends UdpAsyncChannel {
+public class UdpAsyncClientChannel extends UdpAsyncChannel {
     private static final Logger           logger = Logger.getLogger(UdpAsyncClientChannel.class);
-    private final        UdpTransport     transport;
-    private final        ByteBufAllocator bufAllocator;
+    protected final      UdpTransport     transport;
+    protected final      ByteBufAllocator bufAllocator;
 
-    UdpAsyncClientChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
+    protected UdpAsyncClientChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
         super(channelId, channel, context, remoteAddress, soConfig);
 
         this.bufAllocator = this.context.getByteBufAllocator();
@@ -103,7 +103,7 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
         }
     }
 
-    private void onDatagram(UdpChannel channel, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
+    protected void onDatagram(UdpChannel channel, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
         InetSocketAddress inetRemoteAddr = (InetSocketAddress) remoteAddr;
         if (this.soConfig.isRcvRemoteOnly() && !inetRemoteAddr.equals(this.remoteAddress)) {
             return;
@@ -133,7 +133,6 @@ class UdpAsyncClientChannel extends UdpAsyncChannel {
                 this.context                //
         );
 
-        channel.setAttribute(UdpIdentifier.class.getName(), new UdpIdentifier(remoteID));
         return channel;
     }
 }

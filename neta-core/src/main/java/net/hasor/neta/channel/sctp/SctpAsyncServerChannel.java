@@ -166,7 +166,7 @@ class SctpAsyncServerChannel implements AsyncServerChannel {
                     this.readSocket(listen, localAddr, channelMap, channel);
                 }
             } catch (Throwable e) {
-                if (listen.getContext().getConfig().isPrintLog()) {
+                if (this.context.getConfig().isPrintLog()) {
                     if (e instanceof SoCloseException) {
                         logger.info("ERROR: AcceptOrReadFailed " + e.getMessage());
                     } else {

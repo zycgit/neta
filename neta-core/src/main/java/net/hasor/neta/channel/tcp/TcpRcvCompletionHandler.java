@@ -34,7 +34,6 @@ import net.hasor.neta.channel.*;
  */
 class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextService>, Closeable {
     private static final Logger           logger = Logger.getLogger(TcpRcvCompletionHandler.class);
-    private static final boolean          DEBUG  = logger.isDebugEnabled();
     private final        long             channelId;
     private final        TcpAsyncChannel  channel;
     private final        SoContextService context;
@@ -76,9 +75,10 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
 
     @Override
     public void completed(Integer result, SoContextService context) {
+        boolean printLog = this.context.getConfig().isPrintLog();
         if (result > 0) {
-            if (DEBUG) {
-                logger.debug("rcv(" + this.channelId + ") the receive " + result + " bytes");
+            if (printLog) {
+                logger.info("rcv(" + this.channelId + ") [TCP-READ] bytes=" + result);
             }
 
             // copy buffer form swap to rcv
@@ -103,8 +103,8 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
 
             this.read();
         } else if (result == 0) {
-            if (DEBUG) {
-                logger.debug("rcv(" + this.channelId + ") empty");
+            if (printLog) {
+                logger.info("rcv(" + this.channelId + ") empty");
             }
 
             this.context.notifyRcvChannelData(this.channelId, ByteBuf.EMPTY);
@@ -127,8 +127,8 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
         if (e instanceof NotYetConnectedException) {
             long costTimeMs = System.currentTimeMillis() - this.monitor.getCreatedTime();
             if (costTimeMs < this.connectTimeoutMs) {
-                if (DEBUG) {
-                    logger.debug("rcv(" + this.channelId + ") NotYetConnected, read try again later.");
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("rcv(" + this.channelId + ") NotYetConnected, read try again later.");
                 }
                 this.read();
             } else {

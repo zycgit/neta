@@ -23,8 +23,8 @@ import net.hasor.neta.channel.*;
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */
-class UdpNetListen extends NetListen {
-    UdpNetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
+public class UdpNetListen extends NetListen {
+    protected UdpNetListen(long channelId, SocketAddress listenAddr, int listenPort, AsyncServerChannel channel,//
             ProtoInitializer initializer, SoContextService context, SoConfig soConfig) {
         super(channelId, listenAddr, listenPort, channel, initializer, context, soConfig);
     }

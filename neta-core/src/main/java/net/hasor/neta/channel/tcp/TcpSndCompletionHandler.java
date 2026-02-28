@@ -35,7 +35,6 @@ import net.hasor.neta.channel.*;
  */
 class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext>, Closeable {
     private static final Logger           logger = Logger.getLogger(TcpSndCompletionHandler.class);
-    private static final boolean          DEBUG  = logger.isDebugEnabled();
     private final        long             channelId;
     private final        TcpAsyncChannel  channel;
     private final        SoContextService context;
@@ -90,8 +89,8 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
 
     @Override
     public void completed(Integer result, SoSndContext wContext) {
-        if (DEBUG) {
-            logger.debug("snd(" + this.channelId + ") size:" + result);
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("snd(" + this.channelId + ") [TCP-WRITE] bytes=" + result);
         }
 
         // when sndData finish, complete inline (no thread dispatch needed)
@@ -139,8 +138,8 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         if (e instanceof NotYetConnectedException) {
             long costTimeMs = System.currentTimeMillis() - this.monitor.getCreatedTime();
             if (costTimeMs < this.connectTimeoutMs) {
-                if (DEBUG) {
-                    logger.debug("snd(" + this.channelId + ") NotYetConnected, write try again later.");
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("snd(" + this.channelId + ") NotYetConnected, write try again later.");
                 }
                 doSendAgain(context);
             } else {

@@ -41,16 +41,16 @@ import net.hasor.neta.channel.*;
  * @see java.nio.channels.DatagramChannel
  * @see java.util.concurrent.ExecutorService
  */
-class UdpAsyncServerChannel implements AsyncServerChannel {
+public class UdpAsyncServerChannel implements AsyncServerChannel {
     private static final Logger            logger = Logger.getLogger(UdpAsyncServerChannel.class);
-    private final        long              channelId;
-    private final        SoContextService  context;
-    private final        InetSocketAddress listenAddr;
-    private final        UdpSoConfig       soConfig;
-    private final        ByteBufAllocator  bufAllocator;
-    private final        UdpTransport      transport;
+    protected final      long              channelId;
+    protected final      SoContextService  context;
+    protected final      InetSocketAddress listenAddr;
+    protected final      UdpSoConfig       soConfig;
+    protected final      ByteBufAllocator  bufAllocator;
+    protected final      UdpTransport      transport;
 
-    UdpAsyncServerChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
+    protected UdpAsyncServerChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         this.channelId = channelId;
         this.context = (SoContextService) context;
         this.listenAddr = (InetSocketAddress) listenAddr;
@@ -124,7 +124,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         return listen;
     }
 
-    private void onDatagram(NetListen listen, SocketAddress localAddr, Map<String, UdpChannel> channelMap, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
+    protected void onDatagram(NetListen listen, SocketAddress localAddr, Map<String, UdpChannel> channelMap, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
         InetSocketAddress inetRemoteAddr = (InetSocketAddress) remoteAddr;
         UdpChannel channel = this.findOrCreateChannel(listen, localAddr, inetRemoteAddr, this.transport.getChannel(), channelMap);
         if (channel == null) {
@@ -136,6 +136,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         byteBuf.writeBuffer(data);
         byteBuf.markWriter();
         int readableBytes = byteBuf.readableBytes();
+
         channel.getNetMonitor().updateRcvCounter(readableBytes);
         if (logger.isDebugEnabled()) {
             logger.debug("rcv(" + this.channelId + ") the receive " + readableBytes + " bytes");
@@ -144,7 +145,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         this.context.notifyRcvChannelData(channel.getChannelId(), byteBuf);
     }
 
-    private UdpChannel findOrCreateChannel(NetListen listen, SocketAddress localAddr, InetSocketAddress remoteAddr, DatagramChannel socket, Map<String, UdpChannel> channelMap) throws SoConnectException {
+    protected UdpChannel findOrCreateChannel(NetListen listen, SocketAddress localAddr, InetSocketAddress remoteAddr, DatagramChannel socket, Map<String, UdpChannel> channelMap) throws SoConnectException {
         String remoteID = remoteAddr.getAddress().getHostAddress() + ":" + remoteAddr.getPort();
         UdpChannel channel = channelMap.get(remoteID);
         if (channel != null) {
@@ -168,7 +169,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
 
             //
             channelMap.put(remoteID, channel);
-            channel.onClose(c -> channelMap.remove(c.getAttribute(UdpIdentifier.class.getName()).toString()));
+            channel.onClose(c -> channelMap.remove(remoteID));
             return channel;
         } catch (Throwable e) {
             logger.error("ERROR: AcceptFailed, " + e.getMessage(), e);
@@ -178,7 +179,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
-    private boolean acceptChannel(NetListen listen, SocketAddress localAddr, SocketAddress remoteAddr) {
+    protected boolean acceptChannel(NetListen listen, SocketAddress localAddr, SocketAddress remoteAddr) {
         try {
             if (!this.context.acceptChannel(remoteAddr)) {
                 printLog("reject(" + listen.getChannelId() + ") R:" + remoteAddr + " -> L:" + localAddr);
@@ -193,7 +194,7 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
-    private void printLog(String msg) {
+    protected void printLog(String msg) {
         if (this.context.getConfig().isPrintLog()) {
             try {
                 logger.warn(msg);
@@ -213,7 +214,6 @@ class UdpAsyncServerChannel implements AsyncServerChannel {
                 this.context                //
         );
 
-        channel.setAttribute(UdpIdentifier.class.getName(), new UdpIdentifier(remoteID));
         return channel;
     }
 }

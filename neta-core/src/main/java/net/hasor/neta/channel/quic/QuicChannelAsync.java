@@ -22,11 +22,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
@@ -53,31 +53,7 @@ class QuicChannelAsync implements AsyncChannel {
     //
     private final        AtomicBoolean                    closed;
     //
-    //
-    private final        long                             negotiationDatagramMaxData;
-    //
-    private final        Set<Long>                        streamIds;
-    private final        Map<Long, QuicStreamChannel>     streamMap;
-    //
-    // ── ACK, Loss Detection, Congestion Control, Flow Control ────────
-    private final        QuicAckTracker                   ackTracker;
-    private final        QuicSentPacketTracker            sentPacketTracker;
-    private final        QuicCongestionControl            congestionControl;
-    private final        QuicFlowControl                  flowControl;
-    //
-    // ── Stream Reassembly ────────────────────────────────────────────
-    private final        Map<Long, QuicStreamReassembler> streamReassemblers;
-    //
-    // ── CRYPTO frame reassembly for post-handshake messages (1-RTT) ──
-    private final        QuicStreamReassembler            cryptoReassembler;
-    //
-    // ── Connection ID Management ─────────────────────────────────────
-    private final        QuicConnectionIdManager          cidManager;
-    //
-    // ── Path Validation ──────────────────────────────────────────────
-    private final        QuicPathValidator                pathValidator;
-    private volatile     SocketAddress                    remoteAddress;
-    /** Last time (in milliseconds) any packet was sent or received on this connection. Used for connection-level idle timeout (RFC 9000 §10.1). */
+    private final        long                             negotiationDatagramMaxData; // Last time (in milliseconds) any packet was sent or received on this connection.
     private volatile     long                             lastActivityTime;
     private volatile     long                             negotiationMaxData;
     // stream for bidi
@@ -91,6 +67,29 @@ class QuicChannelAsync implements AsyncChannel {
     private volatile     long                             peerStreamMaxDataUni;
     private              QuicChannel                      quicChannel;
     private volatile     QuicDatagramChannel              datagramChannel;
+    //
+    private final        Set<Long>                        streamIds;
+    private final        Map<Long, QuicStreamChannel>     streamMap;
+    //
+    // ── ACK, Loss Detection, Congestion Control, Flow Control
+    private final        QuicAckTracker                   ackTracker;
+    private final        QuicSentPacketTracker            sentPacketTracker;
+    private final        QuicCongestionControl            congestionControl;
+    private final        QuicFlowControl                  flowControl;
+    //
+    // ── Stream Reassembly
+    private final        Map<Long, QuicStreamReassembler> streamReassemblers;
+    //
+    // ── CRYPTO frame reassembly for post-handshake messages (1-RTT) ──
+    private final        QuicStreamReassembler            cryptoReassembler;
+    //
+    // ── Connection ID Management
+    private final        QuicConnectionIdManager          cidManager;
+    //
+    // ── Path Validation
+    private final        QuicPathValidator                pathValidator;
+    private volatile     SocketAddress                    remoteAddress;
+    private final        Map<Long, PendingPing>           pendingPings;
 
     public QuicChannelAsync(QuicInitConfigData handshakeData, DatagramChannel ownerUdp, QuicSoConfig soConfig,//
             SoContextService context, ProtoInitializer initializer, QuicListen listen,//
@@ -130,6 +129,7 @@ class QuicChannelAsync implements AsyncChannel {
         this.cryptoReassembler = new QuicStreamReassembler();
         this.cidManager = new QuicConnectionIdManager(handshake.getLocalCid(), handshake.getRemoteCid(), soConfig.getConnectionIdLength());
         this.pathValidator = new QuicPathValidator();
+        this.pendingPings = new ConcurrentHashMap<>();
     }
 
     /** Skips an ACK or ACK_ECN frame body, returning the new position. Returns {@code -1} on parse error. */
@@ -239,6 +239,46 @@ class QuicChannelAsync implements AsyncChannel {
 
     public long getPeerMaxStreamsUni() {
         return this.peerMaxStreamsUni;
+    }
+
+    /** Returns the last activity time of this connection in epoch milliseconds. */
+    long getLastActivityTime() {
+        return this.lastActivityTime;
+    }
+
+    /** Touches the activity timestamp (called when data passes through a stream or datagram channel). */
+    void touchActivity() {
+        this.lastActivityTime = System.currentTimeMillis();
+    }
+
+    /** Returns the ACK tracker for this connection. */
+    QuicAckTracker getAckTracker() {
+        return this.ackTracker;
+    }
+
+    /** Returns the sent packet tracker for loss detection. */
+    QuicSentPacketTracker getSentPacketTracker() {
+        return this.sentPacketTracker;
+    }
+
+    /** Returns the congestion controller. */
+    QuicCongestionControl getCongestionControl() {
+        return this.congestionControl;
+    }
+
+    /** Returns the flow control tracker. */
+    QuicFlowControl getFlowControl() {
+        return this.flowControl;
+    }
+
+    /** Returns the connection ID manager. */
+    QuicConnectionIdManager getCidManager() {
+        return this.cidManager;
+    }
+
+    /** Returns the path validator. */
+    QuicPathValidator getPathValidator() {
+        return this.pathValidator;
     }
 
     //
@@ -457,11 +497,16 @@ class QuicChannelAsync implements AsyncChannel {
     @Override
     public void close() throws IOException {
         if (this.closed.compareAndSet(false, true)) {
+            // Client-side: ownerUdp is dedicated to this single QUIC connection.
+            // Server-side: ownerUdp is the shared server DatagramChannel managed by NetListen/UdpAsyncServerChannel.
+            if (this.clientMode) {
+                IOUtils.closeQuietly(this.ownerUdp);
+            }
             closeAllStreams();
         }
     }
 
-    private void closeAllStreams() {
+    private Future<?> closeAllStreams() {
         final QuicDatagramChannel localDatagramChannel;
         final QuicStreamChannel[] localStreams;
 
@@ -476,7 +521,7 @@ class QuicChannelAsync implements AsyncChannel {
 
         // ── Phase 1: close connection-level QuicChannel ──────────────────
         // ── Phase 2: close each sub-channel in its own task (concurrent) ─
-        context.submitSoTask(new CloseQuicChannelTask(this.quicChannel), this).onCompleted(f -> {
+        return context.submitSoTask(new CloseQuicChannelTask(this.quicChannel), this).onFinal(f -> {
             for (QuicStreamChannel stream : localStreams) {
                 context.submitSoTask(new CloseQuicChannelTask(stream), stream);
             }
@@ -624,12 +669,12 @@ class QuicChannelAsync implements AsyncChannel {
             long pn = this.handshake.getLargestAppPn();
             this.pendingPings.put(pn, new PendingPing(future, sentTime));
             if (timeoutMs > 0) {
-                PING_TIMER.schedule(() -> {
+                this.context.submitSoTask(new SoDelayTask((int) timeoutMs), this).onFinal(f -> {
                     PendingPing pp = this.pendingPings.remove(pn);
                     if (pp != null) {
                         pp.future.failed(new TimeoutException("PING timeout after " + timeoutMs + "ms"));
                     }
-                }, timeoutMs, TimeUnit.MILLISECONDS);
+                });
             }
         } else {
             future.failed(new IOException("Failed to send PING frame"));
@@ -1195,6 +1240,23 @@ class QuicChannelAsync implements AsyncChannel {
             }
         }
 
+        // ── Uni-stream send-rights check ──────────────────────────────────────────
+        // RFC 9000 §3.4: only the stream initiator may send data on a uni stream.
+        // Receiving a STREAM frame for a locally-initiated uni stream from the peer
+        // is a STREAM_STATE_ERROR (RFC 9000 §19.8).
+        if ((streamId & 0x02) != 0) { // uni stream: bit 1 is set
+            boolean clientInitiated = (streamId & 0x01) == 0;
+            boolean locallyInitiated = (this.clientMode == clientInitiated);
+            if (locallyInitiated) {
+                String msg = "Received STREAM frame on locally-initiated uni stream " + streamId;
+                logger.error(msg);
+                QuicException stateEx = new QuicException(QuicErrorCode.STREAM_STATE_ERROR, msg);
+                notifyAllChannelsException(stateEx);
+                this.closeWithError(QuicErrorCode.STREAM_STATE_ERROR, msg, null);
+                return -1;
+            }
+        }
+
         // ── Flow control validation ────────────────────────────────────
         if (dataLength > 0) {
             // Connection-level flow control
@@ -1217,42 +1279,37 @@ class QuicChannelAsync implements AsyncChannel {
             }
         }
 
-        // ── Out-of-order reassembly or direct delivery ──────────────────
+        // ── Reassembly and delivery (always via reassembler for correct multi-message support) ───
         if (dataLength > 0 || fin) {
             stream.touchActivity();
-            if (offset > 0 || fin) {
-                // Use reassembler for potentially out-of-order data
-                QuicStreamReassembler reassembler = this.streamReassemblers.get(streamId);
-                if (reassembler == null) {
-                    reassembler = new QuicStreamReassembler();
-                    this.streamReassemblers.put(streamId, reassembler);
-                }
-                if (dataLength > 0) {
-                    byte[] fragment = new byte[dataLength];
-                    System.arraycopy(data, pos, fragment, 0, dataLength);
-                    reassembler.addFragment(offset, fragment, fin);
-                } else if (fin) {
-                    reassembler.addFragment(offset, new byte[0], true);
-                }
-                // Deliver contiguous data
-                byte[] contiguous = reassembler.readContiguous();
-                if (contiguous != null) {
-                    ByteBuf byteBuf = ByteBufAllocator.DEFAULT.buffer(contiguous.length);
-                    byteBuf.writeBytes(contiguous);
-                    byteBuf.markWriter();
-                    this.context.notifyRcvChannelData(stream.getChannelId(), byteBuf);
-                }
-                // Check if stream is fully received (FIN delivered)
-                if (reassembler.isComplete()) {
-                    this.context.notifyRcvChannelData(stream.getChannelId(), ByteBuf.EMPTY);
-                    this.streamReassemblers.remove(streamId);
-                }
-            } else {
-                // Offset == 0 and no FIN — direct delivery for simple in-order case
-                ByteBuf byteBuf = ByteBufAllocator.DEFAULT.buffer(dataLength);
-                byteBuf.writeBytes(data, pos, dataLength);
+            // Always use reassembler so that subsequent messages (offset > 0) are correctly
+            // sequenced with the first message (offset == 0). Direct delivery for offset==0
+            // would bypass the reassembler and cause subsequent messages to be dropped because
+            // the reassembler would still expect offset 0 when processing msg2, msg3, etc.
+            QuicStreamReassembler reassembler = this.streamReassemblers.get(streamId);
+            if (reassembler == null) {
+                reassembler = new QuicStreamReassembler();
+                this.streamReassemblers.put(streamId, reassembler);
+            }
+            if (dataLength > 0) {
+                byte[] fragment = new byte[dataLength];
+                System.arraycopy(data, pos, fragment, 0, dataLength);
+                reassembler.addFragment(offset, fragment, fin);
+            } else if (fin) {
+                reassembler.addFragment(offset, new byte[0], true);
+            }
+            // Deliver all contiguous data available
+            byte[] contiguous = reassembler.readContiguous();
+            if (contiguous != null) {
+                ByteBuf byteBuf = ByteBufAllocator.DEFAULT.buffer(contiguous.length);
+                byteBuf.writeBytes(contiguous);
                 byteBuf.markWriter();
                 this.context.notifyRcvChannelData(stream.getChannelId(), byteBuf);
+            }
+            // Check if stream is fully received (FIN delivered)
+            if (reassembler.isComplete()) {
+                this.context.notifyRcvChannelData(stream.getChannelId(), ByteBuf.EMPTY);
+                this.streamReassemblers.remove(streamId);
             }
         }
         pos += dataLength;
@@ -1347,59 +1404,7 @@ class QuicChannelAsync implements AsyncChannel {
         }
     }
 
-    /** Returns the last activity time of this connection in epoch milliseconds. */
-    long getLastActivityTime() {
-        return this.lastActivityTime;
-    }
-
-    /** Touches the activity timestamp (called when data passes through a stream or datagram channel). */
-    void touchActivity() {
-        this.lastActivityTime = System.currentTimeMillis();
-    }
-
-    /** Returns the ACK tracker for this connection. */
-    QuicAckTracker getAckTracker() {
-        return this.ackTracker;
-    }
-
-    /** Returns the sent packet tracker for loss detection. */
-    QuicSentPacketTracker getSentPacketTracker() {
-        return this.sentPacketTracker;
-    }
-
-    /** Returns the congestion controller. */
-    QuicCongestionControl getCongestionControl() {
-        return this.congestionControl;
-    }
-
-    /** Returns the flow control tracker. */
-    QuicFlowControl getFlowControl() {
-        return this.flowControl;
-    }
-
-    /** Returns the connection ID manager. */
-    QuicConnectionIdManager getCidManager() {
-        return this.cidManager;
-    }
-
-    /** Returns the path validator. */
-    QuicPathValidator getPathValidator() {
-        return this.pathValidator;
-    }
-
-    /**
-     * Checks and enforces idle timeouts for both the connection and individual streams.
-     * <p>
-     * <b>Connection-level</b> (RFC 9000 §10.1): if no packets have been sent or received
-     * within {@code tpMaxIdleTimeout}, the connection is silently closed (no CONNECTION_CLOSE
-     * frame is sent). A {@link QuicIdleTimeoutException} is propagated to all sub-channels.
-     * <p>
-     * <b>Stream-level</b>: if {@link QuicSoConfig#getStreamIdleTimeoutMs()} is configured
-     * and a stream has had no activity within that period, the stream is closed and a
-     * {@link QuicIdleTimeoutException} is propagated through its pipeline.
-     * <p>
-     * This method should be called periodically (e.g. from the receive loop).
-     */
+    /** Checks and enforces idle timeouts for both the connection and individual streams. */
     void checkIdleTimeouts() {
         if (this.closed.get()) {
             return;
@@ -1441,20 +1446,7 @@ class QuicChannelAsync implements AsyncChannel {
         }
     }
 
-    /**
-     * Initiates an active connection migration (RFC 9000 §9).
-     * <ol>
-     *   <li>Issues a new local Connection ID and sends a NEW_CONNECTION_ID frame so the peer
-     *       has a fresh CID to use after migration.</li>
-     *   <li>Rotates to the next available remote CID (retire-prior-to sequence).</li>
-     *   <li>Resets the congestion controller for the new path.</li>
-     *   <li>Sends a PATH_CHALLENGE frame and returns a {@link Future} that resolves with the
-     *       measured RTT (ms) when PATH_RESPONSE is received, or fails with a
-     *       {@link TimeoutException} if the challenge is not answered in time.</li>
-     * </ol>
-     * @return future completing with path RTT in milliseconds
-     * @throws IOException if the NEW_CONNECTION_ID or PATH_CHALLENGE frame cannot be sent
-     */
+    /** Initiates an active connection migration (RFC 9000 §9). */
     Future<Long> migrate() throws IOException {
         // 1. Issue a new local CID so the peer can address us with a fresh ID
         byte[] newCidFrame = this.cidManager.issueNewConnectionId();

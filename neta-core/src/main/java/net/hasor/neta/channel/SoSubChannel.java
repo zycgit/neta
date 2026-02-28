@@ -13,28 +13,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel.udp;
+package net.hasor.neta.channel;
 /**
- * Represents an identifier for a UDP channel, encapsulating the remote ID.
+ * Marks a channel as a sub-channel of a parent channel.
  * <p>
- * This class is used to uniquely identify a UDP connection based on the remote ID.
- * It provides a simple way to access the remote ID associated with a specific UDP channel.
+ * Sub-channels have their lifecycle tied to their parent: when the parent
+ * is closed, all sub-channels are closed as well. During shutdown, the
+ * framework closes parent channels first so that sub-channels are cleaned
+ * up in the correct order.
  * @author 赵永春 (zyc@hasor.net)
- * @version 2025-08-07
+ * @see NetChannel
  */
-class UdpIdentifier {
-    private final String remoteId;
-
+public interface SoSubChannel {
     /**
-     * Constructs a new UdpIdentifier with the specified remote ID.
-     * @param remoteId the remote ID of the UDP channel
+     * Returns the parent channel that owns this sub-channel.
+     * @return the parent channel, never {@code null}
      */
-    public UdpIdentifier(String remoteId) {
-        this.remoteId = remoteId;
-    }
-
-    @Override
-    public String toString() {
-        return this.remoteId;
-    }
+    SoChannel<?> getParent();
 }

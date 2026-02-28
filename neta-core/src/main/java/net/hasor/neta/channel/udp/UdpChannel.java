@@ -24,11 +24,16 @@ import net.hasor.neta.channel.*;
  * @version : 2023-09-24
  */
 public class UdpChannel extends NetChannel {
-    UdpChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, UdpAsyncChannel asyncChannel, SoContextService context) throws IOException {
+    protected UdpChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, UdpAsyncChannel asyncChannel, SoContextService context) throws IOException {
         super(channelId, monitor, forListen, initializer, asyncChannel, context);
     }
 
-    NetMonitor getNetMonitor() {
+    /** Protected constructor for subclasses that use a different AsyncChannel type. */
+    protected UdpChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
+        super(channelId, monitor, forListen, initializer, asyncChannel, context);
+    }
+
+    protected NetMonitor getNetMonitor() {
         return this.monitor;
     }
 }
