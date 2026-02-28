@@ -30,6 +30,7 @@ class Http2Stream {
     private       ByteBuf          accumulatedHeaderBlock;
     private       int              sendWindowSize;
     private       int              recvWindowSize;
+    private       boolean          endStreamPending;
 
     /**
      * Creates a new HTTP/2 stream.
@@ -85,6 +86,16 @@ class Http2Stream {
 
     public void adjustRecvWindowSize(int delta) {
         this.recvWindowSize += delta;
+    }
+
+    /** Returns true if the original HEADERS frame carried END_STREAM but not END_HEADERS. */
+    public boolean isEndStreamPending() {
+        return endStreamPending;
+    }
+
+    /** Records whether the peer intends to close the stream after the full header block arrives. */
+    public void setEndStreamPending(boolean pending) {
+        this.endStreamPending = pending;
     }
 
     /** Releases resources held by this stream. */

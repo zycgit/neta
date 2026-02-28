@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
@@ -34,24 +35,22 @@ import net.hasor.neta.codec.http.HttpObject;
  * </pre>
  */
 public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-    private final Http2FrameDecoder             frameDecoder;
-    private final Http2FrameToHttpDecoder       frameToHttpDecoder;
-    private final HttpObjectToHttp2FrameEncoder httpToFrameEncoder;
-    private final Http2FrameEncoder             frameEncoder;
-
-    /** Reusable bridge queue for chaining frame-level and semantic-level handlers. */
-    private final Http2FrameBridgeQueue bridgeQueue;
-    private       boolean               serverPrefaceSent;
+    private static final Logger                  logger            = Logger.getLogger(Http2ServerDuplexe.class);
+    private final        Http2FrameDecoder       frameDecoder;
+    private final        Http2FrameToHttpDecoder frameToHttpDecoder;
+    private final        Http2HttpToFrameEncoder httpToFrameEncoder;
+    private final        Http2FrameEncoder       frameEncoder;
+    private final        Http2FrameBridgeQueue   bridgeQueue       = new Http2FrameBridgeQueue();
+    private              boolean                 serverPrefaceSent;
     /** Initial flow control window size for both stream-level and connection-level. */
-    private       int                   initialWindowSize = 65535;
+    private              int                     initialWindowSize = 65535;
 
     /** Creates a server-side HTTP/2 codec with default HPACK settings (tableSize=4096, maxHeaderListSize=8192). */
     public Http2ServerDuplexe() {
         this.frameDecoder = new Http2FrameDecoder(true);
         this.frameToHttpDecoder = new Http2FrameToHttpDecoder(true);
-        this.httpToFrameEncoder = new HttpObjectToHttp2FrameEncoder(true);
+        this.httpToFrameEncoder = new Http2HttpToFrameEncoder(true);
         this.frameEncoder = new Http2FrameEncoder();
-        this.bridgeQueue = new Http2FrameBridgeQueue();
     }
 
     /**
@@ -62,9 +61,8 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     public Http2ServerDuplexe(int maxHeaderTableSize, int maxHeaderListSize) {
         this.frameDecoder = new Http2FrameDecoder(true);
         this.frameToHttpDecoder = new Http2FrameToHttpDecoder(true, maxHeaderTableSize, maxHeaderListSize);
-        this.httpToFrameEncoder = new HttpObjectToHttp2FrameEncoder(true, maxHeaderTableSize);
+        this.httpToFrameEncoder = new Http2HttpToFrameEncoder(true, maxHeaderTableSize);
         this.frameEncoder = new Http2FrameEncoder();
-        this.bridgeQueue = new Http2FrameBridgeQueue();
     }
 
     /**
@@ -83,13 +81,20 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         this.initialWindowSize = Math.max(initialWindowSize, 65535);
     }
 
+    /** Builds a WINDOW_UPDATE frame with the given stream ID and increment. */
+    private static Http2Frame buildWindowUpdate(int streamId, int increment) {
+        return Http2FrameToHttpDecoder.buildWindowUpdate(streamId, increment);
+    }
+
     @Override
     public void onInit(ProtoContext context) throws Throwable {
         this.frameDecoder.onInit(context);
         this.frameToHttpDecoder.onInit(context);
         this.httpToFrameEncoder.onInit(context);
         this.frameEncoder.onInit(context);
-        context.context(Http2Context.class, this.frameToHttpDecoder.createContext());
+        Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
+        decoderState.setServerInitialWindowSize(this.initialWindowSize);
+        context.context(Http2Context.class, new Http2ContextImpl(true, decoderState));
     }
 
     @Override
@@ -106,56 +111,84 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
             // RCV: ByteBuf → Http2Frame → HttpObject
-            bridgeQueue.clear();
-            this.frameDecoder.onMessage(context, rcvUp, bridgeQueue);
-            this.frameToHttpDecoder.onMessage(context, bridgeQueue, rcvDown);
-            return ProtoStatus.Next;
-        } else {
-            bridgeQueue.clear();
+            this.bridgeQueue.clear();
+            this.frameDecoder.onMessage(context, rcvUp, this.bridgeQueue);
+            this.frameToHttpDecoder.onMessage(context, this.bridgeQueue, rcvDown);
 
-            // Server connection preface: SETTINGS frame (RFC 9113 §3.4)
-            // Only added when response data is available, ensuring SETTINGS is always
-            // the absolute first frame on the wire.
-            if (!this.serverPrefaceSent && sndUp.hasMore()) {
-                bridgeQueue.offerMessage(buildServerSettingsFrame());
-                // Proactively expand connection-level flow control window (RFC 9113 §6.9.2)
+            // Server connection preface (SETTINGS frame): send during RCV processing.
+            // Writing SETTINGS to sndDown (headSndDown) during RCV guarantees it is the
+            // FIRST bytes in the output queue — before any inline sendData() output or
+            // auto-SND control frames (SETTINGS_ACK, WINDOW_UPDATE). This satisfies
+            // RFC 9113 §3.4 which mandates SETTINGS as the server's first frame.
+            if (!this.serverPrefaceSent) {
+                this.bridgeQueue.clear();
+                this.bridgeQueue.offerMessage(buildServerSettingsFrame());
+                // Proactively expand connection-level flow control window (RFC 9113 §6.9.2).
+                // Stream-level window is set via INITIAL_WINDOW_SIZE in SETTINGS, but
+                // connection window defaults to 65535 and can only be increased via
+                // WINDOW_UPDATE on stream 0.
                 if (this.initialWindowSize > 65535) {
-                    bridgeQueue.offerMessage(buildWindowUpdate(0, this.initialWindowSize - 65535));
+                    this.bridgeQueue.offerMessage(buildWindowUpdate(0, this.initialWindowSize - 65535));
                 }
+                this.frameEncoder.onMessage(context, this.bridgeQueue, sndDown);
                 this.serverPrefaceSent = true;
+                if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                    logger.info("[H2-RCV] server preface sent, initialWindowSize=" + this.initialWindowSize);
+                }
             }
 
+            return ProtoStatus.Next;
+        } else {
+            Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
+            this.bridgeQueue.clear();
+
             // SETTINGS ACK (acknowledging client's SETTINGS)
-            if (this.frameToHttpDecoder.consumeSettingsAck()) {
-                bridgeQueue.offerMessage(Http2Frame.settingsAck());
+            if (decoderState.consumeSettingsAck()) {
+                this.bridgeQueue.offerMessage(Http2Frame.settingsAck());
             }
 
             // PING ACK
             byte[] pingPayload;
-            while ((pingPayload = this.frameToHttpDecoder.pollPendingPingAck()) != null) {
-                bridgeQueue.offerMessage(Http2Frame.pingAck(pingPayload));
+            while ((pingPayload = decoderState.pollPendingPingAck()) != null) {
+                this.bridgeQueue.offerMessage(Http2Frame.pingAck(pingPayload));
             }
 
             // WINDOW_UPDATE (flow control replenishment for received DATA frames)
             // Sent in auto-SND to prevent flow control deadlock during uploads.
             Http2Frame windowUpdate;
-            while ((windowUpdate = this.frameToHttpDecoder.pollPendingWindowUpdate()) != null) {
-                bridgeQueue.offerMessage(windowUpdate);
+            int wuCount = 0;
+            while ((windowUpdate = decoderState.pollPendingWindowUpdate()) != null) {
+                this.bridgeQueue.offerMessage(windowUpdate);
+                wuCount++;
+            }
+            if (wuCount > 0 && context.getConfig() != null && context.getConfig().isPrintLog()) {
+                logger.info("[H2-SND] polled " + wuCount + " WINDOW_UPDATE frames");
             }
 
             // Response data: append to same bridgeQueue if available
             if (sndUp.hasMore()) {
-                int nextStreamId = this.frameToHttpDecoder.pollResponseStreamId();
-                if (nextStreamId > 0) {
-                    this.httpToFrameEncoder.setResponseStreamId(nextStreamId);
+                // Prefer streamId carried on the HttpObject (proxy / async scenario);
+                // fall back to FIFO queue for standard server path where app code
+                // does not set streamId explicitly.
+                int nextStreamId = 0;
+                Object peek = sndUp.peekMessage();
+                if (peek instanceof HttpObject) {
+                    nextStreamId = ((HttpObject) peek).streamId();
                 }
-                // HttpObject → Http2Frame (appended after SETTINGS + control frames)
-                this.httpToFrameEncoder.onMessage(context, sndUp, bridgeQueue);
+                if (nextStreamId <= 0) {
+                    nextStreamId = decoderState.pollResponseStreamId();
+                }
+                if (nextStreamId > 0) {
+                    Http2EncoderContent encoderState = context.context(Http2EncoderContent.class);
+                    encoderState.setCurrentStreamId(nextStreamId);
+                }
+                // HttpObject → Http2Frame (appended after control frames)
+                this.httpToFrameEncoder.onMessage(context, sndUp, this.bridgeQueue);
             }
 
             // Single-pass encoding: all frames in one frameEncoder call
-            if (bridgeQueue.hasMore()) {
-                this.frameEncoder.onMessage(context, bridgeQueue, sndDown);
+            if (this.bridgeQueue.hasMore()) {
+                this.frameEncoder.onMessage(context, this.bridgeQueue, sndDown);
             }
 
             return ProtoStatus.Next;
@@ -197,16 +230,6 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         payload[offset] = 0x00;
 
         return Http2Frame.settings(Http2Flags.NONE, payload);
-    }
-
-    /** Builds a WINDOW_UPDATE frame with the given stream ID and increment. */
-    private static Http2Frame buildWindowUpdate(int streamId, int increment) {
-        byte[] payload = new byte[4];
-        payload[0] = (byte) ((increment >> 24) & 0x7F);
-        payload[1] = (byte) ((increment >> 16) & 0xFF);
-        payload[2] = (byte) ((increment >> 8) & 0xFF);
-        payload[3] = (byte) (increment & 0xFF);
-        return Http2Frame.windowUpdate(streamId, payload);
     }
 
     @Override

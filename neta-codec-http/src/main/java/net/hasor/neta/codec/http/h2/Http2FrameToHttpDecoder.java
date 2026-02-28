@@ -14,11 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.Map;
-import java.util.Queue;
 import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
@@ -41,22 +38,11 @@ import net.hasor.neta.codec.http.*;
  * @see Http2FrameDecoder
  */
 public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObject> {
-    private final boolean                   serverMode;
-    private final HpackDecoder              hpackDecoder;
-    private final Map<Integer, Http2Stream> streams;
-    private final Http2Settings             localSettings;
-    private final Http2Settings             remoteSettings;
-
-    private       boolean           prefaceReceived;
-    private       boolean           pendingSettingsAck;
-    /** FIFO queue of stream IDs for completed requests — consumed by the encoder in SND direction. */
-    private final Queue<Integer>    responseStreamIdQueue = new LinkedList<>();
-    /** Pending PING payloads that need ACK responses. */
-    private final Queue<byte[]>     pendingPingAcks       = new LinkedList<>();
-    /** Pending WINDOW_UPDATE frames to send back to the client for flow control. */
-    private final Queue<Http2Frame> pendingWindowUpdates  = new LinkedList<>();
-
-    private int lastEmittedStreamId = 0;
+    private static final Logger        logger = Logger.getLogger(Http2FrameToHttpDecoder.class);
+    private final        boolean       serverMode;
+    private final        Http2Settings localSettings;
+    private final        int           maxHeaderTableSize;
+    private final        int           maxHeaderListSize;
 
     /**
      * Creates a new HTTP/2 frame-to-HttpObject decoder with default HPACK settings.
@@ -74,15 +60,29 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
      */
     public Http2FrameToHttpDecoder(boolean serverMode, int maxHeaderTableSize, int maxHeaderListSize) {
         this.serverMode = serverMode;
-        this.hpackDecoder = new HpackDecoder(maxHeaderTableSize, maxHeaderListSize);
-        this.streams = new HashMap<>();
         this.localSettings = new Http2Settings();
-        this.remoteSettings = new Http2Settings();
-        this.prefaceReceived = !serverMode; // Client doesn't receive a preface
+        this.maxHeaderTableSize = maxHeaderTableSize;
+        this.maxHeaderListSize = maxHeaderListSize;
+    }
+
+    /** Builds a WINDOW_UPDATE frame with the given stream ID and increment. */
+    static Http2Frame buildWindowUpdate(int streamId, int increment) {
+        byte[] payload = new byte[4];
+        payload[0] = (byte) ((increment >> 24) & 0x7F);
+        payload[1] = (byte) ((increment >> 16) & 0xFF);
+        payload[2] = (byte) ((increment >> 8) & 0xFF);
+        payload[3] = (byte) (increment & 0xFF);
+        return Http2Frame.windowUpdate(streamId, payload);
+    }
+
+    @Override
+    public void onInit(ProtoContext context) {
+        context.context(Http2DecoderContent.class, new Http2DecoderContent(this.serverMode, this.maxHeaderTableSize, this.maxHeaderListSize));
     }
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http2Frame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        Http2DecoderContent state = context.context(Http2DecoderContent.class);
         while (src.hasMore()) {
             Http2Frame frame = src.takeMessage();
             if (frame == null) {
@@ -90,11 +90,11 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             }
             // Mark preface as received once we start getting frames
             // (binary decoder only emits frames after validating the preface)
-            if (!prefaceReceived) {
-                prefaceReceived = true;
+            if (!state.isPrefaceReceived()) {
+                state.markPrefaceReceived();
             }
 
-            processFrame(context, dst, frame.type(), frame.flags(), frame.streamId(), frame.payload(), frame.payloadOffset(), frame.payloadLength());
+            processFrame(state, context, dst, frame.type(), frame.flags(), frame.streamId(), frame.payload(), frame.payloadOffset(), frame.payloadLength());
         }
         return ProtoStatus.Next;
     }
@@ -102,37 +102,40 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
     /**
      * Processes a single HTTP/2 frame and emits corresponding HttpObject(s).
      */
-    private void processFrame(ProtoContext context, ProtoSndQueue<HttpObject> dst, int type, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, int type, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            logger.info("[H2-FRAME] type=" + type + " flags=" + flags + " streamId=" + streamId + " payloadLen=" + payloadLength);
+        }
         switch (type) {
             case Http2FrameType.DATA:
-                processDataFrame(context, dst, flags, streamId, payload, payloadOffset, payloadLength);
+                processDataFrame(state, context, dst, flags, streamId, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.HEADERS:
-                processHeadersFrame(context, dst, flags, streamId, payload, payloadOffset, payloadLength);
+                processHeadersFrame(state, context, dst, flags, streamId, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.PRIORITY:
                 // Priority is advisory; we acknowledge but don't act on it
                 break;
             case Http2FrameType.RST_STREAM:
-                processRstStream(streamId, payload, payloadOffset, payloadLength);
+                processRstStream(state, streamId, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.SETTINGS:
-                processSettings(flags, payload, payloadOffset, payloadLength);
+                processSettings(state, context, flags, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.PUSH_PROMISE:
                 // Server push is rarely used; skip for now
                 break;
             case Http2FrameType.PING:
-                processPing(flags, payload, payloadOffset, payloadLength);
+                processPing(state, flags, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.GOAWAY:
                 processGoaway(payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.WINDOW_UPDATE:
-                processWindowUpdate(streamId, payload, payloadOffset, payloadLength);
+                processWindowUpdate(state, streamId, payload, payloadOffset, payloadLength);
                 break;
             case Http2FrameType.CONTINUATION:
-                processContinuationFrame(context, dst, flags, streamId, payload, payloadOffset, payloadLength);
+                processContinuationFrame(state, context, dst, flags, streamId, payload, payloadOffset, payloadLength);
                 break;
             default:
                 // Unknown frame types MUST be ignored (RFC 9113, Section 4.1)
@@ -143,7 +146,7 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
     /**
      * Processes a DATA frame and emits HttpContent / LastHttpContent.
      */
-    private void processDataFrame(ProtoContext context, ProtoSndQueue<HttpObject> dst, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processDataFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
         int offset = payloadOffset;
         int dataLength = payloadLength;
 
@@ -167,22 +170,26 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             content.markWriter();
 
             if (endStream) {
-                dst.offerMessage(new DefaultLastHttpContent(content));
+                DefaultLastHttpContent lastContent = new DefaultLastHttpContent(content);
+                lastContent.streamId(streamId);
+                dst.offerMessage(lastContent);
                 // Record stream ID for response association (DATA with END_STREAM completes the request)
-                this.responseStreamIdQueue.offer(streamId);
-                Http2Stream stream = streams.get(streamId);
+                state.offerResponseStreamId(streamId);
+                Http2Stream stream = state.getStream(streamId);
                 if (stream != null) {
                     stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
                 }
             } else {
-                dst.offerMessage(new DefaultHttpContent(content));
+                DefaultHttpContent chunk = new DefaultHttpContent(content);
+                chunk.streamId(streamId);
+                dst.offerMessage(chunk);
             }
 
             // RFC 9113 §6.9: Send WINDOW_UPDATE to replenish flow control windows
             // so the client can continue sending DATA frames.
             if (dataLength > 0) {
-                pendingWindowUpdates.offer(buildWindowUpdate(0, dataLength));        // connection-level
-                pendingWindowUpdates.offer(buildWindowUpdate(streamId, dataLength)); // stream-level
+                state.offerWindowUpdate(buildWindowUpdate(0, dataLength));        // connection-level
+                state.offerWindowUpdate(buildWindowUpdate(streamId, dataLength)); // stream-level
             }
         }
     }
@@ -191,7 +198,7 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
      * Processes a HEADERS frame and emits HttpRequest or HttpResponse.
      * If END_HEADERS is not set, accumulates for CONTINUATION frames.
      */
-    private void processHeadersFrame(ProtoContext context, ProtoSndQueue<HttpObject> dst, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processHeadersFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
         int offset = payloadOffset;
         int headerBlockLength = payloadLength;
 
@@ -214,26 +221,38 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
         }
 
         // Get or create stream
-        Http2Stream stream = streams.computeIfAbsent(streamId, id -> new Http2Stream(id, remoteSettings.initialWindowSize()));
+        Http2Stream stream = state.getOrCreateStream(streamId);
         stream.state(Http2StreamState.OPEN);
+
+        // Proactively expand stream-level flow control window.
+        // Some HTTP/2 clients (e.g. OkHttp) do not apply SETTINGS INITIAL_WINDOW_SIZE
+        // to their stream send windows, relying instead on WINDOW_UPDATE frames.
+        // Send a per-stream WINDOW_UPDATE to ensure the client's send window matches
+        // the server's desired initial window, preventing upload stalls.
+        if (state.serverInitialWindowSize() > 65535) {
+            state.offerWindowUpdate(buildWindowUpdate(streamId, state.serverInitialWindowSize() - 65535));
+        }
 
         if (Http2Flags.endHeaders(flags)) {
             // Complete header block - decode immediately
-            HttpHeaders headers = hpackDecoder.decode(payload, offset, headerBlockLength);
-            emitHttpMessage(dst, streamId, headers, Http2Flags.endStream(flags));
+            HttpHeaders headers = state.decodeHeaders(payload, offset, headerBlockLength);
+            emitHttpMessage(state, dst, streamId, headers, Http2Flags.endStream(flags));
         } else {
-            // Need CONTINUATION frames - accumulate
+            // Need CONTINUATION frames - accumulate.
+            // Save the END_STREAM flag now: the HEADERS frame determines whether the
+            // stream will be half-closed once all header fragments arrive (via CONTINUATION).
             ByteBuf headerBlock = context.byteBufAllocator().buffer(headerBlockLength + 256);
             headerBlock.writeBytes(payload, offset, headerBlockLength);
             stream.accumulatedHeaderBlock(headerBlock);
+            stream.setEndStreamPending(Http2Flags.endStream(flags));
         }
     }
 
     /**
      * Processes a CONTINUATION frame and appends to the header block being accumulated.
      */
-    private void processContinuationFrame(ProtoContext context, ProtoSndQueue<HttpObject> dst, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
-        Http2Stream stream = streams.get(streamId);
+    private void processContinuationFrame(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, int flags, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+        Http2Stream stream = state.getStream(streamId);
         if (stream == null || stream.accumulatedHeaderBlock() == null) {
             throw new HttpProtocolViolationException("HTTP/2: CONTINUATION frame without prior HEADERS on stream " + streamId);
         }
@@ -247,11 +266,13 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             int readable = headerBlock.readableBytes();
             byte[] allHeaders = new byte[readable];
             headerBlock.getBytes(0, allHeaders, 0, readable);
+            // Read the deferred END_STREAM flag before releasing stream state
+            boolean endStream = stream.isEndStreamPending();
             headerBlock.free();
             stream.accumulatedHeaderBlock(null);
 
-            HttpHeaders headers = hpackDecoder.decode(allHeaders, 0, allHeaders.length);
-            emitHttpMessage(dst, streamId, headers, false);
+            HttpHeaders headers = state.decodeHeaders(allHeaders, 0, allHeaders.length);
+            emitHttpMessage(state, dst, streamId, headers, endStream);
         }
     }
 
@@ -267,12 +288,12 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
      *   <li>{@code :status} → HttpResponse.status()</li>
      * </ul>
      */
-    private void emitHttpMessage(ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
-        this.lastEmittedStreamId = streamId;
+    private void emitHttpMessage(Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
+        state.setLastEmittedStreamId(streamId);
         // When a complete request is emitted (endStream), record its stream ID
         // so the encoder can associate the response with the correct stream.
         if (endStream) {
-            this.responseStreamIdQueue.offer(streamId);
+            state.offerResponseStreamId(streamId);
         }
         String status = headers.get(":status");
         headers.remove(":status");
@@ -287,6 +308,7 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             int statusCode = Integer.parseInt(status);
             HttpStatus httpStatus = HttpStatus.valueOf(statusCode);
             DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_2_0, httpStatus, headers);
+            response.streamId(streamId);
             dst.offerMessage(response);
         } else {
             // This is a request
@@ -314,12 +336,15 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
 
             HttpMethod httpMethod = HttpMethod.valueOf(method);
             DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_2_0, httpMethod, path, headers);
+            request.streamId(streamId);
             dst.offerMessage(request);
         }
 
         if (endStream) {
-            dst.offerMessage(DefaultLastHttpContent.EMPTY_LAST_CONTENT);
-            Http2Stream stream = streams.get(streamId);
+            DefaultLastHttpContent emptyLast = new DefaultLastHttpContent();
+            emptyLast.streamId(streamId);
+            dst.offerMessage(emptyLast);
+            Http2Stream stream = state.getStream(streamId);
             if (stream != null) {
                 stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
             }
@@ -329,31 +354,27 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
     /**
      * Processes PING frame. If it's not an ACK, queue the opaque data for sending back a PING ACK.
      */
-    private void processPing(int flags, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processPing(Http2DecoderContent state, int flags, byte[] payload, int payloadOffset, int payloadLength) {
         if (payloadLength != 8) {
             throw new HttpProtocolViolationException("HTTP/2: PING frame must be 8 bytes, got " + payloadLength);
         }
         if (!Http2Flags.ack(flags)) {
             byte[] copy = new byte[8];
             System.arraycopy(payload, payloadOffset, copy, 0, 8);
-            this.pendingPingAcks.offer(copy);
+            state.offerPingAck(copy);
         }
     }
 
     /** Processes RST_STREAM frame - terminates a stream. */
-    private void processRstStream(int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processRstStream(Http2DecoderContent state, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
         if (payloadLength != 4) {
             throw new HttpProtocolViolationException("HTTP/2: RST_STREAM frame must be 4 bytes, got " + payloadLength);
         }
-        Http2Stream stream = streams.get(streamId);
-        if (stream != null) {
-            stream.state(Http2StreamState.CLOSED);
-            stream.release();
-        }
+        state.closeStream(streamId);
     }
 
     /** Processes SETTINGS frame - updates connection parameters. */
-    private void processSettings(int flags, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processSettings(Http2DecoderContent state, ProtoContext context, int flags, byte[] payload, int payloadOffset, int payloadLength) {
         if (Http2Flags.ack(flags)) {
             return;
         }
@@ -363,11 +384,13 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
         for (int i = payloadOffset; i < payloadOffset + payloadLength; i += 6) {
             int id = ((payload[i] & 0xFF) << 8) | (payload[i + 1] & 0xFF);
             long value = ((long) (payload[i + 2] & 0xFF) << 24) | ((payload[i + 3] & 0xFF) << 16) | ((payload[i + 4] & 0xFF) << 8) | (payload[i + 5] & 0xFF);
-            remoteSettings.applySetting(id, value);
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                logger.info("[H2-REMOTE-SETTING] id=" + id + " value=" + value);
+            }
+            state.applyRemoteSetting(id, value);
         }
 
-        hpackDecoder.setMaxHeaderTableSize((int) remoteSettings.headerTableSize());
-        this.pendingSettingsAck = true;
+        state.markSettingsAckPending();
     }
 
     /** Processes GOAWAY frame. */
@@ -378,7 +401,7 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
     }
 
     /** Processes WINDOW_UPDATE frame - adjusts flow control window. */
-    private void processWindowUpdate(int streamId, byte[] payload, int payloadOffset, int payloadLength) {
+    private void processWindowUpdate(Http2DecoderContent state, int streamId, byte[] payload, int payloadOffset, int payloadLength) {
         if (payloadLength != 4) {
             throw new HttpProtocolViolationException("HTTP/2: WINDOW_UPDATE frame must be 4 bytes");
         }
@@ -387,64 +410,8 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
             throw new HttpProtocolViolationException("HTTP/2: WINDOW_UPDATE increment must be non-zero");
         }
         if (streamId > 0) {
-            Http2Stream stream = streams.get(streamId);
-            if (stream != null) {
-                stream.adjustSendWindowSize(increment);
-            }
+            state.adjustStreamSendWindow(streamId, increment);
         }
-    }
-
-    // ========================= Package-private accessors =========================
-
-    /**
-     * Polls the next response stream ID from the FIFO queue.
-     * @return the stream ID, or -1 if the queue is empty
-     */
-    int pollResponseStreamId() {
-        Integer id = this.responseStreamIdQueue.poll();
-        return id != null ? id : -1;
-    }
-
-    /** Returns the stream ID of the last emitted HTTP message (for diagnostics). */
-    int getLastEmittedStreamId() {
-        return this.lastEmittedStreamId;
-    }
-
-    /** Polls the next pending PING ACK payload, or null if none pending. */
-    byte[] pollPendingPingAck() {
-        return this.pendingPingAcks.poll();
-    }
-
-    /** Polls the next pending WINDOW_UPDATE frame, or null if none pending. */
-    Http2Frame pollPendingWindowUpdate() {
-        return this.pendingWindowUpdates.poll();
-    }
-
-    /** Builds a WINDOW_UPDATE frame with the given stream ID and increment. */
-    private static Http2Frame buildWindowUpdate(int streamId, int increment) {
-        byte[] payload = new byte[4];
-        payload[0] = (byte) ((increment >> 24) & 0x7F);
-        payload[1] = (byte) ((increment >> 16) & 0xFF);
-        payload[2] = (byte) ((increment >> 8) & 0xFF);
-        payload[3] = (byte) (increment & 0xFF);
-        return Http2Frame.windowUpdate(streamId, payload);
-    }
-
-    /**
-     * Checks and consumes the pending SETTINGS ACK flag.
-     * Returns true if a SETTINGS frame was received and an ACK should be sent.
-     */
-    boolean consumeSettingsAck() {
-        if (this.pendingSettingsAck) {
-            this.pendingSettingsAck = false;
-            return true;
-        }
-        return false;
-    }
-
-    /** Creates a live {@link Http2Context} backed by this decoder's state. */
-    public Http2Context createContext() {
-        return new Http2ContextImpl(this);
     }
 
     /** Returns true if this is server mode. */
@@ -452,31 +419,11 @@ public class Http2FrameToHttpDecoder implements ProtoHandler<Http2Frame, HttpObj
         return this.serverMode;
     }
 
-    /** Returns true if the HTTP/2 connection preface has been received/processed. */
-    boolean isPrefaceReceived() {
-        return this.prefaceReceived;
-    }
-
-    /** Returns the peer's (remote) HTTP/2 settings. */
-    Http2Settings peerSettings() {
-        return this.remoteSettings;
-    }
-
-    /** Returns the highest stream ID currently tracked. */
-    int lastStreamId() {
-        int max = 0;
-        for (Integer id : this.streams.keySet()) {
-            if (id > max)
-                max = id;
-        }
-        return max;
-    }
-
     @Override
     public void onClose(ProtoContext context) {
-        for (Http2Stream stream : streams.values()) {
-            stream.release();
+        Http2DecoderContent state = context.context(Http2DecoderContent.class);
+        if (state != null) {
+            state.releaseAll();
         }
-        streams.clear();
     }
 }

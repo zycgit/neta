@@ -1,0 +1,104 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.codec.http.h2;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/**
+ * Per-connection state container for {@link Http2HttpToFrameEncoder}.
+ * <p>
+ * Operations are grouped into four categories:
+ * <ul>
+ *   <li><b>init</b>   — constructor; all state is fully initialized at construction time.</li>
+ *   <li><b>append</b> — called by the Encoder to build outbound frames (HPACK encoding,
+ *       stream ID allocation, preface tracking).</li>
+ *   <li><b>inject</b> — called by the Duplexe to set the current stream ID for server-mode
+ *       responses before invoking the Encoder.</li>
+ *   <li><b>release</b> — no resources to release (HPACK encoder is GC-eligible).</li>
+ * </ul>
+ * All fields are private; no caller may access internal sub-objects directly.
+ */
+class Http2EncoderContent {
+    private final HpackEncoder  hpackEncoder;
+    private final AtomicInteger nextStreamId;
+    private       boolean       prefaceSent;
+    private       int           currentStreamId = 0;
+
+    Http2EncoderContent(boolean serverMode, int maxHeaderTableSize) {
+        this.hpackEncoder = new HpackEncoder(maxHeaderTableSize);
+        this.nextStreamId = new AtomicInteger(serverMode ? 2 : 1);
+        this.prefaceSent = serverMode; // Server doesn't send the connection preface
+    }
+
+    // ─── preface state ────────────────────────────────────────────────────────
+
+    /** Returns {@code true} if the connection preface has already been sent. */
+    boolean isPrefaceSent() {
+        return prefaceSent;
+    }
+
+    /** Marks the connection preface as sent. */
+    void markPrefaceSent() {
+        this.prefaceSent = true;
+    }
+
+    // ─── stream ID management ─────────────────────────────────────────────────
+
+    /** Returns the stream ID to use for the current outbound message. */
+    int currentStreamId() {
+        return currentStreamId;
+    }
+
+    /**
+     * Sets the stream ID for the next outbound response (server-mode injection by Duplexe).
+     * Must be called by the Duplexe before invoking the Encoder on the SND path.
+     */
+    void setCurrentStreamId(int streamId) {
+        this.currentStreamId = streamId;
+    }
+
+    /**
+     * Allocates and returns the next outbound stream ID for a new request (client mode).
+     * Uses odd-numbered IDs and increments by 2 per RFC 9113.
+     */
+    int allocateNextStreamId() {
+        int id = nextStreamId.getAndAdd(2);
+        this.currentStreamId = id;
+        return id;
+    }
+
+    // ─── HPACK header encoding ────────────────────────────────────────────────
+
+    /** Begins a new HPACK header-block encoding session. */
+    void beginHeaderEncode() {
+        hpackEncoder.beginEncode();
+    }
+
+    /** Encodes a single header field into the current session. */
+    void encodeHeader(String name, String value) {
+        hpackEncoder.encodeHeaderDirect(name, value);
+    }
+
+    /**
+     * Finalises encoding and returns the complete HPACK-compressed header block.
+     * Must be called after {@link #beginHeaderEncode()} and all {@link #encodeHeader} calls.
+     */
+    byte[] finishHeaderEncode() {
+        int len = hpackEncoder.encodedLength();
+        byte[] block = new byte[len];
+        System.arraycopy(hpackEncoder.encodedBuffer(), 0, block, 0, len);
+        return block;
+    }
+}

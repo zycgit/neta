@@ -26,44 +26,46 @@ package net.hasor.neta.codec.http.h2;
  * @version : 2024-01-15
  */
 class Http2ContextImpl implements Http2Context {
-    private final Http2FrameToHttpDecoder decoder;
+    private final boolean             serverMode;
+    private final Http2DecoderContent state;
 
-    Http2ContextImpl(Http2FrameToHttpDecoder decoder) {
-        this.decoder = decoder;
+    Http2ContextImpl(boolean serverMode, Http2DecoderContent state) {
+        this.serverMode = serverMode;
+        this.state = state;
     }
 
     @Override
     public boolean isReady() {
-        return this.decoder.isPrefaceReceived();
+        return this.state.isPrefaceReceived();
     }
 
     @Override
     public boolean isServer() {
-        return this.decoder.isServerMode();
+        return this.serverMode;
     }
 
     @Override
     public boolean isClient() {
-        return !this.decoder.isServerMode();
+        return !this.serverMode;
     }
 
     @Override
     public int lastStreamId() {
-        return this.decoder.lastStreamId();
+        return this.state.lastStreamId();
     }
 
     @Override
     public long maxConcurrentStreams() {
-        return this.decoder.peerSettings().maxConcurrentStreams();
+        return this.state.remoteMaxConcurrentStreams();
     }
 
     @Override
     public int initialWindowSize() {
-        return this.decoder.peerSettings().initialWindowSize();
+        return this.state.remoteInitialWindowSize();
     }
 
     @Override
     public int maxFrameSize() {
-        return this.decoder.peerSettings().maxFrameSize();
+        return this.state.remoteMaxFrameSize();
     }
 }

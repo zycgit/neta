@@ -42,7 +42,7 @@ import net.hasor.neta.channel.*;
  *   +------------------------------------------------+
  * </pre>
  * @see Http2Frame
- * @see HttpObjectToHttp2FrameEncoder
+ * @see Http2HttpToFrameEncoder
  */
 public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
     private static final int FRAME_HEADER_SIZE = 9;

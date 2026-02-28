@@ -35,19 +35,18 @@ import net.hasor.neta.codec.http.HttpObject;
  * </pre>
  */
 public class Http2ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-    private final Http2FrameDecoder             frameDecoder;
-    private final Http2FrameToHttpDecoder       frameToHttpDecoder;
-    private final HttpObjectToHttp2FrameEncoder httpToFrameEncoder;
-    private final Http2FrameEncoder             frameEncoder;
-    private final Http2FrameBridgeQueue         bridgeQueue;
+    private final Http2FrameDecoder       frameDecoder;
+    private final Http2FrameToHttpDecoder frameToHttpDecoder;
+    private final Http2HttpToFrameEncoder httpToFrameEncoder;
+    private final Http2FrameEncoder       frameEncoder;
+    private final Http2FrameBridgeQueue   bridgeQueue = new Http2FrameBridgeQueue();
 
     /** Creates a client-side HTTP/2 codec with default HPACK settings. */
     public Http2ClientDuplexe() {
         this.frameDecoder = new Http2FrameDecoder(false);
         this.frameToHttpDecoder = new Http2FrameToHttpDecoder(false);
-        this.httpToFrameEncoder = new HttpObjectToHttp2FrameEncoder(false);
+        this.httpToFrameEncoder = new Http2HttpToFrameEncoder(false);
         this.frameEncoder = new Http2FrameEncoder();
-        this.bridgeQueue = new Http2FrameBridgeQueue();
     }
 
     @Override
@@ -56,7 +55,8 @@ public class Http2ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         this.frameToHttpDecoder.onInit(context);
         this.httpToFrameEncoder.onInit(context);
         this.frameEncoder.onInit(context);
-        context.context(Http2Context.class, this.frameToHttpDecoder.createContext());
+        Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
+        context.context(Http2Context.class, new Http2ContextImpl(false, decoderState));
     }
 
     @Override
@@ -73,15 +73,15 @@ public class Http2ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
             // RCV: ByteBuf → Http2Frame → HttpObject
-            bridgeQueue.clear();
-            this.frameDecoder.onMessage(context, rcvUp, bridgeQueue);
-            this.frameToHttpDecoder.onMessage(context, bridgeQueue, rcvDown);
+            this.bridgeQueue.clear();
+            this.frameDecoder.onMessage(context, rcvUp, this.bridgeQueue);
+            this.frameToHttpDecoder.onMessage(context, this.bridgeQueue, rcvDown);
             return ProtoStatus.Next;
         } else {
             // SND: HttpObject → Http2Frame → ByteBuf
-            bridgeQueue.clear();
-            this.httpToFrameEncoder.onMessage(context, sndUp, bridgeQueue);
-            this.frameEncoder.onMessage(context, bridgeQueue, sndDown);
+            this.bridgeQueue.clear();
+            this.httpToFrameEncoder.onMessage(context, sndUp, this.bridgeQueue);
+            this.frameEncoder.onMessage(context, this.bridgeQueue, sndDown);
             return ProtoStatus.Next;
         }
     }

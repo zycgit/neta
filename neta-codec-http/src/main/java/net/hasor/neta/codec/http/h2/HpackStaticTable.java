@@ -111,13 +111,13 @@ final class HpackStaticTable {
         }
     }
 
+    private HpackStaticTable() {
+    }
+
     private static long nameValueKey(String name, String value) {
         // Combine name and value hash codes into a single long key.
         // Use 64-bit to minimize collision probability.
         return ((long) name.hashCode() << 32) | (value.hashCode() & 0xFFFFFFFFL);
-    }
-
-    private HpackStaticTable() {
     }
 
     /**

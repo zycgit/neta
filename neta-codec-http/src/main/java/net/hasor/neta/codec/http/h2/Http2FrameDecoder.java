@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
@@ -46,6 +47,7 @@ import net.hasor.neta.codec.http.HttpProtocolViolationException;
  * @see Http2FrameToHttpDecoder
  */
 public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
+    private static final Logger logger             = Logger.getLogger(Http2FrameDecoder.class);
     /** HTTP/2 connection preface: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" */
     private static final byte[] CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
     /** Frame header size: 9 bytes */
@@ -53,14 +55,12 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
 
     private final boolean       serverMode;
     private final Http2Settings localSettings;
-
-    private ByteBuf accumulator;
-    private boolean prefaceReceived;
-
     /** Reusable frame header buffer to avoid per-frame byte[9] allocation. */
-    private final byte[] frameHeaderBuf  = new byte[FRAME_HEADER_SIZE];
+    private final byte[]        frameHeaderBuf  = new byte[FRAME_HEADER_SIZE];
     /** Reusable preface buffer. */
-    private final byte[] prefaceCheckBuf = new byte[CONNECTION_PREFACE.length];
+    private final byte[]        prefaceCheckBuf = new byte[24]; // "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+    private       ByteBuf       accumulator;
+    private       boolean       prefaceReceived;
 
     /**
      * Creates a new HTTP/2 frame decoder.
@@ -80,27 +80,31 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
         this.accumulator = ByteBufUtils.queueBuffer(src);
 
         // Handle connection preface for server mode
-        if (!prefaceReceived) {
-            if (accumulator.readableBytes() < CONNECTION_PREFACE.length) {
-                accumulator.markReader();
+        if (!this.prefaceReceived) {
+            if (this.accumulator.readableBytes() < CONNECTION_PREFACE.length) {
+                this.accumulator.markReader();
                 return ProtoStatus.Next;
             }
             byte[] prefaceBytes = this.prefaceCheckBuf;
-            accumulator.getBytes(0, prefaceBytes, 0, prefaceBytes.length);
+            this.accumulator.getBytes(0, prefaceBytes, 0, prefaceBytes.length);
             for (int i = 0; i < CONNECTION_PREFACE.length; i++) {
                 if (prefaceBytes[i] != CONNECTION_PREFACE[i]) {
                     throw new HttpProtocolViolationException("HTTP/2: invalid connection preface");
                 }
             }
-            accumulator.skipReadableBytes(CONNECTION_PREFACE.length);
-            prefaceReceived = true;
+            this.accumulator.skipReadableBytes(CONNECTION_PREFACE.length);
+            this.prefaceReceived = true;
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H2-FRAME] channel=" + channelID + " connection preface received");
+            }
         }
 
         // Decode frames
-        while (accumulator.readableBytes() >= FRAME_HEADER_SIZE) {
+        while (this.accumulator.readableBytes() >= FRAME_HEADER_SIZE) {
             // Peek at header without consuming
             byte[] headerBuf = this.frameHeaderBuf;
-            accumulator.getBytes(0, headerBuf, 0, FRAME_HEADER_SIZE);
+            this.accumulator.getBytes(0, headerBuf, 0, FRAME_HEADER_SIZE);
 
             int payloadLength = ((headerBuf[0] & 0xFF) << 16) | ((headerBuf[1] & 0xFF) << 8) | (headerBuf[2] & 0xFF);
             int type = headerBuf[3] & 0xFF;
@@ -113,26 +117,26 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
             }
 
             int totalFrameSize = FRAME_HEADER_SIZE + payloadLength;
-            if (accumulator.readableBytes() < totalFrameSize) {
+            if (this.accumulator.readableBytes() < totalFrameSize) {
                 // Not enough data for the full frame; wait for more
                 break;
             }
 
             // Skip frame header
-            accumulator.skipReadableBytes(FRAME_HEADER_SIZE);
+            this.accumulator.skipReadableBytes(FRAME_HEADER_SIZE);
 
             // Read payload
             byte[] payload = new byte[payloadLength];
             if (payloadLength > 0) {
-                accumulator.getBytes(0, payload, 0, payloadLength);
-                accumulator.skipReadableBytes(payloadLength);
+                this.accumulator.getBytes(0, payload, 0, payloadLength);
+                this.accumulator.skipReadableBytes(payloadLength);
             }
 
             // Emit Http2Frame
             dst.offerMessage(new Http2Frame(type, flags, streamId, payload));
         }
 
-        accumulator.markReader();
+        this.accumulator.markReader();
         return ProtoStatus.Next;
     }
 
@@ -142,7 +146,7 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
     }
 
     /** Returns true if the HTTP/2 connection preface has been received. */
-    boolean isPrefaceReceived() {
+    boolean isPrefaceReceived(ProtoContext context) {
         return this.prefaceReceived;
     }
 
@@ -153,9 +157,9 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
 
     @Override
     public void onClose(ProtoContext context) {
-        if (accumulator != null) {
-            accumulator.free();
-            accumulator = null;
+        if (this.accumulator != null) {
+            this.accumulator.free();
+            this.accumulator = null;
         }
     }
 }
