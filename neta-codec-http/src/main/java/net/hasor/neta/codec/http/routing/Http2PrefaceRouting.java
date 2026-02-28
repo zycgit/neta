@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.routing;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRcvQueue;
@@ -55,10 +56,10 @@ import net.hasor.neta.channel.ProtoSndQueue;
  */
 public class Http2PrefaceRouting implements ProtoRouting<ByteBuf> {
     /** Branch key for HTTP/2 cleartext (Prior Knowledge). */
-    public static final String BRANCH_H2C = "h2c";
-
+    public static final  String BRANCH_H2C       = "h2c";
+    private static final Logger logger           = Logger.getLogger(Http2PrefaceRouting.class);
     /** Minimum bytes required for protocol detection. */
-    private static final int MIN_DETECT_BYTES = 4;
+    private static final int    MIN_DETECT_BYTES = 4;
 
     private final String defaultBranch;
 
@@ -75,6 +76,7 @@ public class Http2PrefaceRouting implements ProtoRouting<ByteBuf> {
 
     @Override
     public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<Object> rcvDown) {
+        boolean printLog = context.getConfig() != null && context.getConfig().isPrintLog();
         // rcvUp is null during onActive phase — h2c detection requires data, so defer
         if (rcvUp == null) {
             return null;
@@ -88,15 +90,22 @@ public class Http2PrefaceRouting implements ProtoRouting<ByteBuf> {
         int b0 = first.getByte(0) & 0xFF;
 
         // "PRI " = 0x50 0x52 0x49 0x20 → HTTP/2 Prior Knowledge (RFC 9113 §3.4)
+        String branch;
         if (b0 == 0x50                                      // 'P'
                 && (first.getByte(1) & 0xFF) == 0x52 // 'R'
                 && (first.getByte(2) & 0xFF) == 0x49 // 'I'
                 && (first.getByte(3) & 0xFF) == 0x20 // ' '
         ) {
-            return BRANCH_H2C;
+            branch = BRANCH_H2C;
+        } else {
+            // Not h2c → use default branch
+            branch = this.defaultBranch;
         }
 
-        // Not h2c → use default branch
-        return this.defaultBranch;
+        if (printLog) {
+            logger.info("[H2C-DETECT] channel=" + context.getChannel().getChannelId() + " -> branch='" + branch + "'");
+        }
+
+        return branch;
     }
 }

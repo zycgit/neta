@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.routing;
 import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRcvQueue;
@@ -57,8 +58,9 @@ import net.hasor.neta.codec.ssl.SslContext;
  */
 public class HttpsAlpnRouting implements ProtoRouting<ByteBuf> {
     /** Branch key for HTTP/2 over TLS (ALPN protocol identifier "h2"). */
-    public static final String BRANCH_H2 = "h2";
-    private final       String defaultBranch;
+    public static final  String BRANCH_H2 = "h2";
+    private static final Logger logger    = Logger.getLogger(HttpsAlpnRouting.class);
+    private final        String defaultBranch;
 
     /**
      * Creates an ALPN routing with the specified default branch.
@@ -78,16 +80,24 @@ public class HttpsAlpnRouting implements ProtoRouting<ByteBuf> {
 
     @Override
     public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<Object> rcvDown) {
+        boolean printLog = context.getConfig() != null && context.getConfig().isPrintLog();
         SslContext sslCtx = context.context(SslContext.class);
         if (sslCtx == null || !sslCtx.isReady()) {
             return null; // SSL handshake not complete, wait
         }
 
         String protocol = sslCtx.getApplicationProtocol();
+        String branch;
         if (StringUtils.equals("h2", protocol)) {
-            return BRANCH_H2;
+            branch = BRANCH_H2;
+        } else {
+            branch = this.defaultBranch;
         }
 
-        return this.defaultBranch;
+        if (printLog) {
+            logger.info("[ALPN] channel=" + context.getChannel().getChannelId() + " protocol='" + protocol + "' -> branch='" + branch + "'");
+        }
+
+        return branch;
     }
 }
