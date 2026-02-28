@@ -71,13 +71,33 @@ public class SelfSignedCertGenerator {
     }
 
     /**
-     * Generates a server certificate signed by a persistent local Root CA.
-     * If the CA does not exist yet, it is created and stored in {@code ~/.neta/ssl/}.
+     * Returns existing server certificate files if they are already present; otherwise generates
+     * a new server certificate signed by the persistent local Root CA (creating the CA on first run).
+     * <p>
+     * To force certificate renewal, call {@link #renew(String)} explicitly.
      * @param hostname the hostname for the server certificate SAN (e.g., "localhost")
-     * @return CertFiles containing paths to generated cert, key, and CA files
+     * @return CertFiles containing paths to the cert, key, and CA files
      * @throws Exception if certificate generation fails
      */
     public static CertFiles generate(String hostname) throws Exception {
+        File certFile = new File(SSL_DIR, "server.crt");
+        File keyFile = new File(SSL_DIR, "server.pem");
+        if (certFile.exists() && keyFile.exists() && CA_CERT_FILE.exists()) {
+            return new CertFiles(certFile, keyFile, CA_CERT_FILE, false);
+        }
+        return renew(hostname);
+    }
+
+    /**
+     * (Re)generates the server certificate signed by the persistent local Root CA, overwriting any
+     * existing server certificate files. Use this as a one-time utility to refresh certificates.
+     * <p>
+     * The Root CA is created only when it does not already exist.
+     * @param hostname the hostname for the server certificate SAN (e.g., "localhost")
+     * @return CertFiles containing paths to the refreshed cert, key, and CA files
+     * @throws Exception if certificate generation fails
+     */
+    public static CertFiles renew(String hostname) throws Exception {
         Security.addProvider(new BouncyCastleProvider());
 
         KeyPairGenerator keyGen = KeyPairGenerator.getInstance("RSA", "BC");

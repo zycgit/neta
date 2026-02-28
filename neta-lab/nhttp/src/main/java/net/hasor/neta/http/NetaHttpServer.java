@@ -323,7 +323,7 @@ public class NetaHttpServer {
         protocols.add("http/1.1"); // always available as fallback
 
         this.sslConfig.setAppProtocol(protocols.toArray(new String[0]));
-        this.sslConfig.setAppProtocolSelector((channel, sslEngine, clientProtocols) -> {
+        this.sslConfig.setAppProtocolSelector((channel, clientProtocols) -> {
             // Prefer h2 > http/1.1
             if (this.http2Enabled && clientProtocols.contains("h2")) {
                 return "h2";
@@ -531,7 +531,7 @@ public class NetaHttpServer {
             try {
                 // create servlet request/response
                 DefaultServletRequest servletRequest = new DefaultServletRequest(request, channel, this.secure, sessionManager);
-                DefaultServletResponse servletResponse = new DefaultServletResponse(channel);
+                DefaultServletResponse servletResponse = new DefaultServletResponse(channel, request.protocolVersion(), request.streamId());
 
                 String path = servletRequest.getRequestPath();
 
@@ -545,6 +545,7 @@ public class NetaHttpServer {
                 if (corsConfig != null && corsConfig.isEnabled()) {
                     if (CorsUtil.isPreflightRequest(request)) {
                         FullHttpResponse corsResponse = new DefaultFullHttpResponse(request.protocolVersion(), HttpStatus.NO_CONTENT);
+                        corsResponse.streamId(request.streamId());
                         CorsUtil.applyPreflightCorsHeaders(request, corsResponse, corsConfig);
                         corsResponse.headers().set(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);
                         channel.sendData(corsResponse);
@@ -579,7 +580,7 @@ public class NetaHttpServer {
 
             } catch (Exception e) {
                 logger.warn("Error handling HTTP request: " + request.uri(), e);
-                sendErrorResponse(channel, 500, "Internal Server Error");
+                sendErrorResponse(channel, 500, "Internal Server Error", request.protocolVersion(), request.streamId());
             }
         }
 
@@ -605,7 +606,7 @@ public class NetaHttpServer {
         private void handleWebSocketUpgrade(ProtoContext context, FullHttpRequest request, DefaultServletRequest servletRequest, NetChannel channel, String path) {
             WebSocketHandler wsHandler = dispatcher.findWebSocketHandler(path);
             if (wsHandler == null) {
-                sendErrorResponse(channel, 404, "No WebSocket handler for path: " + path);
+                sendErrorResponse(channel, 404, "No WebSocket handler for path: " + path, request.protocolVersion(), request.streamId());
                 return;
             }
 
@@ -626,7 +627,7 @@ public class NetaHttpServer {
 
             } catch (Exception e) {
                 logger.warn("WebSocket upgrade failed", e);
-                sendErrorResponse(channel, 500, "WebSocket upgrade failed");
+                sendErrorResponse(channel, 500, "WebSocket upgrade failed", request.protocolVersion(), request.streamId());
             }
         }
 
@@ -683,6 +684,12 @@ public class NetaHttpServer {
         }
 
         private void handleKeepAlive(FullHttpRequest request, NetChannel channel) {
+            // HTTP/2 and HTTP/3 are multiplexed protocols — connection lifecycle is managed
+            // by GOAWAY frames, not per-request Connection headers (RFC 9113 §8.2.2, RFC 9114 §4.2).
+            if (request.protocolVersion().majorVersion() >= 2) {
+                return;
+            }
+
             String connection = request.headers().get(HttpHeaderNames.CONNECTION);
             boolean keepAlive;
             if (connection != null) {
@@ -696,11 +703,12 @@ public class NetaHttpServer {
             }
         }
 
-        private void sendErrorResponse(NetChannel channel, int code, String message) {
+        private void sendErrorResponse(NetChannel channel, int code, String message, HttpVersion version, int streamId) {
             try {
                 String body = "<html><body><h1>" + code + " " + message + "</h1></body></html>";
                 ByteBuf content = ByteBuf.wrap(body.getBytes(StandardCharsets.UTF_8));
-                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.valueOf(code), content);
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(version, HttpStatus.valueOf(code), content);
+                response.streamId(streamId);
                 response.headers().set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML + "; charset=UTF-8");
                 response.headers().set(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(content.readableBytes()));
                 response.headers().set(HttpHeaderNames.SERVER, serverName);
@@ -729,7 +737,7 @@ public class NetaHttpServer {
                 int statusCode = mapProtocolExceptionToStatusCode(e);
                 String statusMessage = mapProtocolExceptionToMessage(e);
                 logger.warn("HTTP protocol error: " + e.getMessage());
-                sendErrorResponse(channel, statusCode, statusMessage);
+                sendErrorResponse(channel, statusCode, statusMessage, HttpVersion.HTTP_1_1, 0);
                 channel.close(); // close connection on protocol error
                 eh.clear();
                 return ProtoStatus.Stop;
@@ -799,7 +807,7 @@ public class NetaHttpServer {
                     NetChannel channel = (NetChannel) context.getChannel();
 
                     // Build the HTTPS redirect URL
-                    String host = request.headers().get("host");
+                    String host = request.headers().get(HttpHeaderNames.HOST);
                     if (host == null) {
                         host = "localhost";
                     }
@@ -809,10 +817,10 @@ public class NetaHttpServer {
                     String body = "<html><body><h1>301 Moved Permanently</h1><p>Redirecting to <a href=\"" + redirectUrl + "\">" + redirectUrl + "</a></p></body></html>";
                     ByteBuf content = ByteBuf.wrap(body.getBytes(StandardCharsets.UTF_8));
                     DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.MOVED_PERMANENTLY, content);
-                    response.headers().set("Location", redirectUrl);
+                    response.headers().set(HttpHeaderNames.LOCATION, redirectUrl);
                     response.headers().set(HttpHeaderNames.CONTENT_TYPE, HttpHeaderValues.TEXT_HTML + "; charset=UTF-8");
                     response.headers().set(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(content.readableBytes()));
-                    response.headers().set(HttpHeaderNames.CONNECTION, "close");
+                    response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
                     response.headers().set(HttpHeaderNames.SERVER, serverName);
 
                     channel.sendData(response);

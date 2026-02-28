@@ -36,6 +36,8 @@ import net.hasor.neta.http.ServletResponse;
  */
 public class DefaultServletResponse implements ServletResponse {
     private final NetChannel            channel;
+    private final HttpVersion           protocolVersion;
+    private final int                   requestStreamId;
     private final HttpHeaders           headers       = new HttpHeaders();
     private final ByteArrayOutputStream bodyBuffer    = new ByteArrayOutputStream(256);
     private       int                   statusCode    = 200;
@@ -44,8 +46,10 @@ public class DefaultServletResponse implements ServletResponse {
     private       long                  contentLength = -1;
     private       HttpSession           session;
 
-    public DefaultServletResponse(NetChannel channel) {
+    public DefaultServletResponse(NetChannel channel, HttpVersion protocolVersion, int requestStreamId) {
         this.channel = Objects.requireNonNull(channel);
+        this.protocolVersion = protocolVersion != null ? protocolVersion : HttpVersion.HTTP_1_1;
+        this.requestStreamId = requestStreamId;
     }
 
     // --- Status ---
@@ -210,10 +214,11 @@ public class DefaultServletResponse implements ServletResponse {
         HttpStatus status = HttpStatus.valueOf(this.statusCode);
         FullHttpResponse response;
         if (content != null) {
-            response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status, content);
+            response = new DefaultFullHttpResponse(this.protocolVersion, status, content);
         } else {
-            response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, status);
+            response = new DefaultFullHttpResponse(this.protocolVersion, status);
         }
+        response.streamId(this.requestStreamId);
 
         // copy headers
         response.headers().add(this.headers);
@@ -235,7 +240,7 @@ public class DefaultServletResponse implements ServletResponse {
 
         // server header
         if (!response.headers().contains(HttpHeaderNames.SERVER)) {
-            response.headers().set(HttpHeaderNames.SERVER, "Neta-HTTP/1.0");
+            response.headers().set(HttpHeaderNames.SERVER, "Neta-HTTP");
         }
 
         this.channel.sendData(response);

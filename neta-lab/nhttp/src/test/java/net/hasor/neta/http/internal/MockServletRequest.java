@@ -20,6 +20,8 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.*;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.codec.http.HttpHeaderNames;
+import net.hasor.neta.codec.http.HttpHeaderValues;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.multipart.FileUpload;
 import net.hasor.neta.http.HttpSession;
@@ -119,12 +121,12 @@ public class MockServletRequest implements ServletRequest {
 
     @Override
     public String getContentType() {
-        return getHeader("content-type");
+        return getHeader(HttpHeaderNames.CONTENT_TYPE);
     }
 
     @Override
     public long getContentLength() {
-        String len = getHeader("content-length");
+        String len = getHeader(HttpHeaderNames.CONTENT_LENGTH);
         return len != null ? Long.parseLong(len) : -1;
     }
 
@@ -157,7 +159,7 @@ public class MockServletRequest implements ServletRequest {
     @Override
     public boolean isMultipart() {
         String ct = getContentType();
-        return ct != null && ct.toLowerCase().contains("multipart/form-data");
+        return ct != null && ct.toLowerCase().contains(HttpHeaderValues.MULTIPART_FORM_DATA);
     }
 
     @Override

@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
+import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.http.ServletResponse;
 
@@ -84,17 +85,17 @@ public class MockServletResponse implements ServletResponse {
     @Override
     public void setContentType(String type) {
         this.contentType = type;
-        setHeader("content-type", type);
+        setHeader(HttpHeaderNames.CONTENT_TYPE, type);
     }
 
     @Override
     public void setContentLength(long length) {
-        setHeader("content-length", String.valueOf(length));
+        setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(length));
     }
 
     @Override
     public void addCookie(Cookie cookie) {
-        addHeader("set-cookie", cookie.name() + "=" + cookie.value());
+        addHeader(HttpHeaderNames.SET_COOKIE, cookie.name() + "=" + cookie.value());
     }
 
     @Override
@@ -126,7 +127,7 @@ public class MockServletResponse implements ServletResponse {
     @Override
     public void sendRedirect(String location) throws IOException {
         this.statusCode = 302;
-        setHeader("location", location);
+        setHeader(HttpHeaderNames.LOCATION, location);
         this.committed = true;
     }
 

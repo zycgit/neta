@@ -18,6 +18,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.util.HashMap;
 import java.util.Map;
+import net.hasor.neta.codec.http.HttpHeaderNames;
+import net.hasor.neta.codec.http.HttpHeaderValues;
 import net.hasor.neta.http.HttpServlet;
 import net.hasor.neta.http.ServletRequest;
 import net.hasor.neta.http.ServletResponse;
@@ -112,9 +114,9 @@ public class StaticFileServlet extends HttpServlet {
 
             // Add cache control for static assets
             if (!path.endsWith(".html") && !path.endsWith(".htm")) {
-                response.setHeader("Cache-Control", "public, max-age=3600");
+                response.setHeader(HttpHeaderNames.CACHE_CONTROL, "public, max-age=3600");
             } else {
-                response.setHeader("Cache-Control", "no-cache");
+                response.setHeader(HttpHeaderNames.CACHE_CONTROL, HttpHeaderValues.NO_CACHE);
             }
 
             // Read and write the resource
@@ -138,6 +140,6 @@ public class StaticFileServlet extends HttpServlet {
                 return mime;
             }
         }
-        return "application/octet-stream";
+        return HttpHeaderValues.APPLICATION_OCTET_STREAM;
     }
 }
