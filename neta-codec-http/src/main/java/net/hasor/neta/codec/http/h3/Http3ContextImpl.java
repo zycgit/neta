@@ -16,52 +16,53 @@
 package net.hasor.neta.codec.http.h3;
 /**
  * Default implementation of {@link Http3Context} backed by the state
- * managed in {@link Http3FrameDecoder}.
+ * managed in {@link Http3DecoderContent}.
  * <p>
- * Created via {@link Http3FrameDecoder#createContext()}, providing live
- * access to the HTTP/3 connection state.
+ * Provides live read-only access to the HTTP/3 connection state.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15
  */
 class Http3ContextImpl implements Http3Context {
-    private final Http3FrameDecoder decoder;
+    private final boolean             serverMode;
+    private final Http3DecoderContent content;
 
-    Http3ContextImpl(Http3FrameDecoder decoder) {
-        this.decoder = decoder;
+    Http3ContextImpl(boolean serverMode, Http3DecoderContent content) {
+        this.serverMode = serverMode;
+        this.content = content;
     }
 
     @Override
     public boolean isReady() {
-        return this.decoder.isSettingsReceived();
+        return this.content.isSettingsReceived();
     }
 
     @Override
     public boolean isServer() {
-        return this.decoder.isServerMode();
+        return this.serverMode;
     }
 
     @Override
     public boolean isClient() {
-        return !this.decoder.isServerMode();
+        return !this.serverMode;
     }
 
     @Override
     public long lastStreamId() {
-        return this.decoder.lastStreamId();
+        return this.content.lastStreamId();
     }
 
     @Override
     public long maxFieldSectionSize() {
-        return this.decoder.peerSettings().maxFieldSectionSize();
+        return this.content.maxFieldSectionSize();
     }
 
     @Override
     public long qpackMaxTableCapacity() {
-        return this.decoder.peerSettings().qpackMaxTableCapacity();
+        return this.content.qpackMaxTableCapacity();
     }
 
     @Override
     public long qpackBlockedStreams() {
-        return this.decoder.peerSettings().qpackBlockedStreams();
+        return this.content.qpackBlockedStreams();
     }
 }

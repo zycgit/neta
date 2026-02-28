@@ -51,6 +51,14 @@ public class Http3Settings {
         this.enableConnectProtocol = other.enableConnectProtocol;
     }
 
+    /**
+     * Returns true if the setting ID is reserved (greasing).
+     * Reserved IDs: 0x1f * N + 0x21
+     */
+    public static boolean isReservedSetting(long id) {
+        return id >= 0x21 && ((id - 0x21) % 0x1f) == 0;
+    }
+
     public long qpackMaxTableCapacity() {
         return qpackMaxTableCapacity;
     }
@@ -103,13 +111,5 @@ public class Http3Settings {
             enableConnectProtocol(value != 0);
         }
         // Unknown settings are ignored per RFC 9114 §7.2.4
-    }
-
-    /**
-     * Returns true if the setting ID is reserved (greasing).
-     * Reserved IDs: 0x1f * N + 0x21
-     */
-    public static boolean isReservedSetting(long id) {
-        return id >= 0x21 && ((id - 0x21) % 0x1f) == 0;
     }
 }

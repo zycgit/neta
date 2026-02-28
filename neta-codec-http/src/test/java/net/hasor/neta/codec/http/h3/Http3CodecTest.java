@@ -24,9 +24,20 @@ public class Http3CodecTest {
     // ========================= Mock & Helpers =========================
 
     private static ProtoContext mockContext() {
+        java.util.Map<Class<?>, Object> contextMap = new java.util.concurrent.ConcurrentHashMap<>();
         return (ProtoContext) java.lang.reflect.Proxy.newProxyInstance(ProtoContext.class.getClassLoader(), new Class[] { ProtoContext.class }, (proxy, method, args) -> {
             if ("byteBufAllocator".equals(method.getName())) {
                 return ByteBufAllocator.DEFAULT;
+            }
+            if ("context".equals(method.getName())) {
+                if (args.length == 1) {
+                    return contextMap.get(args[0]);
+                } else if (args.length == 2) {
+                    if (args[1] != null) {
+                        contextMap.put((Class<?>) args[0], args[1]);
+                    }
+                    return args[1];
+                }
             }
             return null;
         });
@@ -40,171 +51,6 @@ public class Http3CodecTest {
     }
 
     // ========================= Inner Queue Helpers =========================
-
-    private static class SimpleProtoRcvQueue<T> implements ProtoRcvQueue<T> {
-        private final List<T> list = new ArrayList<>();
-
-        public void add(T item) {
-            list.add(item);
-        }
-
-        @Override
-        public int getCapacity() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public int queueSize() {
-            return list.size();
-        }
-
-        @Override
-        public ProtoRcvQueue<T> rcvSubmit() {
-            return this;
-        }
-
-        @Override
-        public ProtoRcvQueue<T> rcvReset() {
-            return this;
-        }
-
-        @Override
-        public List<T> takeMessage(int cnt) {
-            if (list.isEmpty())
-                return Collections.emptyList();
-            int take = Math.min(cnt, list.size());
-            List<T> result = new ArrayList<>(list.subList(0, take));
-            list.subList(0, take).clear();
-            return result;
-        }
-
-        @Override
-        public List<T> peekMessage(int cnt) {
-            if (list.isEmpty())
-                return Collections.emptyList();
-            int take = Math.min(cnt, list.size());
-            return new ArrayList<>(list.subList(0, take));
-        }
-
-        @Override
-        public void skipMessage(int cnt) {
-            int skip = Math.min(cnt, list.size());
-            list.subList(0, skip).clear();
-        }
-    }
-
-    private static class SimpleProtoSndQueue<T> implements ProtoSndQueue<T> {
-        final List<T> list = new ArrayList<>();
-
-        @Override
-        public int getCapacity() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public int slotSize() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public boolean hasCommit() {
-            return true;
-        }
-
-        @Override
-        public ProtoSndQueue<T> sndSubmit() {
-            return this;
-        }
-
-        @Override
-        public ProtoSndQueue<T> sndReset() {
-            return this;
-        }
-
-        @Override
-        public int offerMessage(T[] offerList) {
-            Collections.addAll(list, offerList);
-            return offerList.length;
-        }
-
-        @Override
-        public int offerMessage(List<T> offerList) {
-            list.addAll(offerList);
-            return offerList.size();
-        }
-
-        @Override
-        public int offerMessage(ProtoRcvQueue<T> offerList) {
-            int count = 0;
-            while (offerList.hasMore()) {
-                list.add(offerList.takeMessage());
-                count++;
-            }
-            return count;
-        }
-
-        public int size() {
-            return list.size();
-        }
-
-        public T poll() {
-            return list.isEmpty() ? null : list.remove(0);
-        }
-    }
-
-    // ========================= Round-Trip Helpers =========================
-
-    /** Encodes HttpObject via client encoder, then decodes via server decoder. Returns decoded objects. */
-    private List<HttpObject> clientToServer(HttpObject... messages) throws Throwable {
-        Http3FrameEncoder encoder = new Http3FrameEncoder(false); // client
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);  // server
-
-        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
-        for (HttpObject msg : messages)
-            encIn.add(msg);
-        encoder.onMessage(mockContext(), encIn, encOut);
-
-        // Concatenate all encoder output ByteBufs into one (simulates single-stream delivery)
-        ByteBuf combined = combineAll(encOut);
-
-        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
-        decIn.add(combined);
-        decoder.setNextStreamMeta(0, true); // stream 0, fin=true (complete request)
-        decoder.onMessage(mockContext(), decIn, decOut);
-
-        List<HttpObject> result = new ArrayList<>();
-        while (decOut.size() > 0)
-            result.add(decOut.poll());
-        return result;
-    }
-
-    /** Encodes HttpObject via server encoder, then decodes via client decoder. Returns decoded objects. */
-    private List<HttpObject> serverToClient(HttpObject... messages) throws Throwable {
-        Http3FrameEncoder encoder = new Http3FrameEncoder(true);  // server
-        Http3FrameDecoder decoder = new Http3FrameDecoder(false); // client
-
-        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
-        for (HttpObject msg : messages)
-            encIn.add(msg);
-        encoder.onMessage(mockContext(), encIn, encOut);
-
-        // Concatenate all encoder output ByteBufs into one (simulates single-stream delivery)
-        ByteBuf combined = combineAll(encOut);
-
-        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
-        decIn.add(combined);
-        decoder.setNextStreamMeta(0, true); // stream 0, fin=true (complete response)
-        decoder.onMessage(mockContext(), decIn, decOut);
-
-        List<HttpObject> result = new ArrayList<>();
-        while (decOut.size() > 0)
-            result.add(decOut.poll());
-        return result;
-    }
 
     /** Concatenates all ByteBufs from a queue into a single ByteBuf. */
     private static ByteBuf combineAll(SimpleProtoSndQueue<ByteBuf> queue) {
@@ -224,6 +70,114 @@ public class Http3CodecTest {
         }
         combined.markWriter();
         return combined;
+    }
+
+    private static byte[] concat(byte[]... arrays) {
+        int totalLen = 0;
+        for (byte[] a : arrays)
+            totalLen += a.length;
+        byte[] result = new byte[totalLen];
+        int pos = 0;
+        for (byte[] a : arrays) {
+            System.arraycopy(a, 0, result, pos, a.length);
+            pos += a.length;
+        }
+        return result;
+    }
+
+    // ========================= Round-Trip Helpers =========================
+
+    private static void assertArrayEquals(byte[] expected, byte[] actual) {
+        assertEquals("Array length mismatch", expected.length, actual.length);
+        for (int i = 0; i < expected.length; i++) {
+            assertEquals("Mismatch at index " + i, expected[i], actual[i]);
+        }
+    }
+
+    /** Encodes HttpObject via client encoder pipeline, then decodes via server decoder pipeline. Returns decoded objects. */
+    private List<HttpObject> clientToServer(HttpObject... messages) throws Throwable {
+        // Encode: HttpObject → Http3Frame → ByteBuf (client side)
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+        frameEncoder.onInit(encCtx);
+
+        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+        for (HttpObject msg : messages)
+            encIn.add(msg);
+        httpToFrame.onMessage(encCtx, encIn, encBridge);
+        frameEncoder.onMessage(encCtx, encBridge, encOut);
+
+        // Concatenate all encoder output ByteBufs into one (simulates single-stream delivery)
+        ByteBuf combined = combineAll(encOut);
+
+        // Decode: ByteBuf → Http3Frame → HttpObject (server side)
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
+        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        decIn.add(combined);
+        frameDecoder.pushFallbackMeta(0, true); // stream 0, fin=true (complete request)
+        frameDecoder.onMessage(decCtx, decIn, decBridge);
+        frameToHttp.onMessage(decCtx, decBridge, decOut);
+
+        List<HttpObject> result = new ArrayList<>();
+        while (decOut.size() > 0)
+            result.add(decOut.poll());
+        return result;
+    }
+
+    /** Encodes HttpObject via server encoder pipeline, then decodes via client decoder pipeline. Returns decoded objects. */
+    private List<HttpObject> serverToClient(HttpObject... messages) throws Throwable {
+        // Encode: HttpObject → Http3Frame → ByteBuf (server side)
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(true);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+        frameEncoder.onInit(encCtx);
+
+        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+        for (HttpObject msg : messages)
+            encIn.add(msg);
+        httpToFrame.onMessage(encCtx, encIn, encBridge);
+        frameEncoder.onMessage(encCtx, encBridge, encOut);
+
+        // Concatenate all encoder output ByteBufs into one (simulates single-stream delivery)
+        ByteBuf combined = combineAll(encOut);
+
+        // Decode: ByteBuf → Http3Frame → HttpObject (client side)
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(false);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(false);
+        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        decIn.add(combined);
+        frameDecoder.pushFallbackMeta(0, true); // stream 0, fin=true (complete response)
+        frameDecoder.onMessage(decCtx, decIn, decBridge);
+        frameToHttp.onMessage(decCtx, decBridge, decOut);
+
+        List<HttpObject> result = new ArrayList<>();
+        while (decOut.size() > 0)
+            result.add(decOut.poll());
+        return result;
     }
 
     private <T> T findFirst(List<HttpObject> objects, Class<T> type) {
@@ -650,25 +604,40 @@ public class Http3CodecTest {
 
     @Test
     public void testMultipleSequentialRequests() throws Throwable {
-        Http3FrameEncoder encoder = new Http3FrameEncoder(false);
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
+        // Encode pipeline (client)
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+        frameEncoder.onInit(encCtx);
+
+        // Decode pipeline (server)
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
 
         int requestCount = 0;
         for (int i = 0; i < 10; i++) {
+            Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
             SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
             DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/page/" + i);
             req.headers().add("host", "localhost");
             encIn.add(req);
-            encoder.onMessage(mockContext(), encIn, encOut);
+            httpToFrame.onMessage(encCtx, encIn, encBridge);
+            frameEncoder.onMessage(encCtx, encBridge, encOut);
 
             ByteBuf combined = combineAll(encOut);
 
+            Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
             SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
             decIn.add(combined);
-            decoder.setNextStreamMeta(i * 4, true); // each request on its own stream
-            decoder.onMessage(mockContext(), decIn, decOut);
+            frameDecoder.pushFallbackMeta(i * 4, true); // each request on its own stream
+            frameDecoder.onMessage(decCtx, decIn, decBridge);
+            frameToHttp.onMessage(decCtx, decBridge, decOut);
 
             while (decOut.size() > 0) {
                 if (decOut.poll() instanceof HttpRequest)
@@ -680,27 +649,42 @@ public class Http3CodecTest {
 
     @Test
     public void testMultipleResponsesOnDifferentStreams() throws Throwable {
-        Http3FrameEncoder encoder = new Http3FrameEncoder(true);
-        Http3FrameDecoder decoder = new Http3FrameDecoder(false);
+        // Encode pipeline (server)
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(true);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+        frameEncoder.onInit(encCtx);
+
+        // Decode pipeline (client)
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(false);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(false);
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
 
         HttpStatus[] statuses = { HttpStatus.OK, HttpStatus.NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.NO_CONTENT };
         int responseCount = 0;
         long streamId = 0;
         for (HttpStatus status : statuses) {
+            Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
             SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
             DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, status);
             encIn.add(resp);
-            encoder.setResponseStreamId(streamId);
-            encoder.onMessage(mockContext(), encIn, encOut);
+            encCtx.context(Http3EncoderContent.class).setResponseStreamId(streamId);
+            httpToFrame.onMessage(encCtx, encIn, encBridge);
+            frameEncoder.onMessage(encCtx, encBridge, encOut);
 
             ByteBuf combined = combineAll(encOut);
 
+            Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
             SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
             decIn.add(combined);
-            decoder.setNextStreamMeta(streamId, true);
-            decoder.onMessage(mockContext(), decIn, decOut);
+            frameDecoder.pushFallbackMeta(streamId, true);
+            frameDecoder.onMessage(decCtx, decIn, decBridge);
+            frameToHttp.onMessage(decCtx, decBridge, decOut);
 
             while (decOut.size() > 0) {
                 if (decOut.poll() instanceof HttpResponse)
@@ -1021,7 +1005,15 @@ public class Http3CodecTest {
 
     @Test
     public void testSettingsFrameParsing() throws Throwable {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
+        // Binary decoder: ByteBuf → Http3Frame
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
+        // Semantic decoder: Http3Frame → HttpObject (handles SETTINGS internally)
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
+        Http3FrameBridgeQueue bridge = new Http3FrameBridgeQueue();
+
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
 
         // Construct a control stream (streamId with bit1 set): streamId=2 (unidirectional)
         // Control stream type = 0x00 + SETTINGS frame
@@ -1041,29 +1033,33 @@ public class Http3CodecTest {
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
         decIn.add(buf);
-        decoder.setNextStreamMeta(2, false); // unidirectional streamId=2, not fin
-        decoder.onMessage(mockContext(), decIn, decOut);
+        frameDecoder.pushFallbackMeta(2, false); // unidirectional streamId=2, not fin
+        frameDecoder.onMessage(decCtx, decIn, bridge);
+        frameToHttp.onMessage(decCtx, bridge, decOut);
 
         // Settings frame should be consumed internally, no HttpObject output
         assertEquals(0, decOut.size());
 
         // Verify settings were applied
-        Http3Context ctx = decoder.createContext();
-        assertTrue("Settings should mark as received", ctx.isReady());
+        Http3DecoderContent state = decCtx.context(Http3DecoderContent.class);
+        Http3Context h3ctx = new Http3ContextImpl(true, state);
+        assertTrue("Settings should mark as received", h3ctx.isReady());
     }
 
     @Test
     public void testDataTooSmallSkipped() throws Throwable {
         Http3FrameDecoder decoder = new Http3FrameDecoder(true);
+        ProtoContext decCtx = mockContext();
+        decoder.onInit(decCtx);
 
         // Empty ByteBuf should be skipped gracefully
         ByteBuf emptyBuf = ByteBufAllocator.DEFAULT.buffer(0);
         emptyBuf.markWriter();
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        SimpleProtoSndQueue<Http3Frame> decOut = new SimpleProtoSndQueue<>();
         decIn.add(emptyBuf);
-        decoder.onMessage(mockContext(), decIn, decOut);
+        decoder.onMessage(decCtx, decIn, decOut);
         assertEquals(0, decOut.size());
 
         // Null-readable ByteBuf should also be skipped
@@ -1071,7 +1067,7 @@ public class Http3CodecTest {
         // don't write anything, so readableBytes == 0
         nullReadable.markWriter();
         decIn.add(nullReadable);
-        decoder.onMessage(mockContext(), decIn, decOut);
+        decoder.onMessage(decCtx, decIn, decOut);
         assertEquals(0, decOut.size());
     }
 
@@ -1144,47 +1140,157 @@ public class Http3CodecTest {
 
     @Test
     public void testDecoderCloseCleanup() throws Throwable {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
+        // Encode pipeline (client)
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+        frameEncoder.onInit(encCtx);
 
         // Simulate some activity
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/test");
         req.headers().add("host", "localhost");
 
-        Http3FrameEncoder encoder = new Http3FrameEncoder(false);
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
         encIn.add(req);
-        encoder.onMessage(mockContext(), encIn, encOut);
+        httpToFrame.onMessage(encCtx, encIn, encBridge);
+        frameEncoder.onMessage(encCtx, encBridge, encOut);
+
+        // Decode pipeline (server)
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
+        Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
+        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
         while (encOut.size() > 0)
             decIn.add(encOut.poll());
-        decoder.onMessage(mockContext(), decIn, decOut);
+        frameDecoder.pushFallbackMeta(0, true);
+        frameDecoder.onMessage(decCtx, decIn, decBridge);
+        frameToHttp.onMessage(decCtx, decBridge, decOut);
 
         // Close should clean up streams
-        decoder.onClose(mockContext());
+        frameDecoder.onClose(decCtx);
+        frameToHttp.onClose(decCtx);
     }
 
     // ========================= Helper Methods =========================
 
-    private static byte[] concat(byte[]... arrays) {
-        int totalLen = 0;
-        for (byte[] a : arrays)
-            totalLen += a.length;
-        byte[] result = new byte[totalLen];
-        int pos = 0;
-        for (byte[] a : arrays) {
-            System.arraycopy(a, 0, result, pos, a.length);
-            pos += a.length;
+    private static class SimpleProtoRcvQueue<T> implements ProtoRcvQueue<T> {
+        private final List<T> list = new ArrayList<>();
+
+        public void add(T item) {
+            list.add(item);
         }
-        return result;
+
+        @Override
+        public int getCapacity() {
+            return Integer.MAX_VALUE;
+        }
+
+        @Override
+        public int queueSize() {
+            return list.size();
+        }
+
+        @Override
+        public ProtoRcvQueue<T> rcvSubmit() {
+            return this;
+        }
+
+        @Override
+        public ProtoRcvQueue<T> rcvReset() {
+            return this;
+        }
+
+        @Override
+        public List<T> takeMessage(int cnt) {
+            if (list.isEmpty())
+                return Collections.emptyList();
+            int take = Math.min(cnt, list.size());
+            List<T> result = new ArrayList<>(list.subList(0, take));
+            list.subList(0, take).clear();
+            return result;
+        }
+
+        @Override
+        public List<T> peekMessage(int cnt) {
+            if (list.isEmpty())
+                return Collections.emptyList();
+            int take = Math.min(cnt, list.size());
+            return new ArrayList<>(list.subList(0, take));
+        }
+
+        @Override
+        public void skipMessage(int cnt) {
+            int skip = Math.min(cnt, list.size());
+            list.subList(0, skip).clear();
+        }
     }
 
-    private static void assertArrayEquals(byte[] expected, byte[] actual) {
-        assertEquals("Array length mismatch", expected.length, actual.length);
-        for (int i = 0; i < expected.length; i++) {
-            assertEquals("Mismatch at index " + i, expected[i], actual[i]);
+    private static class SimpleProtoSndQueue<T> implements ProtoSndQueue<T> {
+        final List<T> list = new ArrayList<>();
+
+        @Override
+        public int getCapacity() {
+            return Integer.MAX_VALUE;
+        }
+
+        @Override
+        public int slotSize() {
+            return Integer.MAX_VALUE;
+        }
+
+        @Override
+        public boolean hasCommit() {
+            return true;
+        }
+
+        @Override
+        public ProtoSndQueue<T> sndSubmit() {
+            return this;
+        }
+
+        @Override
+        public ProtoSndQueue<T> sndReset() {
+            return this;
+        }
+
+        @Override
+        public int offerMessage(T[] offerList) {
+            Collections.addAll(list, offerList);
+            return offerList.length;
+        }
+
+        @Override
+        public int offerMessage(List<T> offerList) {
+            list.addAll(offerList);
+            return offerList.size();
+        }
+
+        @Override
+        public int offerMessage(ProtoRcvQueue<T> offerList) {
+            int count = 0;
+            while (offerList.hasMore()) {
+                list.add(offerList.takeMessage());
+                count++;
+            }
+            return count;
+        }
+
+        public int size() {
+            return list.size();
+        }
+
+        public T poll() {
+            return list.isEmpty() ? null : list.remove(0);
         }
     }
 }

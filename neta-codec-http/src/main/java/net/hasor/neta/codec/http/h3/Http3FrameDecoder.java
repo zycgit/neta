@@ -18,87 +18,74 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.channel.quic.QuicChannel;
 import net.hasor.neta.channel.quic.QuicStreamChannel;
 import net.hasor.neta.channel.quic.QuicVarInt;
-import net.hasor.neta.codec.http.*;
 
 /**
- * HTTP/3 frame decoder that converts QUIC stream data into standard {@link HttpObject} instances.
+ * HTTP/3 binary frame decoder that converts raw bytes ({@code ByteBuf}) into
+ * {@link Http3Frame} objects.
  * <p>
- * This decoder operates on the output of the QUIC transport layer. It receives
- * raw per-stream data and reads the stream ID and FIN flag from the
- * {@link QuicChannel} (set by the QUIC transport before data delivery).
- * The QPACK-compressed headers are decoded into standard HTTP headers, and the
- * result is emitted as the same {@link HttpObject} types used by HTTP/1.x and HTTP/2.
+ * This decoder implements the HTTP/3 binary framing layer defined in RFC 9114.
+ * It extracts QUIC stream metadata (stream ID, FIN flag), parses the
+ * variable-length integer frame type and length, reads the payload, and emits
+ * {@link Http3Frame} instances for downstream semantic processing by
+ * {@link Http3FrameToHttpDecoder}.
  * <p>
- * <b>Design Principle:</b> All decoded messages are emitted as standard {@link HttpObject}
- * types ({@link HttpRequest}, {@link HttpResponse}, {@link HttpContent}, {@link LastHttpContent}),
- * so the application layer is protocol-agnostic regardless of HTTP version.
- * <p>Pipeline usage:</p>
+ * For unidirectional streams, the stream type (first varint) is parsed and
+ * tracked per-stream to avoid re-reading on subsequent data chunks.
+ * <p>
+ * <b>Decode path:</b> {@code ByteBuf → Http3Frame → HttpObject}
+ * <p>
+ * Frame format (RFC 9114, Section 7.1):
  * <pre>
- *   ctx.addLast("h3", new Http3ServerDuplexe());
- *   ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
+ *   HTTP/3 Frame {
+ *     Type (i),       — QUIC variable-length integer
+ *     Length (i),     — QUIC variable-length integer
+ *     Frame Payload (..),
+ *   }
  * </pre>
+ * @see Http3Frame
+ * @see Http3FrameToHttpDecoder
  */
-public class Http3FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
-    private final boolean                serverMode;
-    private final QpackDecoder           qpackDecoder;
-    private final Map<Long, Http3Stream> streams;
-    private final Http3Settings          localSettings;
-    private final Http3Settings          remoteSettings;
-    private final Queue<Long>            responseStreamIdQueue  = new LinkedList<>();
-    private       boolean                settingsReceived;
-    // Fallback metadata queue for non-QUIC usage (testing, VirtualChannel)
-    private final Queue<long[]>          fallbackMeta           = new LinkedList<>();
-    // Auto-increment stream ID counter for non-QUIC channels
-    private       long                   nonQuicStreamIdCounter = 0;
+public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
+    private static final Logger logger = Logger.getLogger(Http3FrameDecoder.class);
+
+    private final boolean         serverMode;
+    /** Fallback metadata queue for non-QUIC testing (streamId + fin). */
+    private final Queue<long[]>   fallbackMeta           = new LinkedList<>();
+    /** Tracks unidirectional stream types to avoid re-reading on subsequent chunks. */
+    private final Map<Long, Long> uniStreamTypes         = new HashMap<>();
+    private       long            nonQuicStreamIdCounter = 0;
 
     /**
-     * Creates a new HTTP/3 frame decoder with default QPACK settings.
-     * @param serverMode true for server-side (expects requests), false for client-side (expects responses)
+     * Creates a new HTTP/3 binary frame decoder.
+     * @param serverMode true for server-side (expects requests), false for client-side
      */
     public Http3FrameDecoder(boolean serverMode) {
-        this(serverMode, 4096, 65536);
-    }
-
-    /**
-     * Creates a new HTTP/3 frame decoder with custom QPACK settings.
-     * @param serverMode true for server-side (expects requests), false for client-side (expects responses)
-     * @param maxTableSize maximum QPACK dynamic table size in bytes
-     * @param maxHeaderListSize maximum total size of all decoded headers
-     */
-    public Http3FrameDecoder(boolean serverMode, int maxTableSize, int maxHeaderListSize) {
         this.serverMode = serverMode;
-        this.qpackDecoder = new QpackDecoder(maxTableSize, maxHeaderListSize);
-        this.streams = new HashMap<>();
-        this.localSettings = new Http3Settings();
-        this.remoteSettings = new Http3Settings();
-        this.settingsReceived = false;
     }
 
     /**
      * Pre-loads stream metadata for the next incoming message (for non-QUIC usage).
      * <p>
-     * When no {@link QuicChannel} is available (e.g. in codec unit tests or
+     * When no {@link QuicStreamChannel} is available (e.g. in codec unit tests or
      * over a VirtualChannel), this method can be used to supply per-message
      * stream metadata that would normally come from the QUIC transport.
      * @param streamId the QUIC stream ID
      * @param fin true if this is the final data on the stream
      */
-    public void setNextStreamMeta(long streamId, boolean fin) {
-        this.fallbackMeta.offer(new long[] { streamId, fin ? 1 : 0 });
+    public void pushFallbackMeta(long streamId, boolean fin) {
+        fallbackMeta.offer(new long[] { streamId, fin ? 1 : 0 });
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
-        // Read stream metadata from QuicStreamChannel when available;
-        // for non-QUIC channels (VirtualChannel, test harness) use fallback queue or default to stream 0.
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<Http3Frame> dst) throws Throwable {
         SoChannel<?> ch = context.getChannel();
         QuicStreamChannel streamChannel = (ch instanceof QuicStreamChannel) ? (QuicStreamChannel) ch : null;
+        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
 
         while (src.hasMore()) {
             ByteBuf msg = src.takeMessage();
@@ -106,21 +93,20 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 continue;
             }
 
+            // Extract stream metadata
             long streamId;
             boolean fin;
             if (streamChannel != null) {
                 streamId = streamChannel.getStreamId();
                 fin = streamChannel.isRcvFinReceived();
             } else {
-                long[] meta = this.fallbackMeta.poll();
+                long[] meta = fallbackMeta.poll();
                 if (meta != null) {
                     streamId = meta[0];
                     fin = meta[1] != 0;
                 } else {
-                    // Non-QUIC channel (VrtChannel, testing): treat each ByteBuf as
-                    // a complete stream with auto-incremented ID and fin=true.
-                    streamId = this.nonQuicStreamIdCounter;
-                    this.nonQuicStreamIdCounter += 4;
+                    streamId = nonQuicStreamIdCounter;
+                    nonQuicStreamIdCounter += 4;
                     fin = true;
                 }
             }
@@ -131,33 +117,28 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 msg.getBytes(0, data, 0, dataLen);
             }
 
-            // Check if this is a unidirectional stream (control, QPACK encoder/decoder)
+            // Check if this is a unidirectional stream (bit 1 set in stream ID)
             if ((streamId & 0x02) != 0) {
-                // Unidirectional stream - handle control/QPACK streams
-                processUnidirectionalStream(streamId, data, dataLen);
-                continue;
+                parseUnidirectionalStream(context, dst, streamId, data, 0, dataLen, isPrintLog);
+            } else {
+                parseFrames(context, dst, streamId, data, 0, dataLen, fin, isPrintLog);
             }
-
-            // Bidirectional request stream - process HTTP/3 frames
-            processRequestStream(context, dst, streamId, data, dataLen, fin);
         }
 
         return ProtoStatus.Next;
     }
 
     /**
-     * Processes data on a bidirectional request stream.
-     * Parses HTTP/3 frames (HEADERS, DATA) and emits HttpObject.
+     * Parses HTTP/3 frames from raw data and emits {@link Http3Frame} objects.
+     * <p>
+     * Each frame consists of a varint type, varint length, and payload.
+     * The FIN flag is set only on the last frame in the data chunk.
      */
-    private void processRequestStream(ProtoContext context, ProtoSndQueue<HttpObject> dst, long streamId, byte[] data, int dataLen, boolean fin) {
-        Http3Stream stream = streams.computeIfAbsent(streamId, sid -> {
-            Http3Stream s = new Http3Stream(sid);
-            s.state(Http3StreamState.OPEN);
-            return s;
-        });
+    private void parseFrames(ProtoContext context, ProtoSndQueue<Http3Frame> dst, long streamId, byte[] data, int offset, int length, boolean fin, boolean isPrintLog) {
+        int pos = offset;
+        int end = offset + length;
 
-        int pos = 0;
-        while (pos < dataLen) {
+        while (pos < end) {
             // Read frame type (variable-length int)
             long[] typeResult = QuicVarInt.decode(data, pos);
             long frameType = typeResult[0];
@@ -168,228 +149,64 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             int frameLength = (int) lenResult[0];
             pos += (int) lenResult[1];
 
-            if (pos + frameLength > dataLen) {
-                // Incomplete frame - buffer for next read
-                break;
+            if (pos + frameLength > end) {
+                break; // Incomplete frame - wait for more data
             }
 
-            if (frameType == Http3FrameType.HEADERS) {
-                processHeadersFrame(context, dst, stream, data, pos, frameLength);
-            } else if (frameType == Http3FrameType.DATA) {
-                processDataFrame(context, dst, stream, data, pos, frameLength, fin && (pos + frameLength >= dataLen));
-            } else if (frameType == Http3FrameType.PUSH_PROMISE) {
-                // Push promise - skip for now
-            } else if (Http3FrameType.isReserved(frameType)) {
-                // Reserved/grease frame - ignore
+            // Determine if this is the last frame in the chunk
+            boolean lastFrame = (pos + frameLength >= end) && fin;
+
+            // Extract payload
+            byte[] payload = new byte[frameLength];
+            if (frameLength > 0) {
+                System.arraycopy(data, pos, payload, 0, frameLength);
+            }
+
+            dst.offerMessage(new Http3Frame(frameType, streamId, lastFrame, payload));
+
+            if (isPrintLog) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H3-RCV-FRAME] ch=" + channelID + " " + Http3FrameType.name(frameType) + " stream=" + streamId + " fin=" + lastFrame + " len=" + frameLength);
             }
 
             pos += frameLength;
         }
-
-        // If FIN received and no more data, emit LastHttpContent if needed
-        if (fin && stream.headersReceived() && stream.state() == Http3StreamState.OPEN) {
-            dst.offerMessage(new DefaultLastHttpContent(context.byteBufAllocator().buffer(0)));
-            stream.state(Http3StreamState.HALF_CLOSED);
-        }
     }
 
     /**
-     * Processes a HEADERS frame and emits HttpRequest or HttpResponse.
+     * Parses data on a unidirectional stream.
+     * <p>
+     * On the first data chunk for a stream, the stream type varint is read
+     * and tracked. Subsequent chunks skip the stream type and parse frames
+     * directly, fixing the re-read bug in the original implementation.
      */
-    private void processHeadersFrame(ProtoContext context, ProtoSndQueue<HttpObject> dst, Http3Stream stream, byte[] data, int offset, int length) {
-        HttpHeaders headers = qpackDecoder.decode(data, offset, length);
-
-        if (!stream.headersReceived()) {
-            // Initial headers - create request or response
-            stream.markHeadersReceived();
-
-            if (serverMode) {
-                // Decode as HTTP request
-                String method = headers.get(":method");
-                String path = headers.get(":path");
-                String authority = headers.get(":authority");
-                String scheme = headers.get(":scheme");
-
-                if (StringUtils.isBlank(method)) {
-                    method = "GET";
-                }
-
-                if (StringUtils.isBlank(path)) {
-                    path = "/";
-                }
-
-                HttpMethod httpMethod = HttpMethod.valueOf(method);
-                DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_3_0, httpMethod, path);
-
-                // Copy non-pseudo headers
-                for (String name : headers.names()) {
-                    if (!StringUtils.startsWith(name, ":")) {
-                        for (String value : headers.getAll(name)) {
-                            request.headers().add(name, value);
-                        }
-                    }
-                }
-
-                // Map pseudo-headers
-                if (StringUtils.isNotBlank(authority)) {
-                    request.headers().add(HttpHeaderNames.HOST, authority);
-                }
-                // Map :scheme → X-Forwarded-Proto so downstream handlers know the original scheme
-                if (StringUtils.isNotBlank(scheme)) {
-                    request.headers().add(HttpHeaderNames.X_FORWARDED_PROTO, scheme);
-                }
-
-                dst.offerMessage(request);
-                this.responseStreamIdQueue.offer(stream.streamId());
-            } else {
-                // Decode as HTTP response
-                String statusStr = headers.get(":status");
-                int statusCode = 200;
-                if (StringUtils.isNotBlank(statusStr)) {
-                    statusCode = Integer.parseInt(statusStr);
-                }
-
-                HttpStatus status = HttpStatus.valueOf(statusCode);
-                DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_3_0, status);
-
-                for (String name : headers.names()) {
-                    if (!StringUtils.startsWith(name, ":")) {
-                        for (String value : headers.getAll(name)) {
-                            response.headers().add(name, value);
-                        }
-                    }
-                }
-
-                dst.offerMessage(response);
-            }
-        } else {
-            // Trailers
-            stream.markTrailersReceived();
-            HttpHeaders trailerHeaders = new HttpHeaders();
-            for (String name : headers.names()) {
-                if (!StringUtils.startsWith(name, ":")) {
-                    for (String value : headers.getAll(name)) {
-                        trailerHeaders.add(name, value);
-                    }
-                }
-            }
-            // Emit trailers as LastHttpContent
-            DefaultLastHttpContent lastContent = new DefaultLastHttpContent(context.byteBufAllocator().buffer(0));
-            for (String name : trailerHeaders.names()) {
-                for (String value : trailerHeaders.getAll(name)) {
-                    lastContent.trailerHeaders().add(name, value);
-                }
-            }
-            dst.offerMessage(lastContent);
-            stream.state(Http3StreamState.HALF_CLOSED);
-        }
-    }
-
-    /**
-     * Processes a DATA frame and emits HttpContent.
-     */
-    private void processDataFrame(ProtoContext context, ProtoSndQueue<HttpObject> dst, Http3Stream stream, byte[] data, int offset, int length, boolean lastData) {
-        ByteBuf content = context.byteBufAllocator().buffer(Math.max(length, 1));
-        if (length > 0) {
-            content.writeBytes(data, offset, length);
-        }
-        content.markWriter();
-
-        if (lastData) {
-            dst.offerMessage(new DefaultLastHttpContent(content));
-            stream.state(Http3StreamState.HALF_CLOSED);
-        } else {
-            dst.offerMessage(new DefaultHttpContent(content));
-        }
-    }
-
-    /**
-     * Processes data on a unidirectional stream (control stream, QPACK streams).
-     */
-    private void processUnidirectionalStream(long streamId, byte[] data, int dataLen) {
-        if (dataLen == 0)
+    private void parseUnidirectionalStream(ProtoContext context, ProtoSndQueue<Http3Frame> dst, long streamId, byte[] data, int offset, int length, boolean isPrintLog) {
+        if (length == 0) {
             return;
-
-        // Read stream type (first varint on the stream)
-        long[] typeResult = QuicVarInt.decode(data, 0);
-        long streamType = typeResult[0];
-        int pos = (int) typeResult[1];
-
-        if (streamType == 0x00) {
-            // Control stream - parse SETTINGS and other control frames
-            processControlStream(data, pos, dataLen - pos);
         }
-        // Stream type 0x02 = QPACK encoder stream
-        // Stream type 0x03 = QPACK decoder stream
-        // These would be handled for dynamic table updates
-    }
 
-    /**
-     * Processes frames on the control stream.
-     */
-    private void processControlStream(byte[] data, int offset, int length) {
         int pos = offset;
         int end = offset + length;
 
-        while (pos < end) {
+        // Check if we already know this stream's type
+        Long knownType = uniStreamTypes.get(streamId);
+        if (knownType == null) {
+            // First data on this unidirectional stream - read stream type varint
             long[] typeResult = QuicVarInt.decode(data, pos);
-            long frameType = typeResult[0];
+            long streamType = typeResult[0];
             pos += (int) typeResult[1];
+            uniStreamTypes.put(streamId, streamType);
 
-            long[] lenResult = QuicVarInt.decode(data, pos);
-            int frameLength = (int) lenResult[0];
-            pos += (int) lenResult[1];
-
-            if (frameType == Http3FrameType.SETTINGS) {
-                processSettingsFrame(data, pos, frameLength);
-            } else if (frameType == Http3FrameType.GOAWAY) {
-                // GOAWAY - graceful shutdown
-            }
-
-            pos += frameLength;
-        }
-    }
-
-    /**
-     * Processes a SETTINGS frame.
-     */
-    private void processSettingsFrame(byte[] data, int offset, int length) {
-        int pos = offset;
-        int end = offset + length;
-
-        while (pos < end) {
-            long[] idResult = QuicVarInt.decode(data, pos);
-            long settingId = idResult[0];
-            pos += (int) idResult[1];
-
-            long[] valResult = QuicVarInt.decode(data, pos);
-            long settingValue = valResult[0];
-            pos += (int) valResult[1];
-
-            if (!Http3Settings.isReservedSetting(settingId)) {
-                remoteSettings.applySetting(settingId, settingValue);
+            if (isPrintLog) {
+                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+                logger.info("[H3-RCV-FRAME] ch=" + channelID + " UNI-STREAM type=" + streamType + " stream=" + streamId);
             }
         }
 
-        settingsReceived = true;
-    }
-
-    // ========================= Package-private accessors for Http3ContextImpl =========================
-
-    /** Creates a live {@link Http3Context} backed by this decoder's state. */
-    public Http3Context createContext() {
-        return new Http3ContextImpl(this);
-    }
-
-    /**
-     * Polls the next response stream ID from the FIFO queue.
-     * In server mode, each decoded request enqueues its stream ID so the encoder
-     * can respond on the correct stream.
-     * @return the stream ID, or -1 if no pending stream
-     */
-    long pollResponseStreamId() {
-        Long id = this.responseStreamIdQueue.poll();
-        return id != null ? id : -1;
+        // Parse frames on this unidirectional stream (control stream uses same frame format)
+        if (pos < end) {
+            parseFrames(context, dst, streamId, data, pos, end - pos, false, isPrintLog);
+        }
     }
 
     /** Returns true if this is server mode. */
@@ -397,31 +214,9 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return this.serverMode;
     }
 
-    /** Returns true if the initial SETTINGS frame has been received. */
-    boolean isSettingsReceived() {
-        return this.settingsReceived;
-    }
-
-    /** Returns the peer's (remote) HTTP/3 settings. */
-    Http3Settings peerSettings() {
-        return this.remoteSettings;
-    }
-
-    /** Returns the highest stream ID currently tracked. */
-    long lastStreamId() {
-        long max = 0;
-        for (Long id : this.streams.keySet()) {
-            if (id > max)
-                max = id;
-        }
-        return max;
-    }
-
     @Override
     public void onClose(ProtoContext context) {
-        for (Http3Stream stream : streams.values()) {
-            stream.release();
-        }
-        streams.clear();
+        fallbackMeta.clear();
+        uniStreamTypes.clear();
     }
 }

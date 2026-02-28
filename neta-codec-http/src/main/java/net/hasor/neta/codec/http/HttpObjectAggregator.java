@@ -182,16 +182,18 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         if (httpCtx.currentMessage instanceof HttpRequest) {
             HttpRequest req = (HttpRequest) httpCtx.currentMessage;
             DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(req.protocolVersion(), req.method(), req.uri(), httpCtx.aggregatedContent, req.headers(), httpCtx.trailingHeaders != null ? httpCtx.trailingHeaders : new HttpHeaders());
+            fullReq.streamId(req.streamId()); // propagate streamId for H2/H3 multiplexing
             dst.offerMessage(fullReq);
             if (printLog) {
-                logger.info("[HTTP-AGG] channel=" + channelID + " " + req.method() + " " + req.uri() + " contentLength=" + httpCtx.currentContentLength);
+                logger.info("[HTTP-AGG] channel=" + channelID + " " + req.method() + " " + req.uri() + " streamId=" + req.streamId() + " contentLength=" + httpCtx.currentContentLength);
             }
         } else if (httpCtx.currentMessage instanceof HttpResponse) {
             HttpResponse resp = (HttpResponse) httpCtx.currentMessage;
             DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(resp.protocolVersion(), resp.status(), httpCtx.aggregatedContent, resp.headers(), httpCtx.trailingHeaders != null ? httpCtx.trailingHeaders : new HttpHeaders());
+            fullResp.streamId(resp.streamId()); // propagate streamId for H2/H3 multiplexing
             dst.offerMessage(fullResp);
             if (printLog) {
-                logger.info("[HTTP-AGG] channel=" + channelID + " response status=" + resp.status().code() + " contentLength=" + httpCtx.currentContentLength);
+                logger.info("[HTTP-AGG] channel=" + channelID + " response status=" + resp.status().code() + " streamId=" + resp.streamId() + " contentLength=" + httpCtx.currentContentLength);
             }
         }
 

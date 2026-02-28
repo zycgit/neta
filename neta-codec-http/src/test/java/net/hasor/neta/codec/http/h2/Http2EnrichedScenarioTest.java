@@ -22,12 +22,669 @@ public class Http2EnrichedScenarioTest {
     // ========================= Mock & Helpers (same structure as Http2CodecTest) =========================
 
     private static ProtoContext mockContext() {
+        java.util.Map<Class<?>, Object> contextMap = new java.util.concurrent.ConcurrentHashMap<>();
         return (ProtoContext) java.lang.reflect.Proxy.newProxyInstance(ProtoContext.class.getClassLoader(), new Class[] { ProtoContext.class }, (proxy, method, args) -> {
             if ("byteBufAllocator".equals(method.getName())) {
                 return ByteBufAllocator.DEFAULT;
             }
+            if ("context".equals(method.getName())) {
+                if (args.length == 1) {
+                    return contextMap.get(args[0]);
+                } else if (args.length == 2) {
+                    if (args[1] != null) {
+                        contextMap.put((Class<?>) args[0], args[1]);
+                    }
+                    return args[1];
+                }
+            }
             return null;
         });
+    }
+
+    private List<HttpObject> clientToServer(HttpObject... messages) throws Throwable {
+        // Encode: HttpObject → Http2Frame → ByteBuf
+        Http2HttpToFrameEncoder httpToFrame = new Http2HttpToFrameEncoder(false); // client
+        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
+        Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+
+        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+        for (HttpObject msg : messages)
+            encIn.add(msg);
+        httpToFrame.onMessage(encCtx, encIn, encodeBridge);
+        frameEncoder.onMessage(encCtx, encodeBridge, encOut);
+
+        // Decode: ByteBuf → Http2Frame → HttpObject
+        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(true); // server
+        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(true);
+        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
+
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        while (encOut.size() > 0)
+            decIn.add(encOut.poll());
+        frameDecoder.onMessage(decCtx, decIn, decodeBridge);
+        frameToHttp.onMessage(decCtx, decodeBridge, decOut);
+
+        List<HttpObject> result = new ArrayList<>();
+        while (decOut.size() > 0)
+            result.add(decOut.poll());
+        return result;
+    }
+
+    private List<HttpObject> serverToClient(HttpObject... messages) throws Throwable {
+        // Encode: HttpObject → Http2Frame → ByteBuf
+        Http2HttpToFrameEncoder httpToFrame = new Http2HttpToFrameEncoder(true); // server
+        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
+        Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+
+        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+        for (HttpObject msg : messages)
+            encIn.add(msg);
+        httpToFrame.onMessage(encCtx, encIn, encodeBridge);
+        frameEncoder.onMessage(encCtx, encodeBridge, encOut);
+
+        // Decode: ByteBuf → Http2Frame → HttpObject
+        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(false); // client
+        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(false);
+        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
+
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        while (encOut.size() > 0)
+            decIn.add(encOut.poll());
+        frameDecoder.onMessage(decCtx, decIn, decodeBridge);
+        frameToHttp.onMessage(decCtx, decodeBridge, decOut);
+
+        List<HttpObject> result = new ArrayList<>();
+        while (decOut.size() > 0)
+            result.add(decOut.poll());
+        return result;
+    }
+
+    private <T> T findFirst(List<HttpObject> objects, Class<T> type) {
+        for (HttpObject o : objects) {
+            if (type.isInstance(o))
+                return type.cast(o);
+        }
+        return null;
+    }
+
+    private <T> T findLast(List<HttpObject> objects, Class<T> type) {
+        T last = null;
+        for (HttpObject o : objects) {
+            if (type.isInstance(o))
+                last = type.cast(o);
+        }
+        return last;
+    }
+
+    @Test
+    public void testOptionsRequest() throws Throwable {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.OPTIONS, "*");
+        req.headers().add("host", "api.example.com");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        assertEquals(HttpMethod.OPTIONS, received.method());
+    }
+
+    @Test
+    public void testConnectMethod() throws Throwable {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.CONNECT, "proxy.example.com:443");
+        req.headers().add("host", "proxy.example.com");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        assertEquals(HttpMethod.CONNECT, received.method());
+    }
+
+    // ========================= Additional HTTP Method Tests =========================
+
+    @Test
+    public void testPatchRequest() throws Throwable {
+        String body = "{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"new\"}";
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
+        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.PATCH, "/resource/1", bodyBuf);
+        req.headers().add("host", "api.example.com");
+        req.headers().add("content-type", "application/json-patch+json");
+
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        assertNotNull(received);
+        assertEquals(HttpMethod.PATCH, received.method());
+    }
+
+    @Test
+    public void test201Created() throws Throwable {
+        String body = "{\"id\":42}";
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
+        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.CREATED, bodyBuf);
+        resp.headers().add("location", "/resource/42");
+
+        List<HttpObject> decoded = serverToClient(resp);
+        HttpResponse received = findFirst(decoded, HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.CREATED, received.status());
+        assertEquals("/resource/42", received.headers().get("location"));
+    }
+
+    @Test
+    public void test204NoContent() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NO_CONTENT);
+        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.NO_CONTENT, received.status());
+    }
+
+    // ========================= Additional Response Status Tests =========================
+
+    @Test
+    public void test301Redirect() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.MOVED_PERMANENTLY);
+        resp.headers().add("location", "https://new.example.com/path");
+
+        List<HttpObject> decoded = serverToClient(resp);
+        HttpResponse received = findFirst(decoded, HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.MOVED_PERMANENTLY, received.status());
+        assertEquals("https://new.example.com/path", received.headers().get("location"));
+    }
+
+    @Test
+    public void test304NotModified() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NOT_MODIFIED);
+        resp.headers().add("etag", "\"v1.2.3\"");
+
+        List<HttpObject> decoded = serverToClient(resp);
+        HttpResponse received = findFirst(decoded, HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.NOT_MODIFIED, received.status());
+        assertEquals("\"v1.2.3\"", received.headers().get("etag"));
+    }
+
+    @Test
+    public void test400BadRequest() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.BAD_REQUEST);
+        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.BAD_REQUEST, received.status());
+    }
+
+    @Test
+    public void test403Forbidden() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.FORBIDDEN);
+        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.FORBIDDEN, received.status());
+    }
+
+    @Test
+    public void test503ServiceUnavailable() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.SERVICE_UNAVAILABLE);
+        resp.headers().add("retry-after", "60");
+        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, received.status());
+    }
+
+    @Test
+    public void testJsonContentType() throws Throwable {
+        String body = "{\"users\":[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]}";
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
+        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/api/users", bodyBuf);
+        req.headers().add("host", "api.example.com");
+        req.headers().add("content-type", "application/json");
+
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        assertNotNull(received);
+        assertEquals("application/json", received.headers().get("content-type"));
+
+        HttpContent lastContent = findLast(decoded, HttpContent.class);
+        assertNotNull(lastContent);
+        assertEquals(body, lastContent.content().readString(lastContent.content().readableBytes(), StandardCharsets.US_ASCII));
+    }
+
+    @Test
+    public void testFormUrlEncodedContentType() throws Throwable {
+        String body = "username=admin&password=secret123&remember=true";
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
+        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/login", bodyBuf);
+        req.headers().add("host", "auth.example.com");
+        req.headers().add("content-type", "application/x-www-form-urlencoded");
+
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        assertNotNull(received);
+        assertEquals("application/x-www-form-urlencoded", received.headers().get("content-type"));
+    }
+
+    // ========================= Content-Type Diversity Tests =========================
+
+    @Test
+    public void testXmlContentType() throws Throwable {
+        String body = "<?xml version=\"1.0\"?><root><item>Hello</item></root>";
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
+        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/api/xml", bodyBuf);
+        req.headers().add("host", "api.example.com");
+        req.headers().add("content-type", "application/xml");
+
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        assertNotNull(received);
+        assertEquals("application/xml", received.headers().get("content-type"));
+    }
+
+    @Test
+    public void testBinaryBodyPreserved() throws Throwable {
+        byte[] binary = new byte[256];
+        for (int i = 0; i < 256; i++)
+            binary[i] = (byte) i;
+
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(binary.length);
+        bodyBuf.writeBytes(binary, 0, binary.length);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/upload", bodyBuf);
+        req.headers().add("host", "upload.example.com");
+        req.headers().add("content-type", "application/octet-stream");
+
+        List<HttpObject> decoded = clientToServer(req);
+        HttpContent lastContent = findLast(decoded, HttpContent.class);
+        assertNotNull(lastContent);
+        ByteBuf content = lastContent.content();
+        assertEquals(256, content.readableBytes());
+
+        byte[] received = new byte[256];
+        content.getBytes(0, received, 0, 256);
+        for (int i = 0; i < 256; i++) {
+            assertEquals("Byte mismatch at index " + i, binary[i], received[i]);
+        }
+    }
+
+    @Test
+    public void testHeaderWithEmptyValue() throws Throwable {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/test");
+        req.headers().add("host", "localhost");
+        req.headers().add("x-empty", "");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        assertEquals("", received.headers().get("x-empty"));
+    }
+
+    @Test
+    public void testHeaderWithUnicodeValue() throws Throwable {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/unicode");
+        req.headers().add("host", "localhost");
+        req.headers().add("x-description", "test-header-value");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        assertEquals("test-header-value", received.headers().get("x-description"));
+    }
+
+    // ========================= Header Edge Cases =========================
+
+    @Test
+    public void testMultiValueHeaders() throws Throwable {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/accept");
+        req.headers().add("host", "localhost");
+        req.headers().add("accept", "text/html");
+        req.headers().add("accept", "application/json");
+        req.headers().add("accept", "text/plain");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        // At least the first accept should be present
+        assertNotNull(received.headers().get("accept"));
+    }
+
+    @Test
+    public void testCommonSecurityHeaders() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
+        resp.headers().add("x-content-type-options", "nosniff");
+        resp.headers().add("x-frame-options", "DENY");
+        resp.headers().add("x-xss-protection", "1; mode=block");
+        resp.headers().add("strict-transport-security", "max-age=31536000");
+        resp.headers().add("content-security-policy", "default-src 'self'");
+
+        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        assertNotNull(received);
+        assertEquals("nosniff", received.headers().get("x-content-type-options"));
+        assertEquals("DENY", received.headers().get("x-frame-options"));
+    }
+
+    @Test
+    public void testCorsHeaders() throws Throwable {
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
+        resp.headers().add("access-control-allow-origin", "*");
+        resp.headers().add("access-control-allow-methods", "GET, POST, OPTIONS");
+        resp.headers().add("access-control-allow-headers", "Content-Type, Authorization");
+        resp.headers().add("access-control-max-age", "86400");
+
+        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        assertNotNull(received);
+        assertEquals("*", received.headers().get("access-control-allow-origin"));
+    }
+
+    @Test
+    public void testHpackSequentialEncodingSharesContext() {
+        HpackEncoder encoder = new HpackEncoder(4096);
+        HpackDecoder decoder = new HpackDecoder(4096, 65536);
+
+        // First request
+        HttpHeaders h1 = new HttpHeaders();
+        h1.add(":method", "GET");
+        h1.add(":path", "/page1");
+        h1.add(":scheme", "https");
+        h1.add(":authority", "example.com");
+        byte[] e1 = encoder.encode(h1);
+        HttpHeaders d1 = decoder.decode(e1, 0, e1.length);
+        assertEquals("/page1", d1.get(":path"));
+
+        // Second request with similar headers (should benefit from dynamic table)
+        HttpHeaders h2 = new HttpHeaders();
+        h2.add(":method", "GET");
+        h2.add(":path", "/page2");
+        h2.add(":scheme", "https");
+        h2.add(":authority", "example.com");
+        byte[] e2 = encoder.encode(h2);
+        HttpHeaders d2 = decoder.decode(e2, 0, e2.length);
+        assertEquals("/page2", d2.get(":path"));
+
+        // Second encoding should be more compact due to shared context
+        assertTrue("Second encoding should be <= first due to dynamic table", e2.length <= e1.length);
+    }
+
+    @Test
+    public void testHpackManyUniqueHeaders() {
+        HpackEncoder encoder = new HpackEncoder(4096);
+        HpackDecoder decoder = new HpackDecoder(4096, 65536);
+
+        HttpHeaders headers = new HttpHeaders();
+        for (int i = 0; i < 100; i++) {
+            headers.add("x-unique-" + i, "value-" + i + "-with-some-extra-data");
+        }
+
+        byte[] encoded = encoder.encode(headers);
+        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
+
+        for (int i = 0; i < 100; i++) {
+            assertEquals("value-" + i + "-with-some-extra-data", decoded.get("x-unique-" + i));
+        }
+    }
+
+    // ========================= HPACK Advanced Scenarios =========================
+
+    @Test
+    public void testHpackHeaderWithSpecialChars() {
+        HpackEncoder encoder = new HpackEncoder(4096);
+        HpackDecoder decoder = new HpackDecoder(4096, 65536);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("x-special", "key=value; path=/; domain=.example.com");
+        headers.add("cookie", "session=abc123; lang=en-US");
+
+        byte[] encoded = encoder.encode(headers);
+        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
+        assertEquals("key=value; path=/; domain=.example.com", decoded.get("x-special"));
+        assertEquals("session=abc123; lang=en-US", decoded.get("cookie"));
+    }
+
+    @Test
+    public void testHpackSmallDynamicTable() {
+        HpackEncoder encoder = new HpackEncoder(32);  // Very small table
+        HpackDecoder decoder = new HpackDecoder(32, 65536);
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.add("x-key", "value");
+
+        byte[] encoded = encoder.encode(headers);
+        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
+        assertEquals("value", decoded.get("x-key"));
+    }
+
+    @Test
+    public void testMultipleRequestsWithDifferentMethods() throws Throwable {
+        Http2HttpToFrameEncoder httpToFrame = new Http2HttpToFrameEncoder(false); // client
+        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
+        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(true); // server
+        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(true);
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
+
+        HttpMethod[] methods = { HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.HEAD };
+        SimpleProtoSndQueue<ByteBuf> allEncOut = new SimpleProtoSndQueue<>();
+
+        for (HttpMethod method : methods) {
+            SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+            Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
+            SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+            DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, method, "/api");
+            req.headers().add("host", "localhost");
+            encIn.add(req);
+            httpToFrame.onMessage(encCtx, encIn, encodeBridge);
+            frameEncoder.onMessage(encCtx, encodeBridge, encOut);
+            while (encOut.size() > 0)
+                allEncOut.list.add(encOut.poll());
+        }
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
+        while (allEncOut.size() > 0)
+            decIn.add(allEncOut.poll());
+        frameDecoder.onMessage(decCtx, decIn, decodeBridge);
+        frameToHttp.onMessage(decCtx, decodeBridge, decOut);
+
+        int requestCount = 0;
+        List<HttpMethod> decodedMethods = new ArrayList<>();
+        while (decOut.size() > 0) {
+            HttpObject obj = decOut.poll();
+            if (obj instanceof HttpRequest) {
+                requestCount++;
+                decodedMethods.add(((HttpRequest) obj).method());
+            }
+        }
+        assertEquals("Should decode all 5 requests", 5, requestCount);
+    }
+
+    @Test
+    public void testMultipleResponsesWithVariousStatuses() throws Throwable {
+        Http2HttpToFrameEncoder httpToFrame = new Http2HttpToFrameEncoder(true); // server
+        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
+        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(false); // client
+        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(false);
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(encCtx);
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(decCtx);
+        frameToHttp.onInit(decCtx);
+
+        HttpStatus[] statuses = { HttpStatus.OK, HttpStatus.CREATED, HttpStatus.NO_CONTENT, HttpStatus.NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR };
+        SimpleProtoSndQueue<ByteBuf> allEncOut = new SimpleProtoSndQueue<>();
+
+        for (HttpStatus status : statuses) {
+            SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+            Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
+            SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, status);
+            encIn.add(resp);
+            httpToFrame.onMessage(encCtx, encIn, encodeBridge);
+            frameEncoder.onMessage(encCtx, encodeBridge, encOut);
+            while (encOut.size() > 0)
+                allEncOut.list.add(encOut.poll());
+        }
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
+        while (allEncOut.size() > 0)
+            decIn.add(allEncOut.poll());
+        frameDecoder.onMessage(decCtx, decIn, decodeBridge);
+        frameToHttp.onMessage(decCtx, decodeBridge, decOut);
+
+        int responseCount = 0;
+        while (decOut.size() > 0) {
+            if (decOut.poll() instanceof HttpResponse)
+                responseCount++;
+        }
+        assertEquals("Should decode all 5 responses", 5, responseCount);
+    }
+
+    // ========================= Multiple Stream Scenarios =========================
+
+    @Test
+    public void testLargeBody32KB() throws Throwable {
+        // HTTP/2 default SETTINGS_MAX_FRAME_SIZE is 16384 bytes, use a body within that limit
+        byte[] bodyBytes = new byte[15000];
+        for (int i = 0; i < bodyBytes.length; i++) {
+            bodyBytes[i] = (byte) ('A' + (i % 26));
+        }
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(bodyBytes.length);
+        bodyBuf.writeBytes(bodyBytes, 0, bodyBytes.length);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/large-upload", bodyBuf);
+        req.headers().add("host", "upload.example.com");
+
+        List<HttpObject> decoded = clientToServer(req);
+        assertTrue(decoded.size() > 0);
+
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        assertNotNull(received);
+        assertEquals("/large-upload", received.uri());
+    }
+
+    @Test
+    public void testLargeResponseBody() throws Throwable {
+        byte[] bodyBytes = new byte[16384];
+        for (int i = 0; i < bodyBytes.length; i++) {
+            bodyBytes[i] = (byte) (i % 256);
+        }
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(bodyBytes.length);
+        bodyBuf.writeBytes(bodyBytes, 0, bodyBytes.length);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, bodyBuf);
+        resp.headers().add("content-type", "application/octet-stream");
+
+        List<HttpObject> decoded = serverToClient(resp);
+        assertTrue(decoded.size() > 0);
+
+        HttpResponse received = findFirst(decoded, HttpResponse.class);
+        assertNotNull(received);
+        assertEquals(HttpStatus.OK, received.status());
+    }
+
+    // ========================= Large Body Variations =========================
+
+    @Test
+    public void testHttp2SettingsCustomValues() {
+        Http2Settings settings = new Http2Settings();
+        settings.headerTableSize(8192);
+        settings.initialWindowSize(131072);
+        settings.maxFrameSize(32768);
+
+        assertEquals(8192L, settings.headerTableSize());
+        assertEquals(131072, settings.initialWindowSize());
+        assertEquals(32768, settings.maxFrameSize());
+    }
+
+    @Test
+    public void testHttp2SettingsMaxConcurrentStreams() {
+        Http2Settings settings = new Http2Settings();
+        settings.maxConcurrentStreams(256);
+        assertEquals(256L, settings.maxConcurrentStreams());
+    }
+
+    // ========================= HTTP/2 Settings Tests =========================
+
+    @Test
+    public void testUriWithFragment() throws Throwable {
+        String uri = "/page?query=value#section";
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri);
+        req.headers().add("host", "localhost");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        assertEquals(uri, received.uri());
+    }
+
+    @Test
+    public void testUriWithPort() throws Throwable {
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/resource");
+        req.headers().add("host", "localhost:8080");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        assertEquals("localhost:8080", received.headers().get("host"));
+    }
+
+    // ========================= URI Variations =========================
+
+    @Test
+    public void testUriWithDeepPath() throws Throwable {
+        String uri = "/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p";
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri);
+        req.headers().add("host", "localhost");
+
+        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        assertNotNull(received);
+        assertEquals(uri, received.uri());
+    }
+
+    @Test
+    public void testFreshEncoderDecoderPairPerTest() throws Throwable {
+        // Each call creates fresh encoder/decoder pair - verify independence
+        DefaultFullHttpRequest req1 = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/test1");
+        req1.headers().add("host", "host1.com");
+        HttpRequest r1 = findFirst(clientToServer(req1), HttpRequest.class);
+        assertNotNull(r1);
+        assertEquals("/test1", r1.uri());
+
+        DefaultFullHttpRequest req2 = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/test2");
+        req2.headers().add("host", "host2.com");
+        HttpRequest r2 = findFirst(clientToServer(req2), HttpRequest.class);
+        assertNotNull(r2);
+        assertEquals("/test2", r2.uri());
     }
 
     private static class SimpleProtoRcvQueue<T> implements ProtoRcvQueue<T> {
@@ -81,6 +738,8 @@ public class Http2EnrichedScenarioTest {
             list.subList(0, skip).clear();
         }
     }
+
+    // ========================= Encoder State Isolation Tests =========================
 
     private static class SimpleProtoSndQueue<T> implements ProtoSndQueue<T> {
         final List<T> list = new ArrayList<>();
@@ -139,627 +798,5 @@ public class Http2EnrichedScenarioTest {
         public T poll() {
             return list.isEmpty() ? null : list.remove(0);
         }
-    }
-
-    private List<HttpObject> clientToServer(HttpObject... messages) throws Throwable {
-        // Encode: HttpObject → Http2Frame → ByteBuf
-        HttpObjectToHttp2FrameEncoder httpToFrame = new HttpObjectToHttp2FrameEncoder(false); // client
-        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
-        Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
-
-        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
-        for (HttpObject msg : messages)
-            encIn.add(msg);
-        httpToFrame.onMessage(mockContext(), encIn, encodeBridge);
-        frameEncoder.onMessage(mockContext(), encodeBridge, encOut);
-
-        // Decode: ByteBuf → Http2Frame → HttpObject
-        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(true); // server
-        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(true);
-        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
-
-        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
-        while (encOut.size() > 0)
-            decIn.add(encOut.poll());
-        frameDecoder.onMessage(mockContext(), decIn, decodeBridge);
-        frameToHttp.onMessage(mockContext(), decodeBridge, decOut);
-
-        List<HttpObject> result = new ArrayList<>();
-        while (decOut.size() > 0)
-            result.add(decOut.poll());
-        return result;
-    }
-
-    private List<HttpObject> serverToClient(HttpObject... messages) throws Throwable {
-        // Encode: HttpObject → Http2Frame → ByteBuf
-        HttpObjectToHttp2FrameEncoder httpToFrame = new HttpObjectToHttp2FrameEncoder(true); // server
-        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
-        Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
-
-        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
-        for (HttpObject msg : messages)
-            encIn.add(msg);
-        httpToFrame.onMessage(mockContext(), encIn, encodeBridge);
-        frameEncoder.onMessage(mockContext(), encodeBridge, encOut);
-
-        // Decode: ByteBuf → Http2Frame → HttpObject
-        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(false); // client
-        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(false);
-        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
-
-        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
-        while (encOut.size() > 0)
-            decIn.add(encOut.poll());
-        frameDecoder.onMessage(mockContext(), decIn, decodeBridge);
-        frameToHttp.onMessage(mockContext(), decodeBridge, decOut);
-
-        List<HttpObject> result = new ArrayList<>();
-        while (decOut.size() > 0)
-            result.add(decOut.poll());
-        return result;
-    }
-
-    private <T> T findFirst(List<HttpObject> objects, Class<T> type) {
-        for (HttpObject o : objects) {
-            if (type.isInstance(o))
-                return type.cast(o);
-        }
-        return null;
-    }
-
-    private <T> T findLast(List<HttpObject> objects, Class<T> type) {
-        T last = null;
-        for (HttpObject o : objects) {
-            if (type.isInstance(o))
-                last = type.cast(o);
-        }
-        return last;
-    }
-
-    // ========================= Additional HTTP Method Tests =========================
-
-    @Test
-    public void testOptionsRequest() throws Throwable {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.OPTIONS, "*");
-        req.headers().add("host", "api.example.com");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals(HttpMethod.OPTIONS, received.method());
-    }
-
-    @Test
-    public void testConnectMethod() throws Throwable {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.CONNECT, "proxy.example.com:443");
-        req.headers().add("host", "proxy.example.com");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals(HttpMethod.CONNECT, received.method());
-    }
-
-    @Test
-    public void testPatchRequest() throws Throwable {
-        String body = "{\"op\":\"replace\",\"path\":\"/name\",\"value\":\"new\"}";
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
-        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.PATCH, "/resource/1", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/json-patch+json");
-
-        List<HttpObject> decoded = clientToServer(req);
-        HttpRequest received = findFirst(decoded, HttpRequest.class);
-        assertNotNull(received);
-        assertEquals(HttpMethod.PATCH, received.method());
-    }
-
-    // ========================= Additional Response Status Tests =========================
-
-    @Test
-    public void test201Created() throws Throwable {
-        String body = "{\"id\":42}";
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
-        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.CREATED, bodyBuf);
-        resp.headers().add("location", "/resource/42");
-
-        List<HttpObject> decoded = serverToClient(resp);
-        HttpResponse received = findFirst(decoded, HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.CREATED, received.status());
-        assertEquals("/resource/42", received.headers().get("location"));
-    }
-
-    @Test
-    public void test204NoContent() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NO_CONTENT);
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.NO_CONTENT, received.status());
-    }
-
-    @Test
-    public void test301Redirect() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.MOVED_PERMANENTLY);
-        resp.headers().add("location", "https://new.example.com/path");
-
-        List<HttpObject> decoded = serverToClient(resp);
-        HttpResponse received = findFirst(decoded, HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.MOVED_PERMANENTLY, received.status());
-        assertEquals("https://new.example.com/path", received.headers().get("location"));
-    }
-
-    @Test
-    public void test304NotModified() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NOT_MODIFIED);
-        resp.headers().add("etag", "\"v1.2.3\"");
-
-        List<HttpObject> decoded = serverToClient(resp);
-        HttpResponse received = findFirst(decoded, HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.NOT_MODIFIED, received.status());
-        assertEquals("\"v1.2.3\"", received.headers().get("etag"));
-    }
-
-    @Test
-    public void test400BadRequest() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.BAD_REQUEST);
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.BAD_REQUEST, received.status());
-    }
-
-    @Test
-    public void test403Forbidden() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.FORBIDDEN);
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.FORBIDDEN, received.status());
-    }
-
-    @Test
-    public void test503ServiceUnavailable() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.SERVICE_UNAVAILABLE);
-        resp.headers().add("retry-after", "60");
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.SERVICE_UNAVAILABLE, received.status());
-    }
-
-    // ========================= Content-Type Diversity Tests =========================
-
-    @Test
-    public void testJsonContentType() throws Throwable {
-        String body = "{\"users\":[{\"id\":1,\"name\":\"Alice\"},{\"id\":2,\"name\":\"Bob\"}]}";
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
-        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/api/users", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/json");
-
-        List<HttpObject> decoded = clientToServer(req);
-        HttpRequest received = findFirst(decoded, HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("application/json", received.headers().get("content-type"));
-
-        HttpContent lastContent = findLast(decoded, HttpContent.class);
-        assertNotNull(lastContent);
-        assertEquals(body, lastContent.content().readString(lastContent.content().readableBytes(), StandardCharsets.US_ASCII));
-    }
-
-    @Test
-    public void testFormUrlEncodedContentType() throws Throwable {
-        String body = "username=admin&password=secret123&remember=true";
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
-        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/login", bodyBuf);
-        req.headers().add("host", "auth.example.com");
-        req.headers().add("content-type", "application/x-www-form-urlencoded");
-
-        List<HttpObject> decoded = clientToServer(req);
-        HttpRequest received = findFirst(decoded, HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("application/x-www-form-urlencoded", received.headers().get("content-type"));
-    }
-
-    @Test
-    public void testXmlContentType() throws Throwable {
-        String body = "<?xml version=\"1.0\"?><root><item>Hello</item></root>";
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
-        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/api/xml", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/xml");
-
-        List<HttpObject> decoded = clientToServer(req);
-        HttpRequest received = findFirst(decoded, HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("application/xml", received.headers().get("content-type"));
-    }
-
-    @Test
-    public void testBinaryBodyPreserved() throws Throwable {
-        byte[] binary = new byte[256];
-        for (int i = 0; i < 256; i++)
-            binary[i] = (byte) i;
-
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(binary.length);
-        bodyBuf.writeBytes(binary, 0, binary.length);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/upload", bodyBuf);
-        req.headers().add("host", "upload.example.com");
-        req.headers().add("content-type", "application/octet-stream");
-
-        List<HttpObject> decoded = clientToServer(req);
-        HttpContent lastContent = findLast(decoded, HttpContent.class);
-        assertNotNull(lastContent);
-        ByteBuf content = lastContent.content();
-        assertEquals(256, content.readableBytes());
-
-        byte[] received = new byte[256];
-        content.getBytes(0, received, 0, 256);
-        for (int i = 0; i < 256; i++) {
-            assertEquals("Byte mismatch at index " + i, binary[i], received[i]);
-        }
-    }
-
-    // ========================= Header Edge Cases =========================
-
-    @Test
-    public void testHeaderWithEmptyValue() throws Throwable {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/test");
-        req.headers().add("host", "localhost");
-        req.headers().add("x-empty", "");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("", received.headers().get("x-empty"));
-    }
-
-    @Test
-    public void testHeaderWithUnicodeValue() throws Throwable {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/unicode");
-        req.headers().add("host", "localhost");
-        req.headers().add("x-description", "test-header-value");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("test-header-value", received.headers().get("x-description"));
-    }
-
-    @Test
-    public void testMultiValueHeaders() throws Throwable {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/accept");
-        req.headers().add("host", "localhost");
-        req.headers().add("accept", "text/html");
-        req.headers().add("accept", "application/json");
-        req.headers().add("accept", "text/plain");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        // At least the first accept should be present
-        assertNotNull(received.headers().get("accept"));
-    }
-
-    @Test
-    public void testCommonSecurityHeaders() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
-        resp.headers().add("x-content-type-options", "nosniff");
-        resp.headers().add("x-frame-options", "DENY");
-        resp.headers().add("x-xss-protection", "1; mode=block");
-        resp.headers().add("strict-transport-security", "max-age=31536000");
-        resp.headers().add("content-security-policy", "default-src 'self'");
-
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
-        assertNotNull(received);
-        assertEquals("nosniff", received.headers().get("x-content-type-options"));
-        assertEquals("DENY", received.headers().get("x-frame-options"));
-    }
-
-    @Test
-    public void testCorsHeaders() throws Throwable {
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
-        resp.headers().add("access-control-allow-origin", "*");
-        resp.headers().add("access-control-allow-methods", "GET, POST, OPTIONS");
-        resp.headers().add("access-control-allow-headers", "Content-Type, Authorization");
-        resp.headers().add("access-control-max-age", "86400");
-
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
-        assertNotNull(received);
-        assertEquals("*", received.headers().get("access-control-allow-origin"));
-    }
-
-    // ========================= HPACK Advanced Scenarios =========================
-
-    @Test
-    public void testHpackSequentialEncodingSharesContext() {
-        HpackEncoder encoder = new HpackEncoder(4096);
-        HpackDecoder decoder = new HpackDecoder(4096, 65536);
-
-        // First request
-        HttpHeaders h1 = new HttpHeaders();
-        h1.add(":method", "GET");
-        h1.add(":path", "/page1");
-        h1.add(":scheme", "https");
-        h1.add(":authority", "example.com");
-        byte[] e1 = encoder.encode(h1);
-        HttpHeaders d1 = decoder.decode(e1, 0, e1.length);
-        assertEquals("/page1", d1.get(":path"));
-
-        // Second request with similar headers (should benefit from dynamic table)
-        HttpHeaders h2 = new HttpHeaders();
-        h2.add(":method", "GET");
-        h2.add(":path", "/page2");
-        h2.add(":scheme", "https");
-        h2.add(":authority", "example.com");
-        byte[] e2 = encoder.encode(h2);
-        HttpHeaders d2 = decoder.decode(e2, 0, e2.length);
-        assertEquals("/page2", d2.get(":path"));
-
-        // Second encoding should be more compact due to shared context
-        assertTrue("Second encoding should be <= first due to dynamic table", e2.length <= e1.length);
-    }
-
-    @Test
-    public void testHpackManyUniqueHeaders() {
-        HpackEncoder encoder = new HpackEncoder(4096);
-        HpackDecoder decoder = new HpackDecoder(4096, 65536);
-
-        HttpHeaders headers = new HttpHeaders();
-        for (int i = 0; i < 100; i++) {
-            headers.add("x-unique-" + i, "value-" + i + "-with-some-extra-data");
-        }
-
-        byte[] encoded = encoder.encode(headers);
-        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-
-        for (int i = 0; i < 100; i++) {
-            assertEquals("value-" + i + "-with-some-extra-data", decoded.get("x-unique-" + i));
-        }
-    }
-
-    @Test
-    public void testHpackHeaderWithSpecialChars() {
-        HpackEncoder encoder = new HpackEncoder(4096);
-        HpackDecoder decoder = new HpackDecoder(4096, 65536);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-special", "key=value; path=/; domain=.example.com");
-        headers.add("cookie", "session=abc123; lang=en-US");
-
-        byte[] encoded = encoder.encode(headers);
-        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals("key=value; path=/; domain=.example.com", decoded.get("x-special"));
-        assertEquals("session=abc123; lang=en-US", decoded.get("cookie"));
-    }
-
-    @Test
-    public void testHpackSmallDynamicTable() {
-        HpackEncoder encoder = new HpackEncoder(32);  // Very small table
-        HpackDecoder decoder = new HpackDecoder(32, 65536);
-
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-key", "value");
-
-        byte[] encoded = encoder.encode(headers);
-        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals("value", decoded.get("x-key"));
-    }
-
-    // ========================= Multiple Stream Scenarios =========================
-
-    @Test
-    public void testMultipleRequestsWithDifferentMethods() throws Throwable {
-        HttpObjectToHttp2FrameEncoder httpToFrame = new HttpObjectToHttp2FrameEncoder(false); // client
-        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
-        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(true); // server
-        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(true);
-
-        HttpMethod[] methods = { HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.HEAD };
-        SimpleProtoSndQueue<ByteBuf> allEncOut = new SimpleProtoSndQueue<>();
-
-        for (HttpMethod method : methods) {
-            SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
-            Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
-            SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
-            DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, method, "/api");
-            req.headers().add("host", "localhost");
-            encIn.add(req);
-            httpToFrame.onMessage(mockContext(), encIn, encodeBridge);
-            frameEncoder.onMessage(mockContext(), encodeBridge, encOut);
-            while (encOut.size() > 0)
-                allEncOut.list.add(encOut.poll());
-        }
-
-        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
-        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
-        while (allEncOut.size() > 0)
-            decIn.add(allEncOut.poll());
-        frameDecoder.onMessage(mockContext(), decIn, decodeBridge);
-        frameToHttp.onMessage(mockContext(), decodeBridge, decOut);
-
-        int requestCount = 0;
-        List<HttpMethod> decodedMethods = new ArrayList<>();
-        while (decOut.size() > 0) {
-            HttpObject obj = decOut.poll();
-            if (obj instanceof HttpRequest) {
-                requestCount++;
-                decodedMethods.add(((HttpRequest) obj).method());
-            }
-        }
-        assertEquals("Should decode all 5 requests", 5, requestCount);
-    }
-
-    @Test
-    public void testMultipleResponsesWithVariousStatuses() throws Throwable {
-        HttpObjectToHttp2FrameEncoder httpToFrame = new HttpObjectToHttp2FrameEncoder(true); // server
-        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
-        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(false); // client
-        Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(false);
-
-        HttpStatus[] statuses = { HttpStatus.OK, HttpStatus.CREATED, HttpStatus.NO_CONTENT, HttpStatus.NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR };
-        SimpleProtoSndQueue<ByteBuf> allEncOut = new SimpleProtoSndQueue<>();
-
-        for (HttpStatus status : statuses) {
-            SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
-            Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
-            SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
-            DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, status);
-            encIn.add(resp);
-            httpToFrame.onMessage(mockContext(), encIn, encodeBridge);
-            frameEncoder.onMessage(mockContext(), encodeBridge, encOut);
-            while (encOut.size() > 0)
-                allEncOut.list.add(encOut.poll());
-        }
-
-        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
-        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
-        while (allEncOut.size() > 0)
-            decIn.add(allEncOut.poll());
-        frameDecoder.onMessage(mockContext(), decIn, decodeBridge);
-        frameToHttp.onMessage(mockContext(), decodeBridge, decOut);
-
-        int responseCount = 0;
-        while (decOut.size() > 0) {
-            if (decOut.poll() instanceof HttpResponse)
-                responseCount++;
-        }
-        assertEquals("Should decode all 5 responses", 5, responseCount);
-    }
-
-    // ========================= Large Body Variations =========================
-
-    @Test
-    public void testLargeBody32KB() throws Throwable {
-        // HTTP/2 default SETTINGS_MAX_FRAME_SIZE is 16384 bytes, use a body within that limit
-        byte[] bodyBytes = new byte[15000];
-        for (int i = 0; i < bodyBytes.length; i++) {
-            bodyBytes[i] = (byte) ('A' + (i % 26));
-        }
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(bodyBytes.length);
-        bodyBuf.writeBytes(bodyBytes, 0, bodyBytes.length);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/large-upload", bodyBuf);
-        req.headers().add("host", "upload.example.com");
-
-        List<HttpObject> decoded = clientToServer(req);
-        assertTrue(decoded.size() > 0);
-
-        HttpRequest received = findFirst(decoded, HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("/large-upload", received.uri());
-    }
-
-    @Test
-    public void testLargeResponseBody() throws Throwable {
-        byte[] bodyBytes = new byte[16384];
-        for (int i = 0; i < bodyBytes.length; i++) {
-            bodyBytes[i] = (byte) (i % 256);
-        }
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(bodyBytes.length);
-        bodyBuf.writeBytes(bodyBytes, 0, bodyBytes.length);
-        bodyBuf.markWriter();
-
-        DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, bodyBuf);
-        resp.headers().add("content-type", "application/octet-stream");
-
-        List<HttpObject> decoded = serverToClient(resp);
-        assertTrue(decoded.size() > 0);
-
-        HttpResponse received = findFirst(decoded, HttpResponse.class);
-        assertNotNull(received);
-        assertEquals(HttpStatus.OK, received.status());
-    }
-
-    // ========================= HTTP/2 Settings Tests =========================
-
-    @Test
-    public void testHttp2SettingsCustomValues() {
-        Http2Settings settings = new Http2Settings();
-        settings.headerTableSize(8192);
-        settings.initialWindowSize(131072);
-        settings.maxFrameSize(32768);
-
-        assertEquals(8192L, settings.headerTableSize());
-        assertEquals(131072, settings.initialWindowSize());
-        assertEquals(32768, settings.maxFrameSize());
-    }
-
-    @Test
-    public void testHttp2SettingsMaxConcurrentStreams() {
-        Http2Settings settings = new Http2Settings();
-        settings.maxConcurrentStreams(256);
-        assertEquals(256L, settings.maxConcurrentStreams());
-    }
-
-    // ========================= URI Variations =========================
-
-    @Test
-    public void testUriWithFragment() throws Throwable {
-        String uri = "/page?query=value#section";
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri);
-        req.headers().add("host", "localhost");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals(uri, received.uri());
-    }
-
-    @Test
-    public void testUriWithPort() throws Throwable {
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/resource");
-        req.headers().add("host", "localhost:8080");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("localhost:8080", received.headers().get("host"));
-    }
-
-    @Test
-    public void testUriWithDeepPath() throws Throwable {
-        String uri = "/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p";
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri);
-        req.headers().add("host", "localhost");
-
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals(uri, received.uri());
-    }
-
-    // ========================= Encoder State Isolation Tests =========================
-
-    @Test
-    public void testFreshEncoderDecoderPairPerTest() throws Throwable {
-        // Each call creates fresh encoder/decoder pair - verify independence
-        DefaultFullHttpRequest req1 = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/test1");
-        req1.headers().add("host", "host1.com");
-        HttpRequest r1 = findFirst(clientToServer(req1), HttpRequest.class);
-        assertNotNull(r1);
-        assertEquals("/test1", r1.uri());
-
-        DefaultFullHttpRequest req2 = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/test2");
-        req2.headers().add("host", "host2.com");
-        HttpRequest r2 = findFirst(clientToServer(req2), HttpRequest.class);
-        assertNotNull(r2);
-        assertEquals("/test2", r2.uri());
     }
 }

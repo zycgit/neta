@@ -27,6 +27,7 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     private       HttpVersion version;
     private       HttpMethod  method;
     private       String      uri;
+    private       int         streamId;
 
     /**
      * Creates a new full HTTP request with an empty body.
@@ -140,6 +141,17 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     @Override
     public HttpHeaders trailerHeaders() {
         return trailerHeaders;
+    }
+
+    @Override
+    public int streamId() {
+        return streamId;
+    }
+
+    @Override
+    public HttpObject streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
     }
 
     @Override

@@ -27,8 +27,8 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_serverDecoder() {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
-        Http3Context h3ctx = decoder.createContext();
+        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertNotNull("createContext should return non-null", h3ctx);
         assertTrue("Server decoder should report isServer=true", h3ctx.isServer());
@@ -37,8 +37,8 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_clientDecoder() {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(false);
-        Http3Context h3ctx = decoder.createContext();
+        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3Context h3ctx = new Http3ContextImpl(false, state);
 
         assertNotNull("createContext should return non-null", h3ctx);
         assertFalse("Client decoder should report isServer=false", h3ctx.isServer());
@@ -47,16 +47,16 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_initialState_notReady() {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
-        Http3Context h3ctx = decoder.createContext();
+        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertFalse("Should not be ready before SETTINGS received", h3ctx.isReady());
     }
 
     @Test
     public void createContext_initialState_defaultSettings() {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
-        Http3Context h3ctx = decoder.createContext();
+        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertTrue("maxFieldSectionSize should be >= 0", h3ctx.maxFieldSectionSize() >= 0);
         assertTrue("qpackMaxTableCapacity should be >= 0", h3ctx.qpackMaxTableCapacity() >= 0);
@@ -65,17 +65,17 @@ public class Http3ContextTest {
 
     @Test
     public void createContext_initialState_lastStreamIdZero() {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
-        Http3Context h3ctx = decoder.createContext();
+        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3Context h3ctx = new Http3ContextImpl(true, state);
 
         assertEquals("No streams should exist initially", 0L, h3ctx.lastStreamId());
     }
 
     @Test
     public void createContext_multipleCallsReturnIndependentInstances() {
-        Http3FrameDecoder decoder = new Http3FrameDecoder(true);
-        Http3Context ctx1 = decoder.createContext();
-        Http3Context ctx2 = decoder.createContext();
+        Http3DecoderContent state = new Http3DecoderContent(4096, 65536);
+        Http3Context ctx1 = new Http3ContextImpl(true, state);
+        Http3Context ctx2 = new Http3ContextImpl(true, state);
 
         assertNotNull(ctx1);
         assertNotNull(ctx2);

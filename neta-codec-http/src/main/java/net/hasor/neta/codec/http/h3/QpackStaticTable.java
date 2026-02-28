@@ -146,11 +146,11 @@ public final class QpackStaticTable {
         }
     }
 
-    private static long nameValueKey(String name, String value) {
-        return ((long) name.hashCode() << 32) | (value.hashCode() & 0xFFFFFFFFL);
+    private QpackStaticTable() {
     }
 
-    private QpackStaticTable() {
+    private static long nameValueKey(String name, String value) {
+        return ((long) name.hashCode() << 32) | (value.hashCode() & 0xFFFFFFFFL);
     }
 
     /** Returns the number of entries in the static table. */

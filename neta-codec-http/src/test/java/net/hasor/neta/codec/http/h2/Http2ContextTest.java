@@ -129,8 +129,8 @@ public class Http2ContextTest {
     @Test
     public void createContext_returnsLiveView() throws Throwable {
         // Verify that the context object delegates to live decoder state
-        Http2FrameToHttpDecoder decoder = new Http2FrameToHttpDecoder(true);
-        Http2Context h2ctx = decoder.createContext();
+        Http2DecoderContent state = new Http2DecoderContent(true, 4096, 8192);
+        Http2Context h2ctx = new Http2ContextImpl(true, state);
 
         assertTrue("createContext on server decoder should report isServer=true", h2ctx.isServer());
         assertFalse("createContext on server decoder should report isClient=false", h2ctx.isClient());
@@ -138,8 +138,8 @@ public class Http2ContextTest {
 
     @Test
     public void createContext_clientDecoder() {
-        Http2FrameToHttpDecoder decoder = new Http2FrameToHttpDecoder(false);
-        Http2Context h2ctx = decoder.createContext();
+        Http2DecoderContent state = new Http2DecoderContent(false, 4096, 8192);
+        Http2Context h2ctx = new Http2ContextImpl(false, state);
 
         assertFalse("createContext on client decoder should report isServer=false", h2ctx.isServer());
         assertTrue("createContext on client decoder should report isClient=true", h2ctx.isClient());

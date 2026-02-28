@@ -19,11 +19,11 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * A client-side HTTP/3 codec that combines {@link Http3FrameDecoder} and
- * {@link Http3FrameEncoder} into a single bidirectional handler.
+ * A client-side HTTP/3 codec that combines frame-level and semantic-level
+ * handlers into a single bidirectional handler.
  * <p>
- * RCV direction: ByteBuf → HttpObject (HTTP/3 frame decoding via QPACK → HttpResponse/HttpContent)
- * SND direction: HttpObject → ByteBuf (HttpRequest/HttpContent → HTTP/3 frame encoding via QPACK)
+ * RCV direction: ByteBuf →[FrameDecoder]→ Http3Frame →[FrameToHttpDecoder]→ HttpObject<br>
+ * SND direction: HttpObject →[HttpToFrameEncoder]→ Http3Frame →[FrameEncoder]→ ByteBuf
  * <p>
  * The output {@link HttpObject} types are identical to those produced by the HTTP/1.x
  * and HTTP/2 codecs, enabling protocol-agnostic application logic.
@@ -34,13 +34,18 @@ import net.hasor.neta.codec.http.HttpObject;
  * </pre>
  */
 public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-    private final Http3FrameDecoder decoder;
-    private final Http3FrameEncoder encoder;
+    private final Http3FrameDecoder       frameDecoder;
+    private final Http3FrameToHttpDecoder frameToHttpDecoder;
+    private final Http3HttpToFrameEncoder httpToFrameEncoder;
+    private final Http3FrameEncoder       frameEncoder;
+    private final Http3FrameBridgeQueue   bridgeQueue = new Http3FrameBridgeQueue();
 
     /** Creates a client-side HTTP/3 codec with default QPACK settings. */
     public Http3ClientDuplexe() {
-        this.decoder = new Http3FrameDecoder(false);
-        this.encoder = new Http3FrameEncoder(false);
+        this.frameDecoder = new Http3FrameDecoder(false);
+        this.frameToHttpDecoder = new Http3FrameToHttpDecoder(false);
+        this.httpToFrameEncoder = new Http3HttpToFrameEncoder(false);
+        this.frameEncoder = new Http3FrameEncoder();
     }
 
     /**
@@ -49,21 +54,28 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
      * @param maxHeaderListSize maximum total size of all decoded headers (default: 65536)
      */
     public Http3ClientDuplexe(int maxTableSize, int maxHeaderListSize) {
-        this.decoder = new Http3FrameDecoder(false, maxTableSize, maxHeaderListSize);
-        this.encoder = new Http3FrameEncoder(false, maxTableSize);
+        this.frameDecoder = new Http3FrameDecoder(false);
+        this.frameToHttpDecoder = new Http3FrameToHttpDecoder(false, maxTableSize, maxHeaderListSize);
+        this.httpToFrameEncoder = new Http3HttpToFrameEncoder(false, maxTableSize);
+        this.frameEncoder = new Http3FrameEncoder();
     }
 
     @Override
     public void onInit(ProtoContext context) throws Throwable {
-        this.decoder.onInit(context);
-        this.encoder.onInit(context);
-        context.context(Http3Context.class, this.decoder.createContext());
+        this.frameDecoder.onInit(context);
+        this.frameToHttpDecoder.onInit(context);
+        this.httpToFrameEncoder.onInit(context);
+        this.frameEncoder.onInit(context);
+        Http3DecoderContent decoderContent = context.context(Http3DecoderContent.class);
+        context.context(Http3Context.class, new Http3ContextImpl(false, decoderContent));
     }
 
     @Override
     public void onActive(ProtoContext context) throws Throwable {
-        this.decoder.onActive(context);
-        this.encoder.onActive(context);
+        this.frameDecoder.onActive(context);
+        this.frameToHttpDecoder.onActive(context);
+        this.httpToFrameEncoder.onActive(context);
+        this.frameEncoder.onActive(context);
     }
 
     @Override
@@ -71,24 +83,34 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
-            return this.decoder.onMessage(context, rcvUp, rcvDown);
+            // RCV: ByteBuf → Http3Frame → HttpObject
+            this.bridgeQueue.clear();
+            this.frameDecoder.onMessage(context, rcvUp, this.bridgeQueue);
+            this.frameToHttpDecoder.onMessage(context, this.bridgeQueue, rcvDown);
+            return ProtoStatus.Next;
         } else {
-            return this.encoder.onMessage(context, sndUp, sndDown);
+            // SND: HttpObject → Http3Frame → ByteBuf
+            this.bridgeQueue.clear();
+            this.httpToFrameEncoder.onMessage(context, sndUp, this.bridgeQueue);
+            this.frameEncoder.onMessage(context, this.bridgeQueue, sndDown);
+            return ProtoStatus.Next;
         }
     }
 
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
-            return this.decoder.onError(context, e, eh);
+            return this.frameDecoder.onError(context, e, eh);
         } else {
-            return this.encoder.onError(context, e, eh);
+            return this.frameEncoder.onError(context, e, eh);
         }
     }
 
     @Override
     public void onClose(ProtoContext context) {
-        this.decoder.onClose(context);
-        this.encoder.onClose(context);
+        this.frameDecoder.onClose(context);
+        this.frameToHttpDecoder.onClose(context);
+        this.httpToFrameEncoder.onClose(context);
+        this.frameEncoder.onClose(context);
     }
 }

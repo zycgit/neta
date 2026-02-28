@@ -26,6 +26,7 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
     private final HttpHeaders trailerHeaders;
     private       HttpVersion version;
     private       HttpStatus  status;
+    private       int         streamId;
 
     /**
      * Creates a new full HTTP response with an empty body.
@@ -118,6 +119,17 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
     @Override
     public HttpHeaders trailerHeaders() {
         return trailerHeaders;
+    }
+
+    @Override
+    public int streamId() {
+        return streamId;
+    }
+
+    @Override
+    public HttpObject streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
     }
 
     @Override

@@ -29,20 +29,15 @@ package net.hasor.neta.codec.http;
  * HTTP/1.x objects always return {@code 0}.
  */
 public interface HttpObject {
-
     /**
      * Returns the HTTP/2 stream ID associated with this object,
      * or {@code 0} if not applicable (HTTP/1.x or connection-level).
      */
-    default int streamId() {
-        return 0;
-    }
+    int streamId();
 
     /**
      * Sets the HTTP/2 stream ID. Returns {@code this} for chaining.
      * The default implementation is a no-op (HTTP/1.x objects ignore the call).
      */
-    default HttpObject streamId(int streamId) {
-        return this;
-    }
+    HttpObject streamId(int streamId);
 }
