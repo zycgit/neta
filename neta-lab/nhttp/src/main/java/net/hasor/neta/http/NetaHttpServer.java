@@ -27,8 +27,9 @@ import net.hasor.neta.codec.http.cors.CorsConfig;
 import net.hasor.neta.codec.http.cors.CorsUtil;
 import net.hasor.neta.codec.http.h2.Http2ServerDuplexe;
 import net.hasor.neta.codec.http.h3.Http3ServerDuplexe;
+import net.hasor.neta.codec.http.routing.Http2OverTlsRouting;
 import net.hasor.neta.codec.http.routing.Http2PrefaceRouting;
-import net.hasor.neta.codec.http.routing.HttpsAlpnRouting;
+import net.hasor.neta.codec.http.routing.HttpRoutingKey;
 import net.hasor.neta.codec.http.websocket.WebSocketFrame;
 import net.hasor.neta.codec.http.websocket.WebSocketServerHandshaker;
 import net.hasor.neta.codec.ssl.SslConfig;
@@ -353,13 +354,12 @@ public class NetaHttpServer {
             }
 
             // Protocol detection: route h2c (HTTP/2 Prior Knowledge) vs HTTP/1.1
-            // h2c preface starts with "PRI " (0x50 0x52 0x49 0x20), per RFC 9113 §3.4
-            Http2PrefaceRouting h2cRouting = new Http2PrefaceRouting("http");
+            Http2PrefaceRouting h2cRouting = new Http2PrefaceRouting();
             ProtoRoutingDuplexer.Builder<ByteBuf> httpDetect = ProtoRoutingDuplexer.newBuilder(h2cRouting);
 
             // h2c branch: HTTP/2 over cleartext (Prior Knowledge, RFC 9113 §3.4)
             if (this.http2Enabled) {
-                httpDetect.branch(Http2PrefaceRouting.BRANCH_H2C, h2cBranch -> {
+                httpDetect.branch(HttpRoutingKey.BRANCH_H2, h2cBranch -> {
                     h2cBranch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize, this.maxContentLength));
                     h2cBranch.addLastDecoder("h2-aggregator", new HttpObjectAggregator(this.maxContentLength));
                     h2cBranch.addLastDecoder("h2-handler", new HttpDispatchHandler(secure));
@@ -367,7 +367,7 @@ public class NetaHttpServer {
             }
 
             // HTTP/1.1 branch (default)
-            httpDetect.branch("http", httpBranch -> {
+            httpDetect.branch(HttpRoutingKey.BRANCH_H1, httpBranch -> {
                 httpBranch.addLast("http-codec", new HttpServerDuplexe(this.maxInitialLineLength, this.maxHeaderSize, this.maxChunkSize));
                 httpBranch.addLastDecoder("http-aggregator", new HttpObjectAggregator(this.maxContentLength));
                 httpBranch.addLastDecoder("http-handler", new HttpDispatchHandler(secure));
@@ -419,12 +419,12 @@ public class NetaHttpServer {
                 tlsBranch.addLast("ssl", new SslDuplexer(this.sslConfig));
 
                 // ALPN routing — select protocol based on TLS negotiation result
-                HttpsAlpnRouting alpnRouting = new HttpsAlpnRouting("http/1.1");
+                Http2OverTlsRouting alpnRouting = new Http2OverTlsRouting();
                 ProtoRoutingDuplexer.Builder<ByteBuf> alpnBuilder = ProtoRoutingDuplexer.newBuilder(alpnRouting);
 
                 // HTTP/2 branch
                 if (this.http2Enabled) {
-                    alpnBuilder.branch(HttpsAlpnRouting.BRANCH_H2, branch -> {
+                    alpnBuilder.branch(Http2OverTlsRouting.BRANCH_H2, branch -> {
                         branch.addLast("h2-codec", new Http2ServerDuplexe(4096, this.maxHeaderSize, this.maxContentLength));
                         branch.addLastDecoder("h2-aggregator", new HttpObjectAggregator(this.maxContentLength));
                         branch.addLastDecoder("h2-handler", new HttpDispatchHandler(true));
@@ -432,7 +432,7 @@ public class NetaHttpServer {
                 }
 
                 // HTTP/1.1 fallback branch (always present)
-                alpnBuilder.branch("http/1.1", branch -> {
+                alpnBuilder.branch(Http2OverTlsRouting.BRANCH_H1, branch -> {
                     branch.addLast("http-codec", new HttpServerDuplexe(this.maxInitialLineLength, this.maxHeaderSize, this.maxChunkSize));
                     branch.addLastDecoder("http-aggregator", new HttpObjectAggregator(this.maxContentLength));
                     branch.addLastDecoder("http-handler", new HttpDispatchHandler(true));
