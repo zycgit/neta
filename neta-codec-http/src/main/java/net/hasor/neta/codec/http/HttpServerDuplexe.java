@@ -15,10 +15,13 @@
  */
 package net.hasor.neta.codec.http;
 import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.websocket.WebSocketFrameDecoder;
 import net.hasor.neta.codec.http.websocket.WebSocketFrameEncoder;
+
+// This handler is stateless. Per-connection state is stored in HttpContext.
 
 /**
  * A server-side HTTP codec that combines {@link HttpRequestDecoder} and
@@ -38,12 +41,9 @@ import net.hasor.neta.codec.http.websocket.WebSocketFrameEncoder;
  * </pre>
  */
 public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-    private final HttpRequestDecoder    decoder;
-    private final HttpResponseEncoder   encoder;
-    // WebSocket upgrade state
-    private       WebSocketFrameDecoder wsDecoder;
-    private       WebSocketFrameEncoder wsEncoder;
-    private       boolean               upgraded = false;
+    private static final Logger              logger = Logger.getLogger(HttpServerDuplexe.class);
+    private final        HttpRequestDecoder  decoder;
+    private final        HttpResponseEncoder encoder;
 
     /** Creates a server codec with default decoder limits. */
     public HttpServerDuplexe() {
@@ -79,16 +79,17 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
+        HttpContext httpCtx = context.context(HttpContext.class);
         if (isRcv) {
-            if (this.upgraded) {
+            if (httpCtx.upgraded) {
                 // WebSocket mode: decode raw bytes into WebSocketFrame objects
-                return ((ProtoHandler) this.wsDecoder).onMessage(context, rcvUp, rcvDown);
+                return ((ProtoHandler) httpCtx.wsDecoder).onMessage(context, rcvUp, rcvDown);
             }
             return this.decoder.onMessage(context, rcvUp, rcvDown);
         } else {
-            if (this.upgraded) {
+            if (httpCtx.upgraded) {
                 // WebSocket mode: encode WebSocketFrame objects into raw bytes
-                return ((ProtoHandler) this.wsEncoder).onMessage(context, sndUp, sndDown);
+                return ((ProtoHandler) httpCtx.wsEncoder).onMessage(context, sndUp, sndDown);
             }
             // Check if the outgoing message is a WebSocket upgrade (101 Switching Protocols)
             boolean shouldUpgrade = false;
@@ -104,9 +105,16 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
             ProtoStatus status = this.encoder.onMessage(context, sndUp, sndDown);
             // Switch to WebSocket codec after the 101 response has been encoded
             if (shouldUpgrade) {
-                this.upgraded = true;
-                this.wsDecoder = new WebSocketFrameDecoder();
-                this.wsEncoder = new WebSocketFrameEncoder();
+                httpCtx.upgraded = true;
+                httpCtx.wsDecoder = new WebSocketFrameDecoder();
+                httpCtx.wsDecoder.onInit(context);
+
+                httpCtx.wsEncoder = new WebSocketFrameEncoder();
+                httpCtx.wsEncoder.onInit(context);
+
+                if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                    logger.info("[HTTP] channel=" + context.getChannel().getChannelId() + " WebSocket upgrade completed");
+                }
             }
             return status;
         }
@@ -125,13 +133,20 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     public void onClose(ProtoContext context) {
         this.decoder.onClose(context);
         this.encoder.onClose(context);
-        if (this.wsDecoder != null) {
-            this.wsDecoder.onClose(context);
+        HttpContext httpCtx = context.context(HttpContext.class);
+        if (httpCtx != null) {
+            if (httpCtx.wsDecoder != null) {
+                httpCtx.wsDecoder.onClose(context);
+            }
+            if (httpCtx.wsEncoder != null) {
+                httpCtx.wsEncoder.onClose(context);
+            }
         }
     }
 
     /** Returns true if this codec has been upgraded to WebSocket mode. */
-    public boolean isUpgraded() {
-        return this.upgraded;
+    public boolean isUpgraded(ProtoContext context) {
+        HttpContext httpCtx = context.context(HttpContext.class);
+        return httpCtx != null && httpCtx.isUpgraded();
     }
 }

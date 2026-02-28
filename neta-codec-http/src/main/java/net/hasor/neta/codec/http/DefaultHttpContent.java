@@ -21,6 +21,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 public class DefaultHttpContent implements HttpContent {
     private final ByteBuf content;
+    private       int     streamId;
 
     /**
      * Creates a new HTTP content chunk with the specified data.
@@ -31,6 +32,17 @@ public class DefaultHttpContent implements HttpContent {
             throw new IllegalArgumentException("content must not be null");
         }
         this.content = content;
+    }
+
+    @Override
+    public int streamId() {
+        return streamId;
+    }
+
+    @Override
+    public HttpObject streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
     }
 
     @Override

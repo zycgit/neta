@@ -19,6 +19,7 @@ package net.hasor.neta.codec.http;
  */
 public class DefaultHttpResponse implements HttpResponse {
     private final HttpHeaders headers;
+    private       int         streamId;
     private       HttpVersion version;
     private       HttpStatus  status;
 
@@ -50,6 +51,17 @@ public class DefaultHttpResponse implements HttpResponse {
         this.version = version;
         this.status = status;
         this.headers = headers;
+    }
+
+    @Override
+    public int streamId() {
+        return streamId;
+    }
+
+    @Override
+    public HttpObject streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
     }
 
     @Override

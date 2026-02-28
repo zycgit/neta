@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
@@ -34,14 +35,10 @@ import net.hasor.neta.channel.*;
  * </pre>
  */
 public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject> {
+    private static final Logger logger                     = Logger.getLogger(HttpObjectAggregator.class);
     /** Default maximum content length (1 MB). */
-    private static final int         DEFAULT_MAX_CONTENT_LENGTH = 1048576;
-    private final        int         maxContentLength;
-    // Aggregation state
-    private              HttpMessage currentMessage;
-    private              ByteBuf     aggregatedContent;
-    private              HttpHeaders trailingHeaders;
-    private              int         currentContentLength;
+    private static final int    DEFAULT_MAX_CONTENT_LENGTH = 1048576;
+    private final        int    maxContentLength;
 
     /** Creates an aggregator with the default maximum content length (1 MB). */
     public HttpObjectAggregator() {
@@ -60,8 +57,14 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
     }
 
     @Override
+    public void onInit(ProtoContext context) {
+        HttpContext.getOrCreate(context);
+    }
+
+    @Override
     @SuppressWarnings({ "unchecked", "rawtypes" })
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        HttpContext httpCtx = context.context(HttpContext.class);
         while (src.hasMore()) {
             // Use Object type to avoid ClassCastException for non-HttpObject messages
             // (e.g., WebSocketFrame after protocol upgrade). Type erasure makes this safe.
@@ -84,32 +87,32 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
 
             if (msg instanceof HttpRequest) {
                 // Start of a new request
-                startAggregation(context, (HttpRequest) msg);
+                startAggregation(httpCtx, context, (HttpRequest) msg);
                 continue;
             }
 
             if (msg instanceof HttpResponse) {
                 // Start of a new response
-                startAggregation(context, (HttpResponse) msg);
+                startAggregation(httpCtx, context, (HttpResponse) msg);
                 continue;
             }
 
             if (msg instanceof LastHttpContent) {
                 // End of message - finalize and emit
                 LastHttpContent last = (LastHttpContent) msg;
-                appendContent(last.content());
+                appendContent(httpCtx, last.content());
 
                 if (last.trailerHeaders() != null && !last.trailerHeaders().isEmpty()) {
-                    trailingHeaders = last.trailerHeaders();
+                    httpCtx.trailingHeaders = last.trailerHeaders();
                 }
 
-                emitAggregated(dst);
+                emitAggregated(httpCtx, context, dst);
                 continue;
             }
 
             if (msg instanceof HttpContent) {
                 // Body chunk - accumulate
-                appendContent(((HttpContent) msg).content());
+                appendContent(httpCtx, ((HttpContent) msg).content());
             }
         }
 
@@ -119,39 +122,39 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
     /**
      * Starts aggregation for a new HTTP message.
      */
-    private void startAggregation(ProtoContext context, HttpMessage message) {
+    private void startAggregation(HttpContext httpCtx, ProtoContext context, HttpMessage message) {
         // Reset state from previous message
-        if (aggregatedContent != null) {
-            aggregatedContent.free();
+        if (httpCtx.aggregatedContent != null) {
+            httpCtx.aggregatedContent.free();
         }
-        currentMessage = message;
+        httpCtx.currentMessage = message;
         // Initial capacity: min(256, maxContentLength) to avoid requesting more than the limit
         int initCap = Math.min(256, maxContentLength);
-        aggregatedContent = context.byteBufAllocator().buffer(initCap, maxContentLength);
-        trailingHeaders = new HttpHeaders();
-        currentContentLength = 0;
+        httpCtx.aggregatedContent = context.byteBufAllocator().buffer(initCap, maxContentLength);
+        httpCtx.trailingHeaders = new HttpHeaders();
+        httpCtx.currentContentLength = 0;
     }
 
     /**
      * Appends content to the aggregated buffer.
      */
-    private void appendContent(ByteBuf content) {
+    private void appendContent(HttpContext httpCtx, ByteBuf content) {
         if (content == null || content.readableBytes() == 0) {
             return;
         }
 
-        if (currentMessage == null) {
+        if (httpCtx.currentMessage == null) {
             throw new HttpBadRequestException("received HttpContent without preceding HttpMessage");
         }
 
         int readable = content.readableBytes();
-        int newLength = currentContentLength + readable;
+        int newLength = httpCtx.currentContentLength + readable;
         if (newLength > maxContentLength) {
             throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + maxContentLength, maxContentLength, newLength);
         }
 
-        int written = aggregatedContent.writeBuffer(content, readable);
-        currentContentLength += written;
+        int written = httpCtx.aggregatedContent.writeBuffer(content, readable);
+        httpCtx.currentContentLength += written;
     }
 
     /**
@@ -161,43 +164,54 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
      * message based on the actual accumulated content size, and removes
      * {@code Transfer-Encoding} if present (since the body is now complete).
      */
-    private void emitAggregated(ProtoSndQueue<HttpObject> dst) {
-        if (currentMessage == null) {
+    private void emitAggregated(HttpContext httpCtx, ProtoContext context, ProtoSndQueue<HttpObject> dst) {
+        if (httpCtx.currentMessage == null) {
             return;
         }
 
         // Finalize the content buffer
-        aggregatedContent.markWriter();
+        httpCtx.aggregatedContent.markWriter();
 
         // Auto-set Content-Length and remove Transfer-Encoding
-        HttpHeaders headers = currentMessage.headers();
-        headers.set(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(currentContentLength));
+        HttpHeaders headers = httpCtx.currentMessage.headers();
+        headers.set(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(httpCtx.currentContentLength));
         headers.remove(HttpHeaderNames.TRANSFER_ENCODING);
 
-        if (currentMessage instanceof HttpRequest) {
-            HttpRequest req = (HttpRequest) currentMessage;
-            DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(req.protocolVersion(), req.method(), req.uri(), aggregatedContent, req.headers(), trailingHeaders != null ? trailingHeaders : new HttpHeaders());
+        boolean printLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+        if (httpCtx.currentMessage instanceof HttpRequest) {
+            HttpRequest req = (HttpRequest) httpCtx.currentMessage;
+            DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(req.protocolVersion(), req.method(), req.uri(), httpCtx.aggregatedContent, req.headers(), httpCtx.trailingHeaders != null ? httpCtx.trailingHeaders : new HttpHeaders());
             dst.offerMessage(fullReq);
-        } else if (currentMessage instanceof HttpResponse) {
-            HttpResponse resp = (HttpResponse) currentMessage;
-            DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(resp.protocolVersion(), resp.status(), aggregatedContent, resp.headers(), trailingHeaders != null ? trailingHeaders : new HttpHeaders());
+            if (printLog) {
+                logger.info("[HTTP-AGG] channel=" + channelID + " " + req.method() + " " + req.uri() + " contentLength=" + httpCtx.currentContentLength);
+            }
+        } else if (httpCtx.currentMessage instanceof HttpResponse) {
+            HttpResponse resp = (HttpResponse) httpCtx.currentMessage;
+            DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(resp.protocolVersion(), resp.status(), httpCtx.aggregatedContent, resp.headers(), httpCtx.trailingHeaders != null ? httpCtx.trailingHeaders : new HttpHeaders());
             dst.offerMessage(fullResp);
+            if (printLog) {
+                logger.info("[HTTP-AGG] channel=" + channelID + " response status=" + resp.status().code() + " contentLength=" + httpCtx.currentContentLength);
+            }
         }
 
         // Reset but don't free aggregatedContent - it's now owned by the full message
-        currentMessage = null;
-        aggregatedContent = null;
-        trailingHeaders = null;
-        currentContentLength = 0;
+        httpCtx.currentMessage = null;
+        httpCtx.aggregatedContent = null;
+        httpCtx.trailingHeaders = null;
+        httpCtx.currentContentLength = 0;
     }
 
     @Override
     public void onClose(ProtoContext context) {
-        if (aggregatedContent != null) {
-            aggregatedContent.free();
-            aggregatedContent = null;
+        HttpContext httpCtx = context.context(HttpContext.class);
+        if (httpCtx != null) {
+            if (httpCtx.aggregatedContent != null) {
+                httpCtx.aggregatedContent.free();
+                httpCtx.aggregatedContent = null;
+            }
+            httpCtx.currentMessage = null;
+            httpCtx.trailingHeaders = null;
         }
-        currentMessage = null;
-        trailingHeaders = null;
     }
 }

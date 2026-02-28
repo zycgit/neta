@@ -34,21 +34,19 @@ import net.hasor.neta.channel.*;
  * <p>
  * For {@link FullHttpRequest}, the complete message (request-line + headers + body) is
  * encoded in a single call.
- * <p><b>Thread safety:</b> This handler maintains internal state ({@code chunkedEncoding})
- * and is intended to be used per-connection. Do not share a single instance across
- * multiple connections/pipelines.
+ * <p><b>Thread safety:</b> This handler is stateless. Per-connection state is stored in
+ * {@link HttpContext} on the {@link ProtoContext}, making it safe to share a single
+ * instance across multiple connections/pipelines.
  * <p>Pipeline usage:</p>
  * <pre>
  *   ctx.addLastEncoder("http-request", new HttpRequestEncoder());
  * </pre>
  */
 public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
-    private static final byte[]              CRLF            = { '\r', '\n' };
-    private static final byte[]              ZERO_CRLF_CRLF  = { '0', '\r', '\n', '\r', '\n' };
-    private static final int                 SCRATCH_SIZE    = 2048;
-    private static final ThreadLocal<byte[]> SCRATCH_BUF     = ThreadLocal.withInitial(() -> new byte[SCRATCH_SIZE]);
-    //
-    private              boolean             chunkedEncoding = false;
+    private static final byte[]              CRLF           = { '\r', '\n' };
+    private static final byte[]              ZERO_CRLF_CRLF = { '0', '\r', '\n', '\r', '\n' };
+    private static final int                 SCRATCH_SIZE   = 2048;
+    private static final ThreadLocal<byte[]> SCRATCH_BUF    = ThreadLocal.withInitial(() -> new byte[SCRATCH_SIZE]);
 
     /**
      * Tries to compose the entire request head (request-line + headers + CRLF) into the
@@ -122,7 +120,13 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     @Override
+    public void onInit(ProtoContext context) {
+        HttpContext.getOrCreate(context);
+    }
+
+    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
+        HttpContext httpCtx = context.context(HttpContext.class);
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
             if (msg == null) {
@@ -131,16 +135,16 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
 
             if (msg instanceof FullHttpRequest) {
                 // Encode complete request in one go
-                encodeFullRequest(context, (FullHttpRequest) msg, dst);
+                encodeFullRequest(httpCtx, context, (FullHttpRequest) msg, dst);
             } else if (msg instanceof HttpRequest) {
                 // Encode request line and headers
-                encodeRequestHead(context, (HttpRequest) msg, dst);
+                encodeRequestHead(httpCtx, context, (HttpRequest) msg, dst);
             } else if (msg instanceof LastHttpContent) {
                 // Encode last content chunk
-                encodeLastContent(context, (LastHttpContent) msg, dst);
+                encodeLastContent(httpCtx, context, (LastHttpContent) msg, dst);
             } else if (msg instanceof HttpContent) {
                 // Encode content chunk
-                encodeContent(context, (HttpContent) msg, dst);
+                encodeContent(httpCtx, context, (HttpContent) msg, dst);
             }
         }
 
@@ -150,7 +154,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     /**
      * Encodes a complete HTTP request (request-line + headers + body) into bytes.
      */
-    private void encodeFullRequest(ProtoContext context, FullHttpRequest request, ProtoSndQueue<ByteBuf> dst) {
+    private void encodeFullRequest(HttpContext httpCtx, ProtoContext context, FullHttpRequest request, ProtoSndQueue<ByteBuf> dst) {
         ByteBuf content = request.content();
         int bodyLen = (content != null) ? content.readableBytes() : 0;
 
@@ -177,16 +181,16 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
         dst.offerMessage(buf);
 
-        chunkedEncoding = false;
+        httpCtx.reqChunkedEncoding = false;
     }
 
     /**
      * Encodes the request-line and headers.
      */
-    private void encodeRequestHead(ProtoContext context, HttpRequest request, ProtoSndQueue<ByteBuf> dst) {
+    private void encodeRequestHead(HttpContext httpCtx, ProtoContext context, HttpRequest request, ProtoSndQueue<ByteBuf> dst) {
         // Determine if chunked
         String te = request.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-        chunkedEncoding = StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
+        httpCtx.reqChunkedEncoding = StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
 
         int headLen = composeRequestHead(request);
         ByteBuf buf;
@@ -209,13 +213,13 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     /**
      * Encodes a body content chunk.
      */
-    private void encodeContent(ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
+    private void encodeContent(HttpContext httpCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
         ByteBuf body = content.content();
         if (body == null || body.readableBytes() == 0) {
             return;
         }
 
-        if (chunkedEncoding) {
+        if (httpCtx.reqChunkedEncoding) {
             // Chunked: SIZE CRLF DATA CRLF
             ByteBuf buf = context.byteBufAllocator().buffer(body.readableBytes() + 32);
             writeHexInt(buf, body.readableBytes());
@@ -236,10 +240,10 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     /**
      * Encodes the last body content chunk and optional trailing headers.
      */
-    private void encodeLastContent(ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<ByteBuf> dst) {
+    private void encodeLastContent(HttpContext httpCtx, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<ByteBuf> dst) {
         ByteBuf body = lastContent.content();
 
-        if (chunkedEncoding) {
+        if (httpCtx.reqChunkedEncoding) {
             if (body != null && body.readableBytes() > 0) {
                 ByteBuf chunkBuf = context.byteBufAllocator().buffer(body.readableBytes() + 32);
                 writeHexInt(chunkBuf, body.readableBytes());
@@ -275,7 +279,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
 
         // Reset state
-        chunkedEncoding = false;
+        httpCtx.reqChunkedEncoding = false;
     }
 
     /**

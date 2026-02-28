@@ -25,6 +25,7 @@ public class DefaultLastHttpContent implements LastHttpContent {
     public static final LastHttpContent EMPTY_LAST_CONTENT = new DefaultLastHttpContent(ByteBuf.EMPTY, HttpHeaders.EMPTY);
     private final       ByteBuf         content;
     private final       HttpHeaders     trailingHeaders;
+    private             int             streamId;
 
     /** Creates a new last content with empty body and no trailing headers. */
     public DefaultLastHttpContent() {
@@ -53,6 +54,17 @@ public class DefaultLastHttpContent implements LastHttpContent {
         }
         this.content = content;
         this.trailingHeaders = trailingHeaders;
+    }
+
+    @Override
+    public int streamId() {
+        return streamId;
+    }
+
+    @Override
+    public HttpObject streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
     }
 
     @Override

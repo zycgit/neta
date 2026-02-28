@@ -37,9 +37,9 @@ import net.hasor.neta.channel.*;
  */
 public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFrame> {
     private static final int     XOR_SCRATCH_SIZE = 4096;
-    private final        byte[]  maskKeyBuf       = new byte[4]; // Reusable mask key buffer (avoids per-frame allocation)
-    private final        byte[]  headerBuf        = new byte[14]; // Reusable header buffer (2 base + 8 ext-len + 4 mask-key)
-    private final        byte[]  xorScratch       = new byte[XOR_SCRATCH_SIZE]; // Reusable scratch for chunked XOR unmask
+    private final        byte[]  maskKeyBuf       = new byte[4];
+    private final        byte[]  headerBuf        = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
+    private final        byte[]  xorScratch       = new byte[XOR_SCRATCH_SIZE];
     private              ByteBuf accumulator;
 
     @Override
@@ -57,7 +57,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
         }
 
         // Consume fully-read ByteBuf messages from the queue
-        accumulator.markReader();
+        this.accumulator.markReader();
 
         return ProtoStatus.Next;
     }
@@ -67,7 +67,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
      * @return true if a complete frame was decoded and emitted
      */
     private boolean decodeFrame(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst) {
-        int readable = accumulator.readableBytes();
+        int readable = this.accumulator.readableBytes();
         // Need at least 2 header bytes
         if (readable < 2) {
             return false;
@@ -75,8 +75,8 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
 
         // Bulk-read header bytes (max 14: 2 base + 8 extended-len + 4 mask-key)
         int peekLen = Math.min(readable, 14);
-        byte[] hdr = headerBuf;
-        accumulator.getBytes(0, hdr, 0, peekLen);
+        byte[] hdr = this.headerBuf;
+        this.accumulator.getBytes(0, hdr, 0, peekLen);
 
         byte byte0 = hdr[0];
         byte byte1 = hdr[1];
@@ -117,12 +117,12 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
         }
 
         // All bytes are available – skip the entire header at once
-        accumulator.skipReadableBytes(headerSize - (masked ? 4 : 0));
+        this.accumulator.skipReadableBytes(headerSize - (masked ? 4 : 0));
 
         byte[] maskKey = null;
         if (masked) {
-            accumulator.readBytes(maskKeyBuf, 0, 4);
-            maskKey = maskKeyBuf;
+            this.accumulator.readBytes(this.maskKeyBuf, 0, 4);
+            maskKey = this.maskKeyBuf;
         }
 
         int len = (int) payloadLen;
@@ -137,33 +137,33 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
             int remaining = len;
             while (remaining > 0) {
                 int chunk = Math.min(remaining, XOR_SCRATCH_SIZE);
-                accumulator.readBytes(xorScratch, 0, chunk);
+                this.accumulator.readBytes(this.xorScratch, 0, chunk);
                 // Unrolled XOR unmask (XOR_SCRATCH_SIZE is multiple of 4, so alignment is guaranteed per chunk)
                 int j = 0;
                 int chunk4 = chunk & ~3;
                 for (; j < chunk4; j += 4) {
-                    xorScratch[j] ^= maskKey[0];
-                    xorScratch[j + 1] ^= maskKey[1];
-                    xorScratch[j + 2] ^= maskKey[2];
-                    xorScratch[j + 3] ^= maskKey[3];
+                    this.xorScratch[j] ^= maskKey[0];
+                    this.xorScratch[j + 1] ^= maskKey[1];
+                    this.xorScratch[j + 2] ^= maskKey[2];
+                    this.xorScratch[j + 3] ^= maskKey[3];
                 }
                 for (; j < chunk; j++) {
-                    xorScratch[j] ^= maskKey[j & 3];
+                    this.xorScratch[j] ^= maskKey[j & 3];
                 }
-                contentBuf.writeBytes(xorScratch, 0, chunk);
+                contentBuf.writeBytes(this.xorScratch, 0, chunk);
                 remaining -= chunk;
             }
             contentBuf.markWriter();
         } else {
             // For unmasked frames: direct buffer-to-buffer copy (avoids intermediate byte[])
             contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
-            accumulator.readBuffer(contentBuf, len);
+            this.accumulator.readBuffer(contentBuf, len);
             contentBuf.markWriter();
         }
 
         WebSocketOpcode opcode = WebSocketOpcode.of(opcodeVal);
         // Copy maskKey since maskKeyBuf is reused across frames
-        byte[] frameMaskKey = masked ? new byte[] { maskKeyBuf[0], maskKeyBuf[1], maskKeyBuf[2], maskKeyBuf[3] } : null;
+        byte[] frameMaskKey = masked ? new byte[] { this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3] } : null;
         WebSocketFrame frame = new DefaultWebSocketFrame(opcode, fin, masked, frameMaskKey, contentBuf);
         dst.offerMessage(frame);
         return true;
@@ -171,9 +171,9 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
 
     @Override
     public void onClose(ProtoContext context) {
-        if (accumulator != null) {
-            accumulator.free();
-            accumulator = null;
+        if (this.accumulator != null) {
+            this.accumulator.free();
+            this.accumulator = null;
         }
     }
 }

@@ -23,6 +23,26 @@ package net.hasor.neta.codec.http;
  *   <li>Zero or more {@link HttpContent} - body chunks</li>
  *   <li>{@link LastHttpContent} - marks the end of the message</li>
  * </ol>
+ * <p>
+ * HTTP/2 transparency: objects decoded from HTTP/2 carry the originating stream ID
+ * via {@link #streamId()}, enabling protocol-agnostic proxy and routing logic.
+ * HTTP/1.x objects always return {@code 0}.
  */
 public interface HttpObject {
+
+    /**
+     * Returns the HTTP/2 stream ID associated with this object,
+     * or {@code 0} if not applicable (HTTP/1.x or connection-level).
+     */
+    default int streamId() {
+        return 0;
+    }
+
+    /**
+     * Sets the HTTP/2 stream ID. Returns {@code this} for chaining.
+     * The default implementation is a no-op (HTTP/1.x objects ignore the call).
+     */
+    default HttpObject streamId(int streamId) {
+        return this;
+    }
 }

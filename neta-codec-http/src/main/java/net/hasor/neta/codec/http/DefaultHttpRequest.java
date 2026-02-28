@@ -19,6 +19,7 @@ package net.hasor.neta.codec.http;
  */
 public class DefaultHttpRequest implements HttpRequest {
     private final HttpHeaders headers;
+    private       int         streamId;
     private       HttpVersion version;
     private       HttpMethod  method;
     private       String      uri;
@@ -103,6 +104,17 @@ public class DefaultHttpRequest implements HttpRequest {
             throw new IllegalArgumentException("uri must not be null");
         }
         this.uri = uri;
+        return this;
+    }
+
+    @Override
+    public int streamId() {
+        return streamId;
+    }
+
+    @Override
+    public HttpObject streamId(int streamId) {
+        this.streamId = streamId;
         return this;
     }
 
