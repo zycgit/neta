@@ -18,6 +18,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.event.HttpStreamResetEvent;
 
 /**
  * A server-side HTTP/2 codec that combines frame-level and semantic-level
@@ -84,6 +85,20 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     /** Builds a WINDOW_UPDATE frame with the given stream ID and increment. */
     private static Http2Frame buildWindowUpdate(int streamId, int increment) {
         return Http2FrameToHttpDecoder.buildWindowUpdate(streamId, increment);
+    }
+
+    /** Maps a semantic {@link HttpStreamResetEvent} error-code sentinel to the corresponding HTTP/2 wire error code (RFC 9113 §7). */
+    private static long resolveH2ErrorCode(long code) {
+        if (code == HttpStreamResetEvent.CANCEL) {
+            return Http2ErrorCode.CANCEL;
+        } else if (code == HttpStreamResetEvent.INTERNAL_ERROR) {
+            return Http2ErrorCode.INTERNAL_ERROR;
+        } else if (code == HttpStreamResetEvent.REFUSED) {
+            return Http2ErrorCode.REFUSED_STREAM;
+        } else if (code < 0) {
+            return Http2ErrorCode.INTERNAL_ERROR; // unknown sentinel → INTERNAL_ERROR
+        }
+        return code;
     }
 
     @Override
@@ -165,6 +180,16 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
                 logger.info("[H2-SND] polled " + wuCount + " WINDOW_UPDATE frames");
             }
 
+            // RST_STREAM frames are injected directly into sndUp via context.sendData(Http2Frame).
+            int rstCount = 0;
+            while (sndUp.hasMore() && sndUp.peekMessage() instanceof Http2Frame) {
+                this.bridgeQueue.offerMessage((Http2Frame) sndUp.takeMessage());
+                rstCount++;
+            }
+            if (rstCount > 0 && context.getConfig() != null && context.getConfig().isPrintLog()) {
+                logger.info("[H2-SND] flushed " + rstCount + " RST_STREAM frame(s)");
+            }
+
             // Response data: append to same bridgeQueue if available
             if (sndUp.hasMore()) {
                 // Prefer streamId carried on the HttpObject (proxy / async scenario);
@@ -233,12 +258,62 @@ public class Http2ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        if (event.getEventType() == HttpStreamResetEvent.class) {
+            HttpStreamResetEvent reset = (HttpStreamResetEvent) event.getData();
+            long sid = reset.streamId();
+            if (sid > 0 && sid <= Integer.MAX_VALUE) {
+                int streamId = (int) sid;
+                long errorCode = resolveH2ErrorCode(reset.errorCode());
+                // Clean up stream state and orphaned response-queue entry
+                Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
+                decoderState.closeStream(streamId);
+                decoderState.removeFromResponseQueue(streamId);
+                // Inject RST_STREAM frame directly into the SND pipeline.
+                context.sendData(buildRstStreamFrame(streamId, errorCode));
+                if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                    logger.info("[H2-SND] ch=" + context.getChannel().getChannelId() + " RST_STREAM queued stream=" + streamId + " errorCode=0x" + Long.toHexString(errorCode) + " (via UserEvent)");
+                }
+            }
+            return false; // event consumed
+        }
+        return true;
+    }
+
+    @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
             return this.frameDecoder.onError(context, e, eh);
         } else {
+            // SND-side error: reset only the current stream rather than closing the entire connection.
+            Http2EncoderContent encoderState = context.context(Http2EncoderContent.class);
+            int streamId = encoderState != null ? encoderState.currentStreamId() : 0;
+            if (streamId > 0) {
+                try {
+                    Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
+                    decoderState.closeStream(streamId);
+                    decoderState.removeFromResponseQueue(streamId);
+                    context.sendData(buildRstStreamFrame(streamId, Http2ErrorCode.INTERNAL_ERROR));
+                    logger.warn("[H2-SND] ch=" + context.getChannel().getChannelId() + " encoding error on stream=" + streamId + ", queued RST_STREAM(INTERNAL_ERROR): " + e.getMessage());
+                    return ProtoStatus.Next;
+                } catch (Throwable t) {
+                    // Fall through to connection-level error handling
+                }
+            }
             return this.frameEncoder.onError(context, e, eh);
         }
+    }
+
+    // ─── helpers ──────────────────────────────────────────────────────────────
+
+    /** Builds an RST_STREAM {@link Http2Frame} for the given stream ID and H2 error code. */
+    private static Http2Frame buildRstStreamFrame(int streamId, long errorCode) {
+        byte[] payload = new byte[4];
+        payload[0] = (byte) ((errorCode >> 24) & 0xFF);
+        payload[1] = (byte) ((errorCode >> 16) & 0xFF);
+        payload[2] = (byte) ((errorCode >> 8) & 0xFF);
+        payload[3] = (byte) (errorCode & 0xFF);
+        return Http2Frame.rstStream(streamId, payload);
     }
 
     @Override

@@ -89,16 +89,16 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
 
         while (src.hasMore()) {
             ByteBuf msg = src.takeMessage();
-            if (msg == null || msg.readableBytes() == 0) {
+            if (msg == null) {
                 continue;
             }
 
             // Extract stream metadata
             long streamId;
-            boolean fin;
+            // Empty ByteBuf is the FIN signal delivered by QUIC after reassembly completes.
+            boolean fin = msg.readableBytes() == 0;
             if (streamChannel != null) {
                 streamId = streamChannel.getStreamId();
-                fin = streamChannel.isRcvFinReceived();
             } else {
                 long[] meta = fallbackMeta.poll();
                 if (meta != null) {
@@ -112,6 +112,13 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
             }
 
             int dataLen = msg.readableBytes();
+            // Empty ByteBuf is the FIN signal delivered by QUIC after reassembly completes.
+            if (dataLen == 0) {
+                if (fin) {
+                    parseFrames(context, dst, streamId, new byte[0], 0, 0, true, isPrintLog);
+                }
+                continue;
+            }
             byte[] data = new byte[dataLen];
             if (dataLen > 0) {
                 msg.getBytes(0, data, 0, dataLen);

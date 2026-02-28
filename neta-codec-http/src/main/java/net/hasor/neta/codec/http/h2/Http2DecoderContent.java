@@ -86,6 +86,11 @@ class Http2DecoderContent {
         }
     }
 
+    /** Removes any pending response-stream-ID entry for the given stream from the FIFO queue. */
+    void removeFromResponseQueue(int streamId) {
+        responseStreamIdQueue.removeIf(id -> id == streamId);
+    }
+
     /** Adjusts the send window of the given stream by {@code increment} bytes. */
     void adjustStreamSendWindow(int streamId, int increment) {
         Http2Stream stream = streams.get(streamId);

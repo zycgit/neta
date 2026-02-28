@@ -73,6 +73,11 @@ class Http3DecoderContent {
         }
     }
 
+    /** Removes any pending response-stream-ID entry for the given stream from the FIFO queue. */
+    void removeFromResponseQueue(long streamId) {
+        responseStreamIdQueue.removeIf(id -> id == streamId);
+    }
+
     /** Decodes a QPACK-compressed header block. */
     HttpHeaders decodeHeaders(byte[] data, int offset, int length) {
         return qpackDecoder.decode(data, offset, length);

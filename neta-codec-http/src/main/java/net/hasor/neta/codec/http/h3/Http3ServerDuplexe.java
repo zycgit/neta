@@ -14,9 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.quic.QuicStreamChannel;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.event.HttpStreamResetEvent;
 
 /**
  * A server-side HTTP/3 codec that combines frame-level and semantic-level
@@ -34,11 +37,12 @@ import net.hasor.neta.codec.http.HttpObject;
  * </pre>
  */
 public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-    private final Http3FrameDecoder       frameDecoder;
-    private final Http3FrameToHttpDecoder frameToHttpDecoder;
-    private final Http3HttpToFrameEncoder httpToFrameEncoder;
-    private final Http3FrameEncoder       frameEncoder;
-    private final Http3FrameBridgeQueue   bridgeQueue = new Http3FrameBridgeQueue();
+    private static final Logger                  logger      = Logger.getLogger(Http3ServerDuplexe.class);
+    private final        Http3FrameDecoder       frameDecoder;
+    private final        Http3FrameToHttpDecoder frameToHttpDecoder;
+    private final        Http3HttpToFrameEncoder httpToFrameEncoder;
+    private final        Http3FrameEncoder       frameEncoder;
+    private final        Http3FrameBridgeQueue   bridgeQueue = new Http3FrameBridgeQueue();
 
     /** Creates a server-side HTTP/3 codec with default QPACK settings (tableSize=4096, maxHeaderListSize=65536). */
     public Http3ServerDuplexe() {
@@ -58,6 +62,20 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         this.frameToHttpDecoder = new Http3FrameToHttpDecoder(true, maxTableSize, maxHeaderListSize);
         this.httpToFrameEncoder = new Http3HttpToFrameEncoder(true, maxTableSize);
         this.frameEncoder = new Http3FrameEncoder();
+    }
+
+    /** Maps a semantic {@link HttpStreamResetEvent} error-code sentinel to the corresponding HTTP/3 application error code (RFC 9114 §8.1). */
+    private static long resolveH3ErrorCode(long code) {
+        if (code == HttpStreamResetEvent.CANCEL) {
+            return Http3ErrorCode.H3_REQUEST_CANCELLED;
+        } else if (code == HttpStreamResetEvent.INTERNAL_ERROR) {
+            return Http3ErrorCode.H3_INTERNAL_ERROR;
+        } else if (code == HttpStreamResetEvent.REFUSED) {
+            return Http3ErrorCode.H3_REQUEST_REJECTED;
+        } else if (code < 0) {
+            return Http3ErrorCode.H3_INTERNAL_ERROR; // unknown sentinel → H3_INTERNAL_ERROR
+        }
+        return code;
     }
 
     @Override
@@ -111,9 +129,52 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         if (isRcv) {
             return this.frameDecoder.onError(context, e, eh);
         } else {
+            // SND-side error: send QUIC RESET_STREAM on this stream only.
+            SoChannel<?> channel = context.getChannel();
+            if (channel instanceof QuicStreamChannel) {
+                try {
+                    Http3DecoderContent decoderState = context.context(Http3DecoderContent.class);
+                    Http3EncoderContent encoderState = context.context(Http3EncoderContent.class);
+                    long streamId = encoderState != null ? encoderState.responseStreamId() : -1L;
+                    if (streamId >= 0) {
+                        decoderState.closeStream(streamId);
+                        decoderState.removeFromResponseQueue(streamId);
+                    }
+                    ((QuicStreamChannel) channel).sendReset(Http3ErrorCode.H3_INTERNAL_ERROR, 0L);
+                    logger.warn("[H3-SND] ch=" + channel.getChannelId() + " encoding error, sent RESET_STREAM(H3_INTERNAL_ERROR): " + e.getMessage());
+                    return ProtoStatus.Next;
+                } catch (Throwable t) {
+                    // Fall through to transport-level error handling
+                }
+            }
             return this.frameEncoder.onError(context, e, eh);
         }
     }
+
+    @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        if (event.getEventType() == HttpStreamResetEvent.class) {
+            HttpStreamResetEvent reset = (HttpStreamResetEvent) event.getData();
+            long streamId = reset.streamId();
+            long errorCode = resolveH3ErrorCode(reset.errorCode());
+            // Clean up stream state and orphaned response-queue entry
+            Http3DecoderContent decoderState = context.context(Http3DecoderContent.class);
+            decoderState.closeStream(streamId);
+            decoderState.removeFromResponseQueue(streamId);
+            // Delegate to the QUIC transport layer to send RESET_STREAM
+            SoChannel<?> channel = context.getChannel();
+            if (channel instanceof QuicStreamChannel) {
+                ((QuicStreamChannel) channel).sendReset(errorCode, 0L);
+            }
+            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+                logger.info("[H3-SND] ch=" + channel.getChannelId() + " RESET_STREAM errorCode=0x" + Long.toHexString(errorCode) + " (via UserEvent)");
+            }
+            return false; // event consumed
+        }
+        return true;
+    }
+
+    // ─── helpers ──────────────────────────────────────────────────────────────
 
     @Override
     public void onClose(ProtoContext context) {
