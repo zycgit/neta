@@ -224,6 +224,7 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
         this.closeFuture.onCompleted(f -> listener.onEvent(this));
     }
 
+    /** Registers a listener to be notified when a new channel is accepted. */
     public void onAccept(SoChannelListener<SoChannel<?>> listener) {
         if (listener != null) {
             this.onAcceptListeners.add(listener);
@@ -243,14 +244,12 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
                 this.acceptLock.notifyAll();
             }
 
-            this.context.submitSoTask(new SoDelayTask(0), this).onCompleted(f -> {
-                this.onAcceptListeners.forEach(listener -> {
-                    try {
-                        listener.onEvent(channel);
-                    } catch (Exception e) {
-                        logger.error("onAccept error " + e.getMessage(), e);
-                    }
-                });
+            this.onAcceptListeners.forEach(listener -> {
+                try {
+                    listener.onEvent(channel);
+                } catch (Exception e) {
+                    logger.error("onAccept error " + e.getMessage(), e);
+                }
             });
         }
     }
