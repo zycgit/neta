@@ -101,15 +101,11 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     public void onActive(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
-        ProtoSndQueue<RCV_DOWN> rcvDown = (ProtoSndQueue<RCV_DOWN>) (this.next == null ? this.chainRoot.getTailRcvDown() : this.next.rcvUp);
-        ProtoSndQueue<SND_DOWN> sndDown = (ProtoSndQueue<SND_DOWN>) (this.previous == null ? this.chainRoot.getHeadSndDown() : this.previous.sndUp);
         try {
             ctx.setStackName(this.name);
-            this.handler.onActive(protoCtx, rcvDown, sndDown);
+            this.handler.onActive(protoCtx);
         } finally {
             ctx.setStackName(null);
-            rcvDown.sndSubmit();
-            sndDown.sndSubmit();
         }
     }
 

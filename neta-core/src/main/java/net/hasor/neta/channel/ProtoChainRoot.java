@@ -35,9 +35,6 @@ class ProtoChainRoot implements ProtoStack<Object> {
     private              ProtoInvocation<?, ?, ?, ?> head;
     private              ProtoInvocation<?, ?, ?, ?> tail;
     private              long                        channelID;
-    private final        boolean                     branchMode;
-    private final        ArrayList<Object[]>         cachedRcvReturnData;
-    private final        ArrayList<Object[]>         cachedSndReturnData;
 
     ProtoChainRoot(SoConfig protoConf) {
         this(protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), false);
@@ -47,8 +44,6 @@ class ProtoChainRoot implements ProtoStack<Object> {
         this.tailRcvDown = new ProtoQueue<>(rcvSlotSize < 0 ? -1 : rcvSlotSize);
         this.headSndDown = new ProtoQueue<>(sndSlotSize < 0 ? -1 : sndSlotSize);
         this.branchMode = branchMode;
-        this.cachedRcvReturnData = new ArrayList<>();
-        this.cachedSndReturnData = new ArrayList<>();
     }
 
     public ProtoQueue<?> getTailRcvDown() {
@@ -137,7 +132,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     @Override
-    public Object[] onActive(ProtoContext protoCtx) throws Throwable {
+    public void onActive(ProtoContext protoCtx) throws Throwable {
         try {
             ProtoInvocation<?, ?, ?, ?> current = this.head;
             while (current != null) {
@@ -149,15 +144,6 @@ class ProtoChainRoot implements ProtoStack<Object> {
                     current = current.next;
                 }
             }
-
-            // Collect headSndDown data produced during onActive
-            int queueSize = this.headSndDown.queueSize();
-            if (queueSize > 0) {
-                Object[] take = this.headSndDown.takeMessageToArray(queueSize);
-                this.headSndDown.rcvSubmit();
-                return take;
-            }
-            return EMPTY;
         } finally {
             ((ProtoContextService) protoCtx).clearFlash();
         }

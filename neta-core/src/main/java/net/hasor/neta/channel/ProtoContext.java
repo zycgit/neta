@@ -24,10 +24,6 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @version : 2023-09-24
  */
 public interface ProtoContext {
-    String CURRENT_PROTO_IN_RCV     = ProtoContext.class.getName() + "_CURRENT_PROTO_IN_RCV";
-    String CURRENT_PROTO_IN_SND     = ProtoContext.class.getName() + "_CURRENT_PROTO_IN_SND";
-    String CURRENT_PROTO_STACK_NAME = ProtoContext.class.getName() + "_CURRENT_PROTO_STACK_NAME";
-
     /** global config */
     NetConfig getConfig();
 
@@ -44,10 +40,6 @@ public interface ProtoContext {
      * @return the name of the current protocol stack
      */
     String getStackName();
-
-    String findNextStack(String withName);
-
-    String findPreviousStack(String withName);
 
     /** Get the attachment for {@link ProtoContext} */
     <T> T context(Class<T> attachment);

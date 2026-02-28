@@ -37,9 +37,8 @@ public interface ProtoStack<OUT> {
     /**
      * when connected, before any rcv/snd
      * @param protoCtx protoCtx
-     * @return data produced during activation (from headSndDown), to be written to the remote peer
      */
-    Object[] onActive(ProtoContext protoCtx) throws Throwable;
+    void onActive(ProtoContext protoCtx) throws Throwable;
 
     /**
      * Processing received data

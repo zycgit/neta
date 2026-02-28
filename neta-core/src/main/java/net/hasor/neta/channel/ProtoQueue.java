@@ -25,10 +25,11 @@ import java.util.List;
  * @version : 2023-09-24
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
-    private final int     capacity;
-    private final List<T> linkedList;
-    private final List<T> offerTemp;
-    protected     int     takeCount;
+    private static final Object[] EMPTY_ARRAY = new Object[0];
+    private final        int      capacity;
+    private final        List<T>  linkedList;
+    private final        List<T>  offerTemp;
+    protected            int      takeCount;
 
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
@@ -198,8 +199,6 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         this.takeCount += fixCnt;
         return result;
     }
-
-    private static final Object[] EMPTY_ARRAY = new Object[0];
 
     @Override
     public String toString() {
