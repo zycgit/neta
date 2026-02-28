@@ -56,27 +56,8 @@ import net.hasor.neta.codec.ssl.SslContext;
  * @see Http2PrefaceRouting
  * @see SslContext
  */
-public class HttpsAlpnRouting implements ProtoRouting<ByteBuf> {
-    /** Branch key for HTTP/2 over TLS (ALPN protocol identifier "h2"). */
-    public static final  String BRANCH_H2 = "h2";
-    private static final Logger logger    = Logger.getLogger(HttpsAlpnRouting.class);
-    private final        String defaultBranch;
-
-    /**
-     * Creates an ALPN routing with the specified default branch.
-     * <p>
-     * When the negotiated ALPN protocol is "h2", the {@link #BRANCH_H2} branch key is returned.
-     * For all other negotiated protocols (including "http/1.1", null, or unknown),
-     * the {@code defaultBranch} is returned.
-     * @param defaultBranch branch key to use when the ALPN result is not "h2" (e.g. "http/1.1")
-     * @throws IllegalArgumentException if defaultBranch is null or empty
-     */
-    public HttpsAlpnRouting(String defaultBranch) {
-        if (defaultBranch == null || defaultBranch.isEmpty()) {
-            throw new IllegalArgumentException("defaultBranch must not be null or empty.");
-        }
-        this.defaultBranch = defaultBranch;
-    }
+public class Http2OverTlsRouting implements ProtoRouting<ByteBuf>, HttpRoutingKey {
+    private static final Logger logger = Logger.getLogger(Http2OverTlsRouting.class);
 
     @Override
     public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<Object> rcvDown) {
@@ -91,7 +72,7 @@ public class HttpsAlpnRouting implements ProtoRouting<ByteBuf> {
         if (StringUtils.equals("h2", protocol)) {
             branch = BRANCH_H2;
         } else {
-            branch = this.defaultBranch;
+            branch = BRANCH_H1;
         }
 
         if (printLog) {

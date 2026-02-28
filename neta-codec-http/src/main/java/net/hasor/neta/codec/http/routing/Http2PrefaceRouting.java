@@ -54,25 +54,10 @@ import net.hasor.neta.channel.ProtoSndQueue;
  *   ctx.addLast("protocol-detect", builder.build(ctx));
  * </pre>
  */
-public class Http2PrefaceRouting implements ProtoRouting<ByteBuf> {
-    /** Branch key for HTTP/2 cleartext (Prior Knowledge). */
-    public static final  String BRANCH_H2C       = "h2c";
+public class Http2PrefaceRouting implements ProtoRouting<ByteBuf>, HttpRoutingKey {
     private static final Logger logger           = Logger.getLogger(Http2PrefaceRouting.class);
     /** Minimum bytes required for protocol detection. */
     private static final int    MIN_DETECT_BYTES = 4;
-
-    private final String defaultBranch;
-
-    /**
-     * Creates an h2c detection routing with the specified default branch.
-     * @param defaultBranch branch key to use when the data does NOT match h2c (e.g. "default", "http")
-     */
-    public Http2PrefaceRouting(String defaultBranch) {
-        if (defaultBranch == null || defaultBranch.isEmpty()) {
-            throw new IllegalArgumentException("defaultBranch must not be null or empty.");
-        }
-        this.defaultBranch = defaultBranch;
-    }
 
     @Override
     public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<Object> rcvDown) {
@@ -96,10 +81,9 @@ public class Http2PrefaceRouting implements ProtoRouting<ByteBuf> {
                 && (first.getByte(2) & 0xFF) == 0x49 // 'I'
                 && (first.getByte(3) & 0xFF) == 0x20 // ' '
         ) {
-            branch = BRANCH_H2C;
+            branch = BRANCH_H2; // http/2
         } else {
-            // Not h2c → use default branch
-            branch = this.defaultBranch;
+            branch = BRANCH_H1; // http/1.1
         }
 
         if (printLog) {
