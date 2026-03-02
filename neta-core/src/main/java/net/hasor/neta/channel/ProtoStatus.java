@@ -53,4 +53,11 @@ public enum ProtoStatus {
      * </pre>
      */
     Stop,
+
+    /**
+     * Fatal error: the connection has already been closed (via {@code channel.close()}).
+     * The SND lifecycle is skipped entirely. Returned by the framework when
+     * {@code onError} itself throws a secondary exception.
+     */
+    Abort,
 }

@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.io.IOException;
 import java.io.PrintStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
@@ -24,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.concurrent.future.Futures;
 import net.hasor.cobble.concurrent.timer.Timeout;
 import net.hasor.cobble.concurrent.timer.TimerTask;
 import net.hasor.cobble.logging.Logger;
@@ -36,10 +36,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2023-09-24
  */
 public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<NetChannel> {
-    private static final Logger              logger       = Logger.getLogger(NetChannel.class);
-    /** Pre-completed no-op future to avoid BasicFuture allocation for internal RCV sends */
-    @SuppressWarnings("unchecked")
-    private static final Future<NetChannel>  NOOP_FUTURE  = (Future<NetChannel>) (Future<?>) NoopFuture.INSTANCE;
+    private static final Logger              logger              = Logger.getLogger(NetChannel.class);
+    private static final ByteBuf[]           EMPTY_BYTEBUF_ARRAY = new ByteBuf[0];
     protected final      AsyncChannel        asyncChannel;
     protected final      NetListen           forListen;
     protected final      SoSndContext        wContext;
@@ -49,13 +47,13 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     protected final      AtomicBoolean       closeStatus;
     protected final      Future<NetChannel>  closeFuture;
     protected final      Object              readTimeoutSyncObj;
-    protected volatile   int                 readWaiters;
     //
     final                ProtoContextService protoCtx;
     private final        long                channelId;
-    private final        Object[]            singleRcvBuf = new Object[1]; // reusable 1-element array for single RCV
+    private final        Object[]            singleRcvBuf        = new Object[1]; // reusable 1-element array for single RCV
+    protected volatile   int                 readWaiters;
 
-    protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService soContext) throws IOException {
+    protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService soContext) {
         this.channelId = channelId;
         this.asyncChannel = asyncChannel;
         this.forListen = forListen;
@@ -157,6 +155,9 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     @Override
     public Future<NetChannel> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
+            if (this.soContext.getConfig().isPrintLog()) {
+                logger.info("[NET] ch=" + this.channelId + " close()");
+            }
             if (this.asyncChannel.isOpen()) {
                 SoCloseTask task = new SoCloseTask(this.channelId, this.soContext, false);
                 this.soContext.submitSoTask(task, this).onCompleted(f -> {
@@ -195,13 +196,6 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.monitor.getSndCounterBytes();
     }
 
-    /* Write data produced during onActive to socket */
-    void notifyActiveData(Object[] activeData) {
-        if (activeData != null && activeData.length > 0) {
-            appendSoSndTask(toSoSndData(NOOP_FUTURE, activeData));
-        }
-    }
-
     /* Receive data without concurrency */
     protected void notifyRcv(Object[] rcvBytes) throws Throwable {
         if (this.readWaiters > 0) {
@@ -212,7 +206,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
         Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, rcvBytes);
         if (dataArray != null && dataArray.length > 0) {
-            appendSoSndTask(toSoSndData(NOOP_FUTURE, dataArray));
+            appendSoSndTask(toSoSndData(Futures.buildNoop(), dataArray));
         }
     }
 
@@ -228,7 +222,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         try {
             Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, this.singleRcvBuf);
             if (dataArray != null && dataArray.length > 0) {
-                appendSoSndTask(toSoSndData(NOOP_FUTURE, dataArray));
+                appendSoSndTask(toSoSndData(Futures.buildNoop(), dataArray));
             }
         } finally {
             this.singleRcvBuf[0] = null; // avoid retaining reference
@@ -241,7 +235,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
                 this.protoStack.onRcvError(this.protoCtx, null, e) ://
                 this.protoStack.onSndError(this.protoCtx, null, e);
         if (dataArray != null && dataArray.length > 0) {
-            appendSoSndTask(toSoSndData(NOOP_FUTURE, dataArray));
+            appendSoSndTask(toSoSndData(Futures.buildNoop(), dataArray));
         }
     }
 
@@ -328,8 +322,6 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         }
         return future;
     }
-
-    private static final ByteBuf[] EMPTY_BYTEBUF_ARRAY = new ByteBuf[0];
 
     private SoSndData toSoSndData(Future<NetChannel> future, Object[] dataArray) {
         if (dataArray.length == 0) {

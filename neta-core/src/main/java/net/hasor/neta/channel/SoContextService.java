@@ -95,6 +95,14 @@ public class SoContextService implements SoContext {
         this.listenList = new ConcurrentLinkedQueue<>();
     }
 
+    private static void doCloseChannel(boolean now, SoChannel<?> channel, List<Future<?>> waitFinish) {
+        if (now) {
+            channel.closeNow();
+        } else {
+            waitFinish.add(channel.close());
+        }
+    }
+
     public long nextID() {
         return nextID.incrementAndGet();
     }
@@ -178,10 +186,7 @@ public class SoContextService implements SoContext {
             try {
                 protoStack.onInit(protoCtx);
                 if (!channel.isClose()) {
-                    Object[] activeData = protoStack.onActive(protoCtx);
-                    if (activeData != null && activeData.length > 0) {
-                        netChannel.notifyActiveData(activeData);
-                    }
+                    protoStack.onActive(protoCtx);
                 }
             } catch (Throwable e) {
                 // rollback: remove channel from maps on init failure
@@ -286,13 +291,16 @@ public class SoContextService implements SoContext {
         // close all NetChannel
         while (!this.channelList.isEmpty()) {
             NetChannel channel = this.channelList.poll();
-            if (channel != null) {
-                if (now) {
-                    channel.closeNow();
-                } else {
-                    waitFinish.add(channel.close());
+            if (channel == null || channel.isClose()) {
+                continue;
+            }
+            if (channel instanceof SoSubChannel) {
+                SoChannel<?> parent = ((SoSubChannel) channel).getParent();
+                if (parent != null && !parent.isClose()) {
+                    doCloseChannel(now, parent, waitFinish);//close parent first
                 }
             }
+            doCloseChannel(now, channel, waitFinish);
         }
 
         // wait all finish

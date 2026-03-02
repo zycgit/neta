@@ -32,6 +32,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
     private final        Object                      pipeLock = new Object();
     private final        ProtoQueue<Object>          tailRcvDown;
     private final        ProtoQueue<Object>          headSndDown;
+    private final        boolean                     branchMode;
     private              ProtoInvocation<?, ?, ?, ?> head;
     private              ProtoInvocation<?, ?, ?, ?> tail;
     private              long                        channelID;
@@ -191,19 +192,15 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
     }
 
-    private int takeSndDownToArray(ProtoInvocation<?, ?, ?, ?> current, List<Object[]> array) {
-        if (current.previous == null) {
-            int queueSize = this.headSndDown.queueSize();
-            if (queueSize == 0) {
-                return 0;
-            }
-            Object[] take = this.headSndDown.takeMessageToArray(queueSize);
-            array.add(take);
-            this.headSndDown.rcvSubmit();
-            return take.length;
-        } else {
-            return 0;
+    /** Drain all pending data from {@code headSndDown} into a single array. */
+    private Object[] drainHeadSndDown() {
+        int queueSize = this.headSndDown.queueSize();
+        if (queueSize == 0) {
+            return EMPTY;
         }
+        Object[] result = this.headSndDown.takeMessageToArray(queueSize);
+        this.headSndDown.rcvSubmit();
+        return result;
     }
 
     // ------------------------------------------------------------
@@ -215,7 +212,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                ctx.setRcvMode();
+                ctx.beginRcv();
 
                 if (this.head == null) {
                     return this.triggerRcvWithEmpty(ctx, rcvData);
@@ -223,7 +220,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
                     return this.onRcvLife(ctx, stackName, rcvData);
                 }
             } finally {
-                ctx.clearFlash();
+                ctx.end();
             }
         }
     }
@@ -233,8 +230,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                ctx.setRcvError(rcvError);
-                ctx.setRcvMode();
+                ctx.beginRcv(rcvError);
 
                 if (this.head == null) {
                     return this.triggerRcvWithEmpty(ctx, EMPTY);
@@ -242,7 +238,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
                     return this.onRcvLife(ctx, stackName, null);
                 }
             } finally {
-                ctx.clearFlash();
+                ctx.end();
             }
         }
     }
@@ -266,10 +262,6 @@ class ProtoChainRoot implements ProtoStack<Object> {
     }
 
     private Object[] onRcvLife(ProtoContextService ctx, String stackName, Object[] rcvData) throws Throwable {
-        ArrayList<Object[]> returnData = this.cachedRcvReturnData;
-        returnData.clear();
-        int arraySize = 0;
-
         boolean found = false;
         ProtoInvocation<?, ?, ?, ?> current = this.head;
         while (current != null) {
@@ -287,44 +279,31 @@ class ProtoChainRoot implements ProtoStack<Object> {
                 while (true) {
                     status = current.doLayer(ctx, true);
                     if (status == ProtoStatus.Retry) {
-                        if (ctx.getSoContext().getConfig().isPrintLog()) {
+                        if (ctx.getConfig().isPrintLog()) {
                             this.printLog(true, "Stack " + current.getName() + " doRetry");
                         }
-
-                        arraySize += takeSndDownToArray(current, returnData);
                         continue;
                     } else if (status == ProtoStatus.Next) {
-                        arraySize += takeSndDownToArray(current, returnData);
-
                         // when last then snd life result.
-                        // skip for main pipeline single handler (doSndLife would be a no-op)
-                        if (current.next == null && (this.head != this.tail || this.branchMode)) {
-                            Object[] objects = this.doSndLife(ctx, stackName, null);
-                            arraySize += objects.length;
-                            returnData.add(objects);
+                        if (current.next == null) {
+                            this.doSndLife(ctx, stackName, null);
                         }
                         break;
                     } else if (status == ProtoStatus.Stop) {
-                        // rcv life result.
-                        arraySize += takeSndDownToArray(current, returnData);
-
-                        if (ctx.isSkipSndLife()) {
-                            break;
-                        }
-
-                        // snd life result (skip for main pipeline single handler)
+                        // “this.head != this.tail” include any handler
+                        // “this.branchMode”        in branch Mode must be doSndLife.
                         if (this.head != this.tail || this.branchMode) {
-                            Object[] sndObjects = this.doSndLife(ctx, current.getName(), null);
-                            arraySize += sndObjects.length;
-                            returnData.add(sndObjects);
+                            this.doSndLife(ctx, current.getName(), null);
                         }
+                        break;
+                    } else if (status == ProtoStatus.Abort) {
                         break;
                     } else {
                         throw new UnsupportedOperationException("unsupported status = " + status);
                     }
                 }
 
-                if (status == ProtoStatus.Stop) {
+                if (status == ProtoStatus.Stop || status == ProtoStatus.Abort) {
                     ctx.setRcvError(null);
                     break;
                 }
@@ -333,21 +312,9 @@ class ProtoChainRoot implements ProtoStack<Object> {
             }
         }
 
-        // return data(Will be written to SND)
+        // Drain headSndDown once — all snd output from both rcv and snd pipeline execution ends up here.
         try {
-            if (arraySize == 0) {
-                return EMPTY;
-            } else if (returnData.size() == 1) {
-                return returnData.get(0);
-            } else {
-                Object[] result = new Object[arraySize];
-                int dstPos = 0;
-                for (Object[] objs : returnData) {
-                    System.arraycopy(objs, 0, result, dstPos, objs.length);
-                    dstPos = dstPos + objs.length;
-                }
-                return result;
-            }
+            return drainHeadSndDown();
         } finally {
             this.triggerRcv(ctx);
         }
@@ -384,15 +351,16 @@ class ProtoChainRoot implements ProtoStack<Object> {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                ctx.setSndMode();
+                ctx.beginSnd();
 
                 if (this.tail == null) {
                     return sndData;
                 } else {
-                    return this.doSndLife(ctx, stackName, sndData);
+                    this.doSndLife(ctx, stackName, sndData);
+                    return drainHeadSndDown();
                 }
             } finally {
-                ctx.clearFlash();
+                ctx.end();
             }
         }
     }
@@ -402,26 +370,22 @@ class ProtoChainRoot implements ProtoStack<Object> {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
-                ctx.setSndError(sndError);
-                ctx.setSndMode();
+                ctx.beginSnd(sndError);
 
                 if (this.tail == null) {
                     this.triggerSend(ctx);
                     return EMPTY;
                 } else {
-                    return this.doSndLife(ctx, stackName, null);
+                    this.doSndLife(ctx, stackName, null);
+                    return drainHeadSndDown();
                 }
             } finally {
-                ctx.clearFlash();
+                ctx.end();
             }
         }
     }
 
-    private Object[] doSndLife(ProtoContextService ctx, String stackName, Object[] sndData) throws Throwable {
-        ArrayList<Object[]> returnData = this.cachedSndReturnData;
-        returnData.clear();
-        int arraySize = 0;
-
+    private void doSndLife(ProtoContextService ctx, String stackName, Object[] sndData) throws Throwable {
         boolean found = false;
         ProtoInvocation<?, ?, ?, ?> current = this.tail;
         while (current != null) {
@@ -439,25 +403,22 @@ class ProtoChainRoot implements ProtoStack<Object> {
                 while (true) {
                     status = current.doLayer(ctx, false);
                     if (status == ProtoStatus.Retry) {
-                        if (ctx.getSoContext().getConfig().isPrintLog()) {
+                        if (ctx.getConfig().isPrintLog()) {
                             this.printLog(false, "Stack " + current.getName() + " doRetry");
                         }
-
-                        arraySize += takeSndDownToArray(current, returnData);
                         continue;
                     } else if (status == ProtoStatus.Next) {
-                        arraySize += takeSndDownToArray(current, returnData);
                         break;
                     } else if (status == ProtoStatus.Stop) {
-                        // rcv life result.
-                        arraySize += takeSndDownToArray(current, returnData);
+                        break;
+                    } else if (status == ProtoStatus.Abort) {
                         break;
                     } else {
                         throw new UnsupportedOperationException("unsupported status = " + status);
                     }
                 }
 
-                if (status == ProtoStatus.Stop) {
+                if (status == ProtoStatus.Stop || status == ProtoStatus.Abort) {
                     ctx.setSndError(null);
                     break;
                 }
@@ -466,24 +427,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
             }
         }
 
-        // return data(Will be written to SND)
-        try {
-            if (arraySize == 0) {
-                return EMPTY;
-            } else if (returnData.size() == 1) {
-                return returnData.get(0);
-            } else {
-                Object[] result = new Object[arraySize];
-                int dstPos = 0;
-                for (Object[] objs : returnData) {
-                    System.arraycopy(objs, 0, result, dstPos, objs.length);
-                    dstPos = dstPos + objs.length;
-                }
-                return result;
-            }
-        } finally {
-            this.triggerSend(ctx);
-        }
+        this.triggerSend(ctx);
     }
 
     private void triggerSend(ProtoContextService ctx) {
@@ -503,24 +447,29 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // ------------------------------------------------------------
     @Override
     public void onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
+                ctx.beginRcv();
                 if (this.doRcvUserEvent(protoCtx, stackName, event)) {
+                    ctx.switchToSnd(); // switch direction for the SND leg
                     this.doSndUserEvent(protoCtx, null, event);
                 }
             } finally {
-                ((ProtoContextService) protoCtx).clearFlash();
+                ctx.end();
             }
         }
     }
 
     @Override
     public void onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             try {
+                ctx.beginSnd();
                 this.doSndUserEvent(protoCtx, stackName, event);
             } finally {
-                ((ProtoContextService) protoCtx).clearFlash();
+                ctx.end();
             }
         }
     }

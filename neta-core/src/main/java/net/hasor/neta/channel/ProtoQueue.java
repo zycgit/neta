@@ -25,16 +25,63 @@ import java.util.List;
  * @version : 2023-09-24
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
-    private static final Object[] EMPTY_ARRAY = new Object[0];
-    private final        int      capacity;
-    private final        List<T>  linkedList;
-    private final        List<T>  offerTemp;
-    protected            int      takeCount;
+    private static final Object[]      EMPTY_ARRAY = new Object[0];
+    /** Canonical immutable empty {@link ProtoRcvQueue} singleton (no data, all operations are no-ops). */
+    @SuppressWarnings("rawtypes")
+    private static final ProtoRcvQueue EMPTY_RCV   = new ProtoRcvQueue() {
+        @Override
+        public int getCapacity() {
+            return 0;
+        }
+
+        @Override
+        public int queueSize() {
+            return 0;
+        }
+
+        @Override
+        public ProtoRcvQueue rcvSubmit() {
+            return this;
+        }
+
+        @Override
+        public ProtoRcvQueue rcvReset() {
+            return this;
+        }
+
+        @Override
+        public List takeMessage(int cnt) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public List peekMessage(int cnt) {
+            return Collections.emptyList();
+        }
+
+        @Override
+        public void skipMessage(int cnt) {
+        }
+    };
+
+    private final int     capacity;
+    private final List<T> linkedList;
+    private final List<T> offerTemp;
+    protected     int     takeCount;
 
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
         this.linkedList = new ArrayList<>();
         this.offerTemp = new ArrayList<>();
+    }
+
+    /**
+     * Returns an immutable empty {@link ProtoRcvQueue} singleton.
+     * <p>Useful when a non-null queue reference is required but no data is available,
+     * e.g. when invoking a routing predicate during the {@code onActive} phase.</p>
+     */
+    public static <T> ProtoRcvQueue<T> emptyRcv() {
+        return (ProtoRcvQueue<T>) EMPTY_RCV;
     }
 
     @Override

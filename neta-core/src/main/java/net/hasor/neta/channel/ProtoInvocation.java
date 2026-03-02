@@ -40,7 +40,6 @@ import net.hasor.cobble.logging.Logger;
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     public static final  String                                            RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
     public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
-    public static final  String                                            SKIP_SND_LIFE = ProtoChainRoot.class.getName() + "-skip-snd-life";
     private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
     protected final      ProtoQueue<Object>                                rcvUp;
     protected final      ProtoQueue<Object>                                sndUp;
@@ -120,7 +119,13 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     }
 
     public boolean onEvent(ProtoContext protoCtx, SoUserEvent event, boolean isRcv) throws Throwable {
-        return this.handler.onUserEvent(protoCtx, event, isRcv);
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
+        try {
+            ctx.setStackName(this.name);
+            return this.handler.onUserEvent(protoCtx, event, isRcv);
+        } finally {
+            ctx.setStackName(null);
+        }
     }
 
     public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {
@@ -140,8 +145,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
                     return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, ctx));
                 } catch (Throwable e) {
                     protoCtx.getChannel().close();
-                    ctx.setSkipSndLife();
-                    return ProtoStatus.Stop;
+                    return ProtoStatus.Abort;
                 }
             }
         } catch (Throwable e) {
@@ -163,8 +167,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
                     return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, ctx));
                 } catch (Throwable ex2) {
                     protoCtx.getChannel().close();
-                    ctx.setSkipSndLife();
-                    return ProtoStatus.Stop;
+                    return ProtoStatus.Abort;
                 }
             } else {
                 throw e;

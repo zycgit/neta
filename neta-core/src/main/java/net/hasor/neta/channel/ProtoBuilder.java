@@ -222,27 +222,16 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
     <SND_UP> ProtoBuilder<RCV_UP, SND_UP> nextEncoder(String name, ProtoConfig protoConf, ProtoHandler<SND_UP, SND_DOWN> encoder);
 
     /**
-     * Add a routing fork point to the pipeline. The routing predicate evaluates incoming data
-     * to select a branch sub-pipeline. All branches receive lifecycle events; data events are
-     * routed only through the selected branch.
-     * @param name the router name in the pipeline
-     * @param routing the routing predicate
-     * @param branches a consumer to register branches via {@link ProtoRoutingDuplexer.Builder}
-     * @return a new builder for the next stage after routing (types become Object)
+     * Add a routing fork point to the pipeline with custom config.
      */
-    default ProtoBuilder<Object, Object> nextRoute(String name, ProtoRouting<RCV_UP> routing, Consumer<ProtoRoutingDuplexer.Builder<RCV_UP>> branches) {
+    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRoute(String name, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches) {
         return this.nextRoute(name, ProtoConfig.DEFAULT, routing, branches);
     }
 
     /**
      * Add a routing fork point to the pipeline with custom config.
-     * @param name the router name in the pipeline
-     * @param protoConf the protocol config
-     * @param routing the routing predicate
-     * @param branches a consumer to register branches via {@link ProtoRoutingDuplexer.Builder}
-     * @return a new builder for the next stage after routing (types become Object)
      */
-    ProtoBuilder<Object, Object> nextRoute(String name, ProtoConfig protoConf, ProtoRouting<RCV_UP> routing, Consumer<ProtoRoutingDuplexer.Builder<RCV_UP>> branches);
+    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRoute(String name, ProtoConfig protoConf, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches);
 
     /** build {@link ProtoStack} */
     ProtoInitializer build();

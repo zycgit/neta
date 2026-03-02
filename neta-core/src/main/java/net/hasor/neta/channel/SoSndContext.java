@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
@@ -22,7 +23,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * @version : 2023-09-24
  */
 public class SoSndContext {
-    private final ConcurrentLinkedQueue<SoSndData> wQueue = new ConcurrentLinkedQueue<>();
+    private final Queue<SoSndData> wQueue = new ConcurrentLinkedQueue<>();
 
     /**
      * poll data form wQueue
