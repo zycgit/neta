@@ -16,7 +16,7 @@
 package net.hasor.neta.channel;
 
 /**
- * When shutdownInput() called.
+ * Thrown when the remote side has called {@code shutdownInput()}, indicating the input half is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

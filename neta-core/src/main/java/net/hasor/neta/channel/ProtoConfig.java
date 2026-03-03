@@ -14,22 +14,22 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * {@link ProtoConfig} represents the amount of data stored on these endpoints
- * <li>A {@link ByteBuf} endpoint indicating the number of bytes to store</li>
- * <li>The {@link ProtoRcvQueue}/{@link ProtoSndQueue} endpoint, which indicates the number of stored objects</li>
- * <li>default value is -1, when set to -1, It means infinite</li>
- * <p>
- * A ProtoConfig is used for only one protocol layer.
- * An application may consist of multiple protocol layers stacked together, so Each protocol layer can be configured separately
- * </p>
+ * Per-layer capacity configuration for a protocol stack layer.
+ * <ul>
+ *  <li>{@code rcvSlotSize} — max items in the RCV endpoint queue</li>
+ *  <li>{@code sndSlotSize} — max items in the SND endpoint queue</li>
+ *  <li>Default {@code -1} means unlimited capacity</li>
+ * </ul>
+ * <p>Each {@link ProtoDuplexer} layer can have its own {@code ProtoConfig}.
+ * Use {@link #DEFAULT} for the immutable unlimited-capacity singleton.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see ProtoDuplexer
  */
 public class ProtoConfig {
+    /** Immutable default config with unlimited capacity. */
     public static final ProtoConfig DEFAULT = new ProtoConfig() {
         @Override
         public void setRcvSlotSize(int rcvSlotSize) {
@@ -45,18 +45,22 @@ public class ProtoConfig {
     private int rcvSlotSize = -1;
     private int sndSlotSize = -1;
 
+    /** Returns the receive-side queue capacity ({@code -1} for unlimited). */
     public int getRcvSlotSize() {
         return this.rcvSlotSize;
     }
 
+    /** Set the receive-side queue capacity ({@code -1} for unlimited). */
     public void setRcvSlotSize(int rcvSlotSize) {
         this.rcvSlotSize = rcvSlotSize;
     }
 
+    /** Returns the send-side queue capacity ({@code -1} for unlimited). */
     public int getSndSlotSize() {
         return this.sndSlotSize;
     }
 
+    /** Set the send-side queue capacity ({@code -1} for unlimited). */
     public void setSndSlotSize(int sndSlotSize) {
         this.sndSlotSize = sndSlotSize;
     }

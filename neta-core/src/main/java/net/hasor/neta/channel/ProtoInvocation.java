@@ -18,12 +18,9 @@ import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * RCV_UP and RCV_DOWN,SND_UP and SND_DOWN. Is the name of RCV and SND under different endpoints.
- * When the {@link ProtoStack} forms a chain, the rcv event upward propagates,the snd event downward propagates.
- * <p>
- * When two {@link ProtoDuplexer} are connected, the endpoint object is shared in the same direction. e.g., RCV_DOWN and RCV_UP.
- * For convenience, use the DOWN name
- * </p>
+ * A single node in the {@link ProtoChainRoot} doubly-linked handler chain.
+ * <p>Wraps one {@link ProtoDuplexer} together with its RCV_UP / SND_UP queues,
+ * and links to the previous/next nodes for bidirectional event propagation.</p>
  * <pre>
  *              Protocol Layer(0)               Protocol Layer(1)
  *         ┏━━━━━━━━━━━━━━━━━━━━━━━━┓       ┏━━━━━━━━━━━━━━━━━━━━━━━━┓

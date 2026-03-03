@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * When {@link SoChannel} is closed.
+ * Base exception indicating that a {@link SoChannel} has been closed or is closing.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

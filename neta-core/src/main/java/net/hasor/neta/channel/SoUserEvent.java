@@ -15,27 +15,17 @@
  */
 package net.hasor.neta.channel;
 /**
- * Represents a message payload in the message bus system.
- * Encapsulates the data, error, and source channel information for a message.
+ * Represents a user-defined event fired through the inbound pipeline of a channel.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
 public interface SoUserEvent {
-    /**
-     * Gets the source channel from which this payload originated.
-     * @return the source SoChannel instance
-     */
+    /** Returns the channel that fired this event. */
     SoChannel<?> getSource();
 
-    /**
-     * Gets the data contained in this payload.
-     * @return the payload data object, or null if an error occurred
-     */
+    /** Returns the runtime type of the event payload. */
     Class<?> getEventType();
 
-    /**
-     * Gets the data contained in this payload.
-     * @return the payload data object, or null if an error occurred
-     */
+    /** Returns the event payload object. */
     Object getData();
 }

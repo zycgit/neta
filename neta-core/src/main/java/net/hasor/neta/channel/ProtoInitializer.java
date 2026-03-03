@@ -15,11 +15,13 @@
  */
 package net.hasor.neta.channel;
 /**
- * Application protocol stack
+ * Callback used to configure (initialise) a protocol stack when a new channel is created.
+ * Implementations add decoders, encoders and handlers to the {@link ProtoContext}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 @FunctionalInterface
 public interface ProtoInitializer {
+    /** Called once per new channel; add pipeline handlers to {@code ctx}. */
     void config(ProtoContext ctx);
 }

@@ -22,7 +22,8 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * data packet
+ * A single outbound data packet carrying one or more {@link ByteBuf} fragments
+ * and a completion {@link Future} to notify callers when the send finishes.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -79,6 +80,10 @@ public class SoSndData {
         return len;
     }
 
+    /**
+     * Returns the next chunk as a raw byte array and advances the read cursor.
+     * Returns {@code null} when all fragments have been consumed.
+     */
     public byte[] transferPull() {
         if (!this.hasReadable()) {
             return null;
@@ -100,6 +105,10 @@ public class SoSndData {
         }
     }
 
+    /**
+     * Returns the next raw data element (typically a {@link ByteBuf}) without copying
+     * and advances the read cursor. Returns {@code null} when exhausted.
+     */
     public Object transferTake() {
         if (!this.hasReadable()) {
             return null;

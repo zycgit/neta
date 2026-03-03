@@ -21,8 +21,8 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * A tcp network channel
- * the channel that binds to the Application layer network protocol stack.
+ * TCP channel implementation that binds to the application-layer protocol stack.
+ * Wraps a {@link TcpAsyncChannel} and manages the associated read/write completion handlers.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

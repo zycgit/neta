@@ -20,7 +20,8 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * {@link ProtoRcvQueue}/{@link ProtoSndQueue} implements
+ * Default implementation of both {@link ProtoRcvQueue} and {@link ProtoSndQueue}.
+ * <p>Provides capacity-bounded message storage with transactional take/offer semantics.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -230,7 +231,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         this.takeCount += fixCnt;
     }
 
-    /** Direct Object[] return to avoid intermediate ArrayList + toArray() */
+    /** Direct {@code Object[]} return — avoids intermediate ArrayList + toArray() overhead. */
     public Object[] takeMessageToArray(int cnt) {
         if (cnt <= 0) {
             return EMPTY_ARRAY;

@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * closing the channel.
+ * A one-shot task that wraps a plain {@link Runnable} for execution in the event loop.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  */

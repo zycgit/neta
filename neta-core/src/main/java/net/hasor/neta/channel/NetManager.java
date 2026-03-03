@@ -32,7 +32,23 @@ import net.hasor.neta.channel.udp.UdpProvider;
 import net.hasor.neta.channel.virtual.VrtProvider;
 
 /**
- * AIO TCP/IP
+ * Entry point for Neta's AIO network layer.
+ * Manages server listeners and client connections over TCP, UDP, QUIC, SCTP and virtual transports.
+ * <pre>
+ *  ┌─────────────────────────────────────────────────────────────┐
+ *  │                        NetManager                           │
+ *  │   bind(addr, initializer)          connect(addr, init)      │
+ *  │          │                                 │                │
+ *  │    ┌─────▼──────┐                  ┌───────▼───────┐        │
+ *  │    │  NetListen │  ──onAccept──►   │   NetChannel  │        │
+ *  │    └────────────┘                  └───────┬───────┘        │
+ *  │                                            │                │
+ *  │                              ┌─────────────▼────────────┐   │
+ *  │                              │     Protocol Stack       │   │
+ *  │                              │  [codec] → [handler] → … │   │
+ *  │                              └──────────────────────────┘   │
+ *  └─────────────────────────────────────────────────────────────┘
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -135,12 +151,12 @@ public class NetManager extends AbstractNetManager {
         }
     }
 
-    /** find SoChannel by id */
+    /** Returns the channel identified by {@code channelId}, or {@code null} if not found. */
     public SoChannel<?> findChannel(long channelId) {
         return this.context.findChannel(channelId);
     }
 
-    /** find NetListen by listenPort */
+    /** Returns the first active {@link NetListen} bound to {@code port}, or {@code null} if none. */
     public NetListen findListen(int port) {
         AtomicReference<NetListen> found = new AtomicReference<>();
         this.context.foreachListen(netListen -> {

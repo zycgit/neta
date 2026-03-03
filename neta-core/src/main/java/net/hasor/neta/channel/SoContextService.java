@@ -31,7 +31,9 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * SoContext implements
+ * Default {@link SoContext} implementation.
+ * <p>Manages the lifecycle of all channels/listeners, event dispatching,
+ * IO/worker thread pools, and the global timer.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -103,6 +105,7 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /** Generate a unique channel ID (monotonically increasing). */
     public long nextID() {
         return nextID.incrementAndGet();
     }
@@ -127,6 +130,7 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /** Returns the IO thread pool executor. */
     public ExecutorService getIoExecutor() {
         return this.ioExecutor;
     }
@@ -153,6 +157,7 @@ public class SoContextService implements SoContext {
         return this.channelMap.get(channelId);
     }
 
+    /** Register a channel/listener and optionally trigger init/active lifecycle. */
     public void initChannel(SoChannel<?> channel, boolean init) throws Throwable {
         long channelId = channel.getChannelId();
         if (this.channelMap.containsKey(channelId)) {
@@ -424,7 +429,7 @@ public class SoContextService implements SoContext {
         }
     }
 
-    /** receiving new data */
+    /** Notify that new data has been received on a channel. */
     public void notifyRcvChannelData(long channelId, Object... rcvData) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {

@@ -17,7 +17,9 @@ package net.hasor.neta.channel;
 import java.util.List;
 
 /**
- * Network protocol layer input endpoint data queue
+ * Inbound (receive-side) data queue for a protocol layer endpoint.
+ * <p>Supports take/peek/skip operations with transactional semantics
+ * ({@link #rcvSubmit()}/{@link #rcvReset()}).</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoSndQueue

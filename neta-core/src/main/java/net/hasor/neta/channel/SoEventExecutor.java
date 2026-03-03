@@ -27,7 +27,10 @@ import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Low-latency task Dispatcher
+ * Low-latency task dispatcher backed by a fixed-size worker thread pool.
+ * <p>Tasks are queued into a lock-free {@link ConcurrentLinkedQueue} and workers
+ * are woken via {@link LockSupport}. Supports delayed task scheduling via
+ * {@link HashedWheelTimer}. Graceful shutdown drains remaining tasks.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  */

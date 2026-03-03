@@ -18,8 +18,8 @@ import java.io.IOException;
 import net.hasor.neta.channel.*;
 
 /**
- * A SCTP network channel
- * Represents an active SCTP connection that binds to the Application layer network protocol stack.
+ * SCTP channel implementation that binds to the application-layer protocol stack.
+ * Wraps a {@link SctpAsyncChannel} and manages the SCTP notification handler.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

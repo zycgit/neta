@@ -16,8 +16,8 @@
 package net.hasor.neta.channel;
 
 /**
- * A tcp network channel
- * the channel that binds to the Application layer network protocol stack.
+ * Traffic counter and I/O timing monitor attached to a {@link NetChannel}.
+ * Tracks total bytes sent/received and the timestamps of the last I/O activities.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -28,35 +28,43 @@ public class NetMonitor {
     private volatile long lastSndTime;
     private volatile long lastRcvTime;
 
+    /** Returns the epoch-ms timestamp when this monitor (and its channel) was created. */
     public long getCreatedTime() {
         return this.createdTime;
     }
 
+    /** Returns the epoch-ms timestamp of the last data reception, or 0 if nothing received yet. */
     public long getLastRcvTime() {
         return this.lastRcvTime;
     }
 
+    /** Returns the epoch-ms timestamp of the last data send, or 0 if nothing sent yet. */
     public long getLastSndTime() {
         return this.lastSndTime;
     }
 
+    /** Returns the later of {@link #getLastRcvTime()} and {@link #getLastSndTime()}. */
     public long getLastActiveTime() {
         return Math.max(this.lastRcvTime, this.lastSndTime);
     }
 
+    /** Returns the cumulative number of bytes received since channel creation. */
     public long getRcvCounterBytes() {
         return this.rcvCounterBytes;
     }
 
+    /** Returns the cumulative number of bytes sent since channel creation. */
     public long getSndCounterBytes() {
         return this.sndCounterBytes;
     }
 
+    /** Adds {@code update} bytes to the receive counter and refreshes the last-receive timestamp. */
     public void updateRcvCounter(long update) {
         this.rcvCounterBytes += update;
         this.lastRcvTime = System.currentTimeMillis();
     }
 
+    /** Adds {@code update} bytes to the send counter and refreshes the last-send timestamp. */
     public void updateSndCounter(long update) {
         this.sndCounterBytes += update;
         this.lastSndTime = System.currentTimeMillis();

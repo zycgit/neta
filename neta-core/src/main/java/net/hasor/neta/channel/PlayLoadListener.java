@@ -15,15 +15,12 @@
  */
 package net.hasor.neta.channel;
 /**
- * on event
+ * Listener for {@link PlayLoad} events on the message bus.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
 @FunctionalInterface
 public interface PlayLoadListener extends java.util.EventListener {
-    /**
-     * on event
-     * @param data event data
-     */
+    /** Called when a {@link PlayLoad} event is published. */
     void onEvent(PlayLoad data);
 }

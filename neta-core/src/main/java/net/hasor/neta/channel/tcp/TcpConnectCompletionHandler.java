@@ -24,7 +24,9 @@ import net.hasor.neta.channel.SoConnectException;
 import net.hasor.neta.channel.SoContextService;
 
 /**
- * Client Connect Handler
+ * Completion handler for TCP client connections.
+ * On success, initializes the channel, starts reading, and completes the future.
+ * On failure, notifies the context and fails the future.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

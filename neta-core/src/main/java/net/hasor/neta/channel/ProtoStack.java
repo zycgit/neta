@@ -17,7 +17,8 @@ package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Application protocol stack
+ * Internal composite protocol stack interface wrapping a chain of {@link ProtoDuplexer} layers.
+ * <p>Handles the full lifecycle: init → active → rcv/snd message/error/event → close.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

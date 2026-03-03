@@ -18,7 +18,8 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * send Data context
+ * Per-channel outbound queue that holds pending {@link SoSndData} items.
+ * Items are enqueued by writers and dequeued by the IO worker that performs actual flushing.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

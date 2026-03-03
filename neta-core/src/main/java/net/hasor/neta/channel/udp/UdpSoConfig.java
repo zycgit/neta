@@ -43,34 +43,42 @@ public class UdpSoConfig extends SoConfig {
         super(providerName);
     }
 
+    /** Returns the maximum receive packet size in bytes, or null to use the socket buffer size. */
     public Integer getRcvPacketSize() {
         return this.rcvPacketSize;
     }
 
+    /** Sets the maximum receive packet size in bytes. */
     public void setRcvPacketSize(Integer rcvPacketSize) {
         this.rcvPacketSize = rcvPacketSize;
     }
 
+    /** Returns true if receive is restricted to the connected remote address only. */
     public boolean isRcvRemoteOnly() {
         return this.rcvRemoteOnly;
     }
 
+    /** Sets whether receive is restricted to the connected remote address only. */
     public void setRcvRemoteOnly(boolean rcvRemoteOnly) {
         this.rcvRemoteOnly = rcvRemoteOnly;
     }
 
+    /** Returns the number of write-timeout retries (0 = no retry). */
     public int getSndWriteRetryCount() {
         return this.sndWriteRetryCount;
     }
 
+    /** Sets the number of write-timeout retries. */
     public void setSndWriteRetryCount(int sndWriteRetryCount) {
         this.sndWriteRetryCount = sndWriteRetryCount;
     }
 
+    /** Returns the delay between write retries in milliseconds. */
     public int getSndWriteRetryIntervalMs() {
         return this.sndWriteRetryIntervalMs;
     }
 
+    /** Sets the delay between write retries in milliseconds. */
     public void setSndWriteRetryIntervalMs(int sndWriteRetryIntervalMs) {
         this.sndWriteRetryIntervalMs = sndWriteRetryIntervalMs;
     }

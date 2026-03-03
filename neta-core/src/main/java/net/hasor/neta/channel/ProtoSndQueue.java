@@ -18,7 +18,9 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * The network protocol layer outputs the data queue of the endpoint
+ * Outbound (send-side) data queue for a protocol layer endpoint.
+ * <p>Supports offer operations with transactional semantics
+ * ({@link #sndSubmit()}/{@link #sndReset()}).</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoRcvQueue
@@ -29,7 +31,7 @@ public interface ProtoSndQueue<T> {
      */
     int getCapacity();
 
-    /** The number of writable slots, default is Integer.MAX. */
+    /** Number of writable slots remaining. Default is {@code Integer.MAX_VALUE}. */
     int slotSize();
 
     /** can be writer */
@@ -37,7 +39,7 @@ public interface ProtoSndQueue<T> {
         return slotSize() > 0;
     }
 
-    /** Changes can be submitted */
+    /** Returns {@code true} if there are uncommitted changes (takes or offers). */
     boolean hasCommit();
 
     /**

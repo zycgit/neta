@@ -15,7 +15,8 @@
  */
 package net.hasor.neta.channel;
 /**
- * Used to represent a unidirectional data processor, two {@link ProtoHandler}`s in opposite directions can to {@link ProtoDuplexer}
+ * Unidirectional data processor (decoder or encoder).
+ * <p>Two {@code ProtoHandler}s in opposite directions can be combined into a {@link ProtoDuplexer}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoDuplexer
@@ -38,6 +39,7 @@ public interface ProtoHandler<IN, OUT> {
     default void onActive(ProtoContext context) throws Throwable {
     }
 
+    /** Called on user-defined event. Return {@code true} to propagate, {@code false} to consume. */
     default boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
         return true;
     }

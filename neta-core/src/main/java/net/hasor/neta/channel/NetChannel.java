@@ -30,8 +30,12 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * A tcp network channel
- * the channel that binds to the Application layer network protocol stack.
+ * A connected socket channel with a bound application-layer protocol stack.
+ * Supports async {@link #sendData}/{@link #flush} and read-timeout waiting.
+ * <pre>
+ *  Remote ──► [ByteBuf] ──► Decoder(n) ──► … ──► Decoder(0) ──► Application
+ *  Remote ◄── [ByteBuf] ◄── Encoder(n) ◄── … ◄── Encoder(0) ◄── Application
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -128,6 +132,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.asyncChannel;
     }
 
+    /** Returns the traffic and timing monitor attached to this channel. */
     public NetMonitor getMonitor() {
         return this.monitor;
     }
@@ -196,7 +201,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.monitor.getSndCounterBytes();
     }
 
-    /* Receive data without concurrency */
+    /** Feeds raw received data through the protocol stack; must be called from a single thread. */
     protected void notifyRcv(Object[] rcvBytes) throws Throwable {
         if (this.readWaiters > 0) {
             synchronized (this.readTimeoutSyncObj) {
@@ -210,7 +215,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         }
     }
 
-    /* Single-element fast path: reuses array to avoid allocation */
+    /** Single-element fast path for {@link #notifyRcv}; reuses a cached array to avoid allocation. */
     public void notifyRcvSingle(Object rcvByte) throws Throwable {
         if (this.readWaiters > 0) {
             synchronized (this.readTimeoutSyncObj) {
@@ -239,7 +244,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         }
     }
 
-    /* Receive event */
+    /** Fires a user-defined event into the inbound pipeline from this channel. */
     public <T> void fireUserEvent(Class<T> eventType, T event) {
         this.notifyUserEvent(true, null, eventType, event);
     }
@@ -288,7 +293,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.sendOrFlush(writeData, stackName);
     }
 
-    /** flash */
+    /** Flushes any pending outbound data through the full protocol stack. */
     public Future<NetChannel> flush() {
         return this.sendOrFlush(null, null);
     }

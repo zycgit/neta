@@ -55,6 +55,7 @@ public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     default void onActive(ProtoContext context) throws Throwable {
     }
 
+    /** Called on user-defined event. Return {@code true} to propagate, {@code false} to consume. */
     default boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
         return true;
     }

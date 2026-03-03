@@ -16,7 +16,7 @@
 package net.hasor.neta.channel;
 
 /**
- * A message data in the message bus
+ * Default {@link PlayLoad} implementation carrying message data or error.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */

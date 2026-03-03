@@ -20,9 +20,13 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Application stack builder
+ * Fluent API for building a bidirectional protocol pipeline.
+ * <p>Chain {@link ProtoDuplexer}, {@link ProtoHandler} (decoder/encoder),
+ * or routing branches via {@code nextDuplex}/{@code nextDecoder}/{@code nextEncoder}/{@code nextRoute},
+ * then call {@link #build()} to produce a {@link ProtoInitializer}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see ProtoHelper
  */
 public interface ProtoBuilder<RCV_UP, SND_DOWN> {
 

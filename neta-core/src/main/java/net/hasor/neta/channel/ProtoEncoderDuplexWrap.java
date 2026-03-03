@@ -1,4 +1,6 @@
 package net.hasor.neta.channel;
+
+/** Adapter that wraps an encoder-only {@link ProtoHandler} as a {@link ProtoDuplexer} with transparent RCV pass-through. */
 class ProtoEncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV, RCV, SND_UP, SND_DOWN> {
     private final ProtoHandler<SND_UP, SND_DOWN> encoder;
 

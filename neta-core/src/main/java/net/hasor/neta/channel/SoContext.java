@@ -19,7 +19,8 @@ import java.util.function.Predicate;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * manage all network NetChannel and NetListen
+ * Central service context that manages all {@link NetChannel} and {@link NetListen} instances.
+ * <p>Provides channel lookup, event subscription, and access to global configuration.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

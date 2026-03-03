@@ -20,7 +20,8 @@ import java.util.function.Predicate;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * AIO Socket basic
+ * Base class for {@link NetManager}, holding the shared {@link NetConfig}, {@link SoContextService}
+ * and lifecycle state. Subclasses implement the actual protocol providers and shutdown logic.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -39,34 +40,35 @@ public abstract class AbstractNetManager {
         this.shutdown = new AtomicBoolean(false);
     }
 
-    /** return {@link NetConfig} */
+    /** Returns the global configuration shared by all channels. */
     public NetConfig getConfig() {
         return this.config;
     }
 
-    /** return {@link SoContext} */
+    /** Returns the shared socket context that manages all channels and listeners. */
     public SoContext getContext() {
         return this.context;
     }
 
     /**
-     * subscribe event
-     * @param channelId event topic
-     * @param listener event listener
+     * Subscribes to all messages (inbound and outbound) for the specified channel.
+     * @param channelId the target channel ID
+     * @param listener callback invoked for each {@link PlayLoad} event
      */
     public SubscribeHolder subscribe(long channelId, PlayLoadListener listener) {
         return this.context.subscribe(channelId, listener);
     }
 
     /**
-     * subscribe event
-     * @param select event topic
-     * @param listener event listener
+     * Subscribes to messages that match the given predicate across all channels.
+     * @param select filter predicate
+     * @param listener callback invoked for each matching {@link PlayLoad} event
      */
     public SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
         return this.context.subscribe(select, listener);
     }
 
+    /** Gracefully shuts down the manager, closing all channels and releasing resources. */
     public final void shutdown() throws IOException {
         if (this.shutdown.compareAndSet(false, true)) {
             // do close

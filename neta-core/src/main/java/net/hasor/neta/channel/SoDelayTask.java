@@ -17,17 +17,20 @@ package net.hasor.neta.channel;
 import java.util.concurrent.TimeUnit;
 
 /**
- * delay task
+ * A task that delays execution by a fixed number of milliseconds before completing.
+ * Used internally to schedule work on the next event-loop tick.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public class SoDelayTask extends DefaultSoTask {
     private final int intervalMillis;
 
+    /** Creates a delay task with a fixed interval in milliseconds. */
     public SoDelayTask(int intervalMillis) {
         this.intervalMillis = intervalMillis;
     }
 
+    /** Creates a delay task whose interval is derived from {@link NetConfig#getRetryIntervalMs()}. */
     public SoDelayTask(SoContext context) {
         this.intervalMillis = Math.max(10, context.getConfig().getRetryIntervalMs());
     }

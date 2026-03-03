@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * When {@link SoChannel} is closed.
+ * Thrown when a server channel fails to bind to a local address.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

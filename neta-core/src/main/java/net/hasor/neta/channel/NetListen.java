@@ -24,7 +24,13 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * A listener channel for accept incoming sockets and binding them to the protocol stack
+ * A listening socket that accepts incoming connections and binds each to a new protocol stack.
+ * Supports suspend/resume to temporarily stop accepting, and wait APIs for accept/idle events.
+ * <pre>
+ *  bind(addr) ──► NetListen ──onAccept──► NetChannel(1)
+ *                          └──onAccept──► NetChannel(2)
+ *                          └──onAccept──► NetChannel(n)
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

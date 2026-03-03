@@ -16,10 +16,9 @@
 package net.hasor.neta.channel.virtual;
 import java.net.SocketAddress;
 import net.hasor.cobble.ObjectUtils;
-import net.hasor.neta.channel.SoChannel;
 
 /**
- * Base class for {@link SoChannel} implementations that are used in an embedded fashion.
+ * Address representation for virtual channels, using an integer identifier instead of a network address.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

@@ -19,7 +19,8 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * SoChannel abstract implementation, providing only get/set of attributes.
+ * Base implementation of {@link SoChannel} that adds a thread-safe attribute map
+ * and convenience {@code subscribe} methods scoped to this channel's ID.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -36,11 +37,13 @@ public abstract class SoAttrChannel<T> implements SoChannel<T> {
         return this.attributes.get(key);
     }
 
+    /** Subscribes to all {@link PlayLoad} events originating from this channel. */
     @Override
     public SubscribeHolder subscribe(PlayLoadListener listener) {
         return this.subscribe(t -> true, listener);
     }
 
+    /** Subscribes to events from this channel that satisfy {@code select}. */
     @Override
     public SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
         Predicate<PlayLoad> predicate = select.and(t -> t.getSource().getChannelId() == this.getChannelId());

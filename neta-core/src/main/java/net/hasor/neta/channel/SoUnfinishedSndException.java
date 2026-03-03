@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * When {@link SoChannel} is closed.
+ * Thrown when a channel is closed while it still has unsent data waiting in the send queue.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

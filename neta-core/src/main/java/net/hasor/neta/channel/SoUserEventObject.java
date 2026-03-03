@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * A message data in the message bus
+ * Default {@link SoUserEvent} implementation carrying a typed user event.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
@@ -30,12 +30,7 @@ final class SoUserEventObject implements SoUserEvent {
         this.source = source;
     }
 
-    /**
-     * Creates a successful payload with the specified source channel and data.
-     * @param source the originating SoChannel
-     * @param event the message data
-     * @return a new PlayLoad instance containing the data
-     */
+    /** Creates a user event with the specified source channel, event type, and data. */
     public static SoUserEvent of(SoChannel<?> source, Class<?> eventType, Object event) {
         return new SoUserEventObject(eventType, event, source);
     }

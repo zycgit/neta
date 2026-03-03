@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * Thrown to indicate that there is an error creating or accessing a Socket.
+ * Base exception for all socket timeout errors (read, write, connect).
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

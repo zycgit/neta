@@ -14,10 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.net.ConnectException;
 
 /**
- * {@link ConnectException} which will be thrown if a connection could not be established because of a connection timeout.
+ * Thrown when a connection attempt times out.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

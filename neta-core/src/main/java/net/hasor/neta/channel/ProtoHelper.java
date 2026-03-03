@@ -21,31 +21,41 @@ import java.util.function.Consumer;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Application stack Builder
+ * Factory for creating type-safe {@link ProtoBuilder} instances.
+ * <p>Entry points: {@link #standard()} for {@code ByteBuf} pipelines,
+ * {@link #object()} for generic {@code Object} pipelines,
+ * {@link #typed(Class, Class)} for custom-typed pipelines.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see ProtoBuilder
  */
 public final class ProtoHelper {
+    /** Create a {@link ProtoBuilder} with {@code ByteBuf} endpoints and default config. */
     public static ProtoBuilder<ByteBuf, ByteBuf> standard() {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
+    /** Create a {@link ProtoBuilder} with {@code ByteBuf} endpoints and custom config. */
     public static ProtoBuilder<ByteBuf, ByteBuf> standard(ProtoConfig protoConf) {
         return new ProtoHelper().nextTo(protoConf);
     }
 
+    /** Create a {@link ProtoBuilder} with generic {@code Object} endpoints and default config. */
     public static ProtoBuilder<Object, Object> object() {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
+    /** Create a {@link ProtoBuilder} with generic {@code Object} endpoints and custom config. */
     public static ProtoBuilder<Object, Object> object(ProtoConfig protoConf) {
         return new ProtoHelper().nextTo(protoConf);
     }
 
+    /** Create a typed {@link ProtoBuilder} with specified RCV/SND endpoint types and default config. */
     public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown) {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
+    /** Create a typed {@link ProtoBuilder} with specified RCV/SND endpoint types and custom config. */
     public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown, ProtoConfig terminalConfig) {
         return new ProtoHelper().nextTo(terminalConfig);
     }
@@ -61,6 +71,23 @@ public final class ProtoHelper {
         ProtoBuilderImpl(ProtoConfig protoConf, List<Consumer<ProtoContext>> taskAppend) {
             this.defaultConf = Objects.requireNonNull(protoConf, "ProtoConfig is null.");
             this.taskAppend = taskAppend;
+        }
+
+        private static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRouting(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
+            Objects.requireNonNull(routing, "routing is null.");
+            final ProtoRoutingDuplexer<RCV_UP, SND_DOWN> duplexer = new ProtoRoutingDuplexer<>(routing);
+            return new ProtoRoutingBuilder<RCV_UP, SND_DOWN>() {
+                @Override
+                public ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, ProtoInitializer initializer) {
+                    duplexer.addBranch(name, initializer);
+                    return this;
+                }
+
+                @Override
+                public ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build() {
+                    return duplexer;
+                }
+            };
         }
 
         @Override
@@ -117,23 +144,6 @@ public final class ProtoHelper {
                 c.addLast(name, r.build());
             });
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
-        }
-
-        private static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRouting(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
-            Objects.requireNonNull(routing, "routing is null.");
-            final ProtoRoutingDuplexer<RCV_UP, SND_DOWN> duplexer = new ProtoRoutingDuplexer<>(routing);
-            return new ProtoRoutingBuilder<RCV_UP, SND_DOWN>() {
-                @Override
-                public ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, ProtoInitializer initializer) {
-                    duplexer.addBranch(name, initializer);
-                    return this;
-                }
-
-                @Override
-                public ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build() {
-                    return duplexer;
-                }
-            };
         }
 
         @Override

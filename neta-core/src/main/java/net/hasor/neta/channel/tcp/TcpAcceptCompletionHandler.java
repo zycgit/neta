@@ -25,7 +25,8 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * TCP Accept Handler
+ * Completion handler for accepting incoming TCP connections.
+ * Creates a new {@link TcpChannel} for each accepted socket, configures it, and starts reading.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

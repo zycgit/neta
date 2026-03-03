@@ -17,7 +17,9 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * closing the channel.
+ * Asynchronous task that gracefully closes a channel.
+ * <p>In safe-close mode, waits for pending writes to drain before closing.
+ * In force mode, closes immediately.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  */

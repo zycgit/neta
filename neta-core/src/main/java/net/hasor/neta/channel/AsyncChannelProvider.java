@@ -42,5 +42,6 @@ public interface AsyncChannelProvider {
      */
     AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException;
 
+    /** Gracefully releases all provider resources and stops accepting new channels. */
     void shutdown();
 }

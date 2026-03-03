@@ -18,8 +18,8 @@ import java.io.IOException;
 import net.hasor.neta.channel.*;
 
 /**
- * A UDP network channel
- * the channel that binds to the Application layer network protocol stack.
+ * UDP channel implementation that binds to the application-layer protocol stack.
+ * Wraps a {@link UdpAsyncChannel} and serves as the base class for QUIC channels.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

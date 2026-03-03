@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.channel;
 /**
- * When {@link SoChannel} is closed.
+ * Thrown when an error occurs during data reception on a {@link SoChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

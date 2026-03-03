@@ -17,7 +17,9 @@ package net.hasor.neta.channel;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Socket Task
+ * Base class for retryable event-loop tasks.
+ * A task signals its result by calling {@link #finishTask()}, {@link #continueTask()},
+ * {@link #delayTask} or {@link #failedTask} at the end of {@link #doWork}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -28,18 +30,22 @@ public abstract class DefaultSoTask implements Runnable {
     private Exception    cause;
     private int          retryCnt;
 
+    /** Returns the failure cause if the last {@code doWork} call ended with {@link #failedTask}. */
     public Throwable getCause() {
         return this.cause;
     }
 
+    /** Returns the current execution status of this task. */
     public SoTaskStatus getStatus() {
         return this.status;
     }
 
+    /** Returns the delay duration set by the last {@link #delayTask} call. */
     public int getDelayTime() {
         return this.delayTime;
     }
 
+    /** Returns the time unit for the delay set by the last {@link #delayTask} call. */
     public TimeUnit getDelayUnit() {
         return this.delayUnit;
     }

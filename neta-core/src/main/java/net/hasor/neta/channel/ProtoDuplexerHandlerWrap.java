@@ -15,7 +15,8 @@
  */
 package net.hasor.neta.channel;
 /**
- * Used to represent a unidirectional data processor, two {@link ProtoDuplexerHandlerWrap}`s in opposite directions can to {@link ProtoDuplexer}
+ * Adapter that combines two {@link ProtoHandler}s (decoder + encoder) into a single {@link ProtoDuplexer}.
+ * <p>Delegates RCV calls to the decoder and SND calls to the encoder.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoDuplexer

@@ -25,6 +25,7 @@ import net.hasor.cobble.StringUtils;
  */
 public class SoUtils {
 
+    /** Builds a {@link SoConnectTimeoutException} for the channel's remote address. */
     public static SoConnectTimeoutException newConnectTimeout(boolean isRcv, long channelId, SoContextService context, Throwable e) {
         SocketAddress address = context.getRemoteAddress(channelId);
         String errorMsg = (isRcv ? "rcv(" : "snd(") + channelId + ") Connection timed out: " + address;

@@ -40,66 +40,82 @@ public class SctpSoConfig extends SoConfig {
         super(SctpProvider.NAME);
     }
 
+    /** Returns the swap buffer size for receiving data (bytes). */
     public int getSwapRcvBuf() {
         return this.swapRcvBuf;
     }
 
+    /** Sets the swap buffer size for receiving data (bytes). */
     public void setSwapRcvBuf(int swapRcvBuf) {
         this.swapRcvBuf = swapRcvBuf;
     }
 
+    /** Returns the swap buffer size for sending data (bytes). */
     public int getSwapSndBuf() {
         return this.swapSndBuf;
     }
 
+    /** Sets the swap buffer size for sending data (bytes). */
     public void setSwapSndBuf(int swapSndBuf) {
         this.swapSndBuf = swapSndBuf;
     }
 
+    /** Returns the SO_KEEPALIVE setting, or null if unset. */
     public Boolean getSoKeepAlive() {
         return this.soKeepAlive;
     }
 
+    /** Enables or disables SO_KEEPALIVE. */
     public void setSoKeepAlive(Boolean soKeepAlive) {
         this.soKeepAlive = soKeepAlive;
     }
 
+    /** Returns TCP_KEEPIDLE in seconds, or null if unset. */
     public Integer getSoKeepIdleSec() {
         return this.soKeepIdleSec;
     }
 
+    /** Sets TCP_KEEPIDLE in seconds. */
     public void setSoKeepIdleSec(Integer soKeepIdleSec) {
         this.soKeepIdleSec = soKeepIdleSec;
     }
 
+    /** Returns TCP_KEEPINTERVAL in seconds, or null if unset. */
     public Integer getSoKeepIntervalSec() {
         return this.soKeepIntervalSec;
     }
 
+    /** Sets TCP_KEEPINTERVAL in seconds. */
     public void setSoKeepIntervalSec(Integer soKeepIntervalSec) {
         this.soKeepIntervalSec = soKeepIntervalSec;
     }
 
+    /** Returns TCP_KEEPCOUNT, or null if unset. */
     public Integer getSoKeepCount() {
         return this.soKeepCount;
     }
 
+    /** Sets TCP_KEEPCOUNT. */
     public void setSoKeepCount(Integer soKeepCount) {
         this.soKeepCount = soKeepCount;
     }
 
+    /** Returns the number of write-timeout retries (0 = no retry). */
     public int getSndWriteRetryCount() {
         return this.sndWriteRetryCount;
     }
 
+    /** Sets the number of write-timeout retries. */
     public void setSndWriteRetryCount(int sndWriteRetryCount) {
         this.sndWriteRetryCount = sndWriteRetryCount;
     }
 
+    /** Returns the delay between write retries in milliseconds. */
     public int getSndWriteRetryIntervalMs() {
         return this.sndWriteRetryIntervalMs;
     }
 
+    /** Sets the delay between write retries in milliseconds. */
     public void setSndWriteRetryIntervalMs(int sndWriteRetryIntervalMs) {
         this.sndWriteRetryIntervalMs = sndWriteRetryIntervalMs;
     }

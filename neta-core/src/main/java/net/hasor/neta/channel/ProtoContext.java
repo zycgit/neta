@@ -19,7 +19,9 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Each {@link NetChannel} has a {@link ProtoContext}.
+ * Protocol context bound to a single {@link NetChannel}.
+ * <p>Provides pipeline configuration (add/remove handlers), data sending,
+ * user-event firing, and per-event flash storage.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -60,6 +62,7 @@ public interface ProtoContext {
     /** write data to protocol stack, the event propagates backward from the current protocol layer */
     Future<?> sendData(Object writeData);
 
+    /** Fire a typed user event; propagates along the current pipeline direction. */
     <T> void fireUserEvent(Class<T> eventType, T event);
 
     /** Refresh the protocol stack, the event propagates backward from the current protocol layer */
