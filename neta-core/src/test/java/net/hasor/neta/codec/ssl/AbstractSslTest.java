@@ -20,7 +20,7 @@ import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import net.hasor.cobble.function.EConsumer;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
@@ -123,7 +123,7 @@ public class AbstractSslTest {
             return ProtoStatus.Next;
         }
 
-        ByteBuf tmpBuf = ByteBufAllocator.DEFAULT.buffer();
+        ByteBuf tmpBuf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer();
         int lastIndex = temp.size() - 1;
         for (int i = 0; i < temp.size(); i++) {
             ByteBuf buf = temp.get(i);

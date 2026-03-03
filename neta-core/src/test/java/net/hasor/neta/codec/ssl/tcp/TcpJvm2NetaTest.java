@@ -67,9 +67,13 @@ public class TcpJvm2NetaTest extends AbstractSslTest {
             }
         });
 
-        // wait finish
+        // wait finish: first wait for client write to complete, then wait for server to receive
         while (!writeFinish.get()) {
             ThreadUtils.sleep(100);
+        }
+        long deadline = System.currentTimeMillis() + 3000;
+        while (rcvMessage.isEmpty() && System.currentTimeMillis() < deadline) {
+            ThreadUtils.sleep(50);
         }
         assert rcvMessage.get(0).equals("Hello Server, this message form client.");
 

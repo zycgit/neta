@@ -67,6 +67,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         return "Handler [name=" + this.name + ", queue=" + this.rcvUp.queueSize() + ", slot=" + this.sndUp.slotSize() + "]";
     }
 
+    /** RCV queue occupancy as {@code "current/capacity"}, or {@code "n/500+"} for unbounded queues. */
     public String toMonitorRcvString() {
         int capacity = this.rcvUp.getCapacity();
         if (capacity > 500) {
@@ -76,6 +77,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    /** SND queue occupancy as {@code "current/capacity"}, or {@code "n/500+"} for unbounded queues. */
     public String toMonitorSndString() {
         int capacity = this.sndUp.getCapacity();
         if (capacity > 500) {
@@ -85,6 +87,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    /** Calls {@link ProtoDuplexer#onInit} on the wrapped handler, with {@code stackName} set in context. */
     public void onInit(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -95,6 +98,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    /** Calls {@link ProtoDuplexer#onActive} on the wrapped handler, with {@code stackName} set in context. */
     public void onActive(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -105,6 +109,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    /** Calls {@link ProtoDuplexer#onClose} on the wrapped handler, with {@code stackName} set in context. */
     public void onClose(ProtoContext protoCtx) {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -115,6 +120,11 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    /**
+     * Delivers a user-defined event to the wrapped handler.
+     * @param isRcv {@code true} for inbound direction, {@code false} for outbound
+     * @return {@code true} to continue propagation, {@code false} to consume the event
+     */
     public boolean onEvent(ProtoContext protoCtx, SoUserEvent event, boolean isRcv) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -125,6 +135,15 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    /**
+     * Executes one pass of this handler node.
+     * <p>Resolves the four queue endpoints (rcvUp/rcvDown/sndUp/sndDown) from the chain
+     * topology, then calls {@link ProtoDuplexer#onMessage} or {@link ProtoDuplexer#onError}
+     * depending on whether a pending error is present. All four queues are committed
+     * (submit/reset) in the {@code finally} block regardless of outcome.</p>
+     * @param isRcv {@code true} for the RCV pass, {@code false} for the SND pass
+     * @return the {@link ProtoStatus} returned by the handler
+     */
     public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         ProtoRcvQueue<RCV_UP> rcvUp = (ProtoRcvQueue<RCV_UP>) this.rcvUp;

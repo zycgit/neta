@@ -56,8 +56,8 @@ public class TcpNeta2NetaTest extends AbstractSslTest {
         NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
 
         // shake hands
-        SslContext clientSslCtx = SslUtils.getSslContext(clientSide);
-        SslContext serverSslCtx = SslUtils.getSslContext(serverSide);
+        SslContext clientSslCtx = SslUtils.getSslContextFromRoot(clientSide);
+        SslContext serverSslCtx = SslUtils.getSslContextFromRoot(serverSide);
 
         // wait shake hands
         while (!clientSslCtx.isReady() || !serverSslCtx.isReady()) {

@@ -70,7 +70,7 @@ public class SoWriteTest extends AbstractSoTest {
         NetManager server = new NetManager(globalConf());
         NetListen listen = server.bind(address, ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onActive(ProtoContext context, ProtoSndQueue<ByteBuf> dst) throws Throwable {
+            public void onActive(ProtoContext context) throws Throwable {
                 context.sendData(ByteBuf.wrap("Hello this message form server.\n".getBytes()));
             }
 
@@ -163,7 +163,11 @@ public class SoWriteTest extends AbstractSoTest {
         NetListen listen = server.bind(address, initializer, tcpConf);
 
         // connect to server -> send data -> close
-        Socket client = new Socket("127.0.0.1", safePort);
+        // Set a tiny OS receive buffer BEFORE connecting so the TCP receive window is small;
+        // this ensures back-pressure builds quickly and the 1 ms write-timeout fires reliably.
+        Socket client = new Socket();
+        client.setReceiveBufferSize(4096);
+        client.connect(address);
         listen.waitAnyAccept();
 
         // server close rcv channel keep output
@@ -211,7 +215,9 @@ public class SoWriteTest extends AbstractSoTest {
         NetListen listen = server.bind(address, initializer, tcpConf);
 
         // connect to server -> send data -> close
-        Socket client = new Socket("127.0.0.1", safePort);
+        Socket client = new Socket();
+        client.setReceiveBufferSize(4096);
+        client.connect(address);
         listen.waitAnyAccept();
 
         // server close rcv channel keep output

@@ -37,7 +37,7 @@ public class SendAndCloseTest extends AbstractSoTest {
         server.bind(address, ctx -> {
             ctx.addLastEncoder(new ProtoHandler<Object, Object>() {
                 @Override
-                public void onActive(ProtoContext c, ProtoSndQueue<Object> dst) throws Throwable {
+                public void onActive(ProtoContext c) throws Throwable {
                     c.sendData("Hello Word".getBytes()).onCompleted(f -> {
                         ctx.getChannel().close();
                     });

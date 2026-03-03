@@ -73,21 +73,10 @@ public final class ProtoHelper {
             this.taskAppend = taskAppend;
         }
 
-        private static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRouting(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
+        private static <RCV_UP, SND_DOWN> ProtoRoutingBuilderImpl<RCV_UP, SND_DOWN> typedRouting(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
             Objects.requireNonNull(routing, "routing is null.");
             final ProtoRoutingDuplexer<RCV_UP, SND_DOWN> duplexer = new ProtoRoutingDuplexer<>(routing);
-            return new ProtoRoutingBuilder<RCV_UP, SND_DOWN>() {
-                @Override
-                public ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, ProtoInitializer initializer) {
-                    duplexer.addBranch(name, initializer);
-                    return this;
-                }
-
-                @Override
-                public ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build() {
-                    return duplexer;
-                }
-            };
+            return new ProtoRoutingBuilderImpl<RCV_UP, SND_DOWN>(duplexer);
         }
 
         @Override
@@ -139,7 +128,7 @@ public final class ProtoHelper {
             Objects.requireNonNull(branches, "branches is null.");
 
             this.taskAppend.add(c -> {
-                ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> r = typedRouting(routing);
+                ProtoRoutingBuilderImpl<NEXT_RCV_DOWN, PREV_SND_UP> r = typedRouting(routing);
                 branches.accept(r);
                 c.addLast(name, r.build());
             });
@@ -153,6 +142,24 @@ public final class ProtoHelper {
                     consumer.accept(ctx);
                 }
             };
+        }
+    }
+
+    private static class ProtoRoutingBuilderImpl<RCV_DOWN, SND_UP> implements ProtoRoutingBuilder<RCV_DOWN, SND_UP> {
+        private final ProtoRoutingDuplexer<RCV_DOWN, SND_UP> duplexer;
+
+        public ProtoRoutingBuilderImpl(ProtoRoutingDuplexer<RCV_DOWN, SND_UP> duplexer) {
+            this.duplexer = duplexer;
+        }
+
+        @Override
+        public ProtoRoutingBuilder<RCV_DOWN, SND_UP> branch(String name, ProtoInitializer initializer) {
+            duplexer.addBranch(name, initializer);
+            return this;
+        }
+
+        public ProtoDuplexer<RCV_DOWN, ?, ?, SND_UP> build() {
+            return this.duplexer;
         }
     }
 }

@@ -212,21 +212,18 @@ public class JdkSslContext extends SslContextBasic {
             throw new GeneralSecurityException("SSL/TLS/DTLS can only be chosen one.");
         }
 
-        for (String p : protocol) {
-            try {
-                SSLContext context = SSLContext.getInstance(p);
-                context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
-
-                if (this.protoCtx.getConfig().isPrintLog()) {
-                    logger.info("ssl(" + this.channelId + ") create JdkSslContext with protocol " + p);
-                }
-                return context;
-            } catch (Exception ignored) {
-                //
+        // Always use the generic protocol family context (e.g. "TLS") so that the SSLEngine supports the full range of versions.
+        String contextProtocol = family.isEmpty() ? "TLS" : family.get(0);
+        try {
+            SSLContext context = SSLContext.getInstance(contextProtocol);
+            context.init(kmf.getKeyManagers(), tmf.getTrustManagers(), null);
+            if (this.protoCtx.getConfig().isPrintLog()) {
+                logger.info("ssl(" + this.channelId + ") create JdkSslContext with protocol " + contextProtocol);
             }
+            return context;
+        } catch (Exception e) {
+            throw new GeneralSecurityException("create SSLContext failed, protocol = " + contextProtocol, e);
         }
-
-        throw new GeneralSecurityException("create SSLContext failed, protocol = " + StringUtils.join(protocol, ", "));
     }
 
     @Override

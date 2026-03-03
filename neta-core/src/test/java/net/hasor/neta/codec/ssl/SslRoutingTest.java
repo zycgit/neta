@@ -52,6 +52,199 @@ public class SslRoutingTest extends AbstractSslTest {
         return sslConfig;
     }
 
+    // =================================================================
+    //  Helper: Port unification pipeline (TLS vs plaintext detection)
+    // =================================================================
+    private static ProtoInitializer createPortUnificationStack(SslConfig sslConf) {
+        return ProtoHelper.standard()//
+                .nextRoute("router", (context, rcvUp, rcvDown) -> {
+                    // rcvUp is null during onActive (connection init) — no data yet, defer routing
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+                    ByteBuf data = (ByteBuf) rcvUp.peekMessage();
+                    if (data != null && data.readableBytes() > 0) {
+                        byte firstByte = data.getByte(data.readerIndex());
+                        return (firstByte == 0x16) ? "tls" : "plain";
+                    }
+                    return null; // not enough data
+                }, r -> {
+                    // TLS branch: SSL decryption → string codec
+                    r.branch("tls", branch -> {
+                        branch.addLast("SSL", new SslDuplexer(sslConf));
+                        branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
+                    });
+                    // Plaintext branch: direct string codec
+                    r.branch("plain", branch -> {
+                        branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
+                    });
+                }).build();
+    }
+
+    // =================================================================
+    //  Helper: Plain text pipeline (no SSL)
+    // =================================================================
+    private static ProtoInitializer createPlainTextStack() {
+        return ProtoHelper.standard().nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1).build();
+    }
+
+    // =================================================================
+    //  Helper: ALPN-based routing after SSL
+    //
+    //  [SSL] → [ALPN Router] ─── "http/2"      ─── [H2TagHandler] → [StringCodec]
+    //                        └── "http/1.1" ── [Http11TagHandler] → [StringCodec]
+    // =================================================================
+    private static ProtoInitializer createAlpnRoutingStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
+        return ctx -> {
+            // SSL layer
+            ctx.addLast("SSL", new SslDuplexer(sslConf));
+
+            // ALPN-based router: after SSL decryption, route by negotiated protocol
+            ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((context, rcvUp, rcvDown) -> {
+                SslContext sslContext = context.context(SslContext.class);
+                if (sslContext != null && sslContext.isReady()) {
+                    String proto = sslContext.getApplicationProtocol();
+                    if ("http/2".equals(proto)) {
+                        return "http/2";
+                    }
+                    return "http/1.1"; // ALPN negotiated non-h2 protocol
+                }
+                return null; // SSL not ready yet, defer routing
+            });
+
+            alpnRouter.addBranch("http/2", branch -> {
+                branch.addLast("tag", createTagHandler("http/2", h2Events));
+                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
+            });
+
+            alpnRouter.addBranch("http/1.1", branch -> {
+                branch.addLast("tag", createTagHandler("http/1.1", http11Events));
+                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
+            });
+
+            ctx.addLast("alpnRouter", alpnRouter);
+        };
+    }
+
+    // =================================================================
+    //  Helper: Full combined stack (port unification + SSL + ALPN)
+    //
+    //  [FirstByte Router] ─── "tls"  ─── [SSL] → [ALPN Router] ─── "http/2"      ── [Tag] → [String]
+    //                     │                                     └── "http/1.1" ── [Tag] → [String]
+    //                     └── "plain" ── [StringCodec]
+    // =================================================================
+    private static ProtoInitializer createFullStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
+        return ctx -> {
+            ProtoRoutingDuplexer<ByteBuf, ByteBuf> outerRouter = new ProtoRoutingDuplexer<>((context, rcvUp, rcvDown) -> {
+                // rcvUp is null during onActive (connection init) — no data yet, defer routing
+                if (rcvUp.queueSize() == 0) {
+                    return null;
+                }
+                ByteBuf data = rcvUp.peekMessage();
+                if (data != null && data.readableBytes() > 0) {
+                    byte firstByte = data.getByte(data.readerIndex());
+                    return (firstByte == 0x16) ? "tls" : "plain";
+                }
+                return null;
+            });
+
+            // TLS branch with nested ALPN routing
+            outerRouter.addBranch("tls", branch -> {
+                branch.addLast("SSL", new SslDuplexer(sslConf));
+
+                // Nested ALPN router within the TLS branch
+                ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((context, rcvUp, rcvDown) -> {
+                    SslContext sslContext = context.context(SslContext.class);
+                    if (sslContext != null && sslContext.isReady()) {
+                        String proto = sslContext.getApplicationProtocol();
+                        if ("http/2".equals(proto)) {
+                            return "http/2";
+                        }
+                        return "http/1.1"; // ALPN negotiated non-h2 protocol
+                    }
+                    return null; // SSL not ready yet, defer routing
+                });
+
+                alpnRouter.addBranch("http/2", b -> {
+                    b.addLast("tag", createTagHandler("http/2", h2Events));
+                    b.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
+                });
+
+                alpnRouter.addBranch("http/1.1", b -> {
+                    b.addLast("tag", createTagHandler("http/1.1", http11Events));
+                    b.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
+                });
+
+                branch.addLast("alpnRouter", alpnRouter);
+            });
+
+            // Plaintext branch
+            outerRouter.addBranch("plain", branch -> {
+                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
+            });
+
+            ctx.addLast("router", outerRouter);
+        };
+    }
+
+    // =================================================================
+    //  Helper: Tag handler — prefixes messages with protocol tag
+    //  and records events for test assertions
+    //
+    //  RCV: ByteBuf → ByteBuf (prepend "[proto]" to content)
+    //  SND: pass through
+    // =================================================================
+    @SuppressWarnings("unchecked")
+    private static ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> createTagHandler(String proto, List<String> events) {
+        return new ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
+            @Override
+            public void onInit(ProtoContext context) {
+                events.add("init");
+            }
+
+            @Override
+            public void onActive(ProtoContext context) {
+                events.add("active");
+            }
+
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) {
+                if (isRcv) {
+                    events.add("message");
+                    ByteBuf data;
+                    while ((data = rcvUp.takeMessage()) != null) {
+                        // Prepend protocol tag
+                        byte[] tag = ("[" + proto + "]").getBytes();
+                        byte[] original = new byte[data.readableBytes()];
+                        data.readBytes(original);
+                        byte[] tagged = new byte[tag.length + original.length];
+                        System.arraycopy(tag, 0, tagged, 0, tag.length);
+                        System.arraycopy(original, 0, tagged, tag.length, original.length);
+                        rcvDown.offerMessage(ByteBuf.wrap(tagged));
+                    }
+                } else {
+                    // SND passthrough
+                    ByteBuf data;
+                    while ((data = sndUp.takeMessage()) != null) {
+                        sndDown.offerMessage(data);
+                    }
+                }
+                return ProtoStatus.Next;
+            }
+
+            @Override
+            public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) {
+                events.add("error");
+                return ProtoStatus.Next;
+            }
+
+            @Override
+            public void onClose(ProtoContext context) {
+                events.add("close");
+            }
+        };
+    }
+
     // =====================================================================
     // Test 1: Port unification — SSL vs plaintext auto-detection
     //
@@ -168,7 +361,7 @@ public class SslRoutingTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig serverConf = sslConfig();
             serverConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
-            serverConf.setAppProtocolSelector((channel, sslEngine, protocols) -> {
+            serverConf.setAppProtocolSelector((channel, protocols) -> {
                 // Server prefers http/2
                 if (protocols.contains("http/2")) {
                     return "http/2";
@@ -207,7 +400,7 @@ public class SslRoutingTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig serverConf = sslConfig();
             serverConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
-            serverConf.setAppProtocolSelector((channel, sslEngine, protocols) -> {
+            serverConf.setAppProtocolSelector((channel, protocols) -> {
                 // Server only supports http/1.1
                 return "http/1.1";
             });
@@ -250,7 +443,7 @@ public class SslRoutingTest extends AbstractSslTest {
 
             SslConfig serverConf = sslConfig();
             serverConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
-            serverConf.setAppProtocolSelector((channel, sslEngine, protocols) -> "http/2");
+            serverConf.setAppProtocolSelector((channel, protocols) -> "http/2");
 
             SslConfig clientConf = sslConfig();
             clientConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
@@ -310,7 +503,7 @@ public class SslRoutingTest extends AbstractSslTest {
 
             SslConfig serverConf = sslConfig();
             serverConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
-            serverConf.setAppProtocolSelector((channel, sslEngine, protocols) -> "http/1.1");
+            serverConf.setAppProtocolSelector((channel, protocols) -> "http/1.1");
 
             SslConfig clientConf = sslConfig();
             clientConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
@@ -357,7 +550,7 @@ public class SslRoutingTest extends AbstractSslTest {
         this.autoCloseNeta(neta -> {
             SslConfig serverConf = sslConfig();
             serverConf.setAppProtocol(new String[] { "http/2" });
-            serverConf.setAppProtocolSelector((channel, sslEngine, protocols) -> {
+            serverConf.setAppProtocolSelector((channel, protocols) -> {
                 assert protocols.contains("http/2");
                 return "http/2";
             });
@@ -409,7 +602,7 @@ public class SslRoutingTest extends AbstractSslTest {
 
             SslConfig serverConf = sslConfig();
             serverConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
-            serverConf.setAppProtocolSelector((channel, sslEngine, protocols) -> "http/2");
+            serverConf.setAppProtocolSelector((channel, protocols) -> "http/2");
 
             SslConfig clientConf = sslConfig();
             clientConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
@@ -434,7 +627,7 @@ public class SslRoutingTest extends AbstractSslTest {
 
             ThreadUtils.sleep(1000);
 
-            SslContext serverSSL = server.findProtoContext(SslContext.class);
+            SslContext serverSSL = server.findProtoContextByPath(SslContext.class, "router", "tls");
             assert "http/2".equals(serverSSL.getApplicationProtocol()) : "Server should negotiate http/2 via ALPN";
 
             client.sendData("combined test\n");
@@ -463,7 +656,7 @@ public class SslRoutingTest extends AbstractSslTest {
 
             SslConfig sslConf = sslConfig();
             sslConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
-            sslConf.setAppProtocolSelector((channel, sslEngine, protocols) -> "http/2");
+            sslConf.setAppProtocolSelector((channel, protocols) -> "http/2");
 
             // Server stack: SSL → String, with user event listener
             ProtoInitializer serverStack = ctx -> {
@@ -527,195 +720,5 @@ public class SslRoutingTest extends AbstractSslTest {
             assert capturedEvent.get().getContext() != null : "SslContext should be available";
             assert "http/2".equals(capturedEvent.get().getContext().getApplicationProtocol()) : "ALPN should be http/2";
         });
-    }
-
-    // =================================================================
-    //  Helper: Port unification pipeline (TLS vs plaintext detection)
-    // =================================================================
-    private static ProtoInitializer createPortUnificationStack(SslConfig sslConf) {
-        return ctx -> {
-            // Route based on first byte: 0x16 = TLS ClientHello
-            ProtoRoutingDuplexer.Builder<ByteBuf> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
-                ByteBuf data = rcvUp.peekMessage();
-                if (data != null && data.readableBytes() > 0) {
-                    byte firstByte = data.getByte(data.readerIndex());
-                    return (firstByte == 0x16) ? "tls" : "plain";
-                }
-                return null; // not enough data
-            });
-
-            // TLS branch: SSL decryption → string codec
-            builder.branch("tls", branch -> {
-                branch.addLast("SSL", new SslDuplexer(sslConf));
-                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-            });
-
-            // Plaintext branch: direct string codec
-            builder.branch("plain", branch -> {
-                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-            });
-
-            ctx.addLast("router", builder.build(ctx));
-        };
-    }
-
-    // =================================================================
-    //  Helper: Plain text pipeline (no SSL)
-    // =================================================================
-    private static ProtoInitializer createPlainTextStack() {
-        return ProtoHelper.standard().nextDuplex("String", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1).build();
-    }
-
-    // =================================================================
-    //  Helper: ALPN-based routing after SSL
-    //
-    //  [SSL] → [ALPN Router] ─── "http/2"      ─── [H2TagHandler] → [StringCodec]
-    //                        └── "http/1.1" ── [Http11TagHandler] → [StringCodec]
-    // =================================================================
-    private static ProtoInitializer createAlpnRoutingStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
-        return ctx -> {
-            // SSL layer
-            ctx.addLast("SSL", new SslDuplexer(sslConf));
-
-            // ALPN-based router: after SSL decryption, route by negotiated protocol
-            ProtoRoutingDuplexer.Builder<ByteBuf> builder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
-                SslContext sslContext = context.context(SslContext.class);
-                if (sslContext != null && sslContext.isReady()) {
-                    String proto = sslContext.getApplicationProtocol();
-                    if ("http/2".equals(proto)) {
-                        return "http/2";
-                    }
-                    return "http/1.1"; // ALPN negotiated non-h2 protocol
-                }
-                return null; // SSL not ready yet, defer routing
-            });
-
-            builder.branch("http/2", branch -> {
-                branch.addLast("tag", createTagHandler("http/2", h2Events));
-                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-            });
-
-            builder.branch("http/1.1", branch -> {
-                branch.addLast("tag", createTagHandler("http/1.1", http11Events));
-                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-            });
-
-            ctx.addLast("alpnRouter", builder.build(ctx));
-        };
-    }
-
-    // =================================================================
-    //  Helper: Full combined stack (port unification + SSL + ALPN)
-    //
-    //  [FirstByte Router] ─── "tls"  ─── [SSL] → [ALPN Router] ─── "http/2"      ── [Tag] → [String]
-    //                     │                                     └── "http/1.1" ── [Tag] → [String]
-    //                     └── "plain" ── [StringCodec]
-    // =================================================================
-    private static ProtoInitializer createFullStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
-        return ctx -> {
-            ProtoRoutingDuplexer.Builder<ByteBuf> outerBuilder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
-                ByteBuf data = rcvUp.peekMessage();
-                if (data != null && data.readableBytes() > 0) {
-                    byte firstByte = data.getByte(data.readerIndex());
-                    return (firstByte == 0x16) ? "tls" : "plain";
-                }
-                return null;
-            });
-
-            // TLS branch with nested ALPN routing
-            outerBuilder.branch("tls", branch -> {
-                branch.addLast("SSL", new SslDuplexer(sslConf));
-
-                // Nested ALPN router within the TLS branch
-                ProtoRoutingDuplexer.Builder<ByteBuf> alpnBuilder = ProtoRoutingDuplexer.newBuilder((context, rcvUp, rcvDown) -> {
-                    SslContext sslContext = context.context(SslContext.class);
-                    if (sslContext != null && sslContext.isReady()) {
-                        String proto = sslContext.getApplicationProtocol();
-                        if ("http/2".equals(proto)) {
-                            return "http/2";
-                        }
-                        return "http/1.1"; // ALPN negotiated non-h2 protocol
-                    }
-                    return null; // SSL not ready yet, defer routing
-                });
-
-                alpnBuilder.branch("http/2", b -> {
-                    b.addLast("tag", createTagHandler("http/2", h2Events));
-                    b.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-                });
-
-                alpnBuilder.branch("http/1.1", b -> {
-                    b.addLast("tag", createTagHandler("http/1.1", http11Events));
-                    b.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-                });
-
-                branch.addLast("alpnRouter", alpnBuilder.build(branch));
-            });
-
-            // Plaintext branch
-            outerBuilder.branch("plain", branch -> {
-                branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-            });
-
-            ctx.addLast("router", outerBuilder.build(ctx));
-        };
-    }
-
-    // =================================================================
-    //  Helper: Tag handler — prefixes messages with protocol tag
-    //  and records events for test assertions
-    //
-    //  RCV: ByteBuf → ByteBuf (prepend "[proto]" to content)
-    //  SND: pass through
-    // =================================================================
-    @SuppressWarnings("unchecked")
-    private static ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> createTagHandler(String proto, List<String> events) {
-        return new ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
-            @Override
-            public void onInit(ProtoContext context) {
-                events.add("init");
-            }
-
-            @Override
-            public void onActive(ProtoContext context) {
-                events.add("active");
-            }
-
-            @Override
-            public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown, ProtoRcvQueue<ByteBuf> sndUp, ProtoSndQueue<ByteBuf> sndDown) {
-                if (isRcv) {
-                    events.add("message");
-                    ByteBuf data;
-                    while ((data = rcvUp.takeMessage()) != null) {
-                        // Prepend protocol tag
-                        byte[] tag = ("[" + proto + "]").getBytes();
-                        byte[] original = new byte[data.readableBytes()];
-                        data.readBytes(original);
-                        byte[] tagged = new byte[tag.length + original.length];
-                        System.arraycopy(tag, 0, tagged, 0, tag.length);
-                        System.arraycopy(original, 0, tagged, tag.length, original.length);
-                        rcvDown.offerMessage(ByteBuf.wrap(tagged));
-                    }
-                } else {
-                    // SND passthrough
-                    ByteBuf data;
-                    while ((data = sndUp.takeMessage()) != null) {
-                        sndDown.offerMessage(data);
-                    }
-                }
-                return ProtoStatus.Next;
-            }
-
-            @Override
-            public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) {
-                events.add("error");
-                return ProtoStatus.Next;
-            }
-
-            @Override
-            public void onClose(ProtoContext context) {
-                events.add("close");
-            }
-        };
     }
 }

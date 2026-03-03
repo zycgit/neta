@@ -21,7 +21,13 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * root Application stack
+ * Root of the bidirectional handler chain ({@link ProtoStack} implementation).
+ * <p>Manages a doubly-linked list of {@link ProtoInvocation} nodes.
+ * RCV events propagate head→tail; SND events propagate tail→head.</p>
+ * <pre>
+ *   head → [Inv-0] → [Inv-1] → ... → [Inv-N] → tailRcvDown   (RCV)
+ *   headSndDown ← [Inv-0] ← [Inv-1] ← ... ← [Inv-N] ← tail      (SND)
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
@@ -47,14 +53,20 @@ class ProtoChainRoot implements ProtoStack<Object> {
         this.branchMode = branchMode;
     }
 
+    /** Returns the tail RCV-down queue — decoded output from the last handler in the RCV chain. */
     public ProtoQueue<?> getTailRcvDown() {
         return this.tailRcvDown;
     }
 
+    /** Returns the head SND-down queue — encoded output pushed toward the wire by the SND chain. */
     public ProtoQueue<?> getHeadSndDown() {
         return this.headSndDown;
     }
 
+    /**
+     * Appends {@code invocation} to the tail of the handler chain.
+     * <pre>  head → … → [existing tail] → [invocation]  (RCV direction)</pre>
+     */
     public void appendProtoStack(ProtoInvocation<?, ?, ?, ?> invocation) {
         if (this.head == null) {
             this.head = this.tail = invocation;
@@ -65,6 +77,10 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
     }
 
+    /**
+     * Inserts {@code invocation} at the head of the handler chain.
+     * <pre>  [invocation] → [existing head] → … → tail  (RCV direction)</pre>
+     */
     public void insertProtoStack(ProtoInvocation<?, ?, ?, ?> invocation) {
         if (this.head == null) {
             this.head = this.tail = invocation;
@@ -80,6 +96,10 @@ class ProtoChainRoot implements ProtoStack<Object> {
         return this.headSndDown.slotSize();
     }
 
+    /**
+     * Returns the name of the handler immediately after {@code withName} in the RCV chain,
+     * or {@code null} if {@code withName} is the last handler or not found.
+     */
     public String findNextStack(String withName) {
         ProtoInvocation<?, ?, ?, ?> current = this.head;
         while (current != null) {
@@ -96,6 +116,10 @@ class ProtoChainRoot implements ProtoStack<Object> {
         return null;
     }
 
+    /**
+     * Returns the name of the handler immediately before {@code withName} in the RCV chain
+     * (i.e. the next node in the SND direction), or {@code null} if not found or already at head.
+     */
     public String findPreviousStack(String withName) {
         ProtoInvocation<?, ?, ?, ?> current = this.tail;
         while (current != null) {
@@ -114,6 +138,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
     @Override
     public void onInit(ProtoContext protoCtx) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             this.channelID = protoCtx.getChannel().getChannelId();
 
@@ -123,17 +148,19 @@ class ProtoChainRoot implements ProtoStack<Object> {
                     current.onInit(protoCtx);
                 } catch (Throwable e) {
                     logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onInit error: " + e.getMessage(), e);
+                    ctx.clearFlash(); // reset flash after handler error to protect subsequent handlers
                 } finally {
                     current = current.next;
                 }
             }
         } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
+            ctx.clearFlash();
         }
     }
 
     @Override
     public void onActive(ProtoContext protoCtx) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             ProtoInvocation<?, ?, ?, ?> current = this.head;
             while (current != null) {
@@ -141,28 +168,33 @@ class ProtoChainRoot implements ProtoStack<Object> {
                     current.onActive(protoCtx);
                 } catch (Throwable e) {
                     logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onActive error: " + e.getMessage(), e);
+                    ctx.clearFlash(); // reset flash after handler error to protect subsequent handlers
                 } finally {
                     current = current.next;
                 }
             }
         } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
+            ctx.clearFlash();
         }
     }
 
     @Override
     public void onClose(ProtoContext protoCtx) {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             ProtoInvocation<?, ?, ?, ?> current = this.head;
             while (current != null) {
                 try {
                     current.onClose(protoCtx);
+                } catch (Throwable e) {
+                    logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onClose error: " + e.getMessage(), e);
+                    ctx.clearFlash(); // reset flash after handler error to protect subsequent handlers
                 } finally {
                     current = current.next;
                 }
             }
         } finally {
-            ((ProtoContextService) protoCtx).clearFlash();
+            ctx.clearFlash();
         }
     }
 
@@ -211,9 +243,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     public Object[] onRcvMessage(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
+            ctx.beginRcv();
             try {
-                ctx.beginRcv();
-
                 if (this.head == null) {
                     return this.triggerRcvWithEmpty(ctx, rcvData);
                 } else {
@@ -229,9 +260,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     public Object[] onRcvError(ProtoContext protoCtx, String stackName, Throwable rcvError) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
+            ctx.beginRcv(rcvError);
             try {
-                ctx.beginRcv(rcvError);
-
                 if (this.head == null) {
                     return this.triggerRcvWithEmpty(ctx, EMPTY);
                 } else {
@@ -350,9 +380,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     public Object[] onSndMessage(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
+            ctx.beginSnd();
             try {
-                ctx.beginSnd();
-
                 if (this.tail == null) {
                     return sndData;
                 } else {
@@ -369,9 +398,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     public Object[] onSndError(ProtoContext protoCtx, String stackName, Throwable sndError) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
+            ctx.beginSnd(sndError);
             try {
-                ctx.beginSnd(sndError);
-
                 if (this.tail == null) {
                     this.triggerSend(ctx);
                     return EMPTY;
@@ -449,14 +477,22 @@ class ProtoChainRoot implements ProtoStack<Object> {
     public void onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
+            // RCV leg: propagate forward through the chain from stackName.
+            ctx.beginRcv();
+            boolean continueSnd;
             try {
-                ctx.beginRcv();
-                if (this.doRcvUserEvent(protoCtx, stackName, event)) {
-                    ctx.switchToSnd(); // switch direction for the SND leg
-                    this.doSndUserEvent(protoCtx, null, event);
-                }
+                continueSnd = this.doRcvUserEvent(protoCtx, stackName, event);
             } finally {
                 ctx.end();
+            }
+            // SND leg: propagate in reverse only when the RCV leg completes normally.
+            if (continueSnd) {
+                ctx.beginSnd();
+                try {
+                    this.doSndUserEvent(protoCtx, null, event);
+                } finally {
+                    ctx.end();
+                }
             }
         }
     }
@@ -465,8 +501,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
     public void onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
+            ctx.beginSnd();
             try {
-                ctx.beginSnd();
                 this.doSndUserEvent(protoCtx, stackName, event);
             } finally {
                 ctx.end();
@@ -526,6 +562,16 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // Statistical
     // ------------------------------------------------------------
 
+    /**
+     * Renders the handler chain as a bordered table showing each layer's name and its
+     * current RCV/SND queue occupancy ({@code current/capacity}).
+     * <pre>
+     * ┏━ name ━━━━━━━━ rcv ↓  snd ━┓
+     * ┃ handlerA  [↑ 0/8,  ↓ 0/8 ] ┃
+     * ┃ handlerB  [↑ 0/8,  ↓ 0/8 ] ┃
+     * ┗━ name ━ ↑  rcv  ━━━ snd ━━━┛
+     * </pre>
+     */
     @Override
     public String toString() {
         List<String> layerNames = new ArrayList<>();

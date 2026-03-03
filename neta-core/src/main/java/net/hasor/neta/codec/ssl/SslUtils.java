@@ -257,7 +257,38 @@ public class SslUtils {
         return encryptedPrivateKeyInfo.getKeySpec(cipher);
     }
 
-    public static SslContext getSslContext(NetChannel channel) {
+    /**
+     * Retrieves the {@link SslContext} stored in the <b>root (main-pipeline) ctx</b>.
+     * <p>Use this when {@link SslDuplexer} is placed directly in the main pipeline (not inside a branch).
+     * If SSL is inside a routing branch, use {@link #getSslContextFromPath} instead.</p>
+     *
+     * @param channel the network channel
+     * @return the {@link SslContext} or {@code null} if not set
+     */
+    public static SslContext getSslContextFromRoot(NetChannel channel) {
         return channel.findProtoContext(SslContext.class);
+    }
+
+    /**
+     * Navigates the routing tree by path and retrieves the {@link SslContext} stored in
+     * the target branch ctx.
+     * <p>
+     * The {@code path} is a sequence of {@code (routerStackName, branchName)} pairs identifying
+     * which Router and branch to descend into at each level.
+     * </p>
+     * <pre>
+     *   // SSL in "tls" branch under "router1"
+     *   getSslContextFromPath(channel, "router1", "tls")
+     *
+     *   // SSL in nested branch: router1 -&gt; tls -&gt; router2 -&gt; http2
+     *   getSslContextFromPath(channel, "router1", "tls", "router2", "http2")
+     * </pre>
+     *
+     * @param channel the network channel
+     * @param path    alternating (routerStackName, branchName) pairs; must be non-empty and even-length
+     * @return the {@link SslContext} or {@code null} if the path cannot be resolved
+     */
+    public static SslContext getSslContextFromPath(NetChannel channel, String... path) {
+        return channel.findProtoContextByPath(SslContext.class, path);
     }
 }

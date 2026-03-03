@@ -17,20 +17,17 @@ package net.hasor.neta.channel;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.InetSocketAddress;
-import java.net.ServerSocket;
-import java.net.Socket;
-import java.net.SocketException;
+import java.net.*;
 import java.security.MessageDigest;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BooleanSupplier;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.function.Callable;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.quic.QuicSoConfig;
-import net.hasor.neta.channel.quic.QuicStreamCodec;
 import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.channel.udp.UdpSoConfig;
 
@@ -42,9 +39,13 @@ public class AbstractSoTest {
     public static int safePort() throws IOException {
         for (int i = 24601; i < 65525; i++) {
             try {
+                // 同时检查 TCP 和 UDP 端口是否空闲，避免与仍在运行的 QUIC UDP 服务端冲突
                 ServerSocket ss = new ServerSocket();
                 ss.bind(new InetSocketAddress("127.0.0.1", i));
                 ss.close();
+                DatagramSocket ds = new DatagramSocket(null);
+                ds.bind(new InetSocketAddress("127.0.0.1", i));
+                ds.close();
                 return i;
             } catch (Exception e) {
                 continue;
@@ -87,7 +88,7 @@ public class AbstractSoTest {
     public static ProtoHandler counter(AtomicInteger counter) {
         return new ProtoHandler() {
             @Override
-            public void onActive(ProtoContext context, ProtoSndQueue dst) throws Throwable {
+            public void onActive(ProtoContext context) throws Throwable {
                 counter.incrementAndGet();
             }
 
@@ -152,13 +153,14 @@ public class AbstractSoTest {
 
     public static QuicSoConfig quicConfig() {
         QuicSoConfig config = SoConfig.QUIC();
-        config.setSslEnabled(false);
         config.setRcvPacketSize(65535);
+        config.setSoReadTimeoutMs(1000);  // align with UDP/TCP config
+        config.setSoWriteTimeoutMs(1000); // align with UDP/TCP config
         return config;
     }
 
     /** Wait for a condition to become true within timeoutMs milliseconds. */
-    public static void waitFor(java.util.function.BooleanSupplier condition, long timeoutMs) {
+    public static void waitFor(BooleanSupplier condition, long timeoutMs) {
         long deadline = System.currentTimeMillis() + timeoutMs;
         while (!condition.getAsBoolean() && System.currentTimeMillis() < deadline) {
             ThreadUtils.sleep(50);
@@ -172,22 +174,13 @@ public class AbstractSoTest {
         for (long id = listenId + 1; id < listenId + 20; id++) {
             SoChannel<?> ch = ctx.findChannel(id);
             if (ch instanceof NetChannel) {
-                return (NetChannel) ch;
+                NetChannel nc = (NetChannel) ch;
+                // Only return channels that belong to this listen (server-side channels)
+                if (nc.getListen() == listen) {
+                    return nc;
+                }
             }
         }
         return null;
     }
-
-    /**
-     * Wraps a ProtoInitializer with QuicStreamCodec as the first handler.
-     * This strips the stream metadata prefix (streamId+fin) that the QUIC transport
-     * prepends, so downstream handlers receive raw data.
-     */
-    public static ProtoInitializer quicWrap(ProtoInitializer inner) {
-        return ctx -> {
-            ctx.addLast("stream-codec", new QuicStreamCodec());
-            inner.config(ctx);
-        };
-    }
-
 }

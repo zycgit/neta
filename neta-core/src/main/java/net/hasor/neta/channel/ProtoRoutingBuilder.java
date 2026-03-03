@@ -16,8 +16,7 @@
 package net.hasor.neta.channel;
 /**
  * Builder for defining routing branches in a protocol pipeline.
- * <p>Use {@link #branch(String, ProtoInitializer)} to register named sub-pipelines,
- * then call {@link #build()} to produce the composite {@link ProtoDuplexer}.</p>
+ * <p>Use {@link #branch(String, ProtoInitializer)} to register named sub-pipelines.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoRoutingSelector
@@ -26,7 +25,4 @@ package net.hasor.neta.channel;
 public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {
     /** Register a named sub-pipeline branch. */
     ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, ProtoInitializer initializer);
-
-    /** Build all registered branches into a single composite {@link ProtoDuplexer}. */
-    ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build();
 }

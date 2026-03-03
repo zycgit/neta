@@ -48,13 +48,13 @@ public class UdpSndWriteRetryTest {
 
     /** Invoke the private {@code handleException(Throwable, SoSndContext)} with a timeout exception. */
     private static boolean invokeHandleTimeout(UdpWriteTask task) throws Exception {
-        Method m = UdpWriteTask.class.getDeclaredMethod("handleException", Throwable.class, SoSndContext.class);
+        Method m = AbstractUdpWriteTask.class.getDeclaredMethod("handleException", Throwable.class, SoSndContext.class);
         m.setAccessible(true);
         return (Boolean) m.invoke(task, new InterruptedByTimeoutException(), null);
     }
 
     private static void setSendData(UdpWriteTask task, byte[] data) throws Exception {
-        Field f = UdpWriteTask.class.getDeclaredField("sendData");
+        Field f = AbstractUdpWriteTask.class.getDeclaredField("sendData");
         f.setAccessible(true);
         f.set(task, data);
     }
@@ -64,13 +64,13 @@ public class UdpSndWriteRetryTest {
     // -------------------------------------------------------------------------
 
     private static byte[] getSendData(UdpWriteTask task) throws Exception {
-        Field f = UdpWriteTask.class.getDeclaredField("sendData");
+        Field f = AbstractUdpWriteTask.class.getDeclaredField("sendData");
         f.setAccessible(true);
         return (byte[]) f.get(task);
     }
 
     private static int getTimeoutRetryCnt(UdpWriteTask task) throws Exception {
-        Field f = UdpWriteTask.class.getDeclaredField("timeoutRetryCnt");
+        Field f = AbstractUdpWriteTask.class.getDeclaredField("timeoutRetryCnt");
         f.setAccessible(true);
         return (int) f.get(task);
     }

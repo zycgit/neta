@@ -38,7 +38,7 @@ public class SoShutdownTest extends AbstractSoTest {
         AtomicBoolean rcvError = new AtomicBoolean(false);
         ProtoInitializer initializer = ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
-            public void onActive(ProtoContext context, ProtoSndQueue<ByteBuf> dst) {
+            public void onActive(ProtoContext context) {
                 ((TcpChannel) context.getChannel()).shutdownInput();// shutdownInput with accept.
             }
 

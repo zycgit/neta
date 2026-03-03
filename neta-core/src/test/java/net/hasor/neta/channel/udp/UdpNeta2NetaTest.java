@@ -61,7 +61,8 @@ public class UdpNeta2NetaTest {
         Future<?> send2 = server.sendData("Hello Client, this message form server.\n");
 
         // wait finish
-        while (serverRcvData.isEmpty() || clientRcvData.isEmpty()) {
+        int i = 100 * 50; // max 5sec
+        while ((serverRcvData.isEmpty() || clientRcvData.isEmpty()) && i-- > 0) {
             ThreadUtils.sleep(100);
         }
 

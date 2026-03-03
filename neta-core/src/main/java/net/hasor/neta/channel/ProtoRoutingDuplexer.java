@@ -20,21 +20,18 @@ import net.hasor.cobble.logging.Logger;
 /**
  * A routing duplexer that forks the pipeline into multiple sub-pipeline branches.
  * <p>
- * On the first RCV (inbound) onMessage invocation, the {@link ProtoRouting} predicate is
- * evaluated to select which branch should handle the connection. The routing decision is
- * cached for the connection's lifetime. Routing does NOT require data to be present —
- * decisions can be based purely on protocol context state (e.g. ALPN negotiation result
- * from {@code SslContext}).
+ * Routing is attempted in two phases via {@link ProtoRoutingSelector#route}:
+ * <ol>
+ *   <li><b>onActive</b>: called with an empty {@code rcvUp} — supports context-based routing (e.g. ALPN).</li>
+ *   <li><b>onMessage (first RCV)</b>: called with real inbound data — supports data-based routing (e.g. TLS peek).</li>
+ * </ol>
+ * The predicate may peek/take from {@code rcvUp}; unconsumed data is re-presented on the next call.
+ * Return {@code null} to defer; once a branch key is returned the decision is cached for the connection's lifetime.
  * </p>
  * <p>
- * Routing happens exclusively during the RCV phase because protocol handshakes
- * (SSL/TLS, ALPN, WebSocket upgrade, etc.) are completed during inbound processing.
- * SND (outbound) data arriving before route determination is passed through as-is.
- * </p>
- * <p>
- * Lifecycle events (onInit, onActive, onClose) are propagated to ALL branches.
- * Data events (onMessage) are routed only through the selected branch.
- * User events are propagated to ALL branches.
+ * Lifecycle: {@code onInit}/{@code onClose} → ALL branches;
+ * {@code onActive}/{@code onMessage}/user-events → selected branch only.
+ * SND data arriving before the route is determined is dropped with a warning.
  * </p>
  * <pre>
  *  Main Pipeline:
@@ -46,111 +43,149 @@ import net.hasor.cobble.logging.Logger;
  *      [TlsHandler]   [HttpCodec]
  *      [HttpCodec]
  * </pre>
- * @param <T> the data type flowing into/out of the routing node
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15
  */
-public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object, T> {
-    private static final Logger logger = Logger.getLogger(ProtoRoutingDuplexer.class);
+public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, Object, OUT> {
+    private static final Logger                        logger = Logger.getLogger(ProtoRoutingDuplexer.class);
+    private final        ProtoRoutingSelector<IN, OUT> routing;
+    private final        Map<String, BranchEntry>      branches;
+    private final        List<String>                  branchOrder;
+    private              String                        selectedRoute;
+    private              boolean                       branchActivated;
 
-    private final ProtoRouting<T>          routing;
-    private final Map<String, BranchEntry> branches;
-    private final List<String>             branchOrder;
-    private       String                   selectedRoute;
-
-    private ProtoRoutingDuplexer(ProtoRouting<T> routing, Map<String, BranchEntry> branches, List<String> branchOrder) {
+    public ProtoRoutingDuplexer(ProtoRoutingSelector<IN, OUT> routing) {
         this.routing = Objects.requireNonNull(routing, "routing is null.");
-        this.branches = branches;
-        this.branchOrder = branchOrder;
-    }
-
-    /** Returns the currently selected route, or null if not yet determined. */
-    public String getSelectedRoute() {
-        return this.selectedRoute;
+        this.branches = new LinkedHashMap<>();
+        this.branchOrder = new ArrayList<>();
     }
 
     @Override
     public void onInit(ProtoContext context) throws Throwable {
-        // Initialize ALL branches
+        if (this.branchOrder.isEmpty()) {
+            throw new IllegalStateException("ProtoRoutingDuplexer has no branches registered. At least one branch is required.");
+        }
+        // Pre-compute the adjacent-node names once; they are constant for the lifetime of the
+        // connection and shared by all branches of this Router.
+        ProtoContextService parentCtxService = (ProtoContextService) context;
+        String routerName = context.getStackName();
+        String prevStackName = parentCtxService.getChainRoot().findPreviousStack(routerName);
+        String nextStackName = parentCtxService.getChainRoot().findNextStack(routerName);
+
+        // Lazily create and initialize each branch context (branch pipelines are built here, not at addBranch time).
         for (String name : this.branchOrder) {
-            BranchEntry branch = this.branches.get(name);
+            BranchEntry entry = this.branches.get(name);
+            ProtoContextService branchCtx = new ProtoContextService(parentCtxService, -1, -1, prevStackName, nextStackName);
+            ProtoChainRoot chainRoot = branchCtx.getChainRoot();
+
+            // Run the user-supplied initializer to populate the branch handler chain
+            entry.initializer.config(branchCtx);
+            // Start the branch chain lifecycle
             try {
-                branch.initializer.config(branch.branchCtx);
-                branch.chainRoot.onInit(branch.branchCtx);
+                chainRoot.onInit(branchCtx);
             } catch (Throwable e) {
                 logger.error("Branch '" + name + "' onInit error: " + e.getMessage(), e);
+                throw e;
             }
+            // Store back the fully-initialized entry (replaces the null-chainRoot placeholder)
+            this.branches.put(name, new BranchEntry(name, chainRoot, branchCtx, entry.initializer));
         }
     }
 
     @Override
-    public void onActive(ProtoContext context, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<T> sndDown) throws Throwable {
-        // Do NOT activate branches here — branch activation is deferred
-        // until the route is determined during onMessage(isRcv=true).
+    public void onActive(ProtoContext context) throws Throwable {
+        if (this.selectedRoute == null) {
+            // No pre-selection: ask the routing selector (context-based, e.g. ALPN)
+            ProtoSndQueue<?> headSndDown = ((ProtoContextService) context).getChainRoot().getHeadSndDown();
+            this.selectedRoute = this.routing.route(context, ProtoQueue.emptyRcv(), (ProtoSndQueue<OUT>) headSndDown);
+        }
+        if (this.selectedRoute != null) {
+            this.doActivateSelectedBranch(context);
+        }
+        // If selectedRoute is still null, branch activation is deferred to onMessage(isRcv=true)
     }
 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
-        // Propagate user events to ALL branches
-        for (String name : this.branchOrder) {
-            BranchEntry branch = this.branches.get(name);
-            try {
-                if (isRcv) {
-                    branch.chainRoot.onRcvUserEvent(branch.branchCtx, null, event);
-                } else {
-                    branch.chainRoot.onSndUserEvent(branch.branchCtx, null, event);
-                }
-            } catch (Throwable e) {
-                logger.error("Branch '" + name + "' onUserEvent error: " + e.getMessage(), e);
+        if (this.selectedRoute == null) {
+            return true;
+        }
+        BranchEntry branch = this.branches.get(this.selectedRoute);
+        if (branch != null) {
+            if (isRcv) {
+                branch.chainRoot.onRcvUserEvent(branch.branchCtx, null, event);
+            } else {
+                branch.chainRoot.onSndUserEvent(branch.branchCtx, null, event);
             }
         }
         return true;
     }
 
     @Override
-    @SuppressWarnings("unchecked")
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<T> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<T> sndDown) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
         if (isRcv) {
-            // Route determination happens only during RCV phase — protocol handshakes
-            // (SSL/ALPN, WebSocket, etc.) complete during inbound processing
             if (this.selectedRoute == null) {
-                this.selectedRoute = this.routing.route(context, rcvUp, rcvDown);
+                // Route not yet determined: pass the live rcvUp so the predicate can peek or partially consume.
+                // Data not consumed by the predicate stays in rcvUp and will reappear on the next invocation.
+                this.selectedRoute = this.routing.route(context, rcvUp, sndDown);
                 if (this.selectedRoute == null) {
-                    return ProtoStatus.Stop; // routing cannot determine yet, wait for more RCV data
-                }
-                if (!this.branches.containsKey(this.selectedRoute)) {
-                    throw new IllegalStateException("Routing returned unknown branch: '" + this.selectedRoute + "', available: " + this.branches.keySet());
-                }
-
-                // Activate the selected branch now that route is determined
-                BranchEntry branch = this.branches.get(this.selectedRoute);
-                Object[] activeData = branch.chainRoot.onActive(branch.branchCtx);
-
-                // Write branch onActive data (e.g. SETTINGS frame) to sndDown immediately
-                if (activeData != null && activeData.length > 0) {
-                    for (Object obj : activeData) {
-                        sndDown.offerMessage((T) obj);
-                    }
+                    // Predicate deferred — unconsumed data remains in rcvUp naturally.
+                    return ProtoStatus.Stop;
                 }
             }
-            return this.doRcvRoute(context, rcvUp, rcvDown, sndDown);
+
+            // Route is now known. Fire branch onActive if not yet done (covers the case where
+            // activateBranch() was called before onActive, or selector decided on first message).
+            if (!this.branchActivated) {
+                this.doActivateSelectedBranch(context);
+            }
+
+            // Fast path: forward data to the selected branch.
+            List<IN> data = rcvUp.takeMessage(rcvUp.queueSize());
+            return this.doRcvRoute(this.branches.get(this.selectedRoute), data, rcvDown, sndDown);
         } else {
             return this.doSndRoute(context, sndUp, sndDown);
         }
     }
 
-    @SuppressWarnings("unchecked")
-    private ProtoStatus doRcvRoute(ProtoContext context, ProtoRcvQueue<T> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<T> sndDown) throws Throwable {
-        if (!rcvUp.hasMore()) {
+    private ProtoStatus doSndRoute(ProtoContext context, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
+        if (!sndUp.hasMore()) {
+            return ProtoStatus.Next;
+        }
+
+        if (this.selectedRoute == null) {
+            // SND before route is determined — this is a pipeline logic error.
+            int cnt = sndUp.queueSize();
+            sndUp.takeMessage(cnt); // drain to prevent queue buildup
+            logger.warn("[ROUTE] channel=" + context.getChannel().getChannelId() + " SND arrived before route was determined (" + cnt + " item(s) dropped)." + " This is a pipeline logic error — do not send data before the routing decision is made.");
             return ProtoStatus.Next;
         }
 
         BranchEntry branch = this.branches.get(this.selectedRoute);
 
-        // Collect data from rcvUp
-        List<T> rcvData = rcvUp.takeMessage(rcvUp.queueSize());
-        Object[] rcvArray = rcvData.toArray();
+        // Collect data from sndUp
+        List<Object> sndData = sndUp.takeMessage(sndUp.queueSize());
+        Object[] sndArray = sndData.toArray();
 
+        // Execute branch SND chain
+        Object[] sndResult = branch.chainRoot.onSndMessage(branch.branchCtx, null, sndArray);
+
+        // onSndMessage already drains headSndDown internally and returns the result directly.
+        if (sndResult != null) {
+            for (Object obj : sndResult) {
+                sndDown.offerMessage((OUT) obj);
+            }
+        }
+
+        return ProtoStatus.Next;
+    }
+
+    private ProtoStatus doRcvRoute(BranchEntry branch, List<IN> dataList, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<OUT> sndDown) throws Throwable {
+        if (dataList.isEmpty()) {
+            return ProtoStatus.Next;
+        }
+
+        Object[] rcvArray = dataList.toArray();
         // Execute branch RCV chain (which may also trigger branch SND chain internally)
         Object[] sndResult = branch.chainRoot.onRcvMessage(branch.branchCtx, null, rcvArray);
 
@@ -165,51 +200,7 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
         // Forward branch SND results to main pipeline sndDown
         if (sndResult != null) {
             for (Object obj : sndResult) {
-                sndDown.offerMessage((T) obj);
-            }
-        }
-
-        return ProtoStatus.Next;
-    }
-
-    @SuppressWarnings("unchecked")
-    private ProtoStatus doSndRoute(ProtoContext context, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<T> sndDown) throws Throwable {
-        if (!sndUp.hasMore()) {
-            return ProtoStatus.Next;
-        }
-
-        if (this.selectedRoute == null) {
-            // SND before routing decision — should not happen in normal flow
-            // pass through data as-is
-            while (sndUp.hasMore()) {
-                sndDown.offerMessage((T) sndUp.takeMessage());
-            }
-            return ProtoStatus.Next;
-        }
-
-        BranchEntry branch = this.branches.get(this.selectedRoute);
-
-        // Collect data from sndUp
-        List<Object> sndData = sndUp.takeMessage(sndUp.queueSize());
-        Object[] sndArray = sndData.toArray();
-
-        // Execute branch SND chain
-        Object[] sndResult = branch.chainRoot.onSndMessage(branch.branchCtx, null, sndArray);
-
-        // Collect SND output from branch headSndDown
-        ProtoQueue<Object> branchHeadSndDown = (ProtoQueue<Object>) branch.chainRoot.getHeadSndDown();
-        if (branchHeadSndDown.queueSize() > 0) {
-            List<Object> branchSndOutput = branchHeadSndDown.takeMessage(branchHeadSndDown.queueSize());
-            branchHeadSndDown.rcvSubmit();
-            for (Object obj : branchSndOutput) {
-                sndDown.offerMessage((T) obj);
-            }
-        }
-
-        // Also forward any returned data
-        if (sndResult != null) {
-            for (Object obj : sndResult) {
-                sndDown.offerMessage((T) obj);
+                sndDown.offerMessage((OUT) obj);
             }
         }
 
@@ -217,7 +208,6 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
     }
 
     @Override
-    @SuppressWarnings("unchecked")
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (this.selectedRoute != null) {
             BranchEntry branch = this.branches.get(this.selectedRoute);
@@ -237,9 +227,11 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
 
     @Override
     public void onClose(ProtoContext context) {
-        // Close ALL branches
         for (String name : this.branchOrder) {
             BranchEntry branch = this.branches.get(name);
+            if (branch.chainRoot == null) {
+                continue; // branch onInit failed before chainRoot was assigned — skip to avoid NPE
+            }
             try {
                 branch.chainRoot.onClose(branch.branchCtx);
             } catch (Throwable e) {
@@ -250,81 +242,91 @@ public class ProtoRoutingDuplexer<T> implements ProtoDuplexer<T, Object, Object,
 
     // -- Builder --------------------------------------------------------
 
-    /**
-     * Create a new builder for constructing a {@link ProtoRoutingDuplexer}.
-     * @param routing the routing predicate (receives full onMessage parameters)
-     * @param <T> the data type flowing through the routing node
-     * @return the builder
-     */
-    public static <T> Builder<T> newBuilder(ProtoRouting<T> routing) {
-        return new Builder<>(routing);
+    /** Returns {@code true} if a branch named {@code name} has already been registered. */
+    public boolean containsBranch(String name) {
+        Objects.requireNonNull(name, "branch name is null.");
+        return this.branches.containsKey(name);
     }
 
     /**
-     * Builder for constructing a {@link ProtoRoutingDuplexer} with registered branches.
-     * @param <T> the data type flowing through the routing node
+     * Registers a new branch with the given {@code name} and {@code initializer}.
+     * Must be called before {@link #onInit} — adding branches after initialisation is not supported.
+     * @throws IllegalArgumentException if a branch with that name already exists
      */
-    public static class Builder<T> {
-        private final ProtoRouting<T>               routing;
-        private final Map<String, ProtoInitializer> branchInitializers;
-        private final List<String>                  branchOrder;
+    public void addBranch(String name, ProtoInitializer initializer) {
+        Objects.requireNonNull(name, "branch name is null.");
+        Objects.requireNonNull(initializer, "initializer is null.");
+        if (this.branches.containsKey(name)) {
+            throw new IllegalArgumentException("Branch '" + name + "' already registered.");
+        }
+        this.branches.put(name, new BranchEntry(name, initializer));
+        this.branchOrder.add(name);
+    }
 
-        Builder(ProtoRouting<T> routing) {
-            this.routing = Objects.requireNonNull(routing, "routing is null.");
-            this.branchInitializers = new LinkedHashMap<>();
-            this.branchOrder = new ArrayList<>();
+    /**
+     * Pre-selects the routing branch for this connection by name, as an imperative alternative to
+     * returning a branch name from {@link ProtoRoutingSelector#route}.
+     * <p>
+     * This method <em>only</em> records the routing decision ({@code selectedRoute = name}).
+     * It can be called at any time — even before {@code onInit} — and does <em>not</em> trigger
+     * the branch's {@code onActive} lifecycle. The actual {@code onActive} is always fired at the
+     * normal lifecycle point: when the Router's own {@code onActive} runs, or on the first inbound
+     * message, whichever comes first.
+     * </p>
+     * @throws IllegalArgumentException if no branch with that name has been registered
+     */
+    public void activateBranch(String name) {
+        Objects.requireNonNull(name, "branch name is null.");
+        if (!this.branches.containsKey(name)) {
+            throw new IllegalArgumentException("Unknown branch '" + name + "', available: " + this.branches.keySet());
         }
 
-        /**
-         * Register a branch with the given name and pipeline initializer.
-         * @param name the branch name (must match the routing predicate return value)
-         * @param initializer a ProtoInitializer that configures the branch pipeline
-         * @return this builder
-         */
-        public Builder<T> branch(String name, ProtoInitializer initializer) {
-            Objects.requireNonNull(name, "branch name is null.");
-            Objects.requireNonNull(initializer, "initializer is null.");
-            if (this.branchInitializers.containsKey(name)) {
-                throw new IllegalArgumentException("Branch '" + name + "' already registered.");
-            }
-            this.branchInitializers.put(name, initializer);
-            this.branchOrder.add(name);
-            return this;
+        if (this.branchActivated) {
+            throw new IllegalStateException("branch already activated for route '" + this.selectedRoute + "'");
         }
 
-        /**
-         * Build the {@link ProtoRoutingDuplexer}. Must be called within a pipeline initialization context
-         * so that the context's channel and soContext are available for branch creation.
-         * @param parentContext the parent pipeline context
-         * @return the constructed routing duplexer
-         */
-        public ProtoRoutingDuplexer<T> build(ProtoContext parentContext) {
-            if (this.branchInitializers.isEmpty()) {
-                throw new IllegalStateException("At least one branch must be registered.");
-            }
+        this.selectedRoute = name;
+    }
 
-            Map<String, BranchEntry> branches = new LinkedHashMap<>();
-            for (Map.Entry<String, ProtoInitializer> entry : this.branchInitializers.entrySet()) {
-                String name = entry.getKey();
-                ProtoInitializer init = entry.getValue();
-
-                // Create branch-mode ProtoContextService sharing contextData/flash/namedHandlerMap with parent
-                ProtoContextService branchCtx = new ProtoContextService((ProtoContextService) parentContext, -1, -1);
-                ProtoChainRoot chainRoot = branchCtx.getChainRoot();
-
-                branches.put(name, new BranchEntry(name, chainRoot, branchCtx, init));
-            }
-
-            return new ProtoRoutingDuplexer<>(this.routing, branches, new ArrayList<>(this.branchOrder));
+    /**
+     * Fires {@link ProtoChainRoot#onActive} on the selected branch exactly once.
+     * Guarded by {@link #branchActivated} — subsequent calls are no-ops.
+     */
+    private void doActivateSelectedBranch(ProtoContext context) {
+        if (this.branchActivated) {
+            return;
         }
+        this.branchActivated = true;
+        if (context.getConfig().isPrintLog()) {
+            logger.info("[ROUTE] channel=" + context.getChannel().getChannelId() + " selected='" + this.selectedRoute + "'");
+        }
+        BranchEntry entry = this.branches.get(this.selectedRoute);
+        if (entry == null) {
+            throw new IllegalStateException("Branch '" + this.selectedRoute + "' not found, available: " + this.branches.keySet());
+        }
+        try {
+            entry.chainRoot.onActive(entry.branchCtx);
+        } catch (Throwable e) {
+            logger.error("Branch '" + this.selectedRoute + "' onActive error: " + e.getMessage(), e);
+        }
+    }
+
+    /** Returns the branch ctx for the named branch. */
+    ProtoContextService getBranchCtx(String branchName) {
+        BranchEntry entry = this.branches.get(branchName);
+        return entry != null ? entry.branchCtx : null;
     }
 
     /** Internal branch entry holding the sub-pipeline chain. */
-    static class BranchEntry {
+    private static class BranchEntry {
         final String              name;
         final ProtoChainRoot      chainRoot;
         final ProtoContextService branchCtx;
         final ProtoInitializer    initializer;
+
+        BranchEntry(String name, ProtoInitializer initializer) {
+            this(name, null, null, initializer);
+        }
 
         BranchEntry(String name, ProtoChainRoot chainRoot, ProtoContextService branchCtx, ProtoInitializer initializer) {
             this.name = name;

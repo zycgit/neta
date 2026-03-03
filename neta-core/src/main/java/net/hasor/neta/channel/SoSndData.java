@@ -122,7 +122,7 @@ public class SoSndData {
     }
 
     /**
-     * completed callback.
+     * Marks the send as successful: fulfills the completion future and releases all {@link ByteBuf} fragments.
      */
     public void completed() {
         try {
@@ -137,7 +137,8 @@ public class SoSndData {
     }
 
     /**
-     * failed callback.
+     * Marks the send as failed: propagates {@code e} to the completion future and releases all {@link ByteBuf} fragments.
+     * @param e the cause of the failure
      */
     public void failed(Throwable e) {
         try {

@@ -318,6 +318,10 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /**
+     * Shuts down all thread pools and the global timer.
+     * Safe to call multiple times; subsequent calls are no-ops for each resource.
+     */
     public void shutdown() {
         if (this.ioExecutor != null) {
             this.ioExecutor.shutdown();
@@ -358,6 +362,10 @@ public class SoContextService implements SoContext {
         this.globalTimer.newTimeout(task, delay, unit);
     }
 
+    /**
+     * Routes a user-defined event into the <em>inbound</em> pipeline of the given channel,
+     * starting from {@code stackName} (or head if {@code null}).
+     */
     public void notifyRcvUserEvent(long channelId, String stackName, SoUserEvent event) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -379,6 +387,10 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /**
+     * Routes a user-defined event into the <em>outbound</em> pipeline of the given channel,
+     * starting from {@code stackName} (or tail if {@code null}).
+     */
     public void notifySndUserEvent(long channelId, String stackName, SoUserEvent event) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -400,6 +412,7 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /** Called when a listener fails to bind; logs the error and closes the listen channel. */
     public void notifyBindChannelException(long channelId, SoBindException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -415,6 +428,10 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /**
+     * Called when an outbound connection attempt fails.
+     * @param doClose if {@code true}, the channel is closed after the error is delivered
+     */
     public void notifyConnectChannelException(long channelId, boolean doClose, SoConnectException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -450,6 +467,10 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /**
+     * Called when an inbound pipeline error occurs.
+     * @param doClose if {@code true}, the channel is closed after the error is delivered
+     */
     public void notifyRcvChannelException(long channelId, boolean doClose, SoException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -464,6 +485,10 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /**
+     * Called when an outbound pipeline error occurs.
+     * @param doClose if {@code true}, the channel is closed after the error is delivered
+     */
     public void notifySndChannelException(long channelId, boolean doClose, SoException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -491,6 +516,10 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /**
+     * Called when a channel is closed by the remote peer or locally.
+     * @param remote {@code true} if closed by the remote side
+     */
     public void notifyChannelClose(long channelId, boolean remote) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel != null) {

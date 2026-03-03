@@ -56,8 +56,8 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
         NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
 
         // wait shake hands
-        SslContext clientSslCtx = SslUtils.getSslContext(clientSide);
-        SslContext serverSslCtx = SslUtils.getSslContext(serverSide);
+        SslContext clientSslCtx = SslUtils.getSslContextFromRoot(clientSide);
+        SslContext serverSslCtx = SslUtils.getSslContextFromRoot(serverSide);
         while (!clientSslCtx.isReady() || !serverSslCtx.isReady()) {
             ThreadUtils.sleep(100);
         }
@@ -91,8 +91,8 @@ public class UdpNeta2NetaTest extends AbstractSslTest {
         NetChannel serverSide = (NetChannel) neta.getContext().findChannel(3);
 
         // wait shake hands
-        SslContext clientSslCtx = SslUtils.getSslContext(clientSide);
-        SslContext serverSslCtx = SslUtils.getSslContext(serverSide);
+        SslContext clientSslCtx = SslUtils.getSslContextFromRoot(clientSide);
+        SslContext serverSslCtx = SslUtils.getSslContextFromRoot(serverSide);
         while (!clientSslCtx.isReady() || !serverSslCtx.isReady()) {
             ThreadUtils.sleep(100);
         }

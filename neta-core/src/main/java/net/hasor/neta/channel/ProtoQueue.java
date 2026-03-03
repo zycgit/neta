@@ -70,6 +70,10 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     private final List<T> offerTemp;
     protected     int     takeCount;
 
+    /**
+     * Creates a queue with the given capacity.
+     * @param capacity max number of simultaneously queued messages; negative means unbounded ({@link Integer#MAX_VALUE})
+     */
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
         this.linkedList = new ArrayList<>();

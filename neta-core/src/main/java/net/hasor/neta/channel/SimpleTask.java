@@ -22,6 +22,7 @@ package net.hasor.neta.channel;
 public class SimpleTask extends DefaultSoTask {
     private final Runnable runnable;
 
+    /** Wraps {@code runnable} as a one-shot event-loop task. */
     public SimpleTask(Runnable runnable) {
         this.runnable = runnable;
     }

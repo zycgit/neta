@@ -147,6 +147,54 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.protoCtx.context(serviceType);
     }
 
+    /**
+     * Navigate the routing tree by path and retrieve an attachment from the target branch ctx.
+     * <p>
+     * The {@code path} is a sequence of {@code (routerStackName, branchName)} pairs.
+     * Each pair identifies which Router node to descend into and which branch to follow.
+     * Since a single pipeline may contain multiple Router nodes in series (or nested),
+     * the caller must specify each step explicitly.
+     * </p>
+     * <pre>
+     *   Main: [A] → [router1] → [Z]
+     *                    │
+     *          Branch "tls": [SslDuplexer] → [router2]
+     *                                              │
+     *                                     Branch "http2": [Http2Handler]
+     *
+     *   // Read SslContext stored in the "tls" branch ctx:
+     *   findProtoContextByPath(SslContext.class, "router1", "tls")
+     *
+     *   // Read Http2Context stored in the nested "http2" branch ctx:
+     *   findProtoContextByPath(Http2Context.class, "router1", "tls", "router2", "http2")
+     * </pre>
+     *
+     * @param type the attachment type to retrieve from the target ctx
+     * @param path alternating (routerStackName, branchName) pairs; must be non-empty and even-length
+     * @return the attachment value, or {@code null} if the path cannot be resolved or
+     *         the target ctx has no value for {@code type}
+     * @throws IllegalArgumentException if {@code path} is null, empty, or has odd length
+     */
+    public <T> T findProtoContextByPath(Class<T> type, String... path) {
+        if (path == null || path.length == 0 || path.length % 2 != 0) {
+            throw new IllegalArgumentException("path must be a non-empty even-length sequence of (routerStackName, branchName) pairs");
+        }
+        ProtoContextService ctx = this.protoCtx;
+        for (int i = 0; i < path.length; i += 2) {
+            String routerName = path[i];
+            String branchName = path[i + 1];
+            ProtoRoutingDuplexer<?, ?> router = ctx.getHandler(routerName, ProtoRoutingDuplexer.class);
+            if (router == null) {
+                return null;
+            }
+            ctx = router.getBranchCtx(branchName);
+            if (ctx == null) {
+                return null;
+            }
+        }
+        return ctx.context(type);
+    }
+
     /** Returns the {@link NetListen} that accepts this channel */
     public NetListen getListen() {
         return this.forListen;
@@ -306,9 +354,34 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.sendOrFlush(null, stackName);
     }
 
+    /** passing the SND pipeline direct send data */
+    Future<NetChannel> sendEncoded(Object[] writeData) {
+        Future<NetChannel> future = newFutureForSend();
+        if (future.isDone()) {
+            return future;
+        }
+        try {
+            synchronized (this) {
+                appendSoSndTask(toSoSndData(future, writeData));
+            }
+        } catch (Throwable e) {
+            logger.error("snd(" + this.channelId + ") sendEncoded failed, " + e.getMessage(), e);
+            future.failed(e);
+        }
+        return future;
+    }
+
     private Future<NetChannel> sendOrFlush(Object[] writeData, String stackName) {
         Future<NetChannel> future = newFutureForSend();
         if (future.isDone()) {
+            return future;
+        }
+
+        // Detect misuse: calling channel.send()/flush() from within a pipeline handler; use sndDown.offerMessage() instead.
+        if (this.protoCtx.isRcv() || this.protoCtx.isSnd()) {
+            IllegalStateException ex = new IllegalStateException("snd(" + this.channelId + ") channel.send()/flush() must not be called from within a pipeline handler.");
+            logger.error("snd(" + this.channelId + ") illegal reentrant send detected.", ex);
+            future.failed(ex);
             return future;
         }
 

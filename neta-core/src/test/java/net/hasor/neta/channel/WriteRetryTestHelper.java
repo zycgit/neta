@@ -26,7 +26,6 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
  * @author 赵永春 (zyc@hasor.net)
  */
 public class WriteRetryTestHelper {
-
     /** Create a minimal SoContextService backed by a small thread pool. */
     public static SoContextService createContextService() {
         NetConfig config = new NetConfig();

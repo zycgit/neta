@@ -72,7 +72,7 @@ public class UdpNeta2JvmTest {
         NetChannel channel = future.get();
         channel.sendData("Hello UDP");
 
-        int i = 100 * 50; // max 5sce
+        int i = 100 * 50; // max 5sec
         while (!udpRead.get()) {
             ThreadUtils.sleep(100);
             i--;
@@ -81,5 +81,6 @@ public class UdpNeta2JvmTest {
             }
         }
         assert udpRead.get();
+        neta.shutdown();
     }
 }

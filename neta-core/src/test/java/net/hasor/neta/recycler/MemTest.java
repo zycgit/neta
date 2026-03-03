@@ -6,7 +6,7 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import org.junit.Test;
 
 public class MemTest {
@@ -25,7 +25,7 @@ public class MemTest {
     @Test
     public void requestNetaBuffer_1() {
         for (int j : randomInt) {
-            ByteBuf buf = ByteBufAllocator.DEFAULT.pooledBuffer(j);
+            ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.pooledBuffer(j);
             IOUtils.closeQuietly(buf);
         }
     }
@@ -37,14 +37,14 @@ public class MemTest {
             Thread t = ThreadUtils.daemonThread(true, (Runnable) () -> {
                 while (!future.isDone()) {
                     for (int j : randomInt) {
-                        ByteBuf buf = ByteBufAllocator.DEFAULT.pooledBuffer(j);
+                        ByteBuf buf = ByteBufUtils.DEFAULT_ALLOCATOR.pooledBuffer(j);
                         IOUtils.closeQuietly(buf);
                     }
                 }
             });
         }
 
-        ThreadUtils.sleep(3, TimeUnit.SECONDS);
+        ThreadUtils.sleep(1, TimeUnit.SECONDS);
         future.completed(new Object());
         System.out.println("requestNetaBuffer done.");
     }
