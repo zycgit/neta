@@ -22,7 +22,7 @@ package net.hasor.neta.bytebuf;
  * @version : 2022-11-01
  */
 public interface ByteBufAllocator extends BufferAllocator {
-    ByteBufAllocator DEFAULT = ByteBufUtils.DEFAULT_ALLOCATOR;
+    ByteBufAllocator DEFAULT = ByteBufUtils.defaultAllocator();
 
     /** Returns the {@link ByteBufAllocatorMetric} for this allocator. */
     ByteBufAllocatorMetric metric();
@@ -95,4 +95,30 @@ public interface ByteBufAllocator extends BufferAllocator {
     //
     //    /** Allocate a direct {@link ByteBuf} with the given initial capacity and the given maximal capacity. */
     //    ByteBuf mappedBuffer(int memSize, int maxCapacity, File tempFile);
+
+    /**
+     * 分配一个内存-文件交换 {@link ByteBuf}，使用默认阈值（128 KB 内存 / 512 KB 紧凑）。
+     * 数据量未超过 memThreshold 时全程基于堆内存；超过后自动换出到临时文件，
+     * 已消费的头部数据在 fileBaseOffset 超过 compactThreshold 时触发文件紧凑。
+     */
+    default ByteBuf swapFile() {
+        return swapFile(SwapFileByteBuf.DEFAULT_MEM_THRESHOLD, SwapFileByteBuf.DEFAULT_COMPACT_THRESHOLD);
+    }
+
+    /**
+     * 分配一个内存-文件交换 {@link ByteBuf}，指定内存阈值，紧凑阈值默认为 memThreshold × 4。
+     * @param memThreshold 触发换出到文件的内存字节阈值（当前写指针超过此值时切换）
+     */
+    default ByteBuf swapFile(int memThreshold) {
+        return swapFile(memThreshold, memThreshold * 4);
+    }
+
+    /**
+     * 分配一个内存-文件交换 {@link ByteBuf}，分别指定内存阈值和文件头部紧凑阈值。
+     * @param memThreshold 触发换出到文件的内存字节阈值
+     * @param compactThreshold fileBaseOffset 超过此值时触发文件紧凑，以回收磁盘空间
+     */
+    default ByteBuf swapFile(int memThreshold, int compactThreshold) {
+        return new SwapFileByteBuf(this, memThreshold, compactThreshold);
+    }
 }

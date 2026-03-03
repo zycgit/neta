@@ -136,6 +136,30 @@ public class ByteBufUtils {
         }
     }
 
+    /** Returns the default {@link ByteBufAllocator}, guaranteed non-null even during class-initialization */
+    static ByteBufAllocator defaultAllocator() {
+        ByteBufAllocator alloc = DEFAULT_ALLOCATOR;
+        if (alloc != null) {
+            return alloc;
+        }
+        alloc = UNPOOLED_HEAP_ALLOCATOR;
+        if (alloc != null) {
+            return alloc;
+        }
+        // emergency: static init has not assigned any allocators yet
+        return new BasicByteBufAllocator(false, 4096, 4096) {
+            @Override
+            public boolean isDirect() {
+                return false;
+            }
+
+            @Override
+            public java.nio.ByteBuffer jvmBuffer(int capacity) {
+                return java.nio.ByteBuffer.allocate(capacity);
+            }
+        };
+    }
+
     private static boolean isPooled() {
         return !SystemUtils.isAndroid();
     }
@@ -178,7 +202,7 @@ public class ByteBufUtils {
      * @return a new empty CompositeByteBuf
      */
     public static CompositeByteBuf compositeBuffer() {
-        return new CompositeByteBuf(DEFAULT_ALLOCATOR);
+        return new CompositeByteBuf(defaultAllocator());
     }
 
     /**
@@ -200,7 +224,7 @@ public class ByteBufUtils {
      * @return a new CompositeByteBuf containing all buffers
      */
     public static CompositeByteBuf compositeBuffer(ByteBuf... buffers) {
-        CompositeByteBuf composite = new CompositeByteBuf(DEFAULT_ALLOCATOR);
+        CompositeByteBuf composite = new CompositeByteBuf(defaultAllocator());
         if (buffers != null) {
             composite.addComponents(buffers);
         }
@@ -274,5 +298,80 @@ public class ByteBufUtils {
      */
     public static int smallBufferCacheSize() {
         return SmallBufferCache.currentThreadCacheSize();
+    }
+
+    /** Lazy-init holder – deferred until first access, avoiding circular static init with {@link ByteBufAllocator}. */
+    private static class AllocatorHolder {
+        static final ByteBufAllocator UNPOOLED_HEAP;
+        static final ByteBufAllocator POOLED_HEAP;
+        static final ByteBufAllocator UNPOOLED_DIRECT;
+        static final ByteBufAllocator POOLED_DIRECT;
+        static final ByteBufAllocator DEFAULT;
+
+        static {
+            String allocType = SystemUtils.getSystemProperty("neta.bytebuf.type", isPooled() ? "pooled" : "unpooled");
+            String memType = SystemUtils.getSystemProperty("neta.bytebuf.mem", isDirect() ? "direct" : "heap");
+            String sliceSize = SystemUtils.getSystemProperty("neta.bytebuf.sliceSize", String.valueOf(4 * 1024));
+            String initialSize = SystemUtils.getSystemProperty("neta.bytebuf.initialSize", String.valueOf(4 * 1024));
+
+            int sliceSizeByDefault = Integer.parseInt(sliceSize);
+            int initialCapacityByDefault = Integer.parseInt(initialSize);
+
+            UNPOOLED_HEAP = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
+                @Override
+                public boolean isDirect() {
+                    return false;
+                }
+
+                @Override
+                public ByteBuffer jvmBuffer(int capacity) {
+                    return ByteBuffer.allocate(capacity);
+                }
+            };
+            POOLED_HEAP = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
+                @Override
+                public boolean isDirect() {
+                    return false;
+                }
+
+                @Override
+                public ByteBuffer jvmBuffer(int capacity) {
+                    return ByteBuffer.allocate(capacity);
+                }
+            };
+            UNPOOLED_DIRECT = new BasicByteBufAllocator(false, initialCapacityByDefault, sliceSizeByDefault) {
+                @Override
+                public boolean isDirect() {
+                    return true;
+                }
+
+                @Override
+                public ByteBuffer jvmBuffer(int capacity) {
+                    return ByteBuffer.allocateDirect(capacity);
+                }
+            };
+            POOLED_DIRECT = new BasicByteBufAllocator(true, initialCapacityByDefault, sliceSizeByDefault) {
+                @Override
+                public boolean isDirect() {
+                    return true;
+                }
+
+                @Override
+                public ByteBuffer jvmBuffer(int capacity) {
+                    return ByteBuffer.allocateDirect(capacity);
+                }
+            };
+
+            allocType = allocType.toLowerCase().trim();
+            memType = memType.toLowerCase().trim();
+
+            if ("pooled".equals(allocType)) {
+                DEFAULT = "direct".equals(memType) ? POOLED_DIRECT : POOLED_HEAP;
+            } else {
+                DEFAULT = "direct".equals(memType) ? UNPOOLED_DIRECT : UNPOOLED_HEAP;
+            }
+
+            logger.debug(String.format("-Dneta.bytebuf.type: %s -Dneta.bytebuf.mem: %s", allocType, memType));
+        }
     }
 }
