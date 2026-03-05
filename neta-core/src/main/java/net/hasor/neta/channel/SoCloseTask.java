@@ -18,8 +18,17 @@ import net.hasor.cobble.logging.Logger;
 
 /**
  * Asynchronous task that gracefully closes a channel.
- * <p>In safe-close mode, waits for pending writes to drain before closing.
- * In force mode, closes immediately.</p>
+ * <h3>Safe-close sequence</h3>
+ * <ol>
+ *   <li>Wait for the write queue to drain (busy-spin via {@code continueTask()}).</li>
+ *   <li>Fire a {@link SoCloseEvent} through the <em>SND</em> pipeline so that handlers
+ *       can enqueue final farewell data (e.g. WebSocket Close frame, TLS close_notify) via
+ *       {@link ProtoContext#sendData} — no {@code await()} needed, the data enters the queue
+ *       synchronously.</li>
+ *   <li>Wait again for the queue to drain (the farewell data written in step 2).</li>
+ *   <li>Call {@code notifyChannelClose} to perform the actual teardown.</li>
+ * </ol>
+ * <p>In force mode, closes immediately without draining or firing the event.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  */
@@ -28,6 +37,7 @@ class SoCloseTask extends DefaultSoTask {
     private final        long             channelID;
     private final        SoContextService context;
     private final        boolean          forceNow;
+    private              boolean          eventFired;
 
     public SoCloseTask(long channelID, SoContextService context, boolean forceNow) {
         this.channelID = channelID;
@@ -51,7 +61,6 @@ class SoCloseTask extends DefaultSoTask {
                 NetChannel netChannel = (NetChannel) channel;
                 boolean needWaiting = !netChannel.wContext.isEmpty();
 
-                // notifyRcv last message
                 if (this.context.getConfig().isPrintLog()) {
                     if (needWaiting) {
                         logger.info("channel(" + this.channelID + ") safe close form local, waiting send finish.");
@@ -60,12 +69,29 @@ class SoCloseTask extends DefaultSoTask {
                     }
                 }
 
-                // wait send finish
+                // Phase 1 / Phase 2: wait for the write queue to drain.
                 if (needWaiting) {
                     continueTask();
                     return;
                 }
 
+                // Phase 2: queue is empty. If we haven't fired the before-close event yet, do so now.
+                if (!this.eventFired) {
+                    if (this.context.getConfig().isPrintLog()) {
+                    }
+                    this.eventFired = true;
+                    SoUserEvent event = SoUserEventObject.of(netChannel, SoCloseEvent.class, SoCloseEvent.INSTANCE);
+                    this.context.notifySndUserEvent(this.channelID, null, event);
+                    // After notifySndUserEvent returns, isSnd is reset to false.
+                    // A flush() call is now allowed and will run the SND pipeline,
+                    // giving protocol layers (e.g. SSL) a chance to enqueue any
+                    // farewell bytes (e.g. TLS close_notify) into the write queue.
+                    netChannel.flushForClose();
+                    continueTask(); // re-enter to drain any farewell data
+                    return;
+                }
+
+                // Phase 3: event fired and queue is empty → perform actual close.
                 this.context.notifyChannelClose(this.channelID, false);
                 finishTask();
             }
