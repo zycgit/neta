@@ -14,16 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
+import net.hasor.neta.channel.SoUserEventData;
+
 /**
  * Handling the SSL handshake
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
  */
-public class SslEvent {
+public class SslHandshakeEvent implements SoUserEventData {
     private final boolean    handshake;
     private final SslContext context;
 
-    public SslEvent(boolean handshake, SslContext context) {
+    public SslHandshakeEvent(boolean handshake, SslContext context) {
         this.handshake = handshake;
         this.context = context;
     }

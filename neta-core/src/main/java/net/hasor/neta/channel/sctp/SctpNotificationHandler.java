@@ -38,6 +38,6 @@ final class SctpNotificationHandler extends AbstractNotificationHandler<SoContex
     }
 
     private void fireEvent(Notification notification) {
-        this.channel.fireUserEvent(Notification.class, notification);
+        this.channel.fireUserEvent(SctpNotificationEvent.class, new SctpNotificationEvent(notification));
     }
 }
