@@ -211,4 +211,11 @@ public abstract class SslContextBasic implements SslContext {
     public void openSSL() {
         this.sslEnable = true;
     }
+
+    /** Signal the {@link SslHandle} to produce a TLS {@code close_notify} alert */
+    public void signalCloseNotify() {
+        if (this.sslEnable) {
+            this.sslHandler.signalCloseNotify();
+        }
+    }
 }

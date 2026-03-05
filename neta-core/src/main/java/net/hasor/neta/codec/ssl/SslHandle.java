@@ -48,6 +48,7 @@ class SslHandle {
     private              ByteBuffer         inAppData;
     private              ByteBuffer         outNetData;
     private              ByteBuffer         outAppData;
+    private volatile     boolean            closeNotifyPending;
 
     public SslHandle(long channelID, ProtoContext protoCtx, SslContext sslContext, SslEngineWrap engine, Runnable closeCallBack) {
         this.channelID = channelID;
@@ -174,7 +175,7 @@ class SslHandle {
                     if (hs == HandshakeStatus.FINISHED) {
                         this.handshake = SslHandshakeStatus.Finish;
                         logger.info("sslHandshake(" + this.channelID + ") finish.");
-                        ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslEvent.class, new SslEvent(true, this.sslContext));
+                        ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslHandshakeEvent.class, new SslHandshakeEvent(this.sslContext));
 
                         if (this.outAppData.hasRemaining()) {
                             this.handshakeWrap(sndUp, sndDown);
@@ -331,11 +332,10 @@ class SslHandle {
         this.outAppData.clear();
     }
 
-    public void afterClose() throws IOException {
+    public void afterClose() {
         this.clearBuffers();
-        this.handshake = SslHandshakeStatus.NotHandshaking;
+        this.handshake = SslHandshakeStatus.Closed;
         this.closeCallBack.run();
-        ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslEvent.class, new SslEvent(false, this.sslContext));
     }
     // --------------------------------------------------------------------------------------------
     //
@@ -391,6 +391,7 @@ class SslHandle {
 
                 if (result.getStatus() == Status.CLOSED) {
                     this.afterClose();
+                    ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslCloseNotifyEvent.class, new SslCloseNotifyEvent(this.sslContext));
                     return;
                 }
 
@@ -464,8 +465,37 @@ class SslHandle {
             }
         }
 
+        // Produce TLS close_notify alert if signalCloseNotify() was called before this SND pass.
+        if (this.closeNotifyPending && !this.engine.isOutboundDone()) {
+            this.closeNotifyPending = false;
+            this.outNetData.clear();
+            int closeNotifyBytes = 0;
+            while (!this.engine.isOutboundDone()) {
+                SSLEngineResult res = this.engine.wrap(EMPTY, this.outNetData);
+                if (res.bytesProduced() > 0) {
+                    closeNotifyBytes += res.bytesProduced();
+                    this.outNetData.flip();
+                    this.bufferToQueue(this.outNetData, sndDown);
+                    this.outNetData.compact();
+                } else {
+                    break;
+                }
+            }
+        }
+
         if (this.protoCtx.getConfig().isPrintLog()) {
             logger.info("sslSnd(" + this.channelID + ") [SSL-WRAP] plaintext=" + sndTotal + " consumed=" + totalConsumed + " cipher=" + totalProduced);
         }
+    }
+
+    /**
+     * Signal that a TLS {@code close_notify} alert should be produced on the next
+     * {@link #handlerSnd} call.  Must be called <em>before</em> placing a SND
+     * trigger ({@code context.sendData(ByteBuf.EMPTY)}) so that the flag is set
+     * when the SND pipeline runs.
+     */
+    public void signalCloseNotify() {
+        this.closeNotifyPending = true;
+        this.engine.closeOutbound();
     }
 }

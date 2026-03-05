@@ -26,4 +26,7 @@ enum SslHandshakeStatus {
     Handshaking,
 
     Finish,
+
+    /** SSL session ended by a {@code close_notify} alert (either sent or received). */
+    Closed,
 }

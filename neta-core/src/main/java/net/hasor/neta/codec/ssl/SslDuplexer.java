@@ -38,7 +38,8 @@ public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, Byt
         String stackName = context.getStackName();
 
         if (this.config.getProvider() == SslProvider.JSSE) {
-            context.context(SslContext.class, new JdkSslContext(channel, stackName, context, this.config, channel.isClient()));
+            JdkSslContext ctx = new JdkSslContext(channel, stackName, context, this.config, channel.isClient());
+            context.context(SslContext.class, ctx);
         } else {
             throw new UnsupportedOperationException(this.config.getProvider() + " Unsupported.");
         }
@@ -49,6 +50,18 @@ public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, Byt
         if (context.getChannel().isClient()) {
             context.sendData(ByteBuf.EMPTY);// make sure to trigger the handshake
         }
+    }
+
+    @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        // when safe-close to send close_notify alert
+        if (!isRcv && event.getData() instanceof SoCloseEvent) {
+            SslContextBasic ref = (SslContextBasic) context.context(SslContext.class);
+            if (ref != null) {
+                ref.signalCloseNotify();
+            }
+        }
+        return true;
     }
 
     @Override
