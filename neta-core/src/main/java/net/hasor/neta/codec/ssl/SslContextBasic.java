@@ -82,7 +82,7 @@ public abstract class SslContextBasic implements SslContext {
 
     @Override
     public boolean isReady() {
-        return this.sslHandler.getHandshake() == SslHandshakeStatus.Finish;
+        return this.sslEnable && this.sslHandler.getHandshake() == SslHandshakeStatus.Finish;
     }
 
     @Override
@@ -197,13 +197,10 @@ public abstract class SslContextBasic implements SslContext {
         if (!this.sslEnable) {
             return;
         }
-
-        SslEngineWrap engine = this.getEngine();
-        if (engine != null && !engine.isOutboundDone()) {
-            engine.closeOutbound();
+        if (!this.sslEngine.isOutboundDone()) {
+            this.sslHandler.signalCloseNotify();
             this.protoCtx.flush();
         }
-
         this.sslEnable = false;
     }
 
@@ -213,7 +210,7 @@ public abstract class SslContextBasic implements SslContext {
     }
 
     /** Signal the {@link SslHandle} to produce a TLS {@code close_notify} alert */
-    public void signalCloseNotify() {
+    void signalCloseNotify() {
         if (this.sslEnable) {
             this.sslHandler.signalCloseNotify();
         }

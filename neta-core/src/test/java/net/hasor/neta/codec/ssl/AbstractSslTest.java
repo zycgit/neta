@@ -43,7 +43,7 @@ public class AbstractSslTest {
     }
 
     /**
-     * Creates a protocol stack whose String codec layer listens for {@link SslEvent} and counts
+     * Creates a protocol stack whose String codec layer listens for {@link SslHandshakeEvent} and counts
      * down {@code handshakeLatch} as soon as TLS negotiation succeeds on that side.
      * <p>
      * {@link SslDuplexer} already calls {@code fireUserEvent(SslEvent.class, …)} the moment the
@@ -74,7 +74,7 @@ public class AbstractSslTest {
 
                 @Override
                 public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
-                    if (event.getEventType() == SslEvent.class && ((SslEvent) event.getData()).isHandshake()) {
+                    if (event.getEventType() == SslHandshakeEvent.class) {
                         handshakeLatch.countDown();
                     }
                     return false; // continue propagating

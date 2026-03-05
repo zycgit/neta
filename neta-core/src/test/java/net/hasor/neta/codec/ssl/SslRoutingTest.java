@@ -64,7 +64,7 @@ public class SslRoutingTest extends AbstractSslTest {
                     }
                     ByteBuf data = (ByteBuf) rcvUp.peekMessage();
                     if (data != null && data.readableBytes() > 0) {
-                        byte firstByte = data.getByte(data.readerIndex());
+                        byte firstByte = data.getByte((int) data.readerIndex());
                         return (firstByte == 0x16) ? "tls" : "plain";
                     }
                     return null; // not enough data
@@ -142,7 +142,7 @@ public class SslRoutingTest extends AbstractSslTest {
                 }
                 ByteBuf data = rcvUp.peekMessage();
                 if (data != null && data.readableBytes() > 0) {
-                    byte firstByte = data.getByte(data.readerIndex());
+                    byte firstByte = data.getByte((int) data.readerIndex());
                     return (firstByte == 0x16) ? "tls" : "plain";
                 }
                 return null;
@@ -215,7 +215,7 @@ public class SslRoutingTest extends AbstractSslTest {
                     while ((data = rcvUp.takeMessage()) != null) {
                         // Prepend protocol tag
                         byte[] tag = ("[" + proto + "]").getBytes();
-                        byte[] original = new byte[data.readableBytes()];
+                        byte[] original = new byte[(int) data.readableBytes()];
                         data.readBytes(original);
                         byte[] tagged = new byte[tag.length + original.length];
                         System.arraycopy(tag, 0, tagged, 0, tag.length);
@@ -651,7 +651,7 @@ public class SslRoutingTest extends AbstractSslTest {
     @Test
     public void routing_sslEvent_propagation() throws Throwable {
         this.autoCloseNeta(neta -> {
-            AtomicReference<SslEvent> capturedEvent = new AtomicReference<>();
+            AtomicReference<SslHandshakeEvent> capturedEvent = new AtomicReference<>();
             CountDownLatch eventLatch = new CountDownLatch(1);
 
             SslConfig sslConf = sslConfig();
@@ -673,8 +673,8 @@ public class SslRoutingTest extends AbstractSslTest {
 
                     @Override
                     public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
-                        if (event.getEventType() == SslEvent.class) {
-                            capturedEvent.set((SslEvent) event.getData());
+                        if (event.getEventType() == SslHandshakeEvent.class) {
+                            capturedEvent.set((SslHandshakeEvent) event.getData());
                             eventLatch.countDown();
                         }
                         return true;
@@ -716,7 +716,6 @@ public class SslRoutingTest extends AbstractSslTest {
             boolean received = eventLatch.await(3, TimeUnit.SECONDS);
             assert received : "SslEvent should be received";
             assert capturedEvent.get() != null : "SslEvent should not be null";
-            assert capturedEvent.get().isHandshake() : "Should be handshake event";
             assert capturedEvent.get().getContext() != null : "SslContext should be available";
             assert "http/2".equals(capturedEvent.get().getContext().getApplicationProtocol()) : "ALPN should be http/2";
         });
