@@ -20,19 +20,7 @@ import java.util.TreeMap;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Reassembles out-of-order STREAM and CRYPTO frame data into a contiguous byte sequence
- * (RFC 9000 §2.2 for STREAM, §19.6 for CRYPTO).
- * <p>
- * QUIC allows stream data to arrive out of order. This class buffers fragments
- * indexed by byte offset and delivers them in order once the next expected offset
- * is available.
- * <p>
- * <b>Usage pattern</b>:
- * <pre>
- *   reassembler.addFragment(offset, data);
- *   byte[] contiguous = reassembler.readContiguous();
- *   if (contiguous != null) { // deliver to application }
- * </pre>
+ * Reassembles out-of-order STREAM/CRYPTO frame data into a contiguous byte sequence (RFC 9000 §2.2, §19.6).
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicStreamReassembler {
@@ -58,14 +46,7 @@ class QuicStreamReassembler {
         this.maxBufferSize = maxBufferSize;
     }
 
-    /**
-     * Adds a fragment of data at the given offset.
-     * @param offset the byte offset within the stream/crypto context
-     * @param data the fragment data
-     * @param fin whether this fragment carries the FIN flag (STREAM only)
-     * @return {@code true} if the fragment was accepted; {@code false} if it was rejected
-     * (e.g., buffer overflow, duplicate, or invalid offset)
-     */
+    /** Adds a data fragment at the given offset; returns false if the buffer limit is exceeded or the offset is invalid. */
     synchronized boolean addFragment(long offset, byte[] data, boolean fin) {
         if (data == null || data.length == 0) {
             // FIN-only frame

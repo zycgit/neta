@@ -16,31 +16,19 @@
 package net.hasor.neta.channel.quic;
 
 /**
- * Thrown when a QUIC {@code CONNECTION_CLOSE} frame is received from the peer
- * or sent locally due to a connection-level error (RFC 9000 §19.19).
- * <p>
- * This exception is propagated through the pipeline on all open stream and
- * datagram channels so that application handlers are notified of the connection teardown.
+ * Thrown when a QUIC CONNECTION_CLOSE frame is received or sent (RFC 9000 §19.19).
  * @author 赵永春 (zyc@hasor.net)
- * @see QuicErrorCode
  */
 public class QuicConnectionCloseException extends QuicException {
     private final String reason;
 
-    /**
-     * @param errorCode the QUIC error code from the CONNECTION_CLOSE frame
-     * @param reason the reason phrase from the CONNECTION_CLOSE frame (may be empty)
-     */
+    /** Creates a QuicConnectionCloseException with an error code and reason phrase. */
     public QuicConnectionCloseException(long errorCode, String reason) {
         super(errorCode, "CONNECTION_CLOSE: errorCode=0x" + Long.toHexString(errorCode) + ", reason=" + reason);
         this.reason = reason != null ? reason : "";
     }
 
-    /**
-     * @param errorCode the QUIC error code from the CONNECTION_CLOSE frame
-     * @param reason the reason phrase from the CONNECTION_CLOSE frame (may be empty)
-     * @param cause the underlying cause
-     */
+    /** Creates a QuicConnectionCloseException with an error code, reason phrase, and cause. */
     public QuicConnectionCloseException(long errorCode, String reason, Throwable cause) {
         super(errorCode, "CONNECTION_CLOSE: errorCode=0x" + Long.toHexString(errorCode) + ", reason=" + reason, cause);
         this.reason = reason != null ? reason : "";

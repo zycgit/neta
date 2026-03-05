@@ -21,20 +21,7 @@ import java.util.List;
 import java.util.TreeSet;
 
 /**
- * Tracks received packet numbers and generates ACK frames (RFC 9000 §19.3).
- * <p>
- * Each QUIC encryption level (Initial, Handshake, 1-RTT) should have its own
- * {@code QuicAckTracker} instance. The tracker records received packet numbers,
- * computes contiguous ranges, and produces ACK frame bytes ready to embed in
- * outgoing QUIC packets.
- * <p>
- * <b>ACK generation policy (RFC 9000 §13.2):</b>
- * <ul>
- *   <li>An ACK frame MUST be generated after receiving at least
- *       {@link #ackElicitingThreshold} ack-eliciting packets.</li>
- *   <li>Out-of-order packets trigger immediate ACK.</li>
- *   <li>{@link #maxAckDelay} limits how long an ACK can be deferred (default 25 ms).</li>
- * </ul>
+ * Tracks received packet numbers and generates ACK frames per RFC 9000 §13.2 / §19.3.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAckTracker {
@@ -109,13 +96,7 @@ class QuicAckTracker {
         this.maxAckDelay = maxAckDelayMs;
     }
 
-    /**
-     * Records a received packet number. Should be called for every packet
-     * successfully processed at this encryption level.
-     * @param pn the packet number
-     * @param ackEliciting {@code true} if the packet contains ack-eliciting frames
-     * (i.e. anything other than ACK, PADDING, CONNECTION_CLOSE)
-     */
+    /** Records a received packet number and updates out-of-order and ack-eliciting counters. */
     synchronized void onPacketReceived(long pn, boolean ackEliciting) {
         // Detect gap (out-of-order)
         if (this.largestReceivedPn >= 0 && pn != this.largestReceivedPn + 1) {
@@ -134,15 +115,7 @@ class QuicAckTracker {
         }
     }
 
-    /**
-     * Returns {@code true} if an ACK frame should be generated now.
-     * <p>Conditions (RFC 9000 §13.2):
-     * <ul>
-     *   <li>Received at least {@code ackElicitingThreshold} ack-eliciting packets.</li>
-     *   <li>Out-of-order data was received (gap detected).</li>
-     *   <li>The max ACK delay has elapsed since the last ACK.</li>
-     * </ul>
-     */
+    /** Returns true if an ACK frame should be sent now based on threshold, gaps, and max delay. */
     synchronized boolean shouldSendAck() {
         if (this.pendingAckEliciting <= 0) {
             return false;
@@ -163,11 +136,7 @@ class QuicAckTracker {
         return this.lastAckSentTime == 0 && this.pendingAckEliciting > 0;
     }
 
-    /**
-     * Generates an ACK frame (RFC 9000 §19.3) for all packet numbers received so far.
-     * Resets the pending-ack-eliciting counter.
-     * @return the encoded ACK frame bytes, or {@code null} if nothing to acknowledge
-     */
+    /** Generates an ACK frame (RFC 9000 §19.3) for all received packet numbers, or null if none. */
     synchronized byte[] generateAckFrame() {
         if (this.receivedPns.isEmpty()) {
             return null;
@@ -242,10 +211,7 @@ class QuicAckTracker {
         return frame;
     }
 
-    /**
-     * Computes contiguous ranges from the sorted set of received PNs.
-     * Each range is {@code [high, low]} (inclusive). Ranges are sorted descending.
-     */
+    /** Computes contiguous packet number ranges from the sorted received set, in descending order. */
     private List<long[]> computeRanges() {
         if (this.receivedPns.isEmpty()) {
             return Collections.emptyList();

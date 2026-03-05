@@ -24,22 +24,7 @@ import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Handles PATH_CHALLENGE and PATH_RESPONSE frames for path validation (RFC 9000 §8.2).
- * <p>
- * Path validation is used to verify that a peer can receive and send packets on
- * a particular network path. This is essential for:
- * <ul>
- *   <li>Connection migration (RFC 9000 §9): before migrating to a new path,
- *       the endpoint validates the path with PATH_CHALLENGE/PATH_RESPONSE.</li>
- *   <li>NAT rebinding detection: verifying the new path after an address change.</li>
- * </ul>
- * <p>
- * The validation flow is:
- * <ol>
- *   <li>Initiator sends a PATH_CHALLENGE frame with 8 random bytes.</li>
- *   <li>Responder echoes the same 8 bytes in a PATH_RESPONSE frame.</li>
- *   <li>If the initiator receives the PATH_RESPONSE, the path is validated.</li>
- * </ol>
+ * Handles PATH_CHALLENGE and PATH_RESPONSE frames for path validation and migration per RFC 9000 §8.2.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicPathValidator {
@@ -87,13 +72,7 @@ class QuicPathValidator {
         return initiateChallenge(null);
     }
 
-    /**
-     * Initiates a path validation. The given {@code completionFuture} (if non-null) will
-     * be completed with the measured RTT in milliseconds when PATH_RESPONSE is received,
-     * or failed with a {@link TimeoutException} if the challenge times out.
-     * @param completionFuture optional future to notify on validation result
-     * @return the complete PATH_CHALLENGE frame bytes
-     */
+    /** Initiates a path validation with an optional future that completes with RTT on success or TimeoutException on timeout. */
     byte[] initiateChallenge(BasicFuture<Long> completionFuture) {
         byte[] challengeData = new byte[8];
         RANDOM.nextBytes(challengeData);
@@ -104,12 +83,7 @@ class QuicPathValidator {
         return buildPathChallengeFrame(challengeData);
     }
 
-    /**
-     * Called when a connection migration is detected on this connection.
-     * Activates the anti-amplification limit and stores a callback to invoke if
-     * PATH_CHALLENGE times out (RFC 9000 §9.3.1).
-     * @param onTimeout called on PATH_CHALLENGE timeout; may be {@code null}
-     */
+    /** Activates anti-amplification mode on migration start and registers a timeout callback (RFC 9000 §9.3.1). */
     void onMigrationStart(Runnable onTimeout) {
         this.antAmpActive = true;
         this.antAmpBytesIn = 0;
@@ -118,21 +92,14 @@ class QuicPathValidator {
         this.currentPathValidated = false;
     }
 
-    /**
-     * Records bytes received on the unvalidated path. Call this for every incoming
-     * packet while anti-amplification is active.
-     */
+    /** Records incoming bytes on the unvalidated path for anti-amplification accounting. */
     void recordIncoming(int bytes) {
         if (this.antAmpActive) {
             this.antAmpBytesIn += bytes;
         }
     }
 
-    /**
-     * Returns {@code true} if anti-amplification allows sending {@code bytes} more bytes
-     * on the current (unvalidated) path.
-     * Always returns {@code true} when anti-amp is not active.
-     */
+    /** Returns true if anti-amplification limits allow sending the given number of bytes on the current path. */
     boolean canSendBytes(int bytes) {
         if (!this.antAmpActive) {
             return true;
@@ -147,11 +114,7 @@ class QuicPathValidator {
         }
     }
 
-    /**
-     * Processes a received PATH_RESPONSE frame.
-     * @param responseData the 8-byte response data from the peer
-     * @return {@code true} if the response matches a pending challenge (path validated)
-     */
+    /** Processes a PATH_RESPONSE frame; returns true if it matches a pending challenge and the path is validated. */
     boolean onPathResponse(byte[] responseData) {
         if (responseData == null || responseData.length != 8) {
             return false;
@@ -176,11 +139,7 @@ class QuicPathValidator {
         return false;
     }
 
-    /**
-     * Processes a received PATH_CHALLENGE frame by building a PATH_RESPONSE.
-     * @param challengeData the 8-byte challenge data from the peer
-     * @return the PATH_RESPONSE frame bytes to send back
-     */
+    /** Processes a PATH_CHALLENGE frame from the peer; returns the PATH_RESPONSE frame bytes to send back. */
     byte[] onPathChallenge(byte[] challengeData) {
         if (challengeData == null || challengeData.length != 8) {
             return null;
@@ -188,10 +147,7 @@ class QuicPathValidator {
         return buildPathResponseFrame(challengeData);
     }
 
-    /**
-     * Checks for timed-out path validations and removes them.
-     * @return {@code true} if any pending challenges have timed out
-     */
+    /** Removes timed-out pending challenges and fails any migration future; returns true if any challenge timed out. */
     boolean checkTimeouts() {
         long now = System.currentTimeMillis();
         boolean anyTimeout = false;

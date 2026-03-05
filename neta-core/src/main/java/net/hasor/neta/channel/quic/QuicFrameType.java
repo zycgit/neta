@@ -56,18 +56,22 @@ public final class QuicFrameType {
     private QuicFrameType() {
     }
 
+    /** Returns true if the frame type is a STREAM frame (0x08–0x0F). */
     public static boolean isStream(int type) {
         return (type & 0xF8) == STREAM_BASE;
     }
 
+    /** Returns true if the STREAM frame has the FIN bit set. */
     public static boolean streamFin(int type) {
         return (type & 0x01) != 0;
     }
 
+    /** Returns true if the STREAM frame has the LEN bit set. */
     public static boolean streamLen(int type) {
         return (type & 0x02) != 0;
     }
 
+    /** Returns true if the STREAM frame has the OFF bit set. */
     public static boolean streamOff(int type) {
         return (type & 0x04) != 0;
     }

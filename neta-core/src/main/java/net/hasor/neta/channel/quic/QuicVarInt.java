@@ -22,6 +22,10 @@ public final class QuicVarInt {
     private QuicVarInt() {
     }
 
+    /**
+     * Decodes a variable-length integer from the given byte array at the specified offset.
+     * @return a two-element array: [decoded value, number of bytes consumed]
+     */
     public static long[] decode(byte[] data, int offset) {
         if (offset >= data.length) {
             throw new IllegalArgumentException("Not enough data for varint at offset " + offset);
@@ -38,6 +42,10 @@ public final class QuicVarInt {
         return new long[] { value, length };
     }
 
+    /**
+     * Encodes a variable-length integer into the destination array at the given offset.
+     * @return the number of bytes written (1, 2, 4, or 8)
+     */
     public static int encodeTo(byte[] dst, int dstOffset, long value) {
         if (value <= 63) {
             dst[dstOffset] = (byte) value;
@@ -67,6 +75,7 @@ public final class QuicVarInt {
         }
     }
 
+    /** Encodes a variable-length integer and returns the result as a new byte array. */
     public static byte[] encode(long value) {
         if (value < 0) {
             throw new IllegalArgumentException("Negative varint value: " + value);
@@ -84,6 +93,7 @@ public final class QuicVarInt {
         }
     }
 
+    /** Returns the number of bytes needed to encode the given value (1, 2, 4, or 8). */
     public static int encodedLength(long value) {
         if (value < 0) {
             throw new IllegalArgumentException("Negative varint value: " + value);

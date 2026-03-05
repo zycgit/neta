@@ -18,6 +18,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
+import java.util.Arrays;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.NetChannel;
@@ -27,11 +28,7 @@ import net.hasor.neta.channel.SoRcvException;
 import net.hasor.neta.channel.udp.UdpAsyncClientChannel;
 
 /**
- * QUIC client channel extending {@link UdpAsyncClientChannel}.
- * <p>
- * Overrides {@link #connectTo} to initiate a QUIC handshake over the UDP transport.
- * The {@link Future} passed to {@code connectTo} is completed only after the QUIC
- * handshake reaches the ESTABLISHED state.
+ * QUIC client channel extending {@link UdpAsyncClientChannel}, initiating a QUIC handshake and completing the future only on ESTABLISHED state.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncClientChannel extends UdpAsyncClientChannel {
@@ -45,10 +42,7 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         super(channelId, channel, context, remoteAddress, soConfig);
     }
 
-    /**
-     * Checks if the payload contains a HANDSHAKE_DONE frame (type 0x1e).
-     * Scans through known frame types, skipping their bodies to find HANDSHAKE_DONE.
-     */
+    /** Scans the payload for a HANDSHAKE_DONE frame (type 0x1e), skipping other frame bodies. */
     private static boolean containsHandshakeDone(byte[] payload) {
         int pos = 0;
         while (pos < payload.length) {
@@ -123,13 +117,11 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         return false;
     }
 
-    // ── Connect override ───────────────────────────────────────────────
-
     private QuicSoConfig quicSoConfig() {
         return (QuicSoConfig) this.soConfig;
     }
 
-    // ── QUIC datagram processing ───────────────────────────────────────
+    //
 
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
@@ -144,7 +136,7 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
 
         // ── 2. Create handshake handler ──────────────────────────────
         QuicSoConfig quicConfig = quicSoConfig();
-        this.handshake = new QuicAsyncChannelHandshake(true, quicConfig, this.channel, this.remoteAddress);
+        this.handshake = new QuicAsyncChannelHandshake(true, quicConfig, this.channel, this.remoteAddress, this.context.getConfig().isPrintLog());
         this.pendingInitializer = initializer;
         this.pendingFuture = future;
 
@@ -201,8 +193,14 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
     }
 
-    /** Processes a Long Header response from the server during handshake (Initial with ServerHello, or Handshake with server messages). */
+    /** Processes a Long Header response from the server during handshake (Initial, Handshake, or Version Negotiation). */
     private void processLongHeaderResponse(byte[] rawData, SocketAddress remoteAddr) {
+        // ── Version Negotiation (RFC 9000 §6) ─────────────────────────────────
+        if (QuicPacket.isVersionNegotiation(rawData)) {
+            processVersionNegotiation(rawData);
+            return;
+        }
+
         QuicPacket.ParsedPacket parsed = QuicPacket.parseLongHeader(rawData, 0, rawData.length);
         if (parsed == null) {
             return;
@@ -261,6 +259,69 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
     }
 
+    /**
+     * Handles a Version Negotiation packet received from the server during handshake (RFC 9000 §6).
+     * Validates the packet, selects the first mutually supported QUIC version, and re-initiates
+     * the handshake with that version. A VN packet received after connection establishment is silently ignored.
+     */
+    private void processVersionNegotiation(byte[] rawData) {
+        // RFC 9000 §6.2: MUST ignore if the connection is already established
+        if (this.handshake.isEstablished()) {
+            logger.debug("[QUIC-VN] ignoring VN packet on established connection (RFC 9000 §6.2)");
+            return;
+        }
+
+        // RFC 9000 §6.2: DCID in VN packet MUST match our original Source Connection ID (localCid)
+        byte[] vnDcid = QuicPacket.parseVersionNegotiationDcid(rawData);
+        if (vnDcid == null || !Arrays.equals(vnDcid, this.handshake.getLocalCid())) {
+            logger.warn("[QUIC-VN] discarding VN: DCID does not match our localCid (RFC 9000 §6.2)");
+            return;
+        }
+
+        // Parse the server's supported version list
+        int[] serverVersions = QuicPacket.parseVersionNegotiationVersions(rawData);
+        if (serverVersions == null || serverVersions.length == 0) {
+            logger.warn("[QUIC-VN] VN packet contains no supported versions, aborting connection");
+            this.pendingFuture.failed(new IOException("QUIC Version Negotiation failed: server advertised no versions"));
+            return;
+        }
+
+        // Select the first version recognised by both sides
+        QuicVersion chosen = null;
+        for (int v : serverVersions) {
+            chosen = QuicVersion.fromVersion(v);
+            if (chosen != null) {
+                break;
+            }
+        }
+        if (chosen == null) {
+            logger.warn("[QUIC-VN] no mutually supported QUIC version found in server's list");
+            this.pendingFuture.failed(new IOException("QUIC Version Negotiation: no mutually supported version"));
+            return;
+        }
+
+        // RFC 9000 §6.2: if chosen version == current version, ignore to prevent infinite retry loops
+        QuicSoConfig quicConfig = quicSoConfig();
+        if (chosen.getVersion() == quicConfig.getQuicVersion().getVersion()) {
+            logger.warn("[QUIC-VN] chosen version 0x" + String.format("%08x", chosen.getVersion()) + " matches current version — ignoring to prevent retry loop (RFC 9000 §6.2)");
+            return;
+        }
+
+        logger.info("[QUIC-VN] downgrading from 0x" + String.format("%08x", quicConfig.getQuicVersion().getVersion()) + " to 0x" + String.format("%08x", chosen.getVersion()));
+
+        // Re-create a fresh handshake handler with the chosen version and re-send Initial
+        // The existing receive loop continues and will process the new handshake responses.
+        this.handshake = new QuicAsyncChannelHandshake(true, quicConfig, chosen,//
+                this.channel, this.remoteAddress, this.context.getConfig().isPrintLog());
+        try {
+            this.handshake.initTlsEngine();
+            this.handshake.initiateClientHandshake(this.remoteAddress);
+        } catch (Exception e) {
+            logger.error("[QUIC-VN] failed to re-initiate handshake after version negotiation: " + e.getMessage(), e);
+            this.pendingFuture.failed(e);
+        }
+    }
+
     /** Processes a Short Header (1-RTT) packet during handshake. The server sends HANDSHAKE_DONE as a 1-RTT frame. */
     private void processShortHeaderResponse(byte[] rawData) {
         try {
@@ -268,14 +329,14 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
             if (quicSoConfig().isSslEnabled()) {
                 parsed = this.handshake.decrypt1RttPacket(rawData, 0, rawData.length);
             } else {
-                parsed = QuicAsyncServerChannel.parseRawShortHeader(rawData, quicSoConfig().getConnectionIdLength());
+                parsed = QuicPacket.parseRawShortHeader(rawData, quicSoConfig().getConnectionIdLength());
             }
 
             if (parsed == null || parsed.payload == null) {
                 return;
             }
 
-            this.handshake.updateLargestAppPn(parsed.packetNumber);
+            this.handshake.updateMaxAppPacketNumber(parsed.packetNumber);
 
             // Check for HANDSHAKE_DONE frame in the payload
             if (containsHandshakeDone(parsed.payload)) {
@@ -336,8 +397,6 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
     }
 
-    // ── Helpers ─────────────────────────────────────────────────────────
-
     /** Dispatches decrypted 1-RTT data to the established connection's protocol pipeline. */
     private void dispatchAppData(byte[] rawData) {
         this.connAsync.checkIdleTimeouts();
@@ -346,14 +405,14 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
             if (quicSoConfig().isSslEnabled()) {
                 parsed = this.handshake.decrypt1RttPacket(rawData, 0, rawData.length);
             } else {
-                parsed = QuicAsyncServerChannel.parseRawShortHeader(rawData, quicSoConfig().getConnectionIdLength());
+                parsed = QuicPacket.parseRawShortHeader(rawData, quicSoConfig().getConnectionIdLength());
             }
 
             if (parsed == null || parsed.payload == null) {
                 return;
             }
 
-            this.handshake.updateLargestAppPn(parsed.packetNumber);
+            this.handshake.updateMaxAppPacketNumber(parsed.packetNumber);
 
             // Dispatch individual QUIC frames to streams, datagrams, and control handlers
             this.connAsync.dispatchReceivedFrames(parsed.payload);

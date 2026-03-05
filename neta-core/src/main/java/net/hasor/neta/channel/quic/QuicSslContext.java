@@ -19,13 +19,7 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * {@link SslContext} implementation for QUIC connections.
- * <p>
- * Unlike {@link net.hasor.neta.codec.ssl.SslContextBasic} which wraps a {@code javax.net.ssl.SSLEngine},
- * this class wraps the result of a QUIC-specific TLS 1.3 handshake performed by {@link QuicTlsEngine}.
- * <p>
- * {@link #openSSL()} and {@link #closeSSL()} are no-ops because QUIC always encrypts
- * (there is no unencrypted fallback after the handshake completes).
+ * {@link SslContext} implementation wrapping QUIC TLS 1.3 handshake results from {@link QuicTlsEngine}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-01-01
  */
@@ -39,16 +33,7 @@ public class QuicSslContext implements SslContext {
     private final    String        sniHostName;    // SNI server_name from TLS handshake
     private volatile boolean       ready;
 
-    /**
-     * Creates a QuicSslContext after successful QUIC handshake.
-     * @param channel the QUIC connection-level channel
-     * @param certConfig shared certificate configuration
-     * @param clientMode true if this is the client side
-     * @param negotiatedAlpn the ALPN protocol negotiated during handshake (may be null)
-     * @param peerHost the remote host name (may be null)
-     * @param peerPort the remote port
-     * @param sniHostName the SNI server_name from TLS handshake (may be null)
-     */
+    /** Creates a QuicSslContext wrapping the results of a completed QUIC handshake. */
     QuicSslContext(SoChannel<?> channel, SslCertConfig certConfig, boolean clientMode, String negotiatedAlpn, String peerHost, int peerPort, String sniHostName) {
         this.channel = channel;
         this.certConfig = certConfig;
@@ -109,19 +94,13 @@ public class QuicSslContext implements SslContext {
         return this.sniHostName;
     }
 
-    /**
-     * No-op. QUIC always encrypts after handshake; there is no way to
-     * "switch off" encryption on a live QUIC connection.
-     */
+    /** No-op: QUIC encryption cannot be switched off on a live connection. */
     @Override
     public void closeSSL() {
         this.ready = false;
     }
 
-    /**
-     * No-op. QUIC encryption is managed by the connection lifecycle,
-     * not by an on/off toggle.
-     */
+    /** No-op: QUIC encryption is managed by the connection lifecycle, not an on/off toggle. */
     @Override
     public void openSSL() {
         this.ready = true;

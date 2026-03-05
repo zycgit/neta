@@ -17,20 +17,8 @@ package net.hasor.neta.channel.quic;
 import java.util.Arrays;
 
 /**
- * QUIC protocol version definitions, encapsulating version-specific parameters
- * such as Initial Salt, key derivation label prefixes, and packet type wire encodings.
- * <p>
- * Predefined instances:
- * <ul>
- *   <li>{@link #V1} — QUIC v1 (RFC 9000/9001), wire version {@code 0x00000001}</li>
- *   <li>{@link #V2} — QUIC v2 (RFC 9369), wire version {@code 0x6b3343cf}</li>
- * </ul>
- * <p>
- * Custom versions can be created via the public constructor for experimental
- * or future QUIC versions.
+ * QUIC protocol version definition, encapsulating version-specific salt, key label prefix, and packet type encodings.
  * @author 赵永春 (zyc@hasor.net)
- * @see <a href="https://www.rfc-editor.org/rfc/rfc9000">RFC 9000 — QUIC v1</a>
- * @see <a href="https://www.rfc-editor.org/rfc/rfc9369">RFC 9369 — QUIC v2</a>
  */
 public final class QuicVersion {
 
@@ -44,14 +32,7 @@ public final class QuicVersion {
 
     // ── Predefined version instances ───────────────────────────────────
 
-    /**
-     * QUIC v1 (RFC 9000/9001).
-     * <ul>
-     *   <li>Initial Salt: {@code 38762cf7f55934b34d179ae6a4c80cadccbb7f0a}</li>
-     *   <li>Key labels: {@code "quic key"}, {@code "quic iv"}, {@code "quic hp"}</li>
-     *   <li>Packet types: Initial=0, 0-RTT=1, Handshake=2, Retry=3</li>
-     * </ul>
-     */
+    /** QUIC v1 instance (RFC 9000/9001), wire version 0x00000001. */
     public static final QuicVersion V1 = new QuicVersion(               //
             VERSION_1,                                                  //
             new byte[] {                                                //
@@ -65,14 +46,7 @@ public final class QuicVersion {
             new int[] { 0x00, 0x01, 0x02, 0x03 }                        // Initial, 0-RTT, Handshake, Retry
     );
 
-    /**
-     * QUIC v2 (RFC 9369).
-     * <ul>
-     *   <li>Initial Salt: {@code 0dede3def700a6db819381be6e269dcbf9bd2ed9}</li>
-     *   <li>Key labels: {@code "quicv2 key"}, {@code "quicv2 iv"}, {@code "quicv2 hp"}</li>
-     *   <li>Packet types: Initial=1, 0-RTT=2, Handshake=3, Retry=0 (rotated from v1)</li>
-     * </ul>
-     */
+    /** QUIC v2 instance (RFC 9369), wire version 0x6b3343cf with rotated packet type encodings. */
     public static final QuicVersion V2 = new QuicVersion(               //
             VERSION_2,                                                  //
             new byte[] {                                                //
@@ -93,18 +67,7 @@ public final class QuicVersion {
     private final String keyLabelPrefix;
     private final int[]  wirePacketTypes;  // indexed by logical type: [Initial, 0-RTT, Handshake, Retry]
 
-    /**
-     * Creates a custom QUIC version definition.
-     * <p>
-     * Use this constructor to support experimental or future QUIC versions that are
-     * not yet covered by the predefined {@link #V1} and {@link #V2} instances.
-     * @param version the 32-bit wire version number
-     * @param initialSalt the 20-byte Initial Salt for HKDF-Extract (RFC 9001 §5.2)
-     * @param keyLabelPrefix the HKDF label prefix for packet protection keys
-     * (e.g. {@code "quic"} for v1, {@code "quicv2"} for v2)
-     * @param wirePacketTypes a 4-element array mapping logical packet types (indices 0–3:
-     * Initial, 0-RTT, Handshake, Retry) to their wire encodings
-     */
+    /** Creates a custom QUIC version with the given wire number, initial salt, key label prefix, and wire packet type array. */
     public QuicVersion(int version, byte[] initialSalt, String keyLabelPrefix, int[] wirePacketTypes) {
         if (initialSalt == null || initialSalt.length != 20) {
             throw new IllegalArgumentException("initialSalt must be exactly 20 bytes");
@@ -123,11 +86,7 @@ public final class QuicVersion {
 
     // ── Accessors ──────────────────────────────────────────────────────
 
-    /**
-     * Resolves a {@link QuicVersion} from a 32-bit wire version number.
-     * @param wireVersion the version number read from a QUIC packet header
-     * @return the matching {@link QuicVersion}, or {@code null} if the version is unknown
-     */
+    /** Resolves a QuicVersion from a 32-bit wire version number; returns null if unknown. */
     public static QuicVersion fromVersion(int wireVersion) {
         switch (wireVersion) {
             case VERSION_1:
@@ -144,33 +103,19 @@ public final class QuicVersion {
         return this.version;
     }
 
-    /**
-     * Returns a copy of the 20-byte Initial Salt used for deriving Initial secrets.
-     * @see <a href="https://www.rfc-editor.org/rfc/rfc9001#section-5.2">RFC 9001 §5.2</a>
-     */
+    /** Returns a copy of the 20-byte Initial Salt for HKDF-Extract (RFC 9001 §5.2). */
     public byte[] getInitialSalt() {
         return Arrays.copyOf(this.initialSalt, this.initialSalt.length);
     }
 
     // ── Packet Type Mapping ────────────────────────────────────────────
 
-    /**
-     * Returns the HKDF label prefix for packet protection key derivation.
-     * <p>For QUIC v1 this is {@code "quic"} (producing labels like {@code "quic key"});
-     * for v2 it is {@code "quicv2"} (producing {@code "quicv2 key"}).
-     */
+    /** Returns the HKDF label prefix for packet protection key derivation (e.g. "quic" for v1, "quicv2" for v2). */
     public String getKeyLabelPrefix() {
         return this.keyLabelPrefix;
     }
 
-    /**
-     * Converts a logical packet type to its wire encoding for this QUIC version.
-     * <p>Logical types use the v1 numbering convention:
-     * Initial=0, 0-RTT=1, Handshake=2, Retry=3.
-     * @param logicalType one of {@link QuicPacket#TYPE_INITIAL}, {@link QuicPacket#TYPE_0RTT},
-     * {@link QuicPacket#TYPE_HANDSHAKE}, {@link QuicPacket#TYPE_RETRY}
-     * @return the version-specific wire encoding (2-bit value)
-     */
+    /** Converts a logical packet type (Initial=0, 0-RTT=1, Handshake=2, Retry=3) to its version-specific wire encoding. */
     public int logicalToWireType(int logicalType) {
         if (logicalType < 0 || logicalType > 3) {
             throw new IllegalArgumentException("Invalid logical packet type: " + logicalType);
@@ -180,12 +125,7 @@ public final class QuicVersion {
 
     // ── Lookup ─────────────────────────────────────────────────────────
 
-    /**
-     * Converts a version-specific wire packet type back to the logical type.
-     * @param wireType the wire-encoded packet type from the Long Header first byte (2-bit value)
-     * @return the logical type (Initial=0, 0-RTT=1, Handshake=2, Retry=3)
-     * @throws IllegalArgumentException if the wire type is not found in this version's mapping
-     */
+    /** Converts a version-specific wire packet type back to the logical type (Initial=0, 0-RTT=1, Handshake=2, Retry=3). */
     public int wireToLogicalType(int wireType) {
         for (int i = 0; i < this.wirePacketTypes.length; i++) {
             if (this.wirePacketTypes[i] == wireType) {

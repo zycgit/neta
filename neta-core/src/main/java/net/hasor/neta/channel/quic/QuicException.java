@@ -17,43 +17,25 @@ package net.hasor.neta.channel.quic;
 import net.hasor.neta.channel.SoException;
 
 /**
- * Base exception for QUIC protocol errors.
- * <p>
- * Carries a QUIC error code (RFC 9000 §20) that maps to one of the constants in
- * {@link QuicErrorCode}. This exception is propagated through the pipeline via
- * {@link net.hasor.neta.channel.SoContextService#notifyRcvChannelException} or
- * {@link net.hasor.neta.channel.SoContextService#notifySndChannelException}.
+ * Base exception for QUIC protocol errors, carrying a QUIC error code (RFC 9000 §20).
  * @author 赵永春 (zyc@hasor.net)
- * @see QuicErrorCode
  */
 public class QuicException extends SoException {
     private final long errorCode;
 
-    /**
-     * Creates a QUIC exception with an error code and message.
-     * @param errorCode the QUIC error code (see {@link QuicErrorCode})
-     * @param message human-readable description
-     */
+    /** Creates a QUIC exception with an error code and message. */
     public QuicException(long errorCode, String message) {
         super(message);
         this.errorCode = errorCode;
     }
 
-    /**
-     * Creates a QUIC exception with an error code, message, and cause.
-     * @param errorCode the QUIC error code (see {@link QuicErrorCode})
-     * @param message human-readable description
-     * @param cause the underlying cause
-     */
+    /** Creates a QUIC exception with an error code, message, and cause. */
     public QuicException(long errorCode, String message, Throwable cause) {
         super(message, cause);
         this.errorCode = errorCode;
     }
 
-    /**
-     * Returns the QUIC error code associated with this exception.
-     * @return one of the constants in {@link QuicErrorCode}
-     */
+    /** Returns the QUIC error code associated with this exception. */
     public long getErrorCode() {
         return this.errorCode;
     }

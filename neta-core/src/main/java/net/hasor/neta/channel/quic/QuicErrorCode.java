@@ -15,9 +15,7 @@
  */
 package net.hasor.neta.channel.quic;
 /**
- * QUIC transport error codes as defined in RFC 9000, Section 20.1.
- * <p>These codes are carried in the {@code error_code} field of
- * {@code CONNECTION_CLOSE} frames (type 0x1c).
+ * QUIC transport error codes (RFC 9000 §20.1), carried in CONNECTION_CLOSE frames.
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface QuicErrorCode {
@@ -27,91 +25,48 @@ public interface QuicErrorCode {
     /** The endpoint encountered an internal error and cannot continue processing. */
     long INTERNAL_ERROR = 0x01;
 
-    /**
-     * The server refused the connection attempt.
-     * Only applicable during the handshake.
-     */
+    /** Server refused the connection attempt during handshake. */
     long CONNECTION_REFUSED = 0x02;
 
-    /**
-     * An endpoint received more data than it permitted in its advertised
-     * data limits (MAX_DATA / MAX_STREAM_DATA).
-     */
+    /** Received more data than permitted by MAX_DATA / MAX_STREAM_DATA limits. */
     long FLOW_CONTROL_ERROR = 0x03;
 
-    /**
-     * An endpoint received a frame for a stream identifier that exceeded its
-     * advertised stream limit for the corresponding stream type.
-     * @see <a href="https://www.rfc-editor.org/rfc/rfc9000#section-20.1">RFC 9000 §20.1</a>
-     */
+    /** Received a stream frame for a stream ID exceeding the advertised stream limit. */
     long STREAM_LIMIT_ERROR = 0x04;
 
-    /**
-     * An endpoint received a frame for a stream that was not in a state that
-     * permitted that frame to be received.
-     */
+    /** Received a frame for a stream that was not in a permitted state. */
     long STREAM_STATE_ERROR = 0x05;
 
-    /**
-     * A STREAM frame was received that indicated that the final size changed
-     * after it had been established.
-     */
+    /** Received a STREAM frame that changed the final size after it was established. */
     long FINAL_SIZE_ERROR = 0x06;
 
-    /**
-     * A frame that contained prohibited data was received, or a frame of
-     * prohibited type was received.
-     */
+    /** Received a frame with prohibited data or of a prohibited type. */
     long FRAME_ENCODING_ERROR = 0x07;
 
-    /**
-     * An endpoint received transport parameters that it found invalid, or it
-     * received transport parameters before the end of the handshake.
-     */
+    /** Received invalid or untimely transport parameters. */
     long TRANSPORT_PARAMETER_ERROR = 0x08;
 
-    /**
-     * The number of Connection IDs provided by the peer exceeded the advertised
-     * active_connection_id_limit.
-     */
+    /** Peer provided more Connection IDs than the advertised active_connection_id_limit. */
     long CONNECTION_ID_LIMIT_ERROR = 0x09;
 
-    /**
-     * An endpoint detected an error with protocol compliance that was not
-     * covered by more specific error codes; also used when it does not wish to
-     * reveal more specific information.
-     */
+    /** Generic protocol compliance error not covered by more specific codes. */
     long PROTOCOL_VIOLATION = 0x0a;
 
-    /**
-     * A server received a client Initial that contained an invalid Token field.
-     */
+    /** Server received a client Initial containing an invalid Token field. */
     long INVALID_TOKEN = 0x0b;
 
     /** The application or application protocol caused the connection to be closed. */
     long APPLICATION_ERROR = 0x0c;
 
-    /**
-     * An endpoint could not keep up with the rate at which its peer created
-     * new CRYPTO data.
-     */
+    /** Endpoint could not keep pace with the peer's rate of new CRYPTO data. */
     long CRYPTO_BUFFER_EXCEEDED = 0x0d;
 
-    /**
-     * An endpoint detected errors in performing key updates.
-     */
+    /** Endpoint detected errors during key update. */
     long KEY_UPDATE_ERROR = 0x0e;
 
-    /**
-     * An endpoint has reached the confidentiality or integrity limit for the
-     * AEAD algorithm used by the given connection.
-     */
+    /** AEAD confidentiality or integrity limit reached for this connection. */
     long AEAD_LIMIT_REACHED = 0x0f;
 
-    /**
-     * An endpoint has determined that the network path is incapable of supporting
-     * QUIC. An endpoint is unlikely to receive a CONNECTION_CLOSE frame carrying
-     * this code except when the path does not support a large enough MTU.
-     */
+    /** Network path cannot support QUIC (e.g., MTU too small). */
     long NO_VIABLE_PATH = 0x10;
 }

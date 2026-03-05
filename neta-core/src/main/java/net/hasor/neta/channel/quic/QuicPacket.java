@@ -17,8 +17,7 @@ package net.hasor.neta.channel.quic;
 import java.util.Arrays;
 
 /**
- * QUIC packet parsing and building utilities (RFC 9000 §17).
- * Handles Long Header (Initial, Handshake) and Short Header (1-RTT) packets.
+ * QUIC packet parsing and building utilities (RFC 9000 §17) for Long Header and Short Header packets.
  * @author 赵永春 (zyc@hasor.net)
  */
 final class QuicPacket {
@@ -31,26 +30,28 @@ final class QuicPacket {
     private QuicPacket() {
     }
 
+    /** Returns true if the first byte indicates a Long Header packet. */
     public static boolean isLongHeader(byte[] data) {
         return (data[0] & 0x80) != 0;
     }
 
+    /** Returns true if the first byte indicates a Long Header packet. */
+    public static boolean isLongHeader(byte firstByte) {
+        return (firstByte & 0x80) != 0;
+    }
+
+    /** Extracts the raw Long Header packet type from the first byte (without version mapping). */
     public static int longHeaderType(byte firstByte) {
         return (firstByte & 0x30) >> 4;
     }
 
-    /**
-     * Returns the logical packet type from a Long Header first byte, converting
-     * from the version-specific wire encoding.
-     * @param firstByte the first byte of the QUIC packet
-     * @param version the QUIC version for wire→logical type mapping
-     * @return the logical packet type (one of {@link #TYPE_INITIAL}, etc.)
-     */
+    /** Returns the logical packet type from a Long Header first byte using version-specific wire-to-logical mapping. */
     public static int longHeaderType(byte firstByte, QuicVersion version) {
         int wireType = (firstByte & 0x30) >> 4;
         return version.wireToLogicalType(wireType);
     }
 
+    /** Parses a Long Header packet structure without decryption. Returns null if data is too short. */
     public static ParsedPacket parseLongHeader(byte[] data, int offset, int length) {
         if (length < 7) {
             return null;
@@ -117,6 +118,7 @@ final class QuicPacket {
         return pkt;
     }
 
+    /** Removes header protection and decrypts a Long Header packet payload. Returns true on success. */
     public static boolean decryptLongHeaderPacket(byte[] data, int offset, ParsedPacket parsed, byte[] key, byte[] iv, byte[] hp, long largestPn) {
         try {
             int pnOffset = parsed.headerLength;
@@ -141,6 +143,7 @@ final class QuicPacket {
         }
     }
 
+    /** Parses and decrypts a Short Header (1-RTT) packet. Returns null on failure. */
     public static ParsedPacket decryptShortHeaderPacket(byte[] data, int offset, int length, int dcidLen, byte[] key, byte[] iv, byte[] hp, long largestPn) {
         try {
             if (length < 1 + dcidLen + 4 + 16) {
@@ -176,6 +179,7 @@ final class QuicPacket {
         }
     }
 
+    /** Builds an encrypted Long Header packet with AEAD protection and optional PADDING for Initial packets. */
     public static byte[] buildLongHeaderPacket(int packetType, int version, byte[] dcid, byte[] scid, byte[] token, long packetNumber, byte[] payload, byte[] key, byte[] iv, byte[] hp, int minSize) throws Exception {
         int pnLength = packetNumberLength(packetNumber);
         byte[] pnBytes = encodePacketNumber(packetNumber, pnLength);
@@ -233,21 +237,74 @@ final class QuicPacket {
         return packet;
     }
 
-    /**
-     * Version-aware overload of {@link #buildLongHeaderPacket(int, int, byte[], byte[], byte[], long, byte[], byte[], byte[], byte[], int)}.
-     * Automatically maps the logical packet type to the wire encoding for the given QUIC version
-     * and fills in the correct version number.
-     */
+    /** Version-aware Long Header packet builder that maps logical packet type to wire encoding for the given QUIC version. */
     public static byte[] buildLongHeaderPacket(QuicVersion version, int packetType, byte[] dcid, byte[] scid, byte[] token, long packetNumber, byte[] payload, byte[] key, byte[] iv, byte[] hp, int minSize) throws Exception {
         return buildLongHeaderPacket(version.logicalToWireType(packetType), version.getVersion(), dcid, scid, token, packetNumber, payload, key, iv, hp, minSize);
     }
+
+    /** Builds a Version Negotiation packet (RFC 9000 §17.2.1). */
+    public static byte[] buildVersionNegotiationPacket(byte[] clientDcid, byte[] clientScid, int[] supportedVersions) {
+        int vnDcidLen = clientScid != null ? clientScid.length : 0;
+        int vnScidLen = clientDcid != null ? clientDcid.length : 0;
+        int packetLen = 1 + 4 + 1 + vnDcidLen + 1 + vnScidLen + (supportedVersions.length * 4);
+        byte[] packet = new byte[packetLen];
+        int pos = 0;
+
+        // First byte: Form bit (1) set, remaining 7 bits unused
+        packet[pos++] = (byte) 0x80;
+
+        // Version: 0x00000000 (identifies this as a Version Negotiation packet)
+        packet[pos++] = 0x00;
+        packet[pos++] = 0x00;
+        packet[pos++] = 0x00;
+        packet[pos++] = 0x00;
+
+        // DCID Length + DCID (= received packet's SCID, echoed back)
+        packet[pos++] = (byte) vnDcidLen;
+        if (vnDcidLen > 0) {
+            System.arraycopy(clientScid, 0, packet, pos, vnDcidLen);
+            pos += vnDcidLen;
+        }
+
+        // SCID Length + SCID (= received packet's DCID, echoed back)
+        packet[pos++] = (byte) vnScidLen;
+        if (vnScidLen > 0) {
+            System.arraycopy(clientDcid, 0, packet, pos, vnScidLen);
+            pos += vnScidLen;
+        }
+
+        // Supported Versions (each 4 bytes, big-endian)
+        for (int version : supportedVersions) {
+            packet[pos++] = (byte) (version >> 24);
+            packet[pos++] = (byte) (version >> 16);
+            packet[pos++] = (byte) (version >> 8);
+            packet[pos++] = (byte) version;
+        }
+
+        return packet;
+    }
+
     // ── Building Packets ───────────────────────────────────────────────
 
+    /** Builds an encrypted Short Header (1-RTT) packet with AEAD protection. */
     public static byte[] buildShortHeaderPacket(byte[] dcid, long packetNumber, byte[] payload, byte[] key, byte[] iv, byte[] hp) throws Exception {
         int pnLength = packetNumberLength(packetNumber);
         byte[] pnBytes = encodePacketNumber(packetNumber, pnLength);
         int headerSize = 1 + dcid.length + pnLength;
-        int totalSize = headerSize + payload.length + QuicCrypto.GCM_TAG_LENGTH;
+
+        // RFC 9001 §5.4.2: ensure the ciphertext (payload + GCM tag) is ≥ (4 + 16 - pnLength)
+        // so the header protection sample (16 bytes at pnOffset + 4) fits within the packet.
+        int minPayloadLen = 4 - pnLength + 16 - QuicCrypto.GCM_TAG_LENGTH; // = 20 - pnLength - 16 = 4 - pnLength
+        byte[] actualPayload;
+        if (payload.length < minPayloadLen) {
+            actualPayload = new byte[minPayloadLen];
+            System.arraycopy(payload, 0, actualPayload, 0, payload.length);
+            // remaining bytes are 0x00 = PADDING frames (RFC 9000 §19.1)
+        } else {
+            actualPayload = payload;
+        }
+
+        int totalSize = headerSize + actualPayload.length + QuicCrypto.GCM_TAG_LENGTH;
         byte[] packet = new byte[totalSize];
         int pos = 0;
         packet[pos++] = (byte) (0x40 | (pnLength - 1));
@@ -259,12 +316,13 @@ final class QuicPacket {
         byte[] aad = new byte[headerSize];
         System.arraycopy(packet, 0, aad, 0, headerSize);
         byte[] nonce = QuicCrypto.createNonce(iv, packetNumber);
-        byte[] encrypted = QuicCrypto.aesGcmEncrypt(key, nonce, payload, aad);
+        byte[] encrypted = QuicCrypto.aesGcmEncrypt(key, nonce, actualPayload, aad);
         System.arraycopy(encrypted, 0, packet, pos, encrypted.length);
         QuicCrypto.applyHeaderProtection(packet, pnOffset, pnLength, hp, false);
         return packet;
     }
 
+    /** Recovers the full packet number from a truncated value using the largest acknowledged PN (RFC 9000 Appendix A). */
     static long decodePacketNumber(long truncatedPn, int pnLength, long largestPn) {
         long expectedPn = largestPn + 1;
         long pnWin = 1L << (pnLength * 8);
@@ -282,6 +340,7 @@ final class QuicPacket {
 
     // ── Packet Number Encoding/Decoding ────────────────────────────────
 
+    /** Returns the minimum number of bytes needed to encode a packet number (1–4). */
     static int packetNumberLength(long pn) {
         if (pn <= 0xFF) {
             return 1;
@@ -295,6 +354,7 @@ final class QuicPacket {
         return 4;
     }
 
+    /** Encodes a packet number into a big-endian byte array of the given length. */
     static byte[] encodePacketNumber(long pn, int length) {
         byte[] result = new byte[length];
         for (int i = length - 1; i >= 0; i--) {
@@ -304,6 +364,7 @@ final class QuicPacket {
         return result;
     }
 
+    /** Builds a CRYPTO frame (type + offset + length + data) per RFC 9000 §19.6. */
     public static byte[] buildCryptoFrame(long offset, byte[] data) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.CRYPTO);
         byte[] offsetBytes = QuicVarInt.encode(offset);
@@ -322,6 +383,7 @@ final class QuicPacket {
 
     // ── QUIC Frame building utilities ──────────────────────────────────
 
+    /** Builds a simple ACK frame with a single range (RFC 9000 §19.3). */
     public static byte[] buildAckFrame(long largestAcked, long firstRange) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.ACK);
         byte[] largestBytes = QuicVarInt.encode(largestAcked);
@@ -342,16 +404,12 @@ final class QuicPacket {
         return frame;
     }
 
+    /** Builds a HANDSHAKE_DONE frame (RFC 9000 §19.20). */
     public static byte[] buildHandshakeDoneFrame() {
         return QuicVarInt.encode(QuicFrameType.HANDSHAKE_DONE);
     }
 
-    /**
-     * Scans through QUIC frames in {@code data} starting at {@code offset}
-     * to find the first CRYPTO frame. Non-CRYPTO frames (PADDING, PING, ACK,
-     * NEW_CONNECTION_ID, etc.) are skipped automatically.
-     * @return {@code long[]{cryptoOffset, dataPos, dataLength}} or {@code null} if not found
-     */
+    /** Scans QUIC frames starting at offset and returns the first CRYPTO frame as {cryptoOffset, dataPos, dataLength}, or null. */
     public static long[] parseCryptoFrame(byte[] data, int offset) {
         int pos = offset;
         while (pos < data.length) {
@@ -471,12 +529,119 @@ final class QuicPacket {
         return packet;
     }
 
-    /**
-     * Version-aware overload of {@link #buildRawLongHeaderPacket(int, int, byte[], byte[], byte[], long, byte[])}.
-     * Automatically maps the logical packet type to the wire encoding for the given QUIC version.
-     */
+    /** Version-aware raw Long Header packet builder that maps logical packet type to wire encoding for the given QUIC version. */
     public static byte[] buildRawLongHeaderPacket(QuicVersion version, int packetType, byte[] dcid, byte[] scid, byte[] token, long packetNumber, byte[] payload) {
         return buildRawLongHeaderPacket(version.logicalToWireType(packetType), version.getVersion(), dcid, scid, token, packetNumber, payload);
+    }
+
+    // ── Version Negotiation (RFC 9000 §17.2.1) ─────────────────────────
+
+    /**
+     * Returns {@code true} if the raw packet is a Version Negotiation packet (RFC 9000 §17.2.1):
+     * Long Header with version field equal to {@code 0x00000000}.
+     */
+    public static boolean isVersionNegotiation(byte[] data) {
+        if (data == null || data.length < 5) {
+            return false;
+        }
+        if ((data[0] & 0x80) == 0) {
+            return false; // Short Header — cannot be a VN packet
+        }
+        return data[1] == 0 && data[2] == 0 && data[3] == 0 && data[4] == 0;
+    }
+
+    /**
+     * Parses the DCID field from a Version Negotiation packet (RFC 9000 §17.2.1).
+     * The server echoes back the client's Source Connection ID as the VN DCID, used for
+     * anti-spoofing validation (RFC 9000 §6.2).
+     * Returns {@code null} if the packet is malformed.
+     */
+    public static byte[] parseVersionNegotiationDcid(byte[] data) {
+        if (data == null || data.length < 7) {
+            return null;
+        }
+        int pos = 5; // skip first byte + 4-byte version
+        int dcidLen = data[pos++] & 0xFF;
+        if (pos + dcidLen > data.length) {
+            return null;
+        }
+        byte[] dcid = new byte[dcidLen];
+        System.arraycopy(data, pos, dcid, 0, dcidLen);
+        return dcid;
+    }
+
+    /**
+     * Parses the Supported Versions list from a Version Negotiation packet (RFC 9000 §17.2.1).
+     * Returns each version as a 32-bit integer in the order advertised by the server,
+     * an empty array if the list is empty, or {@code null} on parse error.
+     */
+    public static int[] parseVersionNegotiationVersions(byte[] data) {
+        if (data == null || data.length < 7) {
+            return null;
+        }
+        int pos = 5; // skip first byte + 4-byte version
+        int dcidLen = data[pos++] & 0xFF;
+        if (pos + dcidLen > data.length) {
+            return null;
+        }
+        pos += dcidLen;
+        if (pos >= data.length) {
+            return new int[0];
+        }
+        int scidLen = data[pos++] & 0xFF;
+        if (pos + scidLen > data.length) {
+            return null;
+        }
+        pos += scidLen;
+        int remaining = data.length - pos;
+        if (remaining < 0 || remaining % 4 != 0) {
+            return null;
+        }
+        int count = remaining / 4;
+        int[] versions = new int[count];
+        for (int i = 0; i < count; i++) {
+            versions[i] = ((data[pos] & 0xFF) << 24) | ((data[pos + 1] & 0xFF) << 16) | ((data[pos + 2] & 0xFF) << 8) | (data[pos + 3] & 0xFF);
+            pos += 4;
+        }
+        return versions;
+    }
+
+    // ── Raw (non-TLS) Short Header ─────────────────────────────────────
+
+    /**
+     * Parses a raw (unencrypted) Short Header packet for non-TLS mode.
+     * Used by both the server and the client when {@code sslEnabled=false}.
+     * Returns {@code null} if the data is too short.
+     */
+    public static ParsedPacket parseRawShortHeader(byte[] data, int dcidLen) {
+        if (data.length < 1 + dcidLen + 1) {
+            return null;
+        }
+        ParsedPacket pkt = new ParsedPacket();
+        pkt.packetType = TYPE_1RTT;
+        int pos = 0;
+        int firstByte = data[pos++] & 0xFF;
+        int pnLength = (firstByte & 0x03) + 1;
+        pkt.dcid = new byte[dcidLen];
+        System.arraycopy(data, pos, pkt.dcid, 0, dcidLen);
+        pos += dcidLen;
+        if (pos + pnLength > data.length) {
+            return null;
+        }
+        long pn = 0;
+        for (int i = 0; i < pnLength; i++) {
+            pn = (pn << 8) | (data[pos++] & 0xFF);
+        }
+        pkt.packetNumber = pn;
+        pkt.pnLength = pnLength;
+        int payloadLen = data.length - pos;
+        if (payloadLen > 0) {
+            pkt.payload = new byte[payloadLen];
+            System.arraycopy(data, pos, pkt.payload, 0, payloadLen);
+        } else {
+            pkt.payload = new byte[0];
+        }
+        return pkt;
     }
 
     /** Parse a raw (unencrypted) Long Header packet for non-SSL mode. */

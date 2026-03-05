@@ -26,16 +26,15 @@ import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
+import net.hasor.cobble.concurrent.future.Futures;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * Connection-level {@link AsyncChannel} for QUIC, responsible for managing
- * all sub-channels (streams and datagrams) under a single QUIC connection.
- * <p>
+ * Connection-level {@link AsyncChannel} for QUIC, managing all streams and datagrams under a single QUIC connection.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicChannelAsync implements AsyncChannel {
@@ -52,21 +51,6 @@ class QuicChannelAsync implements AsyncChannel {
     private final        QuicAsyncChannelHandshake        handshake;
     //
     private final        AtomicBoolean                    closed;
-    //
-    private final        long                             negotiationDatagramMaxData; // Last time (in milliseconds) any packet was sent or received on this connection.
-    private volatile     long                             lastActivityTime;
-    private volatile     long                             negotiationMaxData;
-    // stream for bidi
-    private volatile     long                             peerMaxStreamsBidi;
-    private volatile     long                             nextRemoteBidiStreamId;
-    private volatile     long                             peerStreamMaxDataBidiLocal;
-    private volatile     long                             peerStreamMaxDataBidiRemote;
-    // stream for uni
-    private volatile     long                             peerMaxStreamsUni;
-    private volatile     long                             nextRemoteUniStreamId;
-    private volatile     long                             peerStreamMaxDataUni;
-    private              QuicChannel                      quicChannel;
-    private volatile     QuicDatagramChannel              datagramChannel;
     //
     private final        Set<Long>                        streamIds;
     private final        Map<Long, QuicStreamChannel>     streamMap;
@@ -88,8 +72,22 @@ class QuicChannelAsync implements AsyncChannel {
     //
     // ── Path Validation
     private final        QuicPathValidator                pathValidator;
-    private volatile     SocketAddress                    remoteAddress;
     private final        Map<Long, PendingPing>           pendingPings;
+    private final        long                             connectionDatagramMaxData; // Last time (in milliseconds) any packet was sent or received on this connection.
+    private volatile     long                             lastActivityTime;
+    private volatile     long                             connectionMaxData;
+    // stream for bidi
+    private volatile     long                             peerMaxStreamsBidi;
+    private volatile     long                             nextRemoteBidiStreamId;
+    private volatile     long                             peerStreamMaxDataBidiLocal;
+    private volatile     long                             peerStreamMaxDataBidiRemote;
+    // stream for uni
+    private volatile     long                             peerMaxStreamsUni;
+    private volatile     long                             nextRemoteUniStreamId;
+    private volatile     long                             peerStreamMaxDataUni;
+    private              QuicChannel                      quicChannel;
+    private volatile     QuicDatagramChannel              datagramChannel;
+    private volatile     SocketAddress                    remoteAddress;
 
     public QuicChannelAsync(QuicInitConfigData handshakeData, DatagramChannel ownerUdp, QuicSoConfig soConfig,//
             SoContextService context, ProtoInitializer initializer, QuicListen listen,//
@@ -107,8 +105,8 @@ class QuicChannelAsync implements AsyncChannel {
         this.closed = new AtomicBoolean(false);
         this.lastActivityTime = System.currentTimeMillis();
         //
-        this.negotiationMaxData = Math.min(handshakeData.getPeerMaxData(), soConfig.getTpInitialFrameMaxData());
-        this.negotiationDatagramMaxData = Math.min(handshakeData.getDatagramMaxDataSize(), soConfig.getTpInitialDatagramFrameMaxData());
+        this.connectionMaxData = Math.min(handshakeData.getPeerMaxData(), soConfig.getTpInitialFrameMaxData());
+        this.connectionDatagramMaxData = Math.min(handshakeData.getDatagramMaxDataSize(), soConfig.getTpInitialDatagramFrameMaxData());
         this.peerMaxStreamsBidi = handshakeData.getPeerMaxStreamsBidi();
         this.peerMaxStreamsUni = handshakeData.getPeerMaxStreamsUni();
         this.peerStreamMaxDataBidiLocal = handshakeData.getPeerStreamMaxDataBidiLocal();
@@ -225,12 +223,12 @@ class QuicChannelAsync implements AsyncChannel {
         return this.forListen;
     }
 
-    public long getNegotiationMaxData() {
-        return this.negotiationMaxData;
+    public long getConnectionMaxData() {
+        return this.connectionMaxData;
     }
 
     public long getPeerDatagramMaxData() {
-        return this.negotiationDatagramMaxData;
+        return this.connectionDatagramMaxData;
     }
 
     public long getPeerMaxStreamsBidi() {
@@ -244,11 +242,6 @@ class QuicChannelAsync implements AsyncChannel {
     /** Returns the last activity time of this connection in epoch milliseconds. */
     long getLastActivityTime() {
         return this.lastActivityTime;
-    }
-
-    /** Touches the activity timestamp (called when data passes through a stream or datagram channel). */
-    void touchActivity() {
-        this.lastActivityTime = System.currentTimeMillis();
     }
 
     /** Returns the ACK tracker for this connection. */
@@ -281,19 +274,36 @@ class QuicChannelAsync implements AsyncChannel {
         return this.pathValidator;
     }
 
-    //
-
-    public void updateGlobalMaxDataSize(long globalMaxDataSize) {
-        this.negotiationMaxData = Math.max(this.negotiationMaxData, globalMaxDataSize);
+    /** Returns whether this connection has been closed. */
+    boolean isClosed() {
+        return this.closed.get();
     }
 
+    /** Returns the number of currently active streams on this connection. */
+    int getActiveStreamCount() {
+        return this.streamMap.size();
+    }
+
+    /** Returns the number of in-flight (pending) PING requests. */
+    int getPendingPingCount() {
+        return this.pendingPings.size();
+    }
+
+    //
+
+    /** Updates the connection-level MAX_DATA limit to the given value (if larger than current). */
+    public void updateGlobalMaxDataSize(long globalMaxDataSize) {
+        this.connectionMaxData = Math.max(this.connectionMaxData, globalMaxDataSize);
+    }
+
+    /** Applies negotiated transport parameters from the peer's handshake data. */
     public void updateInitConfigData(QuicInitConfigData initConfigData) {
         if (this.closed.get() || initConfigData == null) {
             return;
         }
 
         if (initConfigData.getPeerMaxData() > 0) {
-            this.negotiationMaxData = Math.max(this.negotiationMaxData, initConfigData.getPeerMaxData());
+            this.connectionMaxData = Math.max(this.connectionMaxData, initConfigData.getPeerMaxData());
         }
         if (initConfigData.getPeerMaxStreamsBidi() > 0) {
             this.peerMaxStreamsBidi = Math.max(this.peerMaxStreamsBidi, initConfigData.getPeerMaxStreamsBidi());
@@ -328,7 +338,7 @@ class QuicChannelAsync implements AsyncChannel {
     /** Creates a new QUIC stream channel with the given stream ID. */
     public Future<QuicStreamChannel> newStreamChannel(long streamId) {
         if (this.closed.get()) {
-            return BasicFuture.buildFailed(new SoCloseException("Channel is closed"));
+            return Futures.buildFailed(new SoCloseException("Channel is closed"));
         }
 
         BasicFuture<QuicStreamChannel> future = new BasicFuture<>();
@@ -429,21 +439,20 @@ class QuicChannelAsync implements AsyncChannel {
         this.streamMap.put(streamId, streamCh);
         this.streamIds.add(streamId);
 
-        logger.info("Created QUIC stream " + streamId     //
-                + (bidi ? " (bidi)" : " (uni)")              //
-                + (localInitiated ? " [local]" : " [remote]")//
-                + " maxData=" + streamMaxData);
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("[QUIC] stream=" + streamId + (bidi ? " bidi" : " uni") + (localInitiated ? " local" : " remote") + " maxData=" + streamMaxData);
+        }
         return streamCh;
     }
 
     public Future<QuicDatagramChannel> getOrCreateDatagramChannel() {
         if (this.closed.get()) {
-            return BasicFuture.buildFailed(new SoCloseException("Channel is closed"));
+            return Futures.buildFailed(new SoCloseException("Channel is closed"));
         }
 
         // channel already exists (volatile read, no lock needed)
         if (this.datagramChannel != null) {
-            return BasicFuture.buildCompleted(this.datagramChannel);
+            return Futures.buildCompleted(this.datagramChannel);
         }
 
         BasicFuture<QuicDatagramChannel> future = new BasicFuture<>();
@@ -454,7 +463,7 @@ class QuicChannelAsync implements AsyncChannel {
                 return future;
             }
             // RFC 9221 §3: both peers must advertise max_datagram_frame_size > 0 to enable datagrams.
-            if (this.negotiationDatagramMaxData == 0) {
+            if (this.connectionDatagramMaxData == 0) {
                 future.failed(new IllegalStateException("DATAGRAM frames not supported: peer did not advertise max_datagram_frame_size > 0"));
                 return future;
             }
@@ -466,7 +475,7 @@ class QuicChannelAsync implements AsyncChannel {
             // ── Double-checked locking ────────────────────────────────────
             synchronized (this) {
                 if (this.datagramChannel != null) {
-                    return BasicFuture.buildCompleted(this.datagramChannel);
+                    return Futures.buildCompleted(this.datagramChannel);
                 }
                 long chId = this.context.nextID();
                 NetMonitor monitor = new NetMonitor();
@@ -575,10 +584,7 @@ class QuicChannelAsync implements AsyncChannel {
         throw new UnsupportedOperationException("use QuicDatagramChannel or QuicStreamChannelAsync to write.");
     }
 
-    /**
-     * Wraps the given QUIC frame(s) into a 1-RTT Short Header packet and sends it over the underlying UDP channel.
-     * If TLS is enabled, the packet is encrypted using application-level keys derived during the handshake.
-     */
+    /** Wraps the given frame(s) into a 1-RTT Short Header packet (encrypted with app keys if TLS is enabled) and sends it over UDP. */
     public int sendDataFrame(ByteBuf frame, BasicFuture<QuicChannel> future) {
         if (this.closed.get()) {
             if (future != null) {
@@ -619,7 +625,7 @@ class QuicChannelAsync implements AsyncChannel {
 
         try {
             byte[] packet = this.handshake.build1RttPacket(combinedPayload);
-            long pn = this.handshake.getLargestAppPn(); // last used PN
+            long pn = this.handshake.getLastSndAppPacketNumber(); // PN used in the packet just built
             // Anti-amplification (RFC 9000 §9.3.1): on an unvalidated path the server MUST NOT
             // send more than 3x the bytes it has received.  Drop silently if over limit.
             if (!this.pathValidator.canSendBytes(packet.length)) {
@@ -643,7 +649,9 @@ class QuicChannelAsync implements AsyncChannel {
             logger.error("sendDataFrame failed: " + e.getMessage(), e);
             QuicException qe = new QuicException(QuicErrorCode.INTERNAL_ERROR, "sendDataFrame failed: " + e.getMessage(), e);
             notifyAllChannelsException(qe);
-            this.closeWithError(QuicErrorCode.INTERNAL_ERROR, "sendDataFrame failed: " + e.getMessage(), null);
+            // Close directly without calling closeWithError to avoid recursive sendDataFrame calls
+            this.closed.set(true);
+            closeAllStreams();
             if (future != null) {
                 future.failed(e);
             }
@@ -652,9 +660,7 @@ class QuicChannelAsync implements AsyncChannel {
     }
 
     /**
-     * Sends a PING frame and returns a {@link Future} that completes with the RTT in milliseconds
-     * when the peer's ACK is received.
-     * @param timeoutMs positive value to enable timeout; 0 = wait indefinitely
+     * Sends a PING frame and returns a future completing with RTT in ms; timeoutMs=0 means infinite wait.
      */
     Future<Long> sendPingRtt(long timeoutMs) {
         BasicFuture<Long> future = new BasicFuture<>();
@@ -666,7 +672,7 @@ class QuicChannelAsync implements AsyncChannel {
         long sentTime = System.currentTimeMillis();
         int sent = sendDataFrame(frame, null);
         if (sent > 0) {
-            long pn = this.handshake.getLargestAppPn();
+            long pn = this.handshake.getLastSndAppPacketNumber(); // PN of the just-sent PING packet
             this.pendingPings.put(pn, new PendingPing(future, sentTime));
             if (timeoutMs > 0) {
                 this.context.submitSoTask(new SoDelayTask((int) timeoutMs), this).onFinal(f -> {
@@ -683,11 +689,7 @@ class QuicChannelAsync implements AsyncChannel {
     }
 
     /**
-     * Parses QUIC frames from a decrypted 1-RTT packet payload and dispatches
-     * each frame to its appropriate handler: STREAM data to {@link QuicStreamChannel},
-     * DATAGRAM data to {@link QuicDatagramChannel}, and control frames to internal state.
-     * <p>Called by {@code QuicAsyncServerChannel} and {@code QuicAsyncClientChannel}
-     * after decrypting a Short Header (1-RTT) packet.
+     * Parses decrypted 1-RTT payload frames and dispatches STREAM/DATAGRAM/control frames to their handlers.
      */
     void dispatchReceivedFrames(byte[] payload) {
         this.lastActivityTime = System.currentTimeMillis();
@@ -801,7 +803,7 @@ class QuicChannelAsync implements AsyncChannel {
             if (frameType == QuicFrameType.MAX_DATA) {
                 packetAckEliciting = true;
                 long[] tmp = QuicVarInt.decode(payload, pos);
-                this.negotiationMaxData = Math.max(this.negotiationMaxData, tmp[0]);
+                this.connectionMaxData = Math.max(this.connectionMaxData, tmp[0]);
                 pos += (int) tmp[1];
                 continue;
             }
@@ -852,7 +854,9 @@ class QuicChannelAsync implements AsyncChannel {
                 pos += (int) sizeResult[1];
                 QuicStreamChannel stream = this.streamMap.get(streamId);
                 if (stream != null) {
-                    logger.info("Received RESET_STREAM for stream " + streamId + ", errorCode=" + errorCode);
+                    if (this.context.getConfig().isPrintLog()) {
+                        logger.info("[QUIC] RESET_STREAM stream=" + streamId + " errorCode=" + errorCode);
+                    }
                     QuicStreamResetException ex = new QuicStreamResetException(errorCode, streamId, finalSize);
                     this.context.notifyRcvChannelException(stream.getChannelId(), true, ex);
                 }
@@ -870,7 +874,9 @@ class QuicChannelAsync implements AsyncChannel {
                 pos += (int) errResult[1];
                 QuicStreamChannel stream = this.streamMap.get(streamId);
                 if (stream != null) {
-                    logger.info("Received STOP_SENDING for stream " + streamId + ", errorCode=" + errorCode);
+                    if (this.context.getConfig().isPrintLog()) {
+                        logger.info("[QUIC] STOP_SENDING stream=" + streamId + " errorCode=" + errorCode);
+                    }
                     QuicStopSendingException ex = new QuicStopSendingException(errorCode, streamId);
                     this.context.notifySndChannelException(stream.getChannelId(), false, ex);
                 }
@@ -890,7 +896,9 @@ class QuicChannelAsync implements AsyncChannel {
                 int reasonLen = (int) lenResult[0];
                 pos += (int) lenResult[1];
                 String reason = reasonLen > 0 ? new String(payload, pos, reasonLen, java.nio.charset.StandardCharsets.UTF_8) : "";
-                logger.info("Received CONNECTION_CLOSE: errorCode=" + errorCode + ", reason=" + reason);
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] CONNECTION_CLOSE errorCode=" + errorCode + " reason=" + reason);
+                }
 
                 QuicConnectionCloseException ex = new QuicConnectionCloseException(errorCode, reason);
                 notifyAllChannelsException(ex);
@@ -975,7 +983,9 @@ class QuicChannelAsync implements AsyncChannel {
                     System.arraycopy(payload, pos, token, 0, tokenLen);
                     // Store token for future connection attempts (client only)
                     if (this.clientMode) {
-                        logger.info("Received NEW_TOKEN (len=" + tokenLen + "), stored for future connections");
+                        if (this.context.getConfig().isPrintLog()) {
+                            logger.info("[QUIC] NEW_TOKEN len=" + tokenLen);
+                        }
                         // Token stored in quicSoConfig or session cache (implementation detail)
                     }
                 }
@@ -989,7 +999,9 @@ class QuicChannelAsync implements AsyncChannel {
                 long[] tmp = QuicVarInt.decode(payload, pos);
                 long maximumData = tmp[0];
                 pos += (int) tmp[1];
-                logger.info("Peer is DATA_BLOCKED at " + maximumData + " bytes (connection level)");
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] DATA_BLOCKED at " + maximumData + " bytes");
+                }
                 // Auto-expand flow control window and send MAX_DATA
                 long newMaxData = this.flowControl.shouldExpandConnectionWindow();
                 if (newMaxData < 0) {
@@ -1011,7 +1023,9 @@ class QuicChannelAsync implements AsyncChannel {
                 long[] maxResult = QuicVarInt.decode(payload, pos);
                 long maximumStreamData = maxResult[0];
                 pos += (int) maxResult[1];
-                logger.info("Peer is STREAM_DATA_BLOCKED on stream " + streamId + " at " + maximumStreamData + " bytes");
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] STREAM_DATA_BLOCKED stream=" + streamId + " at " + maximumStreamData + " bytes");
+                }
                 QuicStreamChannel stream = this.streamMap.get(streamId);
                 if (stream != null) {
                     // Auto-expand stream flow control
@@ -1030,7 +1044,9 @@ class QuicChannelAsync implements AsyncChannel {
                 long maximumStreams = tmp[0];
                 pos += (int) tmp[1];
                 boolean bidi = (frameType == QuicFrameType.STREAMS_BLOCKED_BIDI);
-                logger.info("Peer is STREAMS_BLOCKED (" + (bidi ? "bidi" : "uni") + ") at " + maximumStreams);
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] STREAMS_BLOCKED " + (bidi ? "bidi" : "uni") + " at " + maximumStreams);
+                }
                 // Notify the connection-level channel so the application can decide to increase limits
                 if (this.quicChannel != null) {
                     // Auto-expand: increase by 10 more streams
@@ -1081,7 +1097,7 @@ class QuicChannelAsync implements AsyncChannel {
         }
 
         // ── Record received packet for ACK generation ───────────────
-        long pn = this.handshake.getLargestAppPn();
+        long pn = this.handshake.getLastRcvAppPacketNumber();
         this.ackTracker.onPacketReceived(pn, packetAckEliciting);
 
         // ── Check PTO timer for probe ───────────────────────────────
@@ -1111,10 +1127,7 @@ class QuicChannelAsync implements AsyncChannel {
         this.pathValidator.checkTimeouts();
     }
 
-    /**
-     * Handles post-handshake CRYPTO data received in 1-RTT packets.
-     * This includes NewSessionTicket (0x04) and KeyUpdate (0x18) TLS messages.
-     */
+    /** Handles post-handshake CRYPTO data (NewSessionTicket 0x04, KeyUpdate 0x18) received in 1-RTT packets. */
     private void handlePostHandshakeCrypto(byte[] data) {
         if (data == null || data.length < 4) {
             return;
@@ -1125,25 +1138,18 @@ class QuicChannelAsync implements AsyncChannel {
             handleKeyUpdate(data);
         } else if (msgType == 0x04) {
             // NewSessionTicket (TLS 1.3, RFC 8446 §4.6.1)
-            logger.info("Received post-handshake NewSessionTicket (len=" + data.length + ")");
+            if (this.context.getConfig().isPrintLog()) {
+                logger.info("[QUIC] post-handshake NewSessionTicket len=" + data.length);
+            }
             // Store session ticket for 0-RTT resumption (future enhancement)
         } else {
-            logger.info("Received post-handshake CRYPTO message type=0x" + Integer.toHexString(msgType));
+            if (this.context.getConfig().isPrintLog()) {
+                logger.info("[QUIC] post-handshake CRYPTO type=0x" + Integer.toHexString(msgType));
+            }
         }
     }
 
-    /**
-     * Handles a TLS KeyUpdate message (RFC 8446 §4.6.3).
-     * <p>
-     * KeyUpdate structure: (1 byte type=0x18) + (3 bytes length) + (1 byte request_update)
-     * <p>
-     * request_update values:
-     * <ul>
-     *     <li>0 = update_not_requested</li>
-     *     <li>1 = update_requested</li>
-     * </ul>
-     * This rotates the peer's read keys and optionally our write keys.
-     */
+    /** Handles a TLS KeyUpdate message (RFC 8446 §4.6.3); rotates the peer's read keys and optionally our write keys. */
     private void handleKeyUpdate(byte[] data) {
         // KeyUpdate: type(1) + length(3) + request_update(1) = 5 bytes total
         if (data.length < 5) {
@@ -1157,17 +1163,23 @@ class QuicChannelAsync implements AsyncChannel {
             return;
         }
         int requestUpdate = data[4] & 0xFF;
-        logger.info("Received KeyUpdate: request_update=" + requestUpdate);
+        if (this.context.getConfig().isPrintLog()) {
+            logger.info("[QUIC] KeyUpdate request_update=" + requestUpdate);
+        }
 
         try {
             // Rotate peer's read keys  (their write keys updated → our read keys must update)
             this.handshake.rotateReadKeys();
-            logger.info("Read keys rotated after KeyUpdate");
+            if (this.context.getConfig().isPrintLog()) {
+                logger.info("[QUIC] read keys rotated after KeyUpdate");
+            }
 
             if (requestUpdate == 1) {
                 // Peer requested us to update too — rotate our write keys and send KeyUpdate response
                 this.handshake.rotateWriteKeys();
-                logger.info("Write keys rotated (peer requested update)");
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] write keys rotated (peer requested)");
+                }
                 // Send our KeyUpdate with update_not_requested
                 byte[] kuResponse = new byte[] { 0x18,                         // HandshakeType: key_update
                         0x00, 0x00, 0x01,             // Length: 1
@@ -1184,10 +1196,7 @@ class QuicChannelAsync implements AsyncChannel {
         }
     }
 
-    /**
-     * Parses a STREAM frame, auto-creates the stream if it's peer-initiated and unknown,
-     * and delivers data to the stream's pipeline. Returns the new position, or {@code -1} on error.
-     */
+    /** Parses a STREAM frame, auto-creates peer-initiated streams, delivers data to the pipeline; returns new position or -1 on error. */
     private int handleStreamFrame(byte[] data, int pos, int frameType) {
         // Parse Stream ID
         long[] sidResult = QuicVarInt.decode(data, pos);
@@ -1301,13 +1310,23 @@ class QuicChannelAsync implements AsyncChannel {
             // Deliver all contiguous data available
             byte[] contiguous = reassembler.readContiguous();
             if (contiguous != null) {
-                ByteBuf byteBuf = ByteBufAllocator.DEFAULT.buffer(contiguous.length);
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC-RCV] stream=" + streamId + " delivering " + contiguous.length + " bytes, ch=" + stream.getChannelId());
+                }
+                ByteBuf byteBuf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer(contiguous.length);
                 byteBuf.writeBytes(contiguous);
                 byteBuf.markWriter();
-                this.context.notifyRcvChannelData(stream.getChannelId(), byteBuf);
+                try {
+                    this.context.notifyRcvChannelData(stream.getChannelId(), byteBuf);
+                } catch (Throwable t) {
+                    logger.error("stream " + streamId + " pipeline delivery failed: " + t.getClass().getName() + ": " + t.getMessage(), t);
+                }
             }
             // Check if stream is fully received (FIN delivered)
             if (reassembler.isComplete()) {
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC-RCV] stream=" + streamId + " FIN (stream complete), ch=" + stream.getChannelId());
+                }
                 this.context.notifyRcvChannelData(stream.getChannelId(), ByteBuf.EMPTY);
                 this.streamReassemblers.remove(streamId);
             }
@@ -1325,15 +1344,7 @@ class QuicChannelAsync implements AsyncChannel {
         return pos;
     }
 
-    /**
-     * Parses a DATAGRAM frame, auto-creates the datagram channel if needed,
-     * and delivers data to its pipeline. Returns the new position, or {@code -1} on error.
-     * <p>
-     * Per RFC 9221 §5: if the local endpoint did not advertise {@code max_datagram_frame_size}
-     * in its transport parameters, receiving a DATAGRAM frame is a connection error of type
-     * {@code PROTOCOL_VIOLATION}. If support was advertised but is administratively disabled,
-     * the data is silently discarded.
-     */
+    /** Parses a DATAGRAM frame (RFC 9221 §5), auto-creates the datagram channel, and delivers data; PROTOCOL_VIOLATION if not negotiated. */
     private int handleDatagramFrame(byte[] data, int pos, int frameType) {
         int dataLength;
         if (QuicFrameType.datagramHasLen(frameType)) {
@@ -1345,7 +1356,7 @@ class QuicChannelAsync implements AsyncChannel {
         }
 
         // ── RFC 9221 §5: DATAGRAM not negotiated → PROTOCOL_VIOLATION ──
-        if (this.negotiationDatagramMaxData == 0) {
+        if (this.connectionDatagramMaxData == 0) {
             String pvMsg = "DATAGRAM frame received without max_datagram_frame_size negotiation";
             logger.error("Received DATAGRAM frame but max_datagram_frame_size was not negotiated");
             QuicException pvEx = new QuicException(QuicErrorCode.PROTOCOL_VIOLATION, pvMsg);
@@ -1373,7 +1384,7 @@ class QuicChannelAsync implements AsyncChannel {
 
         // ── Deliver data to datagram channel's pipeline ─────────────────
         if (dataLength > 0) {
-            ByteBuf byteBuf = ByteBufAllocator.DEFAULT.buffer(dataLength);
+            ByteBuf byteBuf = ByteBufUtils.DEFAULT_ALLOCATOR.buffer(dataLength);
             byteBuf.writeBytes(data, pos, dataLength);
             byteBuf.markWriter();
             this.context.notifyRcvChannelData(dgCh.getChannelId(), byteBuf);
@@ -1382,12 +1393,7 @@ class QuicChannelAsync implements AsyncChannel {
         return pos;
     }
 
-    /**
-     * Propagates a QUIC exception to all open sub-channel pipelines (streams + datagram)
-     * as a <em>receive</em> error, so that application handlers are notified of the error.
-     * The {@code doClose} parameter of {@code notifyRcvChannelException} is {@code false}
-     * because channel cleanup is handled separately by {@link #closeAllStreams()}.
-     */
+    /** Propagates a QUIC exception to all open sub-channel pipelines (streams + datagram) as a receive error for application notification. */
     void notifyAllChannelsException(SoException ex) {
         // Notify connection-level channel
         if (this.quicChannel != null) {
@@ -1416,7 +1422,9 @@ class QuicChannelAsync implements AsyncChannel {
         if (connIdleTimeout > 0) {
             long elapsed = now - this.lastActivityTime;
             if (elapsed >= connIdleTimeout) {
-                logger.info("Connection idle timeout after " + elapsed + "ms (limit=" + connIdleTimeout + "ms)");
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] connection idle timeout " + elapsed + "ms (limit=" + connIdleTimeout + "ms)");
+                }
                 QuicIdleTimeoutException ex = new QuicIdleTimeoutException(//
                         "Connection idle timeout: " + elapsed + "ms >= " + connIdleTimeout + "ms", true);
                 notifyAllChannelsException(ex);
@@ -1438,7 +1446,9 @@ class QuicChannelAsync implements AsyncChannel {
         for (QuicStreamChannel stream : this.streamMap.values()) {
             long streamElapsed = now - stream.getLastActivityTime();
             if (streamElapsed >= streamIdleTimeout) {
-                logger.info("Stream " + stream.getStreamId() + " idle timeout after " + streamElapsed + "ms (limit=" + streamIdleTimeout + "ms)");
+                if (this.context.getConfig().isPrintLog()) {
+                    logger.info("[QUIC] stream " + stream.getStreamId() + " idle timeout " + streamElapsed + "ms (limit=" + streamIdleTimeout + "ms)");
+                }
                 QuicIdleTimeoutException ex = new QuicIdleTimeoutException(//
                         "Stream " + stream.getStreamId() + " idle timeout: " + streamElapsed + "ms >= " + streamIdleTimeout + "ms", false);
                 this.context.notifyRcvChannelException(stream.getChannelId(), true, ex);
@@ -1447,7 +1457,7 @@ class QuicChannelAsync implements AsyncChannel {
     }
 
     /** Initiates an active connection migration (RFC 9000 §9). */
-    Future<Long> migrate() throws IOException {
+    Future<Long> migrate() {
         // 1. Issue a new local CID so the peer can address us with a fresh ID
         byte[] newCidFrame = this.cidManager.issueNewConnectionId();
         if (newCidFrame != null) {

@@ -22,20 +22,7 @@ import java.util.List;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Tracks sent packets and implements loss detection per RFC 9002 §6.
- * <p>
- * Each QUIC encryption level (Initial, Handshake, 1-RTT) should have its own
- * {@code QuicSentPacketTracker} instance. The tracker records each packet sent,
- * detects lost packets when ACKs are received, and determines when packets
- * need to be retransmitted.
- * <p>
- * <b>Loss detection algorithm (RFC 9002 §6.1):</b>
- * <ul>
- *   <li><b>Packet Threshold</b>: A packet is declared lost if a later packet
- *       has been acknowledged and the gap exceeds {@link #PACKET_THRESHOLD} (3).</li>
- *   <li><b>Time Threshold</b>: A packet is declared lost if it was sent more than
- *       {@code timeThreshold} ago and a later packet has been acknowledged.</li>
- * </ul>
+ * Tracks sent packets and implements loss detection per RFC 9002 §6 (packet threshold and time threshold).
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicSentPacketTracker {
@@ -74,13 +61,7 @@ class QuicSentPacketTracker {
         return false;
     }
 
-    /**
-     * Records a sent packet.
-     * @param packetNumber the packet number
-     * @param payload the frames contained in the packet (for retransmission)
-     * @param size the total packet size in bytes (for congestion control)
-     * @param ackEliciting true if the packet contains ack-eliciting frames
-     */
+    /** Records a sent packet for loss detection and congestion control tracking. */
     synchronized void onPacketSent(long packetNumber, byte[] payload, int size, boolean ackEliciting) {
         SentPacketInfo info = new SentPacketInfo();
         info.packetNumber = packetNumber;
@@ -98,12 +79,7 @@ class QuicSentPacketTracker {
         }
     }
 
-    /**
-     * Processes an ACK and returns the list of packets that are declared lost.
-     * Updates RTT estimates per RFC 9002 §5.
-     * @param ackedRanges the acknowledged ranges from the ACK frame (each range is [low, high])
-     * @return list of lost packet payloads that should be retransmitted
-     */
+    /** Processes received ACK ranges, updates RTT, removes acked packets, and returns lost packet payloads. */
     synchronized List<byte[]> onAckReceived(List<long[]> ackedRanges) {
         if (ackedRanges == null || ackedRanges.isEmpty()) {
             return new ArrayList<>();
@@ -156,10 +132,7 @@ class QuicSentPacketTracker {
         return lostPayloads;
     }
 
-    /**
-     * Checks whether the PTO timer has expired and returns {@code true} if a probe
-     * should be sent (RFC 9002 §6.2).
-     */
+    /** Returns true if the PTO timer has expired and a probe should be sent (RFC 9002 §6.2). */
     synchronized boolean isPtoExpired() {
         if (this.ptoExpiry == 0 || this.sentPackets.isEmpty()) {
             return false;
@@ -234,7 +207,7 @@ class QuicSentPacketTracker {
             }
 
             boolean packetThresholdLost = (this.largestAckedPn - info.packetNumber) >= PACKET_THRESHOLD;
-            boolean timeThresholdLost = (now - info.sentTime) >= lossDelay;
+            boolean timeThresholdLost = (now - info.sentTime) > lossDelay;
 
             if (packetThresholdLost || timeThresholdLost) {
                 logger.info("Packet " + info.packetNumber + " declared lost (pktThreshold=" + packetThresholdLost + ", timeThreshold=" + timeThresholdLost + ")");

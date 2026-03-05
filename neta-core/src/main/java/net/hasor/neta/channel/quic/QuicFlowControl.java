@@ -18,16 +18,7 @@ package net.hasor.neta.channel.quic;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Enforces inbound (receive-side) flow control at both the connection and stream level (RFC 9000 §4).
- * <p>
- * Tracks the total bytes received against the advertised flow control limits
- * ({@code MAX_DATA} for connection-level, {@code MAX_STREAM_DATA} for stream-level).
- * If the peer sends more data than allowed, the connection must be terminated with
- * a {@link QuicErrorCode#FLOW_CONTROL_ERROR}.
- * <p>
- * This class also provides auto-tuning: when consumption reaches a threshold percentage
- * of the current window, it generates a new {@code MAX_DATA} / {@code MAX_STREAM_DATA}
- * frame to advertise a larger limit.
+ * Enforces receive-side flow control at connection and stream level per RFC 9000 §4, with auto-tuning window expansion.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicFlowControl {
@@ -45,20 +36,13 @@ class QuicFlowControl {
     // ── Per-stream flow control state is maintained externally (in QuicStreamChannel).
     // This class provides helper methods for validation.
 
-    /**
-     * Creates a flow control tracker with the initial connection-level limit.
-     * @param initialMaxData the initial {@code MAX_DATA} value advertised to the peer
-     */
+    /** Creates a flow control tracker with the given initial connection-level max data. */
     QuicFlowControl(long initialMaxData) {
         this.connectionMaxData = initialMaxData;
         this.connectionBytesReceived = 0;
     }
 
-    /**
-     * Builds a MAX_DATA frame (RFC 9000 §19.9) for the given limit.
-     * @param maxData the new connection-level data limit
-     * @return encoded MAX_DATA frame bytes
-     */
+    /** Builds a MAX_DATA frame (RFC 9000 §19.9) for the given connection-level limit. */
     static byte[] buildMaxDataFrame(long maxData) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_DATA);
         byte[] valBytes = QuicVarInt.encode(maxData);
@@ -68,12 +52,7 @@ class QuicFlowControl {
         return frame;
     }
 
-    /**
-     * Builds a MAX_STREAM_DATA frame (RFC 9000 §19.10).
-     * @param streamId the stream ID
-     * @param maxStreamData the new per-stream data limit
-     * @return encoded MAX_STREAM_DATA frame bytes
-     */
+    /** Builds a MAX_STREAM_DATA frame (RFC 9000 §19.10) for the given stream and limit. */
     static byte[] buildMaxStreamDataFrame(long streamId, long maxStreamData) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAM_DATA);
         byte[] sidBytes = QuicVarInt.encode(streamId);
@@ -88,13 +67,7 @@ class QuicFlowControl {
         return frame;
     }
 
-    /**
-     * Records received data at the connection level.
-     * Returns {@code true} if the data is within limits; {@code false} if the peer
-     * has violated the flow control limit (and the connection should be closed).
-     * @param bytes the number of bytes received
-     * @return {@code true} if the data is within the connection-level {@code MAX_DATA} limit
-     */
+    /** Records received bytes at connection level; returns false if the MAX_DATA limit is violated. */
     synchronized boolean onConnectionDataReceived(long bytes) {
         this.connectionBytesReceived += bytes;
         if (this.connectionBytesReceived > this.connectionMaxData) {
@@ -104,14 +77,7 @@ class QuicFlowControl {
         return true;
     }
 
-    /**
-     * Validates that the given stream offset + length does not exceed the stream's
-     * per-stream flow control limit.
-     * @param streamOffset the byte offset within the stream
-     * @param length the number of data bytes
-     * @param streamMaxData the current MAX_STREAM_DATA limit for this stream
-     * @return {@code true} if within limits; {@code false} if violated
-     */
+    /** Validates stream data does not exceed MAX_STREAM_DATA; returns false on violation. */
     boolean validateStreamData(long streamOffset, long length, long streamMaxData) {
         long totalStreamBytes = streamOffset + length;
         if (totalStreamBytes > streamMaxData) {
@@ -121,11 +87,7 @@ class QuicFlowControl {
         return true;
     }
 
-    /**
-     * Checks whether the connection-level flow control window should be expanded
-     * (i.e., a MAX_DATA frame should be sent to the peer).
-     * @return the new {@code MAX_DATA} value if expansion is needed, or {@code -1} if not necessary
-     */
+    /** Returns the new doubled MAX_DATA if usage exceeds the auto-tune threshold, or -1 if not needed. */
     synchronized long shouldExpandConnectionWindow() {
         double usageRatio = (double) this.connectionBytesReceived / this.connectionMaxData;
         if (usageRatio >= AUTO_TUNE_THRESHOLD) {
@@ -137,12 +99,7 @@ class QuicFlowControl {
         return -1;
     }
 
-    /**
-     * Checks whether a stream-level flow control window should be expanded.
-     * @param streamBytesReceived total bytes received on the stream so far
-     * @param streamMaxData current stream limit
-     * @return the new MAX_STREAM_DATA value, or -1 if expansion is not needed
-     */
+    /** Returns the new doubled MAX_STREAM_DATA if usage exceeds the auto-tune threshold, or -1 if not needed. */
     long shouldExpandStreamWindow(long streamBytesReceived, long streamMaxData) {
         if (streamMaxData <= 0) {
             return -1;

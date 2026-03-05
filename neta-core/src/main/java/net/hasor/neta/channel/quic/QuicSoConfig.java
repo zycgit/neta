@@ -18,41 +18,27 @@ import net.hasor.neta.channel.udp.UdpSoConfig;
 import net.hasor.neta.codec.ssl.SslCertConfig;
 
 /**
- * QUIC-specific configuration options, extending {@link UdpSoConfig} since
- * QUIC is built on top of UDP.
- * <p>
- * This class consolidates all configuration into a single place:
- * <ul>
- *   <li><b>SSL</b>: sslEnabled, certChain, privateKey</li>
- *   <li><b>Connection</b>: connectionIdLength, selectorPollMs</li>
- *   <li><b>Transport parameters</b> (RFC 9000 §18.2): all fields prefixed with {@code tp},
- *       e.g. {@link #getTpInitialFrameMaxData()}, {@link #setTpMaxIdleTimeout(long)}.
- *       Transport parameter <em>wire IDs</em> ({@code PARAM_*}) are in
- *       {@link QuicAsyncChannelHandshake}.</li>
- * </ul>
- * <p>All fields in this class are <em>startup-only</em> &mdash; they must be set before the
- * connection is established and must not be modified at runtime.
- * Runtime state (flow control, datagram enablement, peer advertised limits, etc.)
- * is tracked internally by {@code QuicChannel}.
+ * QUIC-specific configuration, extending {@link UdpSoConfig} with SSL, connection, and transport parameters (RFC 9000 §18.2).
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicSoConfig extends UdpSoConfig {
     // ── SSL fields ─────────────────────────────────────────────────────
-    private SslCertConfig sslConfig;                                   // TLS certificate + private key config; null = TLS disabled
+    private SslCertConfig          sslConfig;                                   // TLS certificate + private key config; null = TLS disabled
     // ── Connection-level fields ────────────────────────────────────────
-    private int           connectionIdLength               = 8;        // Connection ID length in bytes, range 0-20 (RFC 9000 §17.2)
+    private int                    connectionIdLength               = 8;        // Connection ID length in bytes, range 0-20 (RFC 9000 §17.2)
     // ── Transport parameters (RFC 9000 §18.2) ─────────────────────────
-    private long          tpMaxIdleTimeout                 = 30000;    // connection idle timeout (ms); 0 = no timeout
-    private long          streamIdleTimeoutMs              = 0;        // stream idle timeout (ms); 0 = disabled (app-layer, not an RFC transport param)
-    private long          tpInitialFrameMaxData            = 1048576;  // connection-level initial receive window (initial_max_data)
-    private long          tpInitialMaxStreamDataBidiLocal  = 262144;   // initial receive window for locally-initiated bidi streams
-    private long          tpInitialMaxStreamDataBidiRemote = 262144;   // initial receive window for remotely-initiated bidi streams
-    private long          tpInitialMaxStreamDataUni        = 262144;   // initial receive window for remotely-initiated uni streams
-    private long          tpInitialMaxStreamsBidi          = 100;      // max concurrent bidi streams the peer may open
-    private long          tpInitialMaxStreamsUni           = 100;      // max concurrent uni streams the peer may open
-    private long          tpInitialDatagramFrameMaxData    = 0;        // max DATAGRAM frame payload size (RFC 9221); 0 = disabled
-    private boolean       disableDatagram                  = false;
-    private QuicVersion   quicVersion                      = QuicVersion.V1;
+    private long                   tpMaxIdleTimeout                 = 30000;    // connection idle timeout (ms); 0 = no timeout
+    private long                   streamIdleTimeoutMs              = 0;        // stream idle timeout (ms); 0 = disabled (app-layer, not an RFC transport param)
+    private long                   tpInitialFrameMaxData            = 1048576;  // connection-level initial receive window (initial_max_data)
+    private long                   tpInitialMaxStreamDataBidiLocal  = 262144;   // initial receive window for locally-initiated bidi streams
+    private long                   tpInitialMaxStreamDataBidiRemote = 262144;   // initial receive window for remotely-initiated bidi streams
+    private long                   tpInitialMaxStreamDataUni        = 262144;   // initial receive window for remotely-initiated uni streams
+    private long                   tpInitialMaxStreamsBidi          = 100;      // max concurrent bidi streams the peer may open
+    private long                   tpInitialMaxStreamsUni           = 100;      // max concurrent uni streams the peer may open
+    private long                   tpInitialDatagramFrameMaxData    = 0;        // max DATAGRAM frame payload size (RFC 9221); 0 = disabled
+    private boolean                disableDatagram                  = false;
+    private QuicVersion            quicVersion                      = QuicVersion.V1;
+    private QuicConnectionListener connectionListener               = null;
 
     public QuicSoConfig() {
         super(QuicProvider.NAME);
@@ -157,19 +143,12 @@ public class QuicSoConfig extends UdpSoConfig {
         return this;
     }
 
-    /**
-     * Returns the maximum DATAGRAM frame size (RFC 9221).
-     * 0 means DATAGRAM frames are not supported; a positive value enables DATAGRAM support.
-     */
+    /** Returns the max DATAGRAM frame payload size (RFC 9221); 0 means DATAGRAM is disabled. */
     public long getTpInitialDatagramFrameMaxData() {
         return this.tpInitialDatagramFrameMaxData;
     }
 
-    /**
-     * Sets the maximum DATAGRAM frame size (RFC 9221).
-     * Set to 0 to disable DATAGRAM support, or a positive value to enable it.
-     * @param value maximum DATAGRAM frame payload size in bytes (0 = disabled)
-     */
+    /** Sets the max DATAGRAM frame payload size (RFC 9221); 0 disables DATAGRAM support. */
     public QuicSoConfig setTpInitialDatagramFrameMaxData(long value) {
         if (value < 0) {
             throw new IllegalArgumentException("tp_max_datagram_frame_size must be non-negative: " + value);
@@ -178,20 +157,12 @@ public class QuicSoConfig extends UdpSoConfig {
         return this;
     }
 
-    /**
-     * Returns whether DATAGRAM support is administratively disabled.
-     * When {@code true}, {@link QuicChannel#openDatagramChannel()} always throws and
-     * incoming DATAGRAM frames are silently dropped.
-     */
+    /** Returns true if DATAGRAM is administratively disabled; all DATAGRAM usage will be blocked. */
     public boolean isDisableDatagram() {
         return this.disableDatagram;
     }
 
-    /**
-     * Enables or disables the application-layer DATAGRAM gate.
-     * @param disableDatagram {@code true} to block all DATAGRAM usage on connections
-     * created from this config; {@code false} (default) to allow it
-     */
+    /** Enables or disables the application-layer DATAGRAM gate for connections created from this config. */
     public QuicSoConfig setDisableDatagram(boolean disableDatagram) {
         this.disableDatagram = disableDatagram;
         return this;
@@ -199,20 +170,12 @@ public class QuicSoConfig extends UdpSoConfig {
 
     // ── QUIC Version ─────────────────────────────────────────────────────────
 
-    /**
-     * Returns the QUIC protocol version to use.
-     * @return the configured {@link QuicVersion}, defaults to {@link QuicVersion#V1}
-     */
+    /** Returns the configured QUIC protocol version (default: V1). */
     public QuicVersion getQuicVersion() {
         return this.quicVersion;
     }
 
-    /**
-     * Sets the QUIC protocol version to use.
-     * @param quicVersion the target QUIC version (e.g. {@link QuicVersion#V1}, {@link QuicVersion#V2})
-     * @return this config instance for method chaining
-     * @throws IllegalArgumentException if {@code quicVersion} is {@code null}
-     */
+    /** Sets the QUIC protocol version to use (e.g. V1 or V2). */
     public QuicSoConfig setQuicVersion(QuicVersion quicVersion) {
         if (quicVersion == null) {
             throw new IllegalArgumentException("quicVersion must not be null");
@@ -221,27 +184,27 @@ public class QuicSoConfig extends UdpSoConfig {
         return this;
     }
 
+    // ── Connection Established Listener ──────────────────────────────────
+
+    /** Returns the connection-established listener, or null if none is set. */
+    public QuicConnectionListener getConnectionListener() {
+        return this.connectionListener;
+    }
+
+    /** Registers a listener invoked when a QUIC connection handshake completes. */
+    public QuicSoConfig setConnectionListener(QuicConnectionListener listener) {
+        this.connectionListener = listener;
+        return this;
+    }
+
     // ── Stream Idle Timeout ────────────────────────────────────────────
 
-    /**
-     * Returns the stream-level idle timeout in milliseconds.
-     * 0 means stream idle timeout is disabled.
-     * @return stream idle timeout in ms, or 0 if disabled
-     */
+    /** Returns the stream-level idle timeout in milliseconds (0 = disabled). */
     public long getStreamIdleTimeoutMs() {
         return this.streamIdleTimeoutMs;
     }
 
-    /**
-     * Sets the stream-level idle timeout in milliseconds.
-     * If no data is sent or received on a stream within this period, the stream is
-     * automatically reset and a {@link QuicIdleTimeoutException} is propagated
-     * through the stream's pipeline.
-     * <p>Set to 0 to disable stream-level idle timeout (default).
-     * @param streamIdleTimeoutMs stream idle timeout in ms (0 = disabled)
-     * @return this config instance for method chaining
-     * @throws IllegalArgumentException if {@code streamIdleTimeoutMs} is negative
-     */
+    /** Sets the stream-level idle timeout in milliseconds; streams inactive for this period are auto-reset (0 = disabled). */
     public QuicSoConfig setStreamIdleTimeoutMs(long streamIdleTimeoutMs) {
         if (streamIdleTimeoutMs < 0) {
             throw new IllegalArgumentException("streamIdleTimeoutMs must be non-negative: " + streamIdleTimeoutMs);

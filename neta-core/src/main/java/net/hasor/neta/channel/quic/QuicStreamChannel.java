@@ -16,29 +16,12 @@
 package net.hasor.neta.channel.quic;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * Stream-level QUIC channel.
- * <p>
- * Each QUIC stream is represented by its own {@code QuicStreamChannel}, which has
- * a fixed {@link #getStreamId() stream ID} and its own protocol pipeline.
- * This channel is created and managed by the parent {@link QuicChannel} via
- * {@link QuicChannel#newBidiStream()} or {@link QuicChannel#newUniStream()}.
- * <p>
- * <b>Receive path</b>: {@link QuicChannel} delivers data for a specific stream
- * to the corresponding {@code QuicStreamChannel}, which processes it through
- * its own pipeline.
- * <p>
- * <b>Send path</b>: Data written through the pipeline is packaged by
- * {@link QuicStreamChannelAsync} as QUIC STREAM frames and forwarded to the
- * parent connection channel for transmission.
- * <p>
- * Implements {@link SoSubChannel}: the parent is the connection-level {@link QuicChannel}.
+ * Stream-level QUIC channel with its own pipeline, created and managed by the parent {@link QuicChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @see QuicChannel
  */
@@ -49,23 +32,7 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
     /** Last time (in milliseconds) data was sent or received on this stream. Used for stream-level idle timeout. */
     private volatile long        lastActivityTime;
 
-    /**
-     * Creates a stream-level channel from an already-constructed async stream channel.
-     * Called exclusively by {@link QuicChannel} after the QUIC handshake completes.
-     * <p>
-     * Both the peer's announced limit and the effective limit are passed in from the
-     * parent {@link QuicChannel}. The effective limit ({@link #getMaxDataSize()}) is
-     * already computed as {@code Math.min(localMax, peerMax)} by the caller.
-     * @param channelId unique channel ID allocated by the context
-     * @param streamId QUIC stream ID (per RFC 9000 §2.1)
-     * @param monitor I/O traffic monitor
-     * @param forListen the server-side listen handle, or {@code null} for client-initiated streams
-     * @param initializer pipeline initializer for this stream
-     * @param asyncChannel the low-level stream async channel
-     * @param soContext the Neta context service
-     * @param parent the parent connection-level {@link QuicChannel}
-     * @param initMaxDataSize the peer's announced {@code initial_max_stream_data} (immutable)
-     */
+    /** Creates a stream-level channel from an already-constructed async stream channel; called exclusively by {@link QuicChannel}. */
     QuicStreamChannel(long channelId, long streamId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer,//
             QuicStreamChannelAsync asyncChannel, SoContextService soContext, QuicChannel parent, long initMaxDataSize) {
         super(channelId, monitor, forListen, initializer, asyncChannel, soContext);
@@ -81,20 +48,14 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
     }
 
     /**
-     * Returns the effective per-stream data limit currently in use.
-     * Initially {@code min(localMax, peerMax)} as computed during stream creation,
-     * and can only <b>increase</b> via {@link #sendMaxDataSize(long)} or peer's MAX_STREAM_DATA.
-     * @return current effective stream data limit
+     * Returns the effective per-stream data limit; can only increase via {@link #sendMaxDataSize(long)} or peer's MAX_STREAM_DATA.
      */
     public long getMaxDataSize() {
         return this.maxDataSize;
     }
 
     /**
-     * Updates the per-stream flow-control limit when the peer sends a MAX_STREAM_DATA frame.
-     * The limit can only <b>increase</b>; smaller values are silently ignored.
-     * <p>Package-private — called by {@link QuicChannelAsync#dispatchReceivedFrames(byte[])}.
-     * @param newMaxDataSize the new maximum announced by the peer
+     * Updates the per-stream flow-control limit when the peer sends a MAX_STREAM_DATA frame; smaller values are silently ignored.
      */
     void updateMaxDataSize(long newMaxDataSize) {
         this.maxDataSize = Math.max(this.maxDataSize, newMaxDataSize);
@@ -110,113 +71,111 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
         this.lastActivityTime = System.currentTimeMillis();
     }
 
-    /**
-     * Returns the parent connection-level {@link QuicChannel} that owns this stream.
-     * @return the parent {@link QuicChannel}
-     */
+    /** Returns the parent connection-level {@link QuicChannel} that owns this stream. */
     @Override
     public QuicChannel getParent() {
         return this.parent;
     }
 
-    /**
-     * Returns the {@link SslContext} from the parent QUIC connection.
-     * @return the connection-level SSL context, or {@code null} if SSL is disabled
-     */
+    /** Returns the {@link SslContext} from the parent QUIC connection, or null if SSL is disabled. */
     public SslContext getSslContext() {
         return this.parent.getSslContext();
     }
 
     /**
-     * Returns {@code true} if this is a <b>bidirectional</b> stream.
-     * <p>Per RFC 9000 §2.1, bit 1 (value {@code 0x02}) of the stream ID encodes the
-     * stream type: {@code 0} = bidirectional, {@code 1} = unidirectional.
-     * Stream IDs 0, 1, 4, 5, 8, 9, … are bidirectional.
-     * @return {@code true} if this stream is bidirectional
+     * Returns true if this is a bidirectional stream (bit 1 of stream ID == 0, per RFC 9000 §2.1).
      */
     public boolean isBidi() {
         return (this.streamId & 0x02) == 0;
     }
 
     /**
-     * Returns {@code true} if this is a <b>unidirectional</b> stream.
-     * <p>Per RFC 9000 §2.1, bit 1 (value {@code 0x02}) of the stream ID encodes the
-     * stream type: {@code 0} = bidirectional, {@code 1} = unidirectional.
-     * Stream IDs 2, 3, 6, 7, 10, 11, … are unidirectional.
-     * @return {@code true} if this stream is unidirectional
+     * Returns true if this is a unidirectional stream (bit 1 of stream ID == 1, per RFC 9000 §2.1).
      */
     public boolean isUni() {
         return (this.streamId & 0x02) != 0;
     }
 
     /**
-     * Sends a RESET_STREAM frame (RFC 9000 §19.4) to abruptly terminate this stream.
-     * The peer will discard any buffered data and stop delivering data on this stream.
-     * @param errorCode application-defined error code indicating why the stream is being reset
-     * @param finalSize the total number of bytes that were sent on this stream before the reset
-     * @return a {@link Future} that completes with the parent {@link QuicChannel} once the
-     * frame has been handed off for transmission, or fails if the connection is closed
+     * Sends a RESET_STREAM frame (RFC 9000 §19.4) to abruptly terminate this stream with the given error code and final size.
      */
     public Future<QuicChannel> sendReset(long errorCode, long finalSize) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
-        ByteBuf frame = null;
         try {
             byte[] typeBytes = QuicVarInt.encode(QuicFrameType.RESET_STREAM);
             byte[] sidBytes = QuicVarInt.encode(this.streamId);
             byte[] errBytes = QuicVarInt.encode(errorCode);
             byte[] sizeBytes = QuicVarInt.encode(finalSize);
-            frame = ByteBufAllocator.DEFAULT.buffer(typeBytes.length + sidBytes.length + errBytes.length + sizeBytes.length);
-            frame.writeBytes(typeBytes);
-            frame.writeBytes(sidBytes);
-            frame.writeBytes(errBytes);
-            frame.writeBytes(sizeBytes);
-            this.parent.asyncChannel().sendDataFrame(frame, future);
+            int totalSize = typeBytes.length + sidBytes.length + errBytes.length + sizeBytes.length;
+            byte[] frame = new byte[totalSize];
+            int pos = 0;
+            System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
+            pos += typeBytes.length;
+            System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
+            pos += sidBytes.length;
+            System.arraycopy(errBytes, 0, frame, pos, errBytes.length);
+            pos += errBytes.length;
+            System.arraycopy(sizeBytes, 0, frame, pos, sizeBytes.length);
+            this.parent.asyncChannel().sendDataFrame(ByteBuf.wrap(frame), future);
         } catch (Throwable e) {
-            IOUtils.closeQuietly(frame);
             future.failed(e);
         }
         return future;
     }
 
     /**
-     * Sends a STOP_SENDING frame (RFC 9000 §19.5) to ask the peer to cease sending
-     * data on this stream.  The peer is expected to respond with a RESET_STREAM frame.
-     * @param errorCode application-defined error code indicating why the stream is being stopped
-     * @return a {@link Future} that completes with the parent {@link QuicChannel} once the
-     * frame has been handed off for transmission, or fails if the connection is closed
+     * Sends a STOP_SENDING frame (RFC 9000 §19.5) asking the peer to stop sending data on this stream.
      */
     public Future<QuicChannel> sendStop(long errorCode) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
-        ByteBuf frame = null;
         try {
             byte[] typeBytes = QuicVarInt.encode(QuicFrameType.STOP_SENDING);
             byte[] sidBytes = QuicVarInt.encode(this.streamId);
             byte[] errBytes = QuicVarInt.encode(errorCode);
-            frame = ByteBufAllocator.DEFAULT.buffer(typeBytes.length + sidBytes.length + errBytes.length);
-            frame.writeBytes(typeBytes);
-            frame.writeBytes(sidBytes);
-            frame.writeBytes(errBytes);
-            this.parent.asyncChannel().sendDataFrame(frame, future);
+            int totalSize = typeBytes.length + sidBytes.length + errBytes.length;
+            byte[] frame = new byte[totalSize];
+            int pos = 0;
+            System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
+            pos += typeBytes.length;
+            System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
+            pos += sidBytes.length;
+            System.arraycopy(errBytes, 0, frame, pos, errBytes.length);
+            this.parent.asyncChannel().sendDataFrame(ByteBuf.wrap(frame), future);
         } catch (Throwable e) {
-            IOUtils.closeQuietly(frame);
             future.failed(e);
         }
         return future;
     }
 
     /**
-     * Sends a MAX_STREAM_DATA frame (RFC 9000 §19.10) to increase the receive-side
-     * flow-control limit for this stream, allowing the peer to send more data.
-     * The new limit must be <b>greater than or equal to</b> the current
-     * {@link #getMaxDataSize()} — shrinking is not allowed.
-     * <p>
-     * After the frame has been successfully transmitted over UDP, the local
-     * {@code useMaxDataSize} is updated to {@code newMaxDataSize}.
-     * @param newMaxDataSize the new cumulative maximum number of bytes the peer may send on this stream
-     * (must be &ge; current {@code useMaxDataSize})
-     * @return a {@link Future} that completes with the parent {@link QuicChannel} once the
-     * frame has been handed off for transmission, or fails if the connection is closed
-     * @throws IllegalArgumentException if {@code newMaxDataSize} is smaller than the current limit
+     * Sends raw bytes on this QUIC stream as a STREAM frame (RFC 9000 §19.8), bypassing the protocol pipeline.
+     */
+    public Future<QuicChannel> sendRawData(byte[] data) {
+        BasicFuture<QuicChannel> future = new BasicFuture<>();
+        try {
+            int type = QuicFrameType.STREAM_BASE | QuicFrameType.STREAM_LEN_BIT;
+            byte[] typeBytes = QuicVarInt.encode(type);
+            byte[] sidBytes = QuicVarInt.encode(this.streamId);
+            byte[] lenBytes = QuicVarInt.encode(data.length);
+            int totalSize = typeBytes.length + sidBytes.length + lenBytes.length + data.length;
+            byte[] frame = new byte[totalSize];
+            int pos = 0;
+            System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
+            pos += typeBytes.length;
+            System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
+            pos += sidBytes.length;
+            System.arraycopy(lenBytes, 0, frame, pos, lenBytes.length);
+            pos += lenBytes.length;
+            System.arraycopy(data, 0, frame, pos, data.length);
+            this.parent.asyncChannel().sendDataFrame(ByteBuf.wrap(frame), future);
+        } catch (Throwable e) {
+            future.failed(e);
+        }
+        return future;
+    }
+
+    /**
+     * Sends a MAX_STREAM_DATA frame (RFC 9000 §19.10) increasing this stream's receive-side flow-control limit; new value must be ≥ current.
      */
     public Future<QuicChannel> sendMaxDataSize(long newMaxDataSize) {
         if (newMaxDataSize < this.maxDataSize) {
@@ -224,19 +183,21 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
         }
 
         BasicFuture<QuicChannel> future = new BasicFuture<>();
-        ByteBuf frame = null;
         try {
             byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAM_DATA);
             byte[] sidBytes = QuicVarInt.encode(streamId);
             byte[] valBytes = QuicVarInt.encode(newMaxDataSize);
-            frame = ByteBufAllocator.DEFAULT.buffer(typeBytes.length + sidBytes.length + valBytes.length);
-            frame.writeBytes(typeBytes);
-            frame.writeBytes(sidBytes);
-            frame.writeBytes(valBytes);
-            this.parent.asyncChannel().sendDataFrame(frame, future);
+            int totalSize = typeBytes.length + sidBytes.length + valBytes.length;
+            byte[] frame = new byte[totalSize];
+            int pos = 0;
+            System.arraycopy(typeBytes, 0, frame, pos, typeBytes.length);
+            pos += typeBytes.length;
+            System.arraycopy(sidBytes, 0, frame, pos, sidBytes.length);
+            pos += sidBytes.length;
+            System.arraycopy(valBytes, 0, frame, pos, valBytes.length);
+            this.parent.asyncChannel().sendDataFrame(ByteBuf.wrap(frame), future);
             future.onCompleted(f -> this.maxDataSize = Math.max(this.maxDataSize, newMaxDataSize));
         } catch (Throwable e) {
-            IOUtils.closeQuietly(frame);
             future.failed(e);
         }
         return future;

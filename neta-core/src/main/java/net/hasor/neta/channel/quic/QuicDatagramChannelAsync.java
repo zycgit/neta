@@ -25,11 +25,7 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.udp.AbstractUdpWriteTask;
 
 /**
- * DATAGRAM-level {@link AsyncChannel} for QUIC.
- * <p>
- * Routes write operations to the underlying {@link QuicChannel} as DATAGRAM frames
- * (RFC 9221). Unlike stream channels, DATAGRAM frames are unreliable and not
- * flow-controlled.
+ * DATAGRAM-level {@link AsyncChannel} that routes writes as unreliable DATAGRAM frames (RFC 9221) through the parent {@link QuicChannel}.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicDatagramChannelAsync implements AsyncChannel {

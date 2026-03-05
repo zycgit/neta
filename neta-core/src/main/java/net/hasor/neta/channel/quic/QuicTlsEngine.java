@@ -25,56 +25,47 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import javax.crypto.KeyAgreement;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.codec.ssl.SslCertConfig;
 
 /**
- * Minimal TLS 1.3 handshake engine for QUIC (RFC 8446 + RFC 9001).
- * <p>
- * Implements both the server and client sides of the TLS 1.3 handshake for QUIC
- * using pure Java crypto APIs:
- * <ul>
- *   <li>Server: Parses ClientHello, generates ServerHello/EncryptedExtensions/Certificate/CertificateVerify/Finished</li>
- *   <li>Client: Generates ClientHello, processes ServerHello + server handshake messages, sends client Finished</li>
- *   <li>Manages the TLS 1.3 key schedule (Early → Handshake → Application)</li>
- *   <li>Derives QUIC packet protection keys for each encryption level</li>
- * </ul>
- * <p>
- * This implementation supports:
- * <ul>
- *   <li>Key Exchange: secp256r1 (P-256) ECDHE</li>
- *   <li>Cipher Suite: TLS_AES_128_GCM_SHA256 (0x1301)</li>
- *   <li>Signature: RSA-PSS-RSAE-SHA256 (0x0804) or ECDSA-SECP256R1-SHA256 (0x0403)</li>
- * </ul>
+ * Minimal pure-Java TLS 1.3 engine for QUIC (RFC 8446 + RFC 9001), handling both client and server sides with X25519/P-256 key exchange and AES-128-GCM.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicTlsEngine {
+    private static final Logger logger                    = Logger.getLogger(QuicTlsEngine.class);
     // ── TLS Constants ──────────────────────────────────────────────────
-    private static final int TLS_VERSION_12 = 0x0303; // legacy
-    private static final int TLS_VERSION_13 = 0x0304;
-
+    private static final int    TLS_VERSION_12            = 0x0303; // legacy
+    private static final int    TLS_VERSION_13            = 0x0304;
     // Cipher suite
-    private static final int TLS_AES_128_GCM_SHA256 = 0x1301;
-
+    private static final int    TLS_AES_128_GCM_SHA256    = 0x1301;
     // Handshake types
-    private static final int HT_CLIENT_HELLO         = 0x01;
-    private static final int HT_SERVER_HELLO         = 0x02;
-    private static final int HT_ENCRYPTED_EXTENSIONS = 0x08;
-    private static final int HT_CERTIFICATE          = 0x0B;
-    private static final int HT_CERTIFICATE_VERIFY   = 0x0F;
-    private static final int HT_FINISHED             = 0x14;
-
+    private static final int    HT_CLIENT_HELLO           = 0x01;
+    private static final int    HT_SERVER_HELLO           = 0x02;
+    private static final int    HT_ENCRYPTED_EXTENSIONS   = 0x08;
+    private static final int    HT_CERTIFICATE            = 0x0B;
+    private static final int    HT_CERTIFICATE_VERIFY     = 0x0F;
+    private static final int    HT_FINISHED               = 0x14;
     // Extension types
-    private static final int EXT_SERVER_NAME           = 0x0000;
-    private static final int EXT_SUPPORTED_GROUPS      = 0x000A;
-    private static final int EXT_SIGNATURE_ALGORITHMS  = 0x000D;
-    private static final int EXT_ALPN                  = 0x0010;
-    private static final int EXT_SUPPORTED_VERSIONS    = 0x002B;
-    private static final int EXT_KEY_SHARE             = 0x0033;
-    private static final int EXT_QUIC_TRANSPORT_PARAMS = 0x0039;
-
+    private static final int    EXT_SERVER_NAME           = 0x0000;
+    private static final int    EXT_SUPPORTED_GROUPS      = 0x000A;
+    private static final int    EXT_SIGNATURE_ALGORITHMS  = 0x000D;
+    private static final int    EXT_ALPN                  = 0x0010;
+    private static final int    EXT_SUPPORTED_VERSIONS    = 0x002B;
+    private static final int    EXT_KEY_SHARE             = 0x0033;
+    private static final int    EXT_QUIC_TRANSPORT_PARAMS = 0x0039;
     // Named groups
-    private static final int GROUP_SECP256R1 = 0x0017;
+    private static final int    GROUP_X25519              = 0x001d;
+    private static final int    GROUP_SECP256R1           = 0x0017;
+
+    // ── Pure-Java X25519 constants (RFC 7748 §5) — no JDK version restriction ──
+    /** p = 2^255 − 19, the field prime for Curve25519. */
+    private static final BigInteger P25519 = BigInteger.ONE.shiftLeft(255).subtract(BigInteger.valueOf(19));
+    /** a24 = (486662 − 2) / 4 = 121665, Montgomery-curve constant. */
+    private static final BigInteger A24    = BigInteger.valueOf(121665);
+    /** Base-point u-coordinate for Curve25519. */
+    private static final BigInteger BASE_U = BigInteger.valueOf(9);
 
     // Signature algorithms
     private static final int SIG_RSA_PSS_RSAE_SHA256    = 0x0804;
@@ -94,7 +85,11 @@ class QuicTlsEngine {
     private       byte[]            clientRandom;
     private       byte[]            serverRandom;
     private       byte[]            clientSessionId; // legacy session_id echo
-    private       byte[]            peerKeyShareP256; // client's P-256 public key (65 bytes uncompressed)
+    private       byte[]            peerKeyShareP256;   // client's P-256 public key (65 bytes uncompressed)
+    private       byte[]            peerKeyShareX25519; // client's X25519 public key (32 bytes, little-endian)
+    private       int               selectedGroup = GROUP_SECP256R1; // negotiated key exchange group
+    private       byte[]            x25519EphemeralPrivKey; // our X25519 scalar (clamped, 32 bytes)
+    private       byte[]            x25519EphemeralPubKey;  // our X25519 public key in wire format (32 bytes LE)
     private       byte[]            peerQuicTransportParams;
     private       List<String>      peerAlpnProtocols; // parsed from ClientHello EXT_ALPN
     private       String            negotiatedAlpn;    // result of ALPN negotiation
@@ -117,6 +112,9 @@ class QuicTlsEngine {
     private       byte[][]          serverAppKeys;
     // Generated TLS messages
     private       byte[]            serverHelloMsg;
+    // RFC 9000 §7.3 mandatory CID transport parameters
+    private       byte[]            sourceConnectionId;       // = server/client localCid (initial_source_connection_id)
+    private       byte[]            originalDestinationCid;   // = original DCID from client’s first Initial (server only)
     private       byte[]            encryptedExtensionsMsg;
     private       byte[]            certificateMsg;
     private       byte[]            certificateVerifyMsg;
@@ -125,13 +123,7 @@ class QuicTlsEngine {
     private       byte[]            clientFinishedMsg;        // client mode: the generated client Finished
     private       X509Certificate[] peerCertChain;  // server's certificate chain received during handshake
 
-    /**
-     * Creates a new TLS engine for QUIC.
-     * @param certConfig shared SSL certificate configuration
-     * @param soConfig QUIC configuration containing transport parameters
-     * @param channel the channel for ALPN negotiation callback (may be null)
-     * @param clientMode {@code true} for client side, {@code false} for server side
-     */
+    /** Creates a TLS 1.3/QUIC engine for the given side (clientMode=true for client, false for server). */
     public QuicTlsEngine(SslCertConfig certConfig, QuicSoConfig soConfig, SoChannel<?> channel, boolean clientMode) {
         this.sslCertConfig = (certConfig != null) ? certConfig : new SslCertConfig();
         this.certChain = this.sslCertConfig.getCertChainDirect();
@@ -142,12 +134,7 @@ class QuicTlsEngine {
         this.clientMode = clientMode;
     }
 
-    /**
-     * Creates a new TLS engine for QUIC server mode (backward compatible).
-     * @param certConfig shared SSL certificate configuration
-     * @param soConfig QUIC configuration containing transport parameters
-     * @param channel the channel for ALPN negotiation callback (may be null)
-     */
+    /** Creates a TLS 1.3/QUIC engine in server mode (backward-compatible constructor). */
     public QuicTlsEngine(SslCertConfig certConfig, QuicSoConfig soConfig, SoChannel<?> channel) {
         this(certConfig, soConfig, channel, false);
     }
@@ -197,9 +184,117 @@ class QuicTlsEngine {
     }
 
     /**
-     * Processes a TLS ClientHello message from a QUIC CRYPTO frame.
-     * @param clientHello raw ClientHello handshake message bytes (starting with handshake type)
-     * @return true if successfully parsed and server messages generated
+     * Generates a fresh clamped X25519 private scalar (32 bytes) per RFC 7748 §5.
+     */
+    private static byte[] x25519GenScalar() {
+        byte[] k = new byte[32];
+        new SecureRandom().nextBytes(k);
+        k[0] &= 0xF8; // clear bits 0–2
+        k[31] &= 0x7F; // clear bit 255
+        k[31] |= 0x40; // set bit 254
+        return k;
+    }
+
+    /**
+     * Computes the X25519 public key (32-byte little-endian wire format) via scalar×BASE_U on Curve25519.
+     */
+    private static byte[] x25519KeyGen(byte[] scalar) {
+        BigInteger result = x25519MontgomeryLadder(decodeLe32(scalar), BASE_U);
+        return encodeLe32(result);
+    }
+
+    /**
+     * Computes the X25519 shared secret (pure Java, Java 8+) from our clamped scalar and the peer's 32-byte little-endian wire key.
+     */
+    private static byte[] x25519SharedSecret(byte[] scalar, byte[] peerKeyWire) {
+        BigInteger u = decodeLe32(peerKeyWire);
+        BigInteger result = x25519MontgomeryLadder(decodeLe32(scalar), u);
+        return encodeLe32(result);
+    }
+
+    /**
+     * Montgomery ladder for scalar multiplication on Curve25519 (RFC 7748 §5); all arithmetic in GF(p), p=2^255−19.
+     */
+    private static BigInteger x25519MontgomeryLadder(BigInteger k, BigInteger u) {
+        BigInteger x1 = u;
+        BigInteger x2 = BigInteger.ONE;
+        BigInteger z2 = BigInteger.ZERO;
+        BigInteger x3 = u;
+        BigInteger z3 = BigInteger.ONE;
+        int swap = 0;
+        for (int t = 254; t >= 0; t--) {
+            int kt = k.testBit(t) ? 1 : 0;
+            swap ^= kt;
+            if (swap != 0) {
+                BigInteger tmp;
+                tmp = x2;
+                x2 = x3;
+                x3 = tmp;
+                tmp = z2;
+                z2 = z3;
+                z3 = tmp;
+            }
+            swap = kt;
+            BigInteger A = x2.add(z2).mod(P25519);
+            BigInteger AA = A.multiply(A).mod(P25519);
+            BigInteger B = x2.subtract(z2).mod(P25519);
+            BigInteger BB = B.multiply(B).mod(P25519);
+            BigInteger E = AA.subtract(BB).mod(P25519);
+            BigInteger C = x3.add(z3).mod(P25519);
+            BigInteger D = x3.subtract(z3).mod(P25519);
+            BigInteger DA = D.multiply(A).mod(P25519);
+            BigInteger CB = C.multiply(B).mod(P25519);
+            BigInteger sum = DA.add(CB).mod(P25519);
+            BigInteger diff = DA.subtract(CB).mod(P25519);
+            x3 = sum.multiply(sum).mod(P25519);
+            z3 = x1.multiply(diff.multiply(diff).mod(P25519)).mod(P25519);
+            x2 = AA.multiply(BB).mod(P25519);
+            z2 = E.multiply(AA.add(A24.multiply(E).mod(P25519)).mod(P25519)).mod(P25519);
+        }
+        if (swap != 0) {
+            BigInteger tmp;
+            tmp = x2;
+            x2 = x3;
+            x3 = tmp;
+            tmp = z2;
+            z2 = z3;
+            z3 = tmp;
+        }
+        // result = x2 / z2 mod p  (Fermat inversion: z2^(p-2) mod p)
+        BigInteger inv = z2.modPow(P25519.subtract(BigInteger.valueOf(2)), P25519);
+        return x2.multiply(inv).mod(P25519);
+    }
+
+    /** Decodes 32 bytes in little-endian order to an unsigned BigInteger. */
+    private static BigInteger decodeLe32(byte[] b) {
+        byte[] be = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            be[i] = b[31 - i];
+        }
+        return new BigInteger(1, be);
+    }
+
+    /** Encodes a field element to 32 bytes in little-endian order. */
+    private static byte[] encodeLe32(BigInteger v) {
+        v = v.mod(P25519);
+        byte[] be = v.toByteArray(); // big-endian, may include leading 0x00 sign byte
+        // normalise to exactly 32 big-endian bytes
+        byte[] be32 = new byte[32];
+        if (be.length >= 32) {
+            System.arraycopy(be, be.length - 32, be32, 0, 32);
+        } else {
+            System.arraycopy(be, 0, be32, 32 - be.length, be.length);
+        }
+        // reverse to little-endian
+        byte[] le = new byte[32];
+        for (int i = 0; i < 32; i++) {
+            le[i] = be32[31 - i];
+        }
+        return le;
+    }
+
+    /**
+     * Processes a TLS ClientHello from a QUIC CRYPTO frame; returns true if parsed and server messages generated.
      */
     public boolean processClientHello(byte[] clientHello) throws Exception {
         this.transcriptHash = MessageDigest.getInstance("SHA-256");
@@ -212,13 +307,21 @@ class QuicTlsEngine {
         // Add ClientHello to transcript
         transcriptHash.update(clientHello);
 
-        // Generate server ephemeral key pair for P-256
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
-        kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom());
-        this.serverEphemeralKeyPair = kpg.generateKeyPair();
-
-        // Compute shared secret via ECDH
-        this.sharedSecret = computeECDHSharedSecret(serverEphemeralKeyPair.getPrivate(), peerKeyShareP256);
+        // Generate server ephemeral key pair and compute shared secret —
+        // prefer X25519 (pure-Java, works on Java 8+) over P-256 when available
+        if (peerKeyShareX25519 != null) {
+            this.x25519EphemeralPrivKey = x25519GenScalar();
+            this.x25519EphemeralPubKey = x25519KeyGen(x25519EphemeralPrivKey);
+            this.sharedSecret = x25519SharedSecret(x25519EphemeralPrivKey, peerKeyShareX25519);
+            this.selectedGroup = GROUP_X25519;
+        } else {
+            // Fall back to P-256
+            KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
+            kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom());
+            this.serverEphemeralKeyPair = kpg.generateKeyPair();
+            this.sharedSecret = computeECDHSharedSecret(serverEphemeralKeyPair.getPrivate(), peerKeyShareP256);
+            this.selectedGroup = GROUP_SECP256R1;
+        }
 
         // Generate ServerHello
         this.serverRandom = new byte[32];
@@ -256,9 +359,7 @@ class QuicTlsEngine {
     }
 
     /**
-     * Verifies the client's Finished message.
-     * @param clientFinished raw Finished handshake message bytes
-     * @return true if verification succeeded
+     * Verifies the client's Finished message using the derived client_handshake_traffic_secret; returns true on success.
      */
     public boolean verifyClientFinished(byte[] clientFinished) throws Exception {
         if (clientFinished == null || clientFinished.length < 4) {
@@ -294,9 +395,32 @@ class QuicTlsEngine {
         return serverHelloMsg;
     }
 
+    /** Returns the EncryptedExtensions message bytes (for diagnostic logging). */
+    public byte[] getEncryptedExtensionsMsg() {
+        return encryptedExtensionsMsg;
+    }
+
+    // ── ClientHello Parsing ────────────────────────────────────────────
+
+    /** Returns the Certificate message bytes (for diagnostic logging). */
+    public byte[] getCertificateMsg() {
+        return certificateMsg;
+    }
+
+    // ── TLS Message Building ───────────────────────────────────────────
+
+    /** Returns the CertificateVerify message bytes (for diagnostic logging). */
+    public byte[] getCertificateVerifyMsg() {
+        return certificateVerifyMsg;
+    }
+
+    /** Returns the server Finished message bytes (for diagnostic logging). */
+    public byte[] getServerFinishedMsg() {
+        return serverFinishedMsg;
+    }
+
     /**
-     * Returns the encrypted handshake messages: EncryptedExtensions + Certificate
-     * + CertificateVerify + Finished (for CRYPTO frames in Handshake packet).
+     * Returns the concatenated encrypted handshake messages (EE + Cert + CertVerify + Finished) for CRYPTO frames.
      */
     public byte[] getHandshakeBytes() {
         int totalLen = encryptedExtensionsMsg.length + certificateMsg.length + certificateVerifyMsg.length + serverFinishedMsg.length;
@@ -320,40 +444,38 @@ class QuicTlsEngine {
         return serverHandshakeKeys;
     }
 
-    // ── ClientHello Parsing ────────────────────────────────────────────
-
     public byte[][] getClientAppKeys() {
         return clientAppKeys;
     }
-
-    // ── TLS Message Building ───────────────────────────────────────────
 
     public byte[][] getServerAppKeys() {
         return serverAppKeys;
     }
 
     /**
-     * Returns the raw QUIC transport parameters bytes received from the peer
-     * (parsed from the {@code quic_transport_parameters} TLS extension in ClientHello).
-     * May be {@code null} if not present in the handshake.
+     * Returns the raw QUIC transport parameters received from the peer (from quic_transport_parameters TLS extension); may be null.
      */
     public byte[] getPeerTransportParams() {
         return peerQuicTransportParams;
     }
 
     /**
-     * Returns the ALPN protocol negotiated during the TLS handshake.
-     * Available after {@link #processClientHello(byte[])} completes successfully.
-     * @return the negotiated application protocol, or {@code null} if not yet negotiated
+     * Returns the ALPN protocol negotiated during TLS handshake; available after processClientHello completes.
      */
     public String getNegotiatedAlpn() {
         return negotiatedAlpn;
     }
 
+    /** Sets the SCID and original DCID to include in QUIC transport parameters per RFC 9000 §7.3. */
+    public void setConnectionIds(byte[] sourceConnectionId, byte[] originalDestinationCid) {
+        this.sourceConnectionId = sourceConnectionId;
+        this.originalDestinationCid = originalDestinationCid;
+    }
+
+    // ── Key Schedule (RFC 8446 §7.1) ───────────────────────────────────
+
     /**
-     * Returns the SNI server_name extracted from the ClientHello extension.
-     * Available after {@link #processClientHello(byte[])} completes successfully.
-     * @return the peer-indicated server hostname, or {@code null} if not present
+     * Returns the SNI server_name from ClientHello; available after processClientHello completes, or null if absent.
      */
     public String getPeerSniHost() {
         return peerSniHost;
@@ -366,6 +488,11 @@ class QuicTlsEngine {
 
         int type = msg[0] & 0xFF;
         if (type != HT_CLIENT_HELLO) {
+            StringBuilder dbg = new StringBuilder("parseClientHello: bad type=0x" + Integer.toHexString(type) + " len=" + msg.length + " bytes:");
+            for (int ii = 0; ii < Math.min(msg.length, 32); ii++) {
+                dbg.append(String.format(" %02x", msg[ii] & 0xFF));
+            }
+            logger.error(dbg.toString());
             return false;
         }
 
@@ -453,7 +580,11 @@ class QuicTlsEngine {
                             int group = ((msg[ksPos] & 0xFF) << 8) | (msg[ksPos + 1] & 0xFF);
                             int keyLen = ((msg[ksPos + 2] & 0xFF) << 8) | (msg[ksPos + 3] & 0xFF);
                             ksPos += 4;
-                            if (group == GROUP_SECP256R1 && keyLen == 65) {
+                            if (group == GROUP_X25519 && keyLen == 32) {
+                                peerKeyShareX25519 = new byte[32];
+                                System.arraycopy(msg, ksPos, peerKeyShareX25519, 0, 32);
+                                foundKeyShare = true;
+                            } else if (group == GROUP_SECP256R1 && keyLen == 65) {
                                 peerKeyShareP256 = new byte[65];
                                 System.arraycopy(msg, ksPos, peerKeyShareP256, 0, 65);
                                 foundKeyShare = true;
@@ -509,6 +640,8 @@ class QuicTlsEngine {
         return foundTls13 && foundKeyShare;
     }
 
+    // ── ECDHE P-256 ────────────────────────────────────────────────────
+
     private byte[] buildServerHello() throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream(256);
 
@@ -547,11 +680,16 @@ class QuicTlsEngine {
                 (byte) (TLS_VERSION_13 >> 8), (byte) (TLS_VERSION_13 & 0xFF) };
         exts.write(svExt);
 
-        // key_share extension (server's P-256 public key)
-        byte[] serverPubKeyBytes = encodeP256PublicKey((ECPublicKey) serverEphemeralKeyPair.getPublic());
+        // key_share extension (server's public key, group matches negotiated algorithm)
+        byte[] serverPubKeyBytes;
+        if (this.selectedGroup == GROUP_X25519) {
+            serverPubKeyBytes = x25519EphemeralPubKey; // already in 32-byte wire format
+        } else {
+            serverPubKeyBytes = encodeP256PublicKey((ECPublicKey) serverEphemeralKeyPair.getPublic());
+        }
         ByteArrayOutputStream ksData = new ByteArrayOutputStream();
-        ksData.write(GROUP_SECP256R1 >> 8);
-        ksData.write(GROUP_SECP256R1 & 0xFF);
+        ksData.write(this.selectedGroup >> 8);
+        ksData.write(this.selectedGroup & 0xFF);
         ksData.write(serverPubKeyBytes.length >> 8);
         ksData.write(serverPubKeyBytes.length & 0xFF);
         ksData.write(serverPubKeyBytes);
@@ -575,29 +713,32 @@ class QuicTlsEngine {
             selectedAlpn = this.sslCertConfig.negotiateAlpn(this.channel, this.peerAlpnProtocols);
         }
         if (selectedAlpn == null) {
-            // fallback: configured default or "h3"
+            // fallback: configured default protocol
             selectedAlpn = (this.sslCertConfig != null) ? this.sslCertConfig.resolveDefaultProtocol() : null;
-            if (selectedAlpn == null) {
-                selectedAlpn = "h3";
-            }
+        }
+        if (selectedAlpn == null && this.peerAlpnProtocols != null && !this.peerAlpnProtocols.isEmpty()) {
+            // last resort: accept the first protocol the peer offered
+            selectedAlpn = this.peerAlpnProtocols.get(0);
         }
         this.negotiatedAlpn = selectedAlpn;
 
-        // Encode ALPN extension with the selected protocol
-        byte[] alpnProto = selectedAlpn.getBytes(StandardCharsets.US_ASCII);
-        ByteArrayOutputStream alpnData = new ByteArrayOutputStream();
-        int alpnListLen = 1 + alpnProto.length;
-        alpnData.write(alpnListLen >> 8);
-        alpnData.write(alpnListLen & 0xFF);
-        alpnData.write(alpnProto.length);
-        alpnData.write(alpnProto);
-        byte[] alpnBytes = alpnData.toByteArray();
+        // Encode ALPN extension only when a protocol was negotiated
+        if (selectedAlpn != null) {
+            byte[] alpnProto = selectedAlpn.getBytes(StandardCharsets.US_ASCII);
+            ByteArrayOutputStream alpnData = new ByteArrayOutputStream();
+            int alpnListLen = 1 + alpnProto.length;
+            alpnData.write(alpnListLen >> 8);
+            alpnData.write(alpnListLen & 0xFF);
+            alpnData.write(alpnProto.length);
+            alpnData.write(alpnProto);
+            byte[] alpnBytes = alpnData.toByteArray();
 
-        exts.write(EXT_ALPN >> 8);
-        exts.write(EXT_ALPN & 0xFF);
-        exts.write(alpnBytes.length >> 8);
-        exts.write(alpnBytes.length & 0xFF);
-        exts.write(alpnBytes);
+            exts.write(EXT_ALPN >> 8);
+            exts.write(EXT_ALPN & 0xFF);
+            exts.write(alpnBytes.length >> 8);
+            exts.write(alpnBytes.length & 0xFF);
+            exts.write(alpnBytes);
+        }
 
         // QUIC Transport Parameters extension
         byte[] tpBytes = encodeTransportParams(localTransportParams);
@@ -616,6 +757,8 @@ class QuicTlsEngine {
 
         return wrapHandshakeMessage(HT_ENCRYPTED_EXTENSIONS, body.toByteArray());
     }
+
+    // ── Client-side TLS 1.3 handshake ─────────────────────────────────
 
     private byte[] buildCertificate() throws Exception {
         ByteArrayOutputStream body = new ByteArrayOutputStream(4096);
@@ -644,8 +787,6 @@ class QuicTlsEngine {
 
         return wrapHandshakeMessage(HT_CERTIFICATE, body.toByteArray());
     }
-
-    // ── Key Schedule (RFC 8446 §7.1) ───────────────────────────────────
 
     private byte[] buildCertificateVerify(byte[] transcriptHash) throws Exception {
         // Construct the content to be signed (RFC 8446 §4.4.3)
@@ -718,8 +859,6 @@ class QuicTlsEngine {
         }
     }
 
-    // ── ECDHE P-256 ────────────────────────────────────────────────────
-
     private byte[] buildFinished(byte[] baseSecret, byte[] transcriptHash) throws Exception {
         byte[] finishedKey = QuicCrypto.tlsExpandLabel(baseSecret, "finished", new byte[0], 32);
 
@@ -782,23 +921,16 @@ class QuicTlsEngine {
         serverAppKeys = QuicCrypto.derivePacketKeys(serverAppTrafficSecret, this.quicVersion);
     }
 
-    // ── Client-side TLS 1.3 handshake ─────────────────────────────────
-
     /**
-     * Generates and returns a TLS ClientHello message for QUIC client mode.
-     * <p>
-     * The generated ClientHello includes: supported_versions (TLS 1.3),
-     * key_share (P-256), supported_groups, signature_algorithms,
-     * ALPN, SNI (server_name), and quic_transport_parameters.
-     * @return the ClientHello handshake message bytes
+     * Generates and returns a TLS ClientHello for QUIC client mode with X25519 key share, ALPN, SNI, and transport parameters.
      */
     public byte[] generateClientHello() throws Exception {
         this.transcriptHash = MessageDigest.getInstance("SHA-256");
 
-        // Generate client ephemeral key pair for P-256
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("EC");
-        kpg.initialize(new ECGenParameterSpec("secp256r1"), new SecureRandom());
-        this.serverEphemeralKeyPair = kpg.generateKeyPair(); // reuse field for client ephemeral key
+        // Generate client ephemeral X25519 key pair (pure-Java, works on Java 8+)
+        this.x25519EphemeralPrivKey = x25519GenScalar();
+        this.x25519EphemeralPubKey = x25519KeyGen(x25519EphemeralPrivKey);
+        this.selectedGroup = GROUP_X25519;
 
         // Generate client random
         this.clientRandom = new byte[32];
@@ -815,21 +947,17 @@ class QuicTlsEngine {
         return clientHelloMsg;
     }
 
+    // ── Client-side message building (private) ─────────────────────────
+
     /**
-     * Returns the previously generated ClientHello message.
-     * Available after {@link #generateClientHello()} is called.
+     * Returns the previously generated ClientHello message bytes; available after generateClientHello() is called.
      */
     public byte[] getClientHelloBytes() {
         return clientHelloMsg;
     }
 
     /**
-     * Processes a TLS ServerHello message received in a QUIC Initial packet (client side).
-     * <p>
-     * Parses the ServerHello, extracts server's P-256 key_share, computes ECDH shared secret,
-     * and derives handshake traffic keys.
-     * @param serverHello raw ServerHello handshake message bytes (starting with handshake type)
-     * @return {@code true} if successfully processed
+     * Processes a TLS ServerHello from a QUIC Initial packet (client side), extracting the key share and deriving handshake keys.
      */
     public boolean processServerHello(byte[] serverHello) throws Exception {
         if (serverHello == null || serverHello.length < 4) {
@@ -903,9 +1031,15 @@ class QuicTlsEngine {
                     if (pos + 4 <= extDataEnd) {
                         int group = ((serverHello[pos] & 0xFF) << 8) | (serverHello[pos + 1] & 0xFF);
                         int keyLen = ((serverHello[pos + 2] & 0xFF) << 8) | (serverHello[pos + 3] & 0xFF);
-                        if (group == GROUP_SECP256R1 && keyLen == 65 && pos + 4 + keyLen <= extDataEnd) {
+                        if (group == GROUP_X25519 && keyLen == 32 && pos + 4 + keyLen <= extDataEnd) {
+                            peerKeyShareX25519 = new byte[32];
+                            System.arraycopy(serverHello, pos + 4, peerKeyShareX25519, 0, 32);
+                            this.selectedGroup = GROUP_X25519;
+                            foundKeyShare = true;
+                        } else if (group == GROUP_SECP256R1 && keyLen == 65 && pos + 4 + keyLen <= extDataEnd) {
                             peerKeyShareP256 = new byte[65];
                             System.arraycopy(serverHello, pos + 4, peerKeyShareP256, 0, 65);
+                            this.selectedGroup = GROUP_SECP256R1;
                             foundKeyShare = true;
                         }
                     }
@@ -924,22 +1058,22 @@ class QuicTlsEngine {
         // Add ServerHello to transcript
         transcriptHash.update(serverHello);
 
-        // Compute shared secret via ECDH (our ephemeral private key + server's public key)
-        this.sharedSecret = computeECDHSharedSecret(serverEphemeralKeyPair.getPrivate(), peerKeyShareP256);
+        // Compute shared secret (our ephemeral key + server's public key)
+        if (this.selectedGroup == GROUP_X25519) {
+            this.sharedSecret = x25519SharedSecret(x25519EphemeralPrivKey, peerKeyShareX25519);
+        } else {
+            this.sharedSecret = computeECDHSharedSecret(serverEphemeralKeyPair.getPrivate(), peerKeyShareP256);
+        }
 
         // Derive handshake keys
         deriveHandshakeSecrets();
         return true;
     }
 
+    // ── Client-side message parsing (private) ──────────────────────────
+
     /**
-     * Processes the server's encrypted handshake messages (client side).
-     * <p>
-     * Expects concatenated: EncryptedExtensions + Certificate + CertificateVerify + Finished.
-     * Validates the server's CertificateVerify signature and Finished verify_data.
-     * After processing, derives application-level keys and generates the client Finished message.
-     * @param handshakeData the concatenated server handshake messages
-     * @return {@code true} if all messages were processed and verified successfully
+     * Processes concatenated server handshake messages (EE+Cert+CertVerify+Finished), verifies them, and derives application keys.
      */
     public boolean processServerHandshakeMessages(byte[] handshakeData) throws Exception {
         int pos = 0;
@@ -1032,16 +1166,14 @@ class QuicTlsEngine {
     }
 
     /**
-     * Returns the client's Finished message to send to the server.
-     * Available after {@link #processServerHandshakeMessages(byte[])} completes successfully.
+     * Returns the client Finished message bytes to send to the server; available after processServerHandshakeMessages completes.
      */
     public byte[] getClientFinishedBytes() {
         return clientFinishedMsg;
     }
 
     /**
-     * Returns the server's peer certificate chain received during handshake (client side).
-     * Available after {@link #processServerHandshakeMessages(byte[])} completes.
+     * Returns the server's peer certificate chain received during handshake; available after processServerHandshakeMessages completes.
      */
     public X509Certificate[] getPeerCertChain() {
         return peerCertChain;
@@ -1051,8 +1183,6 @@ class QuicTlsEngine {
     public boolean isClientMode() {
         return clientMode;
     }
-
-    // ── Client-side message building (private) ─────────────────────────
 
     private byte[] buildClientHelloMessage() throws Exception {
         ByteArrayOutputStream out = new ByteArrayOutputStream(512);
@@ -1087,6 +1217,8 @@ class QuicTlsEngine {
         return wrapHandshakeMessage(HT_CLIENT_HELLO, out.toByteArray());
     }
 
+    // ── QUIC Transport Parameters Encoding ─────────────────────────────
+
     private byte[] buildClientHelloExtensions() throws Exception {
         ByteArrayOutputStream exts = new ByteArrayOutputStream(512);
 
@@ -1119,13 +1251,15 @@ class QuicTlsEngine {
         exts.write(TLS_VERSION_13 >> 8);
         exts.write(TLS_VERSION_13 & 0xFF);
 
-        // 3. supported_groups extension
+        // 3. supported_groups extension (X25519 preferred, P-256 as fallback)
         exts.write(EXT_SUPPORTED_GROUPS >> 8);
         exts.write(EXT_SUPPORTED_GROUPS & 0xFF);
         exts.write(0x00);
-        exts.write(0x04); // ext length = 4
+        exts.write(0x06); // ext length = 6
         exts.write(0x00);
-        exts.write(0x02); // list length = 2
+        exts.write(0x04); // list length = 4 (two 2-byte groups)
+        exts.write(GROUP_X25519 >> 8);
+        exts.write(GROUP_X25519 & 0xFF);
         exts.write(GROUP_SECP256R1 >> 8);
         exts.write(GROUP_SECP256R1 & 0xFF);
 
@@ -1135,11 +1269,11 @@ class QuicTlsEngine {
                 (byte) (SIG_RSA_PSS_RSAE_SHA256 >> 8), (byte) (SIG_RSA_PSS_RSAE_SHA256 & 0xFF), (byte) (SIG_ECDSA_SECP256R1_SHA256 >> 8), (byte) (SIG_ECDSA_SECP256R1_SHA256 & 0xFF) };
         exts.write(sigAlgs);
 
-        // 5. key_share extension (client's P-256 public key)
-        byte[] clientPubKeyBytes = encodeP256PublicKey((ECPublicKey) serverEphemeralKeyPair.getPublic());
+        // 5. key_share extension (client's X25519 public key — pure-Java, Java 8+)
+        byte[] clientPubKeyBytes = x25519EphemeralPubKey; // already 32-byte wire format
         ByteArrayOutputStream ksEntry = new ByteArrayOutputStream();
-        ksEntry.write(GROUP_SECP256R1 >> 8);
-        ksEntry.write(GROUP_SECP256R1 & 0xFF);
+        ksEntry.write(GROUP_X25519 >> 8);
+        ksEntry.write(GROUP_X25519 & 0xFF);
         ksEntry.write(clientPubKeyBytes.length >> 8);
         ksEntry.write(clientPubKeyBytes.length & 0xFF);
         ksEntry.write(clientPubKeyBytes);
@@ -1154,28 +1288,26 @@ class QuicTlsEngine {
         exts.write(ksEntryBytes.length & 0xFF);
         exts.write(ksEntryBytes);
 
-        // 6. ALPN extension
+        // 6. ALPN extension — only added when protocols are configured
         String[] alpnProtocols = (this.sslCertConfig != null) ? this.sslCertConfig.getAppProtocol() : null;
-        if (alpnProtocols == null || alpnProtocols.length == 0) {
-            // Default to "h3" for QUIC
-            alpnProtocols = new String[] { "h3" };
-        }
-        ByteArrayOutputStream alpnList = new ByteArrayOutputStream();
-        for (String proto : alpnProtocols) {
-            byte[] protoBytes = proto.getBytes(StandardCharsets.US_ASCII);
-            alpnList.write(protoBytes.length);
-            alpnList.write(protoBytes);
-        }
-        byte[] alpnListBytes = alpnList.toByteArray();
+        if (alpnProtocols != null && alpnProtocols.length > 0) {
+            ByteArrayOutputStream alpnList = new ByteArrayOutputStream();
+            for (String proto : alpnProtocols) {
+                byte[] protoBytes = proto.getBytes(StandardCharsets.US_ASCII);
+                alpnList.write(protoBytes.length);
+                alpnList.write(protoBytes);
+            }
+            byte[] alpnListBytes = alpnList.toByteArray();
 
-        exts.write(EXT_ALPN >> 8);
-        exts.write(EXT_ALPN & 0xFF);
-        int alpnExtLen = 2 + alpnListBytes.length;
-        exts.write(alpnExtLen >> 8);
-        exts.write(alpnExtLen & 0xFF);
-        exts.write(alpnListBytes.length >> 8);
-        exts.write(alpnListBytes.length & 0xFF);
-        exts.write(alpnListBytes);
+            exts.write(EXT_ALPN >> 8);
+            exts.write(EXT_ALPN & 0xFF);
+            int alpnExtLen = 2 + alpnListBytes.length;
+            exts.write(alpnExtLen >> 8);
+            exts.write(alpnExtLen & 0xFF);
+            exts.write(alpnListBytes.length >> 8);
+            exts.write(alpnListBytes.length & 0xFF);
+            exts.write(alpnListBytes);
+        }
 
         // 7. QUIC transport parameters extension
         byte[] tpBytes = encodeTransportParams(localTransportParams);
@@ -1188,7 +1320,7 @@ class QuicTlsEngine {
         return exts.toByteArray();
     }
 
-    // ── Client-side message parsing (private) ──────────────────────────
+    // ── Pure-Java X25519 (RFC 7748 §5) — no JDK version restriction ──────────────
 
     private void parseEncryptedExtensions(byte[] eeMsg) {
         // eeMsg: type(1) + length(3) + body
@@ -1361,8 +1493,6 @@ class QuicTlsEngine {
         return MessageDigest.isEqual(verifyData, expected);
     }
 
-    // ── QUIC Transport Parameters Encoding ─────────────────────────────
-
     private byte[] computeECDHSharedSecret(PrivateKey serverPrivKey, byte[] clientPubKeyBytes) throws Exception {
         // Decode client's uncompressed P-256 point (0x04 || x(32) || y(32))
         if (clientPubKeyBytes[0] != 0x04 || clientPubKeyBytes.length != 65) {
@@ -1399,7 +1529,17 @@ class QuicTlsEngine {
     }
 
     private byte[] encodeTransportParams(QuicSoConfig config) {
-        ByteArrayOutputStream out = new ByteArrayOutputStream(128);
+        ByteArrayOutputStream out = new ByteArrayOutputStream(256);
+        // ── RFC 9000 §7.3 mandatory CID params (byte-array, NOT VarInt) ─────────
+        // original_destination_connection_id (0x00): server MUST include
+        if (!clientMode && originalDestinationCid != null && originalDestinationCid.length > 0) {
+            writeTransportParamBytes(out, 0x00, originalDestinationCid);
+        }
+        // initial_source_connection_id (0x0f): both sides MUST include
+        if (sourceConnectionId != null && sourceConnectionId.length > 0) {
+            writeTransportParamBytes(out, 0x0f, sourceConnectionId);
+        }
+        // ── Standard VarInt params ────────────────────────────────────────────
         writeTransportParam(out, QuicAsyncChannelHandshake.PARAM_MAX_IDLE_TIMEOUT, config.getTpMaxIdleTimeout());
         writeTransportParam(out, QuicAsyncChannelHandshake.PARAM_INITIAL_MAX_DATA, config.getTpInitialFrameMaxData());
         writeTransportParam(out, QuicAsyncChannelHandshake.PARAM_INITIAL_MAX_STREAM_DATA_BIDI_LOCAL, config.getTpInitialMaxStreamDataBidiLocal());
@@ -1424,6 +1564,23 @@ class QuicTlsEngine {
             out.write(idBytes);
             out.write(lenBytes);
             out.write(valBytes);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    /**
+     * Writes a byte-array transport parameter (e.g. Connection IDs) using QUIC encoding: paramId(VarInt)|length(VarInt)|value.
+     */
+    private void writeTransportParamBytes(ByteArrayOutputStream out, int paramId, byte[] value) {
+        if (value == null || value.length == 0)
+            return;
+        byte[] idBytes = QuicVarInt.encode(paramId);
+        byte[] lenBytes = QuicVarInt.encode(value.length);
+        try {
+            out.write(idBytes);
+            out.write(lenBytes);
+            out.write(value);
         } catch (Exception e) {
             throw new RuntimeException(e);
         }

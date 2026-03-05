@@ -18,18 +18,7 @@ package net.hasor.neta.channel.quic;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Implements QUIC congestion control per RFC 9002 §7 (NewReno-like algorithm).
- * <p>
- * The congestion controller manages the sending rate to avoid overwhelming the
- * network. It maintains a congestion window ({@link #cwnd}) that limits the
- * total number of bytes in flight.
- * <p>
- * <b>States (RFC 9002 §7.3):</b>
- * <ul>
- *   <li><b>Slow Start</b>: cwnd grows by the number of bytes acknowledged, doubling each RTT.</li>
- *   <li><b>Congestion Avoidance</b>: cwnd grows by ~1 MSS per RTT (additive increase).</li>
- *   <li><b>Recovery</b>: after a loss event, cwnd is halved and slow start threshold is set.</li>
- * </ul>
+ * Implements NewReno-like congestion control per RFC 9002 §7 (slow start, congestion avoidance, recovery).
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicCongestionControl {
@@ -51,11 +40,7 @@ class QuicCongestionControl {
     /** ECN-CE counter (RFC 9002 §7.1). */
     private              long   ecnCeCount        = 0;
 
-    /**
-     * Returns whether we can send more data given current bytes in flight.
-     * @param bytesInFlight the number of bytes currently in flight
-     * @return {@code true} if sending is allowed
-     */
+    /** Returns whether we can send more data given current bytes in flight. */
     synchronized boolean canSend(long bytesInFlight) {
         return bytesInFlight < this.cwnd;
     }
@@ -75,11 +60,7 @@ class QuicCongestionControl {
         return this.state;
     }
 
-    /**
-     * Called when bytes are acknowledged (RFC 9002 §7.3.1 and §7.3.3).
-     * @param ackedBytes the number of bytes newly acknowledged
-     * @param packetNumber the packet number that was acknowledged
-     */
+    /** Called when bytes are acknowledged; grows cwnd in slow start or congestion avoidance (RFC 9002 §7.3). */
     synchronized void onPacketsAcked(long ackedBytes, long packetNumber) {
         if (this.state == State.RECOVERY) {
             // In recovery: don't increase cwnd until we exit recovery
@@ -105,11 +86,7 @@ class QuicCongestionControl {
         }
     }
 
-    /**
-     * Called when a packet loss is detected (RFC 9002 §7.3.2).
-     * Enters recovery state, halves cwnd and sets ssthresh.
-     * @param lostPacketNumber the packet number of the lost packet
-     */
+    /** Called on packet loss; enters recovery, halves cwnd and sets ssthresh (RFC 9002 §7.3.2). */
     synchronized void onPacketLost(long lostPacketNumber) {
         if (this.state == State.RECOVERY) {
             // Already in recovery — do not reduce cwnd again
@@ -124,10 +101,7 @@ class QuicCongestionControl {
         logger.info("Congestion event: packet " + lostPacketNumber + " lost, cwnd=" + this.cwnd + ", ssthresh=" + this.ssthresh);
     }
 
-    /**
-     * Called when a persistent congestion event is detected (RFC 9002 §7.6).
-     * Resets cwnd to the minimum window.
-     */
+    /** Called on persistent congestion; resets cwnd to the minimum window (RFC 9002 §7.6). */
     synchronized void onPersistentCongestion() {
         this.cwnd = MINIMUM_WINDOW;
         this.ssthresh = this.cwnd;
@@ -135,12 +109,7 @@ class QuicCongestionControl {
         logger.info("Persistent congestion detected, cwnd reset to " + this.cwnd);
     }
 
-    /**
-     * Called when an ECN-CE marking is received in an ACK frame (RFC 9002 §7.1).
-     * Treated as a congestion event similar to packet loss.
-     * @param ceCount the new ECN-CE counter value from the ACK-ECN frame
-     * @param sentPacketNumber the packet number of the sent packet that triggered the ECN signal
-     */
+    /** Called when ECN-CE is reported in an ACK frame; treated as a loss event (RFC 9002 §7.1). */
     synchronized void onEcnCongestion(long ceCount, long sentPacketNumber) {
         if (ceCount <= this.ecnCeCount) {
             return; // not a new congestion signal

@@ -16,20 +16,16 @@
 package net.hasor.neta.channel.quic;
 
 /**
- * Thrown when a QUIC STOP_SENDING frame is received from the peer (RFC 9000 §19.5).
+ * QUIC connection handshake phase.
  * @author 赵永春 (zyc@hasor.net)
  */
-public class QuicStopSendingException extends QuicException {
-    private final long streamId;
-
-    /** Creates a QuicStopSendingException with an application error code and stream ID. */
-    public QuicStopSendingException(long errorCode, long streamId) {
-        super(errorCode, "STOP_SENDING: stream=" + streamId + ", errorCode=0x" + Long.toHexString(errorCode));
-        this.streamId = streamId;
-    }
-
-    /** Returns the stream ID on which STOP_SENDING was received. */
-    public long getStreamId() {
-        return this.streamId;
-    }
+public enum QuicHandshakeState {
+    /** Initial state; no handshake messages exchanged yet. */
+    INITIAL,
+    /** Handshake is in progress (Initial + Handshake packets exchanged). */
+    HANDSHAKE,
+    /** Handshake fully completed; 1-RTT application data may flow. */
+    ESTABLISHED,
+    /** Connection has been closed. */
+    CLOSED
 }

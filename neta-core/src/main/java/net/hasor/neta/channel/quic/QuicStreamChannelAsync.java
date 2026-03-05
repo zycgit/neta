@@ -26,12 +26,7 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.udp.AbstractUdpWriteTask;
 
 /**
- * Stream-level {@link AsyncChannel} for QUIC.
- * <p>
- * Each {@link QuicStreamChannel} has its own {@code QuicAsyncStreamChannel} that
- * routes write operations to the underlying {@link QuicChannel} with the correct
- * stream ID. Closing this channel sends a STREAM frame with FIN on the stream
- * without affecting the QUIC connection.
+ * Stream-level {@link AsyncChannel} that routes writes to the parent {@link QuicChannel} as STREAM frames for the correct stream ID.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicStreamChannelAsync implements AsyncChannel {
@@ -114,6 +109,9 @@ class QuicStreamChannelAsync implements AsyncChannel {
     @Override
     public void close() throws IOException {
         if (this.closed.compareAndSet(false, true)) {
+            if (this.context.getConfig().isPrintLog()) {
+                logger.info("[QUIC-SND] stream=" + this.streamId + " close (FIN)");
+            }
             try {
                 long offset = this.sendOffset.get();
                 byte[] finFrame = buildStreamData(this.streamId, offset, new byte[0], true);
@@ -183,7 +181,11 @@ class QuicStreamChannelAsync implements AsyncChannel {
         @Override
         protected int doSend(byte[] data) {
             ByteBuf byteBuf = ByteBuf.wrap(data);
-            return quicChannel.asyncChannel().sendDataFrame(byteBuf, null);
+            int sent = quicChannel.asyncChannel().sendDataFrame(byteBuf, null);
+            if (context.getConfig().isPrintLog()) {
+                logger.info("[QUIC-SND] stream=" + this.streamId + " bytes=" + data.length + " sent=" + sent);
+            }
+            return sent;
         }
 
         /** Converts raw application bytes into a QUIC STREAM frame. */
