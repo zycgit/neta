@@ -97,28 +97,88 @@ public interface ByteBufAllocator extends BufferAllocator {
     //    ByteBuf mappedBuffer(int memSize, int maxCapacity, File tempFile);
 
     /**
-     * 分配一个内存-文件交换 {@link ByteBuf}，使用默认阈值（128 KB 内存 / 512 KB 紧凑）。
-     * 数据量未超过 memThreshold 时全程基于堆内存；超过后自动换出到临时文件，
-     * 已消费的头部数据在 fileBaseOffset 超过 compactThreshold 时触发文件紧凑。
+     * Allocates a memory-swap {@link ByteBuf} using all defaults:
+     * 128 KB memory threshold, 512 KB segment size, and {@code "neta-swap-"} temp file prefix.
      */
     default ByteBuf swapFile() {
-        return swapFile(SwapFileByteBuf.DEFAULT_MEM_THRESHOLD, SwapFileByteBuf.DEFAULT_COMPACT_THRESHOLD);
+        return swapFile(SwapFileByteBuf.DEFAULT_MEM_THRESHOLD, SwapFileByteBuf.DEFAULT_SEGMENT_SIZE, SwapFileByteBuf.DEFAULT_TEMP_FILE_PREFIX);
     }
 
     /**
-     * 分配一个内存-文件交换 {@link ByteBuf}，指定内存阈值，紧凑阈值默认为 memThreshold × 4。
-     * @param memThreshold 触发换出到文件的内存字节阈值（当前写指针超过此值时切换）
+     * Allocates a memory-swap {@link ByteBuf} with a custom memory threshold.
+     * The segment size defaults to {@code memThreshold × 4}.
+     * @param memThreshold bytes to keep in heap before spilling to disk
      */
     default ByteBuf swapFile(int memThreshold) {
-        return swapFile(memThreshold, memThreshold * 4);
+        return swapFile(memThreshold, memThreshold * 4, SwapFileByteBuf.DEFAULT_TEMP_FILE_PREFIX);
     }
 
     /**
-     * 分配一个内存-文件交换 {@link ByteBuf}，分别指定内存阈值和文件头部紧凑阈值。
-     * @param memThreshold 触发换出到文件的内存字节阈值
-     * @param compactThreshold fileBaseOffset 超过此值时触发文件紧凑，以回收磁盘空间
+     * Allocates a memory-swap {@link ByteBuf} with a custom memory threshold and segment size.
+     * Uses the default temp file prefix ({@code "neta-swap-"}).
+     * @param memThreshold bytes to keep in heap before spilling to disk
+     * @param segmentSize maximum size (bytes) of each temporary file segment
      */
-    default ByteBuf swapFile(int memThreshold, int compactThreshold) {
-        return new SwapFileByteBuf(this, memThreshold, compactThreshold);
+    default ByteBuf swapFile(int memThreshold, int segmentSize) {
+        return swapFile(memThreshold, segmentSize, SwapFileByteBuf.DEFAULT_TEMP_FILE_PREFIX);
+    }
+
+    /**
+     * Allocates a memory-swap {@link ByteBuf} with full control over all three parameters.
+     * <p>Data stays in heap memory until {@code writerIndex} exceeds {@code memThreshold}, then
+     * overflows into a deque of fixed-size temporary files named {@code tempFilePrefix + "*.buf"}.
+     * Fully consumed segments are deleted O(1) with no data copying.
+     * @param memThreshold bytes to keep in heap before spilling to disk
+     * @param segmentSize maximum size (bytes) of each temporary file segment
+     * @param tempFilePrefix prefix string for temporary swap files (passed to {@link java.io.File#createTempFile})
+     */
+    default ByteBuf swapFile(int memThreshold, int segmentSize, String tempFilePrefix) {
+        return new SwapFileByteBuf(this, memThreshold, segmentSize, tempFilePrefix, false);
+    }
+
+    // ── direct (mmap) variants ────────────────────────────────────────────────
+
+    /**
+     * Allocates a memory-swap {@link ByteBuf} backed by <em>direct</em> (memory-mapped) file
+     * segments, using all defaults (512 KB memory threshold, 64 MB segment, {@code "neta-swap-"} prefix).
+     * <p>Each spill segment is pre-mapped into native off-heap memory via
+     * {@link java.nio.MappedByteBuffer}.  Data never touches the Java heap once spilled,
+     * reducing GC pressure and enabling near-zero-copy I/O.
+     * <p><b>Compatibility:</b> requires OS {@code mmap} support.  Not available on some Android
+     * versions or sandboxed JVM environments — fall back to {@link #swapFile()} in those cases.
+     */
+    default ByteBuf swapFileDirect() {
+        return swapFileDirect(SwapFileByteBuf.DEFAULT_MEM_THRESHOLD, SwapFileByteBuf.DEFAULT_SEGMENT_SIZE, SwapFileByteBuf.DEFAULT_TEMP_FILE_PREFIX);
+    }
+
+    /**
+     * Allocates a direct memory-swap {@link ByteBuf} with a custom memory threshold.
+     * Segment size defaults to {@code memThreshold × 4}.
+     * @param memThreshold bytes to keep in heap before spilling to disk
+     */
+    default ByteBuf swapFileDirect(int memThreshold) {
+        return swapFileDirect(memThreshold, memThreshold * 4, SwapFileByteBuf.DEFAULT_TEMP_FILE_PREFIX);
+    }
+
+    /**
+     * Allocates a direct memory-swap {@link ByteBuf} with custom memory threshold and segment size.
+     * Uses the default temp file prefix ({@code "neta-swap-"}).
+     * @param memThreshold bytes to keep in heap before spilling to disk
+     * @param segmentSize maximum size (bytes) of each memory-mapped segment
+     */
+    default ByteBuf swapFileDirect(int memThreshold, int segmentSize) {
+        return swapFileDirect(memThreshold, segmentSize, SwapFileByteBuf.DEFAULT_TEMP_FILE_PREFIX);
+    }
+
+    /**
+     * Allocates a direct memory-swap {@link ByteBuf} with full control over all three parameters.
+     * <p>File segments are memory-mapped ({@link java.nio.MappedByteBuffer}); each segment file is
+     * pre-extended to {@code segmentSize} bytes at creation time so the full region can be mapped.
+     * @param memThreshold bytes to keep in heap before spilling to disk
+     * @param segmentSize size (bytes) of each memory-mapped segment file
+     * @param tempFilePrefix prefix string for temporary swap files
+     */
+    default ByteBuf swapFileDirect(int memThreshold, int segmentSize, String tempFilePrefix) {
+        return new SwapFileByteBuf(this, memThreshold, segmentSize, tempFilePrefix, true);
     }
 }
