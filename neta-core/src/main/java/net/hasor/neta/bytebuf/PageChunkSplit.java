@@ -16,6 +16,7 @@
 package net.hasor.neta.bytebuf;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * A contiguous block of memory that is allocated.
@@ -23,8 +24,8 @@ import java.util.concurrent.atomic.AtomicInteger;
  * @version : 2024-02-15
  */
 class PageChunkSplit implements PageRange {
-    static final  int                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static        RecycleHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleHandler<PageChunkSplit>() {
+    static final  int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static        RecycleObjectPool.ObjHandler<PageChunkSplit> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<PageChunkSplit>() {
         public PageChunkSplit create() {
             return new PageChunkSplit();
         }
@@ -34,13 +35,13 @@ class PageChunkSplit implements PageRange {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    private final AtomicBoolean                  available       = new AtomicBoolean(false);
-    private       int                            fromPage;
-    private       int                            toPage;
+    private final AtomicBoolean                                available       = new AtomicBoolean(false);
+    private       int                                          fromPage;
+    private       int                                          toPage;
     // ------------------------------------------------------------------------
-    private       int                            capacity;
-    private       PageChunkPool                  chunkPool;
-    private       AtomicInteger                  refCount;
+    private       int                                          capacity;
+    private       PageChunkPool                                chunkPool;
+    private       AtomicInteger                                refCount;
 
     private PageChunkSplit() {
     }

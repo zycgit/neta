@@ -16,6 +16,7 @@
 package net.hasor.neta.bytebuf;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * <pre>
@@ -30,8 +31,8 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 class WrapByteBuffer extends AbstractByteBuf {
-    static final int                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleHandler<WrapByteBuffer> RECYCLE_HANDLER = new RecycleHandler<WrapByteBuffer>() {
+    static final int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleObjectPool.ObjHandler<WrapByteBuffer> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<WrapByteBuffer>() {
         public WrapByteBuffer create() {
             return new WrapByteBuffer();
         }
@@ -41,7 +42,7 @@ class WrapByteBuffer extends AbstractByteBuf {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    protected    ByteBuffer                     target;
+    protected    ByteBuffer                                   target;
 
     private WrapByteBuffer() {
     }

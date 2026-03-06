@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.NoSuchAlgorithmException;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.codec.MD5;
+import net.hasor.cobble.ref.RecycleObjectPool;
 import org.junit.Test;
 
 public class AutoArrayByteBufTest {

@@ -16,6 +16,7 @@
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import java.nio.ReadOnlyBufferException;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * Used to manipulate allocated memory blocks
@@ -23,8 +24,8 @@ import java.nio.ReadOnlyBufferException;
  * @version : 2022-11-01
  */
 class BufferTarget implements Buffer {
-    static final int                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleHandler<BufferTarget> RECYCLE_HANDLER = new RecycleHandler<BufferTarget>() {
+    static final int                                        RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleObjectPool.ObjHandler<BufferTarget> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<BufferTarget>() {
         public BufferTarget create() {
             return new BufferTarget();
         }
@@ -34,9 +35,9 @@ class BufferTarget implements Buffer {
             RecycleObjectPool.free(RECYCLE_INDEX, tar);
         }
     };
-    private      Buffer                       memory;
-    private      PageChunkSplit               pages;
-    private      int                          pageSize;
+    private      Buffer                                     memory;
+    private      PageChunkSplit                             pages;
+    private      int                                        pageSize;
 
     // ------------------------------------------------------------------------
     private boolean readOnly;

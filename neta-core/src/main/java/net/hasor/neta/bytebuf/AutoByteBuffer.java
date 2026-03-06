@@ -16,6 +16,7 @@
 package net.hasor.neta.bytebuf;
 import java.nio.Buffer;
 import java.nio.ByteBuffer;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * 基于 {@link ByteBuffer} 的自动扩缩容 {@link ByteBuf} 实现
@@ -23,8 +24,8 @@ import java.nio.ByteBuffer;
  * @version : 2022-11-01
  */
 final class AutoByteBuffer extends AbstractByteBuf {
-    static final int                            RECYCLE_INDEX   = RecycleObjectPool.registerType();
-    static       RecycleHandler<AutoByteBuffer> RECYCLE_HANDLER = new RecycleHandler<AutoByteBuffer>() {
+    static final int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    static       RecycleObjectPool.ObjHandler<AutoByteBuffer> RECYCLE_HANDLER = new RecycleObjectPool.ObjHandler<AutoByteBuffer>() {
         public AutoByteBuffer create() {
             return new AutoByteBuffer();
         }

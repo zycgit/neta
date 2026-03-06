@@ -18,6 +18,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
 import net.hasor.cobble.ObjectUtils;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * A block of memory managed by pooling, using the buddy algorithm.
@@ -180,8 +181,6 @@ class PageChunkPool {
                 if (tryLock(look, true)) {
                     try {
                         // Re-check after lock acquisition to prevent TOCTOU race condition.
-                        // Between the unlocked isFree() check and tryLock(), another thread at
-                        // a different buddy level may have allocated overlapping pages.
                         if (isFree(look)) {
                             this.used(look);
                             PageChunkSplit chunk = RecycleObjectPool.get(PageChunkSplit.RECYCLE_INDEX, PageChunkSplit.RECYCLE_HANDLER);

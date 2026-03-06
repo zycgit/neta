@@ -18,6 +18,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * A memory-backed {@link ByteBuf} that automatically spills data to temporary files once
@@ -290,7 +291,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
     protected void _putByte(int offset, byte b) {
         checkFree();
         if (!this.fileMode && this.writerIndex > this.memThreshold) {
-            switchToFile((int) offset);
+            switchToFile(offset);
         }
         if (this.fileMode) {
             try {
@@ -300,8 +301,8 @@ public class SwapFileByteBuf extends AbstractByteBuf {
                 throw new RuntimeException("SwapFileByteBuf write error", e);
             }
         } else {
-            ensureMemCapacity((int) (offset + 1));
-            this.memBuf[(int) offset] = b;
+            ensureMemCapacity(offset + 1);
+            this.memBuf[offset] = b;
         }
     }
 
@@ -311,7 +312,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
     protected int _putBytes(int offset, byte[] src, int srcOffset, int srcLen) {
         checkFree();
         if (!this.fileMode && this.writerIndex > this.memThreshold) {
-            switchToFile((int) offset);
+            switchToFile(offset);
         }
         if (this.fileMode) {
             try {
@@ -321,8 +322,8 @@ public class SwapFileByteBuf extends AbstractByteBuf {
                 throw new RuntimeException("SwapFileByteBuf write error", e);
             }
         } else {
-            ensureMemCapacity((int) (offset + srcLen));
-            System.arraycopy(src, srcOffset, this.memBuf, (int) offset, srcLen);
+            ensureMemCapacity(offset + srcLen);
+            System.arraycopy(src, srcOffset, this.memBuf, offset, srcLen);
             return srcLen;
         }
     }
@@ -331,7 +332,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
     protected int _putBytes(int offset, ByteBuffer src, int srcLen) {
         checkFree();
         if (!this.fileMode && this.writerIndex > this.memThreshold) {
-            switchToFile((int) offset);
+            switchToFile(offset);
         }
         if (this.fileMode) {
             try {
@@ -341,8 +342,8 @@ public class SwapFileByteBuf extends AbstractByteBuf {
                 throw new RuntimeException("SwapFileByteBuf write error", e);
             }
         } else {
-            ensureMemCapacity((int) (offset + srcLen));
-            src.get(this.memBuf, (int) offset, srcLen);
+            ensureMemCapacity(offset + srcLen);
+            src.get(this.memBuf, offset, srcLen);
             return srcLen;
         }
     }
@@ -366,7 +367,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
                 throw new RuntimeException("SwapFileByteBuf read error", e);
             }
         } else {
-            return this.memBuf[(int) offset];
+            return this.memBuf[offset];
         }
     }
 
@@ -380,7 +381,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
                 throw new RuntimeException("SwapFileByteBuf read error", e);
             }
         } else {
-            System.arraycopy(this.memBuf, (int) offset, dst, dstOffset, dstLen);
+            System.arraycopy(this.memBuf, offset, dst, dstOffset, dstLen);
             return dstLen;
         }
     }
@@ -395,7 +396,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
                 throw new RuntimeException("SwapFileByteBuf read error", e);
             }
         } else {
-            dst.put(this.memBuf, (int) offset, dstLen);
+            dst.put(this.memBuf, offset, dstLen);
             return dstLen;
         }
     }
@@ -521,7 +522,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
         checkFree();
         int start = this.markedReaderIndex;
         int end = this.markedWriterIndex;
-        int len = (int) (end - start);
+        int len = end - start;
         byte[] data = new byte[Math.max(0, len)];
         if (len > 0) {
             _getBytes(start, data, 0, len);

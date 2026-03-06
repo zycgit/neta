@@ -17,6 +17,7 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 import java.util.ArrayDeque;
 import net.hasor.cobble.ObjectUtils;
+import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
  * 基于 {@link Buffer} 池化的的窗口 {@link ByteBuf} 实现，同时如果容量不足它会自动扩缩容
@@ -24,11 +25,11 @@ import net.hasor.cobble.ObjectUtils;
  * @version : 2022-11-01
  */
 final class PooledByteBuf extends AbstractByteBuf {
-    static final         int                                       RECYCLE_INDEX    = RecycleObjectPool.registerType();
-    static final         ThreadLocal<java.util.ArrayDeque<Buffer>> BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
+    static final         int                                         RECYCLE_INDEX    = RecycleObjectPool.registerType();
+    static final         ThreadLocal<java.util.ArrayDeque<Buffer>>   BUFFER_CACHE     = ThreadLocal.withInitial(java.util.ArrayDeque::new);
     /** Thread-local cache for recently freed pooled Buffers (pages stay allocated). */
-    private static final int                                       MAX_BUFFER_CACHE = 8;
-    static               RecycleHandler<PooledByteBuf>             RECYCLE_HANDLER  = new RecycleHandler<PooledByteBuf>() {
+    private static final int                                         MAX_BUFFER_CACHE = 8;
+    static               RecycleObjectPool.ObjHandler<PooledByteBuf> RECYCLE_HANDLER  = new RecycleObjectPool.ObjHandler<PooledByteBuf>() {
         public PooledByteBuf create() {
             return new PooledByteBuf();
         }
