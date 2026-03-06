@@ -18,7 +18,7 @@ package net.hasor.neta.channel;
  * {@link ProtoDuplexer} is a Duplexer handler, The data flow direction is identified by the isRcv parameter.
  * A protocol stack has four endpoints: RCV_UP, RCV_DOWN, SND_UP, and SND_DOWN, these endpoints can store some data.
  * Some of these endpoints come from Buffers, e.g, RCV_UP is located low on the stack.
- * SND_DOWN is the temporary storage used to receive the output of the ProtoStack.
+ * SND_DOWN is the temporary storage used to receive the output of the ProtoStackChain.
  * When there are multiple {@link ProtoDuplexer} layers, the endpoints are linked, e.g, first {@link ProtoDuplexer} RCV_DOWN → next {@link ProtoDuplexer} RCV_UP
  * <pre>
  *        ┏━━━━━━━━━━━━━━━━━━━━━━━━┓   ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -30,7 +30,7 @@ package net.hasor.neta.channel;
  *        ┗━━━━━━━━━━━━━━━━━━━━━━━━┛   ┗━━━━━━━━━━━━━━━━━━━━━━━━┛
  * </pre>
  * <p>
- * This design means that during any rcv/snd, upstream and downstream of the ProtoStack can be operated.
+ * This design means that during any rcv/snd, upstream and downstream of the ProtoStackChain can be operated.
  * </p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
@@ -70,14 +70,14 @@ public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<RCV_UP> rcvUp, ProtoSndQueue<RCV_DOWN> rcvDown, ProtoRcvQueue<SND_UP> sndUp, ProtoSndQueue<SND_DOWN> sndDown) throws Throwable;
 
     /**
-     * Gets called if a Throwable was thrown. If an exception occurs, ProtoStack executes in the following way.
+     * Gets called if a Throwable was thrown. If an exception occurs, ProtoStackChain executes in the following way.
      * After the doError method returns, The {@link ProtoRcvQueue#rcvReset()}/{@link ProtoSndQueue#sndReset()} method of (RCV_UP, RCV_DOWN, SND_UP, SND_DOWN) will be called
      * <pre>
      *  ... -> onMessage -> onMessage -> Exception
      *                                       |
      *                                    onError -> onError -> onError...
      * </pre>
-     * <p>You can clear the exception flag with the {@link ProtoExceptionHolder#clear()} method, and ProtoStack execution will continue normally</p>
+     * <p>You can clear the exception flag with the {@link ProtoExceptionHolder#clear()} method, and ProtoStackChain execution will continue normally</p>
      * <pre>
      *  ... -> onMessage -> onError -> onError(invoker clear) -> onMessage -> ...
      * </pre>

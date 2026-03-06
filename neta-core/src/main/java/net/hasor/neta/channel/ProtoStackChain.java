@@ -21,7 +21,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Root of the bidirectional handler chain ({@link ProtoStack} implementation).
+ * Root of the bidirectional handler chain.
  * <p>Manages a doubly-linked list of {@link ProtoInvocation} nodes.
  * RCV events propagate head→tail; SND events propagate tail→head.</p>
  * <pre>
@@ -31,9 +31,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
-@SuppressWarnings({ "unchecked" })
-class ProtoChainRoot implements ProtoStack<Object> {
-    private static final Logger                      logger   = Logger.getLogger(ProtoChainRoot.class);
+class ProtoStackChain {
+    private static final Logger                      logger   = Logger.getLogger(ProtoStackChain.class);
     private static final ByteBuf[]                   EMPTY    = new ByteBuf[0];
     private final        Object                      pipeLock = new Object();
     private final        ProtoQueue<Object>          tailRcvDown;
@@ -43,11 +42,11 @@ class ProtoChainRoot implements ProtoStack<Object> {
     private              ProtoInvocation<?, ?, ?, ?> tail;
     private              long                        channelID;
 
-    ProtoChainRoot(SoConfig protoConf) {
+    ProtoStackChain(SoConfig protoConf) {
         this(protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), false);
     }
 
-    ProtoChainRoot(int rcvSlotSize, int sndSlotSize, boolean branchMode) {
+    ProtoStackChain(int rcvSlotSize, int sndSlotSize, boolean branchMode) {
         this.tailRcvDown = new ProtoQueue<>(rcvSlotSize < 0 ? -1 : rcvSlotSize);
         this.headSndDown = new ProtoQueue<>(sndSlotSize < 0 ? -1 : sndSlotSize);
         this.branchMode = branchMode;
@@ -91,15 +90,11 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
     }
 
-    @Override
     public int getSndSlotSize() {
         return this.headSndDown.slotSize();
     }
 
-    /**
-     * Returns the name of the handler immediately after {@code withName} in the RCV chain,
-     * or {@code null} if {@code withName} is the last handler or not found.
-     */
+    /** Returns the name of the handler immediately after {@code withName} in the RCV chain. */
     public String findNextStack(String withName) {
         ProtoInvocation<?, ?, ?, ?> current = this.head;
         while (current != null) {
@@ -116,10 +111,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
         return null;
     }
 
-    /**
-     * Returns the name of the handler immediately before {@code withName} in the RCV chain
-     * (i.e. the next node in the SND direction), or {@code null} if not found or already at head.
-     */
+    /** Returns the name of the handler immediately before {@code withName} in the RCV chain. */
     public String findPreviousStack(String withName) {
         ProtoInvocation<?, ?, ?, ?> current = this.tail;
         while (current != null) {
@@ -136,7 +128,6 @@ class ProtoChainRoot implements ProtoStack<Object> {
         return null;
     }
 
-    @Override
     public void onInit(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -144,57 +135,43 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
             ProtoInvocation<?, ?, ?, ?> current = this.head;
             while (current != null) {
-                try {
-                    current.onInit(protoCtx);
-                } catch (Throwable e) {
-                    logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onInit error: " + e.getMessage(), e);
-                    ctx.clearFlash(); // reset flash after handler error to protect subsequent handlers
-                } finally {
-                    current = current.next;
-                }
+                current.onInit(protoCtx);
+                current = current.next;
             }
         } finally {
-            ctx.clearFlash();
+            if (!this.branchMode) {
+                ctx.clearStatus();
+            }
         }
     }
 
-    @Override
     public void onActive(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             ProtoInvocation<?, ?, ?, ?> current = this.head;
             while (current != null) {
-                try {
-                    current.onActive(protoCtx);
-                } catch (Throwable e) {
-                    logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onActive error: " + e.getMessage(), e);
-                    ctx.clearFlash(); // reset flash after handler error to protect subsequent handlers
-                } finally {
-                    current = current.next;
-                }
+                current.onActive(protoCtx);
+                current = current.next;
             }
         } finally {
-            ctx.clearFlash();
+            if (!this.branchMode) {
+                ctx.clearStatus();
+            }
         }
     }
 
-    @Override
     public void onClose(ProtoContext protoCtx) {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             ProtoInvocation<?, ?, ?, ?> current = this.head;
             while (current != null) {
-                try {
-                    current.onClose(protoCtx);
-                } catch (Throwable e) {
-                    logger.error("rcv(" + this.channelID + ") Stack " + current.getName() + " onClose error: " + e.getMessage(), e);
-                    ctx.clearFlash(); // reset flash after handler error to protect subsequent handlers
-                } finally {
-                    current = current.next;
-                }
+                current.onClose(protoCtx);// No exceptions will be thrown.
+                current = current.next;
             }
         } finally {
-            ctx.clearFlash();
+            if (!this.branchMode) {
+                ctx.clearStatus();
+            }
         }
     }
 
@@ -210,7 +187,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
             int slotSize = queue.slotSize();
             int require = offerData.length;
 
-            String msg = String.format("%s(%s) ProtoStack slot is full, available slot is %s, require %s.", msgTag, this.channelID, slotSize, require);
+            String msg = String.format("%s(%s) ProtoStackChain slot is full, available slot is %s, require %s.", msgTag, this.channelID, slotSize, require);
             logger.error(msg);
             throw new ProtoFullException(msg);
         }
@@ -239,11 +216,10 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // RCV
     // ------------------------------------------------------------
 
-    @Override
-    public Object[] onRcvMessage(ProtoContext protoCtx, String stackName, Object[] rcvData) throws Throwable {
+    public ChainResult onRcv(ProtoContext protoCtx, String stackName, Object[] rcvData, Throwable rcvError) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
-            ctx.beginRcv();
+            ctx.beginRcv(rcvError);
             try {
                 if (this.head == null) {
                     return this.triggerRcvWithEmpty(ctx, rcvData);
@@ -256,24 +232,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
     }
 
-    @Override
-    public Object[] onRcvError(ProtoContext protoCtx, String stackName, Throwable rcvError) throws Throwable {
-        ProtoContextService ctx = (ProtoContextService) protoCtx;
-        synchronized (this.pipeLock) {
-            ctx.beginRcv(rcvError);
-            try {
-                if (this.head == null) {
-                    return this.triggerRcvWithEmpty(ctx, EMPTY);
-                } else {
-                    return this.onRcvLife(ctx, stackName, null);
-                }
-            } finally {
-                ctx.end();
-            }
-        }
-    }
-
-    private Object[] triggerRcvWithEmpty(ProtoContextService ctx, Object[] sndData) {
+    private ChainResult triggerRcvWithEmpty(ProtoContextService ctx, Object[] sndData) {
         // 1st onReceive
         if (sndData != null) {
             for (Object obj : sndData) {
@@ -288,11 +247,12 @@ class ProtoChainRoot implements ProtoStack<Object> {
             PlayLoad playLoad = PlayLoadObject.ofError(ctx.getChannel(), ctxError, true, false);
             ((SoContextService) ctx.getSoContext()).trigger(playLoad);
         }
-        return EMPTY;
+        return ChainResult.EMPTY;
     }
 
-    private Object[] onRcvLife(ProtoContextService ctx, String stackName, Object[] rcvData) throws Throwable {
+    private ChainResult onRcvLife(ProtoContextService ctx, String stackName, Object[] rcvData) throws Throwable {
         boolean found = false;
+        ProtoStatus lastStatus = ProtoStatus.Next;
         ProtoInvocation<?, ?, ?, ?> current = this.head;
         while (current != null) {
             try {
@@ -333,8 +293,8 @@ class ProtoChainRoot implements ProtoStack<Object> {
                     }
                 }
 
+                lastStatus = status;
                 if (status == ProtoStatus.Stop || status == ProtoStatus.Abort) {
-                    ctx.setRcvError(null);
                     break;
                 }
             } finally {
@@ -344,7 +304,9 @@ class ProtoChainRoot implements ProtoStack<Object> {
 
         // Drain headSndDown once — all snd output from both rcv and snd pipeline execution ends up here.
         try {
-            return drainHeadSndDown();
+            Throwable residualError = ctx.getRcvError();
+            Object[] result = drainHeadSndDown();
+            return new ChainResult(result, lastStatus, residualError);
         } finally {
             this.triggerRcv(ctx);
         }
@@ -376,36 +338,21 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // SND
     // ------------------------------------------------------------
 
-    @Override
-    public Object[] onSndMessage(ProtoContext protoCtx, String stackName, Object[] sndData) throws Throwable {
-        ProtoContextService ctx = (ProtoContextService) protoCtx;
-        synchronized (this.pipeLock) {
-            ctx.beginSnd();
-            try {
-                if (this.tail == null) {
-                    return sndData;
-                } else {
-                    this.doSndLife(ctx, stackName, sndData);
-                    return drainHeadSndDown();
-                }
-            } finally {
-                ctx.end();
-            }
-        }
-    }
-
-    @Override
-    public Object[] onSndError(ProtoContext protoCtx, String stackName, Throwable sndError) throws Throwable {
+    public ChainResult onSnd(ProtoContext protoCtx, String stackName, Object[] sndData, Throwable sndError) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             ctx.beginSnd(sndError);
             try {
                 if (this.tail == null) {
-                    this.triggerSend(ctx);
-                    return EMPTY;
+                    if (sndError != null) {
+                        this.triggerSend(ctx);
+                    }
+                    return new ChainResult(sndData, ProtoStatus.Next, sndError);
                 } else {
-                    this.doSndLife(ctx, stackName, null);
-                    return drainHeadSndDown();
+                    ProtoStatus lastStatus = this.doSndLife(ctx, stackName, sndData);
+                    Throwable residualError = ctx.getSndError();
+                    Object[] result = drainHeadSndDown();
+                    return new ChainResult(result, lastStatus, residualError);
                 }
             } finally {
                 ctx.end();
@@ -413,8 +360,9 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
     }
 
-    private void doSndLife(ProtoContextService ctx, String stackName, Object[] sndData) throws Throwable {
+    private ProtoStatus doSndLife(ProtoContextService ctx, String stackName, Object[] sndData) throws Throwable {
         boolean found = false;
+        ProtoStatus lastStatus = ProtoStatus.Next;
         ProtoInvocation<?, ?, ?, ?> current = this.tail;
         while (current != null) {
             try {
@@ -446,6 +394,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
                     }
                 }
 
+                lastStatus = status;
                 if (status == ProtoStatus.Stop || status == ProtoStatus.Abort) {
                     ctx.setSndError(null);
                     break;
@@ -456,6 +405,7 @@ class ProtoChainRoot implements ProtoStack<Object> {
         }
 
         this.triggerSend(ctx);
+        return lastStatus;
     }
 
     private void triggerSend(ProtoContextService ctx) {
@@ -473,89 +423,69 @@ class ProtoChainRoot implements ProtoStack<Object> {
     // ------------------------------------------------------------
     // User Event
     // ------------------------------------------------------------
-    @Override
-    public void onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-        ProtoContextService ctx = (ProtoContextService) protoCtx;
-        synchronized (this.pipeLock) {
-            // RCV leg: propagate forward through the chain from stackName.
-            ctx.beginRcv();
-            boolean continueSnd;
-            try {
-                continueSnd = this.doRcvUserEvent(protoCtx, stackName, event);
-            } finally {
-                ctx.end();
-            }
-            // SND leg: propagate in reverse only when the RCV leg completes normally.
-            if (continueSnd) {
-                ctx.beginSnd();
-                try {
-                    this.doSndUserEvent(protoCtx, null, event);
-                } finally {
-                    ctx.end();
-                }
-            }
-        }
-    }
 
-    @Override
-    public void onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+    public boolean onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
-            ctx.beginSnd();
+            ctx.beginRcv(null);
             try {
-                this.doSndUserEvent(protoCtx, stackName, event);
+                boolean continueStatus = true;
+                boolean found = false;
+                ProtoInvocation<?, ?, ?, ?> current = this.head;
+                while (current != null) {
+                    try {
+                        if (!found) {
+                            if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                                found = true;
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        if (continueStatus) {
+                            continueStatus = current.onEvent(protoCtx, event, true);
+                        }
+                    } finally {
+                        current = current.next;
+                    }
+                }
+                return continueStatus;
             } finally {
                 ctx.end();
             }
         }
     }
 
-    private boolean doRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-        boolean continueStatus = true;
-        boolean found = false;
-        ProtoInvocation<?, ?, ?, ?> current = this.head;
-        while (current != null) {
+    public boolean onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+        ProtoContextService ctx = (ProtoContextService) protoCtx;
+        synchronized (this.pipeLock) {
+            ctx.beginSnd(null);
             try {
-                if (!found) {
-                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
-                        found = true;
-                    } else {
-                        continue;
+                boolean continueStatus = true;
+                boolean found = false;
+                ProtoInvocation<?, ?, ?, ?> current = this.tail;
+                while (current != null) {
+                    try {
+                        if (!found) {
+                            if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
+                                found = true;
+                            } else {
+                                continue;
+                            }
+                        }
+
+                        if (continueStatus) {
+                            continueStatus = current.onEvent(protoCtx, event, false);
+                        }
+                    } finally {
+                        current = current.previous;
                     }
                 }
-
-                if (continueStatus) {
-                    continueStatus = current.onEvent(protoCtx, event, true);
-                }
+                return continueStatus;
             } finally {
-                current = current.next;
+                ctx.end();
             }
         }
-        return continueStatus;
-    }
-
-    private boolean doSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
-        boolean continueStatus = true;
-        boolean found = false;
-        ProtoInvocation<?, ?, ?, ?> current = this.tail;
-        while (current != null) {
-            try {
-                if (!found) {
-                    if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
-                        found = true;
-                    } else {
-                        continue;
-                    }
-                }
-
-                if (continueStatus) {
-                    continueStatus = current.onEvent(protoCtx, event, false);
-                }
-            } finally {
-                current = current.previous;
-            }
-        }
-        return continueStatus;
     }
 
     // ------------------------------------------------------------

@@ -95,7 +95,7 @@ public interface ProtoContext {
      * traversal (provided no inner ctx has shadowed the key) for the rest of the
      * connection's lifetime.
      * </p>
-     * @param type  the type key
+     * @param type the type key
      * @param value the value to store; {@code null} is allowed
      * @return the stored value
      */
@@ -167,9 +167,22 @@ public interface ProtoContext {
     Future<?> sendData(Object writeData);
 
     /**
+     * Requests an in-connection protocol upgrade by switching the owning Router's active branch
+     * to {@code newBranchName}. The switch executes at the end of the current pipeline pass,
+     * after the current branch has finished processing (and any SND responses have been encoded
+     * through the old branch's handlers). Only valid from within a routing branch.
+     * @param newBranchName the name of the target branch (must already be registered on the router)
+     * @throws IllegalArgumentException if no branch with that name exists
+     * @throws UnsupportedOperationException if this context is not inside a routing branch
+     */
+    void upgradeRoute(String newBranchName);
+
+    /**
      * Fire a typed user event that propagates <b>along the current data-flow direction</b>,
      * crossing branch boundaries if necessary until the head/tail of the outermost pipeline
      * is reached.
+     * <p>When called from inside a handler, propagation resumes from the <em>next</em> handler in
+     * the current direction rather than re-entering the caller itself.</p>
      * <h3>Propagation direction</h3>
      * <ul>
      *   <li>In a <b>RCV</b> context ({@link #isRcv()} == true): events travel
@@ -188,7 +201,7 @@ public interface ProtoContext {
      *  Main: [A] ──▶ [Router] ──▶ [Z]
      *                   │
      *         Branch: [B] ──▶ [C*] · · ·?· · ·▶ (boundary crossed) ──▶ [Z]
-     *  Path: C → (end of branch) → Z → ...
+     *  Path: (after C) → (end of branch) → Z → ...
      * </pre>
      * <h3>Example — SND direction (handler B fires event)</h3>
      * <pre>
@@ -199,7 +212,7 @@ public interface ProtoContext {
      *                  · (boundary crossed)
      *                  ·
      *                 [A] ◀── ...
-     *  Path: B → (start of branch) → A → ...
+     *  Path: (before B) → (start of branch) → A → ...
      * </pre>
      * @param eventType the runtime type token used to route the event to interested handlers
      * @param event the event payload

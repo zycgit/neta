@@ -185,7 +185,7 @@ public class SoContextService implements SoContext {
         // init
         if (init && channel instanceof NetChannel) {
             NetChannel netChannel = (NetChannel) channel;
-            ProtoStack<Object> protoStack = netChannel.protoStack;
+            ProtoStackChain protoStack = netChannel.protoStack;
             ProtoContextService protoCtx = netChannel.protoCtx;
 
             try {
@@ -255,7 +255,7 @@ public class SoContextService implements SoContext {
         }
 
         if (!hasProcessed) {
-            String msg = prefix + "(" + data.getSource().getChannelId() + ") There are no program at the tail of the ProtoStack, Skipping event: ";
+            String msg = prefix + "(" + data.getSource().getChannelId() + ") There are no program at the tail of the ProtoStackChain, Skipping event: ";
             logger.debug(msg + data.getData());
         }
     }

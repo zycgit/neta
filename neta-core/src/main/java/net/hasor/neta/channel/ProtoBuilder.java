@@ -237,6 +237,6 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
      */
     <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRoute(String name, ProtoConfig protoConf, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches);
 
-    /** build {@link ProtoStack} */
+    /** build {@link ProtoStackChain} */
     ProtoInitializer build();
 }

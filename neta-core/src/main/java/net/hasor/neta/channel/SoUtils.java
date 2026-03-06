@@ -35,11 +35,11 @@ public class SoUtils {
     }
 
     /**
-     * Prints this {@link ProtoStack} status and its backtrace to the specified print stream.
+     * Prints this {@link ProtoStackChain} status and its backtrace to the specified print stream.
      * @param s {@link PrintStream} to use for output
      */
-    public static void printStackTrace(PrintStream s, SoChannel<?> channel, ProtoStack<?> protoStack) {
-        String body = protoStack == null ? "--- There is no ProtoStack ---" : protoStack.toString();
+    public static void printStackTrace(PrintStream s, SoChannel<?> channel, ProtoStackChain protoStack) {
+        String body = protoStack == null ? "--- There is no ProtoStackChain ---" : protoStack.toString();
         int len = body.split("\n")[0].length();
         String ctitle = "ChannelId  : " + channel.getChannelId() + ",";
         String status = channel.isClient() ? "Client" : "Server";

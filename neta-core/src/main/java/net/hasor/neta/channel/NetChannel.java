@@ -20,7 +20,6 @@ import java.nio.ByteBuffer;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import net.hasor.cobble.ArrayUtils;
 import net.hasor.cobble.concurrent.future.BasicFuture;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.future.Futures;
@@ -47,7 +46,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     protected final      SoSndContext        wContext;
     protected final      SoContextService    soContext;
     protected final      NetMonitor          monitor;
-    protected final      ProtoStack<Object>  protoStack;
+    protected final      ProtoStackChain     protoStack;
     protected final      AtomicBoolean       closeStatus;
     protected final      Future<NetChannel>  closeFuture;
     protected final      Object              readTimeoutSyncObj;
@@ -161,18 +160,15 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
      *          Branch "tls": [SslDuplexer] → [router2]
      *                                              │
      *                                     Branch "http2": [Http2Handler]
-     *
      *   // Read SslContext stored in the "tls" branch ctx:
      *   findProtoContextByPath(SslContext.class, "router1", "tls")
-     *
      *   // Read Http2Context stored in the nested "http2" branch ctx:
      *   findProtoContextByPath(Http2Context.class, "router1", "tls", "router2", "http2")
      * </pre>
-     *
      * @param type the attachment type to retrieve from the target ctx
      * @param path alternating (routerStackName, branchName) pairs; must be non-empty and even-length
      * @return the attachment value, or {@code null} if the path cannot be resolved or
-     *         the target ctx has no value for {@code type}
+     * the target ctx has no value for {@code type}
      * @throws IllegalArgumentException if {@code path} is null, empty, or has odd length
      */
     public <T> T findProtoContextByPath(Class<T> type, String... path) {
@@ -257,9 +253,9 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             }
         }
 
-        Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, rcvBytes);
-        if (dataArray != null && dataArray.length > 0) {
-            appendSoSndTask(toSoSndData(Futures.buildNoop(), dataArray));
+        ChainResult cr = this.protoStack.onRcv(this.protoCtx, null, rcvBytes, null);
+        if (cr.data.length > 0) {
+            appendSoSndTask(toSoSndData(Futures.buildNoop(), cr.data));
         }
     }
 
@@ -273,9 +269,9 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
         this.singleRcvBuf[0] = rcvByte;
         try {
-            Object[] dataArray = this.protoStack.onRcvMessage(this.protoCtx, null, this.singleRcvBuf);
-            if (dataArray != null && dataArray.length > 0) {
-                appendSoSndTask(toSoSndData(Futures.buildNoop(), dataArray));
+            ChainResult cr = this.protoStack.onRcv(this.protoCtx, null, this.singleRcvBuf, null);
+            if (cr.data.length > 0) {
+                appendSoSndTask(toSoSndData(Futures.buildNoop(), cr.data));
             }
         } finally {
             this.singleRcvBuf[0] = null; // avoid retaining reference
@@ -284,11 +280,11 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
     /* Receive error */
     protected void notifyError(boolean isRcv, Throwable e) throws Throwable {
-        Object[] dataArray = isRcv ?//
-                this.protoStack.onRcvError(this.protoCtx, null, e) ://
-                this.protoStack.onSndError(this.protoCtx, null, e);
-        if (dataArray != null && dataArray.length > 0) {
-            appendSoSndTask(toSoSndData(Futures.buildNoop(), dataArray));
+        ChainResult cr = isRcv ?//
+                this.protoStack.onRcv(this.protoCtx, null, null, e) ://
+                this.protoStack.onSnd(this.protoCtx, null, null, e);
+        if (cr.data.length > 0) {
+            appendSoSndTask(toSoSndData(Futures.buildNoop(), cr.data));
         }
     }
 
@@ -386,14 +382,11 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         }
 
         try {
-            Object[] dataArray;
+            ChainResult cr;
             synchronized (this) {
-                boolean isFlush = writeData == null || writeData.length == 0;
-                dataArray = isFlush ?//
-                        this.protoStack.onSndMessage(this.protoCtx, stackName, ArrayUtils.EMPTY_OBJECT_ARRAY) ://
-                        this.protoStack.onSndMessage(this.protoCtx, stackName, writeData);
+                cr = this.protoStack.onSnd(this.protoCtx, stackName, writeData, null);
             }
-            appendSoSndTask(toSoSndData(future, dataArray));
+            appendSoSndTask(toSoSndData(future, cr.data));
         } catch (Throwable e) {
             logger.error("snd(" + this.channelId + ") failed, " + e.getMessage(), e);
             future.failed(e);
@@ -451,7 +444,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     private Future<NetChannel> newFutureForSend() {
         Future<NetChannel> future = new BasicFuture<>();
         if (this.protoStack.getSndSlotSize() == 0) {
-            logger.info("snd(" + this.channelId + ") the ProtoStack slot is full.");
+            logger.info("snd(" + this.channelId + ") the ProtoStackChain slot is full.");
             future.failed(ProtoFullException.INSTANCE);
             return future;
         }
@@ -471,6 +464,24 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
 
         this.wContext.offer(wTask);
         this.asyncChannel.write(this, this.wContext);
+    }
+
+    /**
+     * Runs the full SND pipeline and enqueues the resulting bytes for sending,
+     * bypassing the {@code closeStatus} guard.  Used by {@link SoCloseTask} to
+     * flush farewell bytes (e.g. TLS {@code close_notify}) after close has been
+     * initiated.
+     */
+    void flushForClose() {
+        try {
+            ChainResult cr;
+            synchronized (this) {
+                cr = this.protoStack.onSnd(this.protoCtx, null, null, null);
+            }
+            appendSoSndTask(toSoSndData(Futures.buildNoop(), cr.data));
+        } catch (Throwable e) {
+            logger.error("snd(" + this.channelId + ") flushForClose failed, " + e.getMessage(), e);
+        }
     }
 
     /**

@@ -19,29 +19,29 @@ import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.concurrent.future.Futures;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
  * Default {@link ProtoContext} implementation bound to a single channel.
- * <p>Manages the handler chain ({@link ProtoChainRoot}), per-event flash storage,
+ * <p>Manages the handler chain ({@link ProtoStackChain}), per-event flash storage,
  * context attachments, and pipeline manipulation (add/remove handlers).</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 class ProtoContextService implements ProtoContext {
-    private static final Logger                logger     = Logger.getLogger(ProtoContextService.class);
-    private final        SoChannel<?>          channel;
-    private final        SoContext             soContext;
-    private final        Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
-    private final        ProtoChainRoot        chainRoot;
-    private final        Map<String, Object>   namedHandlerMap;
-    private final        ProtoContextService   parentCtx;
-    private final        String                parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
-    private final        String                parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
+    private final    SoChannel<?>               channel;
+    private final    SoContext                  soContext;
+    private final    Map<Class<?>, Object>      contextData;  // local to this ctx; upward lookup via context(Class<T>)
+    private final    ProtoStackChain            chainRoot;
+    private final    Map<String, Object>        namedHandlerMap;
+    private final    ProtoContextService        parentCtx;
+    private final    String                     parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
+    private final    String                     parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
     //
-    private final        Deque<FlashFrame>     flashStack = new ArrayDeque<>();
-    private volatile     FlashFrame            flashCurrent;
+    private final    Map<String, Object>        flashMap;
+    private final    Deque<ProtoStatus>         statusStack;
+    private volatile ProtoStatus                statusCurrent;
+    private          ProtoRoutingDuplexer<?, ?> ownerRouter;    // set by ProtoRoutingDuplexer.onInit for branch contexts; null for root ctx
 
     ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
@@ -51,10 +51,13 @@ class ProtoContextService implements ProtoContext {
         this.parentPrevStackName = null;
         this.parentNextStackName = null;
         //
-        this.chainRoot = new ProtoChainRoot(channel.getConfig());
+        this.flashMap = new HashMap<>();
+        this.statusStack = new ArrayDeque<>();
+        this.statusStack.push(new ProtoStatus());
+        this.statusCurrent = this.statusStack.peek();
+        //
+        this.chainRoot = new ProtoStackChain(channel.getConfig());
         this.namedHandlerMap = new HashMap<>();
-        this.flashStack.push(new FlashFrame());
-        this.flashCurrent = this.flashStack.peek();
     }
 
     /** Creates a branch-mode ProtoContextService with its own independent contextData. */
@@ -66,14 +69,22 @@ class ProtoContextService implements ProtoContext {
         this.parentPrevStackName = parentPrevStackName; // pre-computed at branch creation time, never changes
         this.parentNextStackName = parentNextStackName; // pre-computed at branch creation time, never changes
         //
-        this.chainRoot = new ProtoChainRoot(rcvSlotSize, sndSlotSize, true);
+        this.flashMap = parent.flashMap;
+        this.statusStack = new ArrayDeque<>();
+        this.statusStack.push(new ProtoStatus());
+        this.statusCurrent = this.statusStack.peek();
+        //
+        this.chainRoot = new ProtoStackChain(rcvSlotSize, sndSlotSize, true);
         this.namedHandlerMap = new HashMap<>();
-        this.flashStack.push(new FlashFrame());
-        this.flashCurrent = this.flashStack.peek();
     }
 
-    ProtoChainRoot getChainRoot() {
+    ProtoStackChain getChainRoot() {
         return this.chainRoot;
+    }
+
+    /** Called by {@link ProtoRoutingDuplexer#onInit} to register the owning router on a branch ctx. */
+    void setOwnerRouter(ProtoRoutingDuplexer<?, ?> router) {
+        this.ownerRouter = router;
     }
 
     /** Returns the registered handler instance by name and type, or {@code null} if not found. */
@@ -99,11 +110,11 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public String getStackName() {
-        return this.flashCurrent.stackName;
+        return this.statusCurrent.stackName;
     }
 
     void setStackName(String name) {
-        this.flashCurrent.stackName = name;
+        this.statusCurrent.stackName = name;
     }
 
     @Override
@@ -134,87 +145,70 @@ class ProtoContextService implements ProtoContext {
         return context(type, value);
     }
 
-    void clearFlash() {
-        while (this.flashStack.size() > 1) {
-            this.flashStack.pop();
-        }
-        this.flashStack.peek().clear();
-        this.flashCurrent = this.flashStack.peek();
+    /** Enter a new re-entrant pipeline frame. */
+    void pushStatus() {
+        this.statusStack.push(new ProtoStatus());
+        this.statusCurrent = this.statusStack.peek();
     }
 
-    /** Enter a new re-entrant pipeline frame. */
-    void pushFlash() {
-        FlashFrame frame = new FlashFrame();
-        this.flashStack.push(frame);
-        this.flashCurrent = frame;
+    void popStatus() {
+        if (this.statusStack.size() > 1) {
+            this.statusStack.pop();
+        }
+    }
+
+    void clearStatus() {
+        this.statusStack.peek().clear();
+        this.statusCurrent = this.statusStack.peek();
+    }
+    // --- Package-private fast internal flash accessors (bypass HashMap) ---
+
+    void beginRcv(Throwable error) {
+        this.pushStatus();
+        this.statusCurrent.inRcv = true;
+        this.statusCurrent.rcvError = error;
+    }
+
+    void beginSnd(Throwable error) {
+        this.pushStatus();
+        this.statusCurrent.inSnd = true;
+        this.statusCurrent.sndError = error;
     }
 
     /** Paired with {@code beginRcv}/{@code beginSnd}: pops the current frame; if already at base, just clears it. */
     void end() {
-        this.flashCurrent.clear();
-        if (this.flashStack.size() > 1) {
-            this.flashStack.pop();
-        }
-        this.flashCurrent = this.flashStack.peek();
-    }
-
-    // --- Package-private fast internal flash accessors (bypass HashMap) ---
-
-    void beginRcv() {
-        this.pushFlash();
-        this.flashCurrent.inRcv = true;
-    }
-
-    void beginRcv(Throwable error) {
-        this.pushFlash();
-        this.flashCurrent.inRcv = true;
-        this.flashCurrent.rcvError = error;
-    }
-
-    void beginSnd() {
-        this.pushFlash();
-        this.flashCurrent.inSnd = true;
-    }
-
-    void beginSnd(Throwable error) {
-        this.pushFlash();
-        this.flashCurrent.inSnd = true;
-        this.flashCurrent.sndError = error;
+        this.statusCurrent.clear();
+        this.popStatus();
+        this.statusCurrent = this.statusStack.peek();
     }
 
     Throwable getRcvError() {
-        return this.flashCurrent.rcvError;
+        return this.statusCurrent.rcvError;
     }
 
     void setRcvError(Throwable t) {
-        this.flashCurrent.rcvError = t;
+        this.statusCurrent.rcvError = t;
     }
 
     Throwable getSndError() {
-        return this.flashCurrent.sndError;
+        return this.statusCurrent.sndError;
     }
 
     void setSndError(Throwable t) {
-        this.flashCurrent.sndError = t;
+        this.statusCurrent.sndError = t;
     }
 
     @Override
     public <T> T flash(String key) {
-        Map<String, Object> m = this.flashCurrent.flashMap;
-        return m != null ? (T) m.get(key) : null;
+        return (T) this.flashMap.get(key);
     }
 
     @Override
     public <T> T flash(String key, T flash) {
-        Map<String, Object> m = this.flashCurrent.flashMap;
-        if (m == null) {
-            m = new HashMap<>();
-            this.flashCurrent.flashMap = m;
-        }
         if (flash == null) {
-            m.remove(key);
+            this.flashMap.remove(key);
         } else {
-            m.put(key, flash);
+            this.flashMap.put(key, flash);
         }
         return flash;
     }
@@ -229,7 +223,8 @@ class ProtoContextService implements ProtoContext {
     private Future<?> sendOrFlushUpward(Object[] encoded) throws Throwable {
         NetChannel netChannel = (NetChannel) this.channel;
         if (this.parentPrevStackName != null) {
-            encoded = this.parentCtx.chainRoot.onSndMessage(this.parentCtx, this.parentPrevStackName, encoded);
+            ChainResult cr = this.parentCtx.chainRoot.onSnd(this.parentCtx, this.parentPrevStackName, encoded, null);
+            encoded = cr.data;
         }
 
         if (this.parentCtx.parentCtx == null) {
@@ -249,14 +244,14 @@ class ProtoContextService implements ProtoContext {
         if (this.parentCtx != null) {
             // in sub pipeline
             try {
-                Object[] encoded = this.chainRoot.onSndMessage(this, null, new Object[] { writeData });
-                return sendOrFlushUpward(encoded);
+                ChainResult cr = this.chainRoot.onSnd(this, null, new Object[] { writeData }, null);
+                return sendOrFlushUpward(cr.data);
             } catch (Throwable e) {
                 return Futures.buildFailed(e);
             }
         } else {
             // main ctx: start from the current handler position.
-            String current = this.flashCurrent.stackName;
+            String current = this.statusCurrent.stackName;
             if (StringUtils.isNotBlank(current)) {
                 return netChannel.sendData(writeData, current);
             } else {
@@ -271,7 +266,7 @@ class ProtoContextService implements ProtoContext {
             throw new UnsupportedOperationException("only NetChannel support fireUserEvent.");
         }
 
-        String current = this.flashCurrent.stackName;
+        String current = this.statusCurrent.stackName;
         current = StringUtils.isBlank(current) ? null : current;
 
         if (this.parentCtx != null) {
@@ -337,13 +332,13 @@ class ProtoContextService implements ProtoContext {
         NetChannel netChannel = (NetChannel) this.channel;
         if (this.parentCtx != null) {
             try {
-                Object[] encoded = this.chainRoot.onSndMessage(this, null, new Object[0]);
-                return sendOrFlushUpward(encoded);
+                ChainResult cr = this.chainRoot.onSnd(this, null, null, null);
+                return sendOrFlushUpward(cr.data);
             } catch (Throwable e) {
                 return Futures.buildFailed(e);
             }
         } else {
-            return netChannel.flush(this.flashCurrent.stackName);
+            return netChannel.flush(this.statusCurrent.stackName);
         }
     }
 
@@ -354,12 +349,20 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public boolean isRcv() {
-        return this.flashCurrent.inRcv;
+        return this.statusCurrent.inRcv;
     }
 
     @Override
     public boolean isSnd() {
-        return this.flashCurrent.inSnd;
+        return this.statusCurrent.inSnd;
+    }
+
+    @Override
+    public void upgradeRoute(String newBranchName) {
+        if (this.ownerRouter == null) {
+            throw new UnsupportedOperationException("upgradeRoute() is only available within a routing branch.");
+        }
+        this.ownerRouter.schedulePendingUpgrade(newBranchName);
     }
 
     @Override
@@ -514,13 +517,12 @@ class ProtoContextService implements ProtoContext {
         this.namedHandlerMap.put(name, decoder);
     }
 
-    private static final class FlashFrame {
-        boolean             inRcv     = false;
-        boolean             inSnd     = false;
-        String              stackName = null;
-        Throwable           rcvError  = null;
-        Throwable           sndError  = null;
-        Map<String, Object> flashMap  = null;
+    private static final class ProtoStatus {
+        boolean   inRcv     = false;
+        boolean   inSnd     = false;
+        String    stackName = null;
+        Throwable rcvError  = null;
+        Throwable sndError  = null;
 
         void clear() {
             this.inRcv = false;
@@ -528,9 +530,6 @@ class ProtoContextService implements ProtoContext {
             this.stackName = null;
             this.rcvError = null;
             this.sndError = null;
-            if (this.flashMap != null) {
-                this.flashMap.clear();
-            }
         }
     }
 }

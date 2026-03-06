@@ -18,7 +18,7 @@ import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * A single node in the {@link ProtoChainRoot} doubly-linked handler chain.
+ * A single node in the {@link ProtoStackChain} doubly-linked handler chain.
  * <p>Wraps one {@link ProtoDuplexer} together with its RCV_UP / SND_UP queues,
  * and links to the previous/next nodes for bidirectional event propagation.</p>
  * <pre>
@@ -35,19 +35,19 @@ import net.hasor.cobble.logging.Logger;
  * @version : 2023-10-20
  */
 class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
-    public static final  String                                            RCV_ERROR_TAG = ProtoChainRoot.class.getName() + "-rcv-error-tag";
-    public static final  String                                            SND_ERROR_TAG = ProtoChainRoot.class.getName() + "-snd-error-tag";
+    public static final  String                                            RCV_ERROR_TAG = ProtoStackChain.class.getName() + "-rcv-error-tag";
+    public static final  String                                            SND_ERROR_TAG = ProtoStackChain.class.getName() + "-snd-error-tag";
     private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
     protected final      ProtoQueue<Object>                                rcvUp;
     protected final      ProtoQueue<Object>                                sndUp;
     private final        String                                            name;
     private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
     //
-    private final        ProtoChainRoot                                    chainRoot;
+    private final        ProtoStackChain                                   chainRoot;
     protected            ProtoInvocation<Object, Object, Object, Object>   previous;
     protected            ProtoInvocation<Object, Object, Object, Object>   next;
 
-    ProtoInvocation(String name, int rcvSize, int sndSize, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoChainRoot chainRoot) {
+    ProtoInvocation(String name, int rcvSize, int sndSize, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler, ProtoStackChain chainRoot) {
         Objects.requireNonNull(handler, "handler is null.");
 
         this.name = name;
@@ -93,6 +93,14 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         try {
             ctx.setStackName(this.name);
             this.handler.onInit(protoCtx);
+        } catch (Throwable e) {
+            long channelID = protoCtx.getChannel().getChannelId();
+            if (protoCtx.getConfig().isPrintLog()) {
+                logger.error("channel(" + channelID + ") Stack " + this.name + " onInit error: " + e.getMessage(), e);
+            } else {
+                logger.error("channel(" + channelID + ") Stack " + this.name + " onInit error: " + e.getMessage());
+            }
+            throw e;
         } finally {
             ctx.setStackName(null);
         }
@@ -104,6 +112,14 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         try {
             ctx.setStackName(this.name);
             this.handler.onActive(protoCtx);
+        } catch (Throwable e) {
+            long channelID = protoCtx.getChannel().getChannelId();
+            if (protoCtx.getConfig().isPrintLog()) {
+                logger.error("channel(" + channelID + ") Stack " + this.name + " onActive error: " + e.getMessage(), e);
+            } else {
+                logger.error("channel(" + channelID + ") Stack " + this.name + " onActive error: " + e.getMessage());
+            }
+            throw e;
         } finally {
             ctx.setStackName(null);
         }
@@ -115,35 +131,38 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         try {
             ctx.setStackName(this.name);
             this.handler.onClose(protoCtx);
+        } catch (Throwable e) {
+            long channelID = protoCtx.getChannel().getChannelId();
+            if (protoCtx.getConfig().isPrintLog()) {
+                logger.error("channel(" + channelID + ") Stack " + this.name + " onClose error: " + e.getMessage(), e);
+            } else {
+                logger.error("channel(" + channelID + ") Stack " + this.name + " onClose error: " + e.getMessage());
+            }
         } finally {
             ctx.setStackName(null);
         }
     }
 
-    /**
-     * Delivers a user-defined event to the wrapped handler.
-     * @param isRcv {@code true} for inbound direction, {@code false} for outbound
-     * @return {@code true} to continue propagation, {@code false} to consume the event
-     */
+    /** Delivers a user-defined event to the wrapped handler. return {@code true} to continue propagation, {@code false} to consume the event */
     public boolean onEvent(ProtoContext protoCtx, SoUserEvent event, boolean isRcv) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             ctx.setStackName(this.name);
             return this.handler.onUserEvent(protoCtx, event, isRcv);
+        } catch (Throwable e) {
+            long channelID = protoCtx.getChannel().getChannelId();
+            if (protoCtx.getConfig().isPrintLog()) {
+                logger.error("channel(" + channelID + ") " + (isRcv ? "rcv " : "snd ") + this.name + " onEvent error: " + e.getMessage(), e);
+            } else {
+                logger.error("channel(" + channelID + ") " + (isRcv ? "rcv " : "snd ") + this.name + " onEvent error: " + e.getMessage());
+            }
+            throw e;
         } finally {
             ctx.setStackName(null);
         }
     }
 
-    /**
-     * Executes one pass of this handler node.
-     * <p>Resolves the four queue endpoints (rcvUp/rcvDown/sndUp/sndDown) from the chain
-     * topology, then calls {@link ProtoDuplexer#onMessage} or {@link ProtoDuplexer#onError}
-     * depending on whether a pending error is present. All four queues are committed
-     * (submit/reset) in the {@code finally} block regardless of outcome.</p>
-     * @param isRcv {@code true} for the RCV pass, {@code false} for the SND pass
-     * @return the {@link ProtoStatus} returned by the handler
-     */
+    /** Executes one pass of this handler node. */
     public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         ProtoRcvQueue<RCV_UP> rcvUp = (ProtoRcvQueue<RCV_UP>) this.rcvUp;
@@ -151,43 +170,32 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         ProtoRcvQueue<SND_UP> sndUp = (ProtoRcvQueue<SND_UP>) this.sndUp;
         ProtoSndQueue<SND_DOWN> sndDown = (ProtoSndQueue<SND_DOWN>) (this.previous == null ? this.chainRoot.getHeadSndDown() : this.previous.sndUp);
 
-        Throwable ctxError = isRcv ? ctx.getRcvError() : ctx.getSndError();
         try {
             ctx.setStackName(this.name);
+            Throwable ctxError = isRcv ? ctx.getRcvError() : ctx.getSndError();
             if (ctxError == null) {
-                return this.handler.onMessage(protoCtx, isRcv, rcvUp, rcvDown, sndUp, sndDown);
-            } else {
                 try {
-                    return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, ctx));
+                    return this.handler.onMessage(protoCtx, isRcv, rcvUp, rcvDown, sndUp, sndDown);
                 } catch (Throwable e) {
-                    protoCtx.getChannel().close();
-                    return ProtoStatus.Abort;
-                }
-            }
-        } catch (Throwable e) {
-            if (ctxError == null) {
-                String msgTag = isRcv ? "rcv" : "snd";
-                long channelID = protoCtx.getChannel().getChannelId();
-                if (protoCtx.getConfig().isPrintLog()) {
-                    logger.error(msgTag + "(" + channelID + ") " + this.handler.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage(), e);
-                } else {
-                    logger.error(msgTag + "(" + channelID + ") " + this.handler.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage());
-                }
+                    String msgTag = isRcv ? "rcv" : "snd";
+                    long channelID = protoCtx.getChannel().getChannelId();
+                    if (protoCtx.getConfig().isPrintLog()) {
+                        logger.error(msgTag + "(" + channelID + ") " + this.handler.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage(), e);
+                    } else {
+                        logger.error(msgTag + "(" + channelID + ") " + this.handler.getClass() + " an error has occurred " + e.getClass().getName() + ": " + e.getMessage());
+                    }
 
-                if (isRcv) {
-                    ctx.setRcvError(e);
-                } else {
-                    ctx.setSndError(e);
+                    if (isRcv) {
+                        ctx.setRcvError(e);
+                    } else {
+                        ctx.setSndError(e);
+                    }
+
+                    ctxError = e;
                 }
-                try {
-                    return this.handler.onError(protoCtx, isRcv, e, this.createExceptionHandler(isRcv, ctx));
-                } catch (Throwable ex2) {
-                    protoCtx.getChannel().close();
-                    return ProtoStatus.Abort;
-                }
-            } else {
-                throw e;
             }
+
+            return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, ctx));
         } finally {
             ctx.setStackName(null);
             rcvUp.rcvSubmit();
