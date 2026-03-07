@@ -134,6 +134,11 @@ class SslHandle {
             }
         }
 
+        // after a successful handshake, maybe have some application needs to send.
+        if (sndUp.hasMore()) {
+            this.queueToBuffer(sndUp, this.outAppData);
+        }
+
         // Handshake successful
         return this.handshake == SslHandshakeStatus.Finish;
     }
