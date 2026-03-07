@@ -416,7 +416,7 @@ public class SwapFileByteBufTest {
             }
         }
         // Read remaining
-        int left = (int) buf.readableBytes();
+        int left = buf.readableBytes();
         if (left > 0) {
             byte[] rb = new byte[left];
             buf.readBytes(rb);

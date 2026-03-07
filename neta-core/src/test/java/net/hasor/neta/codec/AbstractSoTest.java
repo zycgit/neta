@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec;
 import java.io.IOException;
+import java.net.DatagramSocket;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.SocketException;
@@ -36,6 +37,9 @@ public class AbstractSoTest {
                 ServerSocket ss = new ServerSocket();
                 ss.bind(new InetSocketAddress("127.0.0.1", i));
                 ss.close();
+                DatagramSocket ds = new DatagramSocket(null);
+                ds.bind(new InetSocketAddress("127.0.0.1", i));
+                ds.close();
                 return i;
             } catch (Exception e) {
                 continue;

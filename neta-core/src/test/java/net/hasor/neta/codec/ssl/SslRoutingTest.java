@@ -64,7 +64,7 @@ public class SslRoutingTest extends AbstractSslTest {
                     }
                     ByteBuf data = (ByteBuf) rcvUp.peekMessage();
                     if (data != null && data.readableBytes() > 0) {
-                        byte firstByte = data.getByte((int) data.readerIndex());
+                        byte firstByte = data.getByte(data.readerIndex());
                         return (firstByte == 0x16) ? "tls" : "plain";
                     }
                     return null; // not enough data
@@ -142,7 +142,7 @@ public class SslRoutingTest extends AbstractSslTest {
                 }
                 ByteBuf data = rcvUp.peekMessage();
                 if (data != null && data.readableBytes() > 0) {
-                    byte firstByte = data.getByte((int) data.readerIndex());
+                    byte firstByte = data.getByte(data.readerIndex());
                     return (firstByte == 0x16) ? "tls" : "plain";
                 }
                 return null;

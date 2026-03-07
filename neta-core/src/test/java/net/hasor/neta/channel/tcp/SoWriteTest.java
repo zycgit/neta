@@ -106,7 +106,7 @@ public class SoWriteTest extends AbstractSoTest {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
                 while (src.hasMore()) {
-                    ((NetChannel) context.getChannel()).sendData(src.takeMessage());
+                    context.sendData(src.takeMessage());
                 }
                 return ProtoStatus.Next;
             }
@@ -282,6 +282,50 @@ public class SoWriteTest extends AbstractSoTest {
         assert channel == null || channel.isClose();
         assert sndErr1.get();
 
+        server.shutdown();
+    }
+
+    @Test
+    public void sndThrow_sendDataFailsFutureWithoutForceClose() throws Throwable {
+        AtomicBoolean sndErr1 = new AtomicBoolean(false);
+        ProtoInitializer initializer = ProtoHelper.standard().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                throw new IllegalStateException("L1 Throw");
+            }
+
+            @Override
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                sndErr1.set(e instanceof IllegalStateException && "L1 Throw".equals(e.getMessage()));
+                throw new IllegalArgumentException("L1 OnError Throw");
+            }
+        }).build();
+
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        TcpSoConfig tcpConf = tcpConfig(2, 30);
+        NetConfig netConfig = globalConf();
+        netConfig.setPrintLog(false);
+
+        NetManager server = new NetManager(netConfig);
+        SoContext context = server.getContext();
+        NetListen listen = server.bind(address, initializer, tcpConf);
+
+        Socket client = new Socket("127.0.0.1", safePort);
+        listen.waitAnyAccept();
+        NetChannel channel = (NetChannel) context.findChannel(2);
+
+        Future<?> future = channel.sendData(ByteBuf.wrap(new byte[] { 1 }));
+        while (!future.isDone()) {
+            ThreadUtils.sleep(50);
+        }
+
+        assert sndErr1.get();
+        assert future.getCause() instanceof IllegalArgumentException;
+        assert "L1 OnError Throw".equals(future.getCause().getMessage());
+        assert !channel.isClose();
+
+        client.close();
         server.shutdown();
     }
 

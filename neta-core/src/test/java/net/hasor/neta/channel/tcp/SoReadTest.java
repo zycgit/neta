@@ -48,9 +48,8 @@ public class SoReadTest extends AbstractSoTest {
         NetListen listen = server.bind(address, ProtoHelper.standard().nextDecoder(new ProtoHandler<ByteBuf, ByteBuf>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
-                NetChannel netChannel = ((NetChannel) context.getChannel());
                 while (src.hasMore()) {
-                    netChannel.sendData(src.takeMessage()); // echo
+                    context.sendData(src.takeMessage()); // echo
                     cnt.incrementAndGet();// packet ++
                 }
                 return ProtoStatus.Next;
