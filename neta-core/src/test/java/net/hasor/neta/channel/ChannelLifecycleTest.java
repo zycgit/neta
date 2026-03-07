@@ -82,7 +82,7 @@ public class ChannelLifecycleTest extends AbstractStackTest {
 
         ProtoHandler<Integer, Integer> handler = new ProtoHandler<Integer, Integer>() {
             @Override
-            public void onInit(ProtoContext context) {
+            public void onInit(String name, int poolSize, ProtoContext context) {
                 context.context(String.class, "hello-context");
             }
 
@@ -157,7 +157,7 @@ public class ChannelLifecycleTest extends AbstractStackTest {
 
         ProtoHandler<Integer, Integer> handler = new ProtoHandler<Integer, Integer>() {
             @Override
-            public void onInit(ProtoContext context) {
+            public void onInit(String name, int poolSize, ProtoContext context) {
                 lifecycle.add("init");
             }
 

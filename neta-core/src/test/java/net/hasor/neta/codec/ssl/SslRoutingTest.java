@@ -198,7 +198,7 @@ public class SslRoutingTest extends AbstractSslTest {
     private static ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> createTagHandler(String proto, List<String> events) {
         return new ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf>() {
             @Override
-            public void onInit(ProtoContext context) {
+            public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                 events.add("init");
             }
 
@@ -664,7 +664,7 @@ public class SslRoutingTest extends AbstractSslTest {
                 // String codec with SslEvent listener
                 ctx.addLast("string", new ProtoDuplexer<ByteBuf, String, String, ByteBuf>() {
                     @Override
-                    public void onInit(ProtoContext context) {
+                    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                     }
 
                     @Override

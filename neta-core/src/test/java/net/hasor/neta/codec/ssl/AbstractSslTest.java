@@ -65,7 +65,7 @@ public class AbstractSslTest {
             // then lets the event continue propagating (return false)
             ctx.addLast("String", new ProtoDuplexer<ByteBuf, String, String, ByteBuf>() {
                 @Override
-                public void onInit(ProtoContext context) {
+                public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
                 }
 
                 @Override

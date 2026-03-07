@@ -26,7 +26,7 @@ public interface ProtoHandler<IN, OUT> {
     /**
      * Initialize the protocol stack.
      */
-    default void onInit(ProtoContext context) throws Throwable {
+    default void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
     }
 
     /**

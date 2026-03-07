@@ -235,8 +235,6 @@ class ProtoStackChain {
                     ctx.clearFlash();
                 }
             }
-        } finally {
-            this.pipeLock.unlock();
         }
     }
 
@@ -367,12 +365,10 @@ class ProtoStackChain {
                 }
             } finally {
                 ctx.end();
-                if (!this.branchMode) {
+                if (!this.branchMode && !ctx.isRcv()) {
                     ctx.clearFlash();
                 }
             }
-        } finally {
-            this.pipeLock.unlock();
         }
     }
 
@@ -472,8 +468,6 @@ class ProtoStackChain {
                     ctx.clearFlash();
                 }
             }
-        } finally {
-            this.pipeLock.unlock();
         }
     }
 
@@ -505,12 +499,10 @@ class ProtoStackChain {
                 return continueStatus;
             } finally {
                 ctx.end();
-                if (!this.branchMode) {
+                if (!this.branchMode && !ctx.isRcv()) {
                     ctx.clearFlash();
                 }
             }
-        } finally {
-            this.pipeLock.unlock();
         }
     }
 

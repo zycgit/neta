@@ -29,7 +29,7 @@ public class ProtoEventTest extends AbstractStackTest {
     public static ProtoHandler<Integer, Integer> theHandler(String tag, List<String> record) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
-            public void onInit(ProtoContext context) {
+            public void onInit(String name, int poolSize, ProtoContext context) {
                 record.add(tag + "-OnInit");
             }
 
@@ -75,7 +75,7 @@ public class ProtoEventTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
         channel.fireUserEvent(ProtoEventTest.class, this);
 
-        assert record.size() == 12;
+        assert record.size() == 10;
         assert record.get(0).equals("dec1-OnInit");
         assert record.get(1).equals("dec2-OnInit");
         assert record.get(2).equals("enc1-OnInit");
@@ -87,8 +87,28 @@ public class ProtoEventTest extends AbstractStackTest {
         //
         assert record.get(8).equals("dec1-OnUserEvent");
         assert record.get(9).equals("dec2-OnUserEvent");
-        assert record.get(10).equals("enc2-OnUserEvent");
-        assert record.get(11).equals("enc1-OnUserEvent");
+        neta.shutdown();
+    }
+
+    @Test
+    public void eventTest_0_sndOnly() throws Throwable {
+        List<String> record = new ArrayList<>();
+
+        ProtoInitializer initializer = (ctx) -> {
+            ctx.addLastDecoder(theHandler("dec1", record));
+            ctx.addLastDecoder(theHandler("dec2", record));
+
+            ctx.addLastEncoder(theHandler("enc1", record));
+            ctx.addLastEncoder(theHandler("enc2", record));
+        };
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+        channel.notifyUserEvent(false, null, ProtoEventTest.class, this);
+
+        assert record.size() == 10;
+        assert record.get(8).equals("enc2-OnUserEvent");
+        assert record.get(9).equals("enc1-OnUserEvent");
         neta.shutdown();
     }
 
@@ -113,13 +133,42 @@ public class ProtoEventTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
         channel.onReceive(1);
 
-        assert record.size() == 14;
+        // s1 fires fireUserEvent from within RCV — event travels RCV direction only (toward enc1/enc2
+        // wrappers, which are transparent in RCV mode). Encoders receive no UserEvent.
+        // After all decoders complete, doSndLife runs enc2→enc1.
+        assert record.size() == 12;
         assert record.get(8).equals("dec1-OnMessage");
         assert record.get(9).equals("dec2-OnMessage");
-        assert record.get(10).equals("enc2-OnUserEvent");
-        assert record.get(11).equals("enc1-OnUserEvent");
-        assert record.get(12).equals("enc2-OnMessage");
-        assert record.get(13).equals("enc1-OnMessage");
+        assert record.get(10).equals("enc2-OnMessage");    // doSndLife after last decoder
+        assert record.get(11).equals("enc1-OnMessage");
+        neta.shutdown();
+    }
+
+    @Test
+    public void eventTest_2_nestedRcvOnlyForward() throws Throwable {
+        List<String> record = new ArrayList<>();
+
+        ProtoInitializer initializer = (ctx) -> {
+            ctx.addLastDecoder(theHandler("dec1", record));
+            ctx.addLastDecoder("mid", (context, src, dst) -> {
+                record.add("mid-OnMessage");
+                context.fireUserEvent(ProtoEventTest.class, this);
+                dst.offerMessage(src.takeMessage(src.queueSize()));
+                return ProtoStatus.Next;
+            });
+            ctx.addLastDecoder(theHandler("dec2", record));
+        };
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+        channel.onReceive(1);
+
+        assert record.contains("dec1-OnMessage");
+        assert record.contains("mid-OnMessage");
+        assert record.contains("dec2-OnUserEvent");
+        assert record.stream().filter("dec2-OnUserEvent"::equals).count() == 1;
+        assert !record.contains("dec1-OnUserEvent");
+        assert !record.contains("mid-OnUserEvent");
         neta.shutdown();
     }
 }

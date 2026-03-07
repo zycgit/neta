@@ -33,12 +33,11 @@ public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, Byt
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
+    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         SoChannel<?> channel = context.getChannel();
-        String stackName = context.getStackName();
 
         if (this.config.getProvider() == SslProvider.JSSE) {
-            JdkSslContext ctx = new JdkSslContext(channel, stackName, context, this.config, channel.isClient());
+            JdkSslContext ctx = new JdkSslContext(channel, name, context, this.config, channel.isClient());
             context.context(SslContext.class, ctx);
         } else {
             throw new UnsupportedOperationException(this.config.getProvider() + " Unsupported.");

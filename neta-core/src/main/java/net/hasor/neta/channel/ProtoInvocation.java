@@ -92,7 +92,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             ctx.setStackName(this.name);
-            this.handler.onInit(protoCtx);
+            this.handler.onInit(this.name, this.rcvUp.getCapacity(), this.sndUp.getCapacity(), protoCtx);
         } catch (Throwable e) {
             long channelID = protoCtx.getChannel().getChannelId();
             if (protoCtx.getConfig().isPrintLog()) {

@@ -31,9 +31,9 @@ class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pr
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
-        this.decoder.onInit(context);
-        this.encoder.onInit(context);
+    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
+        this.decoder.onInit(name, rcvSize, context);
+        this.encoder.onInit(name, sndSize, context);
     }
 
     @Override

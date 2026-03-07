@@ -62,7 +62,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
+    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         if (this.branchOrder.isEmpty()) {
             throw new IllegalStateException("ProtoRoutingDuplexer has no branches registered. At least one branch is required.");
         }
@@ -71,9 +71,10 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         String routerName = context.getStackName();
         String prevStackName = parentCtxService.getChainRoot().findPreviousStack(routerName);
         String nextStackName = parentCtxService.getChainRoot().findNextStack(routerName);
-        for (String name : this.branchOrder) {
-            BranchEntry entry = this.branches.get(name);
-            ProtoContextService branchCtx = new ProtoContextService(parentCtxService, -1, -1, prevStackName, nextStackName);
+
+        for (String branchName : this.branchOrder) {
+            BranchEntry entry = this.branches.get(branchName);
+            ProtoContextService branchCtx = new ProtoContextService(parentCtxService, rcvSize, sndSize, prevStackName, nextStackName);
             ProtoStackChain chainRoot = branchCtx.getChainRoot();
             branchCtx.setOwnerRouter(this);
 
@@ -242,7 +243,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
 
     /**
      * Registers a new branch with the given {@code name} and {@code initializer}.
-     * Must be called before {@link #onInit} — adding branches after initialisation is not supported.
+     * Must be called before {@link ProtoDuplexer#onInit} — adding branches after initialisation is not supported.
      * @throws IllegalArgumentException if a branch with that name already exists
      */
     public void addBranch(String name, ProtoInitializer initializer) {

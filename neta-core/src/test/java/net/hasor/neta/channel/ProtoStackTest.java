@@ -29,7 +29,7 @@ public class ProtoStackTest extends AbstractStackTest {
     public static ProtoHandler<Integer, Integer> recordHandler(String tag, List<String> record) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
-            public void onInit(ProtoContext context) {
+            public void onInit(String name, int poolSize, ProtoContext context) {
                 record.add(tag + "-OnInit");
             }
 
@@ -66,7 +66,7 @@ public class ProtoStackTest extends AbstractStackTest {
         ProtoInitializer initializer = (ctx) -> {
             ctx.addLastDecoder("test", new ProtoHandler<Integer, Integer>() {
                 @Override
-                public void onInit(ProtoContext context) {
+                public void onInit(String name, int poolSize, ProtoContext context) {
                     record.add("s1-OnInit");
                     ProtoHandler<Integer, Integer> decode = recordHandler("s2", record);
                     context.addLastDecoder("s2", decode);
@@ -109,7 +109,7 @@ public class ProtoStackTest extends AbstractStackTest {
         ProtoInitializer initializer = (ctx) -> {
             ctx.addLastDecoder("test", new ProtoHandler<Integer, Integer>() {
                 @Override
-                public void onInit(ProtoContext context) {
+                public void onInit(String name, int poolSize, ProtoContext context) {
                     record.add("s1-OnInit");
                 }
 
@@ -151,7 +151,7 @@ public class ProtoStackTest extends AbstractStackTest {
         ProtoInitializer initializer = (ctx) -> {
             ctx.addLastDecoder("test", new ProtoHandler<Integer, Integer>() {
                 @Override
-                public void onInit(ProtoContext context) {
+                public void onInit(String name, int poolSize, ProtoContext context) {
                     record.add("s1-OnInit");
                 }
 
@@ -193,7 +193,7 @@ public class ProtoStackTest extends AbstractStackTest {
         ProtoInitializer initializer = (ctx) -> {
             ctx.addLastDecoder("test", new ProtoHandler<Integer, Integer>() {
                 @Override
-                public void onInit(ProtoContext context) {
+                public void onInit(String name, int poolSize, ProtoContext context) {
                     record.add("s1-OnInit");
                 }
 

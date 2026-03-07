@@ -42,7 +42,7 @@ public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     /**
      * Initialize the protocol stack.
      */
-    default void onInit(ProtoContext context) throws Throwable {
+    default void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
     }
 
     /**

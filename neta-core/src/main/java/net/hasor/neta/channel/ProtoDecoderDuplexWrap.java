@@ -9,8 +9,8 @@ class ProtoDecoderDuplexWrap<RCV_UP, RCV_DOWN, SND> implements ProtoDuplexer<RCV
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
-        this.decoder.onInit(context);
+    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
+        this.decoder.onInit(name, rcvSize, context);
     }
 
     @Override

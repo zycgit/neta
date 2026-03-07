@@ -323,7 +323,7 @@ public class TcpSslCloseNotifyTest extends AbstractSslTest {
         assert clientSsl.isReady() && serverSsl.isReady() : "TLS handshake did not complete";
 
         // closeSSL(): sends close_notify then disables SSL (no TCP close)
-        ((SslContextBasic) clientSsl).closeSSL();
+        clientSsl.closeSSL();
 
         // Wait for server to receive SslCloseNotifyEvent
         boolean eventReceived = closeNotifyLatch.await(5, TimeUnit.SECONDS);
