@@ -123,6 +123,7 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         final SocketAddress finalLocalAddr = localAddr;
         this.transport.startReceiveLoop(//
                 (remoteAddr, data) -> this.onQuicDatagram(listen, finalLocalAddr, remoteAddr, data), //
+                listen::isClose,//  exit when the listen handle is closed (consistent with UdpAsyncServerChannel)
                 () -> {
                     if (this.context.getConfig().isPrintLog()) {
                         logger.info("[QUIC] ch=" + this.channelId + " receive loop closed");

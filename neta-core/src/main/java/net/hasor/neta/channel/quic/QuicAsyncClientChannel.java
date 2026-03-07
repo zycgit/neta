@@ -151,9 +151,8 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
 
         // ── 4. Start receive loop for server responses ───────────────
-        this.transport.startReceiveLoop(//
-                (remoteAddr, data) -> this.onQuicDatagram(remoteAddr, data), //
-                () -> {
+        this.transport.startReceiveLoop(this::onQuicDatagram,//
+                () -> !this.transport.isOpen(), () -> {
                     logger.info("rcv(" + this.channelId + ") close from local.");
                     if (this.connAsync != null) {
                         this.context.notifyChannelClose(this.connAsync.getChannelId(), false);
