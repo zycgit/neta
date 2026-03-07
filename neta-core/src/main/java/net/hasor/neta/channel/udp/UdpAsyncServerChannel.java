@@ -114,7 +114,7 @@ public class UdpAsyncServerChannel implements AsyncServerChannel {
         }
 
         final SocketAddress finalLocalAddr = localAddr;
-        this.transport.startReceiveLoop((remoteAddr, data) -> this.onDatagram(listen, finalLocalAddr, channelMap, remoteAddr, data), () -> {
+        this.transport.startReceiveLoop((remoteAddr, data) -> this.onDatagram(listen, finalLocalAddr, channelMap, remoteAddr, data), listen::isClose, () -> {
             logger.info("rcv(" + this.channelId + ") close form local.");
             this.context.notifyChannelClose(this.channelId, false);
         }, (e) -> {

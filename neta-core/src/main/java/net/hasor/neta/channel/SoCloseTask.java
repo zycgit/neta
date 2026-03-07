@@ -77,15 +77,10 @@ class SoCloseTask extends DefaultSoTask {
 
                 // Phase 2: queue is empty. If we haven't fired the before-close event yet, do so now.
                 if (!this.eventFired) {
-                    if (this.context.getConfig().isPrintLog()) {
-                    }
                     this.eventFired = true;
                     SoUserEvent event = SoUserEventObject.of(netChannel, SoCloseEvent.class, SoCloseEvent.INSTANCE);
                     this.context.notifySndUserEvent(this.channelID, null, event);
-                    // After notifySndUserEvent returns, isSnd is reset to false.
-                    // A flush() call is now allowed and will run the SND pipeline,
-                    // giving protocol layers (e.g. SSL) a chance to enqueue any
-                    // farewell bytes (e.g. TLS close_notify) into the write queue.
+                    // After notifySndUserEvent returns, flush pipline
                     netChannel.flushForClose();
                     continueTask(); // re-enter to drain any farewell data
                     return;

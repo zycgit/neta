@@ -24,6 +24,7 @@ import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.util.Iterator;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBufUtils;
@@ -132,14 +133,14 @@ public class UdpTransport implements Closeable {
      * @param onError called when a receive error occurs
      */
 
-    public void startReceiveLoop(DatagramReceiver receiver, Runnable onClose, Consumer<IOException> onError) {
+    public void startReceiveLoop(DatagramReceiver receiver, BooleanSupplier exitSignal, Runnable onClose, Consumer<IOException> onError) {
         this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-            this.doReceiveLoop(receiver, onClose, onError);
+            this.doReceiveLoop(receiver, exitSignal, onClose, onError);
         });
     }
 
-    private void doReceiveLoop(DatagramReceiver receiver, Runnable onClose, Consumer<IOException> onError) {
-        if (this.closed.get() || !this.channel.isOpen()) {
+    private void doReceiveLoop(DatagramReceiver receiver, BooleanSupplier exitSignal, Runnable onClose, Consumer<IOException> onError) {
+        if (this.closed.get() || !this.channel.isOpen() || exitSignal.getAsBoolean()) {
             onClose.run();
             return;
         }
@@ -155,7 +156,7 @@ public class UdpTransport implements Closeable {
         }
 
         this.submitTask(new SoDelayTask(0)).onFinal(f -> {
-            this.doReceiveLoop(receiver, onClose, onError);
+            this.doReceiveLoop(receiver, exitSignal, onClose, onError);
         });
     }
 

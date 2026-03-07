@@ -88,7 +88,7 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
             future.completed(channel);
 
             // start read loop via transport
-            this.transport.startReceiveLoop((remoteAddr, data) -> this.onDatagram(channel, remoteAddr, data), () -> {
+            this.transport.startReceiveLoop((remoteAddr, data) -> this.onDatagram(channel, remoteAddr, data), channel::isClose, () -> {
                 logger.info("rcv(" + this.channelId + ") close form local.");
                 this.context.notifyChannelClose(channel.getChannelId(), false);
             }, (e) -> {
