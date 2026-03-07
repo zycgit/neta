@@ -20,7 +20,7 @@ class ProtoEncoderDuplexWrap<RCV, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV
 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
-        return this.encoder.onUserEvent(context, event);
+        return isRcv || this.encoder.onUserEvent(context, event);
     }
 
     @Override

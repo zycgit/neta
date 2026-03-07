@@ -161,6 +161,11 @@ class ProtoContextService implements ProtoContext {
         this.statusStack.peek().clear();
         this.statusCurrent = this.statusStack.peek();
     }
+
+    void clearFlash() {
+        this.flashMap.clear();
+    }
+
     // --- Package-private fast internal flash accessors (bypass HashMap) ---
 
     void beginRcv(Throwable error) {
@@ -270,8 +275,7 @@ class ProtoContextService implements ProtoContext {
         current = StringUtils.isBlank(current) ? null : current;
 
         if (this.parentCtx != null) {
-            // Branch ctx: propagate within branch chain first; when the chain boundary is
-            // reached, cross into the main pipeline (after Router for RCV, before Router for SND).
+            // Branch ctx: propagate within branch chain first
             SoUserEvent soEvent = SoUserEventObject.of(this.channel, eventType, event);
             if (this.isRcv()) {
                 String found = this.chainRoot.findNextStack(current);
@@ -293,7 +297,7 @@ class ProtoContextService implements ProtoContext {
                 }
             }
         } else {
-            // Main ctx: original logic
+            // Main ctx: fire in the current direction only.
             if (this.isRcv()) {
                 String found = this.chainRoot.findNextStack(current);
                 ((NetChannel) this.channel).notifyUserEvent(true, found, eventType, event);

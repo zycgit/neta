@@ -141,6 +141,7 @@ class ProtoStackChain {
         } finally {
             if (!this.branchMode) {
                 ctx.clearStatus();
+                ctx.clearFlash();
             }
         }
     }
@@ -156,6 +157,7 @@ class ProtoStackChain {
         } finally {
             if (!this.branchMode) {
                 ctx.clearStatus();
+                ctx.clearFlash();
             }
         }
     }
@@ -171,6 +173,7 @@ class ProtoStackChain {
         } finally {
             if (!this.branchMode) {
                 ctx.clearStatus();
+                ctx.clearFlash();
             }
         }
     }
@@ -228,7 +231,12 @@ class ProtoStackChain {
                 }
             } finally {
                 ctx.end();
+                if (!this.branchMode) {
+                    ctx.clearFlash();
+                }
             }
+        } finally {
+            this.pipeLock.unlock();
         }
     }
 
@@ -280,8 +288,8 @@ class ProtoStackChain {
                         }
                         break;
                     } else if (status == ProtoStatus.Stop) {
-                        // “this.head != this.tail” include any handler
-                        // “this.branchMode”        in branch Mode must be doSndLife.
+                        // "this.head != this.tail" include any handler
+                        // "this.branchMode"        in branch Mode must be doSndLife.
                         if (this.head != this.tail || this.branchMode) {
                             this.doSndLife(ctx, current.getName(), null);
                         }
@@ -304,6 +312,9 @@ class ProtoStackChain {
 
         // Drain headSndDown once — all snd output from both rcv and snd pipeline execution ends up here.
         try {
+            if (lastStatus == ProtoStatus.Stop) {
+                ctx.setRcvError(null);
+            }
             Throwable residualError = ctx.getRcvError();
             Object[] result = drainHeadSndDown();
             return new ChainResult(result, lastStatus, residualError);
@@ -356,7 +367,12 @@ class ProtoStackChain {
                 }
             } finally {
                 ctx.end();
+                if (!this.branchMode) {
+                    ctx.clearFlash();
+                }
             }
+        } finally {
+            this.pipeLock.unlock();
         }
     }
 
@@ -452,7 +468,12 @@ class ProtoStackChain {
                 return continueStatus;
             } finally {
                 ctx.end();
+                if (!this.branchMode) {
+                    ctx.clearFlash();
+                }
             }
+        } finally {
+            this.pipeLock.unlock();
         }
     }
 
@@ -484,7 +505,12 @@ class ProtoStackChain {
                 return continueStatus;
             } finally {
                 ctx.end();
+                if (!this.branchMode) {
+                    ctx.clearFlash();
+                }
             }
+        } finally {
+            this.pipeLock.unlock();
         }
     }
 
