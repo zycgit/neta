@@ -114,12 +114,9 @@ public class QuicBidiStreamSndRcvTest extends AbstractSoTest {
             if (ctx.getChannel() instanceof QuicStreamChannel) {
                 ctx.addLastDecoder(new LineBasedFrameHandler());
                 ctx.addLast(new StringDuplexer());
+                ctx.getChannel().subscribe(serverListener);
             }
-        }, quicCfg).onAccept(c -> {
-            if (c instanceof QuicStreamChannel) {
-                c.subscribe(serverListener);
-            }
-        });
+        }, quicCfg);
 
         // client
         QuicChannel client = (QuicChannel) neta.connectAsync(address, ctx -> {

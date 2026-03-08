@@ -26,17 +26,21 @@ import org.junit.Test;
 public class VrtTransferTest {
     @Test
     public void echoTest_1() throws Throwable {
-        ProtoInitializer initializer = ProtoHelper.standard().build();
+        ProtoInitializer serverProto = ProtoHelper.typed(String.class, String.class).nextDecoder(new ProtoHandler<String, String>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<String> src, ProtoSndQueue<String> dst) {
+                while (src.hasMore()) {
+                    context.sendData("Echo " + src.takeMessage());
+                }
+                return ProtoStatus.Stop;
+            }
+        }).build();
+        ProtoInitializer clientProto = ProtoHelper.standard().build();
 
         // server and client
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asDefault());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asDefault());
-
-        // echo
-        server.subscribe(PlayLoad::isInbound, data -> {
-            server.sendData("Echo " + data.getData());
-        });
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), serverProto, VrtSoConfig.asDefault());
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), clientProto, VrtSoConfig.asDefault());
 
         // transfer channel
         VrtTransfer transfer = new VrtTransfer(neta);
@@ -45,7 +49,7 @@ public class VrtTransferTest {
 
         //
         List<String> rcv = new ArrayList<>();
-        client.subscribe(PlayLoad::isInbound, d -> rcv.add((String) d.getData()));
+        client.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> rcv.add((String) d.getData()));
 
         client.sendData("Hello Vrt");
         assert rcv.get(0).equals("Echo Hello Vrt");
@@ -82,7 +86,7 @@ public class VrtTransferTest {
 
         //
         List<String> rcv = new ArrayList<>();
-        client.subscribe(PlayLoad::isInbound, d -> rcv.add((String) d.getData()));
+        client.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> rcv.add((String) d.getData()));
 
         client.sendData("Hello Vrt");
         assert rcv.get(0).equals("Echo Hello Vrt");

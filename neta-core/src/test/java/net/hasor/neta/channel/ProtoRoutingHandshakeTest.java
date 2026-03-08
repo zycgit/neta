@@ -33,11 +33,11 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         List<String> branchLog = new ArrayList<>(), branchErr = new ArrayList<>();
         List<Integer> selectorSeenSizes = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
                     selectorSeenSizes.add(rcvUp.queueSize());
                     return rcvUp.queueSize() >= 3 ? "main" : null;
                 }, r -> {
-                    r.branch("main", branch -> branch.addLast("mainH",//
+                        r.branch("main", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("mainH",//
                             doNextHandler("Main", branchLog, branchErr),//
                             doNextHandler("Main", branchLog, branchErr)));
                 }).build();
@@ -45,7 +45,7 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         //
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
         List<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
         // onActive → size=0 → null
@@ -81,19 +81,21 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
     public void peekAccumulate_neverActivate() throws Throwable {
         List<Integer> selectorSeenSizes = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
                     selectorSeenSizes.add(rcvUp.queueSize());
                     return null;
                 }, r -> {
-                    r.branch("main", branch -> branch.addLast("mainH",//
-                            doNextHandler("Main", new ArrayList<>(), new ArrayList<>()),//
-                            doNextHandler("Main", new ArrayList<>(), new ArrayList<>())));
+                    r.branch("main", (ProtoBuilder<Integer, Integer> branch) -> {
+                        branch.nextDuplex("mainH",//
+                                doNextHandler("Main", new ArrayList<>(), new ArrayList<>()),//
+                                doNextHandler("Main", new ArrayList<>(), new ArrayList<>()));
+                    });
                 }).build();
 
         //
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
         List<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         // onActive → size=0 → null
         // onReceive(1) → size=1 → null
@@ -128,7 +130,7 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         int[] handshakeCount = { 0 };
 
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
                     selectorSeenSizes.add(rcvUp.queueSize());
                     if (rcvUp.queueSize() > 0) {
                         rcvUp.takeMessage(rcvUp.queueSize()); // 握手包：消费并丢弃
@@ -136,14 +138,14 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
                     }
                     return handshakeCount[0] >= 3 ? "main" : null;
                 }, r -> {
-                    r.branch("main", branch -> branch.addLast("mainH",//
+                        r.branch("main", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("mainH",//
                             doNextHandler("Main", branchLog, branchErr),//
                             doNextHandler("Main", branchLog, branchErr)));
                 }).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
         List<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         // onActive    → size=0 → null
         // onReceive(10) → size=1, consume → count=1 → null

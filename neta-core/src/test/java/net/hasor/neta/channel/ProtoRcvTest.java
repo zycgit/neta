@@ -45,7 +45,7 @@ public class ProtoRcvTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> input = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> {
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> {
             input.add(data.getData());
         });
 
@@ -73,7 +73,7 @@ public class ProtoRcvTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> input = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> {
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> {
             input.add(data.getError());
         });
 
@@ -103,7 +103,7 @@ public class ProtoRcvTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> input = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> {
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> {
             input.add(data.getData());
         });
 
@@ -133,7 +133,7 @@ public class ProtoRcvTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> input = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> {
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> {
             input.add(data.getData());
         });
 

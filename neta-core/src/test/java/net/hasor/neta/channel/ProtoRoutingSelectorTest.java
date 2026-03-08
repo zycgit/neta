@@ -38,17 +38,17 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         List<String> oddDecLog = new ArrayList<>(), oddDecErr = new ArrayList<>();
         List<String> oddEncLog = new ArrayList<>(), oddEncErr = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
                     Integer data = (Integer) rcvUp.peekMessage();
                     return (data != null && data % 2 == 0) ? "even" : "odd";
                 }, r -> {
-                    r.branch("even", branch -> branch.addLast("evenDec",//
+                        r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
                             doNextHandler("Even", evenDecLog, evenDecErr),//
                             doNextHandler("Even", evenEncLog, evenEncErr)));
-                    r.branch("odd", branch -> branch.addLast("oddDec",//
+                        r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
                             doNextHandler("Odd", oddDecLog, oddDecErr),//
                             doNextHandler("Odd", oddEncLog, oddEncErr)));
                 }).build();
@@ -56,7 +56,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         //
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
         ArrayList<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
         channel.onReceive(42); // even → "even" branch
@@ -78,17 +78,17 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         List<String> oddDecLog = new ArrayList<>(), oddDecErr = new ArrayList<>();
         List<String> oddEncLog = new ArrayList<>(), oddEncErr = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
                     Integer data = (Integer) rcvUp.peekMessage();
                     return (data != null && data % 2 == 0) ? "even" : "odd";
                 }, r -> {
-                    r.branch("even", branch -> branch.addLast("evenDec",//
+                        r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
                             doNextHandler("Even", evenDecLog, evenDecErr),//
                             doNextHandler("Even", evenEncLog, evenEncErr)));
-                    r.branch("odd", branch -> branch.addLast("oddDec",//
+                        r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
                             doNextHandler("Odd", oddDecLog, oddDecErr),//
                             doNextHandler("Odd", oddEncLog, oddEncErr)));
                 }).build();
@@ -96,7 +96,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         //
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
         ArrayList<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
         channel.onReceive(7); // odd → "odd" branch
@@ -118,13 +118,13 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         List<String> oddDecLog = new ArrayList<>(), oddDecErr = new ArrayList<>();
         List<String> oddEncLog = new ArrayList<>(), oddEncErr = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextRoute("router", (ctx, rcvUp, rcvDown) -> {
+                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
                     return null;
                 }, r -> {
-                    r.branch("even", branch -> branch.addLast("evenDec",//
+                        r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
                             doNextHandler("Even", evenDecLog, evenDecErr),//
                             doNextHandler("Even", evenEncLog, evenEncErr)));
-                    r.branch("odd", branch -> branch.addLast("oddDec",//
+                        r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
                             doNextHandler("Odd", oddDecLog, oddDecErr),//
                             doNextHandler("Odd", oddEncLog, oddEncErr)));
                 }).build();
@@ -133,7 +133,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
         ArrayList<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
         channel.onReceive(5); // selector returns null → no branch
@@ -152,31 +152,28 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
             List<String> largeDecLog, List<String> largeDecErr, List<String> largeEncLog, List<String> largeEncErr,//
             List<String> nonPosDecLog, List<String> nonPosDecErr, List<String> nonPosEncLog, List<String> nonPosEncErr) throws IOException {
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .nextRoute("L1", (ctx, rcvUp, rcvDown) -> {
+                .<Integer, Integer>nextRouteAsStatic("L1", (ctx, rcvUp, rcvDown) -> {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
                     Integer v = (Integer) rcvUp.peekMessage();
                     return (v != null && v > 0) ? "positive" : "nonPos";
                 }, r -> {
-                    r.branch("positive", ctx -> {
-                        ProtoHelper.typed(Integer.class, Integer.class)//
-                                .nextRoute("L2", (ctx2, rcvUp, rcvDown) -> {
-                                    if (rcvUp.queueSize() == 0) {
-                                        return null;
-                                    }
-                                    Integer v = (Integer) rcvUp.peekMessage();
-                                    return (v != null && v < 10) ? "small" : "large";
-                                }, r2 -> {
-                                    r2.branch("small", sc -> sc.addLast("smallH",//
-                                            doNextHandler("Small", smallDecLog, smallDecErr),//
-                                            doNextHandler("Small", smallEncLog, smallEncErr)));
-                                    r2.branch("large", lc -> lc.addLast("largeH",//
-                                            doNextHandler("Large", largeDecLog, largeDecErr),//
-                                            doNextHandler("Large", largeEncLog, largeEncErr)));
-                                }).build().config(ctx);
-                    });
-                    r.branch("nonPos", ctx -> ctx.addLast("nonPosH",//
+                    r.branch("positive", branch -> branch.<Integer, Integer>nextRouteAsStatic("L2", (ctx2, rcvUp, rcvDown) -> {
+                        if (rcvUp.queueSize() == 0) {
+                            return null;
+                        }
+                        Integer v = (Integer) rcvUp.peekMessage();
+                        return (v != null && v < 10) ? "small" : "large";
+                    }, r2 -> {
+                        r2.branch("small", (ProtoBuilder<Integer, Integer> sc) -> sc.nextDuplex("smallH",//
+                                doNextHandler("Small", smallDecLog, smallDecErr),//
+                                doNextHandler("Small", smallEncLog, smallEncErr)));
+                        r2.branch("large", (ProtoBuilder<Integer, Integer> lc) -> lc.nextDuplex("largeH",//
+                                doNextHandler("Large", largeDecLog, largeDecErr),//
+                                doNextHandler("Large", largeEncLog, largeEncErr)));
+                    }));
+                        r.branch("nonPos", (ProtoBuilder<Integer, Integer> nonPos) -> nonPos.nextDuplex("nonPosH",//
                             doNextHandler("NonPos", nonPosDecLog, nonPosDecErr),//
                             doNextHandler("NonPos", nonPosEncLog, nonPosEncErr)));
                 }).build();
@@ -200,7 +197,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                 largeDecLog, largeDecErr, largeEncLog, largeEncErr,//
                 nonPosDecLog, nonPosDecErr, nonPosEncLog, nonPosEncErr);
         ArrayList<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
         channel.onReceive(5); // positive + <10 → L2:small
@@ -232,7 +229,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                 largeDecLog, largeDecErr, largeEncLog, largeEncErr,//
                 nonPosDecLog, nonPosDecErr, nonPosEncLog, nonPosEncErr);
         ArrayList<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
         channel.onReceive(42); // positive + >=10 → L2:large
@@ -264,7 +261,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                 largeDecLog, largeDecErr, largeEncLog, largeEncErr,//
                 nonPosDecLog, nonPosDecErr, nonPosEncLog, nonPosEncErr);
         ArrayList<Object> received = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, data -> received.add(data.getData()));
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
         channel.onReceive(-3); // <=0 → L1:nonPos

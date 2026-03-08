@@ -18,6 +18,7 @@ import java.util.ArrayDeque;
 import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -42,7 +43,7 @@ public class LineBasedFrameHandlerTest {
 
         // transfer channel
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         channel.onReceive(ByteBuf.wrap("abc".getBytes()));
@@ -61,7 +62,7 @@ public class LineBasedFrameHandlerTest {
 
         // transfer channel
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         channel.onReceive(ByteBuf.wrap("abc\r\n123".getBytes()));
@@ -78,7 +79,7 @@ public class LineBasedFrameHandlerTest {
 
         // transfer channel
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         channel.onReceive(ByteBuf.wrap("abc\r\n123".getBytes()));
@@ -100,7 +101,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("abc\r\n".getBytes()));
         assert rcvData.size() == 1;
@@ -115,7 +116,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("abc\n".getBytes()));
         assert rcvData.size() == 1;
@@ -130,7 +131,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("abc\r\n123\n".getBytes()));
         assert rcvData.size() == 2;
@@ -150,7 +151,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("abc\n".getBytes()));
         assert rcvData.size() == 1;
@@ -165,7 +166,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("abc\n123\n".getBytes()));
         assert rcvData.size() == 2;
@@ -185,7 +186,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("aaa\r\nbbb\nccc\r\n".getBytes()));
         assert rcvData.size() == 3;
@@ -206,7 +207,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("\r\n".getBytes()));
         assert rcvData.size() == 1;
@@ -221,7 +222,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("\n".getBytes()));
         assert rcvData.size() == 1;
@@ -240,7 +241,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // send 10 bytes without line ending, exceeds maxLength=5
         // the handler throws TooLongFrameException internally, no data produced
@@ -256,7 +257,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // send a complete line that exceeds maxLength=5
         // the handler throws TooLongFrameException internally, no data produced
@@ -272,7 +273,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // send a line within maxLength=5
         channel.onReceive(ByteBuf.wrap("12345\n".getBytes()));
@@ -292,7 +293,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // send byte by byte
         for (byte b : "hello\n".getBytes()) {
@@ -310,7 +311,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("line1\nline2\nline3\n".getBytes()));
         assert rcvData.size() == 3;
@@ -327,7 +328,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // no line ending, so no output
         channel.onReceive(ByteBuf.wrap("hello".getBytes()));
@@ -342,7 +343,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         channel.onReceive(ByteBuf.wrap("1234567890\n".getBytes()));
         assert rcvData.size() == 1;
@@ -361,7 +362,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // buf0 = "aaa\n" (fully consumed after first line extraction)
         // buf1 = "bbb\nccc\n" (contains two more lines)
@@ -383,7 +384,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // Each buffer is exactly one line; the first buffer is fully consumed each iteration
         channel.onReceive(ByteBuf.wrap("first\n".getBytes()), ByteBuf.wrap("second\n".getBytes()), ByteBuf.wrap("third\n".getBytes()));
@@ -405,7 +406,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // \r at end of buf0, \n at start of buf1
         channel.onReceive(ByteBuf.wrap("hello\r".getBytes()), ByteBuf.wrap("\nworld\n".getBytes()));
@@ -422,7 +423,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // \r at end of buf0, \n at start of buf1 - delimiter should be preserved
         channel.onReceive(ByteBuf.wrap("hello\r".getBytes()), ByteBuf.wrap("\nworld\n".getBytes()));
@@ -439,7 +440,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // Empty line with \r\n split across buffers
         channel.onReceive(ByteBuf.wrap("\r".getBytes()), ByteBuf.wrap("\n".getBytes()));
@@ -455,7 +456,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // Content split across 3 buffers: "hel" + "lo\r" + "\nworld\n"
         channel.onReceive(ByteBuf.wrap("hel".getBytes()), ByteBuf.wrap("lo\r".getBytes()), ByteBuf.wrap("\nworld\n".getBytes()));
@@ -472,7 +473,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // Two lines, both with cross-buffer \r\n
         channel.onReceive(ByteBuf.wrap("aa\r".getBytes()), ByteBuf.wrap("\nbb\r".getBytes()), ByteBuf.wrap("\n".getBytes()));
@@ -489,7 +490,7 @@ public class LineBasedFrameHandlerTest {
         }, VrtSoConfig.asDefault());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        channel.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        channel.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // Bare \r is NOT a line ending; it should be treated as content
         channel.onReceive(ByteBuf.wrap("hello\rworld\n".getBytes()));

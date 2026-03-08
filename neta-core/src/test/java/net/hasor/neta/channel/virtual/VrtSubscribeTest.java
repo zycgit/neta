@@ -31,7 +31,7 @@ public class VrtSubscribeTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> event = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
+        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, data -> {
             event.add(data.getData());
         });
 
@@ -52,7 +52,7 @@ public class VrtSubscribeTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> event = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
+        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, data -> {
             event.add(data.getData());
         });
 

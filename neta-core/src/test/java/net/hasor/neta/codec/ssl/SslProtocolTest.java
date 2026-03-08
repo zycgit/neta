@@ -14,14 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.concurrent.atomic.AtomicReference;
+import java.util.ArrayDeque;
+import java.util.Queue;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 import net.hasor.neta.channel.PlayLoad;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtListen;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import org.junit.Assume;
 import org.junit.Test;
 
 /**
@@ -39,154 +42,75 @@ public class SslProtocolTest extends AbstractSslTest {
         return sslConfig;
     }
 
-    @Test
-    public void ssl_v3() throws Throwable {
+    private void runProtocolTest(String protocol) throws Throwable {
         this.autoCloseNeta(neta -> {
-            SslConfig sslConf = sslConfig(SslProtocol.SSL_v3);
+            SslConfig sslConf = sslConfig(protocol);
+
+            CountDownLatch handshakeDone = new CountDownLatch(2);
+            VrtSoConfig config = VrtSoConfig.asDefault();
+            config.setAsynchronous(false);
+
             VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtSoConfig soConfig = VrtSoConfig.asDefault();
-            soConfig.setAsynchronous(false);
-            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
+            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStackWithHandshakeLatch(sslConf, handshakeDone), config);
+            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStackWithHandshakeLatch(sslConf, handshakeDone), config);
             listen.waitAnyAccept();
-            VrtChannel server = serverRef.get();
+            VrtChannel server = (VrtChannel) neta.findChannel(3);
+
             assert server != null : "Server channel was not accepted";
+            boolean handshakeCompleted = handshakeDone.await(10, TimeUnit.SECONDS);
+            if (isLegacyProtocol(protocol)) {
+                Assume.assumeTrue("Protocol is disabled by current JDK: " + protocol, handshakeCompleted);
+            }
+            assert handshakeCompleted : "SSL handshake did not complete in time";
 
-            // transfer
-            List<Object> serverRcvData = new ArrayList<>();
-            List<Object> clientRcvData = new ArrayList<>();
-            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
-            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
-            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
+            CountDownLatch dataReceived = new CountDownLatch(2);
+            Queue<Object> serverRcvData = new ArrayDeque<>();
+            Queue<Object> clientRcvData = new ArrayDeque<>();
+            server.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> {
+                serverRcvData.offer(d.getData());
+                dataReceived.countDown();
+            });
+            client.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> {
+                clientRcvData.offer(d.getData());
+                dataReceived.countDown();
+            });
 
-            //
             client.sendData("Hello Server, this message form client.\n");
             server.sendData("Hello Client, this message form server.\n");
-            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
+
+            assert dataReceived.await(5, TimeUnit.SECONDS) : "Data was not received in time";
+            assert clientRcvData.poll().equals("Hello Client, this message form server.");
+            assert serverRcvData.poll().equals("Hello Server, this message form client.");
         });
+    }
+
+    private boolean isLegacyProtocol(String protocol) {
+        return SslProtocol.SSL_v3.equals(protocol) || SslProtocol.TLS_v1.equals(protocol) || SslProtocol.TLS_v1_1.equals(protocol);
+    }
+
+    @Test
+    public void ssl_v3() throws Throwable {
+        runProtocolTest(SslProtocol.SSL_v3);
     }
 
     @Test
     public void tls_v1() throws Throwable {
-        this.autoCloseNeta(neta -> {
-            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1);
-            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtSoConfig soConfig = VrtSoConfig.asDefault();
-            soConfig.setAsynchronous(false);
-            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.waitAnyAccept();
-            VrtChannel server = serverRef.get();
-            assert server != null : "Server channel was not accepted";
-
-            // transfer
-            List<Object> serverRcvData = new ArrayList<>();
-            List<Object> clientRcvData = new ArrayList<>();
-            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
-            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
-            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
-
-            //
-            client.sendData("Hello Server, this message form client.\n");
-            server.sendData("Hello Client, this message form server.\n");
-            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-        });
+        runProtocolTest(SslProtocol.TLS_v1);
     }
 
     @Test
     public void tls_v1_1() throws Throwable {
-        this.autoCloseNeta(neta -> {
-            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_1);
-            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtSoConfig soConfig = VrtSoConfig.asDefault();
-            soConfig.setAsynchronous(false);
-            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.waitAnyAccept();
-            VrtChannel server = serverRef.get();
-            assert server != null : "Server channel was not accepted";
-
-            // transfer
-            List<Object> serverRcvData = new ArrayList<>();
-            List<Object> clientRcvData = new ArrayList<>();
-            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
-            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
-            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
-
-            //
-            client.sendData("Hello Server, this message form client.\n");
-            server.sendData("Hello Client, this message form server.\n");
-            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-        });
+        runProtocolTest(SslProtocol.TLS_v1_1);
     }
 
     @Test
     public void tls_v1_2() throws Throwable {
-        this.autoCloseNeta(neta -> {
-            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_2);
-            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtSoConfig soConfig = VrtSoConfig.asDefault();
-            soConfig.setAsynchronous(false);
-            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.waitAnyAccept();
-            VrtChannel server = serverRef.get();
-            assert server != null : "Server channel was not accepted";
-
-            // transfer
-            List<Object> serverRcvData = new ArrayList<>();
-            List<Object> clientRcvData = new ArrayList<>();
-            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
-            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
-            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
-
-            //
-            client.sendData("Hello Server, this message form client.\n");
-            server.sendData("Hello Client, this message form server.\n");
-            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-        });
+        runProtocolTest(SslProtocol.TLS_v1_2);
     }
 
     @Test
     public void tls_v1_3() throws Throwable {
-        this.autoCloseNeta(neta -> {
-            SslConfig sslConf = sslConfig(SslProtocol.TLS_v1_3);
-            VrtSocketAddress vrtListen = new VrtSocketAddress(0, true);
-            VrtSoConfig soConfig = VrtSoConfig.asDefault();
-            soConfig.setAsynchronous(false);
-            AtomicReference<VrtChannel> serverRef = new AtomicReference<>();
-            VrtListen listen = (VrtListen) neta.bind(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.onAccept(c -> serverRef.compareAndSet(null, (VrtChannel) c));
-            VrtChannel client = (VrtChannel) neta.connectSync(vrtListen, createProtoStack(sslConf), soConfig);
-            listen.waitAnyAccept();
-            VrtChannel server = serverRef.get();
-            assert server != null : "Server channel was not accepted";
-
-            // transfer
-            List<Object> serverRcvData = new ArrayList<>();
-            List<Object> clientRcvData = new ArrayList<>();
-            server.subscribe(PlayLoad::isInbound, d -> serverRcvData.add(d.getData()));
-            client.subscribe(PlayLoad::isInbound, d -> clientRcvData.add(d.getData()));
-            System.out.println("server:" + server.getChannelId() + ", client:" + client.getChannelId());
-
-            //
-            client.sendData("Hello Server, this message form client.\n");
-            server.sendData("Hello Client, this message form server.\n");
-            assert clientRcvData.get(0).equals("Hello Client, this message form server.");
-            assert serverRcvData.get(0).equals("Hello Server, this message form client.");
-        });
+        runProtocolTest(SslProtocol.TLS_v1_3);
     }
 
     //    @Test

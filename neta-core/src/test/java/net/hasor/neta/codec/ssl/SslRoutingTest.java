@@ -57,7 +57,7 @@ public class SslRoutingTest extends AbstractSslTest {
     // =================================================================
     private static ProtoInitializer createPortUnificationStack(SslConfig sslConf) {
         return ProtoHelper.standard()//
-                .nextRoute("router", (context, rcvUp, rcvDown) -> {
+                .<ByteBuf, ByteBuf>nextRouteAsStatic("router", (context, rcvUp, rcvDown) -> {
                     // rcvUp is null during onActive (connection init) — no data yet, defer routing
                     if (rcvUp.queueSize() == 0) {
                         return null;
@@ -70,14 +70,12 @@ public class SslRoutingTest extends AbstractSslTest {
                     return null; // not enough data
                 }, r -> {
                     // TLS branch: SSL decryption → string codec
-                    r.branch("tls", branch -> {
-                        branch.addLast("SSL", new SslDuplexer(sslConf));
-                        branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-                    });
+                    r.branch("tls", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch
+                            .nextDuplex("SSL", new SslDuplexer(sslConf))
+                            .nextDuplex("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1));
                     // Plaintext branch: direct string codec
-                    r.branch("plain", branch -> {
-                        branch.addLast("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1);
-                    });
+                    r.branch("plain", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch
+                            .nextDuplex("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1));
                 }).build();
     }
 

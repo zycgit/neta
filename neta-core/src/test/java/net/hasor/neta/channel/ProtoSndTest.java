@@ -45,7 +45,7 @@ public class ProtoSndTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asDefault());
 
         ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
+        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, data -> {
             output.add(data.getData());
         });
 
@@ -73,7 +73,7 @@ public class ProtoSndTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asDefault());
 
         ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
+        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, data -> {
             output.add(data.getError());
         });
 
@@ -103,7 +103,7 @@ public class ProtoSndTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
+        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, data -> {
             output.add(data.getData());
         });
 
@@ -133,7 +133,7 @@ public class ProtoSndTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
 
         ArrayList<Object> output = new ArrayList<>();
-        channel.subscribe(PlayLoad::isOutbound, data -> {
+        channel.subscribe(PlayLoad::isOutbound, SubscribeMode.SYNC, data -> {
             output.add(data.getData());
         });
 

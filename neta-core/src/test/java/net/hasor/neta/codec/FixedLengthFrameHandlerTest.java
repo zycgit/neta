@@ -20,6 +20,7 @@ import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -47,7 +48,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -71,7 +72,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -96,7 +97,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -122,7 +123,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -150,7 +151,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // send data
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -174,7 +175,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
         client.sendData(ByteBuf.wrap(new byte[] { 5, 6, 7, 8, 9, 10, 11, 12, 13, 14 }));
@@ -198,7 +199,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -224,7 +225,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -255,7 +256,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // exactly fixedLength -> 1 frame
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5 }));
@@ -281,7 +282,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // less than fixedLength -> no frame
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3 }));
@@ -306,7 +307,7 @@ public class FixedLengthFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         client.sendData(ByteBuf.wrap(new byte[] { 10, 20, 30 }));
         assert rcvData.size() == 3;

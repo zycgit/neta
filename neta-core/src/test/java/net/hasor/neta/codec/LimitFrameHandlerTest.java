@@ -19,6 +19,7 @@ import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -46,7 +47,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -89,7 +90,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -132,7 +133,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -168,7 +169,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -215,7 +216,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -253,7 +254,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2 }));
@@ -287,7 +288,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2 }));
@@ -335,7 +336,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -378,7 +379,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -421,7 +422,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26 }));
@@ -457,7 +458,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -504,7 +505,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
         transfer.setBatchSize(3);
 
         //
@@ -550,7 +551,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -588,7 +589,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2 }));
@@ -622,7 +623,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2 }));
@@ -670,7 +671,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
         transfer.setBatchSize(6);
 
         //
@@ -734,7 +735,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // data exactly equals maxLength -> 1 frame
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10 }));
@@ -760,7 +761,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // data exactly equals minLength -> 1 frame
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5 }));
@@ -786,7 +787,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // data below minLength -> no frames
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4 }));
@@ -811,7 +812,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // min=1, max=1 -> each byte becomes a frame
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3 }));
@@ -836,7 +837,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3 }));
         assert rcvData.size() == 3;
@@ -864,7 +865,7 @@ public class LimitFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // 7 bytes with fixedLength 3 -> 2 frames (3+3), 1 byte left over
         client.sendData(ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7 }));

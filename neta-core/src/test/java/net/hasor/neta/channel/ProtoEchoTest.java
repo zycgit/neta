@@ -107,7 +107,7 @@ public class ProtoEchoTest {
 
         Queue<TypeRequest> in = new ArrayDeque<>();
         Queue<String> out = new ArrayDeque<>();
-        channel.subscribe(d -> {
+        channel.subscribe(SubscribeMode.SYNC, d -> {
             if (d.isInbound()) {
                 in.offer((TypeRequest) d.getData());
             } else {

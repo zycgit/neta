@@ -126,11 +126,14 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<String> postDecLog = new ArrayList<>(), postDecErr = new ArrayList<>();
         List<String> postEncLog = new ArrayList<>(), postEncErr = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextDuplex("pre", doNextHandler("PreDec", preDecLog, preDecErr), doNextHandler("PreEnc", preEncLog, preEncErr)).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.addLast("brH", doNextHandler("BrDec", brDecLog, brDecErr), doNextHandler("BrEnc", brEncLog, brEncErr)))).nextDuplex("post", doNextHandler("PostDec", postDecLog, postDecErr), doNextHandler("PostEnc", postEncLog, postEncErr)).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextDuplex("pre", doNextHandler("PreDec", preDecLog, preDecErr), doNextHandler("PreEnc", preEncLog, preEncErr))//
+                .nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextDuplex("brH", doNextHandler("BrDec", brDecLog, brDecErr), doNextHandler("BrEnc", brEncLog, brEncErr))))//
+                .nextDuplex("post", doNextHandler("PostDec", postDecLog, postDecErr), doNextHandler("PostEnc", postEncLog, postEncErr))//
+                .build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         List<Object> inbound = new ArrayList<>();
-        channel.subscribe(PlayLoad::isInbound, p -> {
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, p -> {
             if (p.getData() != null) {
                 inbound.add(p.getData());
             }
@@ -173,14 +176,17 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<String> brErrLog = new ArrayList<>(), brErrErr = new ArrayList<>();
         List<String> postLog = new ArrayList<>(), postErr = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> {
-            c.addLastDecoder("brThrow", doThrowHandler("BrThrow", brThrowLog, brThrowErr));
-            c.addLastDecoder("brErr", errNextHandler("BrErr", brErrLog, brErrErr));
-        })).nextDuplex("post", errNextHandler("Post", postLog, postErr), doNextHandler("Post", postLog, postErr)).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class)//
+                .nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> {
+                    c.nextDecoder("brThrow", doThrowHandler("BrThrow", brThrowLog, brThrowErr));
+                    c.nextDecoder("brErr", errNextHandler("BrErr", brErrLog, brErrErr));
+                }))//
+                .nextDuplex("post", errNextHandler("Post", postLog, postErr), doNextHandler("Post", postLog, postErr))//
+                .build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         List<Throwable> inboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isInbound() && p.getError() != null, p -> inboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
         channel.onReceive(42);
 
@@ -209,14 +215,14 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<String> brClearLog = new ArrayList<>();
         List<String> postLog = new ArrayList<>(), postErr = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> {
-            c.addLastDecoder("brThrow", doThrowHandler("BrThrow", new ArrayList<>(), new ArrayList<>()));
-            c.addLastDecoder("brClear", errClearHandler("BrClear", brClearLog));
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> {
+            c.nextDecoder("brThrow", doThrowHandler("BrThrow", new ArrayList<>(), new ArrayList<>()));
+            c.nextDecoder("brClear", errClearHandler("BrClear", brClearLog));
         })).nextDuplex("post", errNextHandler("Post", postLog, postErr), doNextHandler("Post", postLog, postErr)).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         List<Throwable> inboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isInbound() && p.getError() != null, p -> inboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
         channel.onReceive(42);
 
@@ -238,13 +244,13 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     public void rcv_main_error_forwarded_to_branch_not_cleared_reaches_socontext() throws Throwable {
         List<String> brLog = new ArrayList<>(), brErr = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.addLastDecoder("brH", errNextHandler("Br", brLog, brErr)))).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextDecoder("brH", errNextHandler("Br", brLog, brErr)))).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         channel.onReceive(1); // activate branch "a" so selectedRoute != null
 
         List<Throwable> inboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isInbound() && p.getError() != null, p -> inboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
         channel.onReceiveError(new SoException("rcv-err"));
 
@@ -265,13 +271,19 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     public void rcv_main_error_forwarded_to_branch_cleared_stops_at_router() throws Throwable {
         List<String> brClearLog = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.addLastDecoder("brH", errClearHandler("Br", brClearLog)))).build();
+        ProtoInitializer init = ProtoHelper//
+                .typed(Integer.class, Integer.class)//
+                .nextRouteAsStatic("router", selectBranchOnData("a"), r -> {
+                    r.branch("a", c -> {
+                        c.nextDecoder("brH", errClearHandler("Br", brClearLog));
+                    });
+                }).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         channel.onReceive(1); // activate branch "a"
 
         List<Throwable> inboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isInbound() && p.getError() != null, p -> inboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
         channel.onReceiveError(new SoException("rcv-err"));
 
@@ -292,13 +304,13 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<String> brLog = new ArrayList<>(), brErr = new ArrayList<>();
         List<String> postLog = new ArrayList<>(), postErr = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.addLastDecoder("brH", errNextHandler("Br", brLog, brErr)))).nextDuplex("post", errNextHandler("Post", postLog, postErr), doNextHandler("Post", postLog, postErr)).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextDecoder("brH", errNextHandler("Br", brLog, brErr)))).nextDuplex("post", errNextHandler("Post", postLog, postErr), doNextHandler("Post", postLog, postErr)).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         // Intentionally skip onReceive — selectedRoute stays null
 
         List<Throwable> inboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isInbound() && p.getError() != null, p -> inboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
         channel.onReceiveError(new SoException("pre-route-err"));
 
@@ -324,13 +336,13 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     public void snd_main_error_forwarded_to_branch_not_cleared_reaches_socontext() throws Throwable {
         List<String> brLog = new ArrayList<>(), brErr = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.addLastEncoder("brH", errNextHandler("BrEnc", brLog, brErr)))).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextEncoder("brH", errNextHandler("BrEnc", brLog, brErr)))).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         channel.onReceive(1); // activate branch "a"
 
         List<Throwable> outboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isOutbound() && p.getError() != null, p -> outboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isOutbound() && p.getError() != null, SubscribeMode.SYNC, p -> outboundErrors.add(p.getError()));
 
         channel.onSendError(new SoException("snd-err"));
 
@@ -350,13 +362,13 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     public void snd_main_error_forwarded_to_branch_cleared_stops_at_router() throws Throwable {
         List<String> brClearLog = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.addLastEncoder("brH", errClearHandler("BrEnc", brClearLog)))).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextEncoder("brH", errClearHandler("BrEnc", brClearLog)))).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         channel.onReceive(1); // activate branch "a"
 
         List<Throwable> outboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isOutbound() && p.getError() != null, p -> outboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isOutbound() && p.getError() != null, SubscribeMode.SYNC, p -> outboundErrors.add(p.getError()));
 
         channel.onSendError(new SoException("snd-err"));
 
@@ -381,7 +393,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     public void rcv_user_event_from_branch_crosses_to_post_handler() throws Throwable {
         List<String> evtLog = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.addLastDecoder("brH", eventFireHandler("Br", evtLog)))).nextDuplex("post", eventRecordHandler("Post", evtLog), errNextHandler("Post", new ArrayList<>(), new ArrayList<>())).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextDecoder("brH", eventFireHandler("Br", evtLog)))).nextDuplex("post", eventRecordHandler("Post", evtLog), errNextHandler("Post", new ArrayList<>(), new ArrayList<>())).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         channel.onReceive(42);
@@ -406,9 +418,9 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     public void rcv_user_event_from_branch_middle_propagates_within_branch_only() throws Throwable {
         List<String> evtLog = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRoute("router", selectBranchOnData("a"), r -> r.branch("a", c -> {
-            c.addLastDecoder("brFire", eventFireHandler("BrFire", evtLog));
-            c.addLastDecoder("brRecord", eventRecordHandler("BrRecord", evtLog));
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> {
+            c.nextDecoder("brFire", eventFireHandler("BrFire", evtLog));
+            c.nextDecoder("brRecord", eventRecordHandler("BrRecord", evtLog));
         })).nextDuplex("post", eventRecordHandler("Post", evtLog), errNextHandler("Post", new ArrayList<>(), new ArrayList<>())).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
@@ -442,11 +454,11 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     public void nested_rcv_error_propagates_from_inner_branch_to_main_pipeline() throws Throwable {
         List<String> outerPostLog = new ArrayList<>(), outerPostErr = new ArrayList<>();
 
-        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextDuplex("outerPre", doNextHandler("OPre", new ArrayList<>(), new ArrayList<>()), doNextHandler("OPre", new ArrayList<>(), new ArrayList<>())).nextRoute("L1", selectBranchOnData("inner"), r -> r.branch("inner", c -> ProtoHelper.typed(Integer.class, Integer.class).nextRoute("L2", selectBranchOnData("leaf"), r2 -> r2.branch("leaf", c2 -> c2.addLastDecoder("leafH", doThrowHandler("Leaf", new ArrayList<>(), new ArrayList<>())))).build().config(c))).nextDuplex("outerPost", errNextHandler("OPost", outerPostLog, outerPostErr), doNextHandler("OPost", outerPostLog, outerPostErr)).build();
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextDuplex("outerPre", doNextHandler("OPre", new ArrayList<>(), new ArrayList<>()), doNextHandler("OPre", new ArrayList<>(), new ArrayList<>())).nextRouteAsStatic("L1", selectBranchOnData("inner"), r -> r.branch("inner", branch -> branch.nextRouteAsStatic("L2", selectBranchOnData("leaf"), r2 -> r2.branch("leaf", c2 -> c2.nextDecoder("leafH", doThrowHandler("Leaf", new ArrayList<>(), new ArrayList<>())))))).nextDuplex("outerPost", errNextHandler("OPost", outerPostLog, outerPostErr), doNextHandler("OPost", outerPostLog, outerPostErr)).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
         List<Throwable> inboundErrors = new ArrayList<>();
-        channel.subscribe(p -> p.isInbound() && p.getError() != null, p -> inboundErrors.add(p.getError()));
+        channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
         channel.onReceive(42);
 

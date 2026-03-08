@@ -21,6 +21,7 @@ import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.ProtoHelper;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -92,7 +93,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] {//
@@ -122,7 +123,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] {//
@@ -152,7 +153,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] {//
@@ -182,7 +183,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         byte[] bytes1 = new byte[] {            //
@@ -215,7 +216,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         byte[] bytes1 = new byte[] {            //
@@ -248,7 +249,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         byte[] bytes1 = new byte[] {            //
@@ -281,7 +282,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 0 }));
@@ -309,7 +310,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 0 }));
@@ -337,7 +338,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         //
         client.sendData(ByteBuf.wrap(new byte[] { 1, 0 }));
@@ -368,7 +369,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // LE: length 4 -> bytes [4, 0]
         client.sendData(ByteBuf.wrap(new byte[] { 4, 0, 1, 2, 3, 4 }));
@@ -398,7 +399,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // 1-byte length field: length=3
         client.sendData(ByteBuf.wrap(new byte[] { 3, 10, 20, 30 }));
@@ -424,7 +425,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // 3-byte length field: length=2 -> [0, 0, 2]
         client.sendData(ByteBuf.wrap(new byte[] { 0, 0, 2, 10, 20 }));
@@ -450,7 +451,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // 4-byte length field: length=3 -> [0, 0, 0, 3]
         client.sendData(ByteBuf.wrap(new byte[] { 0, 0, 0, 3, 10, 20, 30 }));
@@ -481,7 +482,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // length field says 2, but actual body is 2+2=4 bytes
         client.sendData(ByteBuf.wrap(new byte[] { 0, 2, 1, 2, 3, 4 }));
@@ -508,7 +509,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // length field says 6 (includes 2-byte header), actual body = 6-2=4 bytes
         client.sendData(ByteBuf.wrap(new byte[] { 0, 6, 1, 2, 3, 4 }));
@@ -539,7 +540,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // frame says length=10, exceeds maxSize=5
         // the handler throws TooLongFrameException internally, no data produced
@@ -567,7 +568,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // field says length=2, adjusted = 2 + (-100) = -98
         // the handler throws BadFrameException internally, no data produced
@@ -618,7 +619,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // length=0, strip header -> empty frame
         client.sendData(ByteBuf.wrap(new byte[] { 0, 0 }));
@@ -647,7 +648,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         client.sendData(ByteBuf.wrap(new byte[] { 0, 4, 1, 2, 3, 4 }));
         assert rcvData.size() == 1;
@@ -672,7 +673,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // two frames in one send
         client.sendData(ByteBuf.wrap(new byte[] {//
@@ -704,7 +705,7 @@ public class LengthFieldBasedFrameHandlerTest {
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer((ByteBuf) d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
         // send byte by byte
         byte[] data = new byte[] { 0, 3, 10, 20, 30 };
