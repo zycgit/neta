@@ -1,0 +1,33 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.channel;
+/**
+ * Fluent API for building a bidirectional protocol pipeline.
+ * <p>Chain {@link ProtoDuplexer}, {@link ProtoHandler} (decoder/encoder),
+ * or routing branches via {@code nextDuplex}/{@code nextDecoder}/{@code nextEncoder}/{@code nextRouteAsStatic}/{@code nextRouteAsRealtime},
+ * then call {@link #build()} to produce a {@link ProtoInitializer}.</p>
+ * <p>Routing nodes are added as one-shot fluent steps. For standalone router definitions,
+ * use {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingSelector)} or
+ * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingSelector)}.</p>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
+ * @see ProtoHelper
+ */
+public interface ProtoBuild {
+
+    /** build {@link ProtoStackChain} */
+    ProtoInitializer build();
+}

@@ -29,19 +29,18 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @version : 2023-09-24
  */
 class ProtoContextService implements ProtoContext {
-    private final    SoChannel<?>               channel;
-    private final    SoContext                  soContext;
-    private final    Map<Class<?>, Object>      contextData;  // local to this ctx; upward lookup via context(Class<T>)
-    private final    ProtoStackChain            chainRoot;
-    private final    Map<String, Object>        namedHandlerMap;
-    private final    ProtoContextService        parentCtx;
-    private final    String                     parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
-    private final    String                     parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
+    private final    SoChannel<?>          channel;
+    private final    SoContext             soContext;
+    private final    Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
+    private final    ProtoStackChain       chainRoot;
+    private final    Map<String, Object>   namedHandlerMap;
+    private final    ProtoContextService   parentCtx;
+    private final    String                parentPrevStackName; // node before Router in parent chain (SND direction); null if Router is head-most
+    private final    String                parentNextStackName; // node after Router in parent chain (RCV direction); null if Router is tail-most
     //
-    private final    Map<String, Object>        flashMap;
-    private final    Deque<ProtoStatus>         statusStack;
-    private volatile ProtoStatus                statusCurrent;
-    private          ProtoRoutingDuplexer<?, ?> ownerRouter;    // set by ProtoRoutingDuplexer.onInit for branch contexts; null for root ctx
+    private final    Map<String, Object>   flashMap;
+    private final    Deque<ProtoStatus>    statusStack;
+    private volatile ProtoStatus           statusCurrent;
 
     ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
@@ -80,11 +79,6 @@ class ProtoContextService implements ProtoContext {
 
     ProtoStackChain getChainRoot() {
         return this.chainRoot;
-    }
-
-    /** Called by {@link ProtoDuplexer#onInit} to register the owning router on a branch ctx. */
-    void setOwnerRouter(ProtoRoutingDuplexer<?, ?> router) {
-        this.ownerRouter = router;
     }
 
     /** Returns the registered handler instance by name and type, or {@code null} if not found. */
@@ -383,14 +377,6 @@ class ProtoContextService implements ProtoContext {
     @Override
     public boolean isSnd() {
         return this.statusCurrent.inSnd;
-    }
-
-    @Override
-    public void upgradeRoute(String newBranchName) {
-        if (this.ownerRouter == null) {
-            throw new UnsupportedOperationException("upgradeRoute() is only available within a routing branch.");
-        }
-        this.ownerRouter.schedulePendingUpgrade(newBranchName);
     }
 
     @Override

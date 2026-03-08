@@ -22,14 +22,17 @@ import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Fluent API for building a bidirectional protocol pipeline.
  * <p>Chain {@link ProtoDuplexer}, {@link ProtoHandler} (decoder/encoder),
- * or routing branches via {@code nextDuplex}/{@code nextDecoder}/{@code nextEncoder}/{@code nextRoute},
+ * or routing branches via {@code nextDuplex}/{@code nextDecoder}/{@code nextEncoder}/{@code nextRouteAsStatic}/{@code nextRouteAsRealtime},
  * then call {@link #build()} to produce a {@link ProtoInitializer}.</p>
+ * <p>The routing methods are one-shot additions that return the main {@link ProtoBuilder}.
+ * For standalone router definitions, use {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingSelector)} or
+ * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingSelector)}. For nested branch-local chains,
+ * use {@link ProtoRoutingBuilder#branch(String, Consumer)}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  * @see ProtoHelper
  */
-public interface ProtoBuilder<RCV_UP, SND_DOWN> {
-
+public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
      * <ul>
@@ -226,17 +229,31 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> {
     <SND_UP> ProtoBuilder<RCV_UP, SND_UP> nextEncoder(String name, ProtoConfig protoConf, ProtoHandler<SND_UP, SND_DOWN> encoder);
 
     /**
-     * Add a routing fork point to the pipeline with custom config.
+     * Add a static routing fork point to the pipeline.
+     * <p>This is a one-shot fluent step and returns the main {@link ProtoBuilder}.</p>
      */
-    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRoute(String name, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches) {
-        return this.nextRoute(name, ProtoConfig.DEFAULT, routing, branches);
+    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRouteAsStatic(String name, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches) {
+        return this.nextRouteAsStatic(name, ProtoConfig.DEFAULT, routing, branches);
     }
 
     /**
-     * Add a routing fork point to the pipeline with custom config.
+     * Add a static routing fork point to the pipeline with custom config.
+     * <p>Use {@link ProtoRoutingBuilder#branch(String, Consumer)} when a branch itself needs a local fluent chain.</p>
      */
-    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRoute(String name, ProtoConfig protoConf, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches);
+    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches);
 
-    /** build {@link ProtoStackChain} */
-    ProtoInitializer build();
+    /**
+     * Add a realtime routing fork point to the pipeline.
+     * <p>This is a one-shot fluent step and returns the main {@link ProtoBuilder}.</p>
+     */
+    default <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRouteAsRealtime(String name, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches) {
+        return this.nextRouteAsRealtime(name, ProtoConfig.DEFAULT, routing, branches);
+    }
+
+    /**
+     * Add a realtime routing fork point to the pipeline with custom config.
+     * <p>Use {@link ProtoRoutingBuilder#branch(String, Consumer)} when a branch itself needs a local fluent chain.</p>
+     */
+    <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRouteAsRealtime(String name, ProtoConfig protoConf, ProtoRoutingSelector<RCV_DOWN, SND_UP> routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches);
+
 }

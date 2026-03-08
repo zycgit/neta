@@ -167,17 +167,6 @@ public interface ProtoContext {
     Future<?> sendData(Object writeData);
 
     /**
-     * Requests an in-connection protocol upgrade by switching the owning Router's active branch
-     * to {@code newBranchName}. The switch executes at the end of the current pipeline pass,
-     * after the current branch has finished processing (and any SND responses have been encoded
-     * through the old branch's handlers). Only valid from within a routing branch.
-     * @param newBranchName the name of the target branch (must already be registered on the router)
-     * @throws IllegalArgumentException if no branch with that name exists
-     * @throws UnsupportedOperationException if this context is not inside a routing branch
-     */
-    void upgradeRoute(String newBranchName);
-
-    /**
      * Fire a typed user event that propagates <b>along the current data-flow direction</b>,
      * crossing branch boundaries if necessary until the head/tail of the outermost pipeline
      * is reached.
@@ -229,7 +218,7 @@ public interface ProtoContext {
      * flush exactly once and the Router is never re-entered.
      * </p>
      * @return a {@link Future} that completes when the flush has been submitted to the
-     * network task queue; failure is reported via {@link Future#isFailed()}
+     * network task queue; failure is reported via {@link Future#getCause()} not null.
      */
     Future<?> flush();
 

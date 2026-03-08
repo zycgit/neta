@@ -14,9 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.util.function.Consumer;
+
 /**
  * Builder for defining routing branches in a protocol pipeline.
- * <p>Use {@link #branch(String, ProtoInitializer)} to register named sub-pipelines.</p>
+ * <p>Use {@link #branchByInitializer(String, ProtoInitializer)} to register named sub-pipelines.</p>
+ * <p>This builder is route-definition-focused and does not continue the parent fluent chain.
+ * For nested branch-local fluent composition, use {@link #branch(String, Consumer)}.
+ * For standalone router creation, start from {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingSelector)} or
+ * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingSelector)}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoRoutingSelector
@@ -24,5 +30,10 @@ package net.hasor.neta.channel;
  */
 public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {
     /** Register a named sub-pipeline branch. */
-    ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, ProtoInitializer initializer);
+    ProtoRoutingBuilder<RCV_UP, SND_DOWN> branchByInitializer(String name, ProtoInitializer initializer);
+
+    /** Register a named branch using the branch-local {@link ProtoBuilder} DSL for nested routers or local sub-chains. */
+    ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, Consumer<ProtoBuilder<RCV_UP, SND_DOWN>> branchBuilder);
+
+    ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build();
 }

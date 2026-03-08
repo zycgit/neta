@@ -30,6 +30,18 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @see ProtoBuilder
  */
 public final class ProtoHelper {
+    /** Create a standalone routing builder using static route selection. */
+    public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsStatic(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
+        Objects.requireNonNull(routing, "routing is null.");
+        return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, routing));
+    }
+
+    /** Create a standalone routing builder using realtime route selection. */
+    public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsRealtime(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
+        Objects.requireNonNull(routing, "routing is null.");
+        return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing));
+    }
+
     /** Create a {@link ProtoBuilder} with {@code ByteBuf} endpoints and default config. */
     public static ProtoBuilder<ByteBuf, ByteBuf> standard() {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
@@ -71,12 +83,6 @@ public final class ProtoHelper {
         ProtoBuilderImpl(ProtoConfig protoConf, List<Consumer<ProtoContext>> taskAppend) {
             this.defaultConf = Objects.requireNonNull(protoConf, "ProtoConfig is null.");
             this.taskAppend = taskAppend;
-        }
-
-        private static <RCV_UP, SND_DOWN> ProtoRoutingBuilderImpl<RCV_UP, SND_DOWN> typedRouting(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
-            Objects.requireNonNull(routing, "routing is null.");
-            final ProtoRoutingDuplexer<RCV_UP, SND_DOWN> duplexer = new ProtoRoutingDuplexer<>(routing);
-            return new ProtoRoutingBuilderImpl<RCV_UP, SND_DOWN>(duplexer);
         }
 
         @Override
@@ -121,17 +127,32 @@ public final class ProtoHelper {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRoute(String name, ProtoConfig protoConf, //
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf, //
                 ProtoRoutingSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
             Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(name, "name is null.");
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
-            this.taskAppend.add(c -> {
-                ProtoRoutingBuilderImpl<NEXT_RCV_DOWN, PREV_SND_UP> r = typedRouting(routing);
-                branches.accept(r);
-                c.addLast(name, r.build());
-            });
+            ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, routing);
+            ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
+            branches.accept(routeBuilder);
+            this.taskAppend.add(c -> c.addLast(name, duplexer));
+            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsRealtime(String name, ProtoConfig protoConf, //
+                ProtoRoutingSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+            Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(routing, "routing is null.");
+            Objects.requireNonNull(branches, "branches is null.");
+
+            ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing);
+            ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
+            branches.accept(routeBuilder);
+            this.taskAppend.add(c -> c.addLast(name, duplexer));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
@@ -146,18 +167,31 @@ public final class ProtoHelper {
     }
 
     private static class ProtoRoutingBuilderImpl<RCV_DOWN, SND_UP> implements ProtoRoutingBuilder<RCV_DOWN, SND_UP> {
+        private final ProtoConfig                            defaultConf;
         private final ProtoRoutingDuplexer<RCV_DOWN, SND_UP> duplexer;
 
-        public ProtoRoutingBuilderImpl(ProtoRoutingDuplexer<RCV_DOWN, SND_UP> duplexer) {
+        public ProtoRoutingBuilderImpl(ProtoConfig defaultConf, ProtoRoutingDuplexer<RCV_DOWN, SND_UP> duplexer) {
+            this.defaultConf = defaultConf;
             this.duplexer = duplexer;
         }
 
         @Override
-        public ProtoRoutingBuilder<RCV_DOWN, SND_UP> branch(String name, ProtoInitializer initializer) {
+        public ProtoRoutingBuilder<RCV_DOWN, SND_UP> branchByInitializer(String name, ProtoInitializer initializer) {
             duplexer.addBranch(name, initializer);
             return this;
         }
 
+        @Override
+        public ProtoRoutingBuilder<RCV_DOWN, SND_UP> branch(String name, Consumer<ProtoBuilder<RCV_DOWN, SND_UP>> branchBuilder) {
+            Objects.requireNonNull(branchBuilder, "branchBuilder is null.");
+
+            ProtoBuilder<RCV_DOWN, SND_UP> builder = new ProtoBuilderImpl<>(this.defaultConf, new ArrayList<>());
+            branchBuilder.accept(builder);
+            this.duplexer.addBranch(name, builder.build());
+            return this;
+        }
+
+        @Override
         public ProtoDuplexer<RCV_DOWN, ?, ?, SND_UP> build() {
             return this.duplexer;
         }
