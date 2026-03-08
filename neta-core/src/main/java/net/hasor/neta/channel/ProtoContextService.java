@@ -82,7 +82,7 @@ class ProtoContextService implements ProtoContext {
         return this.chainRoot;
     }
 
-    /** Called by {@link ProtoRoutingDuplexer#onInit} to register the owning router on a branch ctx. */
+    /** Called by {@link ProtoDuplexer#onInit} to register the owning router on a branch ctx. */
     void setOwnerRouter(ProtoRoutingDuplexer<?, ?> router) {
         this.ownerRouter = router;
     }
@@ -172,12 +172,18 @@ class ProtoContextService implements ProtoContext {
         this.pushStatus();
         this.statusCurrent.inRcv = true;
         this.statusCurrent.rcvError = error;
+        if (this.channel instanceof NetChannel) {
+            NetChannel.enterPipeline((NetChannel) this.channel);
+        }
     }
 
     void beginSnd(Throwable error) {
         this.pushStatus();
         this.statusCurrent.inSnd = true;
         this.statusCurrent.sndError = error;
+        if (this.channel instanceof NetChannel) {
+            NetChannel.enterPipeline((NetChannel) this.channel);
+        }
     }
 
     /** Paired with {@code beginRcv}/{@code beginSnd}: pops the current frame; if already at base, just clears it. */
@@ -185,6 +191,9 @@ class ProtoContextService implements ProtoContext {
         this.statusCurrent.clear();
         this.popStatus();
         this.statusCurrent = this.statusStack.peek();
+        if (this.channel instanceof NetChannel) {
+            NetChannel.exitPipeline((NetChannel) this.channel);
+        }
     }
 
     Throwable getRcvError() {
@@ -219,10 +228,9 @@ class ProtoContextService implements ProtoContext {
     }
 
     /**
-     * Branch ctx only. Propagates already-encoded data upward through ancestor branches until
-     * the main pipeline is reached. At each level, only the handlers that lie between the
-     * inner Router and the head of that branch's SND chain are executed (i.e. the handlers
-     * BEFORE the Router that owns this branch, in SND direction). The Router itself is skipped
+     * Branch ctx only. Propagates already-encoded data upward through ancestor branches until the main pipeline is reached.
+     * At each level, only the handlers that lie between the inner Router and the head of that branch's SND chain are executed
+     * (i.e. the handlers BEFORE the Router that owns this branch, in SND direction). The Router itself is skipped
      * since the data is already encoded by the branch below.
      */
     private Future<?> sendOrFlushUpward(Object[] encoded) throws Throwable {
@@ -247,21 +255,56 @@ class ProtoContextService implements ProtoContext {
 
         NetChannel netChannel = (NetChannel) this.channel;
         if (this.parentCtx != null) {
-            // in sub pipeline
-            try {
-                ChainResult cr = this.chainRoot.onSnd(this, null, new Object[] { writeData }, null);
-                return sendOrFlushUpward(cr.data);
-            } catch (Throwable e) {
-                return Futures.buildFailed(e);
-            }
+            // in sub pipline, need pop to up parent pipline.
+            return this.sendWithinBranch(new Object[] { writeData });
         } else {
-            // main ctx: start from the current handler position.
-            String current = this.statusCurrent.stackName;
-            if (StringUtils.isNotBlank(current)) {
-                return netChannel.sendData(writeData, current);
+            // in main pipline, need pop to up parent pipline.
+            String current = this.statusCurrent.safeStackName();
+            if (this.isRcv() || this.isSnd()) {
+                return this.continueCurrentFrame(netChannel, current, new Object[] { writeData });
             } else {
-                return netChannel.sendData(writeData);
+                return netChannel.sendData(writeData, current);
             }
+        }
+    }
+
+    @Override
+    public Future<?> flush() {
+        if (!(this.channel instanceof NetChannel)) {
+            throw new UnsupportedOperationException("only NetChannel support flush.");
+        }
+
+        NetChannel netChannel = (NetChannel) this.channel;
+        if (this.parentCtx != null) {
+            // in sub pipline, need pop to up parent pipline.
+            return this.sendWithinBranch(null);
+        } else {
+            // in main pipline, need pop to up parent pipline.
+            String current = this.statusCurrent.safeStackName();
+            if (this.isRcv() || this.isSnd()) {
+                return this.continueCurrentFrame(netChannel, current, null);
+            } else {
+                return netChannel.flush(current);
+            }
+        }
+    }
+
+    private Future<?> sendWithinBranch(Object[] writeData) {
+        try {
+            ChainResult cr = this.chainRoot.onSnd(this, null, writeData, null);
+            return this.sendOrFlushUpward(cr.data);
+        } catch (Throwable e) {
+            return Futures.buildFailed(e);
+        }
+    }
+
+    private Future<?> continueCurrentFrame(NetChannel netChannel, String current, Object[] writeData) {
+        Objects.requireNonNull(current, "current stackName must not be null while continuing an active message frame.");
+        try {
+            ChainResult cr = this.chainRoot.onSnd(this, current, writeData, null);
+            return netChannel.sendEncoded(cr.data);
+        } catch (Throwable e) {
+            return Futures.buildFailed(e);
         }
     }
 
@@ -324,25 +367,6 @@ class ProtoContextService implements ProtoContext {
         // If the parent is itself a nested branch, continue crossing upward.
         if (this.parentCtx.parentCtx != null) {
             this.parentCtx.fireUserEventUpward(isRcv, soEvent);
-        }
-    }
-
-    @Override
-    public Future<?> flush() {
-        if (!(this.channel instanceof NetChannel)) {
-            throw new UnsupportedOperationException("only NetChannel support flush.");
-        }
-
-        NetChannel netChannel = (NetChannel) this.channel;
-        if (this.parentCtx != null) {
-            try {
-                ChainResult cr = this.chainRoot.onSnd(this, null, null, null);
-                return sendOrFlushUpward(cr.data);
-            } catch (Throwable e) {
-                return Futures.buildFailed(e);
-            }
-        } else {
-            return netChannel.flush(this.statusCurrent.stackName);
         }
     }
 
@@ -534,6 +558,10 @@ class ProtoContextService implements ProtoContext {
             this.stackName = null;
             this.rcvError = null;
             this.sndError = null;
+        }
+
+        String safeStackName() {
+            return StringUtils.isBlank(this.stackName) ? null : this.stackName;
         }
     }
 }

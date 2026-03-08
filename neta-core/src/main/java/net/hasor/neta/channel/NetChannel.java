@@ -17,7 +17,11 @@ package net.hasor.neta.channel;
 import java.io.PrintStream;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
+import java.util.Deque;
+import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.BasicFuture;
@@ -39,22 +43,23 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2023-09-24
  */
 public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<NetChannel> {
-    private static final Logger              logger              = Logger.getLogger(NetChannel.class);
-    private static final ByteBuf[]           EMPTY_BYTEBUF_ARRAY = new ByteBuf[0];
-    protected final      AsyncChannel        asyncChannel;
-    protected final      NetListen           forListen;
-    protected final      SoSndContext        wContext;
-    protected final      SoContextService    soContext;
-    protected final      NetMonitor          monitor;
-    protected final      ProtoStackChain     protoStack;
-    protected final      AtomicBoolean       closeStatus;
-    protected final      Future<NetChannel>  closeFuture;
-    protected final      Object              readTimeoutSyncObj;
+    private static final Logger                         logger              = Logger.getLogger(NetChannel.class);
+    private static final ByteBuf[]                      EMPTY_BYTEBUF_ARRAY = new ByteBuf[0];
+    private static final Map<Thread, Deque<NetChannel>> PIPELINE_CALL_CHAIN = new ConcurrentHashMap<>();
+    protected final      AsyncChannel                   asyncChannel;
+    protected final      NetListen                      forListen;
+    protected final      SoSndContext                   wContext;
+    protected final      SoContextService               soContext;
+    protected final      NetMonitor                     monitor;
+    protected final      ProtoStackChain                protoStack;
+    protected final      AtomicBoolean                  closeStatus;
+    protected final      Future<NetChannel>             closeFuture;
+    protected final      Object                         readTimeoutSyncObj;
     //
-    final                ProtoContextService protoCtx;
-    private final        long                channelId;
-    private final        Object[]            singleRcvBuf        = new Object[1]; // reusable 1-element array for single RCV
-    protected volatile   int                 readWaiters;
+    final                ProtoContextService            protoCtx;
+    private final        long                           channelId;
+    private final        Object[]                       singleRcvBuf        = new Object[1]; // reusable 1-element array for single RCV
+    protected volatile   int                            readWaiters;
 
     protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService soContext) {
         this.channelId = channelId;
@@ -70,6 +75,43 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         initializer.config(this.protoCtx);
         this.closeStatus = new AtomicBoolean(false);
         this.closeFuture = new BasicFuture<>();
+    }
+
+    /** Returns true when the current thread is executing inside any NetChannel pipeline call chain. */
+    public static boolean isCurrentThreadInPipeline() {
+        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(Thread.currentThread());
+        return callChain != null && !callChain.isEmpty();
+    }
+
+    /** Returns true when the current thread is executing inside the target channel's pipeline call chain. */
+    public static boolean isCurrentThreadInPipeline(NetChannel channel) {
+        Objects.requireNonNull(channel, "channel is null.");
+        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(Thread.currentThread());
+        return callChain != null && callChain.contains(channel);
+    }
+
+    static void enterPipeline(NetChannel channel) {
+        Objects.requireNonNull(channel, "channel is null.");
+        PIPELINE_CALL_CHAIN.computeIfAbsent(Thread.currentThread(), key -> new ArrayDeque<>()).push(channel);
+    }
+
+    static void exitPipeline(NetChannel channel) {
+        Objects.requireNonNull(channel, "channel is null.");
+        Thread currentThread = Thread.currentThread();
+        Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(currentThread);
+        if (callChain == null || callChain.isEmpty()) {
+            return;
+        }
+
+        if (callChain.peek() == channel) {
+            callChain.pop();
+        } else {
+            callChain.removeFirstOccurrence(channel);
+        }
+
+        if (callChain.isEmpty()) {
+            PIPELINE_CALL_CHAIN.remove(currentThread);
+        }
     }
 
     @Override
@@ -373,9 +415,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             return future;
         }
 
-        // Detect misuse: calling channel.send()/flush() from within a pipeline handler; use sndDown.offerMessage() instead.
-        if (this.protoCtx.isRcv() || this.protoCtx.isSnd()) {
-            IllegalStateException ex = new IllegalStateException("snd(" + this.channelId + ") channel.send()/flush() must not be called from within a pipeline handler.");
+        if (NetChannel.isCurrentThreadInPipeline(this)) {
+            IllegalStateException ex = new IllegalStateException("snd(" + this.channelId + ") channel.send()/flush() is not allowed while current thread is in this channel's pipeline call chain.");
             logger.error("snd(" + this.channelId + ") illegal reentrant send detected.", ex);
             future.failed(ex);
             return future;
