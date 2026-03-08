@@ -239,6 +239,10 @@ class ProtoStackChain {
     }
 
     private ChainResult triggerRcvWithEmpty(ProtoContextService ctx, Object[] sndData) {
+        if (this.branchMode) {
+            return ChainResult.EMPTY;
+        }
+
         // 1st onReceive
         if (sndData != null) {
             for (Object obj : sndData) {

@@ -60,12 +60,32 @@ public abstract class AbstractNetManager {
     }
 
     /**
+     * Subscribes to all messages for the specified channel using the given delivery mode.
+     * @param channelId the target channel ID
+     * @param mode delivery mode
+     * @param listener callback invoked for each {@link PlayLoad} event
+     */
+    public SubscribeHolder subscribe(long channelId, SubscribeMode mode, PlayLoadListener listener) {
+        return this.context.subscribe(channelId, mode, listener);
+    }
+
+    /**
      * Subscribes to messages that match the given predicate across all channels.
      * @param select filter predicate
      * @param listener callback invoked for each matching {@link PlayLoad} event
      */
     public SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
         return this.context.subscribe(select, listener);
+    }
+
+    /**
+     * Subscribes to messages that match the given predicate using the specified delivery mode.
+     * @param select filter predicate
+     * @param mode delivery mode
+     * @param listener callback invoked for each matching {@link PlayLoad} event
+     */
+    public SubscribeHolder subscribe(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener) {
+        return this.context.subscribe(select, mode, listener);
     }
 
     /** Gracefully shuts down the manager, closing all channels and releasing resources. */

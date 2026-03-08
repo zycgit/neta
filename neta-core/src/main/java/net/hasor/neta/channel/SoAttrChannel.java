@@ -40,13 +40,29 @@ public abstract class SoAttrChannel<T> implements SoChannel<T> {
     /** Subscribes to all {@link PlayLoad} events originating from this channel. */
     @Override
     public SubscribeHolder subscribe(PlayLoadListener listener) {
-        return this.subscribe(t -> true, listener);
+        return this.subscribe(t -> true, SubscribeMode.ASYNC, listener);
+    }
+
+    @Override
+    public SubscribeHolder subscribe(SubscribeMode mode, PlayLoadListener listener) {
+        return this.subscribe(t -> true, mode, listener);
     }
 
     /** Subscribes to events from this channel that satisfy {@code select}. */
     @Override
     public SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
-        Predicate<PlayLoad> predicate = select.and(t -> t.getSource().getChannelId() == this.getChannelId());
-        return this.getContext().subscribe(predicate, listener);
+        return this.subscribe(select, SubscribeMode.ASYNC, listener);
+    }
+
+    @Override
+    public SubscribeHolder subscribe(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener) {
+        Predicate<PlayLoad> baseSelect = select == null ? new Predicate<PlayLoad>() {
+            @Override
+            public boolean test(PlayLoad playLoad) {
+                return true;
+            }
+        } : select;
+        Predicate<PlayLoad> predicate = baseSelect.and(t -> t.getSource().getChannelId() == this.getChannelId());
+        return this.getContext().subscribe(predicate, mode, listener);
     }
 }

@@ -56,7 +56,7 @@ public class VrtTransfer {
         this.asynchronous = asynchronous;
         this.batchSize = 1;
         this.lossRate = 0;
-        this.subscribeHolder = this.manager.getContext().subscribe(this.playLoadFilter(), this::playLoadDistribute);
+        this.subscribeHolder = this.manager.getContext().subscribe(this.playLoadFilter(), SubscribeMode.SYNC, this::playLoadDistribute);
         this.closed = new AtomicBoolean(false);
     }
 

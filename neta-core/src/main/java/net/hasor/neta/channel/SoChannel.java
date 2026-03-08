@@ -87,10 +87,21 @@ public interface SoChannel<T> {
     /** Subscribes to messages belonging to this channel. */
     SubscribeHolder subscribe(PlayLoadListener listener);
 
+    /** Subscribes to messages belonging to this channel using the specified delivery mode. */
+    SubscribeHolder subscribe(SubscribeMode mode, PlayLoadListener listener);
+
     /**
      * Subscribes to messages belonging to this channel and filters events using the provided predicate.
      * @param select predicate to filter events
      * @param listener listener to handle filtered events
      */
     SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
+
+    /**
+     * Subscribes to messages belonging to this channel with the specified filter and delivery mode.
+     * @param select predicate to filter events
+     * @param mode delivery mode
+     * @param listener listener to handle filtered events
+     */
+    SubscribeHolder subscribe(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener);
 }

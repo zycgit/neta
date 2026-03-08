@@ -14,20 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-/**
- * The SubscribeHolder interface represents a subscription holder in a channel.
- * Implementations of this interface are responsible for managing the lifecycle
- * of a subscription, including the ability to unsubscribe from the channel.
- * @author 赵永春 (zyc@hasor.net)
- * @version 2025-09-24
- */
-public interface SubscribeHolder {
-    /**
-     * Unsubscribes from the associated channel or event.
-     * After calling this method, the subscription should be considered inactive,
-     * and no further events will be received.
-     */
-    void unSubscribe();
 
-    SubscribeMode getSubscribeMode();
+/**
+ * Delivery mode for {@link PlayLoadListener} subscriptions.
+ * SYNC runs inline on the trigger call stack; ASYNC runs on the worker executor
+ * and preserves per-subscriber event order.
+ */
+public enum SubscribeMode {
+    SYNC,
+    ASYNC,
 }

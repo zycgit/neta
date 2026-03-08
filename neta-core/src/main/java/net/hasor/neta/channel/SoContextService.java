@@ -17,10 +17,10 @@ package net.hasor.neta.channel;
 import java.net.SocketAddress;
 import java.util.*;
 import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 import java.util.function.Consumer;
-import java.util.function.Function;
 import java.util.function.Predicate;
 import net.hasor.cobble.concurrent.ThreadUtils;
 import net.hasor.cobble.concurrent.future.Future;
@@ -38,24 +38,24 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @version : 2023-09-24
  */
 public class SoContextService implements SoContext {
-    private static final Logger                            logger    = Logger.getLogger(SoContextService.class);
-    private final        AtomicLong                        nextID    = new AtomicLong(0);
-    private final        NetConfig                         config;
-    private final        NetManager                        manager;
-    private final        ByteBufAllocator                  allocator;
-    private final        ClassLoader                       useClassLoader;
-    private final        SoThreadFactory                   useSoThreadFactory;
+    private static final Logger                  logger    = Logger.getLogger(SoContextService.class);
+    private final        AtomicLong              nextID    = new AtomicLong(0);
+    private final        NetConfig               config;
+    private final        NetManager              manager;
+    private final        ByteBufAllocator        allocator;
+    private final        ClassLoader             useClassLoader;
+    private final        SoThreadFactory         useSoThreadFactory;
     //
-    private final        List<Function<PlayLoad, Boolean>> listeners = new CopyOnWriteArrayList<>();
+    private final        List<SubscriptionEntry> listeners = new CopyOnWriteArrayList<>();
     //
-    private final        HashedWheelTimer                  globalTimer;
-    private final        ExecutorService                   ioExecutor;
-    private final        SoEventExecutor                   eventExecutor;
-    private final        ReentrantReadWriteLock            closeSyncLock;
-    private final        Map<Long, SoChannel<?>>           channelMap;
-    private final        Queue<NetChannel>                 channelList;
-    private final        Queue<NetListen>                  listenList;
-    private volatile     boolean                           closeStatus;
+    private final        HashedWheelTimer        globalTimer;
+    private final        ExecutorService         ioExecutor;
+    private final        SoEventExecutor         eventExecutor;
+    private final        ReentrantReadWriteLock  closeSyncLock;
+    private final        Map<Long, SoChannel<?>> channelMap;
+    private final        Queue<NetChannel>       channelList;
+    private final        Queue<NetListen>        listenList;
+    private volatile     boolean                 closeStatus;
 
     SoContextService(NetConfig netConf, NetManager manager) {
         this.manager = manager;
@@ -212,25 +212,29 @@ public class SoContextService implements SoContext {
 
     @Override
     public SubscribeHolder subscribe(long channelId, PlayLoadListener listener) {
-        return this.subscribe(p -> p.getSource().getChannelId() == channelId, listener);
+        return this.subscribe(channelId, SubscribeMode.ASYNC, listener);
+    }
+
+    @Override
+    public SubscribeHolder subscribe(long channelId, SubscribeMode mode, PlayLoadListener listener) {
+        return this.subscribe(p -> p.getSource().getChannelId() == channelId, mode, listener);
     }
 
     @Override
     public SubscribeHolder subscribe(final Predicate<PlayLoad> select, final PlayLoadListener listener) {
-        if (listener != null) {
-            final Function<PlayLoad, Boolean> func = data -> {
-                if (select == null || select.test(data)) {
-                    listener.onEvent(data);
-                    return true;
-                } else {
-                    return false;
-                }
-            };
-            this.listeners.add(func);
-            return () -> this.listeners.remove(func);
-        } else {
+        return this.subscribe(select, SubscribeMode.ASYNC, listener);
+    }
+
+    @Override
+    public SubscribeHolder subscribe(final Predicate<PlayLoad> select, SubscribeMode mode, final PlayLoadListener listener) {
+        if (listener == null) {
             return null;
         }
+
+        mode = (mode == null) ? SubscribeMode.ASYNC : mode;
+        SubscriptionEntry subscription = new SubscriptionEntry(select, mode, listener);
+        this.listeners.add(subscription);
+        return subscription;
     }
 
     /** trigger event */
@@ -246,11 +250,11 @@ public class SoContextService implements SoContext {
         }
 
         boolean hasProcessed = false;
-        for (Function<PlayLoad, Boolean> listener : this.listeners) {
+        for (SubscriptionEntry listener : this.listeners) {
             try {
-                hasProcessed = hasProcessed | listener.apply(data);
+                hasProcessed = hasProcessed | listener.dispatch(data);
             } catch (Exception e) {
-                logger.error(prefix + "(" + data.getSource().getChannelId() + ") trigger " + listener.getClass().getName() + " has error " + e.getMessage(), e);
+                logger.error(prefix + "(" + data.getSource().getChannelId() + ") trigger " + listener.listener.getClass().getName() + " has error " + e.getMessage(), e);
             }
         }
 
@@ -571,6 +575,97 @@ public class SoContextService implements SoContext {
             this.channelMap.remove(channel.getChannelId());
             this.listenList.remove(channel);
             logger.info("listen(" + channel.getChannelId() + ") closed, port :" + netListen.getListenPort());
+        }
+    }
+
+    private final class SubscriptionEntry implements SubscribeHolder {
+        private final Predicate<PlayLoad> select;
+        private final SubscribeMode       mode;
+        private final PlayLoadListener    listener;
+        private final Queue<PlayLoad>     eventQueue;
+        private final AtomicBoolean       draining;
+        private final AtomicBoolean       active;
+
+        private SubscriptionEntry(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener) {
+            this.select = select;
+            this.mode = mode;
+            this.listener = listener;
+            this.eventQueue = mode == SubscribeMode.ASYNC ? new ConcurrentLinkedQueue<>() : null;
+            this.draining = mode == SubscribeMode.ASYNC ? new AtomicBoolean(false) : null;
+            this.active = new AtomicBoolean(true);
+        }
+
+        @Override
+        public SubscribeMode getSubscribeMode() {
+            return this.mode;
+        }
+
+        @Override
+        public void unSubscribe() {
+            this.active.set(false);
+            if (this.eventQueue != null) {
+                this.eventQueue.clear();
+            }
+            SoContextService.this.listeners.remove(this);
+        }
+
+        private boolean dispatch(PlayLoad data) {
+            if (!this.active.get()) {
+                return false;
+            }
+            if (this.select != null && !this.select.test(data)) {
+                return false;
+            }
+
+            if (this.mode == SubscribeMode.SYNC) {
+                this.listener.onEvent(data);
+            } else {
+                this.eventQueue.offer(data);
+                this.scheduleDrain();
+            }
+            return true;
+        }
+
+        private void scheduleDrain() {
+            if (!this.draining.compareAndSet(false, true)) {
+                return;
+            }
+            SoContextService.this.submitSoTask(new DefaultSoTask() {
+                @Override
+                protected void doWork(int retryCnt) {
+                    drainQueue();
+                    finishTask();
+                }
+            }, this);
+        }
+
+        private void drainQueue() {
+            while (this.active.get()) {
+                PlayLoad next = this.eventQueue.poll();
+                if (next == null) {
+                    this.draining.set(false);
+                    if (!this.active.get() || this.eventQueue.isEmpty() || !this.draining.compareAndSet(false, true)) {
+                        return;
+                    }
+                    continue;
+                }
+
+                try {
+                    this.listener.onEvent(next);
+                } catch (Exception e) {
+                    String prefix;
+                    if (next.isInbound()) {
+                        prefix = "rcv";
+                    } else if (next.isOutbound()) {
+                        prefix = "snd";
+                    } else {
+                        prefix = "event";
+                    }
+                    logger.error(prefix + "(" + next.getSource().getChannelId() + ") trigger " + this.listener.getClass().getName() + " has error " + e.getMessage(), e);
+                }
+            }
+            this.eventQueue.clear();
+            this.draining.set(false);
         }
     }
 }

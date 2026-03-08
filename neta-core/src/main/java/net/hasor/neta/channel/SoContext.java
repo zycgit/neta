@@ -51,9 +51,25 @@ public interface SoContext {
     SubscribeHolder subscribe(long channelId, PlayLoadListener listener);
 
     /**
+     * subscribe event with delivery mode
+     * @param channelId event topic
+     * @param mode delivery mode
+     * @param listener event listener
+     */
+    SubscribeHolder subscribe(long channelId, SubscribeMode mode, PlayLoadListener listener);
+
+    /**
      * subscribe event
      * @param select event topic
      * @param listener event listener
      */
     SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
+
+    /**
+     * subscribe event with delivery mode
+     * @param select event topic
+     * @param mode delivery mode
+     * @param listener event listener
+     */
+    SubscribeHolder subscribe(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener);
 }
