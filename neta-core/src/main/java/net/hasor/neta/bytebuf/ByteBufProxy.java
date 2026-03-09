@@ -21,9 +21,20 @@ import java.nio.charset.Charset;
 import java.util.Objects;
 
 /**
- * ByteBufProxy is a proxy class that implements the ByteBuf interface. It holds an internal ByteBuf instance
- * and forwards all method calls to this instance. The primary use of this class is to add additional functionality
- * or intercept behavior without modifying the original ByteBuf implementation.
+ * Transparent {@link ByteBuf} proxy that forwards every operation to a target
+ * buffer.
+ * <p>
+ * This class is the simplest delegation layer in the bytebuf package: it does
+ * not introduce new storage, new indexes, or new lifecycle rules. Subclasses
+ * can override only the operations they want to intercept while leaving the
+ * rest of the {@link ByteBuf} contract unchanged.
+ * <p>
+ * Typical uses include:
+ * <ul>
+ *   <li>adding read-only behavior;</li>
+ *   <li>exposing a restricted view;</li>
+ *   <li>injecting metrics, tracing, or guard checks around selected methods.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version 2022-11-01
  */

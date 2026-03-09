@@ -17,9 +17,37 @@ package net.hasor.neta.channel.virtual;
 import net.hasor.neta.channel.SoConfig;
 
 /**
- * Virtual specific configuration options.
+ * Configuration holder for the virtual in-process transport.
+ * <p>Virtual channels simulate a transport entirely inside one JVM. This config
+ * controls how the link is created and how {@link VrtTransfer} delivers data.
+ * <p><b>Fields overview:</b>
+ * <table border="1" cellpadding="4">
+ *   <tr><th>Field</th><th>Default</th><th>Notes</th></tr>
+ *   <tr><td>vrtMode</td><td>{@link VrtMode#Default}</td>
+ *       <td>Requested role hint for the channel objects created around the transport.
+ *           Connect-mode clients must start with {@code Default}; accepted server-side
+ *           channels are materialized later as {@code Server}.</td></tr>
+ *   <tr><td>rcvConvert</td><td>{@link VrtTransfer#duplicate()}</td>
+ *       <td>Receive-side converter used by each {@link VrtTransferLink}. The default
+ *           strategy duplicates {@link net.hasor.neta.bytebuf.ByteBuf} payloads so peers
+ *           do not share mutable buffer state.</td></tr>
+ *   <tr><td>asynchronous</td><td>true</td>
+ *       <td>Controls whether {@link VrtTransfer} dispatches each target delivery through
+ *           the manager executor or runs inline on the publisher thread.</td></tr>
+ *   <tr><td>batchSize</td><td>1</td>
+ *       <td>Minimum queued payload count required before a link flushes data into the
+ *           target channel.</td></tr>
+ *   <tr><td>lossRate</td><td>0</td>
+ *       <td>Threshold value forwarded to {@link VrtTransfer#setLossRate(int)}. In the
+ *           current implementation {@code 0} disables dropping and larger values reduce
+ *           the chance that a payload is skipped.</td></tr>
+ * </table>
+ * <p>Static factories {@link #asDefault()}, {@link #asClient()}, and
+ * {@link #asServer()} provide common presets without changing any other field.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see VrtMode
+ * @see VrtTransfer
  */
 public class VrtSoConfig extends SoConfig {
     private VrtMode            vrtMode;

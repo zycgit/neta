@@ -20,10 +20,18 @@ import java.util.function.Predicate;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Base class for {@link NetManager}, holding the shared {@link NetConfig}, {@link SoContextService}
- * and lifecycle state. Subclasses implement the actual protocol providers and shutdown logic.
+ * Skeletal base class for {@link NetManager} that initialises and holds the shared
+ * {@link NetConfig}, {@link SoContextService}, and lifecycle shutdown state.
+ * <p>The constructor enforces that only {@link NetManager} may extend this class
+ * (verified via an {@code instanceof} check at construction time), preventing accidental
+ * subclassing that would bypass the required protocol-provider registration logic.
+ * <p>This class exposes the subscribe API that {@link NetManager} inherits, allowing
+ * callers to observe pipeline events by channel ID or custom predicate without holding
+ * a specific {@link SoChannel} reference.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see NetManager
+ * @see SoContextService
  */
 public abstract class AbstractNetManager {
     private static final Logger           logger = Logger.getLogger(AbstractNetManager.class);

@@ -18,7 +18,11 @@ import java.net.SocketAddress;
 import net.hasor.cobble.ObjectUtils;
 
 /**
- * Address representation for virtual channels, using an integer identifier instead of a network address.
+ * Socket address used by the virtual transport.
+ * <p>The address is a simple integer endpoint id rather than an IP/port tuple.
+ * The additional {@code connectMode} flag distinguishes "connect to this virtual
+ * listener" from "bind/listen on this virtual endpoint" in provider logic, while
+ * equality and hash code remain based on the numeric address alone.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

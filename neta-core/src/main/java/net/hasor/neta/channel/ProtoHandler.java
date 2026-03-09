@@ -15,26 +15,24 @@
  */
 package net.hasor.neta.channel;
 /**
- * Unidirectional data processor (decoder or encoder).
- * <p>Two {@code ProtoHandler}s in opposite directions can be combined into a {@link ProtoDuplexer}.</p>
- * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-10-17
+ * Unidirectional protocol node used as a decoder, encoder, or other one-way
+ * transformation stage.
+ * <p>The handler consumes messages from a receive queue and produces zero or
+ * more messages into a send queue for the next stage in the same direction.
+ * When both directions need to be coordinated in one type, use
+ * {@link ProtoDuplexer} instead.
  * @see ProtoDuplexer
  */
 @FunctionalInterface
 public interface ProtoHandler<IN, OUT> {
     /**
-     * Initialize the protocol stack.
+     * Initializes this protocol node.
      */
     default void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
     }
 
     /**
-     * when the Connected.
-     * <p>Called when the channel becomes active. If the handler needs to send initial data
-     * (e.g. protocol handshake frames), use {@link ProtoContext#sendData(Object)} instead
-     * of queue parameters.</p>
-     * @param context the protocol context
+     * Called when the channel becomes active.
      */
     default void onActive(ProtoContext context) throws Throwable {
     }
@@ -45,19 +43,19 @@ public interface ProtoHandler<IN, OUT> {
     }
 
     /**
-     * process data the protocol stack.
+     * Processes one pass through this handler.
      */
     ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<IN> src, ProtoSndQueue<OUT> dst) throws Throwable;
 
     /**
-     * Gets called if a Throwable was thrown. If an exception occurs, piple executes in the following way.
+     * Handles an exception raised by this handler or a downstream handler.
      */
     default ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         return ProtoStatus.Next;
     }
 
     /**
-     * release protocol stack, connection close.
+     * Releases resources when the channel closes.
      */
     default void onClose(ProtoContext context) {
     }

@@ -19,9 +19,33 @@ import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * 基于 {@link ByteBuffer} 的环形 {@link ByteBuf} 实现
+ * Fixed-capacity circular {@link ByteBuf} backed by a {@link java.nio.ByteBuffer}.
+ * <p>Its semantics match {@link RingArrayByteBuf}: logical read/write indexes
+ * grow normally, while physical storage wraps through a power-of-two capacity
+ * mask. The ring layout changes only how bytes are stored internally; it does
+ * not bypass the ordinary readable/writable bounds enforced by
+ * {@link AbstractByteBuf}.
+ *
+ * <pre>
+ * ByteBuffer-backed ring
+ *
+ *   ByteBuffer target
+ *   +---------------------------------------------------------------+
+ *   | 0 | 1 | 2 | 3 | ... | capacity-2 | capacity-1 |
+ *   +---------------------------------------------------------------+
+ *      ^                                            |
+ *      |____________ circular address space ________|
+ *
+ *   logicalIndex --(logicalIndex & capacityMask)--> physical slot in target
+ * </pre>
+ * <p>Instances created from a requested capacity are rounded up to the next
+ * power of two so the wrap calculation can use a cheap bit mask. Instances
+ * built around an existing {@link ByteBuffer} assume that the supplied capacity
+ * already matches the expected ring layout.
  * @author 赵永春 (zyc@hasor.net)
- * @version :  2022-11-01
+ * @version : 2022-11-01
+ * @see RingArrayByteBuf
+ * @see AutoByteBuffer
  */
 final class RingByteBuffer extends AbstractByteBuf {
     static final int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();

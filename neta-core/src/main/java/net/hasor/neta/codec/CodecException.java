@@ -15,9 +15,20 @@
  */
 package net.hasor.neta.codec;
 /**
- * An {@link Exception} which is thrown by a codec.
+ * Base runtime exception for codec layers in the Neta protocol pipeline.
+ * <p>
+ * Encoders, decoders, and frame splitters can throw this type when the current
+ * input cannot be processed normally. Because it extends {@link RuntimeException},
+ * codec implementations can raise it directly from pipeline callbacks without
+ * changing their method signatures.
+ * <p>
+ * Uncaught {@code CodecException}s follow the same error path as other pipeline
+ * failures and are delivered to the channel's inbound or outbound error flow,
+ * depending on where they were raised.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
+ * @see BadFrameException
+ * @see TooLongFrameException
  */
 public class CodecException extends RuntimeException {
     /** Creates a new instance. */

@@ -17,11 +17,25 @@ package net.hasor.neta.channel;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Base class for retryable event-loop tasks.
- * A task signals its result by calling {@link #finishTask()}, {@link #continueTask()},
- * {@link #delayTask} or {@link #failedTask} at the end of {@link #doWork}.
+ * Base class for retryable event-loop tasks executed by {@link SoEventExecutor}.
+ * <p>A task communicates its execution result to the framework by calling one of the
+ * status-setting methods at the end of {@link #doWork}:
+ * <ul>
+ *   <li>{@link #finishTask()} – task completed successfully; will not be re-executed.</li>
+ *   <li>{@link #continueTask()} – task is not yet done; re-queue immediately.</li>
+ *   <li>{@link #delayTask(int, TimeUnit)} – re-queue after the specified delay
+ *       (via the shared {@link net.hasor.cobble.concurrent.timer.HashedWheelTimer}).</li>
+ *   <li>{@link #failedTask(Exception)} – task failed; the owning executor completes the
+ *       associated Future exceptionally and does not re-execute the task.</li>
+ * </ul>
+ * <p>The {@code retryCnt} argument passed to {@link #doWork} starts at 0 and increments
+ * by 1 on each retry (continue or delay).  Subclasses can use this to implement
+ * back-off strategies or maximum-retry limits.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoEventExecutor
+ * @see SimpleTask
+ * @see SoDelayTask
  */
 public abstract class DefaultSoTask implements Runnable {
     private SoTaskStatus status = SoTaskStatus.Finish;

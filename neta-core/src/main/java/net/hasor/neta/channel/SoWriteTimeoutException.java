@@ -14,11 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
- * Thrown when a channel write operation times out.
+ * Thrown when an outbound send operation does not complete within the configured timeout window.
+ * <p>This exception is raised by transport send tasks when the channel stays writable-incomplete for
+ * too long. The exact underlying cause depends on the transport and peer behaviour, but the common
+ * effect is that queued outbound work cannot make forward progress in time.
+ * <p>The transport-level write timeout is configured via {@link SoConfig#getSoWriteTimeoutMs()}.
+ * A value of {@code -1} disables that timeout.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoReadTimeoutException
+ * @see SoTimeoutException
  */
 public class SoWriteTimeoutException extends SoTimeoutException {
 

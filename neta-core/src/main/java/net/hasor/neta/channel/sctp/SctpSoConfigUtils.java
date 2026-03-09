@@ -25,9 +25,17 @@ import com.sun.nio.sctp.SctpStandardSocketOptions.InitMaxStreams;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Utility class for configuring SCTP Socket options.
+ * Package-local SCTP utility methods and option discovery cache.
+ * <p>At class-load time this helper probes which JDK SCTP socket options are
+ * available on the current platform and stores references to them. In the current
+ * codebase, the only behavior actively used at runtime is
+ * {@link #getRcvPacketSize(SctpSoConfig)} plus a placeholder
+ * {@link #configListen(SctpSoConfig, SctpServerChannel)} entry point.
+ * <p>That means this class is primarily an environment-capability cache today,
+ * not a full socket-option applicator yet.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SctpSoConfig
  */
 class SctpSoConfigUtils {
     private static final Logger logger = Logger.getLogger(SctpSoConfigUtils.class);

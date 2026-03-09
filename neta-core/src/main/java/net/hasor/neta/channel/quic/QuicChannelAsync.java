@@ -34,7 +34,32 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * Connection-level {@link AsyncChannel} for QUIC, managing all streams and datagrams under a single QUIC connection.
+ * Internal connection engine behind one established QUIC connection.
+ * <p>This class is the protocol runtime that sits between the UDP transport and
+ * the public {@link QuicChannel}. It owns packet transmission, ACK generation,
+ * loss detection, congestion control, connection-level flow control, stream and
+ * datagram sub-channel creation, path validation, and connection-ID rotation.
+ * <p><b>Subsystem layout:</b>
+ * <pre>
+ *   inbound UDP packet
+ *        |
+ *        +--> packet decrypt / parse
+ *        +--> ACK tracker
+ *        +--> sent-packet tracker + congestion control
+ *        +--> flow control
+ *        +--> stream reassembly / stream dispatch
+ *        +--> datagram dispatch
+ *   outbound frame
+ *        |
+ *        +--> ACK coalescing
+ *        +--> short-header packet build
+ *        +--> sent-packet tracking
+ *        +--> UDP send
+ * </pre>
+ * <p>Although it implements {@link AsyncChannel}, it is not exposed as the
+ * primary application API. User code normally interacts with
+ * {@link QuicChannel}, {@link QuicStreamChannel}, and
+ * {@link QuicDatagramChannel}.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicChannelAsync implements AsyncChannel {

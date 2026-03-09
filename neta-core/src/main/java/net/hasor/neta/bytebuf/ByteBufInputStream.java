@@ -19,19 +19,17 @@ import java.nio.charset.Charset;
 import java.util.Objects;
 
 /**
- * An {@link InputStream} which reads data from a {@link ByteBuf}.
- * This stream implements {@link DataInput} for your convenience.
- * The endianness of the stream is not always big endian but depends on
- * the endianness of the underlying buffer.
- * Implement copy from netty io.netty.buffer.ByteBufInputStream,
- * The ByteBuf implementation is replaced with cobble.bytebuf
+ * Sequential {@link InputStream}/{@link DataInput} view over a {@link ByteBuf}.
+ * <p>The stream reads from the buffer's current readable region and advances the
+ * underlying {@code readerIndex}. Primitive reads use the byte order defined by
+ * the wrapped buffer.
+ * <p>When {@code releaseOnClose} is enabled, closing the stream also frees the
+ * wrapped buffer.
  * @see ByteBufOutputStream
  */
 public class ByteBufInputStream extends InputStream implements DataInput {
     private final ByteBuf buffer;
-    /**
-     * we support a conditional flag which indicates if {@link #buffer} should be released when this {@link InputStream} is closed.
-     */
+    /** Releases the wrapped buffer when the stream is closed. */
     private final boolean releaseOnClose;
     private       boolean closed;
 
@@ -59,13 +57,12 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         this.buffer = buffer;
     }
 
-    /**
-     * Returns the number of read bytes by this stream so far.
-     */
+    /** Returns the readable byte count of the wrapped buffer. */
     public int readBytes() {
         return this.buffer.readableBytes();
     }
 
+    /** Closes this stream and optionally frees the wrapped buffer. */
     @Override
     public void close() throws IOException {
         try {
@@ -79,28 +76,31 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         }
     }
 
-    // Suppress a warning since the class is not thread-safe
+    /** Mark is unsupported. */
     @Override
     public void mark(int readlimit) {
 
     }
 
+    /** Returns {@code false}; mark/reset is unsupported. */
     @Override
     public boolean markSupported() {
         return false;
     }
 
-    // Suppress a warning since the class is not thread-safe
+    /** Reset is unsupported. */
     @Override
     public void reset() throws IOException {
         throw new IOException("mark/reset not supported");
     }
 
+    /** Returns the remaining readable bytes. */
     @Override
     public int available() {
         return this.buffer.readableBytes();
     }
 
+    /** Reads one byte, or {@code -1} when no data remains. */
     @Override
     public int read() throws IOException {
         int available = this.available();
@@ -113,6 +113,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return len;
     }
 
+    /** Reads up to {@code len} bytes into the target array. */
     @Override
     public int read(byte[] b, int off, int len) throws IOException {
         int available = available();
@@ -126,6 +127,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return len;
     }
 
+    /** Skips up to {@code n} bytes. */
     @Override
     public long skip(long n) {
         long len;
@@ -138,6 +140,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return len;
     }
 
+    /** Reads a boolean value. */
     @Override
     public boolean readBoolean() throws IOException {
         if (available() < 1) {
@@ -148,6 +151,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res != 0;
     }
 
+    /** Reads a signed byte. */
     @Override
     public byte readByte() throws IOException {
         int available = available();
@@ -159,6 +163,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads a UTF-16 char. */
     @Override
     public char readChar() throws IOException {
         if (available() < 2) {
@@ -169,6 +174,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads a 64-bit floating-point value. */
     @Override
     public double readDouble() throws IOException {
         if (available() < 8) {
@@ -179,6 +185,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads a 32-bit floating-point value. */
     @Override
     public float readFloat() throws IOException {
         if (available() < 4) {
@@ -189,11 +196,13 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads bytes until the array is full. */
     @Override
     public void readFully(byte[] b) throws IOException {
         this.readFully(b, 0, b.length);
     }
 
+    /** Reads exactly {@code len} bytes into the target array slice. */
     @Override
     public void readFully(byte[] b, int off, int len) throws IOException {
         if (available() < len) {
@@ -203,6 +212,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         this.buffer.markReader();
     }
 
+    /** Reads a 32-bit signed integer. */
     @Override
     public int readInt() throws IOException {
         if (available() < 4) {
@@ -213,6 +223,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads a line using the buffer default charset. */
     @Override
     public String readLine() {
         String line = this.buffer.readLine();
@@ -220,12 +231,14 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return line;
     }
 
+    /** Reads a line using the specified charset. */
     public String readLine(Charset charset) {
         String line = this.buffer.readLine(charset);
         this.buffer.markReader();
         return line;
     }
 
+    /** Reads a 64-bit signed integer. */
     @Override
     public long readLong() throws IOException {
         if (available() < 8) {
@@ -236,6 +249,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads a 16-bit signed integer. */
     @Override
     public short readShort() throws IOException {
         if (available() < 2) {
@@ -246,6 +260,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads a signed 24-bit integer. */
     public int readMedium() throws IOException {
         if (available() < 3) {
             throw new EOFException();
@@ -255,6 +270,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads a modified UTF-8 string. */
     @Override
     public String readUTF() throws IOException {
         String utf = DataInputStream.readUTF(this);
@@ -262,6 +278,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return utf;
     }
 
+    /** Reads an unsigned byte. */
     @Override
     public int readUnsignedByte() throws IOException {
         if (available() < 1) {
@@ -272,6 +289,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Reads an unsigned 16-bit integer. */
     @Override
     public int readUnsignedShort() throws IOException {
         if (available() < 2) {
@@ -282,6 +300,7 @@ public class ByteBufInputStream extends InputStream implements DataInput {
         return res;
     }
 
+    /** Skips up to {@code n} bytes and returns the skipped length. */
     @Override
     public int skipBytes(int n) {
         int nBytes = Math.min(available(), n);

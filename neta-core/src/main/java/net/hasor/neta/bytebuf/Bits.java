@@ -14,6 +14,21 @@
  * limitations under the License.
  */
 package net.hasor.neta.bytebuf;
+/**
+ * Internal helper that reads and writes multi-byte primitive values ({@code short},
+ * {@code int}, {@code long}, {@code float}, {@code double}) to/from a
+ * {@link ByteBuf} at a given byte offset, in either big-endian or little-endian
+ * byte order.
+ * <p>To avoid one {@code _putByte}/{@code _getByte} per byte (each of which performs
+ * range and availability checks), all multi-byte operations stage the bytes into a
+ * thread-local 8-byte scratch buffer ({@code TMP8}) and then copy them to/from the
+ * target {@link ByteBuf} in a single bulk call.  This reduces the number of
+ * check-and-extend calls from N (one per byte) to 1.
+ * <p><b>Package-private:</b> this class is an implementation detail of
+ * {@link AbstractByteBuf} and is not part of the public API.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
+ */
 class Bits {
     // ThreadLocal temp buffer to avoid per-byte _putByte/_getByte calls (reduces checkFree/checkExtension from N to 1)
     private static final ThreadLocal<byte[]> TMP8 = ThreadLocal.withInitial(() -> new byte[8]);

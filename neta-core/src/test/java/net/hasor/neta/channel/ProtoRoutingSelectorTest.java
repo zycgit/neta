@@ -42,13 +42,13 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
-                    Integer data = (Integer) rcvUp.peekMessage();
+                    Integer data = rcvUp.peekMessage();
                     return (data != null && data % 2 == 0) ? "even" : "odd";
                 }, r -> {
-                        r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
+                    r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
                             doNextHandler("Even", evenDecLog, evenDecErr),//
                             doNextHandler("Even", evenEncLog, evenEncErr)));
-                        r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
+                    r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
                             doNextHandler("Odd", oddDecLog, oddDecErr),//
                             doNextHandler("Odd", oddEncLog, oddEncErr)));
                 }).build();
@@ -82,13 +82,13 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
-                    Integer data = (Integer) rcvUp.peekMessage();
+                    Integer data = rcvUp.peekMessage();
                     return (data != null && data % 2 == 0) ? "even" : "odd";
                 }, r -> {
-                        r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
+                    r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
                             doNextHandler("Even", evenDecLog, evenDecErr),//
                             doNextHandler("Even", evenEncLog, evenEncErr)));
-                        r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
+                    r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
                             doNextHandler("Odd", oddDecLog, oddDecErr),//
                             doNextHandler("Odd", oddEncLog, oddEncErr)));
                 }).build();
@@ -121,10 +121,10 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                 .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
                     return null;
                 }, r -> {
-                        r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
+                    r.branch("even", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("evenDec",//
                             doNextHandler("Even", evenDecLog, evenDecErr),//
                             doNextHandler("Even", evenEncLog, evenEncErr)));
-                        r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
+                    r.branch("odd", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("oddDec",//
                             doNextHandler("Odd", oddDecLog, oddDecErr),//
                             doNextHandler("Odd", oddEncLog, oddEncErr)));
                 }).build();
@@ -156,14 +156,14 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
-                    Integer v = (Integer) rcvUp.peekMessage();
+                    Integer v = rcvUp.peekMessage();
                     return (v != null && v > 0) ? "positive" : "nonPos";
                 }, r -> {
                     r.branch("positive", branch -> branch.<Integer, Integer>nextRouteAsStatic("L2", (ctx2, rcvUp, rcvDown) -> {
                         if (rcvUp.queueSize() == 0) {
                             return null;
                         }
-                        Integer v = (Integer) rcvUp.peekMessage();
+                        Integer v = rcvUp.peekMessage();
                         return (v != null && v < 10) ? "small" : "large";
                     }, r2 -> {
                         r2.branch("small", (ProtoBuilder<Integer, Integer> sc) -> sc.nextDuplex("smallH",//
@@ -173,7 +173,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
                                 doNextHandler("Large", largeDecLog, largeDecErr),//
                                 doNextHandler("Large", largeEncLog, largeEncErr)));
                     }));
-                        r.branch("nonPos", (ProtoBuilder<Integer, Integer> nonPos) -> nonPos.nextDuplex("nonPosH",//
+                    r.branch("nonPos", (ProtoBuilder<Integer, Integer> nonPos) -> nonPos.nextDuplex("nonPosH",//
                             doNextHandler("NonPos", nonPosDecLog, nonPosDecErr),//
                             doNextHandler("NonPos", nonPosEncLog, nonPosEncErr)));
                 }).build();

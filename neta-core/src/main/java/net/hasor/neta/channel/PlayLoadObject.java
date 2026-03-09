@@ -16,9 +16,19 @@
 package net.hasor.neta.channel;
 
 /**
- * Default {@link PlayLoad} implementation carrying message data or error.
+ * Default immutable {@link PlayLoad} implementation created by the Neta pipeline.
+ * <p>Instances are constructed exclusively through the static factory methods
+ * (the constructor is package-private):
+ * <ul>
+ *   <li>{@link #of(SoChannel, Object, boolean, boolean)} – wraps a successfully decoded
+ *       or encoded data object.</li>
+ *   <li>{@link #ofError(SoChannel, Throwable, boolean, boolean)} – wraps a pipeline
+ *       exception so subscribers can observe errors without catching them directly in a
+ *       handler.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see PlayLoad
  */
 public class PlayLoadObject implements PlayLoad {
     private final boolean      success;

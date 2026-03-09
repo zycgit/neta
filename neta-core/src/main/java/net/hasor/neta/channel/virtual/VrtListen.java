@@ -20,10 +20,23 @@ import net.hasor.neta.channel.SoConfig;
 import net.hasor.neta.channel.SoContextService;
 
 /**
- * Virtual implementation of listening port.
- * Accepts incoming virtual connections.
+ * The active listening endpoint of a virtual transport.
+ * <p>Extends {@link net.hasor.neta.channel.NetListen} with a reference to the
+ * {@link VrtTransfer} that handles in-JVM data routing between the client and
+ * server sides of a virtual channel pair.
+ * <p>A {@code VrtListen} is created by
+ * {@link VrtAsyncServerChannel#bind(net.hasor.neta.channel.ProtoInitializer)}
+ * and initialized through the standard
+ * {@link net.hasor.neta.channel.SoContextService#initChannel} path, which runs
+ * the user-supplied {@link net.hasor.neta.channel.ProtoInitializer} to build
+ * the server-side protocol stack.
+ * <p>The embedded {@link VrtTransfer} is used by incoming
+ * {@link VrtAsyncChannel} writes to deliver data directly into this pipeline
+ * without any OS socket involvement.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see VrtAsyncServerChannel
+ * @see VrtTransfer
  */
 public class VrtListen extends NetListen {
     private final VrtTransfer transfer;

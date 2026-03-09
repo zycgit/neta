@@ -15,11 +15,17 @@
  */
 package net.hasor.neta.channel;
 /**
- * The SubscribeHolder interface represents a subscription holder in a channel.
- * Implementations of this interface are responsible for managing the lifecycle
- * of a subscription, including the ability to unsubscribe from the channel.
+ * Handle returned by {@link SoChannel#subscribe} (and its overloads).
+ * <p>Calling {@link #unSubscribe()} deactivates the registration and removes it from the
+ * owning {@link SoContextService} listener list. For asynchronous subscriptions any queued,
+ * not-yet-drained events are also discarded.
+ * <p>The current implementation does not perform a dedicated automatic unregister step when a
+ * channel closes; callers that need deterministic cleanup should explicitly call
+ * {@link #unSubscribe()}.
  * @author 赵永春 (zyc@hasor.net)
- * @version 2025-09-24
+ * @version : 2025-09-24
+ * @see SoChannel#subscribe
+ * @see SubscribeMode
  */
 public interface SubscribeHolder {
     /**

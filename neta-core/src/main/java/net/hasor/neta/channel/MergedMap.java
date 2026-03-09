@@ -17,19 +17,12 @@ package net.hasor.neta.channel;
 import java.util.*;
 
 /**
- * A Map that chains a local store with an optional parent.
- * <p>
- * Read operations ({@link #get}, {@link #containsKey}) first check the local store;
- * if not found, they walk up the parent chain.
- * Write operations ({@link #put}, {@link #remove}, {@link #clear}) only affect
- * the local store — the parent chain is <em>never</em> mutated.
- * </p>
- * <p>
- * This semantics is used by {@link ProtoContextService} to stack flash-map layers
- * across re-entrant pipeline invocations (e.g. an SND path triggered from within
- * an RCV handler).  Each nested entry pushes a new local layer; the parent layer
- * is restored transparently when the nested invocation returns.
- * </p>
+ * Layered {@link Map} implementation with local-write, parent-read semantics.
+ * <p>Reads such as {@link #get(Object)} and {@link #containsKey(Object)} first check the local map
+ * and then fall through to the optional parent chain. Writes such as {@link #put(Object, Object)}
+ * and {@link #remove(Object)} affect only the local layer; parent layers are never mutated.
+ * <p>This class is a general utility that remains in the channel package, but the current
+ * {@link ProtoContextService} implementation no longer uses it directly for flash storage.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2016-07-17
  */

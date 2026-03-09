@@ -32,7 +32,25 @@ import net.hasor.neta.channel.udp.UdpAsyncServerChannel;
 import net.hasor.neta.channel.udp.UdpSoConfigUtils;
 
 /**
- * QUIC server channel extending {@link UdpAsyncServerChannel}, overriding the UDP receive loop for QUIC-aware packet parsing and per-connection CID dispatching.
+ * Server-side QUIC dispatcher built on top of the UDP listen channel.
+ * <p>
+ * It replaces the normal UDP receive loop with QUIC-aware processing: parsing
+ * coalesced datagrams, validating tokens, managing in-progress handshakes,
+ * looking up established connections by CID, and promoting a finished handshake
+ * into {@link QuicChannelAsync} plus the public {@link QuicChannel} facade.
+ * <pre>
+ *   inbound UDP datagram
+ *      |
+ *      +--> parse QUIC packet(s)
+ *      +--> route by DCID
+ *             |
+ *             +--> existing connection   -> QuicChannelAsync
+ *             +--> handshake in progress -> QuicAsyncChannelHandshake
+ *             +--> new Initial           -> token/retry + new handshake
+ * </pre>
+ * <p>
+ * This class is the server's QUIC demultiplexer; it is not itself a single QUIC
+ * connection.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncServerChannel extends UdpAsyncServerChannel {

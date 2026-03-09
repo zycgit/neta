@@ -18,9 +18,20 @@ import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * The {@link ByteBuffer} is convert to a {@link Buffer} interface
+ * Unpooled {@link Buffer} implementation that wraps an existing heap array or
+ * {@link ByteBuffer}.
+ * <p>Unlike {@link BufferTarget}, this type does not own pooled pages. It is
+ * used by heap and direct buffers created outside the page allocator, including
+ * small cached temporary buffers.
+ * <p>Calling {@link #free()} invalidates the wrapper. For regular heap buffers
+ * this only drops references; for small cached buffers it returns the storage to
+ * the lightweight cache so it can be reused by later allocations.
+ * <p>When the wrapped storage is heap-backed, {@link Buffer#heapArray()} exposes
+ * the raw byte array as a fast path for bulk access.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see BufferTarget
+ * @see BufferCleaner
  */
 class BufferWrap implements Buffer {
     static final int                                      RECYCLE_INDEX   = RecycleObjectPool.registerType();

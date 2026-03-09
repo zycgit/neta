@@ -23,9 +23,37 @@ import java.util.Set;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Utility class to configure TCP socket options.
+ * Applies {@link TcpSoConfig} options to {@link java.nio.channels.AsynchronousSocketChannel}
+ * and {@link java.nio.channels.AsynchronousServerSocketChannel} instances.
+ * <p>The class is package-private because callers always go through the channel factory
+ * ({@link TcpProvider}), never binding to this utility directly.
+ * <p><b>Socket options configured:</b>
+ * <ul>
+ *   <li>{@code SO_RCVBUF} / {@code SO_SNDBUF}: applied via {@link TcpSoConfig#getSoRcvBuf()}
+ *       and {@link TcpSoConfig#getSoSndBuf()} when non-null.  The operation is wrapped in
+ *       {@code UnsupportedOperationException} catch to survive platforms that ignore these
+ *       options (e.g. some embedded JVMs).</li>
+ *   <li>{@code SO_REUSEADDR}: always set to {@code true} on the server listen socket to
+ *       allow rapid port reuse after restart.</li>
+ *   <li>{@code SO_KEEPALIVE}, {@code TCP_KEEPIDLE}, {@code TCP_KEEPINTERVAL},
+ *       {@code TCP_KEEPCOUNT}: applied on client/connected sockets when
+ *       {@link TcpSoConfig#getSoKeepAlive()} is {@code true}.  The three KEEPIDLE /
+ *       KEEPINTERVAL / KEEPCOUNT options are discovered at class-load time via
+ *       a probe {@link java.nio.channels.AsynchronousSocketChannel}; if the JDK or OS does
+ *       not support them the corresponding static fields remain {@code null} and the
+ *       option is silently skipped.</li>
+ * </ul>
+ * <p><b>Platform notes:</b>
+ * <ul>
+ *   <li>On Windows, {@code TCP_KEEPIDLE/KEEPINTERVAL/KEEPCOUNT} require JDK 11+ and
+ *       Windows 10 / Server 2019 or later.</li>
+ *   <li>On macOS, all three are available on JDK 11+ with macOS 10.15+.</li>
+ *   <li>On older JDK/kernel combinations the static fields will be {@code null} and
+ *       a WARN is logged at class-load time.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see TcpSoConfig
  */
 class TcpSoConfigUtils {
     private static final Logger                logger       = Logger.getLogger(TcpSoConfigUtils.class);

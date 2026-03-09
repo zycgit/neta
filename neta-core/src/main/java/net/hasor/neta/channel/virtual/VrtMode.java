@@ -15,8 +15,11 @@
  */
 package net.hasor.neta.channel.virtual;
 /**
- * Configuration for Virtual channel mode.
- * Defines whether the channel operates as Client, Server, or Default.
+ * Role marker used by virtual channels.
+ * <p>{@link #Client} and {@link #Server} are applied to the concrete
+ * {@link VrtChannel} views exposed after a virtual link is established. The
+ * {@link #Default} value is the neutral preset used by configuration and by
+ * connect-mode client creation before either side-specific channel is materialized.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

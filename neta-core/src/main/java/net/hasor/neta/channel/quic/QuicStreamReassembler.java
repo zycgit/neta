@@ -14,13 +14,26 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 import java.util.Map;
 import java.util.TreeMap;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Reassembles out-of-order STREAM/CRYPTO frame data into a contiguous byte sequence (RFC 9000 §2.2, §19.6).
+ * Reassembles out-of-order STREAM or CRYPTO fragments into contiguous bytes.
+ * <p>
+ * QUIC frame payloads can arrive with offsets, overlap because of retransmission,
+ * and complete out of order. This helper buffers fragments by offset and releases
+ * only the prefix that has become contiguous from the current read cursor.
+ * <pre>
+ *   receive:  offset 6 -> [ghi]
+ *             offset 0 -> [abcdef]
+ *   buffered: [0..5] [6..8]
+ *   deliver : [abcdefghi]
+ *   next    : offset 9
+ * </pre>
+ * <p>
+ * It is used for both stream data and CRYPTO data, so the logic is purely about
+ * ordered byte reconstruction and does not interpret frame semantics by itself.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicStreamReassembler {

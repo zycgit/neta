@@ -27,10 +27,27 @@ import net.hasor.cobble.SystemUtils;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * source code from io.netty.handler.ssl.JdkAlpnSslUtils.
+ * Reflection bridge for JDK ALPN support on {@link javax.net.ssl.SSLEngine}.
+ * <p>This helper resolves the ALPN-related JSSE methods once at class initialization and then exposes
+ * a small wrapper API used by {@link JdkSslContext}. It covers application-protocol configuration,
+ * negotiated-protocol lookup, and server-side selector installation.
+ * <p><b>Compatibility:</b> the relevant methods were added in newer JDKs and some backported JDK 8
+ * builds. {@link #supportsAlpn()} reports whether protocol lookup is available. The mutator methods in
+ * this class are not documented as no-ops on unsupported runtimes; callers are expected to use them only
+ * in environments where reflective initialization succeeded.
+ * <p><b>Usage:</b> called internally by {@link JdkSslContext#configSslEngine(javax.net.ssl.SSLContext, SSLEngine)}
+ * to install the application-protocol list or selector on the freshly created engine:
+ * <pre>
+ *   JdkAlpnSslUtils.setApplicationProtocols(engine, "h2", "http/1.1");
+ *   // later, after handshake:
+ *   String selected = JdkAlpnSslUtils.getApplicationProtocol(engine);
+ * </pre>
+ * <p>Adapted from {@code io.netty.handler.ssl.JdkAlpnSslUtils}.
  * @author Netty
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
+ * @see JdkSslContext
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc7301">RFC 7301 — ALPN</a>
  */
 class JdkAlpnSslUtils {
     private static final Logger logger = Logger.getLogger(JdkAlpnSslUtils.class);

@@ -27,10 +27,23 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * Completion handler for TCP read operations.
- * Processes received data and notifies the pipeline.
+ * TCP receive-side {@link CompletionHandler} that keeps an asynchronous read
+ * loop alive for one {@link TcpAsyncChannel}.
+ * <p>Completed reads copy bytes from the reusable swap buffer into a fresh
+ * {@link ByteBuf}, forward that payload into the channel pipeline, and then arm
+ * the next read operation immediately.
+ * <p>The handler also normalises transport-specific edge cases such as EOF,
+ * local input shutdown, read timeouts, connection timeouts, and closed-channel
+ * failures into Neta's {@link SoException} hierarchy before reporting them to
+ * {@link SoContextService}.
+ * <p>The swap buffer is allocated once per channel and released when this
+ * handler is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see TcpAsyncChannel
+ * @see SoRcvException
+ * @see SoReadTimeoutException
+ * @see SoInputCloseException
  */
 class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextService>, Closeable {
     private static final Logger           logger = Logger.getLogger(TcpRcvCompletionHandler.class);

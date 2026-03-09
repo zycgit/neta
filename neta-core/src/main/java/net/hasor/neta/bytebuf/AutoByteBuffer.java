@@ -19,9 +19,42 @@ import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * 基于 {@link ByteBuffer} 的自动扩缩容 {@link ByteBuf} 实现
+ * Auto-resizing {@link ByteBuf} backed by a {@link java.nio.ByteBuffer}.
+ * <p>Similar to {@link AutoArrayByteBuf} but uses a {@link java.nio.ByteBuffer}
+ * as the underlying storage, which can be either a JVM heap buffer
+ * ({@link java.nio.ByteBuffer#allocate}) or a JVM direct buffer
+ * ({@link java.nio.ByteBuffer#allocateDirect}).  This allows the same
+ * auto-grow semantics for scenarios that need direct memory access (e.g.,
+ * AIO DMA reads/writes).
+ *
+ * <pre>
+ * current storage
+ *
+ *   target : ByteBuffer
+ *   +-----------------------------------------------------------+
+ *   | discarded |         readable data         |   writable    |
+ *   +-----------------------------------------------------------+
+ *   0        markedReaderIndex               writerIndex      target.capacity()
+ *
+ * when resize or recycle happens
+ *
+ *   old target  --copy readable window-->  new ByteBuffer
+ *   +-----------+                         +---------------------+
+ *   | readable  | --------------------->  | readable | writable |
+ *   +-----------+                         +---------------------+
+ * </pre>
+ * <p><b>Growth strategy:</b> when a write exceeds the current capacity,
+ * a new {@link java.nio.ByteBuffer} of size
+ * {@code (current + extensionSize)} is allocated, the existing content is
+ * copied into it, and the old buffer is released (or returned to the cleaner
+ * if it is direct memory).
+ * <p><b>Recycle:</b> on {@link #markReader()}, consumed bytes are dropped and
+ * the buffer may shrink.  Recycled instances go back to the
+ * {@link net.hasor.cobble.ref.RecycleObjectPool} of type {@link #RECYCLE_INDEX}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see AutoArrayByteBuf
+ * @see RingByteBuffer
  */
 final class AutoByteBuffer extends AbstractByteBuf {
     static final int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();

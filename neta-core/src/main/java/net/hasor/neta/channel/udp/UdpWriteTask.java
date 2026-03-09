@@ -23,10 +23,22 @@ import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SoSndContext;
 
 /**
- * Task for writing data to a UDP channel.
- * Handles the actual transmission of packets via {@link DatagramChannel}.
+ * Concrete datagram sender for plain UDP channels.
+ * <p>The transport decision is simple:
+ * <ul>
+ *   <li>server-side logical channels share one unconnected socket, so sending uses
+ *       {@link DatagramChannel#send(ByteBuffer, SocketAddress)} with the logical
+ *       channel's remote address;</li>
+ *   <li>client-side channels use a socket already connected to one peer, so sending
+ *       uses {@link DatagramChannel#write(ByteBuffer)}.</li>
+ * </ul>
+ * <p>All queue management, retry handling, and error mapping remain in
+ * {@link AbstractUdpWriteTask}; this class only supplies the plain UDP transport-specific
+ * send primitive.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see AbstractUdpWriteTask
+ * @see net.hasor.neta.channel.SoSndContext
  */
 public class UdpWriteTask extends AbstractUdpWriteTask {
     private final DatagramChannel udpChannel;

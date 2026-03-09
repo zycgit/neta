@@ -15,7 +15,18 @@
  */
 package net.hasor.neta.channel;
 /**
- * Gets called if a Throwable was thrown.
+ * Control handle passed to {@code onError(...)} callbacks so a handler can clear the
+ * current exception state.
+ * <p>When an unhandled exception escapes a {@link ProtoHandler} or {@link ProtoDuplexer}
+ * during message processing, the framework sets an <em>exception flag</em> on the current
+ * pipeline invocation and switches subsequent handlers from {@code onMessage} to
+ * {@code onError}.  The exception propagates to the end of the pipeline; if nothing clears
+ * it the channel is closed.
+ * <p>A handler can intercept the exception and resume normal processing by calling
+ * {@link #clear()} from its {@code onError} implementation:
+ * <pre>
+ * ... → onMessage → [exception] → onError → onError (calls clear()) → onMessage → ...
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoDuplexer

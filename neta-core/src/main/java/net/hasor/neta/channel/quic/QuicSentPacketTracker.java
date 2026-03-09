@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.LinkedList;

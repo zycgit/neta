@@ -19,7 +19,18 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * DATAGRAM-level QUIC channel (RFC 9221) with its own pipeline; at most one per connection, obtained via {@link QuicChannel#openDatagramChannel()}.
+ * QUIC DATAGRAM sub-channel for RFC 9221 unreliable messages.
+ * <p>
+ * Each QUIC connection owns at most one DATAGRAM channel instance. It has its own
+ * pipeline and can be created explicitly through {@link QuicChannel#openDatagramChannel()},
+ * or lazily on first inbound DATAGRAM delivery when the peer sends datagram data.
+ * <pre>
+ *   QuicChannel
+ *      |
+ *      +--> QuicDatagramChannel (0 or 1 instance per connection)
+ *               |
+ *               +--> unreliable message pipeline
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @see QuicChannel#openDatagramChannel()
  */

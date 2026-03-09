@@ -20,8 +20,29 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
+ * Splits an inbound {@link ByteBuf} byte stream into frames based on one or more
+ * fixed byte-sequence delimiters.
+ * <p>
+ * Unlike {@link LineBasedFrameHandler} which only recognises {@code '\n'}/{@code '\r\n'},
+ * this handler accepts arbitrary byte sequences as delimiters — for example
+ * {@code 0x00}, {@code 0xFF 0xFE}, or the HTTP header separator {@code "\r\n\r\n"}.
+ * <p>
+ * An exception is thrown when the frame length exceeds the configured
+ * {@code maxLength} before a delimiter is found.
+ * <p>
+ * <b>Typical use cases:</b>
+ * <ul>
+ *   <li>Custom binary protocols with fixed end-of-frame markers</li>
+ *   <li>Text protocols with non-newline terminators (e.g. null-terminated strings)</li>
+ *   <li>HTTP/1.x header block detection ({@code \r\n\r\n})</li>
+ * </ul>
+ * <p>
+ * <b>Note:</b> this implementation is a placeholder; the actual delimiter-scanning
+ * logic is not yet implemented and currently throws an exception.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
+ * @see LineBasedFrameHandler
+ * @see LengthFieldBasedFrameHandler
  */
 public class DelimiterBasedFrameHandler implements ProtoHandler<ByteBuf, ByteBuf> {
     @Override

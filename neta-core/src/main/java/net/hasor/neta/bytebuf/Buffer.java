@@ -17,39 +17,48 @@ package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
 
 /**
- * Memory block basic read and write interface
+ * Basic read and write view over a memory block.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */
 public interface Buffer {
-    /** Queries if this buffer is Available(read or write) or not. */
+    /** Returns whether the buffer is still available for access. */
     boolean isAvailable();
 
-    /** The capacity of this buffer, that is, the maximum number of bytes it can contain. */
+    /** Returns the total capacity in bytes. */
     int capacity();
 
-    /** target Memory {@link ByteBuffer} */
+    /** Returns the backing JVM buffer view. */
     ByteBuffer getTarget();
 
-    /** target Memory write/reader start position */
+    /** Returns the absolute start offset in the backing storage. */
     int getOffset();
 
+    /** Reads one byte at {@code index}. */
     byte get(int index);
 
+    /** Writes one byte at {@code index}. */
     void put(int index, byte b);
 
+    /** Copies bytes into the target array slice. */
     void get(int index, byte[] dst, int dstOffset, int dstLen);
 
+    /** Copies bytes from the source array slice. */
     void put(int index, byte[] src, int srcOffset, int srcLen);
 
+    /** Copies bytes into the target buffer. */
     void get(int index, ByteBuffer dst, int dstLen);
 
+    /** Copies bytes into the target buffer range. */
     void get(int index, ByteBuffer dst, int dstOffset, int dstLen);
 
+    /** Copies bytes from the source buffer. */
     void put(int index, ByteBuffer src, int srcLen);
 
+    /** Copies bytes from the source buffer range. */
     void put(int index, ByteBuffer src, int srcOffset, int srcLen);
 
+    /** Releases the underlying memory view. */
     void free();
 
     /**

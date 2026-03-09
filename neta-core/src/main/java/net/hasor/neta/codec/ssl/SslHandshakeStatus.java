@@ -15,9 +15,13 @@
  */
 package net.hasor.neta.codec.ssl;
 /**
- * SSL mode of working
+ * Internal lifecycle state of one channel's TLS session.
+ * <p>This enum is maintained by {@link SslHandle} and observed by {@link SslContextBasic} to decide
+ * whether the current context is still handshaking, ready for normal encrypted traffic, or already
+ * closed at the TLS layer.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-12-19
+ * @see SslHandle
  */
 enum SslHandshakeStatus {
 

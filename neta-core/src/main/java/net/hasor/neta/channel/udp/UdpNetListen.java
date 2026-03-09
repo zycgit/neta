@@ -18,8 +18,10 @@ import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
 
 /**
- * Represents a listening UDP port.
- * Manages receiving of UDP packets acting as a server.
+ * Listen-handle wrapper for a bound UDP server socket.
+ * <p>This class is only the framework-visible {@link NetListen} descriptor. The
+ * actual datagram receive loop and per-peer channel creation are managed by
+ * {@link UdpAsyncServerChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

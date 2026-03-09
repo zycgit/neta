@@ -15,10 +15,26 @@
  */
 package net.hasor.neta.channel;
 /**
- * Callback used to configure (initialise) a protocol stack when a new channel is created.
- * Implementations add decoders, encoders and handlers to the {@link ProtoContext}.
+ * Callback used to populate a {@link ProtoContext} with handlers.
+ * <p>The framework invokes {@link #config(ProtoContext)} whenever it needs to build a protocol chain:
+ * for a freshly created channel's root pipeline, and also for branch pipelines owned by
+ * {@link ProtoRoutingDuplexer}. The callback therefore configures a context; it is not limited to
+ * a single top-level connect or accept event.
+ * <p>Implementations add decoders, encoders, and business-logic handlers to the
+ * {@link ProtoContext} pipeline:
+ * <pre>
+ * manager.bind(address, ctx -&gt; {               // &lt;-- ProtoInitializer
+ *     ctx.addLastDecoder("frame",  new LineBasedFrameHandler(4096, false));
+ *     ctx.addLastDecoder("string", new StringDecoder(StandardCharsets.UTF_8));
+ *     ctx.addLast("app",   new MyAppHandler());
+ * }, SoConfig.TCP());
+ * </pre>
+ * <p>The callback runs synchronously on whichever thread is constructing the pipeline, so it should
+ * stay deterministic and non-blocking.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see ProtoContext
+ * @see ProtoHelper
  */
 @FunctionalInterface
 public interface ProtoInitializer {

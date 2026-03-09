@@ -16,8 +16,20 @@
 package net.hasor.neta.channel.quic;
 
 /**
- * QUIC connection handshake phase.
+ * Public view of the handshake lifecycle reported by the QUIC stack.
+ * <p><b>State machine:</b>
+ * <pre>
+ *   INITIAL  -->  HANDSHAKE  -->  ESTABLISHED
+ *      \                           /
+ *       +---------> CLOSED <-------+
+ * </pre>
+ * <p>The enum is a simplified projection of the internal
+ * {@link QuicAsyncChannelHandshake} state. It indicates which key phase the
+ * connection has reached and whether application traffic can already flow; it
+ * is not a full description of every frame type that may appear on the wire.
  * @author 赵永春 (zyc@hasor.net)
+ * @see QuicFrameType
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9001">RFC 9001 — Using TLS to Secure QUIC</a>
  */
 public enum QuicHandshakeState {
     /** Initial state; no handshake messages exchanged yet. */

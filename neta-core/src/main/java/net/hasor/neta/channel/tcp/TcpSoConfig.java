@@ -14,26 +14,55 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.tcp;
-
 import net.hasor.neta.channel.SoConfig;
 
 /**
- * TCP specific configuration options.
+ * Configuration holder for TCP socket options.
+ * <p>Extends the base {@link net.hasor.neta.channel.SoConfig} with TCP-specific tuning
+ * knobs.  All properties follow a <em>null-means-unset</em> convention for optional
+ * socket options: when a field is {@code null} the corresponding
+ * {@code setOption()} call is simply skipped, leaving the OS default in place.
+ * <p><b>Swap buffer sizes:</b>
+ * <pre>
+ *   swapRcvBuf (default 64 KiB) — size of the direct ByteBuffer used as an
+ *       intermediate receive buffer by TcpRcvCompletionHandler before copying
+ *       incoming bytes into a managed ByteBuf.
+ *   swapSndBuf (default 64 KiB) — size of the direct ByteBuffer used by
+ *       TcpSndCompletionHandler when flushing a SoSndData to the channel.
+ * </pre>
+ * These are <em>not</em> the OS-level socket receive/send buffers
+ * ({@code SO_RCVBUF} / {@code SO_SNDBUF}); those are inherited from
+ * {@link net.hasor.neta.channel.SoConfig}.
+ * <p><b>TCP keep-alive settings:</b> Setting {@code soKeepAlive = true} activates
+ * {@code SO_KEEPALIVE} on the socket.  On Linux (kernel ≥ 2.4) and macOS the
+ * fine-grained timers {@code TCP_KEEPIDLE}, {@code TCP_KEEPINTERVAL}, and
+ * {@code TCP_KEEPCOUNT} can also be configured; they are silently ignored on
+ * platforms that do not support them at runtime.
+ * <table border="1" cellpadding="4">
+ *   <tr><th>Field</th><th>Socket option</th><th>Default</th><th>Notes</th></tr>
+ *   <tr><td>swapRcvBuf</td><td>n/a</td><td>65536</td><td>internal swap buffer size (bytes)</td></tr>
+ *   <tr><td>swapSndBuf</td><td>n/a</td><td>65536</td><td>internal swap buffer size (bytes)</td></tr>
+ *   <tr><td>soKeepAlive</td><td>SO_KEEPALIVE</td><td>null (OS default)</td><td>enable TCP keep-alive</td></tr>
+ *   <tr><td>soKeepIdleSec</td><td>TCP_KEEPIDLE</td><td>null</td><td>idle seconds before first probe</td></tr>
+ *   <tr><td>soKeepIntervalSec</td><td>TCP_KEEPINTERVAL</td><td>null</td><td>seconds between probes</td></tr>
+ *   <tr><td>soKeepCount</td><td>TCP_KEEPCOUNT</td><td>null</td><td>max unanswered probes before close</td></tr>
+ * </table>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see TcpSoConfigUtils
+ * @see net.hasor.neta.channel.SoConfig
  */
 public class TcpSoConfig extends SoConfig {
-    // swapBuffer
+    // Swap buffer sizes.
     private int swapRcvBuf = 64 * 1024;
     private int swapSndBuf = 64 * 1024;
 
-    private Boolean soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
-    private Integer soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
-    private Integer soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
-    private Integer soKeepCount       = null;      // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
-    // TCP_NODELAY  //禁用 Nagle 算法
-    //    SO_LINGER
+    private Boolean soKeepAlive       = null; // SO_KEEPALIVE.
+    private Integer soKeepIdleSec     = null; // TCP_KEEPIDLE in seconds.
+    private Integer soKeepIntervalSec = null; // TCP_KEEPINTERVAL in seconds.
+    private Integer soKeepCount       = null; // TCP_KEEPCOUNT.
 
+    /** Creates a TCP socket config with TCP provider defaults. */
     public TcpSoConfig() {
         super(TcpProvider.NAME);
     }

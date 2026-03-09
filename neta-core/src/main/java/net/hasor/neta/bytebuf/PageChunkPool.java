@@ -21,9 +21,29 @@ import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * A block of memory managed by pooling, using the buddy algorithm.
+ * Buddy-tree allocator for one contiguous chunk of pages.
+ * <p>A {@code PageChunkPool} owns {@code 2^treeHeight} pages and keeps two
+ * complementary structures in sync:
+ * <pre>
+ *  1. chunksMap
+ *     Bitmap of page usage. A set bit means the page is currently allocated.
+ *     The bitmap is split into byte-sized regions guarded by individual locks.
+ *  2. chunksHeads[level]
+ *     Free lists for buddy ranges at each tree level.
+ *     level 0           = one range covering the whole chunk
+ *     level treeHeight  = single-page ranges
+ * </pre>
+ * <p>Allocation chooses the smallest free range that can satisfy the request,
+ * then marks the covered pages in the bitmap. Freeing does the reverse and may
+ * merge buddies back into a larger free range.
+ * <p>The {@code memAddress} stored by this class is a logical memory-block ID
+ * used to find the actual {@link Buffer} in the owning {@link BufferPool}; it
+ * is not a raw native pointer.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-02-15
+ * @see PageChunk
+ * @see PageChunkSplit
+ * @see BufferArena
  */
 class PageChunkPool {
     protected final  byte[]                  chunksMap;

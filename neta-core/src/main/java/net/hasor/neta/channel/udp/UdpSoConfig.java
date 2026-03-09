@@ -17,23 +17,32 @@ package net.hasor.neta.channel.udp;
 import net.hasor.neta.channel.SoConfig;
 
 /**
- * UDP specific configuration options.
+ * Configuration object for UDP and UDP-based transports.
+ * <p>The settings here control three things in the current implementation:
+ * <ul>
+ *   <li>the size of the per-transport receive packet buffer via {@code rcvPacketSize};</li>
+ *   <li>whether {@link UdpAsyncClientChannel} should ignore datagrams from senders other
+ *       than the configured remote peer via {@code rcvRemoteOnly};</li>
+ *   <li>retry policy used by {@link AbstractUdpWriteTask} when a datagram send cannot
+ *       make progress immediately.</li>
+ * </ul>
+ * <p>The base {@link SoConfig} buffer fields still map to OS socket options through
+ * {@link UdpSoConfigUtils}. The logical receive-packet size resolved by
+ * {@link UdpSoConfigUtils#getRcvPacketSize(UdpSoConfig)} determines the capacity of the
+ * shared receive buffer used by {@link UdpTransport}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see UdpSoConfigUtils
+ * @see net.hasor.neta.channel.SoConfig
  */
 public class UdpSoConfig extends SoConfig {
     private Integer rcvPacketSize;
     private boolean rcvRemoteOnly           = true;
-    // write-timeout retry (channel-level)
-    private int     sndWriteRetryCount      = 0;   // 0 = no retry; N = retry up to N times on write timeout
-    private int     sndWriteRetryIntervalMs = 50;  // delay between retries in milliseconds
-    //SO_REUSEADDR	重复使用地址
-    //SO_BROADCAST	允许传输广播数据报
-    //IP_TOS	互联网协议 (IP) 标头中的服务类型 (ToS) 八位字节
-    //IP_MULTICAST_IF	网际协议 (IP) 多播数据报的网络接口
-    //IP_MULTICAST_TTL	time-to-live 用于 Internet 协议 (IP) 多播数据报
-    //IP_MULTICAST_LOOP	互联网协议 (IP) 多播数据报的环回
+    // Channel-level write timeout retry settings.
+    private int     sndWriteRetryCount      = 0;   // 0 = disabled.
+    private int     sndWriteRetryIntervalMs = 50;  // Delay between retries in milliseconds.
 
+    /** Creates a UDP socket config with UDP provider defaults. */
     public UdpSoConfig() {
         super(UdpProvider.NAME);
     }

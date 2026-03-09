@@ -17,8 +17,32 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Handles data transfer between virtual channels.
- * Manages the distribution and routing of payloads in the virtual network.
+ * Routes outbound payloads between linked virtual channels.
+ * <p>This is the core in-memory transport bus used by the virtual channel
+ * package. It subscribes to {@link PlayLoad} publication from the shared
+ * {@link SoContext}, finds every {@link VrtTransferLink} registered for the
+ * source channel, optionally simulates loss, and then hands the payload to the
+ * target channel after conversion and batching.
+ * <p><b>Data path:</b>
+ * <pre>
+ *   sender VrtChannel.write()
+ *       -> context.trigger(PlayLoad)
+ *       -> VrtTransfer subscription callback
+ *       -> distributeMap[sourceChannelId]
+ *       -> VrtTransferLink.cacheQueue/tempQueue
+ *       -> target.onReceive(...)
+ * </pre>
+ * <ul>
+ *   <li><b>Link scope:</b> the routing table is keyed by source channel id, and each
+ *       source may fan out to multiple target links.</li>
+ *   <li><b>Conversion:</b> {@link #duplicate()} creates per-receiver copies for
+ *       {@link ByteBuf} payloads, while {@link #direct()} forwards references as-is.</li>
+ *   <li><b>Delivery mode:</b> when constructed as asynchronous, each target dispatch is
+ *       submitted back to the manager executor; otherwise delivery happens inline.</li>
+ *   <li><b>Loss simulation:</b> {@code lossRate} is applied as the current implementation's
+ *       threshold filter. A value of {@code 0} disables dropping, and larger values make
+ *       dropping less likely because a packet is skipped only when {@code random(0..99) > lossRate}.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

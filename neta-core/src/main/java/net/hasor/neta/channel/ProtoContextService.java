@@ -22,11 +22,19 @@ import net.hasor.cobble.concurrent.future.Futures;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Default {@link ProtoContext} implementation bound to a single channel.
- * <p>Manages the handler chain ({@link ProtoStackChain}), per-event flash storage,
- * context attachments, and pipeline manipulation (add/remove handlers).</p>
+ * Default {@link ProtoContext} implementation for one logical channel pipeline.
+ * <p>It holds the channel-facing {@link ProtoStackChain}, typed attachments
+ * exposed through {@link ProtoContext#context(Class)}, per-pass flash data, and
+ * the re-entrant status stack used while the pipeline invokes nested receive or
+ * send operations.
+ * <p>Branch pipelines created by routing or multiplexing build child
+ * {@code ProtoContextService} instances. A child keeps its own attachments and
+ * stack state, shares the parent's flash map, and knows where encoded data must
+ * re-enter the parent pipeline when it is sent upward.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see ProtoContext
+ * @see ProtoStackChain
  */
 class ProtoContextService implements ProtoContext {
     private final    SoChannel<?>          channel;

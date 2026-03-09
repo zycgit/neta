@@ -30,7 +30,26 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslCertHelper;
 
 /**
- * Shared TLS 1.3/QUIC handshake logic for both client and server channels, managing state machine, keys, and packet protection.
+ * Shared QUIC handshake runtime for both client and server flows.
+ * <p>This class owns the pre-establishment state machine: Initial/Handshake/1-RTT
+ * packet numbers, version-specific Initial keys, optional TLS 1.3 integration,
+ * CRYPTO frame reassembly, transport-parameter exchange, and the transition to
+ * the post-handshake {@link QuicChannelAsync} world.
+ * <p><b>High-level progression:</b>
+ * <pre>
+ *   client/server setup
+ *        |
+ *        +--> derive Initial keys from DCID
+ *        +--> exchange Initial packets
+ *        +--> reassemble CRYPTO data
+ *        +--> drive QuicTlsEngine if TLS is enabled
+ *        +--> derive Handshake keys
+ *        +--> derive 1-RTT keys
+ *        +--> build QuicInitConfigData
+ *        +--> hand off to QuicChannelAsync / QuicChannel
+ * </pre>
+ * <p>The implementation also supports non-TLS mode, where CRYPTO payloads are
+ * still used as the handshake carrier but no TLS engine is created.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncChannelHandshake {

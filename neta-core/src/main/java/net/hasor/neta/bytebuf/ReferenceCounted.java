@@ -16,13 +16,14 @@
 package net.hasor.neta.bytebuf;
 
 /**
- * A reference-counted object that requires explicit deallocation.
- * <p>
- * When a new {@link ReferenceCounted} is instantiated, it starts with the reference count of {@code 1}.
- * {@link #retain()} increases the reference count, and {@link #release()} decreases the reference count.
- * If the reference count decreases to {@code 0}, the object will be deallocated explicitly, and accessing
- * the deallocated object will usually result in an access violation.
- * </p>
+ * Contract for objects whose lifetime is managed through explicit reference
+ * counting.
+ * <p>A newly created instance starts with {@code refCnt() == 1}. Additional
+ * shared ownership is recorded with {@link #retain()}, and ownership is
+ * relinquished with {@link #release()}. Once the count reaches zero, the
+ * implementation deallocates the underlying resource immediately.
+ * <p>After the final release, further access is invalid and typically results in
+ * implementation-specific failures such as {@link IllegalStateException}.
  */
 public interface ReferenceCounted {
     /**

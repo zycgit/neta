@@ -22,11 +22,12 @@ import net.hasor.neta.codec.DelimiterBasedFrameHandler;
 import net.hasor.neta.codec.LineBasedFrameHandler;
 
 /**
- * Decodes a received {@link ByteBuf} into a {@link String}.
- * Please note that this decoder must be used with a proper ByteBuf to String
- * such as {@link DelimiterBasedFrameHandler} or {@link LineBasedFrameHandler}
- * if you are using a stream-based transport such as TCP/IP.
- * A typical setup for a text-based line protocol in a TCP/IP socket
+ * Decodes each received {@link ByteBuf} into a {@link String} with the configured charset.
+ * <p>
+ * This handler performs only byte-to-string conversion. It does not split a byte
+ * stream into message boundaries, so stream transports such as TCP should pair it
+ * with a frame decoder like {@link DelimiterBasedFrameHandler} or
+ * {@link LineBasedFrameHandler} first.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */

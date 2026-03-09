@@ -16,9 +16,24 @@
 package net.hasor.neta.channel;
 
 /**
- * Thrown when a channel read operation times out.
+ * Thrown when a read-idle timeout condition is reported for a channel.
+ * <p>Unlike {@link SoRcvException}, this does not necessarily indicate a transport failure.
+ * It is used both by transport receive loops and by explicit wait-for-receive helpers on
+ * {@link NetChannel}. Common handling strategies:
+ * <ul>
+ *   <li><b>Heartbeat / keep-alive</b> – send a probe message and reset the idle timer;
+ *       close the channel only if the peer fails to respond within a further grace period.</li>
+ *   <li><b>Immediate close</b> – suitable for protocols with strict activity requirements
+ *       where any silence indicates a dead peer.</li>
+ *   <li><b>Log and ignore</b> – if the protocol allows long idle gaps (e.g., a push stream
+ *       with infrequent messages), simply log the event and continue waiting.</li>
+ * </ul>
+ * <p>The transport-level read timeout is configured via {@link SoConfig#getSoReadTimeoutMs()}.
+ * A value of {@code -1} disables that idle check.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoWriteTimeoutException
+ * @see SoTimeoutException
  */
 public class SoReadTimeoutException extends SoTimeoutException {
     public SoReadTimeoutException(String s) {

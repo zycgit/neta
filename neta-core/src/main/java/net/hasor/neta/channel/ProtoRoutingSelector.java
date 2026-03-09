@@ -15,8 +15,9 @@
  */
 package net.hasor.neta.channel;
 /**
- * Routing predicate for branching pipeline. Evaluates pipeline state and/or
- * incoming data to determine which sub-pipeline branch should handle the connection.
+ * Routing predicate used by {@link ProtoRoutingDuplexer} to choose a branch.
+ * Evaluates pipeline state and/or inbound data to determine which sub-pipeline should handle
+ * the current receive pass.
  * <p>
  * The routing decision is attempted in two phases:
  * <ol>
@@ -27,7 +28,8 @@ package net.hasor.neta.channel;
  *   <li><b>onMessage phase</b> — called with actual {@code rcvUp} queue during the first RCV
  *       invocation. This supports data-based routing (e.g. inspecting the first byte).</li>
  * </ol>
- * Once determined, the routing decision is cached for the lifetime of the connection.
+ * In {@link ProtoRoutingMode#STATIC} the selected route is cached until explicitly switched.
+ * In {@link ProtoRoutingMode#REALTIME} the selector may be evaluated again on later inbound passes.
  * </p>
  * <p>
  * Routing decisions can be based on:

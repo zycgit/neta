@@ -24,9 +24,20 @@ import net.hasor.cobble.function.ESupplier;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Encapsulate SSLEngine.
+ * Lightweight wrapper around {@link SSLEngine} used by {@link SslHandle}.
+ * <p>The actual engine is created lazily when {@link #beginHandshake()} is
+ * called. This delays SSL engine construction until the channel is ready and
+ * keeps engine creation logic inside the supplied factory.
+ * <p>Once initialised, this wrapper exposes the small subset of engine methods
+ * needed by Neta's TLS implementation: handshake state queries, packet and
+ * application buffer sizing, delegated-task execution, and the single-buffer
+ * {@code wrap}/{@code unwrap} operations used by the current pipeline.
+ * <p>This type is not thread-safe and is intended to be driven by the same I/O
+ * thread that owns the TLS state machine.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see SslHandle
+ * @see SSLEngine
  */
 class SslEngineWrap {
     private static final Logger                            logger = Logger.getLogger(SslHandle.class);

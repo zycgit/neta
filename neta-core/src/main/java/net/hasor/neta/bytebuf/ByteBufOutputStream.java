@@ -22,12 +22,11 @@ import java.nio.charset.StandardCharsets;
 import java.util.Objects;
 
 /**
- * An {@link OutputStream} which writes data to a {@link ByteBuf}.
- * This stream implements {@link DataOutput} for your convenience.
- * The endianness of the stream is not always big endian but depends on
- * the endianness of the underlying buffer.
- * Implement copy from netty io.netty.buffer.ByteBufOutputStream,
- * The ByteBuf implementation is replaced with cobble.bytebuf
+ * Sequential {@link OutputStream}/{@link DataOutput} view over a {@link ByteBuf}.
+ * <p>Writes append to the wrapped buffer by advancing its {@code writerIndex}.
+ * Primitive values follow the current byte order of the target buffer.
+ * <p>An optional cache threshold can be used to call {@link ByteBuf#flush()}
+ * automatically after enough bytes have been written.
  * @see ByteBufInputStream
  */
 public class ByteBufOutputStream extends OutputStream implements DataOutput {
@@ -37,15 +36,14 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
     private       boolean          closed;
 
     /**
-     * Creates a new stream which writes data to the specified {@code buffer}. (no cache)
+     * Creates a stream with auto flush disabled.
      */
     public ByteBufOutputStream(ByteBuf buffer) {
         this(buffer, -1);
     }
 
     /**
-     * Creates a new stream which writes data to the specified {@code buffer}.
-     * @param cacheSize -1 is no cache
+     * Creates a stream with an optional auto flush threshold.
      */
     public ByteBufOutputStream(ByteBuf buffer, int cacheSize) {
         this.buffer = Objects.requireNonNull(buffer, "buffer");
@@ -59,6 +57,7 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         return this.buffer.writtenBytes();
     }
 
+    /** Writes a byte array slice to the buffer. */
     @Override
     public void write(byte[] b, int off, int len) throws IOException {
         if (len == 0) {
@@ -69,42 +68,49 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         autoFlush();
     }
 
+    /** Writes a full byte array to the buffer. */
     @Override
     public void write(byte[] b) throws IOException {
         this.buffer.writeBytes(b);
         autoFlush();
     }
 
+    /** Writes a single byte to the buffer. */
     @Override
     public void write(int b) throws IOException {
         this.buffer.writeByte((byte) b);
         autoFlush();
     }
 
+    /** Writes a boolean as one byte. */
     @Override
     public void writeBoolean(boolean v) throws IOException {
         this.buffer.writeByte((byte) (v ? 1 : 0));
         autoFlush();
     }
 
+    /** Writes the low byte of the value. */
     @Override
     public void writeByte(int v) throws IOException {
         this.buffer.writeByte((byte) v);
         autoFlush();
     }
 
+    /** Writes ASCII bytes for the string. */
     @Override
     public void writeBytes(String s) throws IOException {
         this.buffer.writeString(s, StandardCharsets.US_ASCII);
         autoFlush();
     }
 
+    /** Writes a 16-bit character value. */
     @Override
     public void writeChar(int v) throws IOException {
         this.buffer.writeInt16((short) v);
         autoFlush();
     }
 
+    /** Writes each character as a 16-bit value. */
     @Override
     public void writeChars(String s) throws IOException {
         int len = s.length();
@@ -114,41 +120,48 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         }
     }
 
+    /** Writes a 64-bit floating point value. */
     @Override
     public void writeDouble(double v) throws IOException {
         this.buffer.writeFloat64(v);
         autoFlush();
     }
 
+    /** Writes a 32-bit floating point value. */
     @Override
     public void writeFloat(float v) throws IOException {
         this.buffer.writeFloat32(v);
         autoFlush();
     }
 
+    /** Writes a 32-bit integer value. */
     @Override
     public void writeInt(int v) throws IOException {
         this.buffer.writeInt32(v);
         autoFlush();
     }
 
+    /** Writes a 64-bit integer value. */
     @Override
     public void writeLong(long v) throws IOException {
         this.buffer.writeInt64(v);
         autoFlush();
     }
 
+    /** Writes the low 16 bits of the value. */
     @Override
     public void writeShort(int v) throws IOException {
         this.buffer.writeInt16((short) v);
         autoFlush();
     }
 
+    /** Writes a 24-bit integer value. */
     public void writeMedium(int v) throws IOException {
         this.buffer.writeInt24(v);
         autoFlush();
     }
 
+    /** Writes a modified UTF-8 string. */
     @Override
     public void writeUTF(String s) throws IOException {
         DataOutputStream out = this.utf8out;
@@ -170,18 +183,18 @@ public class ByteBufOutputStream extends OutputStream implements DataOutput {
         }
     }
 
-    /**
-     * Returns the buffer where this stream is writing data.
-     */
+    /** Returns the target buffer. */
     public ByteBuf buffer() {
         return buffer;
     }
 
+    /** Flushes buffered writes to the underlying ByteBuf. */
     @Override
     public void flush() throws IOException {
         this.buffer.flush();
     }
 
+    /** Closes this stream and the cached UTF helper stream. */
     @Override
     public void close() throws IOException {
         if (this.closed) {

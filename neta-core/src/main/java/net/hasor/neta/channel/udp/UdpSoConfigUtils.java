@@ -22,9 +22,30 @@ import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Utility class to configure UDP socket options.
+ * Applies {@link UdpSoConfig} options to {@link java.nio.channels.DatagramChannel}
+ * instances and resolves the effective receive packet size.
+ * <p><b>Socket options configured:</b>
+ * <ul>
+ *   <li>{@code SO_RCVBUF} / {@code SO_SNDBUF}: set when the corresponding field in
+ *       {@link UdpSoConfig} is non-null.  Silently skipped on platforms that reject
+ *       the option ({@code UnsupportedOperationException}).</li>
+ *   <li>{@code SO_REUSEADDR}: always set to {@code true} on the server socket to
+ *       allow the same port to be reused after restart or unclean shutdown.</li>
+ * </ul>
+ * <p><b>Receive packet size resolution ({@link #getRcvPacketSize}):</b>
+ * The method returns the effective maximum datagram size as:
+ * <ol>
+ *   <li>If both {@code soRcvBuf} and {@code rcvPacketSize} are set: {@code min} of both.</li>
+ *   <li>If only {@code rcvPacketSize} is set: use it directly.</li>
+ *   <li>If only {@code soRcvBuf} is set: use it as a fallback.</li>
+ *   <li>If neither is set: throws {@link NullPointerException} to force the
+ *       caller to provide at least one of them.</li>
+ * </ol>
+ * This value is used as the capacity of the per-channel receive {@link java.nio.ByteBuffer}.
+ * Any incoming datagram larger than this size will be silently truncated by the OS.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see UdpSoConfig
  */
 public class UdpSoConfigUtils {
     private static final Logger                logger       = Logger.getLogger(UdpSoConfigUtils.class);

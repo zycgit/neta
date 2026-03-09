@@ -22,10 +22,39 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * Virtual implementation of asynchronous client channel.
- * Handles virtual connection and data processing.
+ * In-process implementation of the raw virtual transport channel.
+ * <p>This type is the low-level adapter used by {@link VrtProvider} to back
+ * both connect-mode clients and standalone virtual channels. It never opens an
+ * OS socket. Instead it creates a {@link VrtChannel} facade and forwards
+ * outbound payloads into the shared {@link SoContext} so that
+ * {@link VrtTransfer} can fan them out to linked peers.
+ * <p><b>Lifecycle:</b>
+ * <pre>
+ *   connectTo(initializer)
+ *       -> create client-side VrtChannel
+ *       -> if a target server exists: target.acceptLink(clientSide)
+ *       -> server creates its own VrtChannel and links both sides through VrtTransfer
+ *   write(...)
+ *       -> pull SoSndData from the send queue
+ *       -> wrap it as PlayLoadObject(channel, data, ...)
+ *       -> context.trigger(playLoad)
+ *       -> VrtTransfer delivers it to every linked VrtTransferLink
+ * </pre>
+ * <ul>
+ *   <li><b>Addresses:</b> local and remote addresses are {@link VrtSocketAddress}
+ *       instances. The local address reuses the target numeric address and marks it
+ *       as a connect-side endpoint when a server target is present.</li>
+ *   <li><b>Role selection:</b> {@link AsyncChannel#connectTo(ProtoInitializer, net.hasor.cobble.concurrent.future.Future)}
+ *       upgrades the exposed {@link VrtChannel} to {@link VrtMode#Client} only when a
+ *       target server is found. Otherwise the configured mode is kept.</li>
+ *   <li><b>Close semantics:</b> {@link #close()} is a hard local close. It only flips the
+ *       open flag and notifies the context; there is no half-close handshake.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
+ * @see VrtAsyncServerChannel
+ * @see VrtSoConfig
+ * @see VrtTransfer
  */
 class VrtAsyncChannel implements AsyncChannel {
     private static final Logger                logger = Logger.getLogger(VrtAsyncChannel.class);

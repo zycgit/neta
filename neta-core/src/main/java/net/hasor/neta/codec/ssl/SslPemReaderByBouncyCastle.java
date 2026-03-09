@@ -36,9 +36,19 @@ import org.bouncycastle.pkcs.PKCS8EncryptedPrivateKeyInfo;
 import org.bouncycastle.pkcs.PKCSException;
 
 /**
- * this class copy form Netty io.netty.handler.ssl.BouncyCastlePemReader
+ * Optional PEM private-key reader backed by BouncyCastle.
+ * <p>The standard JDK path used by {@link SslUtils} is sufficient for plain
+ * PKCS#8 material, but encrypted or legacy PEM formats often require parsing
+ * and decryption helpers that are only available through BouncyCastle.
+ * <p>This class detects BouncyCastle lazily, exposes that availability through
+ * {@link #isAvailable()}, and when present can extract a {@link PrivateKey} from
+ * common PEM variants such as unencrypted PKCS#8, encrypted PKCS#8, PKCS#1, and
+ * BouncyCastle's key-pair representations.
+ * <p>If BouncyCastle is absent or parsing fails, callers are expected to fall
+ * back to the non-BouncyCastle path in {@link SslUtils}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SslUtils
  */
 class SslPemReaderByBouncyCastle {
     private static final String BC_PROVIDER  = "org.bouncycastle.jce.provider.BouncyCastleProvider";

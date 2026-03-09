@@ -19,9 +19,23 @@ import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * A contiguous block of memory that is allocated.
+ * Live allocation descriptor returned by {@link PageChunkPool}.
+ * <p>{@link PageChunk} models free ranges inside the buddy tree, while
+ * {@code PageChunkSplit} models a range that is currently in use. The stored
+ * page interval is inclusive on both ends and is backed by a reference-counted
+ * ownership record so multiple logical views can share the same physical pages.
+ * <p>{@code duplicate()} creates another descriptor that shares the same pages
+ * and increments the reference count. {@code split(int)} creates an independent
+ * head allocation only when the current descriptor is not shared
+ * ({@code refCount == 1}).
+ * <p>Calling {@link #free()} decrements the shared reference count; only the
+ * final release returns the pages to {@link PageChunkPool} and recycles the
+ * descriptor object.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-02-15
+ * @see PageChunk
+ * @see PageChunkPool
+ * @see PageRange
  */
 class PageChunkSplit implements PageRange {
     static final  int                                          RECYCLE_INDEX   = RecycleObjectPool.registerType();

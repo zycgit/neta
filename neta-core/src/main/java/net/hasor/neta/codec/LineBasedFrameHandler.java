@@ -19,15 +19,18 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * A decoder that splits the received {@link ByteBuf}s on line endings.
+ * Splits queued {@link ByteBuf} data into frames terminated by {@code '\n'} or {@code "\r\n"}.
  * <p>
- * Both {@code "\n"} and {@code "\r\n"} are handled.
+ * The handler scans raw bytes, can join delimiters that span multiple queued buffers,
+ * and optionally keeps or strips the line delimiter from the emitted frame.
+ * <pre>
+ * input queue:   ["abc\r"] ["\n123\n"]
+ * strip=true  -> ["abc"] ["123"]
+ * strip=false -> ["abc\r\n"] ["123\n"]
+ * </pre>
  * <p>
- * The byte stream is expected to be in UTF-8 character encoding or ASCII. The current implementation
- * uses direct {@code byte} to {@code char} cast and then compares that {@code char} to a few low range
- * ASCII characters like {@code '\n'} or {@code '\r'}. UTF-8 is not using low range [0..0x7F]
- * byte values for multibyte codepoint representations therefore fully supported by this implementation.
- * <p>
+ * {@code maxLength} limits the content length before the delimiter. If no delimiter
+ * is found before that limit is exceeded, a {@link TooLongFrameException} is thrown.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */

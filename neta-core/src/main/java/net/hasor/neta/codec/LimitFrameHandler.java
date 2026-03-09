@@ -21,61 +21,20 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * in {@link ByteBuf} is split into multiple or merge {@link ByteBuf} using a fixed length
+ * Re-chunks {@link ByteBuf} messages into frames whose size stays within a configured range.
+ * <p>
+ * The handler reads bytes across one or more queued buffers, emits full frames of
+ * {@code maxLength}, and optionally emits one final shorter frame when its size is
+ * at least {@code minLength}. If the currently accumulated bytes do not reach
+ * {@code minLength}, the data stays in the source queue and waits for more input.
  * <pre>
- * <b>Case 1</b>
- * <b>minLength</b>   = <b>5</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (26 bytes)    AFTER (26 bytes)
- * +----------+        +----------+----------+---------+
- * | 26 bytes | -----> | 10 bytes | 10 bytes | 6 bytes |
- * +----------+        +----------+----------+---------+
+ * min=5, max=10
+ * input queue:   [4 bytes] [10 bytes] [2 bytes]
+ * output frames: [10 bytes] [6 bytes]
  * </pre>
- * <pre>
- * <b>Case 2</b>
- * <b>minLength</b>   = <b>10</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (26 bytes)    AFTER (20 bytes)
- * +----------+        +----------+----------+
- * | 26 bytes | -----> | 10 bytes | 10 bytes |
- * +----------+        +----------+----------+
- * </pre>
- * <pre>
- * <b>Case 3</b>
- * <b>minLength</b>   = <b>1</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (16 bytes)                     AFTER (16 bytes)
- * +------------------------------+      +----------+---------+
- * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes | 6 bytes |
- * +------------------------------+      +----------+---------+
- * </pre>
- * <pre>
- * <b>Case 4</b>
- * <b>minLength</b>   = <b>5</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (16 bytes)                     AFTER (16 bytes)
- * +------------------------------+      +----------+---------+
- * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes | 6 bytes |
- * +------------------------------+      +----------+---------+
- * </pre>
- * <pre>
- * <b>Case 5</b>
- * <b>minLength</b>   = <b>10</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (16 bytes)                     AFTER (10 bytes)
- * +------------------------------+      +----------+
- * | 4 bytes | 10 bytes | 2 bytes | ---> | 10 bytes |
- * +------------------------------+      +----------+
- * </pre>
- * <pre>
- * <b>Case 6</b>
- * <b>minLength</b>   = <b>4</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (16 bytes)              AFTER (14 bytes)
- * +---+---+---+---+---+---+      +---+---+---+
- * | 2 | 2 | 2 | 4 | 4 | 2 | ---> | 4 | 6 | 4 |
- * +---+---+---+---+---+---+      +---+---+---+
- * </pre>
+ * <p>
+ * The same logic is used on whichever side of the pipeline the handler is added,
+ * so it can be used as either a decoder or an encoder.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */

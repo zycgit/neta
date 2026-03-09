@@ -22,8 +22,32 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.ProtoRcvQueue;
 
 /**
+ * Central registry for the {@link ByteBufAllocator}s pre-wired in Neta and
+ * a set of utility methods used by the framework internally.
+ * <p><b>Five pre-built allocators:</b>
+ * <table border="1" summary="pre-built allocators">
+ *   <tr><th>Constant</th><th>Pooled</th><th>Memory type</th></tr>
+ *   <tr><td>{@link #DEFAULT_ALLOCATOR}</td><td>configurable</td><td>configurable</td></tr>
+ *   <tr><td>{@link #POOLED_HEAP_ALLOCATOR}</td><td>yes</td><td>JVM heap</td></tr>
+ *   <tr><td>{@link #POOLED_DIRECT_ALLOCATOR}</td><td>yes</td><td>off-heap direct</td></tr>
+ *   <tr><td>{@link #UNPOOLED_HEAP_ALLOCATOR}</td><td>no</td><td>JVM heap</td></tr>
+ *   <tr><td>{@link #UNPOOLED_DIRECT_ALLOCATOR}</td><td>no</td><td>off-heap direct</td></tr>
+ * </table>
+ * <p>{@link #DEFAULT_ALLOCATOR} is selected at class-load time via system properties:
+ * <ul>
+ *   <li>{@code neta.bytebuf.type} — {@code pooled} (default) or {@code unpooled}.</li>
+ *   <li>{@code neta.bytebuf.mem} — {@code heap} (default) or {@code direct}.</li>
+ *   <li>{@code neta.bytebuf.sliceSize} — growth-step size in bytes (default 1024).</li>
+ * </ul>
+ * <p>{@link #CLEANER} is wired at class-load time to either
+ * {@code BufferCleanerJava9} or {@code BufferCleanerJava6} depending on the
+ * detected JDK version.  It is {@code null} if {@code sun.misc.Unsafe} is
+ * unavailable on the current security policy.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see ByteBufAllocator
+ * @see BasicByteBufAllocator
+ * @see BufferCleaner
  */
 public class ByteBufUtils {
     public static final  ByteBufAllocator DEFAULT_ALLOCATOR;
@@ -136,7 +160,7 @@ public class ByteBufUtils {
         }
     }
 
-    /** Returns the default {@link ByteBufAllocator}, guaranteed non-null even during class-initialization */
+    /** Returns a non-null default allocator, even during early static initialization. */
     static ByteBufAllocator defaultAllocator() {
         ByteBufAllocator alloc = DEFAULT_ALLOCATOR;
         if (alloc != null) {
@@ -172,6 +196,7 @@ public class ByteBufUtils {
         return CLEANER != null;
     }
 
+    /** Copies the readable bytes of the buffer into a new byte array. */
     public static byte[] toBytes(ByteBuf buf) {
         int available = buf.readableBytes();
         byte[] bytes = new byte[available];
@@ -231,6 +256,7 @@ public class ByteBufUtils {
         return composite;
     }
 
+    /** Returns the total readable byte count of all buffers in the list. */
     public static int readableBytes(List<ByteBuf> buffers) {
         int readableBytes = 0;
         for (ByteBuf peek : buffers) {
@@ -239,10 +265,12 @@ public class ByteBufUtils {
         return readableBytes;
     }
 
+    /** Returns whether the list contains at least {@code readLength} readable bytes. */
     public static boolean readableBytes(List<ByteBuf> buffers, int readLength) {
         return readableBytes(buffers, 0, readLength);
     }
 
+    /** Returns whether the list contains at least {@code readLength} readable bytes from {@code formIdx}. */
     public static boolean readableBytes(List<ByteBuf> buffers, int formIdx, int readLength) {
         long readableBytes = 0;
         for (int i = formIdx; i < buffers.size(); i++) {
@@ -255,6 +283,7 @@ public class ByteBufUtils {
         return readableBytes >= readLength;
     }
 
+    /** Resets the reader index of each buffer in the list. */
     public static void resetReader(List<ByteBuf> buffers) {
         if (buffers == null) {
             return;
@@ -264,6 +293,7 @@ public class ByteBufUtils {
         }
     }
 
+    /** Resets the writer index of each buffer in the list. */
     public static void resetWriter(List<ByteBuf> buffers) {
         if (buffers == null) {
             return;
@@ -273,6 +303,7 @@ public class ByteBufUtils {
         }
     }
 
+    /** Flushes each buffer in order. */
     public static void flush(ByteBuf... buffers) throws IOException {
         if (buffers == null) {
             return;
@@ -300,7 +331,7 @@ public class ByteBufUtils {
         return SmallBufferCache.currentThreadCacheSize();
     }
 
-    /** Lazy-init holder – deferred until first access, avoiding circular static init with {@link ByteBufAllocator}. */
+    /** Lazy-init holder used to avoid circular allocator initialization. */
     private static class AllocatorHolder {
         static final ByteBufAllocator UNPOOLED_HEAP;
         static final ByteBufAllocator POOLED_HEAP;

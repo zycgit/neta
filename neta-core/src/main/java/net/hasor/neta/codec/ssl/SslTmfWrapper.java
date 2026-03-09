@@ -19,6 +19,26 @@ import java.util.Objects;
 import javax.net.ssl.ManagerFactoryParameters;
 import javax.net.ssl.TrustManager;
 
+/**
+ * A {@link SimpleTrustManagerFactory} that wraps an existing
+ * {@link javax.net.ssl.TrustManager} (or array of them) into a
+ * {@link javax.net.ssl.TrustManagerFactory} that can be passed to
+ * {@link javax.net.ssl.SSLContext#init}.
+ * <p>Typical usage is to wrap a custom or test {@code TrustManager}:
+ * <pre>
+ *   TrustManager tm = new X509TrustManager() {
+ *       public void checkClientTrusted(X509Certificate[] c, String a) {}
+ *       public void checkServerTrusted(X509Certificate[] c, String a) {}
+ *       public X509Certificate[] getAcceptedIssuers() { return new X509Certificate[0]; }
+ *   };
+ *   SslConfig config = new SslConfig();
+ *   config.setTrustManagerFactory(new SslTmfWrapper(tm));  // trust everything
+ * </pre>
+ * <p>The {@link #engineGetTrustManagers()} method returns a defensive copy of
+ * the wrapped array so callers cannot mutate the internal state.
+ * @see SimpleTrustManagerFactory
+ * @see javax.net.ssl.TrustManager
+ */
 public final class SslTmfWrapper extends SimpleTrustManagerFactory {
     private final TrustManager[] tmArray;
 

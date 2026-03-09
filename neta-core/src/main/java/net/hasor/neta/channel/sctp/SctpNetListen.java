@@ -18,8 +18,10 @@ import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
 
 /**
- * Represents a listening SCTP server port.
- * Manages the lifecycle of the server socket and accepting new connections.
+ * Listen-handle wrapper for an SCTP server binding.
+ * <p>This class is only the framework-facing {@link NetListen} descriptor for an
+ * SCTP listen socket. The actual accept loop and socket lifecycle are managed by
+ * {@link SctpAsyncServerChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

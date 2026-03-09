@@ -25,9 +25,39 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * An implementation of the {@link SslContext} interface that provides SSL handshake support
+ * Base implementation shared by concrete TLS context variants.
+ * <p>This class combines the channel-facing {@link SslContext} API with three operational pieces:
+ * the provider-specific {@link javax.net.ssl.SSLContext}, the lazy {@link SslEngineWrap}, and the
+ * per-channel {@link SslHandle} state machine.
+ * <p><b>Lifecycle:</b>
+ * <pre>
+ *   constructor
+ *       -> resolve/create SSLContext (or reuse user-supplied one)
+ *       -> build SslEngineWrap factory
+ *       -> build SslHandle
+ *   first RCV/SND pass
+ *       -> SslHandle.tryHandshake(...)
+ *       -> SslEngineWrap.beginHandshake()
+ *       -> NotHandshaking -> Handshaking -> Finish
+ *   steady state
+ *       -> handRcv()/handSnd() delegate encrypted traffic to SslHandle
+ *   TLS shutdown
+ *       -> signal close_notify if requested
+ *       -> sslEnable becomes false after TLS close handling completes
+ * </pre>
+ * <p><b>Subclass responsibility:</b> concrete subclasses (for example {@link JdkSslContext})
+ * must implement:
+ * <ul>
+ *   <li>{@link #createSSLContext(String[])} — create the
+ *       {@link javax.net.ssl.SSLContext} with the appropriate key/trust material.</li>
+ *   <li>{@link #configSslEngine(javax.net.ssl.SSLContext, javax.net.ssl.SSLEngine)} —
+ *       configure cipher suites, protocols, and SNI on the freshly created engine.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see JdkSslContext
+ * @see SslHandle
+ * @see SslConfig
  */
 public abstract class SslContextBasic implements SslContext {
     protected static final Logger        logger = Logger.getLogger(SslContextBasic.class);

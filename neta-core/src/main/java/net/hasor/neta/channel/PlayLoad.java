@@ -15,10 +15,22 @@
  */
 package net.hasor.neta.channel;
 /**
- * Represents a message payload in the message bus system.
- * Encapsulates the data, error, and source channel information for a message.
+ * A single message event published on the {@link SoChannel} event bus.
+ * <p>Every data item travelling through the protocol pipeline — in either direction — is
+ * wrapped in a {@code PlayLoad} before being dispatched to registered
+ * {@link PlayLoadListener}s.  A payload is either successful (carrying decoded/encoded
+ * {@code data}) or erroneous (carrying a pipeline {@code error}), never both.
+ * <h3>Direction</h3>
+ * <ul>
+ *   <li>{@link #isInbound()} – the data or error arrived from the remote peer (received).</li>
+ *   <li>{@link #isOutbound()} – the data or error was produced by the local application (sent).</li>
+ * </ul>
+ * <p>Construct instances via {@link PlayLoadObject#of} (success) or
+ * {@link PlayLoadObject#ofError} (failure).
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see PlayLoadListener
+ * @see SoChannel#subscribe
  */
 public interface PlayLoad {
     /**

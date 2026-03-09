@@ -18,9 +18,21 @@ import java.util.concurrent.locks.Lock;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * Memory pool PageChunkPool list manage
+ * Logical allocation bucket inside a {@link BufferPool}.
+ * <p>Each arena holds a group of {@link PageChunkPool}s whose usage ratio falls
+ * into a similar range. Allocation scans the arena's internal ring structure so
+ * requests are spread across chunks instead of concentrating on a single pool.
+ * <p>When a chunk becomes too full or too empty, it is migrated to a neighbour
+ * arena according to the configured thresholds. This keeps hot chunks densely
+ * packed while allowing nearly empty chunks in the initial arena to be released
+ * back to the allocator when appropriate.
+ * <p>The arena itself serialises chunk migration with a shared lock; the actual
+ * page allocation inside each {@link PageChunkPool} remains the responsibility
+ * of the chunk pool implementation.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see BufferPool
+ * @see PageChunkPool
  */
 class BufferArena {
     private final BufferPool                bufferPool;

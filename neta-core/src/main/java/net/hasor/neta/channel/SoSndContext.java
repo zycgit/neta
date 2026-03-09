@@ -18,10 +18,21 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Per-channel outbound queue that holds pending {@link SoSndData} items.
- * Items are enqueued by writers and dequeued by the IO worker that performs actual flushing.
+ * Per-channel outbound queue that stages {@link SoSndData} items awaiting transmission.
+ * <h3>Threading model: multi-producer, single-consumer</h3>
+ * Application threads (any thread) enqueue items via {@link #offer(SoSndData)}. The single
+ * I/O / completion-handler thread drains items via {@link #peekData()} and
+ * {@link #popData()}.  The backing {@link ConcurrentLinkedQueue} provides all necessary
+ * memory-visibility guarantees without an explicit lock.
+ * <h3>Channel close</h3>
+ * If the channel is torn down while items remain in the queue, {@link #purge(Throwable)}
+ * is called to complete each item’s {@link net.hasor.cobble.concurrent.future.Future}
+ * exceptionally with a {@link SoUnfinishedSndException}, so callers are notified rather
+ * than silently abandoned.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoSndData
+ * @see SoUnfinishedSndException
  */
 public class SoSndContext {
     private final Queue<SoSndData> wQueue = new ConcurrentLinkedQueue<>();

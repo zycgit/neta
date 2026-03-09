@@ -27,11 +27,35 @@ import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.SoChannel;
 
 /**
- * An {@link SslContext} which uses JDK's SSL/TLS implementation.
- * refer to `io.netty.handler.ssl.JdkSslContext` implementation
+ * JDK JSSE-backed {@link SslContext} implementation.
+ * <p>Uses the JDK's built-in {@code TLS} {@link javax.net.ssl.SSLContext} provider
+ * to create and configure {@link javax.net.ssl.SSLEngine} instances for
+ * per-channel TLS processing.  Follows the design of Netty's
+ * {@code io.netty.handler.ssl.JdkSslContext}.
+ * <p><b>Cipher-suite strategy:</b>
+ * <ul>
+ *   <li>Preferred suites follow the order in {@link SslUtils#DEFAULT_CIPHER_SUITES}:
+ *       ECDHE-GCM first, ECDHE-CBC second, RSA-GCM third, RSA-CBC last.</li>
+ *   <li>When TLS 1.3 is supported ({@link SslUtils#TLSV13_CIPHER_SUITES}), those
+ *       suites are added at the front of the list.</li>
+ *   <li>Only suites reported as supported by the JDK at class-load time are
+ *       actually applied; unknown suites are silently filtered out.</li>
+ * </ul>
+ * <p><b>Protocol strategy:</b> uses {@code SSLContext.getDefaultSSLParameters()}
+ * to honour JDK security-property flags ({@code jdk.tls.client.protocols},
+ * {@code jdk.tls.server.protocols}) while adding TLS 1.3 only when the JDK
+ * has it enabled by default.
+ * <p><b>ALPN support:</b> Application Layer Protocol Negotiation is implemented
+ * via {@link JdkAlpnSslUtils} using reflection against
+ * {@link javax.net.ssl.SSLParameters#setApplicationProtocols} and
+ * {@link javax.net.ssl.SSLEngine#setHandshakeApplicationProtocolSelector},
+ * which are available in JDK 9+ (and some 8u builds).
  * @author Netty
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
+ * @see SslContextBasic
+ * @see JdkAlpnSslUtils
+ * @see SslUtils
  */
 public class JdkSslContext extends SslContextBasic {
     protected static final String      PROTOCOL = "TLS";

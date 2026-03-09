@@ -28,7 +28,26 @@ import net.hasor.neta.channel.SoRcvException;
 import net.hasor.neta.channel.udp.UdpAsyncClientChannel;
 
 /**
- * QUIC client channel extending {@link UdpAsyncClientChannel}, initiating a QUIC handshake and completing the future only on ESTABLISHED state.
+ * Client-side QUIC bootstrap channel layered on top of the UDP client transport.
+ * <p>
+ * This type owns the pre-connection client flow: it opens the underlying UDP
+ * socket, drives {@link QuicAsyncChannelHandshake}, processes Version Negotiation,
+ * Initial, Handshake, and early 1-RTT responses, and only promotes the transport
+ * to {@link QuicChannelAsync}/{@link QuicChannel} after the handshake has reached
+ * the point where the public connection can be initialised.
+ * <pre>
+ *   UDP connect
+ *      |
+ *      +--> create QuicAsyncChannelHandshake
+ *      +--> send client Initial
+ *      +--> process server Initial / Handshake / HANDSHAKE_DONE
+ *      +--> build QuicChannelAsync
+ *      +--> init public QuicChannel pipeline
+ *      +--> complete user future
+ * </pre>
+ * <p>
+ * It is a temporary bootstrap object rather than the long-lived application API.
+ * User code normally receives the resulting {@link QuicChannel}, not this class.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncClientChannel extends UdpAsyncClientChannel {

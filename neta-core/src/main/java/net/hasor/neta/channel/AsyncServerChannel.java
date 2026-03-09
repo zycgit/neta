@@ -18,11 +18,17 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * Asynchronous server channel interface for network communication.
- * Represents a server-side channel that can accept incoming connections asynchronously.
- * Extends Closeable to ensure proper resource cleanup.
+ * Transport-specific listen-side endpoint used behind {@link NetListen}.
+ * <p>Implementations cover several different listen models: a real socket acceptor for TCP/SCTP,
+ * a bound datagram endpoint that demultiplexes peers for UDP/QUIC, or an in-memory registry-backed
+ * listener for the virtual transport. Calling {@link #bind(ProtoInitializer)} creates the
+ * corresponding {@link NetListen} facade and activates the transport-specific receive or accept path.
+ * <p>The application layer does not interact with {@code AsyncServerChannel} directly; it works with
+ * the higher-level {@link NetListen} returned by {@link #bind(ProtoInitializer)}.
  * @author 赵永春 (zyc@hasor.net)
- * @version 2025-08-06
+ * @version : 2025-08-06
+ * @see AsyncChannelProvider#createServerChannel
+ * @see NetListen
  */
 public interface AsyncServerChannel extends Closeable {
     /**

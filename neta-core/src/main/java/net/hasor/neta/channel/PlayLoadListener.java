@@ -15,9 +15,24 @@
  */
 package net.hasor.neta.channel;
 /**
- * Listener for {@link PlayLoad} events on the message bus.
+ * Callback invoked whenever a {@link PlayLoad} event is published on the channel event bus.
+ * <p>Register an instance via {@link SoChannel#subscribe} (returns a
+ * {@link SubscribeHolder} for later cancellation).  The delivery threading model
+ * depends on the {@link SubscribeMode} chosen at registration time:
+ * <ul>
+ *   <li>{@link SubscribeMode#SYNC} – {@link #onEvent} is called inline on the same thread
+ *       (I/O or task worker) that triggered the event.  The callback must return quickly;
+ *       blocking will stall that thread.</li>
+ *   <li>{@link SubscribeMode#ASYNC} – the event is queued and dispatched on a
+ *       {@link SoEventExecutor} worker thread.  Events for the same subscriber are always
+ *       delivered in order.  Choose this for callbacks that may block or touch external
+ *       systems.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see PlayLoad
+ * @see SubscribeMode
+ * @see SoChannel#subscribe
  */
 @FunctionalInterface
 public interface PlayLoadListener extends java.util.EventListener {

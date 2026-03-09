@@ -29,11 +29,12 @@ import java.util.function.Consumer;
  * @see ProtoRoutingDuplexer
  */
 public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {
-    /** Register a named sub-pipeline branch. */
+    /** Registers a branch from an existing initializer. */
     ProtoRoutingBuilder<RCV_UP, SND_DOWN> branchByInitializer(String name, ProtoInitializer initializer);
 
-    /** Register a named branch using the branch-local {@link ProtoBuilder} DSL for nested routers or local sub-chains. */
+    /** Registers a branch using the branch-local {@link ProtoBuilder} DSL. */
     ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, Consumer<ProtoBuilder<RCV_UP, SND_DOWN>> branchBuilder);
 
+    /** Builds the routing duplexer defined by this builder. */
     ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build();
 }

@@ -4,8 +4,12 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * Represents a link in the virtual transfer chain.
- * Buffers and processes data flow for a virtual connection.
+ * Per-target delivery state owned by {@link VrtTransfer}.
+ * <p>Each link binds one source-side channel id to one target {@link VrtChannel}.
+ * Incoming {@link PlayLoad} objects are first staged in {@link #cacheQueue}, then
+ * converted into delivery objects through {@link VrtTransferHandler}, and finally
+ * emitted to the target when {@link #onReceive(int)} sees enough queued items.
+ * This is where batch delivery and receive-side object conversion actually happen.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

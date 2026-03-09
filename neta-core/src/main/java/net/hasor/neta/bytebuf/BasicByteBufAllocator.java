@@ -19,9 +19,31 @@ import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * readMark &lt;= readIndex &lt;= writerMark &lt;= writerIndex &lt;= capacity
+ * Shared allocation strategy for concrete {@link ByteBufAllocator} variants.
+ * <p>This base class centralises the routing rules that decide which concrete
+ * {@link ByteBuf} implementation should back a request:
+ * <pre>
+ *   buffer(initCapacity, maxCapacity)
+ *       ├─ initCapacity == 0 → {@link ByteBuf#EMPTY}
+ *       ├─ pooled enabled     → {@link PooledByteBuf} for pool-backed growth,
+ *       │                      except very small requests which stay on the
+ *       │                      lightweight small-buffer cache
+ *       └─ unpooled           → {@link AutoArrayByteBuf} or {@link AutoByteBuffer}
+ * </pre>
+ * <p>Concrete subclasses only decide the raw JVM storage type exposed through
+ * {@link #jvmBuffer(int)} and {@link #isDirect()}; all higher-level policies
+ * such as pooled vs. unpooled growth, ring buffer creation, and swap-file
+ * buffer creation are implemented here.
+ * <p>The constructor parameters control the default initial capacity, the
+ * default growth step used by auto-resizing buffers, and whether pooled
+ * allocation should be preferred when {@link #buffer()} is called.
+ * <p>{@link ByteBufAllocatorMetric} records cumulative allocation statistics,
+ * but buffer index invariants belong to the individual {@link ByteBuf}
+ * implementations rather than to this allocator.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see ByteBufUtils
+ * @see ByteBufAllocator
  */
 public abstract class BasicByteBufAllocator implements ByteBufAllocator {
     protected final boolean                defaultUsingPooled;

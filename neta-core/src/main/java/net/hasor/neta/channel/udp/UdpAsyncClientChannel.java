@@ -19,7 +19,6 @@ import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
-import java.util.concurrent.ExecutorService;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -27,14 +26,15 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
- * UDP client channel implementation.
- * <p>
- * The UdpAsyncClientChannel supports reading data into a {@link ByteBuffer} with or without
- * a specified timeout.
+ * Connected-UDP client transport built on top of {@link UdpTransport}.
+ * <p>After {@link #connectTo(ProtoInitializer, Future)} it creates one
+ * application-facing {@link UdpChannel}, starts a receive loop on the shared
+ * transport, and forwards each datagram from the connected peer into the pipeline.
+ * <p>If {@link UdpSoConfig#isRcvRemoteOnly()} is enabled, datagrams from any source
+ * address other than the configured remote peer are discarded in the client receive path.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  * @see DatagramChannel
- * @see ExecutorService
  */
 public class UdpAsyncClientChannel extends UdpAsyncChannel {
     private static final Logger           logger = Logger.getLogger(UdpAsyncClientChannel.class);

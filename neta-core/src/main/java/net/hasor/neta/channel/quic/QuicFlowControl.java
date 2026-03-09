@@ -18,7 +18,12 @@ package net.hasor.neta.channel.quic;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Enforces receive-side flow control at connection and stream level per RFC 9000 §4, with auto-tuning window expansion.
+ * Connection-level receive-window tracker plus helpers for stream-level flow-control decisions.
+ * <p>This class keeps the authoritative connection-level byte counters used for
+ * {@code MAX_DATA} handling and provides utility methods for validating stream
+ * offsets and building {@code MAX_DATA}/{@code MAX_STREAM_DATA} frames.
+ * <p>Per-stream counters are not stored here; they remain on the stream-side
+ * objects and call back into these helper methods when needed.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicFlowControl {

@@ -20,10 +20,26 @@ import java.nio.ByteBuffer;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Allows to free direct {@link ByteBuffer}s.
+ * Abstraction for eagerly releasing native memory held by direct
+ * {@link java.nio.ByteBuffer} instances.
+ * <p>Direct buffers live outside the Java heap, so waiting for GC can keep a
+ * large amount of off-heap memory pinned longer than desired. This helper
+ * exposes {@link #freeDirectBuffer(java.nio.ByteBuffer)} and selects the
+ * appropriate cleanup strategy for the running JDK:
+ * <ul>
+ *   <li><b>JDK 6-8:</b> access the internal {@code cleaner} object of the direct
+ *       buffer and invoke its {@code clean()} method
+ *       ({@link BufferCleanerJava6}).</li>
+ *   <li><b>JDK 9+:</b> invoke {@code sun.misc.Unsafe#invokeCleaner(ByteBuffer)}
+ *       reflectively ({@link BufferCleanerJava9}).</li>
+ * </ul>
+ * <p>The class reflectively acquires {@code sun.misc.Unsafe} during static
+ * initialization. If that is not permitted, {@link ByteBufUtils#CLEANER} stays
+ * {@code null} and callers must fall back to ordinary GC-driven cleanup.
  * @author netty, reference io.netty.util.internal.Cleaner、io.netty.util.internal.PlatformDependent0
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see ByteBufUtils#CLEANER
  */
 public abstract class BufferCleaner {
     protected static final Logger   logger = Logger.getLogger(BufferCleaner.class);

@@ -17,7 +17,19 @@ package net.hasor.neta.channel.quic;
 import java.util.Arrays;
 
 /**
- * QUIC packet parsing and building utilities (RFC 9000 §17) for Long Header and Short Header packets.
+ * Low-level packet codec helpers for QUIC long-header and short-header packets.
+ * <p>This utility class parses packet envelopes, applies or removes header
+ * protection, decrypts payloads, and builds encrypted packets for the handshake
+ * and 1-RTT data phases.
+ * <p><b>Packet shapes handled here:</b>
+ * <pre>
+ *   Long Header packet
+ *     + first byte + version + dcid + scid + [token] + length + pn + ciphertext
+ *   Short Header packet
+ *     + first byte + dcid + pn + ciphertext
+ * </pre>
+ * <p>Frame parsing inside the decrypted payload mostly happens elsewhere; this
+ * class focuses on packet envelope mechanics.
  * @author 赵永春 (zyc@hasor.net)
  */
 final class QuicPacket {

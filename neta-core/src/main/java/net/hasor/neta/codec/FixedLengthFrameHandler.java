@@ -14,25 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec;
-import net.hasor.neta.bytebuf.ByteBuf;
-
 /**
- * in {@link ByteBuf} is split into multiple or merge {@link ByteBuf} using a fixed length
+ * Specialised {@link LimitFrameHandler} that only emits exact-size frames.
+ * <p>
+ * Internally this sets {@code minLength == maxLength == fixedLength}, which means
+ * bytes are accumulated until a full frame is available and any trailing remainder
+ * smaller than {@code fixedLength} stays buffered instead of being emitted.
  * <pre>
- * <b>Case 1</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (26 bytes)    AFTER (20 bytes)
- * +----------+        +----------+----------+
- * | 26 bytes | -----> | 10 bytes | 10 bytes |
- * +----------+        +----------+----------+
- * </pre>
- * <pre>
- * <b>Case 2</b>
- * <b>maxLength</b>   = <b>10</b>
- * BEFORE (16 bytes)                     AFTER (10 bytes)
- * +------------------------------+      +------------+
- * | 4 bytes | 10 bytes | 2 bytes | ---> | (10 bytes) |
- * +------------------------------+      +------------+
+ * fixedLength = 10
+ * input queue:   [4 bytes] [10 bytes] [2 bytes]
+ * output frames: [10 bytes]
+ * remainder:     [6 bytes] kept in the source queue
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20

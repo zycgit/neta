@@ -14,10 +14,27 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import net.hasor.neta.bytebuf.ByteBuf;
+
 /**
- * Represents a user-defined event fired through the inbound pipeline of a channel.
+ * Typed event signal propagated through a {@link SoChannel} pipeline.
+ * <p>User events are out-of-band signals separate from normal data messages. While
+ * data flows as raw bytes ({@link ByteBuf}) or decoded objects, user events communicate
+ * protocol-level state changes — for example:
+ * <ul>
+ *   <li>TLS handshake completion ({@code SslHandshakeEvent})</li>
+ *   <li>TLS close-notify received ({@code SslCloseNotifyEvent})</li>
+ *   <li>SCTP association state change ({@code SctpNotificationEvent})</li>
+ * </ul>
+ * <p>Fire a user event by calling {@link ProtoContext#fireUserEvent}; it is then dispatched
+ * along the current pipeline direction, so the same API works for both receive-side and
+ * send-side propagation. The payload is carried by a
+ * {@link SoUserEventData} implementation; this interface is the envelope wrapping it
+ * together with the source channel reference.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
+ * @see SoUserEventData
+ * @see SoUserEventObject
  */
 public interface SoUserEvent {
     /** Returns the channel that fired this event. */

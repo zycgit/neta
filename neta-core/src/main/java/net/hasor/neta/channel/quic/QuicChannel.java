@@ -28,7 +28,27 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * Post-handshake connection-level QUIC channel managing 1-RTT packets, stream multiplexing, DATAGRAM (RFC 9221), and connection lifecycle.
+ * Post-handshake connection-level QUIC channel exposed to application code.
+ * <p>This object is created only after {@link QuicAsyncChannelHandshake} has
+ * produced an established connection. It owns the public connection API for
+ * stream creation, DATAGRAM access, connection-level flow-control updates, path
+ * probing, and graceful or error-driven shutdown.
+ * <p><b>Relationship to the internal stack:</b>
+ * <pre>
+ *   UDP socket
+ *      |
+ *      v
+ *   QuicChannelAsync   -- packet/ACK/loss/path/CID machinery
+ *      |
+ *      +-- QuicChannel           -- public connection handle
+ *             |
+ *             +-- QuicStreamChannel*    (multiplexed reliable streams)
+ *             |
+ *             +-- QuicDatagramChannel?  (optional RFC 9221 unreliable datagrams)
+ * </pre>
+ * <p>The channel itself does not parse packets directly; all packet processing
+ * stays in {@link QuicChannelAsync}. This class is the stable, post-handshake
+ * facade presented to user code.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicChannel extends UdpChannel {

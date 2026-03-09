@@ -20,11 +20,24 @@ import java.net.SocketAddress;
 import net.hasor.cobble.concurrent.future.Future;
 
 /**
- * Asynchronous channel interface for network communication.
- * Represents a bidirectional communication channel that can perform operations asynchronously.
- * Extends Closeable to ensure proper resource cleanup.
+ * Transport-specific outbound endpoint used behind {@link NetChannel}.
+ * <p>This interface abstracts the actual carrier used by Neta transports: an OS socket
+ * for TCP/SCTP, a datagram endpoint for UDP/QUIC, or an in-memory transport endpoint for
+ * the virtual channel family. Application code does not use it directly; it is created by
+ * {@link AsyncChannelProvider} and driven through {@link NetChannel}.
+ * <p><b>Lifecycle:</b>
+ * <ol>
+ *   <li>Created by {@link AsyncChannelProvider#createClientChannel(long, SoContext, SocketAddress, SoConfig)}.</li>
+ *   <li>{@link #connectTo(ProtoInitializer, Future)} materializes the public-facing
+ *       {@link NetChannel} and completes the connect future when that channel is ready.</li>
+ *   <li>{@link #write(NetChannel, SoSndContext)} drains encoded outbound data from the
+ *       channel's send queue using the transport's own execution model.</li>
+ *   <li>{@link #close()} releases the underlying transport resources.</li>
+ * </ol>
  * @author 赵永春 (zyc@hasor.net)
- * @version 2025-08-06
+ * @version : 2023-09-24
+ * @see AsyncChannelProvider
+ * @see NetChannel
  */
 public interface AsyncChannel extends Closeable {
 
@@ -34,7 +47,7 @@ public interface AsyncChannel extends Closeable {
      */
     long getChannelId();
 
-    /** return socket config. */
+    /** Returns the socket configuration. */
     SoConfig getSoConfig();
 
     /**
@@ -62,16 +75,11 @@ public interface AsyncChannel extends Closeable {
     @Override
     void close() throws IOException;
 
-    /**
-     * Writes data from the given buffer to this channel.
-     * @param channel The NetChannel instance
-     * @param wContext The send context containing the data to be written
-     */
+    /** Writes pending outbound data for the given NetChannel. */
     void write(NetChannel channel, SoSndContext wContext);
 
     /**
-     * Connects this channel to the given remote address.
-     * @throws IOException If an I/O error occurs
+     * Starts the connection flow using the given initializer.
      */
     void connectTo(ProtoInitializer initializer, Future<NetChannel> future) throws Throwable;
 }

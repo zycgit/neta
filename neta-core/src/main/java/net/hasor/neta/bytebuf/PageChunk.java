@@ -15,9 +15,22 @@
  */
 package net.hasor.neta.bytebuf;
 /**
- * A contiguous block of memory
+ * Free-range descriptor used by the buddy allocator inside a
+ * {@link PageChunkPool}.
+ * <p>Each instance represents a contiguous <em>currently unallocated</em> page
+ * range and participates in the doubly-linked free list for one tree level.
+ * When a larger range is split, smaller {@code PageChunk} nodes are exposed;
+ * when neighbouring buddies become free again, they can be merged back into a
+ * larger free range.
+ * <p>The page interval stored here is inclusive on both ends:
+ * {@code [fromPage, toPage]}. The corresponding byte window therefore spans
+ * from {@code fromPage * pageSize} through
+ * {@code (toPage + 1) * pageSize - 1} within the parent pool's memory block.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-02-15
+ * @see PageChunkPool
+ * @see PageChunkSplit
+ * @see PageRange
  */
 class PageChunk implements PageRange {
     private final int           fromPage;

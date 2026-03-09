@@ -35,10 +35,31 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * SCTP-specific implementation of the asynchronous server channel.
- * Handles incoming connection accept operations for SCTP associations.
+ * Selector-driven SCTP server transport built on the JDK SCTP API.
+ * <p>The server owns one listening {@link SctpServerChannel}, accepts native SCTP
+ * sockets, registers them for read readiness, and lazily creates one framework
+ * {@link SctpChannel} wrapper per accepted native channel.
+ * <p><b>Runtime structure:</b>
+ * <pre>
+ *   SctpServerChannel (listen socket)
+ *          |
+ *          +--> accept native SctpChannel
+ *                    |
+ *                    +--> channelMap[native channel] = framework SctpChannel
+ *                    +--> receive MessageInfo + payload
+ *                    +--> wrap as SctpMessage
+ *                    +--> notifyRcvChannelData(...)
+ * </pre>
+ * <p>The internal map is keyed by the accepted native SCTP channel object, not
+ * by remote address text or association ID. A single reusable receive buffer is
+ * shared by the selector loop and copied into fresh {@link ByteBuf} instances
+ * before data enters the pipeline.
+ * <p>This transport depends on {@code com.sun.nio.sctp} and is therefore only
+ * available on JDK and OS combinations that actually provide SCTP support.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
+ * @see SctpAsyncChannel
+ * @see SctpSoConfig
  */
 class SctpAsyncServerChannel implements AsyncServerChannel {
     private static final Logger            logger = Logger.getLogger(SctpAsyncServerChannel.class);

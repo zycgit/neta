@@ -27,12 +27,27 @@ import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Low-latency task dispatcher backed by a fixed-size worker thread pool.
- * <p>Tasks are queued into a lock-free {@link ConcurrentLinkedQueue} and workers
- * are woken via {@link LockSupport}. Supports delayed task scheduling via
- * {@link HashedWheelTimer}. Graceful shutdown drains remaining tasks.</p>
+ * Low-latency, fixed-thread-pool task dispatcher used by {@link SoContextService} for all
+ * Neta pipeline and subscriber tasks.
+ * <h3>Architecture</h3>
+ * <ul>
+ *   <li>Tasks are added to a single lock-free {@link ConcurrentLinkedQueue} shared by
+ *       all worker threads.</li>
+ *   <li>Workers block via {@link LockSupport#park} when the queue is empty — no
+ *       condition-variable or blocking-queue overhead.</li>
+ *   <li>On task submission, the dispatcher wakes <em>one</em> worker using a round-robin
+ *       index ({@code wakeIndex}) to distribute wake-ups evenly and avoid thundering-herd
+ *       situations when multiple tasks are queued simultaneously.</li>
+ *   <li>Delayed tasks are registered with the shared {@link HashedWheelTimer} and re-queued
+ *       automatically after the delay expires.</li>
+ * </ul>
+ * <h3>Shutdown</h3>
+ * {@link #close()} clears the run flag, unparks all worker threads, waits up to three
+ * seconds per thread for a graceful drain, then executes any remaining queued tasks on
+ * the calling thread to ensure no work is silently discarded.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
+ * @see SoContextService
  */
 class SoEventExecutor implements Closeable {
     private static final Logger               logger = Logger.getLogger(SoEventExecutor.class);

@@ -15,10 +15,17 @@
  */
 package net.hasor.neta.codec;
 /**
- * An {@link CodecException} which is thrown when the length of the frame
- * decoded is greater than the allowed maximum.
+ * {@link CodecException} raised when decoded frame data exceeds the configured
+ * upper bound.
+ * <p>Frame-oriented handlers such as {@link net.hasor.neta.codec.LimitFrameHandler}
+ * can throw this exception to stop oversized payloads before they consume too
+ * much memory or violate protocol limits.
+ * <p>The exception message typically records the observed length and the allowed
+ * maximum to make diagnostics easier.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
+ * @see CodecException
+ * @see BadFrameException
  */
 public class TooLongFrameException extends CodecException {
     /** Creates a new instance. */

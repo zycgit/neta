@@ -8,10 +8,35 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * Virtual implementation of asynchronous server channel.
- * Manages virtual listening ports and incoming virtual connections.
+ * In-process server-side entry for the virtual transport.
+ * <p>This class keeps the listen-side registration in the provider-wide
+ * {@code listenPool}, owns the server's {@link VrtTransfer}, and materializes a
+ * server-side {@link VrtChannel} whenever a client-side
+ * {@link AsyncChannel#connectTo(ProtoInitializer, net.hasor.cobble.concurrent.future.Future)}
+ * resolves this listener.
+ * <p><b>Lifecycle:</b>
+ * <pre>
+ *   AsyncChannelProvider.createServerChannel(...)
+ *       -> register this instance by virtual port
+ *   {@link AsyncServerChannel#bind(ProtoInitializer)}
+ *       -> create VrtTransfer + VrtListen
+ *       -> context.initChannel(listen, initializer)
+ *   client.connectTo(...)
+ *       -> acceptLink(clientSide)
+ *       -> create server-side VrtChannel
+ *       -> add bidirectional VrtTransfer links
+ *   close()
+ *       -> close listen/transfer and remove this port from listenPool
+ * </pre>
+ * <p><b>Listen pool:</b> the shared map is keyed only by the numeric address in
+ * {@link VrtSocketAddress}, so one virtual listener exists per virtual port.
+ * <p><b>Bind contract:</b> calling {@link #bind(ProtoInitializer)} more than once
+ * fails because a listener can be initialized only once.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see VrtAsyncChannel
+ * @see VrtListen
+ * @see VrtSoConfig
  */
 public class VrtAsyncServerChannel implements AsyncServerChannel {
     private static final Logger                              logger = Logger.getLogger(VrtAsyncServerChannel.class);

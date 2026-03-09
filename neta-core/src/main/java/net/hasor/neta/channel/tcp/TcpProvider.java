@@ -23,8 +23,14 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * Provides TCP-specific implementation for asynchronous server and client channels.
- * Implements the AsyncChannelProvider interface to create and configure TCP channels.
+ * TCP transport provider for Neta.
+ * <p>The provider owns one shared {@link AsynchronousChannelGroup} backed by the
+ * framework I/O executor and uses it to create both client
+ * {@link AsynchronousSocketChannel} instances and server
+ * {@link AsynchronousServerSocketChannel} instances.
+ * <p>Its job is transport bootstrap only: actual connect, accept, read, and write
+ * logic lives in {@link TcpAsyncChannel}, {@link TcpAsyncServerChannel}, and the
+ * TCP completion handlers.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-07
  */

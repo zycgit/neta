@@ -27,9 +27,37 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * Handling the SSL handshake
+ * Per-channel TLS state machine built on top of {@link SslEngineWrap}.
+ * <p>This class is the operational core behind {@link SslDuplexer}. It owns the temporary packet
+ * buffers, drives {@link javax.net.ssl.SSLEngine#wrap(ByteBuffer, ByteBuffer)} and
+ * {@link javax.net.ssl.SSLEngine#unwrap(ByteBuffer, ByteBuffer)}, advances the handshake, and emits
+ * the SSL-specific user events seen by upper handlers.
+ * <p><b>Data path:</b>
+ * <pre>
+ *   inbound:  rcvUp ByteBuf -> inNetData -> unwrap() -> inAppData -> rcvDown
+ *   outbound: sndUp ByteBuf -> outAppData -> wrap()  -> outNetData -> sndDown
+ * </pre>
+ * <p><b>State:</b>
+ * <pre>
+ *   NotHandshaking -> Handshaking -> Finish -> Closed
+ * </pre>
+ * <ul>
+ *   <li>{@link SslHandshakeStatus#NotHandshaking}: no SSLEngine has been started yet.</li>
+ *   <li>{@link SslHandshakeStatus#Handshaking}: handshake traffic is being exchanged.</li>
+ *   <li>{@link SslHandshakeStatus#Finish}: normal encrypted traffic can flow.</li>
+ *   <li>{@link SslHandshakeStatus#Closed}: TLS has been shut down, typically after
+ *       {@code close_notify} or fatal close handling.</li>
+ * </ul>
+ * <p><b>Events:</b> successful handshake completion fires {@link SslHandshakeEvent}; receiving a
+ * peer {@code close_notify} during normal receive processing fires {@link SslCloseNotifyEvent}.
+ * <p><b>close_notify:</b> {@code closeNotifyPending} means a local TLS shutdown alert should be emitted
+ * on the next send pass. Once that alert has been wrapped and the engine closes, the supplied close
+ * callback disables SSL for the owning context; it does not itself close the transport channel.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
+ * @see SslEngineWrap
+ * @see SslHandshakeEvent
+ * @see SslContextBasic
  */
 class SslHandle {
     private static final Logger             logger = Logger.getLogger(SslHandle.class);

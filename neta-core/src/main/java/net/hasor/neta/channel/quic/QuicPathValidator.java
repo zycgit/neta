@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 import java.security.SecureRandom;
 import java.util.Arrays;
 import java.util.Map;

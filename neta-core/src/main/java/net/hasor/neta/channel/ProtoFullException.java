@@ -17,9 +17,22 @@ package net.hasor.neta.channel;
 import java.net.SocketException;
 
 /**
- * Thrown to indicate that the pipleline's rcv slot is full and cannot accept more data.
+ * Thrown when a pipeline queue cannot accept more items.
+ * <p>This exception is the channel layer's backpressure signal. It can be raised while feeding
+ * either the receive path or the send path whenever the target {@link ProtoQueue} has no free
+ * slots left. The caller decides how to react:
+ * <ul>
+ *   <li><b>Wait and retry</b> – if the overflow is transient, back off briefly and re-deliver.</li>
+ *   <li><b>Discard</b> – for lossy protocols (e.g., UDP) where dropping is acceptable.</li>
+ *   <li><b>Close</b> – for protocols that cannot tolerate data loss, close the channel cleanly
+ *       and report the error to the application.</li>
+ * </ul>
+ * <p>The singleton {@link #INSTANCE} can be used for allocation-free throws when the exception
+ * message is not needed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see ProtoRcvQueue
+ * @see ProtoSndQueue
  */
 public class ProtoFullException extends SocketException {
     public static final ProtoFullException INSTANCE = new ProtoFullException();

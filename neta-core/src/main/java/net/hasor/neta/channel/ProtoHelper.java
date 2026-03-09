@@ -21,13 +21,34 @@ import java.util.function.Consumer;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Factory for creating type-safe {@link ProtoBuilder} instances.
- * <p>Entry points: {@link #standard()} for {@code ByteBuf} pipelines,
- * {@link #object()} for generic {@code Object} pipelines,
- * {@link #typed(Class, Class)} for custom-typed pipelines.</p>
+ * Factory class for building type-safe protocol pipeline builders and routing builders.
+ * <h3>Pipeline builders</h3>
+ * <ul>
+ *   <li>{@link #standard()} – chain whose RCV and SND endpoints are both {@code ByteBuf}
+ *       (most common for binary protocols).</li>
+ *   <li>{@link #object()} – chain with {@code Object} endpoints (useful for testing or
+ *       when the outer type is unknown at compile time).</li>
+ *   <li>{@link #typed(Class, Class)} – fully typed chain with explicit endpoint types.</li>
+ * </ul>
+ * <h3>Routing builders</h3>
+ * <ul>
+ *   <li>{@link #typedRoutingAsStatic} – route is resolved lazily on activation and/or first inbound
+ *       data, then kept until switched explicitly.</li>
+ *   <li>{@link #typedRoutingAsRealtime} – selector is re-evaluated on each inbound receive pass.</li>
+ * </ul>
+ * <h3>Example</h3>
+ * <pre>
+ * ProtoInitializer init = ctx -&gt; {
+ *     ProtoHelper.standard()
+ *         .nextDuplex("frame",  lineBasedFrameDuplexer)
+ *         .nextDuplex("string", stringDuplexer)
+ *         .apply(ctx);
+ * };
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  * @see ProtoBuilder
+ * @see ProtoRoutingBuilder
  */
 public final class ProtoHelper {
     /** Create a standalone routing builder using static route selection. */

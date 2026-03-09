@@ -32,10 +32,35 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * SCTP-specific implementation of the asynchronous channel.
- * Handles read/write operations and connection management for SCTP associations.
+ * Async-channel adapter around one JDK {@link com.sun.nio.sctp.SctpChannel}.
+ * <p>This class is used in two modes:
+ * <ul>
+ *   <li><b>client mode</b>: created by {@link SctpProvider} with
+ *       {@code localAddress == null}; it owns a private {@link Selector} and runs
+ *       its own connect/read loop;</li>
+ *   <li><b>accepted-server mode</b>: created by {@link SctpAsyncServerChannel}; it
+ *       wraps the accepted SCTP socket but relies on the server's selector loop
+ *       for inbound reads.</li>
+ * </ul>
+ * <p><b>Execution model:</b>
+ * <pre>
+ *   client mode:
+ *     connectTo()
+ *        --> selector(OP_CONNECT / OP_READ)
+ *        --> receive MessageInfo + payload
+ *        --> wrap as SctpMessage
+ *        --> notifyRcvChannelData(...)
+ *   outbound path (both modes):
+ *     SoSndContext --> SctpWriteTask --> SctpChannel.send(...)
+ * </pre>
+ * <p>The implementation preserves SCTP's message-oriented semantics by reading
+ * each received message together with its {@link MessageInfo} metadata and by
+ * forwarding writes through {@link SctpWriteTask} instead of exposing a byte-stream API.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SctpAsyncServerChannel
+ * @see SctpWriteTask
+ * @see SctpSoConfig
  */
 class SctpAsyncChannel implements AsyncChannel {
     private static final Logger           logger = Logger.getLogger(SctpAsyncChannel.class);

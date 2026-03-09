@@ -15,9 +15,22 @@
  */
 package net.hasor.neta.bytebuf;
 /**
- * Memory pool utils
+ * Small striped registry of shared {@link BufferPool} instances.
+ * <p>At startup one pool is created per available CPU core, and allocation code
+ * picks a pool by {@code threadId % CPU_CORES}. This is a lightweight sharding
+ * strategy: it reduces hot-spot contention compared with a single global pool
+ * without introducing any explicit thread-local ownership model.
+ * <p>The default pools created here use {@code new BufferPool(4096)}, which
+ * means:
+ * <ul>
+ *   <li>page size is 4096 bytes;</li>
+ *   <li>tree height falls back to {@link BufferPool}'s internal default;</li>
+ *   <li>maximum chunk count is unlimited unless another {@link BufferPool}
+ *       configuration is introduced elsewhere.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see BufferPool
  */
 class BufferPoolUtils {
     private static final int          CPU_CORES = Runtime.getRuntime().availableProcessors();

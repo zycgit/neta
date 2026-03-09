@@ -21,8 +21,12 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * TCP channel implementation that binds to the application-layer protocol stack.
- * Wraps a {@link TcpAsyncChannel} and manages the associated read/write completion handlers.
+ * Application-facing TCP {@link NetChannel} facade.
+ * <p>This class binds one {@link TcpAsyncChannel} together with its dedicated
+ * {@link TcpRcvCompletionHandler} and {@link TcpSndCompletionHandler}, then exposes
+ * the normal Neta channel API to protocol handlers and subscribers.
+ * <p>It does not implement transport mechanics itself; instead it owns the handler
+ * pair and closes them together when the channel is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

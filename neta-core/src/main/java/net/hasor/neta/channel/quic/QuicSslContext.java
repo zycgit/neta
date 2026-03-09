@@ -19,7 +19,13 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * {@link SslContext} implementation wrapping QUIC TLS 1.3 handshake results from {@link QuicTlsEngine}.
+ * Post-handshake {@link SslContext} view for a QUIC connection.
+ * <p>
+ * The object exposes the TLS metadata produced by {@link QuicTlsEngine}, such as
+ * certificate configuration, negotiated ALPN, peer host information, and SNI.
+ * It is not a general-purpose live TLS controller like the stream SSL codec layer:
+ * QUIC packet protection is owned by the connection runtime, while this class mainly
+ * serves as a read-oriented facade for application code.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-01-01
  */

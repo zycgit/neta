@@ -37,7 +37,7 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
                     selectorSeenSizes.add(rcvUp.queueSize());
                     return rcvUp.queueSize() >= 3 ? "main" : null;
                 }, r -> {
-                        r.branch("main", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("mainH",//
+                    r.branch("main", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("mainH",//
                             doNextHandler("Main", branchLog, branchErr),//
                             doNextHandler("Main", branchLog, branchErr)));
                 }).build();
@@ -138,7 +138,7 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
                     }
                     return handshakeCount[0] >= 3 ? "main" : null;
                 }, r -> {
-                        r.branch("main", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("mainH",//
+                    r.branch("main", (ProtoBuilder<Integer, Integer> branch) -> branch.nextDuplex("mainH",//
                             doNextHandler("Main", branchLog, branchErr),//
                             doNextHandler("Main", branchLog, branchErr)));
                 }).build();

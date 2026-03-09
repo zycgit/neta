@@ -25,21 +25,19 @@ import net.hasor.neta.channel.udp.UdpSoConfig;
  * @version : 2023-09-24
  */
 public class SoConfig {
-    // for Listener
+    // Listener settings.
     private final String  protocol;
-    // for slot size
+    // Queue slot settings.
     private       int     rcvSlotSize = -1;
     private       int     sndSlotSize = -1;
     private       boolean suspend     = false;
 
-    // for Socket
-    private Integer soRcvBuf         = null; // SO_RCVBUF: The size of the socket receive buffer
-    private Integer soSndBuf         = null; // SO_SNDBUF: The size of the socket send buffer
-    private Integer soReadTimeoutMs  = -1;        // socket read timeout
-    private Integer soWriteTimeoutMs = -1;        // socket write timeout
-    // SO_REUSEADDR //重复使用地址
-
-    private int connectTimeoutMs = 10 * 1000; // 建立连接超时时间
+    // Socket settings.
+    private Integer soRcvBuf         = null; // SO_RCVBUF in bytes.
+    private Integer soSndBuf         = null; // SO_SNDBUF in bytes.
+    private Integer soReadTimeoutMs  = -1;   // Read-idle timeout in milliseconds.
+    private Integer soWriteTimeoutMs = -1;   // Write-idle timeout in milliseconds.
+    private int     connectTimeoutMs = 10 * 1000; // Connect timeout in milliseconds.
 
     protected SoConfig(String protocol) {
         this.protocol = protocol;

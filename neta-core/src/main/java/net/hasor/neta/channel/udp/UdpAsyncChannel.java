@@ -17,39 +17,33 @@ package net.hasor.neta.channel.udp;
 import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.nio.channels.DatagramChannel;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * An implementation of the {@link AsyncChannel} interface for UDP communication.
- * This class provides asynchronous read and write operations over a UDP channel,
- * using a non-blocking {@link DatagramChannel} and a dedicated I/O executor service.
- * <p>
- * The UdpAsyncChannel supports reading data into a {@link ByteBuffer} with or without
- * a specified timeout. It does not support writing data, as well as connecting to a remote
- * address, which are unsupported operations for this type of channel.
- * <p>
- * Upon creation, the channel is registered with a selector for reading, and all I/O operations
- * are performed by the provided I/O executor service.
+ * Base async-channel wrapper for one UDP peer view.
+ * <p>This type is used as the lightweight transport adapter behind {@link UdpChannel}
+ * instances. It stores the remote/local addressing view and delegates outbound
+ * queue flushing to {@link UdpWriteTask}.
+ * <p>Inbound receive loops are <em>not</em> implemented here: they are driven by
+ * {@link UdpTransport} through {@link UdpAsyncClientChannel} or
+ * {@link UdpAsyncServerChannel}. What this base class actually provides is the
+ * common outbound single-writer gate shared by both modes.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  * @see java.nio.channels.DatagramChannel
- * @see java.util.concurrent.ExecutorService
  */
 public class UdpAsyncChannel implements AsyncChannel {
-    private static final Logger            logger = Logger.getLogger(UdpAsyncChannel.class);
-    protected final      long              channelId;
-    protected final      DatagramChannel   channel;
-    protected final      InetSocketAddress localAddress;
-    protected final      InetSocketAddress remoteAddress;
-    protected final      SoContextService  context;
-    protected final      UdpSoConfig       soConfig;
+    protected final long              channelId;
+    protected final DatagramChannel   channel;
+    protected final InetSocketAddress localAddress;
+    protected final InetSocketAddress remoteAddress;
+    protected final SoContextService  context;
+    protected final UdpSoConfig       soConfig;
     //
-    protected final      AtomicBoolean     writing;
+    protected final AtomicBoolean     writing;
 
     protected UdpAsyncChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
         this.channelId = channelId;

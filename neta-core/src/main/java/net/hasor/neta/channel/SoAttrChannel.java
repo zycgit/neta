@@ -19,10 +19,24 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * Base implementation of {@link SoChannel} that adds a thread-safe attribute map
- * and convenience {@code subscribe} methods scoped to this channel's ID.
+ * Skeletal implementation of {@link SoChannel} providing the attribute map and
+ * subscription plumbing shared by all concrete channel types.
+ * <p>Responsibilities handled by this class:
+ * <ul>
+ *   <li><b>Attributes</b> – thread-safe key-value storage backed by a
+ *       {@link ConcurrentHashMap}. Attributes persist for the full lifetime of the
+ *       channel and are accessible from any thread.</li>
+ *   <li><b>Subscriptions</b> – the four {@code subscribe} overloads are pre-wired to
+ *       delegate to {@link SoContext#subscribe}, automatically AND-ing the caller’s
+ *       filter predicate with a channel-ID check, so that only events originating from
+ *       <em>this</em> channel are delivered to the listener.</li>
+ * </ul>
+ * <p>Subclasses must implement the remaining abstract members of {@link SoChannel}
+ * (lifecycle, addressing, context access, and close semantics).
+ * @param <T> the result type of the {@link SoChannel#close()} future
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoChannel
  */
 public abstract class SoAttrChannel<T> implements SoChannel<T> {
     private final Map<String, Object> attributes = new ConcurrentHashMap<>();

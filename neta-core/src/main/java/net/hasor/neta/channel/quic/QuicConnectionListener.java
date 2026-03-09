@@ -16,7 +16,10 @@
 package net.hasor.neta.channel.quic;
 
 /**
- * Listener invoked exactly once per QUIC connection after TLS 1.3 handshake completes and the channel is initialized.
+ * Server-side callback invoked when a new QUIC connection has finished setup.
+ * <p>The listener is triggered from {@link QuicAsyncServerChannel} after the
+ * handshake has completed, the {@link QuicChannel} has been created, and its
+ * pipeline has been initialised. It is not used for client-mode connections.
  * @author 赵永春 (zyc@hasor.net)
  */
 public interface QuicConnectionListener {

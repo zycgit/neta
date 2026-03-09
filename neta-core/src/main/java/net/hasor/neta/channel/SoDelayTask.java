@@ -17,10 +17,16 @@ package net.hasor.neta.channel;
 import java.util.concurrent.TimeUnit;
 
 /**
- * A task that delays execution by a fixed number of milliseconds before completing.
- * Used internally to schedule work on the next event-loop tick.
+ * {@link DefaultSoTask} that re-schedules itself once after a delay, then finishes.
+ * <p>On the first {@link DefaultSoTask#doWork(int)} call the task records a delay through
+ * {@link DefaultSoTask#delayTask(int, TimeUnit)}. When the executor runs it again after that delay,
+ * the task completes immediately. This makes it a lightweight building block for retry and backoff
+ * loops submitted through {@link SoContextService#submitSoTask(DefaultSoTask, Object)}.
+ * <p>The interval can be specified directly (milliseconds) or derived from
+ * {@link NetConfig#getRetryIntervalMs()} via the context constructor.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see DefaultSoTask#delayTask
  */
 public class SoDelayTask extends DefaultSoTask {
     private final int intervalMillis;

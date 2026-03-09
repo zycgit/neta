@@ -22,10 +22,23 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * A single outbound data packet carrying one or more {@link ByteBuf} fragments
- * and a completion {@link Future} to notify callers when the send finishes.
+ * A single logical write request carrying one or more {@link ByteBuf} fragments and a
+ * completion {@link Future} to notify callers when the send finishes.
+ * <p>Neta supports <em>gather I/O</em>: one {@code SoSndData} can reference multiple
+ * {@link ByteBuf} segments consumed sequentially via {@link #transferTo}.  This avoids
+ * an extra copy when the application assembles a multi-part message (e.g. a fixed-size
+ * protocol header followed by a variable-length payload buffer).
+ * <p>The {@link Future} is completed with the associated {@link NetChannel} on success,
+ * or with a {@link SoSndException} subclass on failure, allowing send-completion callbacks:
+ * <pre>
+ * channel.write(buf).onComplete(result -&gt; {
+ *     if (result.isSuccess()) { log.debug("sent"); }
+ *     else { log.error("send failed", result.cause()); }
+ * });
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoSndContext
  */
 public class SoSndData {
     private final long               dataSize;

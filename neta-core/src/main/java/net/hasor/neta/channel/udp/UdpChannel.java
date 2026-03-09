@@ -18,8 +18,11 @@ import java.io.IOException;
 import net.hasor.neta.channel.*;
 
 /**
- * UDP channel implementation that binds to the application-layer protocol stack.
- * Wraps a {@link UdpAsyncChannel} and serves as the base class for QUIC channels.
+ * Application-facing {@link NetChannel} for one UDP peer view.
+ * <p>This wrapper binds a logical remote-address view to the framework pipeline.
+ * In plain UDP server mode multiple {@code UdpChannel} instances can share the same
+ * underlying datagram socket, while subclasses such as QUIC reuse the same facade
+ * shape for richer protocols built on UDP.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

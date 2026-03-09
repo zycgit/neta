@@ -22,14 +22,26 @@ import net.hasor.cobble.ObjectUtils;
 import static net.hasor.neta.bytebuf.Bits.*;
 
 /**
+ * Base implementation of {@link ByteBuf} index management.
+ * <p>
+ * The abstract class does not mandate a specific backing store, but every
+ * concrete implementation follows the same logical index layout shown below.
+ *
  * <pre>
- * +----------+-------------+------------+-------------+----------+
- * | ancient  | discardable | readable   | overlayable | writable |
- * +------------------------+------------+-------------+----------+
- * |          |             |            |             |          |
- * 0   ≤   marked  ≤  readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
- *      readerIndex                writerIndex
+ * logical index layout
+ *
+ *   0                markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
+ *   |----------------------|-----------------|------------------|---------------|
+ *   |       ancient        |   discardable   |     readable     |  overlayable  | writable |
+ *   |&lt;----- already dropped by markReader() ----&gt;|&lt;-- visible --&gt;|&lt;-- rewritable --&gt;|
+ *
+ * invariants
+ *
+ *   0 <= markedReaderIndex <= readerIndex <= markedWriterIndex <= writerIndex <= capacity
  * </pre>
+ *
+ * Concrete subclasses differ only in how a logical offset is mapped to their
+ * physical storage.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */

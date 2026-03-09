@@ -14,13 +14,33 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.neta.channel.ProtoDuplexer;
 import net.hasor.neta.channel.SoChannel;
 
 /**
- * A status for {@link ProtoDuplexer}
+ * Per-channel TLS state exposed to pipeline handlers.
+ * <p>An instance is created by {@link SslDuplexer#onInit(String, int, int, net.hasor.neta.channel.ProtoContext)}
+ * and stored in the active {@link net.hasor.neta.channel.ProtoContext}. Upper handlers can inspect it
+ * to determine whether the TLS handshake has finished, which ALPN protocol was negotiated, and what SNI
+ * host was requested.
+ * <p><b>Typical usage:</b>
+ * <pre>
+ *   SslContext ssl = protoContext.context(SslContext.class);
+ *   if (ssl != null && ssl.isReady()) {
+ *       String alpn = ssl.getApplicationProtocol();
+ *   }
+ * </pre>
+ * <ul>
+ *   <li>{@link #isReady()} reports whether TLS is currently enabled and the handshake reached
+ *       {@link SslHandshakeStatus#Finish}.</li>
+ *   <li>{@link #getApplicationProtocol()} exposes the negotiated ALPN result or configured fallback.</li>
+ *   <li>{@link #getSniHostName()} exposes requested SNI information when available.</li>
+ *   <li>{@link #closeSSL()} and {@link #openSSL()} are local control switches on the current SSL wrapper.
+ *       They are not a general-purpose renegotiation or full STARTTLS orchestration API by themselves.</li>
+ * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-18
+ * @see SslDuplexer
+ * @see SslConfig
  */
 public interface SslContext {
 

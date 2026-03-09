@@ -44,9 +44,21 @@ import net.hasor.neta.bytebuf.ByteBufInputStream;
 import net.hasor.neta.channel.NetChannel;
 
 /**
- * inner utils.
+ * Shared static utilities for the SSL/TLS support package.
+ * <p>The responsibilities in this class are narrower than a full runtime context. It mainly provides:
+ * <ul>
+ *   <li>default cipher-suite tables and TLS 1.3 capability detection,</li>
+ *   <li>helpers to build {@link KeyManagerFactory} and {@link TrustManagerFactory},</li>
+ *   <li>parsers that turn PEM/JKS certificate material into JCA objects, and</li>
+ *   <li>lookup helpers for retrieving {@link SslContext} from a channel's root or routed pipeline path.</li>
+ * </ul>
+ * <p><b>PEM &amp; key loading:</b> static methods parse X.509 certificates and private keys from input streams.
+ * Encrypted private keys may optionally be handled through {@link SslPemReaderByBouncyCastle} when that
+ * dependency is available.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see JdkSslContext
+ * @see SslPemReaderByBouncyCastle
  */
 public class SslUtils {
     public static final  String[] DEFAULT_CIPHER_SUITES;

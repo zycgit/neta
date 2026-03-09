@@ -22,12 +22,48 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * SSL 网络协议层
+ * TLS record-layer duplexer for byte-oriented Neta pipelines.
+ * <p>This handler is intended to sit close to the transport edge and convert between raw TLS
+ * records and plaintext application bytes. During initialization it creates an
+ * {@link SslContext} for the current channel and stores it in the pipeline context so later
+ * handlers can inspect handshake completion, negotiated ALPN, peer host information, and SNI.
+ * <p><b>Flow:</b>
+ * <pre>
+ *   network ciphertext
+ *       -> SslDuplexer (RCV)
+ *       -> SSLEngine.unwrap(...)
+ *       -> plaintext ByteBuf for upper handlers
+ *   application plaintext
+ *       -> SslDuplexer (SND)
+ *       -> SSLEngine.wrap(...)
+ *       -> ciphertext ByteBuf for the transport
+ * </pre>
+ * <ul>
+ *   <li><b>Client bootstrap:</b> on the client side {@link #onActive(ProtoContext)} sends an empty
+ *       buffer to force the first SND pass and start the handshake immediately.</li>
+ *   <li><b>Server bootstrap:</b> on the server side the handshake starts when the first inbound TLS
+ *       bytes reach the duplexer.</li>
+ *   <li><b>Events:</b> successful handshake completion fires {@link SslHandshakeEvent}; receiving a
+ *       peer {@code close_notify} later fires {@link SslCloseNotifyEvent}. Handshake failure does not
+ *       emit a dedicated success/failure event here; the channel is closed instead.</li>
+ *   <li><b>Graceful close:</b> when the channel-layer {@link SoCloseEvent} travels through the SND
+ *       path, this duplexer asks the current {@link SslContext} to emit TLS {@code close_notify}.</li>
+ * </ul>
+ * <p><b>Pipeline placement:</b>
+ * <pre>
+ *   ctx.addFirst("ssl", new SslDuplexer(sslConfig));
+ *   ctx.addLast("http", httpDuplexer);
+ * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @see SslConfig
+ * @see SslContext
+ * @see SslCertConfig
  */
 public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, ByteBuf> {
     private static final Logger    logger = Logger.getLogger(SslDuplexer.class);
     private final        SslConfig config;
 
+    /** Creates an SSL duplexer with the given SSL configuration. */
     public SslDuplexer(SslConfig config) {
         this.config = Objects.requireNonNull(config);
     }

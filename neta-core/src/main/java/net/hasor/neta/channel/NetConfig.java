@@ -17,22 +17,45 @@ package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Global configuration for the {@link NetManager}: thread pools, buffer allocation and misc options.
+ * Global configuration bean consumed by {@link NetManager} at startup.
+ * <p>Key properties and their defaults:
+ * <table border="1" summary="NetConfig properties">
+ *   <tr><th>Property</th><th>Default</th><th>Description</th></tr>
+ *   <tr><td>{@code ioThreads}</td><td>max(cpu/4, 1)</td>
+ *       <td>Size of the AIO completion-handler thread pool ({@code Neta-IO-*}).
+ *           Controls accept / connect / read / write concurrency.</td></tr>
+ *   <tr><td>{@code taskThreads}</td><td>cpu count</td>
+ *       <td>Size of the worker thread pool ({@code Neta-Worker-*}) used for pipeline
+ *           tasks and {@link PlayLoad} event dispatch.</td></tr>
+ *   <tr><td>{@code retryIntervalMs}</td><td>50 ms</td>
+ *       <td>Base delay between retry ticks for internal {@link SoDelayTask} instances.</td></tr>
+ *   <tr><td>{@code bufAllocator}</td><td>{@link ByteBufAllocator#DEFAULT}</td>
+ *       <td>Buffer allocator used for all channel read/write buffers.</td></tr>
+ *   <tr><td>{@code threadFactory}</td><td>daemon threads</td>
+ *       <td>Factory that creates IO and worker threads; override via
+ *           {@link #setThreadFactory} to customise names, priorities, or class loaders.</td></tr>
+ *   <tr><td>{@code classLoader}</td><td>SoContextService’s classloader</td>
+ *       <td>ClassLoader set on all Neta-managed threads.</td></tr>
+ *   <tr><td>{@code printLog}</td><td>false</td>
+ *       <td>Enables verbose low-level network-layer logging.</td></tr>
+ * </table>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see NetManager
+ * @see SoContextService
  */
 public class NetConfig {
-    // buffers
+    // Buffer allocator.
     private ByteBufAllocator bufAllocator;
-    // timeout
-    private int              retryIntervalMs = 50;        // cobble.net 内部任务延迟调度的延迟间隔
-    // threads
-    private SoThreadFactory  threadFactory;                 // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private ClassLoader      classLoader;                   // IO 线程，负责处理 AIO 回调事件，通常是：创建链接及 swap 缓冲区和 socket 缓冲区之间的数据交换
-    private int              ioThreads;                     // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
-    private int              taskThreads;                   // Worker 线程，负责处理 cobble.net 中的各种 Task，包括 swap 缓冲区和 rcv/snd 缓冲区之间的数据交换及其它各类 IOTask 任务
-    // other
-    private boolean          printLog        = false;       // 打印网络日志
+    // Internal retry scheduler interval.
+    private int              retryIntervalMs = 50;
+    // Thread settings.
+    private SoThreadFactory  threadFactory;
+    private ClassLoader      classLoader;
+    private int              ioThreads;
+    private int              taskThreads;
+    // Misc settings.
+    private boolean          printLog        = false;
 
     /** Interval in milliseconds between internal retry schedule ticks. */
     public int getRetryIntervalMs() {

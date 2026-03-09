@@ -17,25 +17,38 @@ package net.hasor.neta.channel.sctp;
 import net.hasor.neta.channel.SoConfig;
 
 /**
- * SCTP specific socket configuration options.
+ * Configuration object for Neta's SCTP transport.
+ * <p>This type currently contributes three groups of settings to the SCTP code path:
+ * <ul>
+ *   <li>message swap-buffer sizes used by the framework-side receive/send staging buffers;</li>
+ *   <li>retry policy for {@link SctpWriteTask} when {@code send()} cannot make progress;</li>
+ *   <li>additional keepalive-related values carried as configuration fields for future
+ *       or platform-specific socket-option application.</li>
+ * </ul>
+ * <p>In the current implementation only a subset of these fields is actively consumed:
+ * {@code swapRcvBuf} determines the size of the receive staging buffer,
+ * {@code sndWriteRetryCount} and {@code sndWriteRetryIntervalMs} are used by
+ * {@link SctpWriteTask}, while the keepalive fields are stored here but are not
+ * applied by {@link SctpSoConfigUtils#configListen(SctpSoConfig, com.sun.nio.sctp.SctpServerChannel)} yet.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SctpSoConfigUtils
+ * @see net.hasor.neta.channel.SoConfig
  */
 public class SctpSoConfig extends SoConfig {
-    // swapBuffer
+    // Swap buffer sizes.
     private int swapRcvBuf              = 64 * 1024;
     private int swapSndBuf              = 64 * 1024;
-    // write-timeout retry (channel-level)
-    private int sndWriteRetryCount      = 0;   // 0 = no retry; N = retry up to N times on write timeout
-    private int sndWriteRetryIntervalMs = 50;  // delay between retries in milliseconds
+    // Channel-level write timeout retry settings.
+    private int sndWriteRetryCount      = 0;   // 0 = disabled.
+    private int sndWriteRetryIntervalMs = 50;  // Delay between retries in milliseconds.
 
-    private Boolean soKeepAlive       = null;      // SO_KEEPALIVE: 设置 tcp keep-alive（对应 SO_KEEPALIVE 参数）
-    private Integer soKeepIdleSec     = null;      // TCP_KEEPIDLE: 设置连接上如果没有数据发送的话，多久后发送 keepalive 探测包，单位是：秒
-    private Integer soKeepIntervalSec = null;      // TCP_KEEPINTERVAL: 前后两次探测之间的时间间隔，单位是：秒
-    private Integer soKeepCount       = null;      // TCP_KEEPCOUNT: 关闭一个非活跃连接之前的最大重试次数
-    // TCP_NODELAY  //禁用 Nagle 算法
-    //    SO_LINGER
+    private Boolean soKeepAlive       = null; // SO_KEEPALIVE.
+    private Integer soKeepIdleSec     = null; // TCP_KEEPIDLE in seconds.
+    private Integer soKeepIntervalSec = null; // TCP_KEEPINTERVAL in seconds.
+    private Integer soKeepCount       = null; // TCP_KEEPCOUNT.
 
+    /** Creates an SCTP socket config with SCTP provider defaults. */
     public SctpSoConfig() {
         super(SctpProvider.NAME);
     }

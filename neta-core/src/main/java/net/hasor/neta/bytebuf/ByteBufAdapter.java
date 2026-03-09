@@ -20,7 +20,27 @@ import java.nio.ByteOrder;
 import java.nio.charset.Charset;
 
 /**
- * readMark &lt;= readIndex &lt;= writerMark &lt;= writerIndex &lt;= capacity
+ * A {@link ByteBuf} decorator that delegates every operation to a wrapped
+ * {@code ByteBuf}.
+ * <p>Use this class as a convenient base for overriding only selected
+ * {@code ByteBuf} methods while keeping the rest transparent:
+ * <pre>
+ *  ByteBuf base = ByteBufAllocator.DEFAULT.buffer(64);
+ *  ByteBuf readOnly = new ByteBufAdapter(base) {
+ *      &#64;Override
+ *      public void writeByte(byte value) {
+ *          throw new UnsupportedOperationException("read-only");
+ *      }
+ *  };
+ * </pre>
+ * <p>The adapter does not own storage by itself. All index movement, bounds
+ * checks, reference counting, and actual storage layout remain owned by the
+ * wrapped {@code ByteBuf} instance.
+ * <p><b>Index invariant (enforced by the wrapped {@code ByteBuf}):</b>
+ * <pre>  markedReaderIndex &lt;= readerIndex &lt;= markedWriterIndex &lt;= writerIndex &lt;= capacity</pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-01
+ * @see ByteBuf
  */
 public class ByteBufAdapter implements ByteBuf {
     protected final ByteBuf byteBuf;

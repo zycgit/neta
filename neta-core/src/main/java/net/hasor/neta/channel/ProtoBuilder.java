@@ -80,7 +80,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> duplexer);
 
     /**
-     * using decoder and encoder to combined for duplex.
+     * Combines a decoder and encoder into one duplex step.
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
@@ -105,7 +105,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     }
 
     /**
-     * using decoder and encoder to combined for duplex.
+     * Combines a decoder and encoder into one duplex step.
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
@@ -121,7 +121,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     }
 
     /**
-     * using decoder and encoder to combined for duplex.
+     * Combines a decoder and encoder into one duplex step.
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
@@ -137,7 +137,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextDuplex(String name, ProtoConfig protoConf, ProtoHandler<RCV_UP, RCV_DOWN> decoder, ProtoHandler<SND_UP, SND_DOWN> encoder);
 
     /**
-     * using decoder, the encoder is transparent
+     * Adds a decoder while leaving the send path unchanged.
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
@@ -156,7 +156,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     }
 
     /**
-     * using decoder, the encoder is transparent
+     * Adds a decoder while leaving the send path unchanged.
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
@@ -170,7 +170,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     }
 
     /**
-     * using decoder, the encoder is transparent
+     * Adds a decoder while leaving the send path unchanged.
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
@@ -183,7 +183,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     <RCV_DOWN> ProtoBuilder<RCV_DOWN, SND_DOWN> nextDecoder(String name, ProtoConfig protoConf, ProtoHandler<RCV_UP, RCV_DOWN> decoder);
 
     /**
-     * using encoder, the decoder is transparent
+     * Adds an encoder while leaving the receive path unchanged.
      * <ul>
      *  <li>RCV_UP equal to RCV_DOWN</li>
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
@@ -202,7 +202,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     }
 
     /**
-     * using encoder, the decoder is transparent
+     * Adds an encoder while leaving the receive path unchanged.
      * <ul>
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>
@@ -216,7 +216,7 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
     }
 
     /**
-     * using encoder, the decoder is transparent
+     * Adds an encoder while leaving the receive path unchanged.
      * <ul>
      *  <li>SND_UP is {@link ByteBuf} or Message</li>
      *  <li>SND_DOWN is {@link ByteBuf} or Message</li>

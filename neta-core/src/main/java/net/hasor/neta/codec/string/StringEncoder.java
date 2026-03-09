@@ -20,8 +20,11 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Encodes the requested {@link String} into a {@link ByteBuf}.
- * A typical setup for a text-based line protocol in a TCP/IP socket
+ * Encodes each outbound {@link String} into a {@link ByteBuf} with the configured charset.
+ * <p>
+ * This handler only converts bytes and does not append delimiters or other framing
+ * markers. Protocols that require separators, line endings, or length headers need
+ * an additional outbound framing stage.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */

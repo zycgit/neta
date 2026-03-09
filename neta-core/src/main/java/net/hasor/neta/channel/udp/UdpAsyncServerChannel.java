@@ -27,19 +27,26 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
- * An implementation of the {@link AsyncServerChannel} interface for UDP communication.
- * This class provides asynchronous accept operations over a UDP channel,
- * using a non-blocking {@link DatagramChannel} and a dedicated I/O executor service.
- * <p>
- * The UdpAsyncServerChannel supports accepting incoming connections with a specified timeout.
- * Upon accepting a connection, it creates a new {@link UdpAsyncChannel} for the accepted socket,
- * and binds it to the provided {@link SoContext}.
- * <p>
- * The I/O operations for the accepted channels are performed by the provided I/O executor service.
+ * Server-side UDP demultiplexer built on a single {@link DatagramChannel}.
+ * <p>UDP has no real accept phase, so this server does not accept sockets in the TCP
+ * sense. Instead it binds one datagram socket, receives datagrams through
+ * {@link UdpTransport}, and lazily creates one logical {@link UdpChannel} per
+ * remote {@code host:port} pair.
+ * <p><b>Datagram routing model:</b>
+ * <pre>
+ *   one bound DatagramChannel
+ *           |
+ *           +--> receive datagram from remote host:port
+ *                   |
+ *                   +--> channelMap[host:port]
+ *                            | existing -> reuse logical UdpChannel
+ *                            | absent   -> create UdpChannel + init pipeline
+ * </pre>
+ * <p>All logical peer channels share the same underlying socket; only the framework
+ * channel identity and remote-address view differ per peer.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  * @see java.nio.channels.DatagramChannel
- * @see java.util.concurrent.ExecutorService
  */
 public class UdpAsyncServerChannel implements AsyncServerChannel {
     private static final Logger            logger = Logger.getLogger(UdpAsyncServerChannel.class);

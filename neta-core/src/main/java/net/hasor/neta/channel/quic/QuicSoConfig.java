@@ -18,7 +18,18 @@ import net.hasor.neta.channel.udp.UdpSoConfig;
 import net.hasor.neta.codec.ssl.SslCertConfig;
 
 /**
- * QUIC-specific configuration, extending {@link UdpSoConfig} with SSL, connection, and transport parameters (RFC 9000 §18.2).
+ * QUIC-specific channel configuration layered on top of {@link UdpSoConfig}.
+ * <p>
+ * This object mixes two kinds of settings:
+ * <ul>
+ *   <li>transport parameters that are advertised to the peer during the QUIC handshake, such as
+ *       {@code initial_max_data}, {@code initial_max_streams_*}, and the DATAGRAM limit</li>
+ *   <li>local runtime policy such as certificate configuration, stream idle timeout,
+ *       DATAGRAM administrative enablement, version selection, and the connection listener</li>
+ * </ul>
+ * <p>
+ * Not every field becomes a negotiated wire parameter. Some options only affect local
+ * behaviour after the connection is running.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicSoConfig extends UdpSoConfig {

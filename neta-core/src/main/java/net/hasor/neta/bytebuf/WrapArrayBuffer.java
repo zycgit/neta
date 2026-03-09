@@ -18,13 +18,24 @@ import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
+ * Fixed-size {@link ByteBuf} view over an existing heap {@code byte[]}.
+ * <p>
+ * This implementation does not own expandable storage. It simply wraps a user
+ * supplied array and exposes Neta's logical index model on top of it.
+ *
  * <pre>
- * +-------------+------------+-------------+----------+
- * | discardable | readable   | overlayable | writable |
- * +-------------+------------+-------------+----------+
- * |             |            |             |          |
- * 0   ≤   readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
- *                      writerIndex
+ * physical storage
+ *
+ *   target byte[]
+ *   +---------------------------------------------------+
+ *   | 0 | 1 | 2 | ... | capacity - 1 |
+ *   +---------------------------------------------------+
+ *
+ * logical layout on top of the array
+ *
+ *   0      markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
+ *   |-------------|---------------|------------------|---------------|
+ *   | ancient     | discardable   | readable         | overlayable   | writable |
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01

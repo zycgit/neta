@@ -19,9 +19,39 @@ import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * 基于字节数组的环形 {@link ByteBuf} 实现
+ * Fixed-capacity circular {@link ByteBuf} backed by a heap {@code byte[]}.
+ * <p>The physical storage is indexed as a ring, while the logical read/write
+ * indexes continue to move forward and are masked into the backing array.
+ * Capacity is rounded up to a power of two so wrapping can be implemented with
+ * a cheap bit mask.
+ *
+ * <pre>
+ * physical array (power-of-two sized)
+ *
+ *   target[0]  target[1]  target[2]  ...  target[capacity-1]
+ *      ^                                           |
+ *      |___________________________________________|
+ *
+ * logical to physical mapping
+ *
+ *   physicalIndex = logicalIndex & capacityMask
+ *
+ * example after wrap-around
+ *
+ *   logical indexes:  ... 14 15 16 17 18 19
+ *   mask (capacity=16):    14 15  0  1  2  3
+ *                         [---- tail ----][-- head --]
+ * </pre>
+ * <p>Unlike auto-expanding buffers, this implementation never grows. Writes are
+ * still bounded by the current logical writable space defined by the base
+ * {@link AbstractByteBuf} contract; the ring layout only changes how bytes are
+ * stored internally.
+ * <p>When initial data is supplied, the buffer starts with its readable region
+ * already populated; otherwise it starts empty.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see RingByteBuffer
+ * @see AutoArrayByteBuf
  */
 final class RingArrayByteBuf extends AbstractByteBuf {
     static final int                                            RECYCLE_INDEX   = RecycleObjectPool.registerType();

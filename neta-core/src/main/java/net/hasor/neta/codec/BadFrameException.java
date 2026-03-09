@@ -15,9 +15,18 @@
  */
 package net.hasor.neta.codec;
 /**
- * An {@link CodecException} which is thrown when bad frame.
+ * {@link CodecException} that marks structurally invalid frame data.
+ * <p>
+ * Use this exception when the current bytes cannot represent a valid frame
+ * under the active protocol rules, for example after decoding an illegal length
+ * value, a broken header, or another unrecoverable framing error.
+ * <p>
+ * The exact recovery strategy is defined by the surrounding pipeline and channel
+ * error handling, not by this exception type itself.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
+ * @see CodecException
+ * @see TooLongFrameException
  */
 public class BadFrameException extends CodecException {
     /** Creates a new instance. */

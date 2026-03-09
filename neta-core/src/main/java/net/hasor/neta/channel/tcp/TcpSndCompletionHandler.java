@@ -28,10 +28,57 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * Completion handler for TCP write operations.
- * Handles the completion of sending data and managing the send queue.
+ * AIO {@link java.nio.channels.CompletionHandler} that drives the TCP send loop.
+ * <p>An instance is created once per channel.  The send model is
+ * <em>single-writer</em>: the {@code writing} {@link java.util.concurrent.atomic.AtomicBoolean}
+ * ensures that at most one outstanding {@code channel.write()} call exists at any time.
+ * <p><b>Write pipeline:</b>
+ * <pre>
+ *   SoSndContext (queue)
+ *       │  peekData()
+ *       ▼
+ *   SoSndData  ──transferTo──▶ sndSwapBuf (direct ByteBuffer)
+ *       │                          │
+ *       │              channel.write(sndSwapBuf, ...)
+ *       │                          │
+ *       │                 completed(bytesWritten, ctx)
+ *       │                          │
+ *       │        ┌─────────────────┴───────────────┐
+ *       │        │ swapBuf still has remaining?     │ queue has more data?
+ *       │        ▼ yes → writeData()                ▼ yes → copyData() + writeData()
+ *       │                                          else → set writing=false, re-check
+ *       ▼
+ *   sndData.completed()  (when all bytes of one SoSndData are flushed)
+ * </pre>
+ * <p><b>Partial writes:</b> TCP may write fewer bytes than requested.  When {@code sndSwapBuf}
+ * still has remaining bytes after {@code completed()}, {@code writeData()} is called again
+ * without re-fetching from the queue (no re-copy needed).
+ * <p><b>Re-check after idle:</b> When the queue appears empty and {@code writing} is set back
+ * to {@code false}, a second CAS is performed to handle the race where a producer enqueued
+ * data between the {@code isEmpty()} check and the {@code set(false)} call.
+ * <p><b>Error cases:</b>
+ * <ul>
+ *   <li>{@link java.nio.channels.NotYetConnectedException}: retried with a delay if within
+ *       {@code connectTimeoutMs}; otherwise a {@link SoConnectTimeoutException} is raised
+ *       and all pending {@link SoSndData} are failed.</li>
+ *   <li>{@link java.nio.channels.InterruptedByTimeoutException}: write timeout
+ *       ({@code soWriteTimeoutMs}) expired — a {@link SoWriteTimeoutException} is
+ *       raised but the write is retried after a short {@link SoDelayTask}.</li>
+ *   <li>{@link java.nio.channels.ClosedChannelException} /
+ *       {@link java.nio.channels.ShutdownChannelGroupException}: all queued
+ *       {@link SoSndData} are drained and completed with a {@link SoCloseException}.</li>
+ *   <li>Any other {@link Throwable}: wrapped in {@link SoSndException}; same drain.
+ * </ul>
+ * <p><b>Buffer management:</b> {@code sndSwapBuf} is a JVM direct {@link java.nio.ByteBuffer}
+ * allocated once at construction. It is released via
+ * {@link net.hasor.neta.bytebuf.ByteBufUtils#CLEANER} on {@link #close()}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see TcpAsyncChannel
+ * @see SoSndContext
+ * @see SoSndData
+ * @see SoWriteTimeoutException
+ * @see SoUnfinishedSndException
  */
 class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext>, Closeable {
     private static final Logger           logger = Logger.getLogger(TcpSndCompletionHandler.class);

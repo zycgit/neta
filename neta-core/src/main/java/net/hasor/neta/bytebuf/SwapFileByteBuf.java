@@ -21,71 +21,46 @@ import java.util.ArrayDeque;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * A memory-backed {@link ByteBuf} that automatically spills data to temporary files once
- * the in-memory write position exceeds {@code memThreshold}.
- * <h3>Two-Phase Storage</h3>
+ * {@link ByteBuf} implementation that starts in memory and spills overflow to a
+ * deque of temporary file segments.
+ * <p>The storage model is easiest to understand as two phases:
  * <pre>
- *  Memory mode  (writerIndex &le; memThreshold)
- *  ─────────────────────────────────────────────────────────────────
- *  ┌───────────────────────────────────────────────────────────────┐
- *  │                       heap byte[]                             │
- *  │  [  consumed  │      readable      │    writable space    ]   │
- *  │               ↑                    ↑                          │
- *  │          readerIndex           writerIndex                    │
- *  └───────────────────────────────────────────────────────────────┘
- *              │
- *              │  when writerIndex &gt; memThreshold
- *              ▼
- *  File mode  (spill to a deque of fixed-size temporary file segments)
- *  ─────────────────────────────────────────────────────────────────
- *  absoluteBase (monotonically increasing; bytes consumed so far)
- *       │
- *       ▼
- *  ╔═══════════╦═══════════╦════════════╗
- *  ║ Segment 0 ║ Segment 1 ║ Segment 2  ║   ArrayDeque (head → tail)
- *  ║ prefix0   ║ prefix1   ║ prefix2    ║
- *  ║  .buf     ║  .buf     ║  .buf      ║
- *  ║  FULL     ║  FULL     ║  partial   ║
- *  ╚═══════════╩═══════════╩════════════╝
- *       ↑                        ↑
- *  head: deleted when          tail: new data appended here
- *  absoluteBase &ge; logicalStart + segmentSize
+ *  1. Memory mode
+ *     memBuf holds the active logical window
+ *
+ *     [ consumed ][ readable ][ writable ]
+ *                ^          ^
+ *           readerIndex  writerIndex
+ *
+ *  2. File mode
+ *     once committed data grows beyond memThreshold, bytes are appended into
+ *     fixed-size swap segments tracked by absolute stream position
+ *
+ *     absolute stream
+ *     0 ----------- segmentSize ----------- 2*segmentSize -----------&gt;
+ *     [ segment-0 ][ segment-1 ][ segment-2 ... ]
+ *         ^                                ^
+ *      old head removed when           current append tail
+ *      absoluteBase passes it
  * </pre>
- * <h3>Segment Deque — Zero-Copy Head Removal</h3>
- * <pre>
- *  Before consuming Segment 0  (absoluteBase = 0):
- *  [Seg0: 0..512KB] [Seg1: 512KB..1MB] [Seg2: 1MB..partial]
- *  After markReader() advances absoluteBase to 512KB:
- *  → Seg0 file deleted (O(1), no data copy)
- *  [Seg1: 512KB..1MB] [Seg2: 1MB..partial]
- * </pre>
- * <h3>Absolute Offset Mapping</h3>
- * <pre>
- *  physical file position = (absoluteBase + logicalIndex) - segment.logicalStart
- *  logicalIndex        : byte offset within the current logical window [0 .. writerIndex)
- *  segment.logicalStart: the absolute stream position where this segment begins
- * </pre>
- * <h3>File I/O Strategies</h3>
- * <pre>
- *  Heap mode (default)              Direct mode (isDirect = true)
- *  ───────────────────────────────  ─────────────────────────────────────
- *  FileChannel + heap byte[]        MappedByteBuffer (mmap, off-heap)
- *  kernel → copy → Java heap        kernel maps page into process VA space
- *  File grows as data written        File pre-extended to segmentSize upfront
- *  Works on all JVMs / Android       Requires OS mmap (not on all Android)
- *  GC tracks every byte[]            Mapped memory is invisible to GC
- * </pre>
- * <p>Allocate via {@link ByteBufAllocator#swapFile()} (heap) or
- * {@link ByteBufAllocator#swapFileDirect()} (direct).
- * <h3>Capacity Constraints</h3>
- * <pre>
- *  Total stream bytes  : unlimited — {@code absoluteBase} is {@code long} (64-bit).
- *  Logical window size : unlimited — {@code writerIndex} and all index
- *                        fields in {@link AbstractByteBuf} are {@code long}.
- *  In streaming use (write → markWriter → read → markReader → repeat) the
- *  window stays small because markReader() subtracts the consumed offset from
- *  writerIndex, keeping it near zero.
- * </pre>
+ * <p>{@code absoluteBase} records how many bytes have already been logically
+ * discarded from the front. That lets the implementation delete fully-consumed
+ * head segments in O(1) without copying the remaining tail data.
+ * <p>Two segment backends are available:
+ * <ul>
+ *   <li>heap mode via {@link SwapSegmentByHeap}, which uses ordinary
+ *       {@link java.nio.channels.FileChannel} I/O and works on all supported
+ *       JVMs;</li>
+ *   <li>direct mode via {@link SwapSegmentByDirect}, which uses
+ *       {@link java.nio.MappedByteBuffer} for off-heap access.</li>
+ * </ul>
+ * <p>The persisted stream position can grow beyond 2 GB because
+ * {@code absoluteBase} is {@code long}, but the <em>active logical window</em>
+ * still uses the {@code int}-based indexes inherited from
+ * {@link AbstractByteBuf}. In practice this buffer is intended for streaming
+ * patterns that periodically call {@link #markReader()} or
+ * {@link #discardReadBytes()} so the live window remains bounded while older
+ * segments are retired.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class SwapFileByteBuf extends AbstractByteBuf {
@@ -144,7 +119,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
             }
             this.memBuf = null;
             this.fileMode = true;
-            // absoluteBase 保持 0
+            // absoluteBase stays at 0 when switching from memory mode.
         } catch (IOException e) {
             throw new RuntimeException("SwapFileByteBuf: failed to switch to file mode", e);
         }
@@ -476,16 +451,16 @@ public class SwapFileByteBuf extends AbstractByteBuf {
         if (splitOffset < 0 || splitOffset > this.markedWriterIndex) {
             throw new IndexOutOfBoundsException("splitOffset=" + splitOffset + " markedWriterIndex=" + this.markedWriterIndex);
         }
-        // 读取待切走的头部数据
+        // Read the head slice before advancing the live window.
         byte[] sliceData = new byte[splitOffset];
         _getBytes(0, sliceData, 0, splitOffset);
 
-        // 文件模式：仅推进 absoluteBase，无任何文件数据搬移
+        // File mode advances absoluteBase without moving persisted bytes.
         if (this.fileMode) {
             this.absoluteBase += splitOffset;
             releaseConsumedSegments();
         } else {
-            // 内存模式：原地左移剩余数据
+            // Memory mode compacts the remaining bytes in place.
             int liveLen = (this.writerIndex - splitOffset);
             if (liveLen > 0) {
                 System.arraycopy(this.memBuf, splitOffset, this.memBuf, 0, liveLen);

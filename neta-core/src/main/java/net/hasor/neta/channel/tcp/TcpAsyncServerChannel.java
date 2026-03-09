@@ -22,9 +22,25 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * TCP implementation of asynchronous server channel.
- * Provides TCP-specific implementation for accepting incoming connections asynchronously.
- * Wraps Java NIO's AsynchronousServerSocketChannel for actual network operations.
+ * TCP server transport built on {@link AsynchronousServerSocketChannel}.
+ * <p>This class binds the listen socket, creates the framework-facing
+ * {@link TcpNetListen}, and keeps the accept loop alive by re-arming
+ * {@link TcpAcceptCompletionHandler} after every successful accept.
+ * <p><b>Accept pipeline:</b>
+ * <pre>
+ *   AsynchronousServerSocketChannel.accept(...)
+ *                 |
+ *                 v
+ *      TcpAcceptCompletionHandler
+ *                 |
+ *                 +--> configure accepted socket
+ *                 +--> create TcpAsyncChannel
+ *                 +--> create TcpChannel
+ *                 +--> init pipeline
+ *                 +--> start TcpRcvCompletionHandler.read()
+ * </pre>
+ * <p>The server transport itself is only responsible for the listen socket; each
+ * accepted peer connection is handed off to its own {@link TcpAsyncChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

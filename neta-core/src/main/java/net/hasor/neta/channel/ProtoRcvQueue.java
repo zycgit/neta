@@ -17,12 +17,26 @@ package net.hasor.neta.channel;
 import java.util.List;
 
 /**
- * Inbound (receive-side) data queue for a protocol layer endpoint.
- * <p>Supports take/peek/skip operations with transactional semantics
- * ({@link #rcvSubmit()}/{@link #rcvReset()}).</p>
+ * Inbound (receive-side) data queue for one endpoint of a protocol pipeline stage.
+ * <p>Each pipeline stage boundary has exactly one {@code ProtoRcvQueue}: the upstream
+ * producer (e.g. a decoder) offers decoded messages into it; the downstream consumer
+ * reads them out.
+ * <h3>Transaction semantics (two-phase read)</h3>
+ * <ol>
+ *   <li>Call {@link #takeMessage(int)} to tentatively dequeue items (they are removed from
+ *       the visible queue size but not yet finalised).</li>
+ *   <li>Call {@link #rcvSubmit()} to confirm the consume; the capacity slot is freed so a
+ *       new offer becomes possible.</li>
+ *   <li>Or call {@link #rcvReset()} to roll back: the taken items are returned to the front
+ *       of the queue as if they were never consumed.</li>
+ * </ol>
+ * <p>Use {@link #peekMessage(int)} for a non-destructive look-ahead that does not need
+ * {@link #rcvSubmit()} to finalise.
+ * @param <T> the type of received message
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoSndQueue
+ * @see ProtoQueue
  */
 public interface ProtoRcvQueue<T> {
     /**

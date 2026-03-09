@@ -16,8 +16,15 @@
 package net.hasor.neta.channel;
 
 /**
- * Traffic counter and I/O timing monitor attached to a {@link NetChannel}.
- * Tracks total bytes sent/received and the timestamps of the last I/O activities.
+ * Traffic counter and I/O timing monitor maintained by each {@link NetChannel}.
+ * <p>Counters are monotonically increasing from zero (reset only on channel creation);
+ * timestamps are in epoch milliseconds ({@link System#currentTimeMillis()}).
+ * <h3>Thread safety</h3>
+ * {@code rcvCounterBytes} and {@code sndCounterBytes} are updated exclusively from the
+ * dedicated I/O thread, so no external synchronisation is needed for counter increments.
+ * The {@code lastRcvTime} and {@code lastSndTime} fields are declared {@code volatile}
+ * so that monitoring threads reading them always observe the most-recently written value
+ * without acquiring a lock.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

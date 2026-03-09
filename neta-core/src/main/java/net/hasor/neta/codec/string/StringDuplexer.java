@@ -18,15 +18,14 @@ import java.nio.charset.Charset;
 import java.util.Objects;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.DelimiterBasedFrameHandler;
-import net.hasor.neta.codec.LineBasedFrameHandler;
 
 /**
- * Combined {@link StringDecoder}, {@link StringEncoder}.
- * Please note that this decoder must be used with a proper ByteBuf to String
- * such as {@link DelimiterBasedFrameHandler} or {@link LineBasedFrameHandler}
- * if you are using a stream-based transport such as TCP/IP.
- * A typical setup for a text-based line protocol in a TCP/IP socket
+ * Duplex codec that combines {@link StringDecoder} and {@link StringEncoder}.
+ * <p>
+ * The receive side converts one {@link ByteBuf} message into one {@link String},
+ * and the send side converts each outbound {@link String} back into bytes using
+ * the same charset. Like its decoder half, it does not define message boundaries
+ * for stream transports and should usually be placed after a frame splitter.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */

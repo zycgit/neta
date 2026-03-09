@@ -15,9 +15,15 @@
  */
 package net.hasor.neta.bytebuf;
 /**
- * <p>Implementations are responsible to allocate buffers.</p>
- * <p>Interface design reference netty io.netty.buffer.ByteBufAllocator,
- * The ByteBuf implementation is replaced with ByteBuf</p>
+ * High-level allocation entry point for Neta {@link ByteBuf} implementations.
+ * <p>Besides plain heap or direct buffers, the allocator API also exposes
+ * pool-backed buffers, fixed-capacity ring buffers, and spill-to-disk
+ * swap-file buffers. The interface extends {@link BufferAllocator} so the same
+ * implementation can also provide raw JVM {@link java.nio.ByteBuffer} storage
+ * for lower-level transport code.
+ * <p>Its overall role is similar to Netty's allocator layer, but it targets the
+ * buffer types defined in this package rather than Netty's {@code ByteBuf}
+ * hierarchy.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
  */

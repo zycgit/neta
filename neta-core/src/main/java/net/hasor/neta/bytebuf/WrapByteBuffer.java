@@ -19,13 +19,26 @@ import java.nio.ByteBuffer;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
+ * Fixed-size {@link ByteBuf} view over an existing {@link ByteBuffer}.
+ * <p>
+ * Like {@link WrapArrayBuffer}, this class keeps the wrapped storage shape as
+ * is and only overlays Neta's logical index model. The underlying
+ * {@link ByteBuffer} may be heap or direct, but the logical read/write rules
+ * are identical.
+ *
  * <pre>
- * +-------------+------------+-------------+----------+
- * | discardable | readable   | overlayable | writable |
- * +-------------+------------+-------------+----------+
- * |             |            |             |          |
- * 0   ≤   readerIndex  ≤  marked  ≤  writerIndex ≤ capacity
- *                      writerIndex
+ * physical storage
+ *
+ *   target ByteBuffer
+ *   +---------------------------------------------------+
+ *   | 0 | 1 | 2 | ... | capacity - 1 |
+ *   +---------------------------------------------------+
+ *
+ * logical layout on top of the ByteBuffer
+ *
+ *   0      markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
+ *   |-------------|---------------|------------------|---------------|
+ *   | ancient     | discardable   | readable         | overlayable   | writable |
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01

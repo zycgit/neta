@@ -10,8 +10,11 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * Provider for creating Virtual channels.
- * Implements logic to create server and client channels for in-memory virtual communication.
+ * Bootstrap and registry provider for the virtual transport.
+ * <p>The provider owns the process-local listen registry keyed by virtual port.
+ * Server creation reserves a port in that registry, while client creation either
+ * resolves a connect-mode target server from the same registry or creates an
+ * unbound standalone virtual channel when no connect lookup is requested.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-07
  */

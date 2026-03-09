@@ -62,7 +62,7 @@ public class SslRoutingTest extends AbstractSslTest {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
-                    ByteBuf data = (ByteBuf) rcvUp.peekMessage();
+                    ByteBuf data = rcvUp.peekMessage();
                     if (data != null && data.readableBytes() > 0) {
                         byte firstByte = data.getByte(data.readerIndex());
                         return (firstByte == 0x16) ? "tls" : "plain";
@@ -70,12 +70,9 @@ public class SslRoutingTest extends AbstractSslTest {
                     return null; // not enough data
                 }, r -> {
                     // TLS branch: SSL decryption → string codec
-                    r.branch("tls", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch
-                            .nextDuplex("SSL", new SslDuplexer(sslConf))
-                            .nextDuplex("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1));
+                    r.branch("tls", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch.nextDuplex("SSL", new SslDuplexer(sslConf)).nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1));
                     // Plaintext branch: direct string codec
-                    r.branch("plain", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch
-                            .nextDuplex("string", (ProtoHandler<ByteBuf, String>) AbstractSslTest::doDecoder1, (ProtoHandler<String, ByteBuf>) AbstractSslTest::doEncoder1));
+                    r.branch("plain", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch.nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1));
                 }).build();
     }
 

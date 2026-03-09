@@ -1,5 +1,4 @@
 package net.hasor.neta.channel.sctp;
-
 import com.sun.nio.sctp.*;
 import net.hasor.neta.channel.SoContextService;
 

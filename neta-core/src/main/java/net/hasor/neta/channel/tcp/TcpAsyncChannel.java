@@ -26,9 +26,25 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * TCP implementation of asynchronous client channel.
- * Provides TCP-specific implementation for establishing connections and performing I/O operations asynchronously.
- * Wraps Java NIO's AsynchronousSocketChannel for actual network operations.
+ * Async-channel adapter around one {@link AsynchronousSocketChannel}.
+ * <p>This type is used for both outbound client connections and sockets accepted
+ * by {@link TcpAsyncServerChannel}. It wraps the raw AIO socket and exposes the
+ * transport operations that Neta's higher-level {@link TcpChannel} and completion
+ * handlers build upon.
+ * <p><b>Runtime structure:</b>
+ * <pre>
+ *   AsynchronousSocketChannel
+ *          |
+ *          +--> TcpAsyncChannel
+ *                    |
+ *                    +--> TcpConnectCompletionHandler   (connect completion)
+ *                    +--> TcpRcvCompletionHandler       (read loop)
+ *                    +--> TcpSndCompletionHandler       (single-writer send loop)
+ *                    +--> TcpChannel                    (application-facing NetChannel)
+ * </pre>
+ * <p>The class itself does not own the read/write state machines; it only exposes
+ * the underlying asynchronous socket operations and delegates policy to the
+ * completion handlers created around it.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

@@ -25,7 +25,31 @@ import javax.net.ssl.TrustManagerFactory;
 import javax.net.ssl.TrustManagerFactorySpi;
 
 /**
- * Helps to implement a custom {@link TrustManagerFactory}.
+ * A skeletal {@link javax.net.ssl.TrustManagerFactory} that simplifies the
+ * creation of custom {@link javax.net.ssl.TrustManager} implementations.
+ * <p>Adapted from {@code io.netty.handler.ssl.util.SimpleTrustManagerFactory}.
+ * <p><b>Motivation:</b> the standard {@link javax.net.ssl.TrustManagerFactory} SPI
+ * requires providing a concrete {@link javax.net.ssl.TrustManagerFactorySpi} at
+ * construction time, but there is no way to obtain the {@code Spi} instance after
+ * construction, making it impossible to wire callbacks back from the SPI to the
+ * factory.  This class works around the limitation with a {@link ThreadLocal} hack:
+ * the SPI is created in the {@code withInitial} supplier, stored in
+ * {@code CURRENT_SPI}, and immediately retrieved by the constructor to call
+ * {@link SimpleTrustManagerFactorySpi#init(SimpleTrustManagerFactory)}, which
+ * registers the callback and then removes the {@code ThreadLocal} entry.
+ * <p><b>Usage:</b> subclasses implement three abstract methods:
+ * <ul>
+ *   <li>{@link #engineInit(java.security.KeyStore)}: initialise from a KeyStore (may
+ *       be a no-op if not applicable).</li>
+ *   <li>{@link #engineInit(javax.net.ssl.ManagerFactoryParameters)}: initialise from
+ *       provider-specific parameters (may be a no-op).</li>
+ *   <li>{@link #engineGetTrustManagers()}: return the {@link javax.net.ssl.TrustManager}
+ *       array to use.</li>
+ * </ul>
+ * <p>See {@link SslTmfWrapper} for a concrete subclass that wraps an existing
+ * {@code TrustManager} array.
+ * @see SslTmfWrapper
+ * @see javax.net.ssl.TrustManagerFactory
  */
 public abstract class SimpleTrustManagerFactory extends TrustManagerFactory {
 

@@ -19,9 +19,21 @@ import java.nio.ReadOnlyBufferException;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * Used to manipulate allocated memory blocks
+ * {@link Buffer} implementation backed by a {@link PageChunkSplit} allocated
+ * from a {@link PageChunkPool}.
+ * <p>A {@code BufferTarget} represents a window over pooled memory whose byte
+ * range is determined by the split's page range and the allocator page size.
+ * It is the primary storage object used by {@link PooledByteBuf}.
+ * <p>Calling {@link #free()} releases this view. Once the underlying
+ * {@link PageChunkSplit} reference count reaches zero, the pages become
+ * available for reuse and the split descriptor itself can be recycled.
+ * <p>The same storage can be exposed through shared views such as a read-only
+ * variant or the head fragment returned by {@link #split(int)}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see BufferWrap
+ * @see PageChunkSplit
+ * @see PooledByteBuf
  */
 class BufferTarget implements Buffer {
     static final int                                        RECYCLE_INDEX   = RecycleObjectPool.registerType();

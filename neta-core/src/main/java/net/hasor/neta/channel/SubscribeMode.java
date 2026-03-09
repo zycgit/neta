@@ -17,8 +17,20 @@ package net.hasor.neta.channel;
 
 /**
  * Delivery mode for {@link PlayLoadListener} subscriptions.
- * SYNC runs inline on the trigger call stack; ASYNC runs on the worker executor
- * and preserves per-subscriber event order.
+ * <ul>
+ *   <li>{@link #SYNC} – {@link PlayLoadListener#onEvent} is called <em>inline</em> on
+ *       the same thread (I/O or task worker) that triggered the event.  Choose this for
+ *       minimal latency, but ensure the callback returns quickly: blocking will stall
+ *       the triggering thread.</li>
+ *   <li>{@link #ASYNC} – the event is queued and dispatched to a
+ *       {@link SoEventExecutor} worker thread.  Events for the same subscriber are
+ *       always delivered in FIFO order.  Choose this for callbacks that may block, do
+ *       I/O, or interact with external systems.</li>
+ * </ul>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-20
+ * @see PlayLoadListener
+ * @see SoChannel#subscribe
  */
 public enum SubscribeMode {
     SYNC,

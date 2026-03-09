@@ -20,10 +20,31 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Default implementation of both {@link ProtoRcvQueue} and {@link ProtoSndQueue}.
- * <p>Provides capacity-bounded message storage with transactional take/offer semantics.</p>
+ * Concrete, capacity-bounded implementation of both {@link ProtoRcvQueue} and
+ * {@link ProtoSndQueue}.
+ * <p>A single {@code ProtoQueue} instance serves simultaneously as the receive queue
+ * (consumer side) and the send queue (producer side) for one pipeline stage boundary,
+ * so the staging buffer between the upstream consumer and the downstream producer is
+ * contained in a single object.
+ * <h3>Capacity and overflow</h3>
+ * Capacity is set at construction time.  If {@code capacity < 0} the queue is effectively
+ * unbounded ({@link Integer#MAX_VALUE}).  Once all capacity is consumed,
+ * {@link #offerMessage} returns {@code 0} (no items accepted), and the pipeline send path
+ * raises {@link ProtoFullException} as a backpressure signal.
+ * <h3>Transaction semantics</h3>
+ * Both paths use a two-phase commit:
+ * <ul>
+ *   <li>Receive side: call {@link #rcvSubmit()} to finalise a take, or
+ *       {@link #rcvReset()} to return taken items to the front of the queue.</li>
+ *   <li>Send side: call {@link #sndSubmit()} to lock offered items in place, or
+ *       {@link #sndReset()} to discard items that were offered but not yet committed.</li>
+ * </ul>
+ * @param <T> the type of message stored in this queue
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see ProtoRcvQueue
+ * @see ProtoSndQueue
+ * @see ProtoFullException
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     private static final Object[]      EMPTY_ARRAY = new Object[0];

@@ -18,8 +18,10 @@ import java.net.SocketAddress;
 import net.hasor.neta.channel.*;
 
 /**
- * Represents a listening TCP server port.
- * Manages the lifecycle of the server socket and accepting new connections.
+ * Listen-handle wrapper for a bound TCP server socket.
+ * <p>This class is the framework-visible {@link NetListen} descriptor returned
+ * from bind operations. The actual listen socket lifecycle and accept loop are
+ * implemented by {@link TcpAsyncServerChannel}, not by this wrapper.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */

@@ -18,12 +18,28 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Outbound (send-side) data queue for a protocol layer endpoint.
- * <p>Supports offer operations with transactional semantics
- * ({@link #sndSubmit()}/{@link #sndReset()}).</p>
+ * Outbound (send-side) data queue for one endpoint of a protocol pipeline stage.
+ * <p>Each pipeline stage boundary has exactly one {@code ProtoSndQueue}: the downstream
+ * handler (encoder / transformer) offers encoded messages into it; the upstream consumer
+ * (or the transport layer) reads them for transmission.
+ * <h3>Slot mechanism</h3>
+ * Unlike an unbounded queue, outbound capacity is expressed as <em>slots</em>.  Before
+ * offering a message call {@link #hasSlot()} / {@link #slotSize()} to confirm space is
+ * available.  If the queue is full (no slots remaining) the pipeline raises
+ * {@link ProtoFullException} as a backpressure signal to the sender.
+ * <h3>Transaction semantics (two-phase write)</h3>
+ * <ol>
+ *   <li>Call {@link #offerMessage} to tentatively enqueue items.</li>
+ *   <li>Call {@link #sndSubmit()} to lock those items so they are visible to the consumer
+ *       and cannot be rolled back.</li>
+ *   <li>Or call {@link #sndReset()} to discard items that were offered but not yet
+ *       committed.</li>
+ * </ol>
+ * @param <T> the type of outbound message
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoRcvQueue
+ * @see ProtoQueue
  */
 public interface ProtoSndQueue<T> {
     /**

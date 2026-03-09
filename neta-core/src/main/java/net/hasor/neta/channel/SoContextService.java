@@ -31,11 +31,19 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Default {@link SoContext} implementation.
- * <p>Manages the lifecycle of all channels/listeners, event dispatching,
- * IO/worker thread pools, and the global timer.</p>
+ * Default {@link SoContext} implementation and shared runtime container for one
+ * {@link NetManager}.
+ * <p>It owns transport-independent resources such as the byte-buffer allocator,
+ * I/O executor, worker executor, timer wheel, active channel registries, and
+ * subscriber lists used for {@link PlayLoad} dispatch.
+ * <p>It also coordinates channel lifecycle operations, exception reporting, and
+ * shutdown ordering so all transports created by the same manager share a
+ * consistent runtime environment.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoContext
+ * @see SoEventExecutor
+ * @see NetManager
  */
 public class SoContextService implements SoContext {
     private static final Logger                  logger    = Logger.getLogger(SoContextService.class);

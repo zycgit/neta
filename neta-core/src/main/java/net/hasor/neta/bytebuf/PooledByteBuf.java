@@ -20,9 +20,44 @@ import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * 基于 {@link Buffer} 池化的的窗口 {@link ByteBuf} 实现，同时如果容量不足它会自动扩缩容
+ * {@link ByteBuf} implementation backed by pooled memory obtained from a
+ * {@link BufferPool}.
+ * <p>Instead of allocating new JVM buffers on every growth, this class acquires
+ * {@link Buffer} instances from the allocator, copies live data when it needs a
+ * larger region, and frees the previous buffer back to the pool.
+ *
+ * <pre>
+ * pooled ownership model
+ *
+ *   PooledByteBuf
+ *      |
+ *      +--> target : Buffer --------------------------+
+ *      |        |                                     |
+ *      |        +--> heapArray / heapOffset           |
+ *      |        \--> directAddress                    |
+ *      |
+ *      +--> pool : BufferPool
+ *      |
+ *      \--> BUFFER_CACHE (ThreadLocal<ArrayDeque<Buffer>>)
+ *                recent freed buffers for fast reuse
+ *
+ * growth / recycle flow
+ *
+ *   current target full
+ *        -> acquire larger Buffer from cache or pool
+ *        -> copy readable bytes
+ *        -> return old Buffer to thread-local cache or pool
+ * </pre>
+ * <p>To reduce churn during small growth cycles, recently freed pooled buffers
+ * may be kept in a per-thread cache and reused before another pool request is
+ * made.
+ * <p>The implementation also caches heap-array access or direct-memory address
+ * metadata internally so bulk read and write paths can avoid repeated buffer
+ * introspection.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see BufferPool
+ * @see BasicByteBufAllocator
  */
 final class PooledByteBuf extends AbstractByteBuf {
     static final         int                                         RECYCLE_INDEX    = RecycleObjectPool.registerType();

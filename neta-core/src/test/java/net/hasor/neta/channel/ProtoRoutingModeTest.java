@@ -36,7 +36,7 @@ public class ProtoRoutingModeTest {
                     if (rcvUp.queueSize() == 0) {
                         return null;
                     }
-                    Integer value = (Integer) rcvUp.peekMessage();
+                    Integer value = rcvUp.peekMessage();
                     return value != null && value % 2 == 0 ? "even" : "odd";
                 }, router -> {
                     router.branch("even", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("even", new RecordHandler("even")));

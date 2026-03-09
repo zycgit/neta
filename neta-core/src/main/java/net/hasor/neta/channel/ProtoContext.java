@@ -19,9 +19,16 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Protocol context bound to a single {@link NetChannel}.
- * <p>Provides pipeline configuration (add/remove handlers), data sending,
- * user-event firing, and per-event flash storage.</p>
+ * Protocol-pipeline context for one channel and its branch sub-pipelines.
+ * <p>A connection has one root {@code ProtoContext} attached to the public channel and may create
+ * additional branch contexts under routing nodes. The API serves two roles: pipeline construction
+ * during initialization and runtime interaction while handlers are processing data or user events.
+ * <p><b>Structure:</b>
+ * <pre>
+ *   NetChannel / QuicStreamChannel
+ *       -> root ProtoContext
+ *       -> branch ProtoContext(s) created by ProtoRoutingDuplexer
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -102,11 +109,11 @@ public interface ProtoContext {
     <T> T rootContext(Class<T> type, T value);
 
     /**
-     * Retrieves a flash value by key from the <b>current ctx's active event frame</b>.
+     * Retrieves a flash value by key from the active event frame.
      * <p>
-     * Flash storage is <em>local to the ctx instance</em> that writes it: data written by
-     * a branch ctx is <b>not</b> visible to the main pipeline ctx, and vice-versa.
-     * Values are automatically discarded when the current event processing completes.
+     * Flash storage is ephemeral per event pass, but in the current implementation it is shared by
+     * the root ctx and any branch ctxs participating in that same pass. Values are automatically
+     * discarded when the outermost event processing completes.
      * </p>
      * @param key the flash key
      * @return the stored value, or {@code null} if not present in the current frame
@@ -114,15 +121,12 @@ public interface ProtoContext {
     <T> T flash(String key);
 
     /**
-     * Stores a flash value in the <b>current ctx's active event frame</b>.
+     * Stores a flash value in the active event frame.
      * <p>
-     * Flash data is <em>local to this ctx instance only</em> — it is <b>not</b> shared
-     * between the main pipeline ctx and branch ctx instances, even though they belong to
-     * the same connection.  The value exists only for the duration of the current event;
-     * it is automatically cleaned up when the event propagation ends.
+     * The value is visible to the root ctx and branch ctxs participating in the same active pass,
+     * but it is still short-lived: once that outermost pass ends the flash map is cleared.
+     * For state that must survive beyond one event, use {@link #context(Class, Object)}.
      * </p>
-     * <p>To share state across the entire pipeline tree or to retain data beyond a single
-     * event, use {@link #context(Class, Object)} instead.</p>
      * @param key the flash key
      * @param flash the value to store; passing {@code null} removes the key
      * @return the stored value

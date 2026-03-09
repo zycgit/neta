@@ -33,19 +33,23 @@ import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SoDelayTask;
 
 /**
- * Reusable UDP datagram transport layer. Manages a {@link DatagramChannel},
- * {@link Selector}, and a task-driven receive loop that delivers raw
- * datagrams to a {@link DatagramReceiver} callback.
- * <p>
- * Both UDP and QUIC channel implementations share this class to avoid
- * duplicating low-level DatagramChannel / Selector management code.
- * <p>
- * Usage:
- * <pre>{@code
- * UdpTransport transport = UdpTransport.open(channelId, context, 65535, owner);
- * transport.bind(address);
- * transport.startReceiveLoop(receiver, onClose, onError);
- * }</pre>
+ * Shared datagram I/O engine used by UDP and UDP-based protocols.
+ * <p>This class owns the low-level {@link DatagramChannel}, its {@link Selector},
+ * a reusable direct receive buffer, and a task-rescheduled polling loop that hands
+ * raw datagrams to a callback.
+ * <p><b>Execution model:</b>
+ * <pre>
+ *   DatagramChannel + Selector
+ *            |
+ *            +--> select()
+ *                   |
+ *                   +--> receive into shared direct ByteBuffer
+ *                   +--> flip buffer
+ *                   +--> DatagramReceiver.onDatagram(remoteAddr, data)
+ *                   +--> schedule next poll task
+ * </pre>
+ * <p>The received {@link ByteBuffer} is reused on the next poll cycle, so callers
+ * must consume or copy its bytes before returning from the callback.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2026-02-21
  */

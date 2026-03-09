@@ -18,9 +18,17 @@ import java.io.IOException;
 import java.net.SocketAddress;
 
 /**
- * Asynchronous channel provider interface for creating server and client asynchronous channels.
+ * Transport provider SPI used to create low-level client and server channels.
+ * <p>Each implementation encapsulates one transport family, such as TCP, UDP,
+ * SCTP, or the in-memory virtual transport. The owning {@link NetManager}
+ * selects a provider according to the supplied {@link SoConfig} and delegates
+ * actual socket or selector creation to it.
+ * <p>A provider may keep transport-wide resources, so {@link #shutdown()} is
+ * the matching lifecycle hook for releasing them when the manager closes.
  * @author 赵永春 (zyc@hasor.net)
- * @version 2025-08-07
+ * @version : 2025-08-07
+ * @see AsyncChannel
+ * @see AsyncServerChannel
  */
 public interface AsyncChannelProvider {
 

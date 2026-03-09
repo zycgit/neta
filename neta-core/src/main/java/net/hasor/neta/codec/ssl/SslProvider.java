@@ -15,9 +15,24 @@
  */
 package net.hasor.neta.codec.ssl;
 /**
- * An enumeration of SSL/TLS protocol providers.
+ * Enumerates the SSL/TLS engine providers exposed by this package.
+ * <p>At present only {@link #JSSE} is implemented by the runtime code in this package.
+ * An OpenSSL-backed option was considered but remains commented out because:
+ * <ul>
+ *   <li>OpenSSL binding requires a native library (e.g., BoringSSL or OpenSSL 1.1+)
+ *       that adds a mandatory JNI dependency, conflicting with the zero-native-dependency
+ *       design goal.</li>
+ *   <li>JSSE covers all required cipher suites and TLS versions (1.0 – 1.3) on
+ *       modern JDKs (Oracle/OpenJDK ≥ 8u261 / 11.0.3) without native code.</li>
+ * </ul>
+ * <p>Usage:
+ * <pre>
+ *   SslConfig config = new SslConfig();
+ *   config.setProvider(SslProvider.JSSE); // only supported value in this package today
+ * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SslContextBasic
  */
 public enum SslProvider {
     /**

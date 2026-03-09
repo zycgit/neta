@@ -16,9 +16,20 @@
 package net.hasor.neta.channel;
 
 /**
- * Thrown when the remote side has called {@code shutdownInput()}, indicating the input half is closed.
+ * Thrown when the remote peer has shut down the write side of its socket (TCP FIN), causing
+ * the local channel's input stream to report EOF.
+ * <p>This exception represents a TCP <em>half-close</em>: the peer will send no more data,
+ * but the local side may still flush any buffered outbound data before closing the connection.
+ * Typical handling:
+ * <ol>
+ *   <li>Flush any remaining application-level outbound data.</li>
+ *   <li>Call {@link SoChannel#close()} to complete a graceful four-way close.</li>
+ * </ol>
+ * <p>Note: SCTP and UDP do not support half-close semantics; this exception is only
+ * meaningful for TCP (and TLS-over-TCP) channels.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SoCloseException
  */
 public class SoInputCloseException extends SoCloseException {
     public SoInputCloseException(String s) {

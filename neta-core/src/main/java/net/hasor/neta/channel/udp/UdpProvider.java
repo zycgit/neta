@@ -20,8 +20,10 @@ import java.nio.channels.DatagramChannel;
 import net.hasor.neta.channel.*;
 
 /**
- * Provides UDP-specific implementation for asynchronous server and client channels.
- * Implements the AsyncChannelProvider interface to create and configure UDP channels.
+ * UDP transport provider for Neta.
+ * <p>It opens raw {@link DatagramChannel} instances and wraps them as
+ * {@link UdpAsyncClientChannel} or {@link UdpAsyncServerChannel}. Beyond transport
+ * bootstrap, it has no extra lifecycle logic.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-07
  */

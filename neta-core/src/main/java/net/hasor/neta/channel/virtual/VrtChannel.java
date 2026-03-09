@@ -18,8 +18,11 @@ import java.io.IOException;
 import net.hasor.neta.channel.*;
 
 /**
- * Virtual channel implementation for in-memory communication.
- * Binds to the application layer protocol stack without physical network I/O.
+ * Application-facing virtual channel facade.
+ * <p>This is the channel instance exposed to protocol handlers after a virtual
+ * client connect or server-side accept completes. It extends the common channel
+ * base but also exposes manual receive/send error injection methods so that the
+ * virtual transport can drive the protocol pipeline without any real socket I/O.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

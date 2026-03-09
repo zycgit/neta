@@ -25,10 +25,41 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
 
 /**
- * Asynchronous write task for SCTP channels.
- * Handles the actual writing of data to the underlying SCTP channel.
+ * Task that drains the per-channel {@link SoSndContext} queue by sending SCTP messages
+ * synchronously on the framework's task thread.
+ * <p>Unlike TCP, SCTP messages carry per-message metadata via
+ * {@link com.sun.nio.sctp.MessageInfo}: stream ID, sequence number, payload-protocol
+ * identifier (PPID), and an unordered delivery flag.  The framework wraps this metadata
+ * together with the payload in a {@link SctpMessage}.
+ * <p><b>Send loop ({@link #doWork(int)} contract inherited from {@link DefaultSoTask}):</b>
+ * <pre>
+ *   SoSndContext (queue)
+ *       │  peekData()
+ *       ▼
+ *   SoSndData.transferTake() ──▶ SctpMessage (MessageInfo + ByteBuf)
+ *       │
+ *       ▼
+ *   ByteBuf → sndSwapBuf (heap ByteBuffer, resized as needed)
+ *       │
+ *       ▼
+ *   SctpChannel.send(sndSwapBuf, messageInfo)
+ *       ├──▶ write > 0: advance queue, retry if more data
+ *       ├──▶ write == 0: send buffer full → delayTask(50ms) then retry
+ *       └──▶ exception: handleException() → purge or retry
+ * </pre>
+ * <p><b>Type handling:</b> If the application writes a raw
+ * {@link net.hasor.neta.bytebuf.ByteBuf} instead of a {@link SctpMessage}, it is
+ * automatically wrapped in a {@code SctpMessage} with a default outgoing
+ * {@code MessageInfo} on stream 0.
+ * <p><b>Exception policy:</b> write-timeout ({@link java.nio.channels.InterruptedByTimeoutException})
+ * triggers a retry if {@code sndWriteRetryCount > 0}; closed channel
+ * ({@link java.nio.channels.ClosedChannelException}) drains the queue with
+ * {@link net.hasor.neta.channel.SoUnfinishedSndException}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
+ * @see SctpMessage
+ * @see SoSndContext
+ * @see net.hasor.neta.channel.DefaultSoTask
  */
 class SctpWriteTask extends DefaultSoTask {
     protected final SoContextService context;

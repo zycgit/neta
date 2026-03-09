@@ -20,8 +20,10 @@ import com.sun.nio.sctp.SctpServerChannel;
 import net.hasor.neta.channel.*;
 
 /**
- * Provides SCTP-specific implementation for asynchronous server and client channels.
- * Implements the AsyncChannelProvider interface to create and configure SCTP channels.
+ * Provider that creates SCTP client and server transports for Neta.
+ * <p>It opens the underlying JDK SCTP channels and wraps them as
+ * {@link SctpAsyncChannel} or {@link SctpAsyncServerChannel}. Beyond object
+ * creation, this provider currently has no additional lifecycle logic.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-07
  */

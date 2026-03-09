@@ -23,9 +23,29 @@ import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
 /**
- * Memory pool
+ * Pooled memory manager based on the buddy-allocation algorithm.
+ * <p>A {@code BufferPool} partitions memory into fixed-size pages and organises
+ * them into a chain of six utilisation arenas, modelled after Netty's
+ * {@code PooledByteBufAllocator}:
+ * <pre>
+ *  Arena chain (utilisation thresholds):
+ *  qInit(0-25%) → q000(1-50%) → q025(25-75%) → q050(50-100%) → q075(75-100%) → q100(100%+)
+ *  Allocation: start search at q000 → q025 → q050 → q075 → q100
+ *              fall back to qInit when all others are full.
+ *  Deallocation: chunk’s utilisation is re-evaluated and the chunk migrates
+ *                to the arena matching its new utilisation level.
+ * </pre>
+ * <p>Each arena holds a {@link BufferArena} (a ring of {@link PageChunkPool}s).
+ * Each {@code PageChunkPool} implements a buddy-tree allocator over a contiguous
+ * array of pages (default tree height = 12, so 4096 pages per chunk).
+ * <p>To reduce contention, {@link BufferPoolUtils} maintains one
+ * {@code BufferPool} per CPU core and selects a pool with
+ * {@code threadId % poolCount} on every allocation call.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2022-11-01
+ * @see BufferArena
+ * @see PageChunkPool
+ * @see BufferPoolUtils
  */
 class BufferPool {
     //
