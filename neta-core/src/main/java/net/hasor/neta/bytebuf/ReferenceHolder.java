@@ -25,7 +25,7 @@ package net.hasor.neta.bytebuf;
  * <p>After the final release, further access is invalid and typically results in
  * implementation-specific failures such as {@link IllegalStateException}.
  */
-public interface ReferenceCounted {
+public interface ReferenceHolder {
     /**
      * Returns the reference count of this object.  If {@code 0}, it means this object has been deallocated.
      */
@@ -34,12 +34,12 @@ public interface ReferenceCounted {
     /**
      * Increases the reference count by {@code 1}.
      */
-    ReferenceCounted retain();
+    ReferenceHolder retain();
 
     /**
      * Increases the reference count by the specified {@code increment}.
      */
-    ReferenceCounted retain(int increment);
+    ReferenceHolder retain(int increment);
 
     /**
      * Decreases the reference count by {@code 1} and deallocates this object if the reference count reaches at {@code 0}.

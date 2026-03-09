@@ -42,9 +42,9 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * the implementation.
  * <p>Implementations may be heap-backed, direct, pooled, wrapped, read-only, or
  * proxy-based, but they all follow the same sequential read/write contract and
- * reference-count lifecycle inherited from {@link ReferenceCounted}.
+ * reference-count lifecycle inherited from {@link ReferenceHolder}.
  */
-public interface ByteBuf extends ByteChannel, ReferenceCounted {
+public interface ByteBuf extends ByteChannel, ReferenceHolder {
 
     ByteBuf EMPTY = new ByteBufProxy(ByteBuf.wrap(new byte[0])) {
         @Override

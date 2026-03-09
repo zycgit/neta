@@ -25,17 +25,14 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * mask. The ring layout changes only how bytes are stored internally; it does
  * not bypass the ordinary readable/writable bounds enforced by
  * {@link AbstractByteBuf}.
- *
  * <pre>
  * ByteBuffer-backed ring
- *
  *   ByteBuffer target
  *   +---------------------------------------------------------------+
  *   | 0 | 1 | 2 | 3 | ... | capacity-2 | capacity-1 |
  *   +---------------------------------------------------------------+
  *      ^                                            |
  *      |____________ circular address space ________|
- *
  *   logicalIndex --(logicalIndex & capacityMask)--> physical slot in target
  * </pre>
  * <p>Instances created from a requested capacity are rounded up to the next

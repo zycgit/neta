@@ -26,10 +26,8 @@ import net.hasor.neta.channel.ProtoRcvQueue;
  * <p>
  * This class provides zero-copy composite reading across multiple queued ByteBuf messages,
  * allowing protocol decoders to work with fragmented data as if it were a single buffer.
- *
  * <pre>
  * receive queue snapshot
- *
  *   ProtoRcvQueue<ByteBuf>
  *     +--------+--------+--------+--------+
  *     | msg[0] | msg[1] | msg[2] |  ...   |
@@ -39,17 +37,13 @@ import net.hasor.neta.channel.ProtoRcvQueue;
  *     +-------+ +-------+ +-------+
  *     | buf0  | | buf1  | | buf2  |
  *     +-------+ +-------+ +-------+
- *
  * QueueByteBuf component table
- *
  *   +--------------+----------------+--------+
  *   | component[0] | offset = 0      | len=l0 |
  *   | component[1] | offset = l0     | len=l1 |
  *   | component[2] | offset = l0+l1  | len=l2 |
  *   +--------------+----------------+--------+
- *
  * logical read path
- *
  *   readerIndex ---> [ buf0 remainder ][ buf1 ][ buf2 ] ... ---> writerIndex
  * </pre>
  * <p>

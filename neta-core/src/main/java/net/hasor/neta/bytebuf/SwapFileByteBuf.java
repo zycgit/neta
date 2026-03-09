@@ -27,15 +27,12 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * <pre>
  *  1. Memory mode
  *     memBuf holds the active logical window
- *
  *     [ consumed ][ readable ][ writable ]
  *                ^          ^
  *           readerIndex  writerIndex
- *
  *  2. File mode
  *     once committed data grows beyond memThreshold, bytes are appended into
  *     fixed-size swap segments tracked by absolute stream position
- *
  *     absolute stream
  *     0 ----------- segmentSize ----------- 2*segmentSize -----------&gt;
  *     [ segment-0 ][ segment-1 ][ segment-2 ... ]

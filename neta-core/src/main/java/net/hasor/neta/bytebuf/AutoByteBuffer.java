@@ -26,18 +26,14 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * ({@link java.nio.ByteBuffer#allocateDirect}).  This allows the same
  * auto-grow semantics for scenarios that need direct memory access (e.g.,
  * AIO DMA reads/writes).
- *
  * <pre>
  * current storage
- *
  *   target : ByteBuffer
  *   +-----------------------------------------------------------+
  *   | discarded |         readable data         |   writable    |
  *   +-----------------------------------------------------------+
  *   0        markedReaderIndex               writerIndex      target.capacity()
- *
  * when resize or recycle happens
- *
  *   old target  --copy readable window-->  new ByteBuffer
  *   +-----------+                         +---------------------+
  *   | readable  | --------------------->  | readable | writable |

@@ -29,7 +29,7 @@ import java.nio.charset.StandardCharsets;
  * characters may change as well. In other words, the stability of this view depends on the
  * stability of the underlying buffer content.
  */
-public final class StringView implements CharSequence {
+public class StringView implements CharSequence {
     private final int     offset;
     private final int     length;
     private       ByteBuf source;

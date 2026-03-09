@@ -25,17 +25,13 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * is and only overlays Neta's logical index model. The underlying
  * {@link ByteBuffer} may be heap or direct, but the logical read/write rules
  * are identical.
- *
  * <pre>
  * physical storage
- *
  *   target ByteBuffer
  *   +---------------------------------------------------+
  *   | 0 | 1 | 2 | ... | capacity - 1 |
  *   +---------------------------------------------------+
- *
  * logical layout on top of the ByteBuffer
- *
  *   0      markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
  *   |-------------|---------------|------------------|---------------|
  *   | ancient     | discardable   | readable         | overlayable   | writable |

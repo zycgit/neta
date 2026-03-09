@@ -24,20 +24,14 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * indexes continue to move forward and are masked into the backing array.
  * Capacity is rounded up to a power of two so wrapping can be implemented with
  * a cheap bit mask.
- *
  * <pre>
  * physical array (power-of-two sized)
- *
  *   target[0]  target[1]  target[2]  ...  target[capacity-1]
  *      ^                                           |
  *      |___________________________________________|
- *
  * logical to physical mapping
- *
  *   physicalIndex = logicalIndex & capacityMask
- *
  * example after wrap-around
- *
  *   logical indexes:  ... 14 15 16 17 18 19
  *   mask (capacity=16):    14 15  0  1  2  3
  *                         [---- tail ----][-- head --]

@@ -22,17 +22,13 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * <p>
  * This implementation does not own expandable storage. It simply wraps a user
  * supplied array and exposes Neta's logical index model on top of it.
- *
  * <pre>
  * physical storage
- *
  *   target byte[]
  *   +---------------------------------------------------+
  *   | 0 | 1 | 2 | ... | capacity - 1 |
  *   +---------------------------------------------------+
- *
  * logical layout on top of the array
- *
  *   0      markedReaderIndex   readerIndex   markedWriterIndex   writerIndex   capacity
  *   |-------------|---------------|------------------|---------------|
  *   | ancient     | discardable   | readable         | overlayable   | writable |

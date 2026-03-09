@@ -25,10 +25,8 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * <p>Instead of allocating new JVM buffers on every growth, this class acquires
  * {@link Buffer} instances from the allocator, copies live data when it needs a
  * larger region, and frees the previous buffer back to the pool.
- *
  * <pre>
  * pooled ownership model
- *
  *   PooledByteBuf
  *      |
  *      +--> target : Buffer --------------------------+
@@ -40,9 +38,7 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  *      |
  *      \--> BUFFER_CACHE (ThreadLocal<ArrayDeque<Buffer>>)
  *                recent freed buffers for fast reuse
- *
  * growth / recycle flow
- *
  *   current target full
  *        -> acquire larger Buffer from cache or pool
  *        -> copy readable bytes

@@ -24,18 +24,14 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * requested.  The internal {@code byte[]} starts at the size passed to
  * {@link #initBuffer} and grows automatically in steps of {@code extensionSize}
  * whenever a write would exceed the current array bounds.
- *
  * <pre>
  * before recycle / compact
- *
  *   target byte[]
  *   +-----------------------------------------------------------+
  *   | discarded |         readable data         |   writable    |
  *   +-----------------------------------------------------------+
  *   0        markedReaderIndex               writerIndex      target.length
- *
  * after markReader() triggers recycle()
- *
  *   new or compacted target byte[]
  *   +-------------------------------------------+
  *   |         readable data         | writable  |

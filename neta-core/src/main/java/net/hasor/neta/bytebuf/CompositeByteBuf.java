@@ -27,10 +27,8 @@ import java.util.List;
  * This provides zero-copy aggregation of multiple buffers. The composite buffer
  * presents all component buffers as a single readable buffer. Data can be read
  * seamlessly across component boundaries.
- *
  * <pre>
  * logical view
- *
  *   readerIndex -----------------------------------------------> writerIndex
  *   |                                                           |
  *   v                                                           v
@@ -38,9 +36,7 @@ import java.util.List;
  *   | component[0] | component[1] | component[2] | ... | component[n]        |
  *   +-----------------------------------------------------------------------+
  *   0            c0.end          c1.end         c2.end                    totalCapacity
- *
  * physical ownership
- *
  *   components list
  *     -> { buf=buf0, compositeOffset=0,      length=buf0.readableBytes() }
  *     -> { buf=buf1, compositeOffset=c0.end, length=buf1.readableBytes() }
