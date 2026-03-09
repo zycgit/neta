@@ -169,6 +169,8 @@ public class HttpHeaderNames {
     public static final String TRANSFER_ENCODING                      = "transfer-encoding";
     /** {@code "upgrade"} */
     public static final String UPGRADE                                = "upgrade";
+    /** {@code "http2-settings"} */
+    public static final String HTTP2_SETTINGS                         = "http2-settings";
     /** {@code "upgrade-insecure-requests"} */
     public static final String UPGRADE_INSECURE_REQUESTS              = "upgrade-insecure-requests";
     /** {@code "user-agent"} */

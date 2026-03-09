@@ -124,6 +124,8 @@ public final class HttpHeaderValues {
     public static final String TRAILERS                          = "trailers";
     /** {@code "upgrade"} */
     public static final String UPGRADE                           = "upgrade";
+    /** {@code "h2c"} */
+    public static final String H2C                               = "h2c";
     /** {@code "websocket"} */
     public static final String WEBSOCKET                         = "websocket";
     /** {@code "XmlHttpRequest"} */
