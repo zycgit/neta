@@ -30,7 +30,7 @@ public class ProtoRoutingModeTest {
     @Test
     public void realtimeMode_recomputeRouteForEveryInboundMessage() throws Throwable {
         RecordHandler.reset();
-        ProtoInitializer initializer = ProtoHelper          //
+        ProtoInitializer initializer = ProtoHelper   //
                 .typed(Integer.class, Integer.class) //
                 .<Integer, Integer>nextRouteAsRealtime("router", (ctx, rcvUp, rcvDown) -> {
                     if (rcvUp.queueSize() == 0) {

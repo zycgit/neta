@@ -25,7 +25,8 @@ import net.hasor.neta.channel.*;
  * target channel after conversion and batching.
  * <p><b>Data path:</b>
  * <pre>
- *   sender VrtChannel.write()
+ *   sender NetChannel.sendData(...)
+ *       -> VrtAsyncChannel.write(...)
  *       -> context.trigger(PlayLoad)
  *       -> VrtTransfer subscription callback
  *       -> distributeMap[sourceChannelId]

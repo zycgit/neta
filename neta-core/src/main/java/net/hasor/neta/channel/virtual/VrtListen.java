@@ -25,9 +25,9 @@ import net.hasor.neta.channel.SoContextService;
  * {@link VrtTransfer} that handles in-JVM data routing between the client and
  * server sides of a virtual channel pair.
  * <p>A {@code VrtListen} is created by
- * {@link VrtAsyncServerChannel#bind(net.hasor.neta.channel.ProtoInitializer)}
+ * {@link net.hasor.neta.channel.AsyncServerChannel#bind(net.hasor.neta.channel.ProtoInitializer)}
  * and initialized through the standard
- * {@link net.hasor.neta.channel.SoContextService#initChannel} path, which runs
+ * {@link net.hasor.neta.channel.SoContextService#initChannel(net.hasor.neta.channel.SoChannel, boolean)} path, which runs
  * the user-supplied {@link net.hasor.neta.channel.ProtoInitializer} to build
  * the server-side protocol stack.
  * <p>The embedded {@link VrtTransfer} is used by incoming
