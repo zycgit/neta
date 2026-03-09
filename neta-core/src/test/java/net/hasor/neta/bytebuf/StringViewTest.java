@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.function.Release;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -27,7 +28,7 @@ public class StringViewTest {
     public void testStringViewImplementsCharSequence() {
         ByteBuf buf = toBuf("session");
         try {
-            StringView value = new StringView(buf, 0, 7);
+            StringView value = StringView.request(buf, 0, 7);
             assertFalse(value.isResolved());
             assertEquals(7, value.length());
             assertEquals('s', value.charAt(0));
@@ -43,7 +44,7 @@ public class StringViewTest {
     @Test
     public void testStringViewKeepsReadableAfterSourceRelease() {
         ByteBuf buf = toBuf("session");
-        StringView view = new StringView(buf, 0, 7);
+        StringView view = StringView.request(buf, 0, 7);
 
         buf.free();
 
@@ -51,5 +52,55 @@ public class StringViewTest {
         assertEquals("session", view.resolve());
         assertTrue(view.isResolved());
         assertEquals('e', view.charAt(1));
+    }
+
+    @Test
+    public void testResolveReturnsEmptyWhenUnderlyingBufferWasOverReleased() {
+        ByteBuf buf = toBuf("session");
+        StringView view = StringView.request(buf, 0, 7);
+
+        buf.free();
+        buf.free();
+
+        assertEquals("", view.resolve());
+        assertTrue(view.isResolved());
+    }
+
+    @Test
+    public void testStringViewCanBeReusedFromPool() {
+        ByteBuf first = toBuf("first");
+        ByteBuf second = toBuf("second");
+        try {
+            StringView firstView = StringView.request(first, 0, 5);
+            assertEquals("first", firstView.resolve());
+            firstView.release();
+
+            StringView secondView = StringView.request(second, 0, 6);
+            assertSame(firstView, secondView);
+            assertEquals("second", secondView.resolve());
+            secondView.release();
+        } finally {
+            first.free();
+            second.free();
+        }
+    }
+
+    @Test
+    public void testStringViewCanBeReleasedViaReleaseInterface() {
+        ByteBuf first = toBuf("first");
+        ByteBuf second = toBuf("second");
+        try {
+            StringView firstView = StringView.request(first, 0, 5);
+            Release release = firstView;
+            release.release();
+
+            StringView secondView = StringView.request(second, 0, 6);
+            assertSame(firstView, secondView);
+            assertEquals("second", secondView.resolve());
+            secondView.release();
+        } finally {
+            first.free();
+            second.free();
+        }
     }
 }

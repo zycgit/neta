@@ -15,6 +15,9 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.function.Release;
+import net.hasor.cobble.ref.RecycleObjectPool;
+import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 
 /**
  * A lightweight {@link CharSequence} view over a visible range of a {@link ByteBuf}.
@@ -29,13 +32,35 @@ import java.nio.charset.StandardCharsets;
  * characters may change as well. In other words, the stability of this view depends on the
  * stability of the underlying buffer content.
  */
-public class StringView implements CharSequence {
-    private final int     offset;
-    private final int     length;
-    private       ByteBuf source;
-    private       String  cachedValue;
+public class StringView implements CharSequence, Release {
+    private static final int                    RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    private static final ObjHandler<StringView> RECYCLE_HANDLER = new ObjHandler<StringView>() {
+        @Override
+        public StringView create() {
+            return new StringView();
+        }
 
-    public StringView(ByteBuf source, int offset, int length) {
+        @Override
+        public void free(StringView tar) {
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
+        }
+    };
+
+    private int     offset;
+    private int     length;
+    private ByteBuf source;
+    private String  cachedValue;
+
+    protected StringView() {
+    }
+
+    public static StringView request(ByteBuf source, int offset, int length) {
+        StringView view = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        view.init(source, offset, length);
+        return view;
+    }
+
+    protected void init(ByteBuf source, int offset, int length) {
         if (source == null) {
             throw new IllegalArgumentException("source is null");
         }
@@ -48,7 +73,19 @@ public class StringView implements CharSequence {
         this.source = source.retain();
         this.offset = offset;
         this.length = length;
+        this.cachedValue = null;
     }
+
+    @Override
+    public void release() {
+        this.source = null;
+        this.offset = 0;
+        this.length = 0;
+        this.cachedValue = null;
+        RECYCLE_HANDLER.free(this);
+    }
+
+    //
 
     @Override
     public int length() {
@@ -82,9 +119,13 @@ public class StringView implements CharSequence {
 
         ByteBuf current = this.source;
         if (current != null) {
-            return new StringView(current, this.offset + start, end - start);
+            return StringView.request(current, this.offset + start, end - start);
         }
         return this.cachedValue.subSequence(start, end);
+    }
+
+    public String stringValue() {
+        return this.resolve();
     }
 
     public boolean isResolved() {
@@ -92,33 +133,38 @@ public class StringView implements CharSequence {
     }
 
     public String resolve() {
-        if (this.cachedValue == null) {
-            ByteBuf current = this.source;
-            if (current == null) {
-                return this.cachedValue;
-            }
-            this.cachedValue = current.getString(this.offset, this.length, StandardCharsets.US_ASCII);
-            this.releaseSource();
+        if (this.cachedValue != null) {
+            return this.cachedValue;
         }
+
+        ByteBuf current = this.source;
+        if (current == null) {
+            this.cachedValue = "";
+            return this.cachedValue;
+        }
+
+        this.cachedValue = this.readSourceValue(current);
+        this.source = null;
         return this.cachedValue;
     }
 
-    public String stringValue() {
-        return this.resolve();
-    }
-
-    private void releaseSource() {
-        ByteBuf current = this.source;
-        if (current != null) {
-            this.source = null;
-            current.release();
+    private String readSourceValue(ByteBuf current) {
+        if (current.isFree()) {
+            return "";
+        }
+        try {
+            return current.getString(this.offset, this.length, StandardCharsets.US_ASCII);
+        } catch (IllegalStateException e) {
+            return "";
         }
     }
+
+    //
 
     @Override
     protected void finalize() throws Throwable {
         try {
-            this.releaseSource();
+            this.release();
         } finally {
             super.finalize();
         }
