@@ -14,12 +14,17 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+
 /**
- * Represents a fully aggregated HTTP request.
+ * Default implementation of {@link LastHttpHeaders}.
  * <p>
- * A {@link FullHttpRequest} collapses the staged request flow into one object containing the
- * request line, the final header block, and the final content block. It is typically produced by
- * an {@link HttpObjectAggregator}.
+ * This is the final header block of a message. Any following object belongs to the body section.
  */
-public interface FullHttpRequest extends HttpRequest, LastHttpHeaders, LastHttpContent {
+public class DefaultLastHttpHeaders extends DefaultHttpHeaders implements LastHttpHeaders {
+    public static final LastHttpHeaders EMPTY = new DefaultLastHttpHeaders();
+
+    /** Creates an empty terminal header block. */
+    public DefaultLastHttpHeaders() {
+        super();
+    }
 }

@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-
-import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.codec.http.websocket.WebSocketFrameDecoder;
-import net.hasor.neta.codec.http.websocket.WebSocketFrameEncoder;
 
 /**
  * Per-connection mutable state for all HTTP/1.x handlers.
@@ -31,54 +27,10 @@ import net.hasor.neta.codec.http.websocket.WebSocketFrameEncoder;
  * @version : 2024-01-15
  */
 class HttpContext {
-
-    // ==================== Request Decoder State ====================
-    // Used by HttpRequestDecoder
-
-    ReqDecoderState  reqDecoderState     = ReqDecoderState.READ_INITIAL;
-    ByteBuf          reqAccumulator;
-    // head (request-line + headers)
-    HttpRequest      reqCurrentRequest;
-    int              reqHeaderBytes      = 0;
-    String           reqLastHeaderName;
-    HttpHeaders      reqPendingTrailerHeaders;
-    // body (content)
-    long             reqContentLength    = -1;
-    long             reqBytesRead        = 0;
-    boolean          reqChunked          = false;
-    int              reqCurrentChunkSize = 0;
-    RespDecoderState respDecoderState    = RespDecoderState.READ_INITIAL;
-    ByteBuf          respAccumulator;
-
-    // ==================== Response Decoder State ====================
-    // Used by HttpResponseDecoder
-    // head (status-line + headers)
-    HttpResponse          respCurrentResponse;
-    int                   respHeaderBytes      = 0;
-    String                respLastHeaderName;
-    HttpHeaders           respPendingTrailerHeaders;
-    // body (content)
-    long                  respContentLength    = -1;
-    long                  respBytesRead        = 0;
-    boolean               respChunked          = false;
-    int                   respCurrentChunkSize = 0;
-    // ==================== Request Encoder State ====================
-    // Used by HttpRequestEncoder
-    boolean               reqChunkedEncoding   = false;
-    // ==================== Response Encoder State ====================
-    // Used by HttpResponseEncoder
-    boolean               respChunkedEncoding  = false;
-    // ==================== Aggregator State ====================
-    // Used by HttpObjectAggregator
-    HttpMessage           currentMessage;
-    HttpHeaders           trailingHeaders;
-    ByteBuf               aggregatedContent;
-    int                   currentContentLength;
-    // ==================== WebSocket State ====================
-    // Used by HttpServerDuplexe (connection-level, set after 101 upgrade)
-    boolean               upgraded             = false;
-    WebSocketFrameDecoder wsDecoder;
-    WebSocketFrameEncoder wsEncoder;
+    final RequestDecodeState        req     = new RequestDecodeState();
+    final ResponseDecodeState       resp    = new ResponseDecodeState();
+    final EncodeState<HttpRequest>  reqEnc  = new EncodeState<>();
+    final EncodeState<HttpResponse> respEnc = new EncodeState<>();
 
     /**
      * Retrieves the existing {@link HttpContext} from the {@link ProtoContext},
@@ -94,54 +46,102 @@ class HttpContext {
         return impl;
     }
 
-    void resetReqDecoder() {
-        reqDecoderState = ReqDecoderState.READ_INITIAL;
-        reqCurrentRequest = null;
-        reqHeaderBytes = 0;
-        reqLastHeaderName = null;
-        reqPendingTrailerHeaders = null;
-        reqContentLength = -1;
-        reqBytesRead = 0;
-        reqChunked = false;
-        reqCurrentChunkSize = 0;
-    }
-
-    void resetRespDecoder() {
-        respDecoderState = RespDecoderState.READ_INITIAL;
-        respCurrentResponse = null;
-        respHeaderBytes = 0;
-        respLastHeaderName = null;
-        respPendingTrailerHeaders = null;
-        respContentLength = -1;
-        respBytesRead = 0;
-        respChunked = false;
-        respCurrentChunkSize = 0;
-    }
-
-    boolean isUpgraded() {
-        return upgraded;
-    }
-
-    enum ReqDecoderState {
+    enum DecodePhase {
         READ_INITIAL,
         READ_HEADER,
-        READ_FIXED_LENGTH_CONTENT,
-        READ_CHUNK_SIZE,
-        READ_CHUNKED_CONTENT,
-        READ_CHUNK_DELIMITER,
-        READ_CHUNK_TRAILER,
-        DONE
-    }
-
-    enum RespDecoderState {
-        READ_INITIAL,
-        READ_HEADER,
+        DONE_HEADER,
         READ_FIXED_LENGTH_CONTENT,
         READ_VARIABLE_LENGTH_CONTENT,
         READ_CHUNK_SIZE,
         READ_CHUNKED_CONTENT,
         READ_CHUNK_DELIMITER,
-        READ_CHUNK_TRAILER,
-        DONE
+        READ_HEADER_TRAILER,
+        READ_END
+    }
+
+    static class DecodeState<T extends HttpObject> {
+        DecodePhase        decoderPhase          = DecodePhase.READ_INITIAL;
+        T                  currentMessage;
+        DefaultHttpHeaders currentHeaders;
+        boolean            currentHeadersTrailer = false;
+        int                headerBytes           = 0;
+        boolean            chunked               = false;
+        long               contentLength         = -1;
+        long               bytesRead             = 0;
+        int                currentChunkSize      = 0;
+        boolean            chunkSizeReady        = false;
+        boolean            chunkDelimiterReady   = false;
+        boolean            trailerComplete       = false;
+        boolean            emitEmptyEndContent   = false;
+        long               packetSequence        = 0;
+
+        void reset() {
+            this.decoderPhase = DecodePhase.READ_INITIAL;
+            this.currentMessage = null;
+            this.currentHeaders = null;
+            this.currentHeadersTrailer = false;
+            this.headerBytes = 0;
+            this.chunked = false;
+            this.contentLength = -1;
+            this.bytesRead = 0;
+            this.currentChunkSize = 0;
+            this.chunkSizeReady = false;
+            this.chunkDelimiterReady = false;
+            this.trailerComplete = false;
+            this.emitEmptyEndContent = false;
+            this.packetSequence = 0;
+        }
+
+        void initForHeaders() {
+            this.currentHeaders = null;
+            this.currentHeadersTrailer = false;
+            this.headerBytes = 0;
+            this.chunked = false;
+            this.contentLength = -1;
+            this.bytesRead = 0;
+            this.currentChunkSize = 0;
+            this.chunkSizeReady = false;
+            this.chunkDelimiterReady = false;
+            this.trailerComplete = false;
+            this.emitEmptyEndContent = false;
+            this.packetSequence = 0;
+            this.decoderPhase = DecodePhase.READ_HEADER;
+        }
+    }
+
+    static class RequestDecodeState extends DecodeState<HttpRequest> {
+        boolean reqRequestEmitted;
+
+        @Override
+        void reset() {
+            super.reset();
+            this.reqRequestEmitted = false;
+        }
+    }
+
+    static class ResponseDecodeState extends DecodeState<HttpResponse> {
+        boolean connectionClose;
+
+        @Override
+        void reset() {
+            super.reset();
+            this.connectionClose = false;
+        }
+
+        @Override
+        void initForHeaders() {
+            super.initForHeaders();
+            this.connectionClose = false;
+        }
+    }
+
+    static class EncodeState<T extends HttpObject> {
+        boolean chunkedEncoding = false;
+        boolean trailerStarted  = false;
+
+        void reset() {
+            this.chunkedEncoding = false;
+            this.trailerStarted = false;
+        }
     }
 }

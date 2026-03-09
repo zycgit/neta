@@ -14,12 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+
 /**
- * Represents a fully aggregated HTTP request.
- * <p>
- * A {@link FullHttpRequest} collapses the staged request flow into one object containing the
- * request line, the final header block, and the final content block. It is typically produced by
- * an {@link HttpObjectAggregator}.
+ * Default implementation of {@link TrailerHttpHeaders}.
  */
-public interface FullHttpRequest extends HttpRequest, LastHttpHeaders, LastHttpContent {
+public class DefaultTrailerHttpHeaders extends DefaultHttpHeaders implements TrailerHttpHeaders {
+    public static final TrailerHttpHeaders EMPTY = new DefaultTrailerHttpHeaders();
+
+    public DefaultTrailerHttpHeaders() {
+        super();
+    }
 }

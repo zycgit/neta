@@ -14,97 +14,69 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import net.hasor.neta.bytebuf.StringView;
+
 /**
  * Default implementation of {@link HttpRequest}.
+ * <p>
+ * This object holds only the request line fields. Header blocks and body chunks are represented
+ * by separate {@link HttpHeaders} and {@link HttpContent} objects later in the message flow.
  */
 public class DefaultHttpRequest implements HttpRequest {
-    private final HttpHeaders headers;
-    private       int         streamId;
-    private       HttpVersion version;
-    private       HttpMethod  method;
-    private       String      uri;
+    private int          streamId;
+    private HttpVersion  version;
+    private HttpMethod   method;
+    private String       uri;
+    //
+    private CharSequence versionText;
+    private CharSequence methodText;
+    private CharSequence uriText;
 
     /**
-     * Creates a new HTTP request.
+     * Creates a request start-line object.
      * @param version the HTTP version
      * @param method the HTTP method
-     * @param uri the request URI
+     * @param uri the request target
      */
     public DefaultHttpRequest(HttpVersion version, HttpMethod method, String uri) {
-        this(version, method, uri, new HttpHeaders());
+        if (version == null) {
+            throw new IllegalArgumentException("version must not be null");
+        }
+        if (method == null) {
+            throw new IllegalArgumentException("method must not be null");
+        }
+        if (uri == null) {
+            throw new IllegalArgumentException("uri must not be null");
+        }
+
+        this.version = version;
+        this.method = method;
+        this.uri = uri;
+        this.versionText = version.text();
+        this.methodText = method.name();
+        this.uriText = uri;
     }
 
     /**
-     * Creates a new HTTP request with the specified headers.
-     * @param version the HTTP version
-     * @param method the HTTP method
-     * @param uri the request URI
-     * @param headers the HTTP headers
+     * Creates a request start-line object backed by raw text views.
+     * @param version the raw protocol version text
+     * @param method the raw request method text
+     * @param uri the raw request target text
      */
-    public DefaultHttpRequest(HttpVersion version, HttpMethod method, String uri, HttpHeaders headers) {
-        if (version == null) {
-            throw new IllegalArgumentException("version must not be null");
+    public DefaultHttpRequest(CharSequence version, CharSequence method, CharSequence uri) {
+        if (version == null || version.length() == 0) {
+            throw new IllegalArgumentException("version must not be empty");
         }
-        if (method == null) {
-            throw new IllegalArgumentException("method must not be null");
+        if (method == null || method.length() == 0) {
+            throw new IllegalArgumentException("method must not be empty");
         }
         if (uri == null) {
             throw new IllegalArgumentException("uri must not be null");
         }
-        if (headers == null) {
-            throw new IllegalArgumentException("headers must not be null");
-        }
-        this.version = version;
-        this.method = method;
-        this.uri = uri;
-        this.headers = headers;
-    }
 
-    @Override
-    public HttpVersion protocolVersion() {
-        return version;
-    }
-
-    @Override
-    public HttpRequest setProtocolVersion(HttpVersion version) {
-        if (version == null) {
-            throw new IllegalArgumentException("version must not be null");
-        }
-        this.version = version;
-        return this;
-    }
-
-    @Override
-    public HttpHeaders headers() {
-        return headers;
-    }
-
-    @Override
-    public HttpMethod method() {
-        return method;
-    }
-
-    @Override
-    public HttpRequest setMethod(HttpMethod method) {
-        if (method == null) {
-            throw new IllegalArgumentException("method must not be null");
-        }
-        this.method = method;
-        return this;
-    }
-
-    @Override
-    public String uri() {
-        return uri;
-    }
-
-    @Override
-    public HttpRequest setUri(String uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri must not be null");
-        }
-        this.uri = uri;
-        return this;
+        this.versionText = version;
+        this.methodText = method;
+        this.uriText = uri;
     }
 
     @Override
@@ -113,13 +85,99 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     @Override
-    public HttpObject streamId(int streamId) {
+    public HttpRequest streamId(int streamId) {
         this.streamId = streamId;
         return this;
     }
 
     @Override
+    public HttpVersion protocolVersion() {
+        if (this.version == null) {
+            this.version = HttpVersion.valueOf(this.versionText);
+        }
+        return version;
+    }
+
+    public String protocolVersionText() {
+        return this.versionText.toString();
+    }
+
+    /** Sets the protocol version carried by this request line. */
+    public HttpRequest protocolVersion(HttpVersion version) {
+        if (version == null) {
+            throw new IllegalArgumentException("version must not be null");
+        }
+
+        this.releaseSequence(this.versionText);
+        this.version = version;
+        this.versionText = version.text();
+        return this;
+    }
+
+    @Override
+    public HttpMethod method() {
+        if (this.method == null) {
+            this.method = HttpMethod.valueOf(this.methodText);
+        }
+        return method;
+    }
+
+    public String methodText() {
+        return this.methodText.toString();
+    }
+
+    /** Sets the request method carried by this request line. */
+    public HttpRequest method(HttpMethod method) {
+        if (method == null) {
+            throw new IllegalArgumentException("method must not be null");
+        }
+        this.releaseSequence(this.methodText);
+        this.method = method;
+        this.methodText = method.name();
+        return this;
+    }
+
+    @Override
+    public String uri() {
+        if (this.uri == null) {
+            this.uri = this.uriText.toString();
+        }
+        return uri;
+    }
+
+    /** Sets the request target carried by this request line. */
+    public HttpRequest uri(String uri) {
+        if (uri == null) {
+            throw new IllegalArgumentException("uri must not be null");
+        }
+        this.releaseSequence(this.uriText);
+        this.uri = uri;
+        this.uriText = uri;
+        return this;
+    }
+
+    @Override
     public String toString() {
-        return getClass().getSimpleName() + "(decodeResult: success" + ", version: " + version + ", method: " + method + ", uri: " + uri + ')';
+        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ')';
+    }
+
+    @Override
+    public void release() {
+        this.releaseSequence(this.versionText);
+        this.releaseSequence(this.methodText);
+        this.releaseSequence(this.uriText);
+        this.streamId = 0;
+        this.version = null;
+        this.method = null;
+        this.uri = null;
+        this.versionText = null;
+        this.methodText = null;
+        this.uriText = null;
+    }
+
+    private void releaseSequence(CharSequence value) {
+        if (value instanceof StringView) {
+            ((StringView) value).release();
+        }
     }
 }

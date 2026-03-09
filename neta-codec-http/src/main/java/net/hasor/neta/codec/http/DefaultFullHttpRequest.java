@@ -14,148 +14,283 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import java.util.List;
+import java.util.Set;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.CompositeByteBuf;
 
 /**
  * Default implementation of {@link FullHttpRequest}.
- * Combines HTTP request headers with the complete message body.
+ * <p>
+ * This object represents an already aggregated request by combining the request line, the final
+ * header block, and the final content block into one instance.
  */
 public class DefaultFullHttpRequest implements FullHttpRequest {
-    private final HttpHeaders headers;
-    private final ByteBuf     content;
-    private final HttpHeaders trailerHeaders;
-    private       HttpVersion version;
-    private       HttpMethod  method;
-    private       String      uri;
-    private       int         streamId;
+    private final HttpRequest      requestLine;
+    private final HttpHeaders      headers;
+    private final CompositeByteBuf contentView;
 
     /**
-     * Creates a new full HTTP request with an empty body.
+     * Creates an aggregated request with an empty payload and an empty final header block.
      * @param version the HTTP version
      * @param method the HTTP method
-     * @param uri the request URI
+     * @param uri the request target
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri) {
-        this(version, method, uri, ByteBuf.EMPTY, new HttpHeaders(), new HttpHeaders());
+        this(version, method, uri, ByteBuf.EMPTY, new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
     }
 
     /**
-     * Creates a new full HTTP request with the specified body.
+     * Creates an aggregated request with the specified payload and an empty final header block.
      * @param version the HTTP version
      * @param method the HTTP method
-     * @param uri the request URI
-     * @param content the body content
+     * @param uri the request target
+     * @param content the aggregated payload
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content) {
-        this(version, method, uri, content, new HttpHeaders(), new HttpHeaders());
+        this(version, method, uri, content, new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
     }
 
     /**
-     * Creates a new full HTTP request with the specified body, headers, and trailing headers.
+     * Creates an aggregated request with the specified payload and final header block.
      * @param version the HTTP version
      * @param method the HTTP method
-     * @param uri the request URI
-     * @param content the body content
-     * @param headers the HTTP headers
-     * @param trailerHeaders the trailing headers
+     * @param uri the request target
+     * @param content the aggregated payload
+     * @param headers the final header block
      */
-    public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content, HttpHeaders headers, HttpHeaders trailerHeaders) {
-        if (version == null) {
-            throw new IllegalArgumentException("version must not be null");
-        }
-        if (method == null) {
-            throw new IllegalArgumentException("method must not be null");
-        }
-        if (uri == null) {
-            throw new IllegalArgumentException("uri must not be null");
-        }
-        if (content == null) {
-            throw new IllegalArgumentException("content must not be null");
+    public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content, DefaultHttpHeaders headers) {
+        this(version, method, uri, content, headers, new DefaultLastHttpHeaders());
+    }
+
+    public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content, DefaultHttpHeaders headers, DefaultHttpHeaders trailerHeaders) {
+        this(new DefaultHttpRequest(version, method, uri), headers, new DefaultHttpContent(content), trailerHeaders);
+    }
+
+    public DefaultFullHttpRequest(DefaultHttpRequest requestLine, DefaultHttpHeaders headers, DefaultHttpContent content) {
+        this(requestLine, headers, content, new DefaultLastHttpHeaders());
+    }
+
+    public DefaultFullHttpRequest(DefaultHttpRequest requestLine, DefaultHttpHeaders headers, DefaultHttpContent content, DefaultHttpHeaders trailerHeaders) {
+        if (requestLine == null) {
+            throw new IllegalArgumentException("requestLine must not be null");
         }
         if (headers == null) {
             throw new IllegalArgumentException("headers must not be null");
         }
-        if (trailerHeaders == null) {
-            throw new IllegalArgumentException("trailingHeaders must not be null");
+        if (content == null) {
+            throw new IllegalArgumentException("content must not be null");
         }
-        this.version = version;
-        this.method = method;
-        this.uri = uri;
-        this.content = content;
+
+        this.requestLine = requestLine;
         this.headers = headers;
-        this.trailerHeaders = trailerHeaders;
-    }
-
-    @Override
-    public HttpVersion protocolVersion() {
-        return version;
-    }
-
-    @Override
-    public HttpRequest setProtocolVersion(HttpVersion version) {
-        if (version == null) {
-            throw new IllegalArgumentException("version must not be null");
-        }
-        this.version = version;
-        return this;
-    }
-
-    @Override
-    public HttpHeaders headers() {
-        return headers;
-    }
-
-    @Override
-    public HttpMethod method() {
-        return method;
-    }
-
-    @Override
-    public HttpRequest setMethod(HttpMethod method) {
-        if (method == null) {
-            throw new IllegalArgumentException("method must not be null");
-        }
-        this.method = method;
-        return this;
-    }
-
-    @Override
-    public String uri() {
-        return uri;
-    }
-
-    @Override
-    public HttpRequest setUri(String uri) {
-        if (uri == null) {
-            throw new IllegalArgumentException("uri must not be null");
-        }
-        this.uri = uri;
-        return this;
-    }
-
-    @Override
-    public ByteBuf content() {
-        return content;
-    }
-
-    @Override
-    public HttpHeaders trailerHeaders() {
-        return trailerHeaders;
+        this.contentView = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
+        this.contentView.addComponent(content.content());
     }
 
     @Override
     public int streamId() {
-        return streamId;
+        return this.requestLine.streamId();
     }
 
     @Override
-    public HttpObject streamId(int streamId) {
-        this.streamId = streamId;
+    public FullHttpRequest streamId(int streamId) {
+        this.requestLine.streamId(streamId);
+        this.headers.streamId(streamId);
+        return this;
+    }
+
+    //
+
+    @Override
+    public HttpVersion protocolVersion() {
+        return this.requestLine.protocolVersion();
+    }
+
+    /** Sets the protocol version carried by this aggregated request. */
+    public FullHttpRequest protocolVersion(HttpVersion version) {
+        if (!(this.requestLine instanceof DefaultHttpRequest)) {
+            throw new IllegalArgumentException("requestLine must be an instance of DefaultHttpRequest");
+        }
+
+        ((DefaultHttpRequest) this.requestLine).protocolVersion(version);
+        return this;
+    }
+
+    public String protocolVersionText() {
+        return this.requestLine.protocolVersion().text();
+    }
+
+    @Override
+    public HttpMethod method() {
+        return this.requestLine.method();
+    }
+
+    /** Sets the request method carried by this aggregated request. */
+    public FullHttpRequest method(HttpMethod method) {
+        if (!(this.requestLine instanceof DefaultHttpRequest)) {
+            throw new IllegalArgumentException("requestLine must be an instance of DefaultHttpRequest");
+        }
+
+        ((DefaultHttpRequest) this.requestLine).method(method);
+        return this;
+    }
+
+    public String methodText() {
+        return this.requestLine.method().name();
+    }
+
+    @Override
+    public String uri() {
+        return this.requestLine.uri();
+    }
+
+    /** Sets the request target carried by this request line. */
+    public FullHttpRequest uri(String uri) {
+        if (!(this.requestLine instanceof DefaultHttpRequest)) {
+            throw new IllegalArgumentException("requestLine must be an instance of DefaultHttpRequest");
+        }
+
+        ((DefaultHttpRequest) this.requestLine).uri(uri);
+        return this;
+    }
+
+    //
+
+    public FullHttpRequest addHeader(String name, String value) {
+        if (!(this.headers instanceof DefaultHttpHeaders)) {
+            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
+        }
+
+        ((DefaultHttpHeaders) this.headers).addHeader(name, value);
+        return this;
+    }
+
+    public FullHttpRequest addHeader(CharSequence name, CharSequence value) {
+        if (!(this.headers instanceof DefaultHttpHeaders)) {
+            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
+        }
+
+        ((DefaultHttpHeaders) this.headers).addHeader(name, value);
+        return this;
+    }
+
+    public FullHttpRequest setHeader(String name, String value) {
+        if (!(this.headers instanceof DefaultHttpHeaders)) {
+            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
+        }
+
+        ((DefaultHttpHeaders) this.headers).setHeader(name, value);
+        return this;
+    }
+
+    public FullHttpRequest setHeader(CharSequence name, CharSequence value) {
+        if (!(this.headers instanceof DefaultHttpHeaders)) {
+            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
+        }
+
+        ((DefaultHttpHeaders) this.headers).setHeader(name, value);
+        return this;
+    }
+
+    public FullHttpRequest clearHeader() {
+        if (!(this.headers instanceof DefaultHttpHeaders)) {
+            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
+        }
+
+        ((DefaultHttpHeaders) this.headers).clearHeader();
+        return this;
+    }
+
+    public FullHttpRequest removeHeader(String name) {
+        if (!(this.headers instanceof DefaultHttpHeaders)) {
+            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
+        }
+
+        ((DefaultHttpHeaders) this.headers).removeHeader(name);
+        return this;
+    }
+
+    public FullHttpRequest appendHeaders(HttpHeaders headers) {
+        if (!(this.headers instanceof DefaultHttpHeaders)) {
+            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
+        }
+
+        ((DefaultHttpHeaders) this.headers).appendHeaders(headers);
         return this;
     }
 
     @Override
+    public List<String> getValues(String name) {
+        return this.headers.getValues(name);
+    }
+
+    @Override
+    public String getString(String name) {
+        return this.headers.getString(name);
+    }
+
+    @Override
+    public int getInt(String name, int defaultValue) {
+        return this.headers.getInt(name, defaultValue);
+    }
+
+    @Override
+    public long getLong(String name, long defaultValue) {
+        return this.headers.getLong(name, defaultValue);
+    }
+
+    @Override
+    public boolean containsHeader(String name) {
+        return this.headers.containsHeader(name);
+    }
+
+    @Override
+    public Set<String> headerNames() {
+        return this.headers.headerNames();
+    }
+
+    @Override
+    public int headerSize() {
+        return this.headers.headerSize();
+    }
+
+    //
+
+    @Override
+    public ByteBuf content() {
+        return this.contentView;
+    }
+
+    /**
+     * Appends one body chunk into the aggregated content view.
+     * <p>
+     * The underlying {@link ByteBuf} is retained by the internal {@link CompositeByteBuf}, so the
+     * caller may release the original {@link HttpContent} after this method returns. This is a
+     * zero-copy ownership transfer by reference count, not a byte copy.
+     */
+    public void appendContent(HttpContent content) {
+        if (content == null) {
+            return;
+        }
+
+        this.contentView.addComponent(content.content());
+    }
+
+    //
+
+    @Override
     public String toString() {
-        return getClass().getSimpleName() + "(version: " + version + ", method: " + method + ", uri: " + uri + ", content: " + content.readableBytes() + " bytes)";
+        ByteBuf currentContent = this.content();
+        int readableBytes = currentContent != null ? currentContent.readableBytes() : 0;
+        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", headers: " + headerSize() + ", content: " + readableBytes + " bytes)";
+    }
+
+    @Override
+    public void release() {
+        this.requestLine.release();
+        this.headers.release();
+        this.contentView.release();
     }
 }

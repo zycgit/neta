@@ -18,20 +18,20 @@ import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
  * Default implementation of {@link HttpContent}.
+ * <p>
+ * Each instance represents one non-terminal body chunk emitted after the header section has been
+ * closed by {@link LastHttpHeaders}.
  */
 public class DefaultHttpContent implements HttpContent {
-    private final ByteBuf content;
-    private       int     streamId;
+    private int     streamId;
+    private ByteBuf content;
 
     /**
-     * Creates a new HTTP content chunk with the specified data.
-     * @param content the content data (must not be null)
+     * Creates a body chunk with the specified payload.
+     * @param content the chunk payload
      */
     public DefaultHttpContent(ByteBuf content) {
-        if (content == null) {
-            throw new IllegalArgumentException("content must not be null");
-        }
-        this.content = content;
+        this.content = content == null ? ByteBuf.EMPTY : content;
     }
 
     @Override
@@ -40,18 +40,30 @@ public class DefaultHttpContent implements HttpContent {
     }
 
     @Override
-    public HttpObject streamId(int streamId) {
+    public HttpContent streamId(int streamId) {
         this.streamId = streamId;
         return this;
     }
 
     @Override
     public ByteBuf content() {
-        return content;
+        return this.content;
     }
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + "(data: " + content.readableBytes() + " bytes)";
+        if (this.content != null) {
+            return getClass().getSimpleName() + "(data: " + content.readableBytes() + " bytes)";
+        } else {
+            return getClass().getSimpleName() + "(released)";
+        }
+    }
+
+    @Override
+    public void release() {
+        if (this.content != null) {
+            this.content.release();
+            this.content = null;
+        }
     }
 }

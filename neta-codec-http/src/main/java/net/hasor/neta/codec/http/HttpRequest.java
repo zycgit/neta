@@ -15,22 +15,23 @@
  */
 package net.hasor.neta.codec.http;
 /**
- * Represents an HTTP request message as defined in
- * <a href="https://tools.ietf.org/html/rfc7230#section-3.1.1">RFC 7230, Section 3.1.1</a>.
+ * Represents only the request line of an HTTP request.
+ * <p>
+ * In this object model the request start line is separated from the header and body sections.
+ * A decoded request therefore begins with {@link HttpRequest}, followed by zero or more
+ * {@link HttpHeaders}, one {@link LastHttpHeaders}, zero or more {@link HttpContent}, optional
+ * {@link TrailerHttpHeaders}, and one {@link LastHttpContent}.
  * <pre>
  *   request-line = method SP request-target SP HTTP-version CRLF
  * </pre>
  */
-public interface HttpRequest extends HttpMessage {
-    /** Returns the HTTP method of this request (e.g., GET, POST). */
+public interface HttpRequest extends HttpObject {
+    /** Returns the protocol version carried by this request line. */
+    HttpVersion protocolVersion();
+
+    /** Returns the request method carried by this request line. */
     HttpMethod method();
 
-    /** Sets the HTTP method of this request. */
-    HttpRequest setMethod(HttpMethod method);
-
-    /** Returns the URI (request-target) of this request. */
+    /** Returns the request target carried by this request line. */
     String uri();
-
-    /** Sets the URI (request-target) of this request. */
-    HttpRequest setUri(String uri);
 }

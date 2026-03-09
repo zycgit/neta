@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import net.hasor.cobble.function.Release;
+
 /**
  * An HTTP cookie, as defined by
  * <a href="https://tools.ietf.org/html/rfc6265">RFC 6265</a>.
@@ -24,7 +26,7 @@ package net.hasor.neta.codec.http.cookie;
  * {@link #isSecure()}, {@link #isHttpOnly()}, {@link #sameSite()},
  * {@link #expires()}) take effect.
  */
-public interface Cookie {
+public interface Cookie extends Release {
     /**
      * Returns {@code true} when all lazily backed values in this cookie have been materialized.
      */

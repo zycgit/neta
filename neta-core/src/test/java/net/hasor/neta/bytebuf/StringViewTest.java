@@ -103,4 +103,37 @@ public class StringViewTest {
             second.free();
         }
     }
+
+    @Test
+    public void testReleaseReturnsRetainedReferenceToSource() {
+        ByteBuf buf = toBuf("session");
+        try {
+            assertEquals(1, buf.refCnt());
+
+            StringView view = StringView.request(buf, 0, 7);
+            assertEquals(2, buf.refCnt());
+
+            view.release();
+            assertEquals(1, buf.refCnt());
+        } finally {
+            buf.free();
+        }
+    }
+
+    @Test
+    public void testResolveReturnsRetainedReferenceToSource() {
+        ByteBuf buf = toBuf("session");
+        try {
+            assertEquals(1, buf.refCnt());
+
+            StringView view = StringView.request(buf, 0, 7);
+            assertEquals(2, buf.refCnt());
+
+            assertEquals("session", view.resolve());
+            assertEquals(1, buf.refCnt());
+            assertTrue(view.isResolved());
+        } finally {
+            buf.free();
+        }
+    }
 }

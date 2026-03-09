@@ -94,8 +94,8 @@ public final class CookieDecoder {
             }
 
             cookies.add(new DefaultCookie(//
-                    new StringView(buf, segStart, nameEnd - segStart),//
-                    new StringView(buf, valStart, valEnd - valStart)));
+                    StringView.request(buf, segStart, nameEnd - segStart),//
+                    StringView.request(buf, valStart, valEnd - valStart)));
             pos = semiIdx + 1;
         }
 

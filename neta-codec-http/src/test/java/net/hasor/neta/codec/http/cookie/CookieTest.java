@@ -21,7 +21,7 @@ import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.StringView;
-import net.hasor.neta.codec.http.HttpHeaders;
+import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -595,7 +595,7 @@ public class CookieTest {
 
     @Test
     public void testIntegrationReadCookieFromHeader() {
-        HttpHeaders headers = new HttpHeaders();
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         headers.add("Cookie", "user=bob; role=admin");
 
         String cookieHeader = headers.get("cookie");
@@ -614,7 +614,7 @@ public class CookieTest {
 
     @Test
     public void testIntegrationWriteSetCookieToHeader() {
-        HttpHeaders headers = new HttpHeaders();
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         DefaultCookie c = new DefaultCookie("session", "tok").setPath("/").setHttpOnly(true).setMaxAge(1800);
         headers.add("Set-Cookie", ServerCookieEncoder.encode(c));
 
@@ -630,7 +630,7 @@ public class CookieTest {
 
     @Test
     public void testIntegrationMultipleSetCookieHeaders() {
-        HttpHeaders headers = new HttpHeaders();
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         headers.add("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("a", "1").setPath("/")));
         headers.add("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("b", "2").setSecure(true)));
 
@@ -745,7 +745,7 @@ public class CookieTest {
     public void testDefaultCookieAcceptsStringView() {
         ByteBuf buf = toBuf("session=abc123");
         try {
-            DefaultCookie cookie = new DefaultCookie(new StringView(buf, 0, 7), new StringView(buf, 8, 6));
+            DefaultCookie cookie = new DefaultCookie(StringView.request(buf, 0, 7), StringView.request(buf, 8, 6));
 
             assertFalse(cookie.isResolved());
             assertEquals("session", cookie.name());
@@ -761,13 +761,39 @@ public class CookieTest {
     public void testCookieInterfaceCanResolveLazyValues() {
         ByteBuf buf = toBuf("session=abc123");
         try {
-            Cookie cookie = new DefaultCookie(new StringView(buf, 0, 7), new StringView(buf, 8, 6));
+            Cookie cookie = new DefaultCookie(StringView.request(buf, 0, 7), StringView.request(buf, 8, 6));
 
             assertFalse(cookie.isResolved());
             assertSame(cookie, cookie.resolve());
             assertTrue(cookie.isResolved());
             assertEquals("session", cookie.name());
             assertEquals("abc123", cookie.value());
+        } finally {
+            buf.free();
+        }
+    }
+
+    @Test
+    public void testDefaultCookieReleaseRecyclesLazyViewsAndKeepsValues() {
+        ByteBuf buf = toBuf("session=abc123;example.com;/api;Thu, 01 Jan 2099 00:00:00 GMT;Strict");
+        try {
+            DefaultCookie cookie = new DefaultCookie(StringView.request(buf, 0, 7), StringView.request(buf, 8, 6));
+            cookie.setLazyDomain(StringView.request(buf, 15, 11));
+            cookie.setLazyPath(StringView.request(buf, 27, 4));
+            cookie.setLazyExpires(StringView.request(buf, 32, 29));
+            cookie.setLazySameSite(StringView.request(buf, 62, 6));
+
+            assertFalse(cookie.isResolved());
+
+            cookie.release();
+
+            assertTrue(cookie.isResolved());
+            assertEquals("session", cookie.name());
+            assertEquals("abc123", cookie.value());
+            assertEquals("example.com", cookie.domain());
+            assertEquals("/api", cookie.path());
+            assertEquals("Thu, 01 Jan 2099 00:00:00 GMT", cookie.expires());
+            assertEquals("Strict", cookie.sameSite());
         } finally {
             buf.free();
         }

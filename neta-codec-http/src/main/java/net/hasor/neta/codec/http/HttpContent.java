@@ -17,17 +17,15 @@ package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Represents a chunk of HTTP message body content.
+ * Represents one chunk of HTTP message body content.
  * <p>
- * Per <a href="https://tools.ietf.org/html/rfc7230#section-3.3">RFC 7230, Section 3.3</a>,
- * the message body is the sequence of octets after the header section.
- * This interface represents a portion of that body.
+ * {@link HttpContent} objects appear only after {@link LastHttpHeaders} has closed the header
+ * section. A message body may contain zero or more ordinary content chunks and is always finished
+ * by {@link LastHttpContent}. Callers that need an extra reference to the payload should retain
+ * the returned {@link ByteBuf} directly via {@link #content()}.
  * @see LastHttpContent
  */
 public interface HttpContent extends HttpObject {
-    /**
-     * Returns the content body of this chunk.
-     * May be {@link ByteBuf#EMPTY} if there is no content.
-     */
+    /** Returns the payload. */
     ByteBuf content();
 }

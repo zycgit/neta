@@ -15,16 +15,24 @@
  */
 package net.hasor.neta.codec.http;
 /**
- * Represents an HTTP response message as defined in
- * <a href="https://tools.ietf.org/html/rfc7230#section-3.1.2">RFC 7230, Section 3.1.2</a>.
+ * Represents only the status line of an HTTP response.
+ * <p>
+ * In this object model the response start line is separated from the header and body sections.
+ * A decoded response therefore begins with {@link HttpResponse}, followed by zero or more
+ * {@link HttpHeaders}, one {@link LastHttpHeaders}, zero or more {@link HttpContent}, optional
+ * {@link TrailerHttpHeaders}, and one {@link LastHttpContent}.
  * <pre>
  *   status-line = HTTP-version SP status-code SP reason-phrase CRLF
  * </pre>
  */
-public interface HttpResponse extends HttpMessage {
-    /** Returns the status of this response (code + reason phrase). */
+public interface HttpResponse extends HttpObject {
+    /** Returns the protocol version carried by this status line. */
+    HttpVersion protocolVersion();
+
+    /** Returns the status carried by this status line. */
     HttpStatus status();
 
-    /** Sets the status of this response. */
-    HttpResponse setStatus(HttpStatus status);
+    String statusText();
+
+    String reasonText();
 }

@@ -27,13 +27,16 @@ import net.hasor.neta.channel.*;
  * <p>
  * The encoder expects the following sequence of {@link HttpObject}s:
  * <ol>
- *   <li>{@link HttpResponse} - encodes status-line and headers</li>
+ *   <li>{@link HttpResponse} - encodes the status-line</li>
+ *   <li>One or more {@link HttpHeaders} blocks, closed by {@link LastHttpHeaders}</li>
  *   <li>Zero or more {@link HttpContent} - encodes body chunks</li>
- *   <li>{@link LastHttpContent} - encodes the final body chunk and optional trailing headers</li>
+ *   <li>Optional trailing {@link TrailerHttpHeaders} blocks for chunked bodies</li>
+ *   <li>{@link LastHttpContent} - encodes the final body chunk</li>
  * </ol>
  * <p>
- * For {@link FullHttpResponse}, the complete message (status-line + headers + body) is
- * encoded in a single call.
+ * Aggregated responses such as {@link FullHttpResponse} are encoded by the same staged
+ * dispatch path because they also implement {@link HttpResponse}, {@link LastHttpHeaders},
+ * and {@link LastHttpContent}.
  * <p><b>Thread safety:</b> This handler is stateless. Per-connection state is stored in
  * {@link HttpContext} on the {@link ProtoContext}, making it safe to share a single
  * instance across multiple connections/pipelines.
@@ -48,46 +51,227 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private static final int                 SCRATCH_SIZE   = 2048;
     private static final ThreadLocal<byte[]> SCRATCH_BUF    = ThreadLocal.withInitial(() -> new byte[SCRATCH_SIZE]);
 
-    /**
-     * Tries to compose the entire response head (status-line + headers + CRLF) into the
-     * scratch buffer. Returns the total length if successful, or -1 if too large.
-     */
-    private static int composeResponseHead(HttpResponse response) {
+    @Override
+    public void onInit(String name, int poolSize, ProtoContext context) {
+        HttpContext.getOrCreate(context);
+    }
+
+    @Override
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
+        HttpContext.EncodeState<HttpResponse> respCtx = context.context(HttpContext.class).respEnc;
+        while (src.hasMore()) {
+            HttpObject msg = src.takeMessage();
+            if (msg == null) {
+                continue;
+            }
+
+            if (msg instanceof HttpResponse) {
+                this.handleStatusLinePart(respCtx, context, (HttpResponse) msg, dst);
+            }
+            if (msg instanceof HttpHeaders) {
+                this.handleHeadersPart(respCtx, context, (HttpHeaders) msg, dst);
+            }
+            if (msg instanceof HttpContent) {
+                this.handleBodyPart(respCtx, context, (HttpContent) msg, dst);
+            }
+        }
+
+        return ProtoStatus.Next;
+    }
+
+    //
+
+    // status-line
+    private void handleStatusLinePart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
+        respCtx.reset();
+
+        ByteBuf buf = context.byteBufAllocator().buffer(128);
         byte[] scratch = SCRATCH_BUF.get();
         int pos = 0;
-
-        // Status-line: VERSION SP CODE SP REASON CRLF
         byte[] versionBytes = response.protocolVersion().textBytes();
         byte[] codeBytes = response.status().codeBytes();
         byte[] reasonBytes = response.status().reasonPhraseBytes();
-        int statusLineEnd = versionBytes.length + 1 + codeBytes.length + 1 + reasonBytes.length + 2;
-        if (statusLineEnd > SCRATCH_SIZE) {
-            return -1;
-        }
         System.arraycopy(versionBytes, 0, scratch, pos, versionBytes.length);
         pos += versionBytes.length;
         scratch[pos++] = ' ';
         System.arraycopy(codeBytes, 0, scratch, pos, codeBytes.length);
         pos += codeBytes.length;
         scratch[pos++] = ' ';
-        System.arraycopy(reasonBytes, 0, scratch, pos, reasonBytes.length);
-        pos += reasonBytes.length;
-        scratch[pos++] = '\r';
-        scratch[pos++] = '\n';
+        int totalLen = pos + reasonBytes.length + 2;
+        if (totalLen <= SCRATCH_SIZE) {
+            System.arraycopy(reasonBytes, 0, scratch, pos, reasonBytes.length);
+            pos += reasonBytes.length;
+            scratch[pos++] = '\r';
+            scratch[pos++] = '\n';
+            buf.writeBytes(scratch, 0, pos);
+        } else {
+            buf.writeBytes(scratch, 0, pos);
+            buf.writeBytes(reasonBytes, 0, reasonBytes.length);
+            buf.writeBytes(CRLF, 0, CRLF.length);
+        }
+        buf.markWriter();
 
-        // Headers
-        HttpHeaders headers = response.headers();
-        if (headers != null && !headers.isEmpty()) {
-            pos = headers.composeHeadersTo(scratch, pos, SCRATCH_SIZE - 2);
-            if (pos < 0) {
-                return -1;
+        dst.offerMessage(buf);
+    }
+
+    // header
+    private void handleHeadersPart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
+        if (headers instanceof TrailerHttpHeaders) {
+            this.handleTrailerHeadersPart(respCtx, context, headers, dst);
+        } else {
+            respCtx.chunkedEncoding = respCtx.chunkedEncoding || this.isChunked(headers);
+            this.handleInitialHeadersPart(context, headers, headers instanceof LastHttpHeaders, dst);
+        }
+    }
+
+    private void handleInitialHeadersPart(ProtoContext context, HttpHeaders headers, boolean closeHeaders, ProtoSndQueue<ByteBuf> dst) {
+        ByteBuf buf = context.byteBufAllocator().buffer(256);
+
+        this.writeHeaders(buf, headers);
+        if (closeHeaders) {
+            buf.writeBytes(CRLF, 0, CRLF.length);
+        }
+        buf.markWriter();
+
+        dst.offerMessage(buf);
+    }
+
+    private void handleTrailerHeadersPart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
+        respCtx.chunkedEncoding = true;
+        ByteBuf buf = context.byteBufAllocator().buffer(128);
+
+        if (!respCtx.trailerStarted) {
+            buf.writeByte((byte) '0');
+            buf.writeBytes(CRLF, 0, CRLF.length);
+            respCtx.trailerStarted = true;
+        }
+        this.writeHeaders(buf, headers);
+        buf.markWriter();
+
+        dst.offerMessage(buf);
+    }
+
+    private void writeHeaders(ByteBuf buf, HttpHeaders headers) {
+        if (headers == null || headers.headerNames().isEmpty()) {
+            return;
+        }
+        for (String name : headers.headerNames()) {
+            for (String value : headers.getValues(name)) {
+                byte[] scratch = SCRATCH_BUF.get();
+                int nameLen = name.length();
+                int valueLen = value.length();
+                int totalLen = nameLen + 2 + valueLen + 2;
+                if (totalLen <= SCRATCH_SIZE) {
+                    int pos = 0;
+                    for (int i = 0; i < nameLen; i++) {
+                        scratch[pos++] = (byte) name.charAt(i);
+                    }
+                    scratch[pos++] = ':';
+                    scratch[pos++] = ' ';
+                    for (int i = 0; i < valueLen; i++) {
+                        scratch[pos++] = (byte) value.charAt(i);
+                    }
+                    scratch[pos++] = '\r';
+                    scratch[pos++] = '\n';
+                    buf.writeBytes(scratch, 0, pos);
+                } else {
+                    writeAscii(buf, name);
+                    scratch[0] = ':';
+                    scratch[1] = ' ';
+                    buf.writeBytes(scratch, 0, 2);
+                    writeAscii(buf, value);
+                    scratch[0] = '\r';
+                    scratch[1] = '\n';
+                    buf.writeBytes(scratch, 0, 2);
+                }
             }
         }
+    }
 
-        // Final CRLF
-        scratch[pos++] = '\r';
-        scratch[pos++] = '\n';
-        return pos;
+    // body
+    private void handleBodyPart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
+        if (content instanceof LastHttpContent) {
+            this.encodeLastContent(respCtx, context, (LastHttpContent) content, dst);
+        } else {
+            this.encodeContent(respCtx, context, content, dst);
+        }
+    }
+
+    private void encodeContent(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
+        ByteBuf body = content.content();
+        if (respCtx.chunkedEncoding) {
+            this.offerChunkContent(context, body, dst);
+        } else {
+            this.offerDirectContent(body, dst);
+        }
+    }
+
+    private void encodeLastContent(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<ByteBuf> dst) {
+        ByteBuf body = lastContent.content();
+
+        if (respCtx.trailerStarted) {
+            if (respCtx.chunkedEncoding) {
+                this.offerChunkContent(context, body, dst);
+            } else {
+                this.offerDirectContent(body, dst);
+            }
+            this.offerTrailingHeadersTerminator(context, dst);
+        } else if (respCtx.chunkedEncoding) {
+            this.offerChunkContent(context, body, dst);
+            this.offerLastChunk(context, dst);
+        } else {
+            this.offerDirectContent(body, dst);
+        }
+
+        respCtx.reset();
+    }
+
+    //
+
+    private void offerChunkContent(ProtoContext context, ByteBuf body, ProtoSndQueue<ByteBuf> dst) {
+        if (body == null || body.readableBytes() == 0) {
+            return;
+        }
+
+        ByteBuf prefix = context.byteBufAllocator().buffer(16);
+        writeHexInt(prefix, body.readableBytes());
+        prefix.writeBytes(CRLF, 0, CRLF.length);
+        prefix.markWriter();
+        dst.offerMessage(prefix);
+
+        dst.offerMessage(body.retain());
+
+        ByteBuf suffix = context.byteBufAllocator().buffer(CRLF.length);
+        suffix.writeBytes(CRLF, 0, CRLF.length);
+        suffix.markWriter();
+        dst.offerMessage(suffix);
+    }
+
+    private void offerDirectContent(ByteBuf body, ProtoSndQueue<ByteBuf> dst) {
+        if (body == null || body.readableBytes() == 0) {
+            return;
+        }
+        dst.offerMessage(body.retain());
+    }
+
+    private void offerLastChunk(ProtoContext context, ProtoSndQueue<ByteBuf> dst) {
+        ByteBuf lastBuf = context.byteBufAllocator().buffer(ZERO_CRLF_CRLF.length);
+        lastBuf.writeBytes(ZERO_CRLF_CRLF, 0, ZERO_CRLF_CRLF.length);
+        lastBuf.markWriter();
+        dst.offerMessage(lastBuf);
+    }
+
+    private void offerTrailingHeadersTerminator(ProtoContext context, ProtoSndQueue<ByteBuf> dst) {
+        ByteBuf buf = context.byteBufAllocator().buffer(CRLF.length);
+        buf.writeBytes(CRLF, 0, CRLF.length);
+        buf.markWriter();
+        dst.offerMessage(buf);
+    }
+
+    //
+
+    private boolean isChunked(HttpHeaders headers) {
+        return StringUtils.containsIgnoreCase(headers != null ? headers.getString(HttpHeaderNames.TRANSFER_ENCODING) : null, HttpHeaderValues.CHUNKED);
     }
 
     /** Writes an ASCII string directly byte-by-byte, avoiding String.getBytes() allocation. */
@@ -114,231 +298,5 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
             value >>>= 4;
         } while (value != 0);
         buf.writeBytes(scratch, idx + 1, 15 - idx);
-    }
-
-    @Override
-    public void onInit(ProtoContext context) {
-        HttpContext.getOrCreate(context);
-    }
-
-    @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
-        HttpContext httpCtx = context.context(HttpContext.class);
-        while (src.hasMore()) {
-            HttpObject msg = src.takeMessage();
-            if (msg == null) {
-                continue;
-            }
-
-            if (msg instanceof FullHttpResponse) {
-                encodeFullResponse(httpCtx, context, (FullHttpResponse) msg, dst);
-            } else if (msg instanceof HttpResponse) {
-                encodeResponseHead(httpCtx, context, (HttpResponse) msg, dst);
-            } else if (msg instanceof LastHttpContent) {
-                encodeLastContent(httpCtx, context, (LastHttpContent) msg, dst);
-            } else if (msg instanceof HttpContent) {
-                encodeContent(httpCtx, context, (HttpContent) msg, dst);
-            }
-        }
-
-        return ProtoStatus.Next;
-    }
-
-    /**
-     * Encodes a complete HTTP response (status-line + headers + body) into bytes.
-     */
-    private void encodeFullResponse(HttpContext httpCtx, ProtoContext context, FullHttpResponse response, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf content = response.content();
-        int bodyLen = (content != null) ? content.readableBytes() : 0;
-
-        // Try to compose entire head into scratch buffer
-        int headLen = composeResponseHead(response);
-        ByteBuf buf;
-        if (headLen > 0) {
-            // Fast path: write scratch + content directly into a pooled ByteBuf (no intermediate byte[] allocation)
-            buf = context.byteBufAllocator().buffer(headLen + bodyLen);
-            buf.writeBytes(SCRATCH_BUF.get(), 0, headLen);
-            if (bodyLen > 0) {
-                buf.writeBuffer(content, bodyLen);
-            }
-            buf.markWriter();
-        } else {
-            buf = context.byteBufAllocator().buffer(256 + bodyLen);
-            writeStatusLine(buf, response);
-            writeHeaders(buf, response.headers());
-            buf.writeBytes(CRLF, 0, CRLF.length);
-            if (bodyLen > 0) {
-                buf.writeBuffer(content, bodyLen);
-            }
-            buf.markWriter();
-        }
-        dst.offerMessage(buf);
-
-        httpCtx.respChunkedEncoding = false;
-    }
-
-    /**
-     * Encodes the status-line and headers.
-     */
-    private void encodeResponseHead(HttpContext httpCtx, ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
-        // Determine if chunked
-        String te = response.headers().get(HttpHeaderNames.TRANSFER_ENCODING);
-        httpCtx.respChunkedEncoding = StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED);
-
-        int headLen = composeResponseHead(response);
-        ByteBuf buf;
-        if (headLen > 0) {
-            // Fast path: write scratch directly into a pooled ByteBuf (no intermediate byte[] allocation)
-            buf = context.byteBufAllocator().buffer(headLen);
-            buf.writeBytes(SCRATCH_BUF.get(), 0, headLen);
-            buf.markWriter();
-        } else {
-            buf = context.byteBufAllocator().buffer(256);
-            writeStatusLine(buf, response);
-            writeHeaders(buf, response.headers());
-            buf.writeBytes(CRLF, 0, CRLF.length);
-            buf.markWriter();
-        }
-
-        dst.offerMessage(buf);
-    }
-
-    /**
-     * Encodes a body content chunk.
-     */
-    private void encodeContent(HttpContext httpCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf body = content.content();
-        if (body == null || body.readableBytes() == 0) {
-            return;
-        }
-
-        if (httpCtx.respChunkedEncoding) {
-            // Chunked: SIZE CRLF DATA CRLF
-            ByteBuf buf = context.byteBufAllocator().buffer(body.readableBytes() + 32);
-            writeHexInt(buf, body.readableBytes());
-            buf.writeBytes(CRLF, 0, CRLF.length);
-            buf.writeBuffer(body, body.readableBytes());
-            buf.writeBytes(CRLF, 0, CRLF.length);
-            buf.markWriter();
-            dst.offerMessage(buf);
-        } else {
-            // Direct: just write the body bytes
-            ByteBuf buf = context.byteBufAllocator().buffer(body.readableBytes());
-            buf.writeBuffer(body, body.readableBytes());
-            buf.markWriter();
-            dst.offerMessage(buf);
-        }
-    }
-
-    /**
-     * Encodes the last body content chunk and optional trailing headers.
-     */
-    private void encodeLastContent(HttpContext httpCtx, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<ByteBuf> dst) {
-        ByteBuf body = lastContent.content();
-
-        if (httpCtx.respChunkedEncoding) {
-            if (body != null && body.readableBytes() > 0) {
-                ByteBuf chunkBuf = context.byteBufAllocator().buffer(body.readableBytes() + 32);
-                writeHexInt(chunkBuf, body.readableBytes());
-                chunkBuf.writeBytes(CRLF, 0, CRLF.length);
-                chunkBuf.writeBuffer(body, body.readableBytes());
-                chunkBuf.writeBytes(CRLF, 0, CRLF.length);
-                chunkBuf.markWriter();
-                dst.offerMessage(chunkBuf);
-            }
-
-            ByteBuf lastBuf = context.byteBufAllocator().buffer(64);
-            HttpHeaders trailers = lastContent.trailerHeaders();
-
-            if (trailers != null && !trailers.isEmpty()) {
-                writeHexInt(lastBuf, 0);
-                lastBuf.writeBytes(CRLF, 0, CRLF.length);
-                writeHeaders(lastBuf, trailers);
-                lastBuf.writeBytes(CRLF, 0, CRLF.length);
-            } else {
-                lastBuf.writeBytes(ZERO_CRLF_CRLF, 0, ZERO_CRLF_CRLF.length);
-            }
-
-            lastBuf.markWriter();
-            dst.offerMessage(lastBuf);
-        } else {
-            // Non-chunked: just write remaining body if any
-            if (body != null && body.readableBytes() > 0) {
-                ByteBuf buf = context.byteBufAllocator().buffer(body.readableBytes());
-                buf.writeBuffer(body, body.readableBytes());
-                buf.markWriter();
-                dst.offerMessage(buf);
-            }
-        }
-
-        // Reset state
-        httpCtx.respChunkedEncoding = false;
-    }
-
-    /**
-     * Writes the status-line: VERSION SP CODE SP REASON CRLF
-     */
-    private void writeStatusLine(ByteBuf buf, HttpResponse response) {
-        byte[] scratch = SCRATCH_BUF.get();
-        int pos = 0;
-        byte[] versionBytes = response.protocolVersion().textBytes();
-        byte[] codeBytes = response.status().codeBytes();
-        byte[] reasonBytes = response.status().reasonPhraseBytes();
-        System.arraycopy(versionBytes, 0, scratch, pos, versionBytes.length);
-        pos += versionBytes.length;
-        scratch[pos++] = ' ';
-        System.arraycopy(codeBytes, 0, scratch, pos, codeBytes.length);
-        pos += codeBytes.length;
-        scratch[pos++] = ' ';
-        int totalLen = pos + reasonBytes.length + 2;
-        if (totalLen <= SCRATCH_SIZE) {
-            System.arraycopy(reasonBytes, 0, scratch, pos, reasonBytes.length);
-            pos += reasonBytes.length;
-            scratch[pos++] = '\r';
-            scratch[pos++] = '\n';
-            buf.writeBytes(scratch, 0, pos);
-        } else {
-            buf.writeBytes(scratch, 0, pos);
-            buf.writeBytes(reasonBytes, 0, reasonBytes.length);
-            buf.writeBytes(CRLF, 0, CRLF.length);
-        }
-    }
-
-    /**
-     * Writes all headers using forEachHeader callback to avoid Entry allocation.
-     */
-    private void writeHeaders(ByteBuf buf, HttpHeaders headers) {
-        if (headers == null || headers.isEmpty()) {
-            return;
-        }
-        headers.forEachHeader((name, value) -> {
-            byte[] scratch = SCRATCH_BUF.get();
-            int nameLen = name.length();
-            int valueLen = value.length();
-            int totalLen = nameLen + 2 + valueLen + 2;
-            if (totalLen <= SCRATCH_SIZE) {
-                int pos = 0;
-                for (int i = 0; i < nameLen; i++) {
-                    scratch[pos++] = (byte) name.charAt(i);
-                }
-                scratch[pos++] = ':';
-                scratch[pos++] = ' ';
-                for (int i = 0; i < valueLen; i++) {
-                    scratch[pos++] = (byte) value.charAt(i);
-                }
-                scratch[pos++] = '\r';
-                scratch[pos++] = '\n';
-                buf.writeBytes(scratch, 0, pos);
-            } else {
-                writeAscii(buf, name);
-                scratch[0] = ':';
-                scratch[1] = ' ';
-                buf.writeBytes(scratch, 0, 2);
-                writeAscii(buf, value);
-                scratch[0] = '\r';
-                scratch[1] = '\n';
-                buf.writeBytes(scratch, 0, 2);
-            }
-        });
     }
 }

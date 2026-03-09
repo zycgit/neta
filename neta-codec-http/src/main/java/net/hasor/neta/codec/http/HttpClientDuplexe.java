@@ -61,9 +61,9 @@ public class HttpClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
-        decoder.onInit(context);
-        encoder.onInit(context);
+    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
+        decoder.onInit(name, rcvSize, context);
+        encoder.onInit(name, sndSize, context);
     }
 
     @Override

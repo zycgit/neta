@@ -78,6 +78,7 @@ public class StringView implements CharSequence, Release {
 
     @Override
     public void release() {
+        this.releaseSource();
         this.source = null;
         this.offset = 0;
         this.length = 0;
@@ -143,8 +144,12 @@ public class StringView implements CharSequence, Release {
             return this.cachedValue;
         }
 
-        this.cachedValue = this.readSourceValue(current);
-        this.source = null;
+        try {
+            this.cachedValue = this.readSourceValue(current);
+        } finally {
+            this.releaseSource();
+            this.source = null;
+        }
         return this.cachedValue;
     }
 
@@ -156,6 +161,13 @@ public class StringView implements CharSequence, Release {
             return current.getString(this.offset, this.length, StandardCharsets.US_ASCII);
         } catch (IllegalStateException e) {
             return "";
+        }
+    }
+
+    private void releaseSource() {
+        ByteBuf current = this.source;
+        if (current != null && !current.isFree()) {
+            current.release();
         }
     }
 

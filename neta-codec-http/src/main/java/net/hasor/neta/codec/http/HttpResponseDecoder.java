@@ -16,8 +16,10 @@
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
 
 /**
@@ -28,8 +30,10 @@ import net.hasor.neta.channel.*;
  * <p>
  * The decoder emits the following sequence of {@link HttpObject}s for each response:
  * <ol>
- *   <li>{@link DefaultHttpResponse} - the status line and headers</li>
+ *   <li>{@link DefaultHttpResponse} - the status line</li>
+ *   <li>{@link DefaultLastHttpHeaders} - the initial header block</li>
  *   <li>Zero or more {@link DefaultHttpContent} - body chunks</li>
+ *   <li>Zero or more {@link DefaultTrailerHttpHeaders} - trailing header blocks for chunked bodies</li>
  *   <li>{@link DefaultLastHttpContent} - marks the end of the response body</li>
  * </ol>
  * <p>
@@ -46,15 +50,13 @@ import net.hasor.neta.channel.*;
  * </pre>
  */
 public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
-    private static final int                 DEFAULT_MAX_INITIAL_LINE_LENGTH = 4096;
-    private static final int                 DEFAULT_MAX_HEADER_SIZE         = 8192;
-    private static final int                 DEFAULT_MAX_CHUNK_SIZE          = 8192;
-    private static final int                 SCAN_BUF_SIZE                   = 8192;
-    private static final ThreadLocal<byte[]> SCAN_BUF                        = ThreadLocal.withInitial(() -> new byte[SCAN_BUF_SIZE]);
-    //
-    private final        int                 maxInitialLineLength;
-    private final        int                 maxHeaderSize;
-    private final        int                 maxChunkSize;
+    private static final Logger logger                          = Logger.getLogger(HttpResponseDecoder.class);
+    private static final int    DEFAULT_MAX_INITIAL_LINE_LENGTH = 4096;
+    private static final int    DEFAULT_MAX_HEADER_SIZE         = 8192;
+    private static final int    DEFAULT_MAX_CHUNK_SIZE          = 8192;
+    private final        int    maxInitialLineLength;
+    private final        int    maxHeaderSize;
+    private final        int    maxChunkSize;
 
     /** Creates a decoder with default limits. */
     public HttpResponseDecoder() {
@@ -77,423 +79,669 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         if (maxChunkSize <= 0) {
             throw new IllegalArgumentException("maxChunkSize must be positive");
         }
+
         this.maxInitialLineLength = maxInitialLineLength;
         this.maxHeaderSize = maxHeaderSize;
         this.maxChunkSize = maxChunkSize;
     }
 
     @Override
-    public void onInit(ProtoContext context) {
+    public void onInit(String name, int poolSize, ProtoContext context) {
         HttpContext.getOrCreate(context);
     }
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
-        HttpContext respCtx = context.context(HttpContext.class);
+        boolean printLog = context.getConfig().isPrintLog();
+        long channelID = context.getChannel().getChannelId();
+        HttpContext httpCtx = context.context(HttpContext.class);
+        HttpContext.ResponseDecodeState respCtx = httpCtx.resp;
+        ByteBuf accumulator = ByteBufUtils.queueBuffer(src);
 
-        // Create a zero-copy view over all queued ByteBuf data
-        if (respCtx.respAccumulator != null) {
-            respCtx.respAccumulator.free();
-        }
-        respCtx.respAccumulator = ByteBufUtils.queueBuffer(src);
+        try {
+            while (true) {
+                switch (respCtx.decoderPhase) {
+                    // response
+                    case READ_INITIAL: {
+                        HttpResponse responseLine = this.decodeStatusLine(accumulator, respCtx);
+                        if (responseLine == null) {
+                            return ProtoStatus.Next;
+                        }
 
-        // Try to decode as much as possible
-        boolean needMoreData = false;
+                        this.offerResponseObject(dst, respCtx, responseLine, channelID, printLog);
 
-        while (!needMoreData) {
-            switch (respCtx.respDecoderState) {
-                case READ_INITIAL:
-                    needMoreData = !decodeStatusLine(respCtx, dst);
-                    break;
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    // header
+                    case READ_HEADER: {
+                        HttpHeaders headers = this.decodeHeaders(respCtx, accumulator);
+                        if (headers == null) {
+                            return ProtoStatus.Next;
+                        }
 
-                case READ_HEADER:
-                    needMoreData = !decodeHeaders(respCtx, dst);
-                    break;
+                        this.offerResponseObject(dst, respCtx, headers, channelID, printLog);
+                        this.updateResponseTransferMode(headers, respCtx);
 
-                case READ_FIXED_LENGTH_CONTENT:
-                    needMoreData = !decodeFixedLengthContent(respCtx, context, dst);
-                    break;
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    case DONE_HEADER: {
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    // body
+                    case READ_FIXED_LENGTH_CONTENT: {
+                        HttpContent content = this.decodeFixedLengthContent(respCtx, accumulator);
+                        if (content == null) {
+                            return ProtoStatus.Next;
+                        }
 
-                case READ_VARIABLE_LENGTH_CONTENT:
-                    needMoreData = !decodeVariableLengthContent(respCtx, context, dst);
-                    break;
+                        this.offerResponseObject(dst, respCtx, content, channelID, printLog);
 
-                case READ_CHUNK_SIZE:
-                    needMoreData = !decodeChunkSize(respCtx, dst);
-                    break;
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    case READ_VARIABLE_LENGTH_CONTENT: {
+                        // Close-delimited body has no in-band terminator, so we stay in this state
+                        // and keep draining bytes until the peer closes the connection.
+                        HttpContent content = this.decodeVariableLengthContent(respCtx, accumulator);
+                        if (content == null) {
+                            return ProtoStatus.Next;
+                        }
 
-                case READ_CHUNKED_CONTENT:
-                    needMoreData = !decodeChunkedContent(respCtx, context, dst);
-                    break;
+                        this.offerResponseObject(dst, respCtx, content, channelID, printLog);
+                        break;
+                    }
+                    case READ_CHUNK_SIZE: {
+                        if (!this.decodeChunkSize(accumulator, respCtx)) {
+                            return ProtoStatus.Next;
+                        }
 
-                case READ_CHUNK_DELIMITER:
-                    needMoreData = !decodeChunkDelimiter(respCtx);
-                    break;
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    case READ_CHUNKED_CONTENT: {
+                        HttpContent content = this.decodeChunkedContent(respCtx, accumulator);
+                        if (content == null) {
+                            return ProtoStatus.Next;
+                        }
 
-                case READ_CHUNK_TRAILER:
-                    needMoreData = !decodeChunkTrailer(respCtx, dst);
-                    break;
+                        this.offerResponseObject(dst, respCtx, content, channelID, printLog);
 
-                case DONE:
-                    respCtx.resetRespDecoder();
-                    needMoreData = respCtx.respAccumulator.readableBytes() == 0;
-                    break;
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    case READ_CHUNK_DELIMITER: {
+                        if (!this.decodeChunkDelimiter(accumulator, respCtx)) {
+                            return ProtoStatus.Next;
+                        }
 
-                default:
-                    needMoreData = true;
-                    break;
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    // trailer
+                    case READ_HEADER_TRAILER: {
+                        TrailerHttpHeaders trailers = this.decodeChunkTrailer(respCtx, accumulator);
+                        if (trailers == null) {
+                            return ProtoStatus.Next;
+                        }
+                        if (trailers.headerSize() > 0) {
+                            this.offerResponseObject(dst, respCtx, trailers, channelID, printLog);
+                        }
+
+                        respCtx.decoderPhase = this.nextState(respCtx);
+                        break;
+                    }
+                    // finish
+                    case READ_END: {
+                        if (respCtx.emitEmptyEndContent) {
+                            this.offerResponseObject(dst, respCtx, DefaultLastHttpContent.EMPTY, channelID, printLog);
+                        }
+                        httpCtx.resp.reset();
+                        if (accumulator.readableBytes() == 0) {
+                            return ProtoStatus.Next;
+                        }
+                        break;
+                    }
+                    default:
+                        return ProtoStatus.Next;
+                }
             }
+        } finally {
+            accumulator.markReader();
+            accumulator.free();
+        }
+    }
+
+    @Override
+    public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        HttpContext httpCtx = context.context(HttpContext.class);
+        if (httpCtx != null) {
+            httpCtx.resp.reset();
         }
 
-        // Consume fully-read ByteBuf messages from the queue
-        respCtx.respAccumulator.markReader();
-
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel().getChannelId();
+            logger.warn("[HTTP-RESP] channel=" + channelID + " decoder error, response state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+        }
         return ProtoStatus.Next;
     }
 
-    /**
-     * Parses the status-line: HTTP-version SP status-code SP reason-phrase CRLF
-     * (RFC 7230 §3.1.2)
-     */
-    private boolean decodeStatusLine(HttpContext respCtx, ProtoSndQueue<HttpObject> dst) {
-        String line = fastReadLine(respCtx);
-        if (line == null) {
-            return false;
-        }
-
-        // Skip empty lines (robustness, RFC 7230 §3.5)
-        if (line.isEmpty()) {
-            return true;
-        }
-
-        if (line.length() > maxInitialLineLength) {
-            throw new HttpInitialLineTooLongException("status line too long: " + line.length() + " > " + maxInitialLineLength, maxInitialLineLength, line.length());
-        }
-
-        // Parse: VERSION SP STATUS SP REASON
-        int firstSpace = line.indexOf(' ');
-        if (firstSpace < 0) {
-            throw new HttpBadRequestException("invalid status line: " + line);
-        }
-
-        String versionStr = line.substring(0, firstSpace);
-        HttpVersion version = HttpVersion.valueOf(versionStr);
-
-        // Find second space (separates status code from reason phrase)
-        int secondSpace = line.indexOf(' ', firstSpace + 1);
-
-        // Parse status code directly from characters (avoid substring + Integer.parseInt)
-        int codeEnd = secondSpace >= 0 ? secondSpace : line.length();
-        int statusCode = 0;
-        for (int i = firstSpace + 1; i < codeEnd; i++) {
-            char c = line.charAt(i);
-            if (c < '0' || c > '9') {
-                if (c != ' ' && c != '\t') {
-                    throw new HttpBadRequestException("invalid status code in: " + line);
-                }
-                continue; // skip whitespace
-            }
-            statusCode = statusCode * 10 + (c - '0');
-        }
-        if (statusCode < 100 || statusCode > 999) {
-            throw new HttpBadRequestException("invalid status code: " + statusCode);
-        }
-
-        String reasonPhrase = secondSpace >= 0 ? line.substring(secondSpace + 1) : "";
-        HttpStatus status = HttpStatus.valueOf(statusCode, reasonPhrase);
-        respCtx.respCurrentResponse = new DefaultHttpResponse(version, status);
-        respCtx.respDecoderState = HttpContext.RespDecoderState.READ_HEADER;
-        return true;
+    @Override
+    public void onClose(ProtoContext context) {
     }
 
-    /**
-     * Parses header fields until an empty line is encountered.
-     * (RFC 7230 §3.2)
-     */
-    private boolean decodeHeaders(HttpContext respCtx, ProtoSndQueue<HttpObject> dst) {
-        HttpHeaders headers = respCtx.respCurrentResponse.headers();
+    //
 
-        String line;
-        while ((line = fastReadLine(respCtx)) != null) {
-
-            // Empty line marks end of headers
-            if (line.isEmpty()) {
-                determineTransferMode(respCtx, headers);
-                dst.offerMessage(respCtx.respCurrentResponse);
-
-                // Determine body state based on response status and transfer mode
-                int statusCode = respCtx.respCurrentResponse.status().code();
-
-                // RFC 7230 §3.3.3: responses with certain status codes MUST NOT have a body
-                if (statusCode == 204 || statusCode == 304 || (statusCode >= 100 && statusCode < 200)) {
-                    dst.offerMessage(DefaultLastHttpContent.EMPTY_LAST_CONTENT);
-                    respCtx.respDecoderState = HttpContext.RespDecoderState.DONE;
-                } else if (respCtx.respChunked) {
-                    respCtx.respDecoderState = HttpContext.RespDecoderState.READ_CHUNK_SIZE;
-                } else if (respCtx.respContentLength >= 0) {
-                    if (respCtx.respContentLength == 0) {
-                        dst.offerMessage(DefaultLastHttpContent.EMPTY_LAST_CONTENT);
-                        respCtx.respDecoderState = HttpContext.RespDecoderState.DONE;
-                    } else {
-                        respCtx.respDecoderState = HttpContext.RespDecoderState.READ_FIXED_LENGTH_CONTENT;
-                        respCtx.respBytesRead = 0;
-                    }
-                } else {
-                    // No Content-Length and not chunked:
-                    // For HTTP/1.0 or Connection: close, read until connection closed
-                    // For HTTP/1.1 without body indication, assume no body
-                    HttpVersion version = respCtx.respCurrentResponse.protocolVersion();
-                    String connection = headers.get(HttpHeaderNames.CONNECTION);
-                    boolean isClose = HttpVersion.HTTP_1_0.equals(version) || StringUtils.containsIgnoreCase(connection, HttpHeaderValues.CLOSE);
-
-                    if (isClose) {
-                        respCtx.respDecoderState = HttpContext.RespDecoderState.READ_VARIABLE_LENGTH_CONTENT;
-                    } else {
-                        dst.offerMessage(DefaultLastHttpContent.EMPTY_LAST_CONTENT);
-                        respCtx.respDecoderState = HttpContext.RespDecoderState.DONE;
-                    }
+    private HttpContext.DecodePhase nextState(HttpContext.ResponseDecodeState respCtx) {
+        switch (respCtx.decoderPhase) {
+            case READ_INITIAL:
+                return respCtx.currentMessage != null ?      //
+                        HttpContext.DecodePhase.READ_HEADER ://
+                        HttpContext.DecodePhase.READ_INITIAL;
+            case READ_HEADER:
+                if (respCtx.currentHeaders == null) {
+                    return HttpContext.DecodePhase.READ_HEADER;
                 }
-                return true;
-            }
-
-            respCtx.respHeaderBytes += line.length() + 2; // +2 for CRLF
-            if (respCtx.respHeaderBytes > maxHeaderSize) {
-                throw new HttpHeaderTooLargeException("HTTP headers too large: " + respCtx.respHeaderBytes + " > " + maxHeaderSize, maxHeaderSize, respCtx.respHeaderBytes);
-            }
-
-            // Handle obs-fold (RFC 7230 §3.2.4)
-            if ((line.charAt(0) == ' ' || line.charAt(0) == '\t') && !headers.isEmpty()) {
-                // Append folded continuation to the last added header value
-                String continuation = ' ' + line.trim();
-                if (respCtx.respLastHeaderName != null) {
-                    String existing = headers.get(respCtx.respLastHeaderName);
-                    headers.set(respCtx.respLastHeaderName, existing + continuation);
+                return (respCtx.currentHeaders instanceof LastHttpHeaders) ?//
+                        HttpContext.DecodePhase.DONE_HEADER :           //
+                        HttpContext.DecodePhase.READ_HEADER;
+            case DONE_HEADER:
+                if (isBodyForbidden(respCtx)) {
+                    return endState(respCtx, true);
                 }
-                continue;
-            }
-
-            // Parse header: name ":" value
-            int colonIdx = line.indexOf(':');
-            if (colonIdx < 0) {
-                throw new HttpBadRequestException("invalid header line (no colon): " + line);
-            }
-
-            String name = line.substring(0, colonIdx).trim();
-            String value = line.substring(colonIdx + 1).trim();
-
-            if (name.isEmpty()) {
-                throw new HttpBadRequestException("empty header name");
-            }
-
-            headers.add(name, value);
-            respCtx.respLastHeaderName = name;
+                if (respCtx.chunked) {
+                    return HttpContext.DecodePhase.READ_CHUNK_SIZE;
+                }
+                if (respCtx.contentLength > 0) {
+                    respCtx.bytesRead = 0;
+                    return HttpContext.DecodePhase.READ_FIXED_LENGTH_CONTENT;
+                }
+                if (respCtx.contentLength == 0) {
+                    return endState(respCtx, true);
+                }
+                return respCtx.connectionClose ?                           //
+                        HttpContext.DecodePhase.READ_VARIABLE_LENGTH_CONTENT ://
+                        endState(respCtx, true);
+            case READ_FIXED_LENGTH_CONTENT:
+                return respCtx.bytesRead < respCtx.contentLength ?       //
+                        HttpContext.DecodePhase.READ_FIXED_LENGTH_CONTENT ://
+                        endState(respCtx, false);
+            case READ_VARIABLE_LENGTH_CONTENT:
+                return HttpContext.DecodePhase.READ_VARIABLE_LENGTH_CONTENT;
+            case READ_CHUNK_SIZE:
+                if (!respCtx.chunkSizeReady) {
+                    return HttpContext.DecodePhase.READ_CHUNK_SIZE;
+                }
+                respCtx.chunkSizeReady = false;
+                return respCtx.currentChunkSize == 0 ?                 //
+                        HttpContext.DecodePhase.READ_HEADER_TRAILER : //
+                        HttpContext.DecodePhase.READ_CHUNKED_CONTENT;
+            case READ_CHUNKED_CONTENT:
+                return respCtx.bytesRead < respCtx.currentChunkSize ?   //
+                        HttpContext.DecodePhase.READ_CHUNKED_CONTENT :  //
+                        HttpContext.DecodePhase.READ_CHUNK_DELIMITER;
+            case READ_CHUNK_DELIMITER:
+                if (!respCtx.chunkDelimiterReady) {
+                    return HttpContext.DecodePhase.READ_CHUNK_DELIMITER;
+                }
+                respCtx.chunkDelimiterReady = false;
+                return HttpContext.DecodePhase.READ_CHUNK_SIZE;
+            case READ_HEADER_TRAILER:
+                return respCtx.trailerComplete ?                    //
+                        endState(respCtx, true) :                  //
+                        HttpContext.DecodePhase.READ_HEADER_TRAILER;
+            case READ_END:
+            default:
+                return HttpContext.DecodePhase.READ_END;
         }
-
-        return false;
     }
 
-    private void determineTransferMode(HttpContext respCtx, HttpHeaders headers) {
-        respCtx.respChunked = false;
-        respCtx.respContentLength = -1;
+    private HttpContext.DecodePhase endState(HttpContext.ResponseDecodeState respCtx, boolean emitEmptyEndContent) {
+        respCtx.emitEmptyEndContent = emitEmptyEndContent;
+        return HttpContext.DecodePhase.READ_END;
+    }
 
-        String te = headers.get(HttpHeaderNames.TRANSFER_ENCODING);
-        if (StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
-            respCtx.respChunked = true;
-            return;
-        }
+    //
 
-        String cl = headers.get(HttpHeaderNames.CONTENT_LENGTH);
-        if (StringUtils.isNotBlank(cl)) {
+    // status-line
+    private HttpResponse decodeStatusLine(ByteBuf accumulator, HttpContext.ResponseDecodeState respCtx) {
+        ByteBuf line;
+        while ((line = accumulator.readLineBuffer(this.maxInitialLineLength + 2)) != null) {
             try {
-                respCtx.respContentLength = Long.parseLong(cl.trim());
-                if (respCtx.respContentLength < 0) {
-                    throw new HttpContentTooLargeException("negative Content-Length: " + respCtx.respContentLength);
+                if (line.readableBytes() == 0) {
+                    accumulator.markReader();
+                    continue;
                 }
-            } catch (NumberFormatException e) {
-                throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
-            }
-        }
-    }
 
-    private boolean decodeFixedLengthContent(HttpContext respCtx, ProtoContext context, ProtoSndQueue<HttpObject> dst) {
-        int readable = respCtx.respAccumulator.readableBytes();
-        if (readable == 0) {
-            return false;
-        }
-
-        long remaining = respCtx.respContentLength - respCtx.respBytesRead;
-        int toRead = (int) Math.min(Math.min(remaining, readable), maxChunkSize);
-
-        if (toRead > 0) {
-            ByteBuf content = context.byteBufAllocator().buffer(toRead);
-            content.writeBuffer(respCtx.respAccumulator, toRead);
-            content.markWriter();
-            respCtx.respBytesRead += toRead;
-
-            remaining = respCtx.respContentLength - respCtx.respBytesRead;
-            if (remaining == 0) {
-                dst.offerMessage(new DefaultLastHttpContent(content));
-                respCtx.respDecoderState = HttpContext.RespDecoderState.DONE;
-            } else {
-                dst.offerMessage(new DefaultHttpContent(content));
-            }
-            return true;
-        }
-
-        return false;
-    }
-
-    /**
-     * Reads body content until the connection is closed (HTTP/1.0 style).
-     * Per RFC 7230 §3.3.3, point 7: the message body length is determined
-     * by the number of octets received prior to the server closing the connection.
-     */
-    private boolean decodeVariableLengthContent(HttpContext respCtx, ProtoContext context, ProtoSndQueue<HttpObject> dst) {
-        int readable = respCtx.respAccumulator.readableBytes();
-        if (readable == 0) {
-            return false;
-        }
-
-        int toRead = Math.min(readable, maxChunkSize);
-        ByteBuf content = context.byteBufAllocator().buffer(toRead);
-        content.writeBuffer(respCtx.respAccumulator, toRead);
-        content.markWriter();
-
-        dst.offerMessage(new DefaultHttpContent(content));
-        return true;
-    }
-
-    private boolean decodeChunkSize(HttpContext respCtx, ProtoSndQueue<HttpObject> dst) {
-        String line = fastReadLine(respCtx);
-        if (line == null) {
-            return false;
-        }
-
-        int semiIdx = line.indexOf(';');
-        String sizeStr = semiIdx >= 0 ? line.substring(0, semiIdx).trim() : line.trim();
-
-        if (sizeStr.isEmpty()) {
-            throw new HttpBadRequestException("empty chunk size");
-        }
-
-        try {
-            respCtx.respCurrentChunkSize = Integer.parseInt(sizeStr, 16);
-        } catch (NumberFormatException e) {
-            throw new HttpBadRequestException("invalid chunk size: " + sizeStr, e);
-        }
-
-        if (respCtx.respCurrentChunkSize < 0) {
-            throw new HttpContentTooLargeException("negative chunk size: " + respCtx.respCurrentChunkSize);
-        }
-
-        if (respCtx.respCurrentChunkSize == 0) {
-            respCtx.respDecoderState = HttpContext.RespDecoderState.READ_CHUNK_TRAILER;
-        } else {
-            respCtx.respDecoderState = HttpContext.RespDecoderState.READ_CHUNKED_CONTENT;
-            respCtx.respBytesRead = 0;
-        }
-        return true;
-    }
-
-    private boolean decodeChunkedContent(HttpContext respCtx, ProtoContext context, ProtoSndQueue<HttpObject> dst) {
-        int readable = respCtx.respAccumulator.readableBytes();
-        if (readable == 0) {
-            return false;
-        }
-
-        long remaining = respCtx.respCurrentChunkSize - respCtx.respBytesRead;
-        int toRead = (int) Math.min(Math.min(remaining, readable), maxChunkSize);
-
-        if (toRead > 0) {
-            ByteBuf content = context.byteBufAllocator().buffer(toRead);
-            content.writeBuffer(respCtx.respAccumulator, toRead);
-            content.markWriter();
-            respCtx.respBytesRead += toRead;
-
-            remaining = respCtx.respCurrentChunkSize - respCtx.respBytesRead;
-            if (remaining == 0) {
-                respCtx.respDecoderState = HttpContext.RespDecoderState.READ_CHUNK_DELIMITER;
-            }
-
-            dst.offerMessage(new DefaultHttpContent(content));
-            return true;
-        }
-
-        return false;
-    }
-
-    private boolean decodeChunkDelimiter(HttpContext respCtx) {
-        String line = fastReadLine(respCtx);
-        if (line == null) {
-            return false;
-        }
-        respCtx.respDecoderState = HttpContext.RespDecoderState.READ_CHUNK_SIZE;
-        return true;
-    }
-
-    private boolean decodeChunkTrailer(HttpContext respCtx, ProtoSndQueue<HttpObject> dst) {
-        if (respCtx.respPendingTrailerHeaders == null) {
-            respCtx.respPendingTrailerHeaders = new HttpHeaders();
-        }
-
-        String line;
-        while ((line = fastReadLine(respCtx)) != null) {
-            if (line.isEmpty()) {
-                dst.offerMessage(new DefaultLastHttpContent(ByteBuf.EMPTY, respCtx.respPendingTrailerHeaders));
-                respCtx.respPendingTrailerHeaders = null;
-                respCtx.respDecoderState = HttpContext.RespDecoderState.DONE;
-                return true;
-            }
-
-            int colonIdx = line.indexOf(':');
-            if (colonIdx > 0) {
-                String name = line.substring(0, colonIdx).trim();
-                String value = line.substring(colonIdx + 1).trim();
-                if (!name.isEmpty()) {
-                    respCtx.respPendingTrailerHeaders.add(name, value);
+                if (line.readableBytes() > this.maxInitialLineLength) {
+                    throw new HttpInitialLineTooLongException("status line too long: " + line.readableBytes() + " > " + maxInitialLineLength, maxInitialLineLength, line.readableBytes());
                 }
-            }
-        }
 
-        return false;
-    }
+                int lineLength = line.readableBytes();
+                int firstSpace = line.expect((byte) ' ', lineLength);
+                if (firstSpace <= 0) {
+                    throw new HttpBadRequestException("invalid status line");
+                }
 
-    /**
-     * Fast line reading: bulk-copies available bytes into a thread-local scratch buffer,
-     * then scans the local byte array for '\n'. This avoids per-byte virtual method dispatch
-     * through QueueByteBuf's component lookup chain (getByte → findComponent → delegate).
-     */
-    private String fastReadLine(HttpContext respCtx) {
-        int available = respCtx.respAccumulator.readableBytes();
-        if (available == 0) {
-            return null;
-        }
+                int statusStart = firstSpace + 1;
+                while (statusStart < lineLength && isHorizontalWhitespace(line.getUInt8(statusStart))) {
+                    statusStart++;
+                }
 
-        int maxScan = Math.min(available, Math.min(maxHeaderSize + 2, SCAN_BUF_SIZE));
-        byte[] buf = SCAN_BUF.get();
-        respCtx.respAccumulator.getBytes(0, buf, 0, maxScan);
+                int secondSpace = -1;
+                for (int i = statusStart; i < lineLength; i++) {
+                    if (line.getUInt8(i) == ' ') {
+                        secondSpace = i;
+                        break;
+                    }
+                }
 
-        // Scan the local array for '\n' (direct array access, no virtual dispatch)
-        for (int i = 0; i < maxScan; i++) {
-            if (buf[i] == '\n') {
-                int lineLen = (i > 0 && buf[i - 1] == '\r') ? i - 1 : i;
-                String result = (lineLen == 0) ? "" : new String(buf, 0, lineLen, StandardCharsets.US_ASCII);
-                respCtx.respAccumulator.skipReadableBytes(i + 1);
-                return result;
+                int statusEnd = secondSpace >= 0 ? secondSpace : lineLength;
+                while (statusEnd > statusStart && isHorizontalWhitespace(line.getUInt8(statusEnd - 1))) {
+                    statusEnd--;
+                }
+                if (statusStart >= statusEnd) {
+                    throw new HttpBadRequestException("invalid status code");
+                }
+
+                int statusCode = 0;
+                for (int i = statusStart; i < statusEnd; i++) {
+                    int value = line.getUInt8(i);
+                    if (value < '0' || value > '9') {
+                        throw new HttpBadRequestException("invalid status code");
+                    }
+                    statusCode = statusCode * 10 + (value - '0');
+                }
+                if (statusCode < 100 || statusCode > 999) {
+                    throw new HttpBadRequestException("invalid status code: " + statusCode);
+                }
+
+                CharSequence versionText = StringView.request(line, 0, firstSpace);
+                CharSequence statusText = StringView.request(line, statusStart, statusEnd - statusStart);
+                CharSequence reasonText = secondSpace < 0 || secondSpace + 1 >= lineLength ? "" : StringView.request(line, secondSpace + 1, lineLength - secondSpace - 1);
+
+                accumulator.markReader();
+                respCtx.currentMessage = new DefaultHttpResponse(versionText, statusText, reasonText);
+                return respCtx.currentMessage;
+            } finally {
+                line.free();
             }
         }
 
         return null;
     }
 
-    @Override
-    public void onClose(ProtoContext context) {
-        HttpContext respCtx = context.context(HttpContext.class);
-        if (respCtx != null) {
-            if (respCtx.respAccumulator != null) {
-                respCtx.respAccumulator.free();
-                respCtx.respAccumulator = null;
+    // header
+    private HttpHeaders decodeHeaders(HttpContext.ResponseDecodeState respCtx, ByteBuf accumulator) {
+        java.util.List<DefaultHttpHeaderEntry> headerEntries = null;
+        boolean endOfHeaders = false;
+        ByteBuf line;
+        while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
+            try {
+                int lineLength = line.readableBytes();
+                respCtx.headerBytes += lineLength + 2;
+                if (respCtx.headerBytes > this.maxHeaderSize) {
+                    throw new HttpHeaderTooLargeException("HTTP headers too large: " + respCtx.headerBytes + " > " + maxHeaderSize, this.maxHeaderSize, respCtx.headerBytes);
+                }
+
+                if (lineLength == 0) {
+                    endOfHeaders = true;
+                    accumulator.markReader();
+                    break;
+                }
+
+                int colonIdx = line.expect((byte) ':', lineLength);
+                if (colonIdx < 0) {
+                    throw new HttpBadRequestException("invalid header line (no colon)");
+                }
+
+                int nameStart = 0;
+                int nameEnd = colonIdx;
+                while (nameStart < nameEnd && isHorizontalWhitespace(line.getUInt8(nameStart))) {
+                    nameStart++;
+                }
+                while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
+                    nameEnd--;
+                }
+                if (nameStart >= nameEnd) {
+                    throw new HttpBadRequestException("empty header name");
+                }
+
+                int valueStart = colonIdx + 1;
+                while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
+                    valueStart++;
+                }
+                int valueEnd = lineLength;
+                while (valueEnd > valueStart && isHorizontalWhitespace(line.getUInt8(valueEnd - 1))) {
+                    valueEnd--;
+                }
+
+                if (headerEntries == null) {
+                    headerEntries = new java.util.ArrayList<>();
+                }
+
+                String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
+                CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
+                headerEntries.add(new DefaultHttpHeaderEntry(name, value));
+                accumulator.markReader();
+            } finally {
+                line.free();
             }
         }
+
+        if (headerEntries == null) {
+            respCtx.currentHeaders = endOfHeaders ? new DefaultLastHttpHeaders() : null;
+        } else {
+            respCtx.currentHeaders = endOfHeaders ? new DefaultLastHttpHeaders() : new DefaultHttpHeaders();
+            for (DefaultHttpHeaderEntry entry : headerEntries) {
+                respCtx.currentHeaders.addHeaderEntry(entry);
+                entry.release();
+            }
+        }
+
+        if (respCtx.currentHeaders != null && respCtx.currentMessage != null) {
+            respCtx.currentHeaders.streamId(respCtx.currentMessage.streamId());
+        }
+        return respCtx.currentHeaders;
+    }
+
+    private void updateResponseTransferMode(HttpHeaders headers, HttpContext.ResponseDecodeState respCtx) {
+        if (headers.containsHeader(HttpHeaderNames.TRANSFER_ENCODING)) {
+            String te = headers.getString(HttpHeaderNames.TRANSFER_ENCODING);
+            if (StringUtils.containsIgnoreCase(te, HttpHeaderValues.CHUNKED)) {
+                respCtx.chunked = true;
+                respCtx.contentLength = -1;
+            }
+        }
+
+        if (!respCtx.chunked && respCtx.contentLength < 0 && headers.containsHeader(HttpHeaderNames.CONTENT_LENGTH)) {
+            String cl = headers.getString(HttpHeaderNames.CONTENT_LENGTH);
+            if (StringUtils.isNotBlank(cl)) {
+                try {
+                    respCtx.contentLength = Long.parseLong(cl.trim());
+                    if (respCtx.contentLength < 0) {
+                        throw new HttpContentTooLargeException("negative Content-Length: " + respCtx.contentLength);
+                    }
+                } catch (NumberFormatException e) {
+                    throw new HttpBadRequestException("invalid Content-Length: " + cl, e);
+                }
+            }
+        }
+
+        if (headers.containsHeader(HttpHeaderNames.CONNECTION)) {
+            String connection = headers.getString(HttpHeaderNames.CONNECTION);
+            if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.CLOSE)) {
+                respCtx.connectionClose = true;
+            }
+        }
+
+        if (respCtx.currentMessage != null && HttpVersion.HTTP_1_0.equals(respCtx.currentMessage.protocolVersion())) {
+            respCtx.connectionClose = true;
+        }
+    }
+
+    // body
+    private HttpContent decodeFixedLengthContent(HttpContext.ResponseDecodeState respCtx, ByteBuf accumulator) {
+        int readable = accumulator.readableBytes();
+        long remaining = respCtx.contentLength - respCtx.bytesRead;
+        int toRead = (int) Math.min(Math.min(remaining, readable), maxChunkSize);
+
+        if (toRead > 0) {
+            ByteBuf content = accumulator.sliceOff(toRead);
+            respCtx.bytesRead += toRead;
+
+            remaining = respCtx.contentLength - respCtx.bytesRead;
+            if (remaining == 0) {
+                return new DefaultLastHttpContent(content);
+            } else {
+                return new DefaultHttpContent(content);
+            }
+        }
+
+        return null;
+    }
+
+    private HttpContent decodeVariableLengthContent(HttpContext.ResponseDecodeState respCtx, ByteBuf accumulator) {
+        int readable = accumulator.readableBytes();
+        if (readable == 0) {
+            return null;
+        }
+
+        int toRead = Math.min(readable, maxChunkSize);
+        ByteBuf content = accumulator.sliceOff(toRead);
+        return new DefaultHttpContent(content);
+    }
+
+    private boolean decodeChunkSize(ByteBuf accumulator, HttpContext.ResponseDecodeState respCtx) {
+        ByteBuf line = accumulator.readLineBuffer(this.maxHeaderSize + 2);
+        if (line == null) {
+            return false;
+        }
+
+        try {
+            respCtx.currentChunkSize = parseChunkSize(line);
+            respCtx.bytesRead = 0;
+            respCtx.chunkSizeReady = true;
+            accumulator.markReader();
+            return true;
+        } finally {
+            line.free();
+        }
+    }
+
+    private HttpContent decodeChunkedContent(HttpContext.ResponseDecodeState respCtx, ByteBuf accumulator) {
+        int readable = accumulator.readableBytes();
+        if (readable == 0) {
+            return null;
+        }
+
+        long remaining = respCtx.currentChunkSize - respCtx.bytesRead;
+        int toRead = (int) Math.min(Math.min(remaining, readable), maxChunkSize);
+
+        if (toRead > 0) {
+            ByteBuf content = accumulator.sliceOff(toRead);
+            respCtx.bytesRead += toRead;
+            return new DefaultHttpContent(content);
+        }
+
+        return null;
+    }
+
+    private boolean decodeChunkDelimiter(ByteBuf accumulator, HttpContext.ResponseDecodeState respCtx) {
+        ByteBuf line = accumulator.readLineBuffer(this.maxHeaderSize + 2);
+        if (line == null) {
+            return false;
+        }
+
+        try {
+            if (line.readableBytes() != 0) {
+                throw new HttpBadRequestException("invalid chunk delimiter");
+            }
+            accumulator.markReader();
+            respCtx.chunkDelimiterReady = true;
+            return true;
+        } finally {
+            line.free();
+        }
+    }
+
+    private TrailerHttpHeaders decodeChunkTrailer(HttpContext.ResponseDecodeState respCtx, ByteBuf accumulator) {
+        if (!respCtx.currentHeadersTrailer) {
+            respCtx.currentHeaders = new DefaultTrailerHttpHeaders();
+            respCtx.currentHeadersTrailer = true;
+        }
+
+        ByteBuf line;
+        while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
+            try {
+                int lineLength = line.readableBytes();
+                if (lineLength == 0) {
+                    DefaultTrailerHttpHeaders trailers = (DefaultTrailerHttpHeaders) respCtx.currentHeaders;
+                    if (respCtx.currentMessage != null) {
+                        trailers.streamId(respCtx.currentMessage.streamId());
+                    }
+                    respCtx.currentHeaders = null;
+                    respCtx.currentHeadersTrailer = false;
+                    respCtx.trailerComplete = true;
+                    accumulator.markReader();
+                    return trailers;
+                }
+
+                int colonIdx = line.expect((byte) ':', lineLength);
+                if (colonIdx <= 0) {
+                    throw new HttpBadRequestException("invalid trailer line (no colon)");
+                }
+
+                int nameStart = 0;
+                int nameEnd = colonIdx;
+                while (nameStart < nameEnd && isHorizontalWhitespace(line.getUInt8(nameStart))) {
+                    nameStart++;
+                }
+                while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
+                    nameEnd--;
+                }
+                if (nameStart >= nameEnd) {
+                    throw new HttpBadRequestException("empty trailer name");
+                }
+
+                int valueStart = colonIdx + 1;
+                while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
+                    valueStart++;
+                }
+                int valueEnd = lineLength;
+                while (valueEnd > valueStart && isHorizontalWhitespace(line.getUInt8(valueEnd - 1))) {
+                    valueEnd--;
+                }
+
+                String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
+                CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
+                respCtx.currentHeaders.addHeader(name, value);
+                accumulator.markReader();
+            } finally {
+                line.free();
+            }
+        }
+
+        return null;
+    }
+
+    //
+
+    private void offerResponseObject(ProtoSndQueue<HttpObject> dst, HttpContext.ResponseDecodeState respCtx, HttpObject httpObject, long channelID, boolean printLog) {
+        long packetSequence = ++respCtx.packetSequence;
+        if (printLog) {
+            logger.info("[HTTP-RESP] channel=" + channelID + " packet=" + packetSequence + " type=" + packetType(httpObject) + " " + packetSummary(respCtx, httpObject));
+        }
+        dst.offerMessage(httpObject);
+    }
+
+    private static int parseChunkSize(ByteBuf line) {
+        int lineLength = line.readableBytes();
+        int sizeEnd = line.expect((byte) ';', lineLength);
+        if (sizeEnd < 0) {
+            sizeEnd = lineLength;
+        }
+
+        int sizeStart = 0;
+        while (sizeStart < sizeEnd && isHorizontalWhitespace(line.getUInt8(sizeStart))) {
+            sizeStart++;
+        }
+        while (sizeEnd > sizeStart && isHorizontalWhitespace(line.getUInt8(sizeEnd - 1))) {
+            sizeEnd--;
+        }
+        if (sizeStart >= sizeEnd) {
+            throw new HttpBadRequestException("empty chunk size");
+        }
+
+        long size = 0;
+        for (int i = sizeStart; i < sizeEnd; i++) {
+            int digit = hexValue(line.getUInt8(i));
+            if (digit < 0) {
+                throw new HttpBadRequestException("invalid chunk size");
+            }
+            size = (size << 4) | digit;
+            if (size > Integer.MAX_VALUE) {
+                throw new HttpBadRequestException("chunk size too large: " + size);
+            }
+        }
+        return (int) size;
+    }
+
+    private static boolean isBodyForbidden(HttpContext.ResponseDecodeState respCtx) {
+        if (respCtx.currentMessage == null) {
+            return false;
+        }
+        int statusCode = respCtx.currentMessage.status().code();
+        return statusCode == 204 || statusCode == 304 || (statusCode >= 100 && statusCode < 200);
+    }
+
+    private static int hexValue(int value) {
+        if (value >= '0' && value <= '9') {
+            return value - '0';
+        }
+        if (value >= 'a' && value <= 'f') {
+            return value - 'a' + 10;
+        }
+        if (value >= 'A' && value <= 'F') {
+            return value - 'A' + 10;
+        }
+        return -1;
+    }
+
+    private static boolean isHorizontalWhitespace(int value) {
+        return value == ' ' || value == '\t';
+    }
+
+    private static String packetType(HttpObject httpObject) {
+        if (httpObject instanceof HttpResponse) {
+            return "status-line";
+        }
+        if (httpObject instanceof TrailerHttpHeaders) {
+            return "trailer";
+        }
+        if (httpObject instanceof LastHttpHeaders) {
+            return "headers-end";
+        }
+        if (httpObject instanceof HttpHeaders) {
+            return "headers";
+        }
+        if (httpObject instanceof LastHttpContent) {
+            return "last-content";
+        }
+        if (httpObject instanceof HttpContent) {
+            return "content";
+        }
+        return httpObject.getClass().getSimpleName();
+    }
+
+    private static String packetSummary(HttpContext.ResponseDecodeState respCtx, HttpObject httpObject) {
+        String responseSummary = responseSummary(respCtx.currentMessage);
+        if (httpObject instanceof HttpResponse) {
+            HttpResponse response = (HttpResponse) httpObject;
+            return "version=" + response.protocolVersion().text() + " status=" + response.statusText() + " reason=" + response.reasonText();
+        }
+        if (httpObject instanceof TrailerHttpHeaders) {
+            TrailerHttpHeaders trailers = (TrailerHttpHeaders) httpObject;
+            return responseSummary + " trailerCount=" + trailers.headerSize();
+        }
+        if (httpObject instanceof HttpHeaders) {
+            HttpHeaders headers = (HttpHeaders) httpObject;
+            return responseSummary + " headerCount=" + headers.headerSize() + " end=" + (httpObject instanceof LastHttpHeaders);
+        }
+        if (httpObject instanceof HttpContent) {
+            HttpContent content = (HttpContent) httpObject;
+            int readableBytes = content.content() == null ? 0 : content.content().readableBytes();
+            return responseSummary + " bytes=" + readableBytes + " end=" + (httpObject instanceof LastHttpContent);
+        }
+        return responseSummary + " object=" + httpObject;
+    }
+
+    private static String responseSummary(HttpResponse response) {
+        if (response == null) {
+            return "response=<none>";
+        }
+        return "response=" + response.statusText() + ' ' + response.reasonText();
     }
 }

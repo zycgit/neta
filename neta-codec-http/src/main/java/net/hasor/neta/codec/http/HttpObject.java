@@ -14,30 +14,32 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import net.hasor.cobble.function.Release;
+
 /**
  * Marker interface for all HTTP objects that flow through the HTTP codec pipeline.
  * <p>
- * An HTTP message is decoded into a sequence of {@link HttpObject}s:
+ * A complete message is represented as an ordered sequence of {@link HttpObject}s:
  * <ol>
- *   <li>{@link HttpRequest} or {@link HttpResponse} - the initial line and headers</li>
- *   <li>Zero or more {@link HttpContent} - body chunks</li>
- *   <li>{@link LastHttpContent} - marks the end of the message</li>
+ *   <li>{@link HttpRequest} or {@link HttpResponse} for the start line</li>
+ *   <li>Zero or more {@link HttpHeaders} header blocks</li>
+ *   <li>One {@link LastHttpHeaders} marker that closes the header section</li>
+ *   <li>Zero or more {@link HttpContent} body chunks</li>
+ *   <li>Zero or more {@link TrailerHttpHeaders} blocks after the body for chunked messages</li>
+ *   <li>One {@link LastHttpContent} marker that closes the body section</li>
  * </ol>
  * <p>
- * HTTP/2 transparency: objects decoded from HTTP/2 carry the originating stream ID
- * via {@link #streamId()}, enabling protocol-agnostic proxy and routing logic.
- * HTTP/1.x objects always return {@code 0}.
+ * Aggregated forms such as {@link FullHttpRequest} and {@link FullHttpResponse} collapse the
+ * final header marker and final content marker into a single object for convenience.
+ * <p>
+ * HTTP/2 transparency: objects decoded from HTTP/2 carry the originating stream ID via
+ * {@link #streamId()}, enabling protocol-agnostic proxy and routing logic. HTTP/1.x objects
+ * typically return {@code 0}.
  */
-public interface HttpObject {
-    /**
-     * Returns the HTTP/2 stream ID associated with this object,
-     * or {@code 0} if not applicable (HTTP/1.x or connection-level).
-     */
+public interface HttpObject extends Release {
+    /** Returns the HTTP/2 stream ID associated with this object, or {@code 0} when none exists. */
     int streamId();
 
-    /**
-     * Sets the HTTP/2 stream ID. Returns {@code this} for chaining.
-     * The default implementation is a no-op (HTTP/1.x objects ignore the call).
-     */
+    /** Associates this object with an HTTP/2 stream ID and returns {@code this} for chaining. */
     HttpObject streamId(int streamId);
 }

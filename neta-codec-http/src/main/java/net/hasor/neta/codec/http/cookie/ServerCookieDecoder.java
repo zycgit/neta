@@ -94,8 +94,8 @@ public final class ServerCookieDecoder {
         }
 
         DefaultCookie cookie = new DefaultCookie(                          //
-                new StringView(buf, nameStart, nameEnd - nameStart),//
-                new StringView(buf, valStart, valEnd - valStart));
+                StringView.request(buf, nameStart, nameEnd - nameStart),//
+                StringView.request(buf, valStart, valEnd - valStart));
 
         // parse attributes
         int pos = firstSemi < 0 ? length : firstSemi + 1;
@@ -129,9 +129,9 @@ public final class ServerCookieDecoder {
                     }
 
                     if (keyLen == 6 && CookieUtils.equalsIgnoreCase(buf, start, DOMAIN)) {
-                        cookie.setLazyDomain(new StringView(buf, aValStart, attrEnd - aValStart));
+                        cookie.setLazyDomain(StringView.request(buf, aValStart, attrEnd - aValStart));
                     } else if (keyLen == 4 && CookieUtils.equalsIgnoreCase(buf, start, PATH)) {
-                        cookie.setLazyPath(new StringView(buf, aValStart, attrEnd - aValStart));
+                        cookie.setLazyPath(StringView.request(buf, aValStart, attrEnd - aValStart));
                     } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, MAX_AGE)) {
                         long maxAge = 0;
                         boolean negative = false;
@@ -153,9 +153,9 @@ public final class ServerCookieDecoder {
                             cookie.setMaxAge(negative ? -maxAge : maxAge);
                         }
                     } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, EXPIRES)) {
-                        cookie.setLazyExpires(new StringView(buf, aValStart, attrEnd - aValStart));
+                        cookie.setLazyExpires(StringView.request(buf, aValStart, attrEnd - aValStart));
                     } else if (keyLen == 8 && CookieUtils.equalsIgnoreCase(buf, start, SAMESITE)) {
-                        cookie.setLazySameSite(new StringView(buf, aValStart, attrEnd - aValStart));
+                        cookie.setLazySameSite(StringView.request(buf, aValStart, attrEnd - aValStart));
                     }
                 }
             }

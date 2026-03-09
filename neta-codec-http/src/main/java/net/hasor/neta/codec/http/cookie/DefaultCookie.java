@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.StringView;
 
 /**
@@ -62,6 +63,33 @@ public class DefaultCookie implements Cookie {
     // Cookie interface
     // -------------------------------------------------------------------------
 
+    private static String materialize(CharSequence value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        return ((StringView) value).resolve();
+    }
+
+    private static boolean isResolved(CharSequence value) {
+        return !(value instanceof StringView) || ((StringView) value).isResolved();
+    }
+
+    private static CharSequence releaseValue(CharSequence value) {
+        if (value == null || value instanceof String) {
+            return value;
+        }
+
+        if (value instanceof Release) {
+            String resolved = value.toString();
+            ((Release) value).release();
+            return resolved;
+        }
+        return value.toString();
+    }
+
     @Override
     public String name() {
         this.name = materialize(this.name);
@@ -97,16 +125,6 @@ public class DefaultCookie implements Cookie {
         return (String) this.expires;
     }
 
-    private static String materialize(CharSequence value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof String) {
-            return (String) value;
-        }
-        return ((StringView) value).resolve();
-    }
-
     @Override
     public boolean isResolved() {
         return isResolved(this.name) &&    //
@@ -115,10 +133,6 @@ public class DefaultCookie implements Cookie {
                 isResolved(this.path) &&   //
                 isResolved(this.expires) &&//
                 isResolved(this.sameSite);
-    }
-
-    private static boolean isResolved(CharSequence value) {
-        return !(value instanceof StringView) || ((StringView) value).isResolved();
     }
 
     @Override
@@ -130,6 +144,16 @@ public class DefaultCookie implements Cookie {
         this.expires();
         this.sameSite();
         return this;
+    }
+
+    @Override
+    public void release() {
+        this.name = releaseValue(this.name);
+        this.value = releaseValue(this.value);
+        this.domain = releaseValue(this.domain);
+        this.path = releaseValue(this.path);
+        this.expires = releaseValue(this.expires);
+        this.sameSite = releaseValue(this.sameSite);
     }
 
     // -------------------------------------------------------------------------

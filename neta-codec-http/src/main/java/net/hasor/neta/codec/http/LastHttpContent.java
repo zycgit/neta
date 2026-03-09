@@ -17,22 +17,8 @@ package net.hasor.neta.codec.http;
 /**
  * Marks the end of an HTTP message body.
  * <p>
- * In chunked transfer encoding (RFC 7230 §4.1), this corresponds to the
- * last-chunk and optional trailer section. For fixed-length bodies, this
- * is emitted after all content bytes have been received.
- * <p>
- * For chunked encoding:
- * <pre>
- *   last-chunk     = 1*("0") [ chunk-ext ] CRLF
- *   trailer-part   = *( header-field CRLF )
- *   CRLF
- * </pre>
+ * This object closes the content section started after {@link LastHttpHeaders}. It may carry a
+ * final payload buffer, but it no longer owns trailer headers in this object model.
  */
 public interface LastHttpContent extends HttpContent {
-    /**
-     * Returns the trailing headers that follow the last chunk in
-     * chunked transfer encoding. Returns empty headers if no trailing
-     * headers are present.
-     */
-    HttpHeaders trailerHeaders();
 }
