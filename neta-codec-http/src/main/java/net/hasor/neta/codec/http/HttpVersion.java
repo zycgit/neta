@@ -115,6 +115,53 @@ public final class HttpVersion {
         }
     }
 
+    /**
+     * Parses an HTTP version from a {@link CharSequence} without requiring an eager String copy.
+     * @param text the version text to parse
+     * @return the matching HttpVersion
+     */
+    public static HttpVersion valueOf(CharSequence text) {
+        if (text == null || text.length() == 0) {
+            throw new IllegalArgumentException("text must not be empty");
+        }
+        if (text instanceof String) {
+            return valueOf((String) text);
+        }
+        if (matches(text, "HTTP/1.1")) {
+            return HTTP_1_1;
+        }
+        if (matches(text, "HTTP/1.0")) {
+            return HTTP_1_0;
+        }
+        if (matches(text, "HTTP/2.0")) {
+            return HTTP_2_0;
+        }
+        if (matches(text, "HTTP/3.0")) {
+            return HTTP_3_0;
+        }
+        return valueOf(text.toString());
+    }
+
+    private static boolean matches(CharSequence left, String right) {
+        if (left.length() != right.length()) {
+            return false;
+        }
+        for (int i = 0; i < right.length(); i++) {
+            char c1 = left.charAt(i);
+            char c2 = right.charAt(i);
+            if (c1 == c2) {
+                continue;
+            }
+            if (c1 >= 'a' && c1 <= 'z') {
+                c1 = (char) (c1 - 32);
+            }
+            if (c1 != c2) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** Returns the protocol name (e.g., "HTTP"). */
     public String protocolName() {
         return protocolName;
@@ -169,6 +216,8 @@ public final class HttpVersion {
             return false;
         }
         HttpVersion that = (HttpVersion) o;
-        return majorVersion == that.majorVersion && minorVersion == that.minorVersion && protocolName.equals(that.protocolName);
+        return majorVersion == that.majorVersion && //
+                minorVersion == that.minorVersion &&//
+                protocolName.equals(that.protocolName);
     }
 }

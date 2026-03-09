@@ -111,6 +111,74 @@ public final class HttpMethod {
         return known != null ? known : new HttpMethod(name);
     }
 
+    /**
+     * Returns the {@link HttpMethod} instance for the given method text.
+     * This overload avoids forcing callers to materialize a {@link String} eagerly.
+     * @param name the method text
+     * @return the corresponding HttpMethod
+     */
+    public static HttpMethod valueOf(CharSequence name) {
+        if (name == null || name.length() == 0) {
+            throw new IllegalArgumentException("name must not be empty");
+        }
+        if (name instanceof String) {
+            return valueOf((String) name);
+        }
+        HttpMethod known = knownMethod(name);
+        return known != null ? known : new HttpMethod(name.toString().trim().toUpperCase());
+    }
+
+    private static HttpMethod knownMethod(CharSequence name) {
+        if (matches(name, OPTIONS.name)) {
+            return OPTIONS;
+        }
+        if (matches(name, GET.name)) {
+            return GET;
+        }
+        if (matches(name, HEAD.name)) {
+            return HEAD;
+        }
+        if (matches(name, POST.name)) {
+            return POST;
+        }
+        if (matches(name, PUT.name)) {
+            return PUT;
+        }
+        if (matches(name, PATCH.name)) {
+            return PATCH;
+        }
+        if (matches(name, DELETE.name)) {
+            return DELETE;
+        }
+        if (matches(name, TRACE.name)) {
+            return TRACE;
+        }
+        if (matches(name, CONNECT.name)) {
+            return CONNECT;
+        }
+        return null;
+    }
+
+    private static boolean matches(CharSequence left, String right) {
+        if (left.length() != right.length()) {
+            return false;
+        }
+        for (int i = 0; i < right.length(); i++) {
+            char c1 = left.charAt(i);
+            char c2 = right.charAt(i);
+            if (c1 == c2) {
+                continue;
+            }
+            if (c1 >= 'a' && c1 <= 'z') {
+                c1 = (char) (c1 - 32);
+            }
+            if (c1 != c2) {
+                return false;
+            }
+        }
+        return true;
+    }
+
     /** Returns the method name (e.g., "GET", "POST"). */
     public String name() {
         return name;

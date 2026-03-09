@@ -178,6 +178,29 @@ public final class HttpStatus {
         return new HttpStatus(code, reasonPhrase);
     }
 
+    /**
+     * Returns the {@link HttpStatus} for the given status code and reason phrase text.
+     * This overload avoids forcing callers to materialize the reason phrase eagerly.
+     * @param codeText the status code text
+     * @param reasonPhrase the reason phrase text
+     * @return the corresponding HttpStatus
+     */
+    public static HttpStatus valueOf(CharSequence codeText, CharSequence reasonPhrase) {
+        if (codeText == null || codeText.length() == 0) {
+            throw new IllegalArgumentException("codeText must not be empty");
+        }
+        int code = 0;
+        for (int i = 0; i < codeText.length(); i++) {
+            char ch = codeText.charAt(i);
+            if (ch < '0' || ch > '9') {
+                throw new IllegalArgumentException("invalid status code: " + codeText);
+            }
+            code = code * 10 + (ch - '0');
+        }
+        String reason = reasonPhrase == null ? "" : reasonPhrase.toString();
+        return valueOf(code, reason);
+    }
+
     /** Returns the HTTP status code (e.g., 200, 404). */
     public int code() {
         return code;
