@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.StringView;
 
 /**
  * Decodes the value of the HTTP <b>request</b> {@code Cookie} header into a list of
@@ -84,14 +84,18 @@ public final class CookieDecoder {
                 valEnd--;
             }
 
-            if (valEnd - valStart >= 2 && buf.getByte(valStart) == '"' && buf.getByte(valEnd - 1) == '"') {
+            if (valStart < valEnd && buf.getByte(valStart) == '"') {
+                if (valEnd - valStart < 2 || buf.getByte(valEnd - 1) != '"') {
+                    pos = semiIdx + 1;
+                    continue;
+                }
                 valStart++;
                 valEnd--;
             }
 
-            String name = buf.getString(segStart, nameEnd - segStart, StandardCharsets.US_ASCII);
-            String value = buf.getString(valStart, valEnd - valStart, StandardCharsets.US_ASCII);
-            cookies.add(new DefaultCookie(name, value));
+            cookies.add(new DefaultCookie(//
+                    new StringView(buf, segStart, nameEnd - segStart),//
+                    new StringView(buf, valStart, valEnd - valStart)));
             pos = semiIdx + 1;
         }
 
@@ -154,7 +158,11 @@ public final class CookieDecoder {
             }
 
             // RFC 6265: cookie-value may optionally be enclosed in double quotes
-            if (valEnd - valStart >= 2 && cookieHeader.charAt(valStart) == '"' && cookieHeader.charAt(valEnd - 1) == '"') {
+            if (valStart < valEnd && cookieHeader.charAt(valStart) == '"') {
+                if (valEnd - valStart < 2 || cookieHeader.charAt(valEnd - 1) != '"') {
+                    pos = semiIdx + 1;
+                    continue;
+                }
                 valStart++;
                 valEnd--;
             }

@@ -17,6 +17,7 @@ package net.hasor.neta.codec.http.cookie;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.StringView;
 
 /**
  * Decodes the value of an HTTP <b>response</b> {@code Set-Cookie} header into a
@@ -92,9 +93,9 @@ public final class ServerCookieDecoder {
             valEnd--;
         }
 
-        String name = buf.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-        String value = buf.getString(valStart, valEnd - valStart, StandardCharsets.US_ASCII);
-        DefaultCookie cookie = new DefaultCookie(name, value);
+        DefaultCookie cookie = new DefaultCookie(                          //
+                new StringView(buf, nameStart, nameEnd - nameStart),//
+                new StringView(buf, valStart, valEnd - valStart));
 
         // parse attributes
         int pos = firstSemi < 0 ? length : firstSemi + 1;
@@ -114,7 +115,6 @@ public final class ServerCookieDecoder {
             if (start < attrEnd) {
                 int attrEq = CookieUtils.indexOf(buf, start, attrEnd, (byte) '=');
                 if (attrEq < 0 || attrEq >= attrEnd) {
-                    // flag attribute
                     int attrLen = attrEnd - start;
                     if (attrLen == 6 && CookieUtils.equalsIgnoreCase(buf, start, SECURE)) {
                         cookie.setSecure(true);
@@ -122,7 +122,6 @@ public final class ServerCookieDecoder {
                         cookie.setHttpOnly(true);
                     }
                 } else {
-                    // key=value attribute
                     int keyLen = attrEq - start;
                     int aValStart = attrEq + 1;
                     while (aValStart < attrEnd && buf.getByte(aValStart) <= ' ') {
@@ -130,11 +129,10 @@ public final class ServerCookieDecoder {
                     }
 
                     if (keyLen == 6 && CookieUtils.equalsIgnoreCase(buf, start, DOMAIN)) {
-                        cookie.setDomain(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                        cookie.setLazyDomain(new StringView(buf, aValStart, attrEnd - aValStart));
                     } else if (keyLen == 4 && CookieUtils.equalsIgnoreCase(buf, start, PATH)) {
-                        cookie.setPath(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                        cookie.setLazyPath(new StringView(buf, aValStart, attrEnd - aValStart));
                     } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, MAX_AGE)) {
-                        // parse long directly from bytes
                         long maxAge = 0;
                         boolean negative = false;
                         int mi = aValStart;
@@ -155,9 +153,9 @@ public final class ServerCookieDecoder {
                             cookie.setMaxAge(negative ? -maxAge : maxAge);
                         }
                     } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, EXPIRES)) {
-                        cookie.setExpires(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                        cookie.setLazyExpires(new StringView(buf, aValStart, attrEnd - aValStart));
                     } else if (keyLen == 8 && CookieUtils.equalsIgnoreCase(buf, start, SAMESITE)) {
-                        cookie.setSameSite(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
+                        cookie.setLazySameSite(new StringView(buf, aValStart, attrEnd - aValStart));
                     }
                 }
             }

@@ -25,6 +25,15 @@ package net.hasor.neta.codec.http.cookie;
  * {@link #expires()}) take effect.
  */
 public interface Cookie {
+    /**
+     * Returns {@code true} when all lazily backed values in this cookie have been materialized.
+     */
+    boolean isResolved();
+
+    /**
+     * Materializes all lazily backed values in this cookie and returns {@code this}.
+     */
+    Cookie resolve();
 
     /**
      * Returns the name of this cookie.

@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import net.hasor.neta.bytebuf.StringView;
 
 /**
  * Default mutable implementation of {@link Cookie}.
@@ -29,16 +30,16 @@ package net.hasor.neta.codec.http.cookie;
  */
 public class DefaultCookie implements Cookie {
     /** Sentinel value indicating {@code Max-Age} is not set. */
-    public static final long    UNDEFINED_MAX_AGE = Long.MIN_VALUE;
-    private final       String  name;
-    private             String  value;
-    private             String  domain;
-    private             String  path;
-    private             long    maxAge            = UNDEFINED_MAX_AGE;
-    private             String  expires;
-    private             boolean secure;
-    private             boolean httpOnly;
-    private             String  sameSite;
+    public static final long         UNDEFINED_MAX_AGE = Long.MIN_VALUE;
+    private             CharSequence name;
+    private             CharSequence value;
+    private             CharSequence domain;
+    private             CharSequence path;
+    private             long         maxAge            = UNDEFINED_MAX_AGE;
+    private             CharSequence expires;
+    private             boolean      secure;
+    private             boolean      httpOnly;
+    private             CharSequence sameSite;
 
     /**
      * Creates a new cookie with the given name and value.
@@ -46,8 +47,8 @@ public class DefaultCookie implements Cookie {
      * @param value cookie value (must not be {@code null})
      * @throws IllegalArgumentException if name is null or empty, or value is null
      */
-    public DefaultCookie(String name, String value) {
-        if (name == null || name.isEmpty()) {
+    public DefaultCookie(CharSequence name, CharSequence value) {
+        if (name == null || name.length() == 0) {
             throw new IllegalArgumentException("cookie name must not be null or empty");
         }
         if (value == null) {
@@ -63,22 +64,26 @@ public class DefaultCookie implements Cookie {
 
     @Override
     public String name() {
-        return name;
+        this.name = materialize(this.name);
+        return (String) this.name;
     }
 
     @Override
     public String value() {
-        return value;
+        this.value = materialize(this.value);
+        return (String) this.value;
     }
 
     @Override
     public String domain() {
-        return domain;
+        this.domain = materialize(this.domain);
+        return (String) this.domain;
     }
 
     @Override
     public String path() {
-        return path;
+        this.path = materialize(this.path);
+        return (String) this.path;
     }
 
     @Override
@@ -88,8 +93,48 @@ public class DefaultCookie implements Cookie {
 
     @Override
     public String expires() {
-        return expires;
+        this.expires = materialize(this.expires);
+        return (String) this.expires;
     }
+
+    private static String materialize(CharSequence value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof String) {
+            return (String) value;
+        }
+        return ((StringView) value).resolve();
+    }
+
+    @Override
+    public boolean isResolved() {
+        return isResolved(this.name) &&    //
+                isResolved(this.value) &&  //
+                isResolved(this.domain) && //
+                isResolved(this.path) &&   //
+                isResolved(this.expires) &&//
+                isResolved(this.sameSite);
+    }
+
+    private static boolean isResolved(CharSequence value) {
+        return !(value instanceof StringView) || ((StringView) value).isResolved();
+    }
+
+    @Override
+    public Cookie resolve() {
+        this.name();
+        this.value();
+        this.domain();
+        this.path();
+        this.expires();
+        this.sameSite();
+        return this;
+    }
+
+    // -------------------------------------------------------------------------
+    // Setters (builder-style)
+    // -------------------------------------------------------------------------
 
     @Override
     public boolean isSecure() {
@@ -109,10 +154,6 @@ public class DefaultCookie implements Cookie {
         return httpOnly;
     }
 
-    // -------------------------------------------------------------------------
-    // Setters (builder-style)
-    // -------------------------------------------------------------------------
-
     /**
      * Sets the {@code HttpOnly} flag and returns {@code this} for chaining.
      */
@@ -123,7 +164,8 @@ public class DefaultCookie implements Cookie {
 
     @Override
     public String sameSite() {
-        return sameSite;
+        this.sameSite = materialize(this.sameSite);
+        return (String) this.sameSite;
     }
 
     /**
@@ -184,21 +226,49 @@ public class DefaultCookie implements Cookie {
     // Object overrides
     // -------------------------------------------------------------------------
 
+    DefaultCookie setLazyValue(CharSequence value) {
+        if (value == null) {
+            throw new IllegalArgumentException("cookie value must not be null");
+        }
+        this.value = value;
+        return this;
+    }
+
+    DefaultCookie setLazyDomain(CharSequence domain) {
+        this.domain = domain;
+        return this;
+    }
+
+    DefaultCookie setLazyPath(CharSequence path) {
+        this.path = path;
+        return this;
+    }
+
+    DefaultCookie setLazyExpires(CharSequence expires) {
+        this.expires = expires;
+        return this;
+    }
+
+    DefaultCookie setLazySameSite(CharSequence sameSite) {
+        this.sameSite = sameSite;
+        return this;
+    }
+
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        sb.append(name).append('=').append(value);
-        if (domain != null) {
-            sb.append("; Domain=").append(domain);
+        sb.append(this.name()).append('=').append(this.value());
+        if (this.domain() != null) {
+            sb.append("; Domain=").append(this.domain());
         }
-        if (path != null) {
-            sb.append("; Path=").append(path);
+        if (this.path() != null) {
+            sb.append("; Path=").append(this.path());
         }
         if (maxAge != UNDEFINED_MAX_AGE) {
             sb.append("; Max-Age=").append(maxAge);
         }
-        if (expires != null) {
-            sb.append("; Expires=").append(expires);
+        if (this.expires() != null) {
+            sb.append("; Expires=").append(this.expires());
         }
         if (secure) {
             sb.append("; Secure");
@@ -206,8 +276,8 @@ public class DefaultCookie implements Cookie {
         if (httpOnly) {
             sb.append("; HttpOnly");
         }
-        if (sameSite != null) {
-            sb.append("; SameSite=").append(sameSite);
+        if (this.sameSite() != null) {
+            sb.append("; SameSite=").append(this.sameSite());
         }
         return sb.toString();
     }
@@ -221,11 +291,11 @@ public class DefaultCookie implements Cookie {
             return false;
         }
         Cookie that = (Cookie) o;
-        return name.equals(that.name()) && value.equals(that.value());
+        return this.name().equals(that.name()) && this.value().equals(that.value());
     }
 
     @Override
     public int hashCode() {
-        return 31 * name.hashCode() + value.hashCode();
+        return 31 * this.name().hashCode() + this.value().hashCode();
     }
 }
