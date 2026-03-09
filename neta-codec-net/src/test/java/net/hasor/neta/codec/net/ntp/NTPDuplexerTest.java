@@ -1,9 +1,9 @@
 package net.hasor.neta.codec.net.ntp;
-
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -20,7 +20,7 @@ public class NTPDuplexerTest {
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ctx.addLast(new NTPDuplexer());
         }, VrtSoConfig.asServer());
-        server.subscribe(d -> {
+        server.subscribe(SubscribeMode.SYNC, d -> {
             if (d.getData() instanceof NTPMessage) {
                 serverReceived.offer((NTPMessage) d.getData());
             }
@@ -31,7 +31,7 @@ public class NTPDuplexerTest {
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             ctx.addLast(new NTPDuplexer());
         }, VrtSoConfig.asClient());
-        client.subscribe(d -> {
+        client.subscribe(SubscribeMode.SYNC, d -> {
             if (d.getData() instanceof NTPMessage) {
                 clientReceived.offer((NTPMessage) d.getData());
             }

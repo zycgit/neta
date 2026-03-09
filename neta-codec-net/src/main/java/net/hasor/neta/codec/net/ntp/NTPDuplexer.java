@@ -18,10 +18,24 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * A duplex handler that combines {@link NTPDecoder} and {@link NTPEncoder}.
+ * Composite NTP codec that combines {@link NTPDecoder} and {@link NTPEncoder}
+ * into a single bidirectional handler.
  * <p>
- * It handles both inbound (decoding) and outbound (encoding) NTP messages.
- * </p>
+ * RCV direction: {@link net.hasor.neta.bytebuf.ByteBuf} → {@link NTPMessage} (via {@link NTPDecoder})<br>
+ * SND direction: {@link NTPMessage} → {@link net.hasor.neta.bytebuf.ByteBuf} (via {@link NTPEncoder})
+ * <p>
+ * This is the recommended entry point for NTP pipeline setup over UDP:
+ * <pre>
+ *   manager.bind(address, ctx -&gt; {
+ *       ctx.addLast("ntp", new NTPDuplexer());
+ *       ctx.addLast("handler", myNtpHandler);
+ *   }, SoConfig.UDP());
+ * </pre>
+ * <b>Applicable transports:</b> UDP (standard NTP uses UDP port 123; RFC 5905).
+ * @author 赵永春 (zyc@hasor.net)
+ * @see NTPDecoder
+ * @see NTPEncoder
+ * @see NTPMessage
  */
 public class NTPDuplexer implements ProtoDuplexer<ByteBuf, NTPMessage, NTPMessage, ByteBuf> {
     private final NTPDecoder decoder = new NTPDecoder();

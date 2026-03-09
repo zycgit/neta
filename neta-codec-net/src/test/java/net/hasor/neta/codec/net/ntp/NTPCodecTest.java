@@ -1,11 +1,11 @@
 package net.hasor.neta.codec.net.ntp;
-
 import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.Queue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -32,7 +32,7 @@ public class NTPCodecTest {
 
         // Capture received data
         Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer(d.getData()));
 
         // Prepare Data
         long refTs = System.currentTimeMillis();
@@ -111,7 +111,7 @@ public class NTPCodecTest {
 
         // Capture received data
         Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer(d.getData()));
 
         // Prepare Data (Manually construct ByteBuf)
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
@@ -186,7 +186,7 @@ public class NTPCodecTest {
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
         Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer(d.getData()));
 
         NTPControlPacket packet = new NTPControlPacket();
         packet.setLeapIndicator((byte) 0);
@@ -253,7 +253,7 @@ public class NTPCodecTest {
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
         Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer(d.getData()));
 
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
         // Mode 6 (Control), Version 3, LI 0
@@ -325,7 +325,7 @@ public class NTPCodecTest {
 
         // Capture received data
         Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer(d.getData()));
 
         // Prepare Data (Manually construct ByteBuf for V4)
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
@@ -406,7 +406,7 @@ public class NTPCodecTest {
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
         Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer(d.getData()));
 
         NTPPacket packet = new NTPPacket();
         packet.setVersion((byte) 4);
@@ -463,7 +463,7 @@ public class NTPCodecTest {
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
         Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer(d.getData()));
 
         // Construct Sticky Buffer
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(96);
@@ -518,7 +518,7 @@ public class NTPCodecTest {
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
         Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> {
+        server.subscribe(SubscribeMode.SYNC, d -> {
             ByteBuf b = (ByteBuf) d.getData();
             // Copy buffer because it might be recycled
             rcvData.offer(b.copy());

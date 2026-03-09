@@ -18,7 +18,28 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Decodes {@link ByteBuf} to {@link NTPMessage}.
+ * Decodes raw {@link ByteBuf} bytes into {@link NTPMessage} objects.
+ * <p>
+ * This handler parses the NTP wire format (RFC 5905) into either
+ * {@link NTPPacket} (standard client/server mode) or
+ * {@link NTPControlPacket} (control-message mode).
+ * <p>
+ * A standard NTP packet is exactly 48 bytes (without optional extension fields
+ * or MAC). The decoder reads one message per {@code ByteBuf} item from the queue.
+ * If the buffer is empty or null it is skipped.
+ * <p>
+ * <b>Typical pipeline placement:</b>
+ * <pre>
+ *   ctx.addLast("ntp", new NTPDuplexer());
+ *   // or individually:
+ *   ctx.addLastDecoder("ntpDecoder", new NTPDecoder());
+ *   ctx.addLastEncoder("ntpEncoder", new NTPEncoder());
+ * </pre>
+ * <b>Applicable transports:</b> UDP (RFC 5905 §2 mandates UDP port 123).
+ * @author 赵永春 (zyc@hasor.net)
+ * @see NTPEncoder
+ * @see NTPDuplexer
+ * @see NTPMessage
  */
 public class NTPDecoder implements ProtoHandler<ByteBuf, NTPMessage> {
     @Override

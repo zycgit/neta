@@ -18,7 +18,21 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Encodes {@link NTPMessage} to {@link ByteBuf}.
+ * Encodes {@link NTPMessage} objects into raw {@link ByteBuf} bytes.
+ * <p>
+ * This handler serialises either {@link NTPPacket} (standard client/server)
+ * or {@link NTPControlPacket} (control message) into the NTP wire format
+ * defined in RFC 5905. The standard packet is always written as 48 bytes.
+ * <p>
+ * <b>Typical pipeline placement:</b>
+ * <pre>
+ *   ctx.addLastEncoder("ntpEncoder", new NTPEncoder());
+ * </pre>
+ * <b>Applicable transports:</b> UDP (RFC 5905 §2 mandates UDP port 123).
+ * @author 赵永春 (zyc@hasor.net)
+ * @see NTPDecoder
+ * @see NTPDuplexer
+ * @see NTPMessage
  */
 public class NTPEncoder implements ProtoHandler<NTPMessage, ByteBuf> {
     @Override
