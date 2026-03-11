@@ -19,6 +19,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Aggregates a sequence of {@link HttpObject}s (a start line followed by header blocks,
@@ -67,10 +68,39 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
 
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
+        HttpContext.getOrCreate(context);
+    }
+
+    @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        if (event.getEventType() != HttpThroughEvent.class) {
+            return true;
+        }
+
+        HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
+        HttpContext.getOrCreate(context).switchTransparentMode(modeEvent.enabled());
+        this.resetAggregation();
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[HTTP-AGG] channel=" + channelID + " transparent-mode=" + modeEvent.enabled() + ", aggregation reset");
+        }
+        return true;
     }
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        HttpContext httpContext = HttpContext.getOrCreate(context);
+        if (httpContext.isTransparentMode()) {
+            this.resetAggregation();
+            while (src.hasMore()) {
+                HttpObject msg = src.takeMessage();
+                if (msg != null) {
+                    dst.offerMessage(msg);
+                }
+            }
+            return ProtoStatus.Next;
+        }
+
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
             if (msg == null) {
@@ -115,7 +145,10 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
 
             if (msg instanceof HttpContent) {
                 appendContent(((HttpContent) msg).content(), false);
+                continue;
             }
+
+            throw new HttpProtocolViolationException("unsupported HTTP object for aggregation: " + msg.getClass().getName());
         }
 
         return ProtoStatus.Next;
@@ -146,14 +179,11 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
             throw new HttpProtocolViolationException("received initial headers after header section already closed");
         }
 
-        if (!(headers instanceof TrailerHttpHeaders)) {
-            this.phase = AggregatePhase.HEADERS;
-            this.currentHeaders.appendHeaders(headers);
-            if (headers instanceof LastHttpHeaders) {
-                this.headersClosed = true;
-                this.phase = AggregatePhase.BODY;
-            }
-            return;
+        this.phase = AggregatePhase.HEADERS;
+        this.currentHeaders.appendHeaders(headers);
+        if (headers instanceof LastHttpHeaders) {
+            this.headersClosed = true;
+            this.phase = AggregatePhase.BODY;
         }
     }
 
@@ -180,8 +210,8 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
 
         int readable = content.readableBytes();
         int newLength = this.currentContentLength + readable;
-        if (newLength > maxContentLength) {
-            throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + maxContentLength, maxContentLength, newLength);
+        if (newLength > this.maxContentLength) {
+            throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength, this.maxContentLength, newLength);
         }
 
         ByteBuf aggregated = this.aggregatedContent;
@@ -200,15 +230,12 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         this.phase = AggregatePhase.BODY;
     }
 
-    /** Emits the aggregated message to the output queue. */
     private void emitAggregated(ProtoContext context, ProtoSndQueue<HttpObject> dst) {
         if (this.currentMessage == null) {
             return;
         }
 
-        ByteBuf aggregatedContent = this.aggregatedContent != null ? this.aggregatedContent : ByteBuf.EMPTY;
-
-        // Auto-set Content-Length and remove Transfer-Encoding
+        ByteBuf aggregated = this.aggregatedContent != null ? this.aggregatedContent : ByteBuf.EMPTY;
         DefaultHttpHeaders headers = this.currentHeaders != null ? this.currentHeaders : new DefaultHttpHeaders();
         if (this.trailingHeaders != null && this.trailingHeaders.headerSize() > 0) {
             headers.appendHeaders(this.trailingHeaders);
@@ -220,18 +247,16 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
         if (this.currentMessage instanceof HttpRequest) {
             HttpRequest req = (HttpRequest) this.currentMessage;
-            DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(req.protocolVersion(), req.method(), req.uri(), aggregatedContent, headers);
-            fullReq.streamId(req.streamId()); // propagate streamId for H2/H3 multiplexing
-
+            DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(req.protocolVersion(), req.method(), req.uri(), aggregated, headers);
+            fullReq.streamId(req.streamId());
             dst.offerMessage(fullReq);
             if (printLog) {
                 logger.info("[HTTP-AGG] channel=" + channelID + " " + req.method() + " " + req.uri() + " streamId=" + req.streamId() + " contentLength=" + this.currentContentLength);
             }
         } else if (this.currentMessage instanceof HttpResponse) {
             HttpResponse resp = (HttpResponse) this.currentMessage;
-            DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(resp.protocolVersion(), resp.status(), aggregatedContent, headers);
-            fullResp.streamId(resp.streamId()); // propagate streamId for H2/H3 multiplexing
-
+            DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(resp.protocolVersion(), resp.status(), aggregated, headers);
+            fullResp.streamId(resp.streamId());
             dst.offerMessage(fullResp);
             if (printLog) {
                 logger.info("[HTTP-AGG] channel=" + channelID + " response status=" + resp.status().code() + " streamId=" + resp.streamId() + " contentLength=" + this.currentContentLength);
@@ -254,9 +279,9 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         this.headersClosed = false;
     }
 
-    private void resetFor(HttpObject currentMessage) {
+    private void resetFor(HttpObject message) {
         this.phase = AggregatePhase.START;
-        this.currentMessage = currentMessage;
+        this.currentMessage = message;
         this.currentHeaders = new DefaultHttpHeaders();
         this.trailingHeaders = new DefaultTrailerHttpHeaders();
         this.aggregatedContent = null;
