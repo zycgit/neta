@@ -23,6 +23,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Decodes raw bytes into HTTP request objects ({@link HttpObject}).
@@ -86,33 +87,43 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         this.maxChunkSize = maxChunkSize;
     }
 
-    private static int hexValue(int value) {
-        if (value >= '0' && value <= '9') {
-            return value - '0';
-        }
-        if (value >= 'a' && value <= 'f') {
-            return value - 'a' + 10;
-        }
-        if (value >= 'A' && value <= 'F') {
-            return value - 'A' + 10;
-        }
-        return -1;
-    }
-
-    private static boolean isHorizontalWhitespace(int value) {
-        return value == ' ' || value == '\t';
-    }
-
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
         HttpContext.getOrCreate(context);
     }
 
     @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        if (event.getEventType() != HttpThroughEvent.class) {
+            return true;
+        }
+
+        HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
+
+        if (context.getConfig().isPrintLog()) {
+            long channelId = context.getChannel().getChannelId();
+            logger.info("[HTTP-REQ] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
+        }
+        return true;
+    }
+
+    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        if (httpCtx.isTransparentMode()) {
+            while (src.hasMore()) {
+                ByteBuf msg = src.takeMessage();
+                if (msg != null) {
+                    dst.offerMessage(new DefaultHttpByteBuf(msg));
+                }
+            }
+            return ProtoStatus.Next;
+        }
+
         boolean printLog = context.getConfig().isPrintLog();
         long channelID = context.getChannel().getChannelId();
-        HttpContext httpCtx = context.context(HttpContext.class);
         HttpContext.RequestDecodeState reqCtx = httpCtx.req;
         ByteBuf accumulator = ByteBufUtils.queueBuffer(src);
 
@@ -234,10 +245,6 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return ProtoStatus.Next;
     }
 
-    @Override
-    public void onClose(ProtoContext context) {
-    }
-
     //
 
     private HttpContext.DecodePhase nextState(HttpContext.RequestDecodeState reqCtx) {
@@ -299,8 +306,6 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         reqCtx.emitEmptyEndContent = emitEmptyEndContent;
         return HttpContext.DecodePhase.READ_END;
     }
-
-    //
 
     // line-part
     private HttpRequest decodeInitialLine(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ByteBuf accumulator) {
@@ -605,14 +610,31 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return null;
     }
 
-    //
-
     private void offerRequestObject(ProtoSndQueue<HttpObject> dst, HttpContext.RequestDecodeState reqCtx, HttpObject httpObject, long channelID, boolean printLog) {
         long packetSequence = ++reqCtx.packetSequence;
         if (printLog) {
             logger.info("[HTTP-REQ] channel=" + channelID + " packet=" + packetSequence + " type=" + packetType(httpObject) + " " + packetSummary(reqCtx, httpObject));
         }
         dst.offerMessage(httpObject);
+    }
+
+    // utils
+
+    private static int hexValue(int value) {
+        if (value >= '0' && value <= '9') {
+            return value - '0';
+        }
+        if (value >= 'a' && value <= 'f') {
+            return value - 'a' + 10;
+        }
+        if (value >= 'A' && value <= 'F') {
+            return value - 'A' + 10;
+        }
+        return -1;
+    }
+
+    private static boolean isHorizontalWhitespace(int value) {
+        return value == ' ' || value == '\t';
     }
 
     private static String packetType(HttpObject httpObject) {

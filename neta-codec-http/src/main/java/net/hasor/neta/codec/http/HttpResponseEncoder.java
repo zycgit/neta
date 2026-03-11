@@ -16,8 +16,10 @@
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Encodes {@link HttpObject} instances into raw bytes for HTTP response messages.
@@ -46,6 +48,7 @@ import net.hasor.neta.channel.*;
  * </pre>
  */
 public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
+    private static final Logger              logger         = Logger.getLogger(HttpResponseEncoder.class);
     private static final byte[]              CRLF           = { '\r', '\n' };
     private static final byte[]              ZERO_CRLF_CRLF = { '0', '\r', '\n', '\r', '\n' };
     private static final int                 SCRATCH_SIZE   = 2048;
@@ -57,11 +60,36 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        if (event.getEventType() != HttpThroughEvent.class) {
+            return true;
+        }
+
+        HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            long channelId = context.getChannel().getChannelId();
+            logger.info("[HTTP-RESP-ENC] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
+        }
+        return true;
+    }
+
+    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
-        HttpContext.EncodeState<HttpResponse> respCtx = context.context(HttpContext.class).respEnc;
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        HttpContext.EncodeState<HttpResponse> respCtx = httpCtx.respEnc;
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
             if (msg == null) {
+                continue;
+            }
+
+            if (httpCtx.isTransparentMode()) {
+                if (!(msg instanceof HttpByteBuf)) {
+                    throw new HttpProtocolViolationException("transparent mode only accepts HttpByteBuf on response encoder.");
+                }
+                this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
                 continue;
             }
 
@@ -119,7 +147,9 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         if (headers instanceof TrailerHttpHeaders) {
             this.handleTrailerHeadersPart(respCtx, context, headers, dst);
         } else {
-            respCtx.chunkedEncoding = respCtx.chunkedEncoding || this.isChunked(headers);
+            String transferEncoding = headers != null ? headers.getString(HttpHeaderNames.TRANSFER_ENCODING) : null;
+            boolean isChunked = StringUtils.containsIgnoreCase(transferEncoding, HttpHeaderValues.CHUNKED);
+            respCtx.chunkedEncoding = respCtx.chunkedEncoding || isChunked;
             this.handleInitialHeadersPart(context, headers, headers instanceof LastHttpHeaders, dst);
         }
     }
@@ -226,8 +256,6 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         respCtx.reset();
     }
 
-    //
-
     private void offerChunkContent(ProtoContext context, ByteBuf body, ProtoSndQueue<ByteBuf> dst) {
         if (body == null || body.readableBytes() == 0) {
             return;
@@ -269,10 +297,6 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     //
-
-    private boolean isChunked(HttpHeaders headers) {
-        return StringUtils.containsIgnoreCase(headers != null ? headers.getString(HttpHeaderNames.TRANSFER_ENCODING) : null, HttpHeaderValues.CHUNKED);
-    }
 
     /** Writes an ASCII string directly byte-by-byte, avoiding String.getBytes() allocation. */
     private static void writeAscii(ByteBuf buf, String s) {

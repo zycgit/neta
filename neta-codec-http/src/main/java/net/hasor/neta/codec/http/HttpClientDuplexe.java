@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * A client-side HTTP codec that combines {@link HttpResponseDecoder} and
@@ -52,15 +53,6 @@ public class HttpClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
-        if (isRcv) {
-            return decoder.onMessage(context, rcvUp, rcvDown);
-        } else {
-            return encoder.onMessage(context, sndUp, sndDown);
-        }
-    }
-
-    @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         decoder.onInit(name, rcvSize, context);
         encoder.onInit(name, sndSize, context);
@@ -73,9 +65,27 @@ public class HttpClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     }
 
     @Override
-    public void onClose(ProtoContext context) {
-        decoder.onClose(context);
-        encoder.onClose(context);
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        if (event.getEventType() == HttpThroughEvent.class) {
+            this.decoder.onUserEvent(context, event);
+            this.encoder.onUserEvent(context, event);
+            return true;
+        }
+
+        if (isRcv) {
+            return this.decoder.onUserEvent(context, event);
+        } else {
+            return this.encoder.onUserEvent(context, event);
+        }
+    }
+
+    @Override
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
+        if (isRcv) {
+            return decoder.onMessage(context, rcvUp, rcvDown);
+        } else {
+            return encoder.onMessage(context, sndUp, sndDown);
+        }
     }
 
     @Override
@@ -85,5 +95,11 @@ public class HttpClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
         } else {
             return encoder.onError(context, e, eh);
         }
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        decoder.onClose(context);
+        encoder.onClose(context);
     }
 }

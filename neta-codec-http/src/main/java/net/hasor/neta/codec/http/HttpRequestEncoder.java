@@ -16,13 +16,16 @@
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Encodes {@link HttpObject} instances into raw bytes for HTTP request messages.
  */
 public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
+    private static final Logger              logger         = Logger.getLogger(HttpRequestEncoder.class);
     private static final byte[]              CRLF           = { '\r', '\n' };
     private static final byte[]              ZERO_CRLF_CRLF = { '0', '\r', '\n', '\r', '\n' };
     private static final int                 SCRATCH_SIZE   = 2048;
@@ -34,11 +37,37 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        if (event.getEventType() != HttpThroughEvent.class) {
+            return true;
+        }
+
+        HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
+
+        if (context.getConfig().isPrintLog()) {
+            long channelId = context.getChannel().getChannelId();
+            logger.info("[HTTP-REQ-ENC] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
+        }
+        return true;
+    }
+
+    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
-        HttpContext.EncodeState<HttpRequest> reqCtx = context.context(HttpContext.class).reqEnc;
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        HttpContext.EncodeState<HttpRequest> reqCtx = httpCtx.reqEnc;
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
             if (msg == null) {
+                continue;
+            }
+
+            if (httpCtx.isTransparentMode()) {
+                if (!(msg instanceof HttpByteBuf)) {
+                    throw new HttpProtocolViolationException("transparent mode only accepts HttpByteBuf on request encoder.");
+                }
+                this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
                 continue;
             }
 
@@ -248,7 +277,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         dst.offerMessage(buf);
     }
 
-    //
+    // utils
 
     private static void writeAscii(ByteBuf buf, String s) {
         int len = s.length();

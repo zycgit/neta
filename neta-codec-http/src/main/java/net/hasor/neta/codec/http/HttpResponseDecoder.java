@@ -21,6 +21,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Decodes raw bytes into HTTP response objects ({@link HttpObject}).
@@ -91,10 +92,36 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     }
 
     @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        if (event.getEventType() != HttpThroughEvent.class) {
+            return true;
+        }
+
+        HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            long channelId = context.getChannel().getChannelId();
+            logger.info("[HTTP-RESP] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
+        }
+        return true;
+    }
+
+    @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        HttpContext httpCtx = HttpContext.getOrCreate(context);
+        if (httpCtx.isTransparentMode()) {
+            while (src.hasMore()) {
+                ByteBuf msg = src.takeMessage();
+                if (msg != null) {
+                    dst.offerMessage(new DefaultHttpByteBuf(msg));
+                }
+            }
+            return ProtoStatus.Next;
+        }
+
         boolean printLog = context.getConfig().isPrintLog();
         long channelID = context.getChannel().getChannelId();
-        HttpContext httpCtx = context.context(HttpContext.class);
         HttpContext.ResponseDecodeState respCtx = httpCtx.resp;
         ByteBuf accumulator = ByteBufUtils.queueBuffer(src);
 
@@ -228,10 +255,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return ProtoStatus.Next;
     }
 
-    @Override
-    public void onClose(ProtoContext context) {
-    }
-
     //
 
     private HttpContext.DecodePhase nextState(HttpContext.ResponseDecodeState respCtx) {
@@ -302,8 +325,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         respCtx.emitEmptyEndContent = emitEmptyEndContent;
         return HttpContext.DecodePhase.READ_END;
     }
-
-    //
 
     // status-line
     private HttpResponse decodeStatusLine(ByteBuf accumulator, HttpContext.ResponseDecodeState respCtx) {
@@ -627,8 +648,6 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return null;
     }
 
-    //
-
     private void offerResponseObject(ProtoSndQueue<HttpObject> dst, HttpContext.ResponseDecodeState respCtx, HttpObject httpObject, long channelID, boolean printLog) {
         long packetSequence = ++respCtx.packetSequence;
         if (printLog) {
@@ -637,6 +656,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         dst.offerMessage(httpObject);
     }
 
+    // utils
     private static int parseChunkSize(ByteBuf line) {
         int lineLength = line.readableBytes();
         int sizeEnd = line.expect((byte) ';', lineLength);

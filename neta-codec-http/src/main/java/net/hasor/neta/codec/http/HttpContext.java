@@ -31,6 +31,7 @@ class HttpContext {
     final ResponseDecodeState       resp    = new ResponseDecodeState();
     final EncodeState<HttpRequest>  reqEnc  = new EncodeState<>();
     final EncodeState<HttpResponse> respEnc = new EncodeState<>();
+    boolean transparentMode;
 
     /**
      * Retrieves the existing {@link HttpContext} from the {@link ProtoContext},
@@ -44,6 +45,20 @@ class HttpContext {
         HttpContext impl = new HttpContext();
         context.context(HttpContext.class, impl);
         return impl;
+    }
+
+    boolean isTransparentMode() {
+        return this.transparentMode;
+    }
+
+    boolean switchTransparentMode(boolean enabled) {
+        boolean changed = this.transparentMode != enabled;
+        this.transparentMode = enabled;
+        this.req.reset();
+        this.resp.reset();
+        this.reqEnc.reset();
+        this.respEnc.reset();
+        return changed;
     }
 
     enum DecodePhase {

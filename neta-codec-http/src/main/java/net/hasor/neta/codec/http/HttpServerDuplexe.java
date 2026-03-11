@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * A server-side HTTP codec that combines {@link HttpRequestDecoder} and
@@ -61,6 +62,21 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     public void onActive(ProtoContext context) throws Throwable {
         this.decoder.onActive(context);
         this.encoder.onActive(context);
+    }
+
+    @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        if (event.getEventType() == HttpThroughEvent.class) {
+            this.decoder.onUserEvent(context, event);
+            this.encoder.onUserEvent(context, event);
+            return true;
+        }
+
+        if (isRcv) {
+            return this.decoder.onUserEvent(context, event);
+        } else {
+            return this.encoder.onUserEvent(context, event);
+        }
     }
 
     @Override
