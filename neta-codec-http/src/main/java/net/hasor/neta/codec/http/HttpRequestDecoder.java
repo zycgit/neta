@@ -233,6 +233,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         HttpContext httpCtx = context.context(HttpContext.class);
         if (httpCtx != null) {
+            httpCtx.markInboundError(HttpContext.InboundMessageType.REQUEST);
             httpCtx.req.reset();
         }
 

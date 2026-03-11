@@ -32,6 +32,7 @@ class HttpContext {
     final EncodeState<HttpRequest>  reqEnc  = new EncodeState<>();
     final EncodeState<HttpResponse> respEnc = new EncodeState<>();
     boolean transparentMode;
+    InboundMessageType              inboundErrorType;
 
     /**
      * Retrieves the existing {@link HttpContext} from the {@link ProtoContext},
@@ -58,7 +59,23 @@ class HttpContext {
         this.resp.reset();
         this.reqEnc.reset();
         this.respEnc.reset();
+        this.inboundErrorType = null;
         return changed;
+    }
+
+    void markInboundError(InboundMessageType messageType) {
+        this.inboundErrorType = messageType;
+    }
+
+    InboundMessageType consumeInboundErrorType() {
+        InboundMessageType messageType = this.inboundErrorType;
+        this.inboundErrorType = null;
+        return messageType;
+    }
+
+    enum InboundMessageType {
+        REQUEST,
+        RESPONSE
     }
 
     enum DecodePhase {
