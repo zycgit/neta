@@ -180,7 +180,6 @@ public final class HttpStatus {
 
     /**
      * Returns the {@link HttpStatus} for the given status code and reason phrase text.
-     * This overload avoids forcing callers to materialize the reason phrase eagerly.
      * @param codeText the status code text
      * @param reasonPhrase the reason phrase text
      * @return the corresponding HttpStatus

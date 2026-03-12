@@ -51,18 +51,16 @@ import net.hasor.neta.codec.http.HttpHeaderNames;
  * }</pre>
  * <h3>Pipeline placement</h3>
  * <pre>
- *   // After handshake succeeds, inject into the pipeline:
- *   WebSocketVersion ver = WebSocketServerHandshaker.detectVersion(request);
- *   FullHttpResponse resp = WebSocketServerHandshaker.handshakeResponse(request);
- *   context.sendData(resp);
- *   // Add codec handlers ...
- *   // Inject handshake-complete message into the receive pipeline:
- *   HandshakeWebSocketMessage complete = HandshakeWebSocketMessage.from(ver, request);
- *   // ... offer into the downstream receive queue
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLastDecoder("http-agg", new HttpObjectAggregator(65536));
+ *   ctx.addLast("ws-handshake", new WebSocketServerDuplexer());
+ *   ctx.addLastDecoder("ws-decoder", new WebSocketFrameDecoder());
+ *   ctx.addLastDecoder("ws-aggregator", new WebSocketFrameAggregator());
+ *   ctx.addLastEncoder("ws-encoder", new WebSocketFrameEncoder());
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-12
- * @see WebSocketServerHandshaker
+ * @see WebSocketServerDuplexer
  */
 public class HandshakeWebSocketMessage extends AbstractWebSocketMessage {
     private final WebSocketVersion version;
@@ -113,16 +111,8 @@ public class HandshakeWebSocketMessage extends AbstractWebSocketMessage {
         return this.subProtocol;
     }
 
-    public CharSequence subProtocolView() {
-        return this.subProtocol;
-    }
-
     /** Returns the negotiated extensions as a comma-separated string, or {@code null} if none. */
     public String extensions() {
-        return this.extensions;
-    }
-
-    public CharSequence extensionsView() {
         return this.extensions;
     }
 

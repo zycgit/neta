@@ -14,13 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Aggregates a sequence of {@link HttpObject}s (a start line followed by header blocks,
@@ -39,21 +33,13 @@ import net.hasor.neta.codec.http.event.HttpThroughEvent;
  * </pre>
  */
 public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject> {
-    private static final Logger                    logger                     = Logger.getLogger(HttpObjectAggregator.class);
-    /** Default maximum content length (1 MB). */
-    private static final int                       DEFAULT_MAX_CONTENT_LENGTH = 1048576;
-    private final        int                       maxContentLength;
-    private              AggregatePhase            phase                      = AggregatePhase.IDLE;
-    private              HttpObject                currentMessage;
-    private              DefaultHttpHeaders        currentHeaders;
-    private              DefaultTrailerHttpHeaders trailingHeaders;
-    private              ByteBuf                   aggregatedContent;
-    private              int                       currentContentLength;
-    private              boolean                   headersClosed;
+    private final HttpRequestAggregator  requestAggregator;
+    private final HttpResponseAggregator responseAggregator;
+    private       AggregateTarget        activeTarget;
 
     /** Creates an aggregator with the default maximum content length (1 MB). */
     public HttpObjectAggregator() {
-        this(DEFAULT_MAX_CONTENT_LENGTH);
+        this(AbstractHttpAggregator.DEFAULT_MAX_CONTENT_LENGTH);
     }
 
     /**
@@ -61,31 +47,21 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
      * @param maxContentLength the maximum allowed content length in bytes
      */
     public HttpObjectAggregator(int maxContentLength) {
-        if (maxContentLength <= 0) {
-            throw new IllegalArgumentException("maxContentLength must be positive");
-        }
-        this.maxContentLength = maxContentLength;
+        this.requestAggregator = new HttpRequestAggregator(maxContentLength);
+        this.responseAggregator = new HttpResponseAggregator(maxContentLength);
+        this.activeTarget = AggregateTarget.NONE;
     }
 
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
-        HttpContext.getOrCreate(context);
+        this.requestAggregator.onInit(name + "-request", poolSize, context);
+        this.responseAggregator.onInit(name + "-response", poolSize, context);
     }
 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-        if (event.getEventType() != HttpThroughEvent.class) {
-            return true;
-        }
-
-        HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
-        HttpContext.getOrCreate(context).switchTransparentMode(modeEvent.enabled());
-        this.resetAggregation();
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[HTTP-AGG] channel=" + channelID + " transparent-mode=" + modeEvent.enabled() + ", aggregation reset");
-        }
-        return true;
+        this.activeTarget = AggregateTarget.NONE;
+        return this.requestAggregator.onUserEvent(context, event) && this.responseAggregator.onUserEvent(context, event);
     }
 
     @Override
@@ -93,7 +69,7 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         HttpContext httpContext = HttpContext.getOrCreate(context);
         httpContext.consumeInboundErrorType();
         if (httpContext.isTransparentMode()) {
-            this.resetAggregation();
+            this.activeTarget = AggregateTarget.NONE;
             while (src.hasMore()) {
                 HttpObject msg = src.takeMessage();
                 if (msg != null) {
@@ -108,20 +84,7 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
             if (msg == null) {
                 continue;
             }
-
-            if (this.phase == AggregatePhase.DISCARD && this.discardMessage(msg)) {
-                continue;
-            }
-
-            try {
-                this.handleMessage(context, msg, dst);
-            } catch (HttpProtocolException e) {
-                if (this.handleProtocolError(context, e, false)) {
-                    continue;
-                }
-                this.resetAggregation();
-                throw e;
-            }
+            this.routeOne(context, msg, dst);
         }
 
         return ProtoStatus.Next;
@@ -129,357 +92,54 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
 
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-        if (e instanceof HttpProtocolException && this.handleProtocolError(context, (HttpProtocolException) e, true)) {
-            eh.clear();
-            return ProtoStatus.Next;
+        if (this.activeTarget == AggregateTarget.RESPONSE) {
+            ProtoStatus status = this.responseAggregator.onError(context, e, eh);
+            this.activeTarget = this.responseAggregator.isIdle() ? AggregateTarget.NONE : AggregateTarget.RESPONSE;
+            return status;
         }
-        if (!(e instanceof HttpContentTooLargeException && this.phase == AggregatePhase.DISCARD)) {
-            this.resetAggregation();
-        }
-        return ProtoStatus.Next;
+        ProtoStatus status = this.requestAggregator.onError(context, e, eh);
+        this.activeTarget = this.requestAggregator.isIdle() ? AggregateTarget.NONE : AggregateTarget.REQUEST;
+        return status;
     }
 
     @Override
     public void onClose(ProtoContext context) {
-        this.resetAggregation();
+        this.requestAggregator.onClose(context);
+        this.responseAggregator.onClose(context);
+        this.activeTarget = AggregateTarget.NONE;
     }
 
-    //
+    private void routeOne(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        AggregateTarget target = this.selectTarget(msg);
+        ProtoQueue<HttpObject> single = new ProtoQueue<>(-1);
+        single.offerMessage(msg);
+        single.sndSubmit();
 
-    private void handleMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
-        if (msg instanceof FullHttpRequest || msg instanceof FullHttpResponse) {
-            if (this.phase != AggregatePhase.IDLE) {
-                throw new HttpProtocolViolationException("received a full HTTP message before the previous aggregated message completed");
-            }
-            dst.offerMessage(msg);
-            return;
-        }
-
-        if (msg instanceof HttpRequest) {
-            if (this.phase != AggregatePhase.IDLE) {
-                throw new HttpProtocolViolationException("received HttpRequest before previous aggregated message completed");
-            }
-            this.resetFor(msg);
-            return;
-        }
-
-        if (msg instanceof HttpResponse) {
-            if (this.phase != AggregatePhase.IDLE) {
-                throw new HttpProtocolViolationException("received HttpResponse before previous aggregated message completed");
-            }
-            this.resetFor(msg);
-            return;
-        }
-
-        if (msg instanceof HttpHeaders) {
-            appendHeaders(context, (HttpHeaders) msg);
-            return;
-        }
-
-        if (msg instanceof LastHttpContent) {
-            LastHttpContent last = (LastHttpContent) msg;
-            appendContent(context, last.content(), true);
-            emitAggregated(context, dst);
-            return;
-        }
-
-        if (msg instanceof HttpContent) {
-            appendContent(context, ((HttpContent) msg).content(), false);
-            return;
-        }
-
-        throw new HttpProtocolViolationException("unsupported HTTP object for aggregation: " + msg.getClass().getName());
-    }
-
-    private boolean discardMessage(HttpObject msg) {
-        if (msg instanceof LastHttpContent) {
-            this.resetAggregation();
-            return true;
-        }
-        if (msg instanceof HttpContent || msg instanceof HttpHeaders) {
-            return true;
-        }
-        if (msg instanceof FullHttpRequest || msg instanceof FullHttpResponse || msg instanceof HttpRequest || msg instanceof HttpResponse) {
-            this.resetAggregation();
-            return false;
-        }
-        return true;
-    }
-
-    private void appendHeaders(ProtoContext context, HttpHeaders headers) {
-        if (this.currentMessage == null) {
-            throw new HttpBadRequestException("received HttpHeaders without preceding start line");
-        }
-
-        if (headers instanceof TrailerHttpHeaders) {
-            if (!this.headersClosed) {
-                throw new HttpProtocolViolationException("received trailer headers before header section completed");
-            }
-            this.phase = AggregatePhase.TRAILERS;
-            this.trailingHeaders.appendHeaders(headers);
-            return;
-        }
-
-        if (this.headersClosed) {
-            throw new HttpProtocolViolationException("received initial headers after header section already closed");
-        }
-
-        this.phase = AggregatePhase.HEADERS;
-        this.currentHeaders.appendHeaders(headers);
-        if (headers instanceof LastHttpHeaders) {
-            this.headersClosed = true;
-            this.phase = AggregatePhase.BODY;
-
-            long contentLength = this.currentHeaders.getLong(HttpHeaderNames.CONTENT_LENGTH, -1);
-
-            if (this.currentMessage instanceof HttpRequest) {
-                HttpRequest request = (HttpRequest) this.currentMessage;
-                if (contentLength > this.maxContentLength) {
-                    this.sendAutoResponse(context, request, HttpStatus.REQUEST_ENTITY_TOO_LARGE);
-                    this.enterDiscardMode();
-                    return;
-                }
-
-                if (this.handleExpectation(context, request, contentLength)) {
-                    return;
-                }
-            }
-
-            if (contentLength > this.maxContentLength) {
-                throw new HttpContentTooLargeException("content length exceeds maximum: " + contentLength + " > " + this.maxContentLength, this.maxContentLength, contentLength);
-            }
-        }
-    }
-
-    private void appendContent(ProtoContext context, ByteBuf content, boolean lastContent) {
-        if (this.currentMessage == null) {
-            throw new HttpBadRequestException("received HttpContent without preceding HttpMessage");
-        }
-        if (!this.headersClosed) {
-            throw new HttpProtocolViolationException("received HttpContent before LastHttpHeaders");
-        }
-        if (this.phase == AggregatePhase.TRAILERS) {
-            if (!lastContent || content != null && content.readableBytes() > 0) {
-                throw new HttpProtocolViolationException("received HttpContent after trailer headers");
-            }
-            return;
-        }
-
-        if (content == null || content.readableBytes() == 0) {
-            if (!lastContent) {
-                this.phase = AggregatePhase.BODY;
-            }
-            return;
-        }
-
-        int readable = content.readableBytes();
-        int newLength = this.currentContentLength + readable;
-        if (newLength > this.maxContentLength) {
-            if (this.currentMessage instanceof HttpRequest) {
-                this.sendAutoResponse(context, (HttpRequest) this.currentMessage, HttpStatus.REQUEST_ENTITY_TOO_LARGE);
-                this.enterDiscardMode();
-                return;
-            }
-            throw new HttpContentTooLargeException("content length exceeds maximum: " + newLength + " > " + this.maxContentLength, this.maxContentLength, newLength);
-        }
-
-        ByteBuf aggregated = this.aggregatedContent;
-        if (aggregated == null) {
-            this.aggregatedContent = content.retain();
-        } else if (aggregated instanceof CompositeByteBuf) {
-            ((CompositeByteBuf) aggregated).addComponent(content);
+        if (target == AggregateTarget.REQUEST) {
+            this.requestAggregator.onMessage(context, single, dst);
+            this.activeTarget = this.requestAggregator.isIdle() ? AggregateTarget.NONE : AggregateTarget.REQUEST;
         } else {
-            CompositeByteBuf composite = ByteBufUtils.compositeBuffer(aggregated.alloc());
-            composite.addComponent(aggregated);
-            aggregated.free();
-            composite.addComponent(content);
-            this.aggregatedContent = composite;
-        }
-        this.currentContentLength = newLength;
-        this.phase = AggregatePhase.BODY;
-    }
-
-    private void emitAggregated(ProtoContext context, ProtoSndQueue<HttpObject> dst) {
-        if (this.currentMessage == null) {
-            return;
-        }
-
-        ByteBuf aggregated = this.aggregatedContent != null ? this.aggregatedContent : ByteBuf.EMPTY;
-        DefaultHttpHeaders headers = this.currentHeaders != null ? this.currentHeaders : new DefaultHttpHeaders();
-        if (this.trailingHeaders != null && this.trailingHeaders.headerSize() > 0) {
-            headers.appendHeaders(this.trailingHeaders);
-        }
-        headers.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(this.currentContentLength));
-        headers.removeHeader(HttpHeaderNames.TRANSFER_ENCODING);
-
-        boolean printLog = context.getConfig() != null && context.getConfig().isPrintLog();
-        long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-        if (this.currentMessage instanceof HttpRequest) {
-            HttpRequest req = (HttpRequest) this.currentMessage;
-            DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(req.protocolVersion(), req.method(), req.uri(), aggregated, headers);
-            fullReq.streamId(req.streamId());
-            dst.offerMessage(fullReq);
-            if (printLog) {
-                logger.info("[HTTP-AGG] channel=" + channelID + " " + req.method() + " " + req.uri() + " streamId=" + req.streamId() + " contentLength=" + this.currentContentLength);
-            }
-        } else if (this.currentMessage instanceof HttpResponse) {
-            HttpResponse resp = (HttpResponse) this.currentMessage;
-            DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(resp.protocolVersion(), resp.status(), aggregated, headers);
-            fullResp.streamId(resp.streamId());
-            dst.offerMessage(fullResp);
-            if (printLog) {
-                logger.info("[HTTP-AGG] channel=" + channelID + " response status=" + resp.status().code() + " streamId=" + resp.streamId() + " contentLength=" + this.currentContentLength);
-            }
-        }
-
-        // headers and content ownership transferred to full message, only release currentMessage and trailingHeaders
-        this.releaseAggregationState(true);
-        this.phase = AggregatePhase.IDLE;
-        this.currentMessage = null;
-        this.currentHeaders = null;
-        this.trailingHeaders = null;
-        this.aggregatedContent = null;
-        this.currentContentLength = 0;
-        this.headersClosed = false;
-    }
-
-    private boolean handleExpectation(ProtoContext context, HttpRequest request, long contentLength) {
-        String expect = this.currentHeaders.getString(HttpHeaderNames.EXPECT);
-        if (expect == null) {
-            return false;
-        }
-
-        String expectValue = expect.trim();
-        if (expectValue.isEmpty()) {
-            return false;
-        }
-        if (!StringUtils.equalsIgnoreCase(expectValue, HttpHeaderValues.CONTINUE)) {
-            this.sendAutoResponse(context, request, HttpStatus.EXPECTATION_FAILED);
-            this.enterDiscardMode();
-            return true;
-        }
-
-        if (contentLength < 0 || contentLength <= this.maxContentLength) {
-            this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), HttpStatus.CONTINUE, true);
-        }
-        return false;
-    }
-
-    private boolean handleProtocolError(ProtoContext context, HttpProtocolException e, boolean fromPipelineError) {
-        HttpRequest request = this.currentMessage instanceof HttpRequest ? (HttpRequest) this.currentMessage : null;
-        if (request != null) {
-            this.sendAutoResponse(context, request, e.status());
-            this.enterDiscardMode();
-            return true;
-        }
-
-        HttpContext httpContext = HttpContext.getOrCreate(context);
-        HttpContext.InboundMessageType inboundType = fromPipelineError ? httpContext.consumeInboundErrorType() : null;
-        if (inboundType == HttpContext.InboundMessageType.REQUEST) {
-            this.sendAutoResponse(context, HttpVersion.HTTP_1_1, 0, e.status(), false);
-            this.resetAggregation();
-            return true;
-        }
-
-        this.resetAggregation();
-        return false;
-    }
-
-    private void sendAutoResponse(ProtoContext context, HttpRequest request, HttpStatus status) {
-        this.sendAutoResponse(context, request.protocolVersion(), request.streamId(), status, this.isKeepAlive(request));
-    }
-
-    private void sendAutoResponse(ProtoContext context, HttpVersion protocolVersion, int streamId, HttpStatus status, boolean keepAlive) {
-        DefaultFullHttpResponse response = new DefaultFullHttpResponse(protocolVersion, status);
-        response.streamId(streamId);
-        response.setHeader(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);
-
-        if (!keepAlive) {
-            response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.CLOSE);
-        }
-
-        context.sendData(response);
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[HTTP-AGG] channel=" + channelID + " auto-response status=" + status.code() + " keepAlive=" + keepAlive + " streamId=" + streamId);
+            this.responseAggregator.onMessage(context, single, dst);
+            this.activeTarget = this.responseAggregator.isIdle() ? AggregateTarget.NONE : AggregateTarget.RESPONSE;
         }
     }
 
-    private boolean isKeepAlive(HttpRequest request) {
-        String connection = this.currentHeaders != null ? this.currentHeaders.getString(HttpHeaderNames.CONNECTION) : null;
-        if (connection != null) {
-            if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.CLOSE)) {
-                return false;
-            }
-            if (StringUtils.containsIgnoreCase(connection, HttpHeaderValues.KEEP_ALIVE)) {
-                return true;
-            }
+    private AggregateTarget selectTarget(HttpObject msg) {
+        if (this.activeTarget != AggregateTarget.NONE) {
+            return this.activeTarget;
         }
-        return request.protocolVersion().isKeepAliveDefault();
-    }
-
-    private void resetAggregation() {
-        this.releaseAggregationState(false);
-        this.phase = AggregatePhase.IDLE;
-        this.currentMessage = null;
-        this.currentHeaders = null;
-        this.trailingHeaders = null;
-        this.aggregatedContent = null;
-        this.currentContentLength = 0;
-        this.headersClosed = false;
-    }
-
-    private void enterDiscardMode() {
-        this.releaseAggregationState(false);
-        this.phase = AggregatePhase.DISCARD;
-        this.currentMessage = null;
-        this.currentHeaders = null;
-        this.trailingHeaders = null;
-        this.aggregatedContent = null;
-        this.currentContentLength = 0;
-        this.headersClosed = true;
-    }
-
-    private void resetFor(HttpObject message) {
-        this.releaseAggregationState(false);
-        this.phase = AggregatePhase.START;
-        this.currentMessage = message;
-        this.currentHeaders = new DefaultHttpHeaders();
-        this.trailingHeaders = new DefaultTrailerHttpHeaders();
-        this.aggregatedContent = null;
-        this.currentContentLength = 0;
-        this.headersClosed = false;
-    }
-
-    /**
-     * Releases aggregation state that is no longer needed.
-     * @param headersTransferred true if headers and content have been transferred to a FullHttp* object
-     *                          (only currentMessage and trailingHeaders need release),
-     *                          false if all state needs release (error/discard/reset paths).
-     */
-    private void releaseAggregationState(boolean headersTransferred) {
-        if (this.currentMessage != null) {
-            this.currentMessage.release();
+        if (msg instanceof HttpRequest || msg instanceof FullHttpRequest) {
+            return AggregateTarget.REQUEST;
         }
-        if (this.trailingHeaders != null) {
-            this.trailingHeaders.release();
+        if (msg instanceof HttpResponse || msg instanceof FullHttpResponse) {
+            return AggregateTarget.RESPONSE;
         }
-        if (!headersTransferred) {
-            if (this.currentHeaders != null) {
-                this.currentHeaders.release();
-            }
-            if (this.aggregatedContent != null) {
-                this.aggregatedContent.free();
-            }
-        }
+        throw new HttpProtocolViolationException("received " + msg.getClass().getSimpleName() + " without preceding start line");
     }
 
-    private enum AggregatePhase {
-        IDLE,
-        START,
-        HEADERS,
-        BODY,
-        TRAILERS,
-        DISCARD
+    private enum AggregateTarget {
+        NONE,
+        REQUEST,
+        RESPONSE
     }
 }

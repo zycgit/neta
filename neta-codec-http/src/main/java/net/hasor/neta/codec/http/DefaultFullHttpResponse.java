@@ -24,19 +24,19 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
  * Default implementation of {@link FullHttpResponse}.
  * <p>
  * This object represents an already aggregated response by combining the status line, the final
- * merged header view, and the aggregated content into one instance.
+ * merged headers, and the aggregated content into one instance.
  * <p>
- * For a full response, callers observe only one final header view. Any header fields collected
+ * For a full response, callers observe one final header set. Any header fields collected
  * during aggregation, including fields that originally appeared at the logical end of the message,
  * are exposed through the same {@link HttpHeaders} facade.
  */
 public class DefaultFullHttpResponse implements FullHttpResponse {
     private final HttpResponse     responseLine;
     private final HttpHeaders      headers;
-    private final CompositeByteBuf contentView;
+    private final CompositeByteBuf contentBuffer;
 
     /**
-     * Creates an aggregated response with an empty payload and an empty merged header view.
+     * Creates an aggregated response with an empty payload and empty merged headers.
      * @param version the HTTP version
      * @param status the HTTP response status
      */
@@ -45,7 +45,7 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
     }
 
     /**
-     * Creates an aggregated response with the specified payload and an empty merged header view.
+     * Creates an aggregated response with the specified payload and empty merged headers.
      * @param version the HTTP version
      * @param status the HTTP response status
      * @param content the aggregated payload
@@ -55,11 +55,11 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
     }
 
     /**
-     * Creates an aggregated response with the specified payload and merged header view.
+     * Creates an aggregated response with the specified payload and merged headers.
      * @param version the HTTP version
      * @param status the HTTP response status
      * @param content the aggregated payload
-     * @param headers the merged headers visible on the full response
+     * @param headers the headers visible on the full response
      */
     public DefaultFullHttpResponse(HttpVersion version, HttpStatus status, ByteBuf content, DefaultHttpHeaders headers) {
         this(version, status, content, headers, new DefaultLastHttpHeaders());
@@ -86,8 +86,8 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
 
         this.responseLine = responseLine;
         this.headers = headers;
-        this.contentView = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
-        this.contentView.addComponent(content.content());
+        this.contentBuffer = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
+        this.contentBuffer.addComponent(content.content());
     }
 
     @Override
@@ -168,25 +168,7 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
         return this;
     }
 
-    public FullHttpResponse addHeader(CharSequence name, CharSequence value) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).addHeader(name, value);
-        return this;
-    }
-
     public FullHttpResponse setHeader(String name, String value) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).setHeader(name, value);
-        return this;
-    }
-
-    public FullHttpResponse setHeader(CharSequence name, CharSequence value) {
         if (!(this.headers instanceof DefaultHttpHeaders)) {
             throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
         }
@@ -261,22 +243,21 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
 
     @Override
     public ByteBuf content() {
-        return this.contentView;
+        return this.contentBuffer;
     }
 
     /**
-     * Appends one body chunk into the aggregated content view.
+     * Appends one body chunk into the aggregated content.
      * <p>
-     * The underlying {@link ByteBuf} is retained by the internal {@link CompositeByteBuf}, so the
-     * caller may release the original {@link HttpContent} after this method returns. This is a
-     * zero-copy ownership transfer by reference count, not a byte copy.
+     * The chunk data is added to the internal aggregated content buffer. Callers may release the
+     * original {@link HttpContent} after this method returns.
      */
     public void appendContent(HttpContent content) {
         if (content == null) {
             return;
         }
 
-        this.contentView.addComponent(content.content());
+        this.contentBuffer.addComponent(content.content());
     }
 
     //
@@ -292,6 +273,6 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
     public void release() {
         this.responseLine.release();
         this.headers.release();
-        this.contentView.release();
+        this.contentBuffer.release();
     }
 }

@@ -14,66 +14,113 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufUtils;
+import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.HttpByteBuf;
+import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Decodes raw {@link ByteBuf} bytes into {@link WebSocketFrame} objects following
- * <a href="https://tools.ietf.org/html/rfc6455#section-5.2">RFC 6455 §5.2</a>.
- * <h3>Wire format (per frame)</h3>
- * <pre>
- *  Byte 0: FIN (1-bit) | RSV1-3 (3-bits) | Opcode (4-bits)
- *  Byte 1: MASK (1-bit) | Payload length (7-bits)
- *    if payloadLen  == 126: next 2 bytes = true 16-bit length
- *    if payloadLen  == 127: next 8 bytes = true 64-bit length
- *  Masking-key: 4 bytes (only if MASK bit is set)
- *  Payload: payloadLen bytes (XOR-decoded with masking key if masked)
- * </pre>
- * <p>Usage in a pipeline (server-side, receiving masked frames from client):
- * <pre>
- *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
- * </pre>
+ * Decodes {@link HttpByteBuf} into {@link WebSocketFrame} objects.
+ * <p>
+ * Sits behind the HTTP decoder in the pipeline: after the HTTP layer switches to
+ * transparent mode, inbound data arrives as {@link HttpByteBuf}. This handler extracts
+ * the raw bytes and decodes them into WebSocket frames.
+ * <p>
+ * Supports all protocol versions:
+ * <ul>
+ *   <li>{@link WebSocketVersion#V0} — Hixie-76 text framing ({@code 0x00…0xFF}).</li>
+ *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8},
+ *       {@link WebSocketVersion#V13} — RFC 6455 §5.2 binary framing.</li>
+ * </ul>
+ * <p>Non-{@link HttpByteBuf} messages are passed through unchanged.
  */
-public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFrame> {
-    private static final int     XOR_SCRATCH_SIZE = 4096;
-    private final        byte[]  maskKeyBuf       = new byte[4];
-    private final        byte[]  headerBuf        = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
-    private final        byte[]  xorScratch       = new byte[XOR_SCRATCH_SIZE];
-    private              ByteBuf accumulator;
+public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, HttpObject> {
+    private static final Logger           logger           = Logger.getLogger(WebSocketFrameDecoder.class);
+    private static final int              XOR_SCRATCH_SIZE = 4096;
+    private final        byte[]           maskKeyBuf       = new byte[4];
+    private final        byte[]           headerBuf        = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
+    private final        byte[]           xorScratch       = new byte[XOR_SCRATCH_SIZE];
+    private final        WebSocketVersion version;
+    private              CompositeByteBuf accumulator;
+
+    /** Creates a decoder for the specified WebSocket protocol version. */
+    public WebSocketFrameDecoder(WebSocketVersion version) {
+        if (version == null) {
+            throw new IllegalArgumentException("version must not be null");
+        }
+
+        this.version = version;
+    }
+
+    /** Creates a decoder for RFC 6455 (version 13). */
+    public WebSocketFrameDecoder() {
+        this(WebSocketVersion.V13);
+    }
+
+    /** Returns the protocol version this decoder handles. */
+    public WebSocketVersion getVersion() {
+        return this.version;
+    }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
-        // Create a zero-copy view over all queued ByteBuf data
-        if (this.accumulator != null) {
-            this.accumulator.free();
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        // Drain the input queue: accumulate HttpByteBuf content, pass through others
+        while (src.hasMore()) {
+            HttpObject obj = src.takeMessage();
+            if (obj instanceof HttpByteBuf) {
+                try {
+                    ByteBuf content = ((HttpByteBuf) obj).content();
+                    if (content != null && content.readableBytes() > 0) {
+                        if (this.accumulator == null) {
+                            this.accumulator = new CompositeByteBuf(context.byteBufAllocator());
+                        }
+                        this.accumulator.addComponent(content);
+                    }
+                } finally {
+                    obj.release();
+                }
+            } else {
+                dst.offerMessage(obj);
+            }
         }
-        this.accumulator = ByteBufUtils.queueBuffer(src);
 
-        // Attempt to decode as many complete frames as possible
-        boolean decoded = true;
-        while (decoded) {
-            decoded = decodeFrame(context, dst);
+        if (this.accumulator != null && this.accumulator.readableBytes() > 0) {
+            if (this.version.isRfc6455Framing()) {
+                while (decodeRfc6455Frame(context, dst)) { /* loop */ }
+            } else {
+                while (decodeHixie76Frame(context, dst)) { /* loop */ }
+            }
+            this.accumulator.discardReadBytes();
         }
-
-        // Consume fully-read ByteBuf messages from the queue
-        this.accumulator.markReader();
 
         return ProtoStatus.Next;
     }
 
-    /**
-     * Attempts to decode one complete frame from the accumulator.
-     * @return true if a complete frame was decoded and emitted
-     */
-    private boolean decodeFrame(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst) {
+    @Override
+    public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        this.resetAccumulator();
+
+        long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            logger.warn("[WS-DEC] channel=" + channelID + " decoder error, frame state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
+        } else {
+            logger.warn("[WS-DEC] channel=" + channelID + " decoder error, frame state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage());
+        }
+        return ProtoStatus.Next;
+    }
+
+    // =========================================================================
+    // RFC 6455 framing (V7, V8, V13)
+    // =========================================================================
+
+    private boolean decodeRfc6455Frame(ProtoContext context, ProtoSndQueue<HttpObject> dst) {
         int readable = this.accumulator.readableBytes();
-        // Need at least 2 header bytes
         if (readable < 2) {
             return false;
         }
 
-        // Bulk-read header bytes (max 14: 2 base + 8 extended-len + 4 mask-key)
         int peekLen = Math.min(readable, 14);
         byte[] hdr = this.headerBuf;
         this.accumulator.getBytes(0, hdr, 0, peekLen);
@@ -88,7 +135,6 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
 
         int headerSize = 2;
 
-        // Extended payload length
         if (payloadLen == 126) {
             if (readable < 4) {
                 return false;
@@ -106,7 +152,6 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
             headerSize = 10;
         }
 
-        // Masking key (4 bytes)
         if (masked) {
             headerSize += 4;
         }
@@ -116,7 +161,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
             return false;
         }
 
-        // All bytes are available – skip the entire header at once
+        // Skip header (without mask key portion)
         this.accumulator.skipReadableBytes(headerSize - (masked ? 4 : 0));
 
         byte[] maskKey = null;
@@ -131,14 +176,11 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
         if (len == 0) {
             contentBuf = ByteBuf.EMPTY;
         } else if (masked) {
-            // For masked frames: read and unmask payload in fixed-size chunks
-            // to avoid allocating a payload-sized byte array
             contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
             int remaining = len;
             while (remaining > 0) {
                 int chunk = Math.min(remaining, XOR_SCRATCH_SIZE);
                 this.accumulator.readBytes(this.xorScratch, 0, chunk);
-                // Unrolled XOR unmask (XOR_SCRATCH_SIZE is multiple of 4, so alignment is guaranteed per chunk)
                 int j = 0;
                 int chunk4 = chunk & ~3;
                 for (; j < chunk4; j += 4) {
@@ -155,22 +197,145 @@ public class WebSocketFrameDecoder implements ProtoHandler<ByteBuf, WebSocketFra
             }
             contentBuf.markWriter();
         } else {
-            // For unmasked frames: direct buffer-to-buffer copy (avoids intermediate byte[])
             contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
             this.accumulator.readBuffer(contentBuf, len);
             contentBuf.markWriter();
         }
 
         WebSocketOpcode opcode = WebSocketOpcode.of(opcodeVal);
-        // Copy maskKey since maskKeyBuf is reused across frames
+        if (opcode == null) {
+            if (contentBuf != ByteBuf.EMPTY) {
+                contentBuf.release();
+            }
+            throw new WebSocketProtocolViolationException("unsupported WebSocket opcode: " + opcodeVal);
+        }
         byte[] frameMaskKey = masked ? new byte[] { this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3] } : null;
-        WebSocketFrame frame = new DefaultWebSocketFrame(opcode, fin, masked, frameMaskKey, contentBuf);
+        WebSocketFrame frame;
+        switch (opcode) {
+            case TEXT:
+                frame = WebSocketUtils.textFrame(fin, masked, frameMaskKey, contentBuf);
+                break;
+            case BINARY:
+                frame = WebSocketUtils.binaryFrame(fin, masked, frameMaskKey, contentBuf);
+                break;
+            case CONTINUATION:
+                frame = WebSocketUtils.continuationFrame(fin, masked, frameMaskKey, contentBuf);
+                break;
+            case PING:
+                frame = WebSocketUtils.pingFrame(masked, frameMaskKey, contentBuf);
+                break;
+            case PONG:
+                frame = WebSocketUtils.pongFrame(masked, frameMaskKey, contentBuf);
+                break;
+            case CLOSE:
+                frame = WebSocketUtils.closeFrame(masked, frameMaskKey, contentBuf);
+                break;
+            default:
+                if (contentBuf != ByteBuf.EMPTY) {
+                    contentBuf.release();
+                }
+                throw new WebSocketProtocolViolationException("unsupported WebSocket opcode: " + opcodeVal);
+        }
         dst.offerMessage(frame);
+        return true;
+    }
+
+    // =========================================================================
+    // Hixie-76 framing (V0)
+    // =========================================================================
+
+    private boolean decodeHixie76Frame(ProtoContext context, ProtoSndQueue<HttpObject> dst) {
+        int readable = this.accumulator.readableBytes();
+        if (readable < 1) {
+            return false;
+        }
+
+        byte frameType = this.accumulator.getByte(0);
+
+        if ((frameType & 0x80) != 0) {
+            // High bit set: close frame (0xFF 0x00) or length-prefixed binary frame
+            if (frameType == (byte) 0xFF) {
+                // Close frame: 0xFF 0x00
+                if (readable < 2) {
+                    return false;
+                }
+                this.accumulator.skipReadableBytes(2);
+                dst.offerMessage(WebSocketUtils.closeFrame(false, null, ByteBuf.EMPTY));
+                return true;
+            }
+
+            // Length-prefixed binary: read variable-length integer
+            int lengthBytes = 0;
+            long payloadLen = 0;
+            for (int i = 1; ; i++) {
+                if (i >= readable) {
+                    return false; // need more data for length field
+                }
+                byte b = this.accumulator.getByte(i);
+                payloadLen = (payloadLen << 7) | (b & 0x7F);
+                lengthBytes++;
+                if ((b & 0x80) == 0) {
+                    break; // last length byte
+                }
+            }
+
+            int totalNeeded = 1 + lengthBytes + (int) payloadLen;
+            if (readable < totalNeeded) {
+                return false;
+            }
+
+            this.accumulator.skipReadableBytes(1 + lengthBytes);
+            ByteBuf contentBuf;
+            int len = (int) payloadLen;
+            if (len == 0) {
+                contentBuf = ByteBuf.EMPTY;
+            } else {
+                contentBuf = context.byteBufAllocator().buffer(len, Integer.MAX_VALUE);
+                this.accumulator.readBuffer(contentBuf, len);
+                contentBuf.markWriter();
+            }
+            dst.offerMessage(WebSocketUtils.binaryFrame(true, false, null, contentBuf));
+            return true;
+        }
+
+        // Low byte (0x00): text frame — data runs until 0xFF sentinel
+        // Scan for the 0xFF terminator
+        int terminatorIdx = -1;
+        for (int i = 1; i < readable; i++) {
+            if (this.accumulator.getByte(i) == (byte) 0xFF) {
+                terminatorIdx = i;
+                break;
+            }
+        }
+        if (terminatorIdx < 0) {
+            return false; // incomplete text frame, need more data
+        }
+
+        // Skip the 0x00 start byte
+        this.accumulator.skipReadableBytes(1);
+        int textLen = terminatorIdx - 1;
+
+        ByteBuf contentBuf;
+        if (textLen == 0) {
+            contentBuf = ByteBuf.EMPTY;
+        } else {
+            contentBuf = context.byteBufAllocator().buffer(textLen, Integer.MAX_VALUE);
+            this.accumulator.readBuffer(contentBuf, textLen);
+            contentBuf.markWriter();
+        }
+        // Skip the 0xFF terminator
+        this.accumulator.skipReadableBytes(1);
+
+        dst.offerMessage(WebSocketUtils.textFrame(true, false, null, contentBuf));
         return true;
     }
 
     @Override
     public void onClose(ProtoContext context) {
+        this.resetAccumulator();
+    }
+
+    private void resetAccumulator() {
         if (this.accumulator != null) {
             this.accumulator.free();
             this.accumulator = null;

@@ -19,29 +19,23 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import net.hasor.cobble.StringUtils;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.codec.http.*;
 
 /**
- * Utility class for performing the WebSocket server-side opening handshake as
- * described in <a href="https://tools.ietf.org/html/rfc6455#section-4.2">RFC 6455 §4.2</a>.
- * <h3>Handshake flow</h3>
- * <ol>
- *   <li>Client sends an HTTP/1.1 GET request with:
- *       <ul>
- *         <li>{@code Upgrade: websocket}</li>
- *         <li>{@code Connection: Upgrade}</li>
- *         <li>{@code Sec-WebSocket-Key: &lt;base64-16-bytes&gt;}</li>
- *         <li>{@code Sec-WebSocket-Version: 13}</li>
- *       </ul>
- *   </li>
- *   <li>Server responds with HTTP 101 Switching Protocols and a computed
- *       {@code Sec-WebSocket-Accept} header.</li>
- * </ol>
- * <h3>Usage</h3>
- * <pre>
- *   FullHttpResponse resp = WebSocketServerHandshaker.handshakeResponse(request);
- *   channel.sendData(resp);
- * </pre>
+ * Low-level utility for performing the WebSocket server-side opening handshake.
+ * <p>
+ * Most pipelines should prefer {@link WebSocketServerDuplexer}, which wraps this
+ * logic into a stateful bidirectional handshake stage placed before the frame codec.
+ * <p>
+ * Supports all WebSocket protocol versions:
+ * <ul>
+ *   <li><b>V0</b> (Hixie-76 / hybi-00): MD5-based challenge–response using
+ *       {@code Sec-WebSocket-Key1}, {@code Sec-WebSocket-Key2}, and an 8-byte body.</li>
+ *   <li><b>V7</b> (hybi-07), <b>V8</b> (hybi-08/10), <b>V13</b> (RFC 6455):
+ *       SHA-1/GUID–based {@code Sec-WebSocket-Accept} computation.</li>
+ * </ul>
  */
 public final class WebSocketServerHandshaker {
     /**
@@ -54,41 +48,74 @@ public final class WebSocketServerHandshaker {
     }
 
     /**
+     * Detects the WebSocket version from an HTTP upgrade request.
+     * @param request the HTTP request to inspect
+     * @return the detected version, or {@code null} if it is not a WebSocket upgrade
+     */
+    public static WebSocketVersion detectVersion(FullHttpRequest request) {
+        if (request == null) {
+            return null;
+        }
+        String upgrade = request.getString(HttpHeaderNames.UPGRADE);
+        String connection = request.getString(HttpHeaderNames.CONNECTION);
+
+        if (!StringUtils.containsIgnoreCase(connection, HttpHeaderValues.UPGRADE)) {
+            return null;
+        }
+        if (!StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, upgrade) && !StringUtils.equalsIgnoreCase("WebSocket", upgrade)) {
+            return null;
+        }
+
+        String wsVersion = request.getString(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
+        if (StringUtils.isNotBlank(wsVersion)) {
+            return WebSocketVersion.of(wsVersion.trim());
+        }
+
+        // No Sec-WebSocket-Version header — check for Hixie-76 keys
+        String key1 = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY1);
+        String key2 = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY2);
+        if (StringUtils.isNotBlank(key1) && StringUtils.isNotBlank(key2)) {
+            return WebSocketVersion.V0;
+        }
+
+        return null;
+    }
+
+    /**
      * Validates the incoming HTTP upgrade request and returns true if it looks like
-     * a valid WebSocket handshake request.
+     * a valid WebSocket handshake request (any supported version).
      * @param request the HTTP request to validate
      * @return {@code true} if the request is a WebSocket upgrade request
      */
     public static boolean isWebSocketUpgrade(FullHttpRequest request) {
-        if (request == null) {
-            return false;
-        }
-        String upgrade = request.headers().get(HttpHeaderNames.UPGRADE);
-        String connection = request.headers().get(HttpHeaderNames.CONNECTION);
-        String wsKey = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_KEY);
-        String wsVersion = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
-
-        return StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, upgrade)       //
-                && StringUtils.containsIgnoreCase(connection, HttpHeaderValues.UPGRADE)//
-                && !StringUtils.isEmpty(wsKey)                                         //
-                && StringUtils.equals("13", wsVersion);
+        return detectVersion(request) != null;
     }
 
     /**
-     * Builds the HTTP 101 Switching Protocols response for a WebSocket upgrade.
-     * <p>The response includes:
-     * <ul>
-     *   <li>{@code HTTP/1.1 101 Switching Protocols}</li>
-     *   <li>{@code Upgrade: websocket}</li>
-     *   <li>{@code Connection: Upgrade}</li>
-     *   <li>{@code Sec-WebSocket-Accept: <computed>}</li>
-     * </ul>
+     * Builds the HTTP 101 response for a WebSocket upgrade request.
+     * Automatically detects the version and delegates to the appropriate handshake logic.
      * @param request the client's upgrade request
      * @return the 101 response ready to send
-     * @throws IllegalArgumentException if {@code Sec-WebSocket-Key} is missing
+     * @throws IllegalArgumentException if the request is not a valid WebSocket upgrade
      */
     public static FullHttpResponse handshakeResponse(FullHttpRequest request) {
-        String wsKey = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_KEY);
+        WebSocketVersion version = detectVersion(request);
+        if (version == null) {
+            throw new IllegalArgumentException("Not a valid WebSocket upgrade request");
+        }
+        if (version == WebSocketVersion.V0) {
+            return handshakeResponseV0(request);
+        } else {
+            return handshakeResponseRfc(request, version);
+        }
+    }
+
+    // =========================================================================
+    // RFC 6455 / hybi handshake (V7, V8, V13)
+    // =========================================================================
+
+    private static FullHttpResponse handshakeResponseRfc(FullHttpRequest request, WebSocketVersion version) {
+        String wsKey = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
         if (StringUtils.isBlank(wsKey)) {
             throw new IllegalArgumentException("Missing Sec-WebSocket-Key header");
         }
@@ -96,27 +123,21 @@ public final class WebSocketServerHandshaker {
         String acceptKey = computeAcceptKey(wsKey.trim());
 
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.SWITCHING_PROTOCOLS);
-        response.headers().set(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
-        response.headers().set(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
-        response.headers().set(HttpHeaderNames.SEC_WEBSOCKET_ACCEPT, acceptKey);
+        response.setHeader(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
+        response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
+        response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_ACCEPT, acceptKey);
 
-        // Honour requested sub-protocol if any
-        String subProtocol = request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
+        String subProtocol = request.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
         if (StringUtils.isNotBlank(subProtocol)) {
-            response.headers().set(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, subProtocol);
+            response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, subProtocol);
         }
 
         return response;
     }
 
     /**
-     * Computes the {@code Sec-WebSocket-Accept} value for the given
-     * {@code Sec-WebSocket-Key} as per RFC 6455 §4.2.2:
-     * <pre>
-     *   accept = Base64( SHA-1( key + GUID ) )
-     * </pre>
-     * @param key the value of the {@code Sec-WebSocket-Key} header
-     * @return the base64-encoded SHA-1 accept token
+     * Computes the {@code Sec-WebSocket-Accept} value as per RFC 6455 §4.2.2:
+     * <pre>accept = Base64( SHA-1( key + GUID ) )</pre>
      */
     public static String computeAcceptKey(String key) {
         String combined = key + WEBSOCKET_GUID;
@@ -127,5 +148,114 @@ public final class WebSocketServerHandshaker {
         } catch (NoSuchAlgorithmException e) {
             throw new IllegalStateException("SHA-1 algorithm not available", e);
         }
+    }
+
+    // =========================================================================
+    // Hixie-76 handshake (V0)
+    // =========================================================================
+
+    private static FullHttpResponse handshakeResponseV0(FullHttpRequest request) {
+        String key1 = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY1);
+        String key2 = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY2);
+        if (StringUtils.isBlank(key1) || StringUtils.isBlank(key2)) {
+            throw new IllegalArgumentException("Missing Sec-WebSocket-Key1 or Sec-WebSocket-Key2 header");
+        }
+
+        ByteBuf body = request.content();
+        if (body == null || body.readableBytes() < 8) {
+            throw new IllegalArgumentException("Hixie-76 handshake requires 8-byte body");
+        }
+        byte[] key3 = new byte[8];
+        body.getBytes(0, key3, 0, 8);
+
+        byte[] challengeResponse = computeHixie76Response(key1, key2, key3);
+
+        // Build the 16-byte MD5 response body
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(16, Integer.MAX_VALUE);
+        bodyBuf.writeBytes(challengeResponse, 0, challengeResponse.length);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.SWITCHING_PROTOCOLS, bodyBuf);
+        response.setHeader(HttpHeaderNames.UPGRADE, "WebSocket");
+        response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
+
+        String origin = request.getString("origin");
+        if (StringUtils.isNotBlank(origin)) {
+            response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_ORIGIN, origin);
+        }
+
+        String host = request.getString(HttpHeaderNames.HOST);
+        String uri = request.uri();
+        if (StringUtils.isNotBlank(host)) {
+            response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_LOCATION, "ws://" + host + (uri != null ? uri : "/"));
+        }
+
+        String subProtocol = request.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
+        if (StringUtils.isNotBlank(subProtocol)) {
+            response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, subProtocol);
+        }
+
+        return response;
+    }
+
+    /**
+     * Computes the Hixie-76 challenge response:
+     * <ol>
+     *   <li>Extract digits from key1, divide by number of spaces → 32-bit int1</li>
+     *   <li>Extract digits from key2, divide by number of spaces → 32-bit int2</li>
+     *   <li>MD5( big-endian(int1) + big-endian(int2) + key3 )</li>
+     * </ol>
+     */
+    public static byte[] computeHixie76Response(String key1, String key2, byte[] key3) {
+        long num1 = extractDigits(key1);
+        int spaces1 = countSpaces(key1);
+        long num2 = extractDigits(key2);
+        int spaces2 = countSpaces(key2);
+
+        if (spaces1 == 0 || spaces2 == 0) {
+            throw new IllegalArgumentException("Invalid Sec-WebSocket-Key: no spaces found");
+        }
+
+        int part1 = (int) (num1 / spaces1);
+        int part2 = (int) (num2 / spaces2);
+
+        byte[] challenge = new byte[16];
+        challenge[0] = (byte) ((part1 >> 24) & 0xFF);
+        challenge[1] = (byte) ((part1 >> 16) & 0xFF);
+        challenge[2] = (byte) ((part1 >> 8) & 0xFF);
+        challenge[3] = (byte) (part1 & 0xFF);
+        challenge[4] = (byte) ((part2 >> 24) & 0xFF);
+        challenge[5] = (byte) ((part2 >> 16) & 0xFF);
+        challenge[6] = (byte) ((part2 >> 8) & 0xFF);
+        challenge[7] = (byte) (part2 & 0xFF);
+        System.arraycopy(key3, 0, challenge, 8, 8);
+
+        try {
+            MessageDigest md5 = MessageDigest.getInstance("MD5");
+            return md5.digest(challenge);
+        } catch (NoSuchAlgorithmException e) {
+            throw new IllegalStateException("MD5 algorithm not available", e);
+        }
+    }
+
+    private static long extractDigits(String key) {
+        long result = 0;
+        for (int i = 0; i < key.length(); i++) {
+            char c = key.charAt(i);
+            if (c >= '0' && c <= '9') {
+                result = result * 10 + (c - '0');
+            }
+        }
+        return result;
+    }
+
+    private static int countSpaces(String key) {
+        int count = 0;
+        for (int i = 0; i < key.length(); i++) {
+            if (key.charAt(i) == ' ') {
+                count++;
+            }
+        }
+        return count;
     }
 }

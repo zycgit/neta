@@ -29,7 +29,7 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 public class DefaultFullHttpRequest implements FullHttpRequest {
     private final HttpRequest      requestLine;
     private final HttpHeaders      headers;
-    private final CompositeByteBuf contentView;
+    private final CompositeByteBuf contentBuffer;
 
     /**
      * Creates an aggregated request with an empty payload and an empty final header block.
@@ -85,8 +85,8 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
 
         this.requestLine = requestLine;
         this.headers = headers;
-        this.contentView = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
-        this.contentView.addComponent(content.content());
+        this.contentBuffer = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
+        this.contentBuffer.addComponent(content.content());
     }
 
     @Override
@@ -167,25 +167,7 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
         return this;
     }
 
-    public FullHttpRequest addHeader(CharSequence name, CharSequence value) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).addHeader(name, value);
-        return this;
-    }
-
     public FullHttpRequest setHeader(String name, String value) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).setHeader(name, value);
-        return this;
-    }
-
-    public FullHttpRequest setHeader(CharSequence name, CharSequence value) {
         if (!(this.headers instanceof DefaultHttpHeaders)) {
             throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
         }
@@ -260,22 +242,21 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
 
     @Override
     public ByteBuf content() {
-        return this.contentView;
+        return this.contentBuffer;
     }
 
     /**
-     * Appends one body chunk into the aggregated content view.
+     * Appends one body chunk into the aggregated content.
      * <p>
-     * The underlying {@link ByteBuf} is retained by the internal {@link CompositeByteBuf}, so the
-     * caller may release the original {@link HttpContent} after this method returns. This is a
-     * zero-copy ownership transfer by reference count, not a byte copy.
+     * The chunk data is added to the internal aggregated content buffer. Callers may release the
+     * original {@link HttpContent} after this method returns.
      */
     public void appendContent(HttpContent content) {
         if (content == null) {
             return;
         }
 
-        this.contentView.addComponent(content.content());
+        this.contentBuffer.addComponent(content.content());
     }
 
     //
@@ -291,6 +272,6 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     public void release() {
         this.requestLine.release();
         this.headers.release();
-        this.contentView.release();
+        this.contentBuffer.release();
     }
 }

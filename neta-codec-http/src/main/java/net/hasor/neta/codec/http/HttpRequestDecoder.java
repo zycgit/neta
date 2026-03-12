@@ -21,7 +21,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
@@ -340,9 +339,9 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     throw new HttpBadRequestException("invalid request line");
                 }
 
-                CharSequence methodText = StringView.request(line, 0, firstSpace);
-                CharSequence uriText = StringView.request(line, firstSpace + 1, secondSpace - firstSpace - 1);
-                CharSequence versionText = StringView.request(line, secondSpace + 1, lineLength - secondSpace - 1);
+                String methodText = line.getString(0, firstSpace, StandardCharsets.US_ASCII);
+                String uriText = line.getString(firstSpace + 1, secondSpace - firstSpace - 1, StandardCharsets.US_ASCII);
+                String versionText = line.getString(secondSpace + 1, lineLength - secondSpace - 1, StandardCharsets.US_ASCII);
 
                 accumulator.markReader();
                 reqCtx.currentMessage = new DefaultHttpRequest(versionText, methodText, uriText);
@@ -403,7 +402,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     }
 
                     String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                    CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
+                    String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
                     headerEntries.add(new DefaultHttpHeaderEntry(name, value));
                     accumulator.markReader();
                 } finally {
@@ -605,7 +604,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 }
 
                 String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
+                String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
                 reqCtx.currentHeaders.addHeader(name, value);
                 accumulator.markReader();
             } finally {

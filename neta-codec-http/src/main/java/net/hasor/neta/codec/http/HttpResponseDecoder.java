@@ -19,7 +19,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
@@ -380,9 +379,9 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     throw new HttpBadRequestException("invalid status code: " + statusCode);
                 }
 
-                CharSequence versionText = StringView.request(line, 0, firstSpace);
-                CharSequence statusText = StringView.request(line, statusStart, statusEnd - statusStart);
-                CharSequence reasonText = secondSpace < 0 || secondSpace + 1 >= lineLength ? "" : StringView.request(line, secondSpace + 1, lineLength - secondSpace - 1);
+                String versionText = line.getString(0, firstSpace, StandardCharsets.US_ASCII);
+                String statusText = line.getString(statusStart, statusEnd - statusStart, StandardCharsets.US_ASCII);
+                String reasonText = secondSpace < 0 || secondSpace + 1 >= lineLength ? "" : line.getString(secondSpace + 1, lineLength - secondSpace - 1, StandardCharsets.US_ASCII);
 
                 accumulator.markReader();
                 respCtx.currentMessage = new DefaultHttpResponse(versionText, statusText, reasonText);
@@ -446,7 +445,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     }
 
                     String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                    CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
+                    String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
                     headerEntries.add(new DefaultHttpHeaderEntry(name, value));
                     accumulator.markReader();
                 } finally {
@@ -643,7 +642,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 }
 
                 String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
+                String value = line.getString(valueStart, valueEnd - valueStart, StandardCharsets.US_ASCII);
                 respCtx.currentHeaders.addHeader(name, value);
                 accumulator.markReader();
             } finally {

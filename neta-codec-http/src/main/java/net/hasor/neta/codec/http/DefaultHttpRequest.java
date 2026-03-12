@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.neta.bytebuf.StringView;
 
 /**
  * Default implementation of {@link HttpRequest}.
@@ -23,14 +22,13 @@ import net.hasor.neta.bytebuf.StringView;
  * by separate {@link HttpHeaders} and {@link HttpContent} objects later in the message flow.
  */
 public class DefaultHttpRequest implements HttpRequest {
-    private int          streamId;
-    private HttpVersion  version;
-    private HttpMethod   method;
-    private String       uri;
-    //
-    private CharSequence versionText;
-    private CharSequence methodText;
-    private CharSequence uriText;
+    private int         streamId;
+    private HttpVersion version;
+    private HttpMethod  method;
+    private String      uri;
+    private String      versionText;
+    private String      methodText;
+    private String      uriText;
 
     /**
      * Creates a request start-line object.
@@ -58,22 +56,21 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     /**
-     * Creates a request start-line object backed by raw text views.
+     * Creates a request start-line object from parsed text fields.
      * @param version the raw protocol version text
      * @param method the raw request method text
      * @param uri the raw request target text
      */
-    public DefaultHttpRequest(CharSequence version, CharSequence method, CharSequence uri) {
-        if (version == null || version.length() == 0) {
+    public DefaultHttpRequest(String version, String method, String uri) {
+        if (version == null || version.isEmpty()) {
             throw new IllegalArgumentException("version must not be empty");
         }
-        if (method == null || method.length() == 0) {
+        if (method == null || method.isEmpty()) {
             throw new IllegalArgumentException("method must not be empty");
         }
         if (uri == null) {
             throw new IllegalArgumentException("uri must not be null");
         }
-
         this.versionText = version;
         this.methodText = method;
         this.uriText = uri;
@@ -99,7 +96,7 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     public String protocolVersionText() {
-        return this.versionText.toString();
+        return this.versionText;
     }
 
     /** Sets the protocol version carried by this request line. */
@@ -107,8 +104,6 @@ public class DefaultHttpRequest implements HttpRequest {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
         }
-
-        this.releaseSequence(this.versionText);
         this.version = version;
         this.versionText = version.text();
         return this;
@@ -123,7 +118,7 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     public String methodText() {
-        return this.methodText.toString();
+        return this.methodText;
     }
 
     /** Sets the request method carried by this request line. */
@@ -131,7 +126,6 @@ public class DefaultHttpRequest implements HttpRequest {
         if (method == null) {
             throw new IllegalArgumentException("method must not be null");
         }
-        this.releaseSequence(this.methodText);
         this.method = method;
         this.methodText = method.name();
         return this;
@@ -140,7 +134,7 @@ public class DefaultHttpRequest implements HttpRequest {
     @Override
     public String uri() {
         if (this.uri == null) {
-            this.uri = this.uriText.toString();
+            this.uri = this.uriText;
         }
         return uri;
     }
@@ -150,7 +144,6 @@ public class DefaultHttpRequest implements HttpRequest {
         if (uri == null) {
             throw new IllegalArgumentException("uri must not be null");
         }
-        this.releaseSequence(this.uriText);
         this.uri = uri;
         this.uriText = uri;
         return this;
@@ -163,9 +156,6 @@ public class DefaultHttpRequest implements HttpRequest {
 
     @Override
     public void release() {
-        this.releaseSequence(this.versionText);
-        this.releaseSequence(this.methodText);
-        this.releaseSequence(this.uriText);
         this.streamId = 0;
         this.version = null;
         this.method = null;
@@ -173,11 +163,5 @@ public class DefaultHttpRequest implements HttpRequest {
         this.versionText = null;
         this.methodText = null;
         this.uriText = null;
-    }
-
-    private void releaseSequence(CharSequence value) {
-        if (value instanceof StringView) {
-            ((StringView) value).release();
-        }
     }
 }

@@ -39,6 +39,10 @@ import net.hasor.neta.codec.http.event.HttpThroughEvent;
  * Aggregated responses such as {@link FullHttpResponse} are encoded by the same staged
  * dispatch path because they also implement {@link HttpResponse}, {@link LastHttpHeaders},
  * and {@link LastHttpContent}.
+ * <p><b>Ownership:</b> once a response-side {@link HttpObject} is consumed by this
+ * encoder, the encoder takes over its lifecycle and releases the source object
+ * after the encoded output has been produced. Callers should not release a
+ * successfully handed-off message a second time.
  * <p><b>Thread safety:</b> This handler is stateless. Per-connection state is stored in
  * {@link HttpContext} on the {@link ProtoContext}, making it safe to share a single
  * instance across multiple connections/pipelines.
@@ -85,22 +89,33 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
                 continue;
             }
 
-            if (httpCtx.isTransparentMode()) {
-                if (!(msg instanceof HttpByteBuf)) {
-                    throw new HttpProtocolViolationException("transparent mode only accepts HttpByteBuf on response encoder.");
+            boolean consumed = false;
+            try {
+                if (httpCtx.isTransparentMode()) {
+                    consumed = true;
+                    if (!(msg instanceof HttpByteBuf)) {
+                        throw new HttpProtocolViolationException("transparent mode only accepts HttpByteBuf on response encoder.");
+                    }
+                    this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
+                    continue;
                 }
-                this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
-                continue;
-            }
 
-            if (msg instanceof HttpResponse) {
-                this.handleStatusLinePart(respCtx, context, (HttpResponse) msg, dst);
-            }
-            if (msg instanceof HttpHeaders) {
-                this.handleHeadersPart(respCtx, context, (HttpHeaders) msg, dst);
-            }
-            if (msg instanceof HttpContent) {
-                this.handleBodyPart(respCtx, context, (HttpContent) msg, dst);
+                if (msg instanceof HttpResponse) {
+                    consumed = true;
+                    this.handleStatusLinePart(respCtx, context, (HttpResponse) msg, dst);
+                }
+                if (msg instanceof HttpHeaders) {
+                    consumed = true;
+                    this.handleHeadersPart(respCtx, context, (HttpHeaders) msg, dst);
+                }
+                if (msg instanceof HttpContent) {
+                    consumed = true;
+                    this.handleBodyPart(respCtx, context, (HttpContent) msg, dst);
+                }
+            } finally {
+                if (consumed) {
+                    msg.release();
+                }
             }
         }
 

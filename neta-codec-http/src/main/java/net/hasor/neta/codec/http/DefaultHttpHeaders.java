@@ -15,10 +15,9 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.*;
+import net.hasor.cobble.StringUtils;
 
-/**
- * Default implementation of {@link HttpHeaders} backed by lazily materialized header entries.
- */
+/** Default implementation of {@link HttpHeaders} backed by ordinary string header entries. */
 public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
     private final List<DefaultHttpHeaderEntry> entries;
     private       int                          streamId;
@@ -27,33 +26,10 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
         this.entries = new ArrayList<>();
     }
 
-    private static boolean equalsIgnoreCase(CharSequence left, CharSequence right) {
-        if (left == right) {
-            return true;
-        }
-        if (left == null || right == null || left.length() != right.length()) {
-            return false;
-        }
-        for (int i = 0; i < left.length(); i++) {
-            char c1 = left.charAt(i);
-            char c2 = right.charAt(i);
-            if (c1 != c2 && toLowerAscii(c1) != toLowerAscii(c2)) {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static char toLowerAscii(char ch) {
-        return (ch >= 'A' && ch <= 'Z') ? (char) (ch + 32) : ch;
-    }
-
     @Override
     public int streamId() {
         return this.streamId;
     }
-
-    // write
 
     @Override
     public HttpHeaders streamId(int streamId) {
@@ -69,12 +45,10 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
         this.entries.clear();
     }
 
-    public DefaultHttpHeaders addHeader(String name, String value) {
-        return this.addHeader((CharSequence) name, value);
-    }
+    // write
 
-    public DefaultHttpHeaders addHeader(CharSequence name, CharSequence value) {
-        if (name == null || name.length() == 0) {
+    public DefaultHttpHeaders addHeader(String name, String value) {
+        if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name must not be empty");
         }
         if (value == null) {
@@ -117,22 +91,16 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
     }
 
     public DefaultHttpHeaders setHeader(String name, String value) {
-        return this.setHeader((CharSequence) name, value);
-    }
-
-    public DefaultHttpHeaders setHeader(CharSequence name, CharSequence value) {
-        if (name == null || name.length() == 0) {
+        if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name must not be empty");
         }
         if (value == null) {
             throw new IllegalArgumentException("value must not be null");
         }
 
-        this.removeHeader(name.toString());
+        this.removeHeader(name);
         return this.addHeader(name, value);
     }
-
-    // read
 
     public DefaultHttpHeaders clearHeader() {
         this.release();
@@ -147,13 +115,15 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
 
         for (int i = this.entries.size() - 1; i >= 0; i--) {
             DefaultHttpHeaderEntry entry = this.entries.get(i);
-            if (equalsIgnoreCase(entry.getName(), name)) {
+            if (StringUtils.equalsIgnoreCase(entry.getName(), name)) {
                 entry.release();
                 this.entries.remove(i);
             }
         }
         return this;
     }
+
+    // read
 
     @Override
     public List<String> getValues(String name) {
@@ -163,8 +133,8 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
 
         List<String> result = new ArrayList<>();
         for (DefaultHttpHeaderEntry entry : this.entries) {
-            if (equalsIgnoreCase(entry.getName(), name)) {
-                result.add(entry.getValue().toString());
+            if (StringUtils.equalsIgnoreCase(entry.getName(), name)) {
+                result.add(entry.getValue());
             }
         }
 
@@ -173,8 +143,7 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
 
     @Override
     public String getString(String name) {
-        CharSequence value = this.findFirst(name);
-        return value == null ? null : value.toString();
+        return this.findFirst(name);
     }
 
     @Override
@@ -208,8 +177,6 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
         return this.findFirst(name) != null;
     }
 
-    //
-
     @Override
     public Set<String> headerNames() {
         if (this.entries.isEmpty()) {
@@ -218,7 +185,7 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
 
         Set<String> result = new LinkedHashSet<>(this.entries.size());
         for (DefaultHttpHeaderEntry entry : this.entries) {
-            result.add(entry.getName().toString());
+            result.add(entry.getName());
         }
 
         return Collections.unmodifiableSet(result);
@@ -229,13 +196,13 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
         return this.entries.size();
     }
 
-    private CharSequence findFirst(String name) {
+    private String findFirst(String name) {
         if (name == null) {
             return null;
         }
 
         for (DefaultHttpHeaderEntry entry : this.entries) {
-            if (equalsIgnoreCase(entry.getName(), name)) {
+            if (StringUtils.equalsIgnoreCase(entry.getName(), name)) {
                 return entry.getValue();
             }
         }

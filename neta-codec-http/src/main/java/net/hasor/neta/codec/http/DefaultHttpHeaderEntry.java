@@ -14,33 +14,33 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
+import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.function.Release;
 
-/**
- * Default implementation of {@link HttpHeaders} backed by lazily materialized header entries.
- */
+/** Default implementation of one HTTP header entry. */
 public class DefaultHttpHeaderEntry implements Release {
-    private CharSequence name;
-    private CharSequence value;
-    private int          refCount;
+    private String name;
+    private String value;
+    private int    refCount;
 
-    public DefaultHttpHeaderEntry(CharSequence name, CharSequence value) {
+    public DefaultHttpHeaderEntry(String name, String value) {
+        if (StringUtils.isBlank(name)) {
+            throw new IllegalArgumentException("name must not be empty");
+        }
+        if (value == null) {
+            throw new IllegalArgumentException("value must not be null");
+        }
+
         this.name = name;
         this.value = value;
         this.refCount = 1;
     }
 
-    private static void releaseSequence(CharSequence value) {
-        if (value instanceof Release) {
-            ((Release) value).release();
-        }
-    }
-
-    public CharSequence getName() {
+    public String getName() {
         return this.name;
     }
 
-    public CharSequence getValue() {
+    public String getValue() {
         return this.value;
     }
 
@@ -62,9 +62,6 @@ public class DefaultHttpHeaderEntry implements Release {
         if (this.refCount > 0) {
             return;
         }
-
-        releaseSequence(this.name);
-        releaseSequence(this.value);
         this.name = null;
         this.value = null;
     }

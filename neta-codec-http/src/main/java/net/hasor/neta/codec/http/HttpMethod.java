@@ -113,7 +113,6 @@ public final class HttpMethod {
 
     /**
      * Returns the {@link HttpMethod} instance for the given method text.
-     * This overload avoids forcing callers to materialize a {@link String} eagerly.
      * @param name the method text
      * @return the corresponding HttpMethod
      */

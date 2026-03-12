@@ -56,20 +56,21 @@ public class WebSocketContextImpl implements WebSocketContext {
     /**
      * Creates a server-side {@link WebSocketContext} from handshake parameters.
      * <p>
-     * Typically called after {@link WebSocketServerHandshaker#handshakeResponse} succeeds:
+    * Typically called after {@link WebSocketServerDuplexer} completes the opening handshake:
      * <pre>{@code
-     * FullHttpResponse resp = WebSocketServerHandshaker.handshakeResponse(request);
-     * context.context(WebSocketContext.class,
-     *     WebSocketContextImpl.fromHandshake(request.uri(),
-     *         request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL),
-     *         request.headers().get(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS)));
+    * context.context(WebSocketContext.class,
+    *     WebSocketContextImpl.fromHandshake(version, request.uri(),
+    *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL),
+    *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS)));
      * }</pre>
+     * @param version the detected WebSocket version
      * @param requestPath the request URI path
      * @param subProtocol the negotiated sub-protocol (may be null)
      * @param extensions comma-separated extensions string (may be null)
      * @return a new server-side WebSocketContext
      */
-    public static WebSocketContextImpl fromHandshake(String requestPath, String subProtocol, String extensions) {
+    public static WebSocketContextImpl fromHandshake(WebSocketVersion version, String requestPath, String subProtocol, String extensions) {
+        int versionCode = version != null ? version.code() : 13;
         List<String> extList;
         if (StringUtils.isNotBlank(extensions)) {
             String[] parts = extensions.split(",");
@@ -83,7 +84,15 @@ public class WebSocketContextImpl implements WebSocketContext {
         } else {
             extList = Collections.emptyList();
         }
-        return new WebSocketContextImpl(true, subProtocol, 13, requestPath, extList);
+        return new WebSocketContextImpl(true, subProtocol, versionCode, requestPath, extList);
+    }
+
+    /**
+     * Creates a server-side {@link WebSocketContext} from handshake parameters.
+     * Assumes RFC 6455 (version 13).
+     */
+    public static WebSocketContextImpl fromHandshake(String requestPath, String subProtocol, String extensions) {
+        return fromHandshake(WebSocketVersion.V13, requestPath, subProtocol, extensions);
     }
 
     @Override

@@ -23,6 +23,10 @@ import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Encodes {@link HttpObject} instances into raw bytes for HTTP request messages.
+ * <p><b>Ownership:</b> once a request-side {@link HttpObject} is consumed by this
+ * encoder, the encoder takes over its lifecycle and releases the source object
+ * after the encoded output has been produced. Callers should not release a
+ * successfully handed-off message a second time.
  */
 public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private static final Logger              logger         = Logger.getLogger(HttpRequestEncoder.class);
@@ -63,22 +67,33 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
                 continue;
             }
 
-            if (httpCtx.isTransparentMode()) {
-                if (!(msg instanceof HttpByteBuf)) {
-                    throw new HttpProtocolViolationException("transparent mode only accepts HttpByteBuf on request encoder.");
+            boolean consumed = false;
+            try {
+                if (httpCtx.isTransparentMode()) {
+                    consumed = true;
+                    if (!(msg instanceof HttpByteBuf)) {
+                        throw new HttpProtocolViolationException("transparent mode only accepts HttpByteBuf on request encoder.");
+                    }
+                    this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
+                    continue;
                 }
-                this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
-                continue;
-            }
 
-            if (msg instanceof HttpRequest) {
-                this.handleRequestLinePart(reqCtx, context, (HttpRequest) msg, dst);
-            }
-            if (msg instanceof HttpHeaders) {
-                this.handleHeadersPart(reqCtx, context, (HttpHeaders) msg, dst);
-            }
-            if (msg instanceof HttpContent) {
-                this.handleBodyPart(reqCtx, context, (HttpContent) msg, dst);
+                if (msg instanceof HttpRequest) {
+                    consumed = true;
+                    this.handleRequestLinePart(reqCtx, context, (HttpRequest) msg, dst);
+                }
+                if (msg instanceof HttpHeaders) {
+                    consumed = true;
+                    this.handleHeadersPart(reqCtx, context, (HttpHeaders) msg, dst);
+                }
+                if (msg instanceof HttpContent) {
+                    consumed = true;
+                    this.handleBodyPart(reqCtx, context, (HttpContent) msg, dst);
+                }
+            } finally {
+                if (consumed) {
+                    msg.release();
+                }
             }
         }
 
