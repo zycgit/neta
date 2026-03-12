@@ -14,129 +14,121 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-import java.nio.charset.StandardCharsets;
+import net.hasor.cobble.ref.RecycleObjectPool;
+import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Default mutable implementation of {@link WebSocketFrame}.
- * <h3>Convenience factory methods</h3>
- * <pre>
- *   WebSocketFrame text   = DefaultWebSocketFrame.text("hello");
- *   WebSocketFrame binary = DefaultWebSocketFrame.binary(bytes);
- *   WebSocketFrame ping   = DefaultWebSocketFrame.ping();
- *   WebSocketFrame pong   = DefaultWebSocketFrame.pong();
- *   WebSocketFrame close  = DefaultWebSocketFrame.close(1000, "Normal closure");
- * </pre>
+ * Default pooled implementation of {@link WebSocketFrame}.
+ * <p>
+ * WebSocket frames remain transport-level objects; application-visible type
+ * distinction should happen on {@link WebSocketMessage} rather than on frames.
  */
-public class DefaultWebSocketFrame implements WebSocketFrame {
-    private final WebSocketOpcode opcode;
-    private final boolean         finalFragment;
-    private final boolean         masked;
-    private final byte[]          maskingKey;
-    private final ByteBuf         content;
+public final class DefaultWebSocketFrame implements WebSocketFrame {
+    private static final int                               RECYCLE_INDEX   = RecycleObjectPool.registerType();
+    private static final ObjHandler<DefaultWebSocketFrame> RECYCLE_HANDLER = new ObjHandler<DefaultWebSocketFrame>() {
+        @Override
+        public DefaultWebSocketFrame create() {
+            return new DefaultWebSocketFrame();
+        }
 
-    /**
-     * Creates a new frame.
-     * @param opcode the frame opcode
-     * @param finalFragment whether the FIN bit is set
-     * @param masked whether the payload is masked
-     * @param maskingKey the 4-byte masking key (only used when {@code masked} is true)
-     * @param content the (already unmasked) payload
-     */
-    public DefaultWebSocketFrame(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
+        @Override
+        public void free(DefaultWebSocketFrame tar) {
+            RecycleObjectPool.free(RECYCLE_INDEX, tar);
+        }
+    };
+
+    private int             streamId;
+    private boolean         finalFragment;
+    private boolean         masked;
+    private boolean         active;
+    private byte[]          maskingKey;
+    private ByteBuf         content;
+    private WebSocketOpcode opcode;
+
+    private DefaultWebSocketFrame() {
+    }
+
+    @Override
+    public WebSocketOpcode opcode() {
+        return this.opcode;
+    }
+
+    @Override
+    public int streamId() {
+        return this.streamId;
+    }
+
+    @Override
+    public WebSocketFrame streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
+    }
+
+    @Override
+    public boolean isFinalFragment() {
+        return this.finalFragment;
+    }
+
+    @Override
+    public boolean isMasked() {
+        return this.masked;
+    }
+
+    @Override
+    public byte[] maskingKey() {
+        return this.maskingKey;
+    }
+
+    @Override
+    public ByteBuf content() {
+        return this.content;
+    }
+
+    @Override
+    public void release() {
+        if (!this.active) {
+            return;
+        }
+        this.active = false;
+        ByteBuf current = this.content;
+        if (current != null) {
+            current.release();
+            this.content = null;
+        }
+        this.streamId = 0;
+        this.finalFragment = false;
+        this.masked = false;
+        this.maskingKey = null;
+        this.recycle();
+    }
+
+    private void recycle() {
+        this.opcode = null;
+        RECYCLE_HANDLER.free(this);
+    }
+
+    @Override
+    public String toString() {
+        return "WebSocketFrame{opcode=" + this.opcode + ", fin=" + this.finalFragment + ", masked=" + this.masked + ", payloadLen=" + (this.content != null ? this.content.readableBytes() : 0) + '}';
+    }
+
+    static WebSocketFrame newFrame(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
         if (opcode == null) {
             throw new IllegalArgumentException("opcode must not be null");
         }
         if (content == null) {
             throw new IllegalArgumentException("content must not be null");
         }
-        this.opcode = opcode;
-        this.finalFragment = finalFragment;
-        this.masked = masked;
-        this.maskingKey = masked ? maskingKey : null;
-        this.content = content;
-    }
 
-    // -------------------------------------------------------------------------
-    // Factory helpers
-    // -------------------------------------------------------------------------
-
-    /** Creates an unmasked text frame with FIN=true. */
-    public static DefaultWebSocketFrame text(String text) {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(text.length() * 3, Integer.MAX_VALUE);
-        buf.writeString(text, StandardCharsets.UTF_8);
-        buf.markWriter();
-        return new DefaultWebSocketFrame(WebSocketOpcode.TEXT, true, false, null, buf);
-    }
-
-    /** Creates an unmasked binary frame with FIN=true. */
-    public static DefaultWebSocketFrame binary(byte[] data) {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(data.length, Integer.MAX_VALUE);
-        buf.writeBytes(data, 0, data.length);
-        buf.markWriter();
-        return new DefaultWebSocketFrame(WebSocketOpcode.BINARY, true, false, null, buf);
-    }
-
-    /** Creates an unmasked empty ping frame. */
-    public static DefaultWebSocketFrame ping() {
-        return new DefaultWebSocketFrame(WebSocketOpcode.PING, true, false, null, ByteBuf.EMPTY);
-    }
-
-    /** Creates an unmasked empty pong frame. */
-    public static DefaultWebSocketFrame pong() {
-        return new DefaultWebSocketFrame(WebSocketOpcode.PONG, true, false, null, ByteBuf.EMPTY);
-    }
-
-    /**
-     * Creates an unmasked close frame with the specified status code and reason.
-     * @param statusCode WebSocket close status code (e.g. 1000 = Normal Closure)
-     * @param reason human-readable reason (may be empty)
-     */
-    public static DefaultWebSocketFrame close(int statusCode, String reason) {
-        String reasonStr = reason != null ? reason : "";
-        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(2 + reasonStr.length() * 3, Integer.MAX_VALUE);
-        // Write status code as big-endian 16-bit integer
-        buf.writeByte((byte) ((statusCode >> 8) & 0xFF));
-        buf.writeByte((byte) (statusCode & 0xFF));
-        if (!reasonStr.isEmpty()) {
-            buf.writeString(reasonStr, StandardCharsets.UTF_8);
-        }
-        buf.markWriter();
-        return new DefaultWebSocketFrame(WebSocketOpcode.CLOSE, true, false, null, buf);
-    }
-
-    // -------------------------------------------------------------------------
-    // WebSocketFrame interface
-    // -------------------------------------------------------------------------
-
-    @Override
-    public WebSocketOpcode opcode() {
-        return opcode;
-    }
-
-    @Override
-    public boolean isFinalFragment() {
-        return finalFragment;
-    }
-
-    @Override
-    public boolean isMasked() {
-        return masked;
-    }
-
-    @Override
-    public byte[] maskingKey() {
-        return maskingKey;
-    }
-
-    @Override
-    public ByteBuf content() {
-        return content;
-    }
-
-    @Override
-    public String toString() {
-        return "WebSocketFrame{opcode=" + opcode + ", fin=" + finalFragment + ", masked=" + masked + ", payloadLen=" + content.readableBytes() + '}';
+        DefaultWebSocketFrame frame = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        frame.streamId = 0;
+        frame.finalFragment = finalFragment;
+        frame.masked = masked;
+        frame.active = true;
+        frame.maskingKey = masked ? maskingKey : null;
+        frame.content = content;
+        frame.opcode = opcode;
+        return frame;
     }
 }

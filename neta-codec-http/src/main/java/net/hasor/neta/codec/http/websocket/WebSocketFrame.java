@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.codec.http.HttpObject;
 
 /**
  * A WebSocket frame as defined in
@@ -33,7 +34,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * +-------------------------------- - - - - - - - - - - - - - - - +
  * </pre>
  */
-public interface WebSocketFrame {
+public interface WebSocketFrame extends HttpObject {
     /** Returns the opcode of this frame. */
     WebSocketOpcode opcode();
 

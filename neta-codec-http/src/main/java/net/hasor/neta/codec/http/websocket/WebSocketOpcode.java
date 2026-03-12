@@ -30,14 +30,18 @@ public enum WebSocketOpcode {
     /** Ping control frame (opcode 0x9). */
     PING(0x9),
     /** Pong control frame (opcode 0xA). */
-    PONG(0xA);
+    PONG(0xA),
+    /** Synthetic message type emitted after handshake completion. */
+    HANDSHAKE_COMPLETE(-1);
 
     /** Lookup table for O(1) opcode resolution (WebSocket opcodes are 0x0-0xF). */
     private static final WebSocketOpcode[] LOOKUP = new WebSocketOpcode[16];
 
     static {
         for (WebSocketOpcode op : values()) {
-            LOOKUP[op.code] = op;
+            if (op.code >= 0 && op.code < LOOKUP.length) {
+                LOOKUP[op.code] = op;
+            }
         }
     }
 
