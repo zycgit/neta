@@ -246,7 +246,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         HttpContext httpCtx = context.context(HttpContext.class);
         if (httpCtx != null) {
             httpCtx.markInboundError(HttpContext.InboundMessageType.RESPONSE);
-            httpCtx.resp.reset();
+            httpCtx.resp.releaseAndReset();
         }
 
         if (context.getConfig() != null && context.getConfig().isPrintLog()) {
@@ -399,58 +399,63 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private HttpHeaders decodeHeaders(HttpContext.ResponseDecodeState respCtx, ByteBuf accumulator) {
         java.util.List<DefaultHttpHeaderEntry> headerEntries = null;
         boolean endOfHeaders = false;
-        ByteBuf line;
-        while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
-            try {
-                int lineLength = line.readableBytes();
-                respCtx.headerBytes += lineLength + 2;
-                if (respCtx.headerBytes > this.maxHeaderSize) {
-                    throw new HttpHeaderTooLargeException("HTTP headers too large: " + respCtx.headerBytes + " > " + maxHeaderSize, this.maxHeaderSize, respCtx.headerBytes);
-                }
+        try {
+            ByteBuf line;
+            while ((line = accumulator.readLineBuffer(this.maxHeaderSize + 2)) != null) {
+                try {
+                    int lineLength = line.readableBytes();
+                    respCtx.headerBytes += lineLength + 2;
+                    if (respCtx.headerBytes > this.maxHeaderSize) {
+                        throw new HttpHeaderTooLargeException("HTTP headers too large: " + respCtx.headerBytes + " > " + maxHeaderSize, this.maxHeaderSize, respCtx.headerBytes);
+                    }
 
-                if (lineLength == 0) {
-                    endOfHeaders = true;
+                    if (lineLength == 0) {
+                        endOfHeaders = true;
+                        accumulator.markReader();
+                        break;
+                    }
+
+                    int colonIdx = line.expect((byte) ':', lineLength);
+                    if (colonIdx < 0) {
+                        throw new HttpBadRequestException("invalid header line (no colon)");
+                    }
+
+                    int nameStart = 0;
+                    int nameEnd = colonIdx;
+                    while (nameStart < nameEnd && isHorizontalWhitespace(line.getUInt8(nameStart))) {
+                        nameStart++;
+                    }
+                    while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
+                        nameEnd--;
+                    }
+                    if (nameStart >= nameEnd) {
+                        throw new HttpBadRequestException("empty header name");
+                    }
+
+                    int valueStart = colonIdx + 1;
+                    while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
+                        valueStart++;
+                    }
+                    int valueEnd = lineLength;
+                    while (valueEnd > valueStart && isHorizontalWhitespace(line.getUInt8(valueEnd - 1))) {
+                        valueEnd--;
+                    }
+
+                    if (headerEntries == null) {
+                        headerEntries = new java.util.ArrayList<>();
+                    }
+
+                    String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
+                    CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
+                    headerEntries.add(new DefaultHttpHeaderEntry(name, value));
                     accumulator.markReader();
-                    break;
+                } finally {
+                    line.free();
                 }
-
-                int colonIdx = line.expect((byte) ':', lineLength);
-                if (colonIdx < 0) {
-                    throw new HttpBadRequestException("invalid header line (no colon)");
-                }
-
-                int nameStart = 0;
-                int nameEnd = colonIdx;
-                while (nameStart < nameEnd && isHorizontalWhitespace(line.getUInt8(nameStart))) {
-                    nameStart++;
-                }
-                while (nameEnd > nameStart && isHorizontalWhitespace(line.getUInt8(nameEnd - 1))) {
-                    nameEnd--;
-                }
-                if (nameStart >= nameEnd) {
-                    throw new HttpBadRequestException("empty header name");
-                }
-
-                int valueStart = colonIdx + 1;
-                while (valueStart < lineLength && isHorizontalWhitespace(line.getUInt8(valueStart))) {
-                    valueStart++;
-                }
-                int valueEnd = lineLength;
-                while (valueEnd > valueStart && isHorizontalWhitespace(line.getUInt8(valueEnd - 1))) {
-                    valueEnd--;
-                }
-
-                if (headerEntries == null) {
-                    headerEntries = new java.util.ArrayList<>();
-                }
-
-                String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);
-                CharSequence value = StringView.request(line, valueStart, valueEnd - valueStart);
-                headerEntries.add(new DefaultHttpHeaderEntry(name, value));
-                accumulator.markReader();
-            } finally {
-                line.free();
             }
+        } catch (RuntimeException e) {
+            releaseHeaderEntries(headerEntries);
+            throw e;
         }
 
         if (headerEntries == null) {
@@ -713,6 +718,14 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
     private static boolean isHorizontalWhitespace(int value) {
         return value == ' ' || value == '\t';
+    }
+
+    private static void releaseHeaderEntries(java.util.List<DefaultHttpHeaderEntry> entries) {
+        if (entries != null) {
+            for (DefaultHttpHeaderEntry entry : entries) {
+                entry.release();
+            }
+        }
     }
 
     private static String packetType(HttpObject httpObject) {

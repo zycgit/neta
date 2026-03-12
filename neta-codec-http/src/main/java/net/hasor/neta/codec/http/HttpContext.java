@@ -31,8 +31,8 @@ class HttpContext {
     final ResponseDecodeState       resp    = new ResponseDecodeState();
     final EncodeState<HttpRequest>  reqEnc  = new EncodeState<>();
     final EncodeState<HttpResponse> respEnc = new EncodeState<>();
-    boolean transparentMode;
-    InboundMessageType              inboundErrorType;
+    boolean            transparentMode;
+    InboundMessageType inboundErrorType;
 
     /**
      * Retrieves the existing {@link HttpContext} from the {@link ProtoContext},
@@ -55,8 +55,8 @@ class HttpContext {
     boolean switchTransparentMode(boolean enabled) {
         boolean changed = this.transparentMode != enabled;
         this.transparentMode = enabled;
-        this.req.reset();
-        this.resp.reset();
+        this.req.releaseAndReset();
+        this.resp.releaseAndReset();
         this.reqEnc.reset();
         this.respEnc.reset();
         this.inboundErrorType = null;
@@ -122,6 +122,17 @@ class HttpContext {
             this.trailerComplete = false;
             this.emitEmptyEndContent = false;
             this.packetSequence = 0;
+        }
+
+        /** Releases any in-flight resources before resetting state, for error/abort paths. */
+        void releaseAndReset() {
+            if (this.currentMessage != null) {
+                this.currentMessage.release();
+            }
+            if (this.currentHeaders != null) {
+                this.currentHeaders.release();
+            }
+            this.reset();
         }
 
         void initForHeaders() {

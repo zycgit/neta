@@ -332,7 +332,15 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
             }
         }
 
-        this.resetAggregation();
+        // headers and content ownership transferred to full message, only release currentMessage and trailingHeaders
+        this.releaseAggregationState(true);
+        this.phase = AggregatePhase.IDLE;
+        this.currentMessage = null;
+        this.currentHeaders = null;
+        this.trailingHeaders = null;
+        this.aggregatedContent = null;
+        this.currentContentLength = 0;
+        this.headersClosed = false;
     }
 
     private boolean handleExpectation(ProtoContext context, HttpRequest request, long contentLength) {
@@ -411,9 +419,7 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
     }
 
     private void resetAggregation() {
-        if (this.aggregatedContent != null) {
-            this.aggregatedContent.free();
-        }
+        this.releaseAggregationState(false);
         this.phase = AggregatePhase.IDLE;
         this.currentMessage = null;
         this.currentHeaders = null;
@@ -424,9 +430,7 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
     }
 
     private void enterDiscardMode() {
-        if (this.aggregatedContent != null) {
-            this.aggregatedContent.free();
-        }
+        this.releaseAggregationState(false);
         this.phase = AggregatePhase.DISCARD;
         this.currentMessage = null;
         this.currentHeaders = null;
@@ -437,6 +441,7 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
     }
 
     private void resetFor(HttpObject message) {
+        this.releaseAggregationState(false);
         this.phase = AggregatePhase.START;
         this.currentMessage = message;
         this.currentHeaders = new DefaultHttpHeaders();
@@ -444,6 +449,29 @@ public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject
         this.aggregatedContent = null;
         this.currentContentLength = 0;
         this.headersClosed = false;
+    }
+
+    /**
+     * Releases aggregation state that is no longer needed.
+     * @param headersTransferred true if headers and content have been transferred to a FullHttp* object
+     *                          (only currentMessage and trailingHeaders need release),
+     *                          false if all state needs release (error/discard/reset paths).
+     */
+    private void releaseAggregationState(boolean headersTransferred) {
+        if (this.currentMessage != null) {
+            this.currentMessage.release();
+        }
+        if (this.trailingHeaders != null) {
+            this.trailingHeaders.release();
+        }
+        if (!headersTransferred) {
+            if (this.currentHeaders != null) {
+                this.currentHeaders.release();
+            }
+            if (this.aggregatedContent != null) {
+                this.aggregatedContent.free();
+            }
+        }
     }
 
     private enum AggregatePhase {
