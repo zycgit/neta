@@ -230,6 +230,11 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         return ProtoStatus.Next;
                 }
             }
+        } catch (HttpBadRequestException e) {
+            if (this.recoverBadRequest(reqCtx, dst, accumulator, channelID, printLog, e)) {
+                return ProtoStatus.Next;
+            }
+            throw e;
         } finally {
             accumulator.markReader();
             accumulator.free();
@@ -562,6 +567,25 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         } finally {
             line.free();
         }
+    }
+
+    private boolean recoverBadRequest(HttpContext.RequestDecodeState reqCtx, ProtoSndQueue<HttpObject> dst, ByteBuf accumulator, long channelID, boolean printLog, HttpBadRequestException e) {
+        if (reqCtx.currentMessage == null) {
+            return false;
+        }
+        if (reqCtx.decoderPhase != HttpContext.DecodePhase.READ_CHUNK_SIZE && reqCtx.decoderPhase != HttpContext.DecodePhase.READ_CHUNKED_CONTENT && reqCtx.decoderPhase != HttpContext.DecodePhase.READ_CHUNK_DELIMITER) {
+            return false;
+        }
+
+        reqCtx.currentMessage.markBad(e.getMessage());
+
+        DefaultLastHttpContent lastContent = new DefaultLastHttpContent(ByteBuf.EMPTY);
+        lastContent.streamId(reqCtx.currentMessage.streamId());
+        this.offerRequestObject(dst, reqCtx, lastContent, channelID, printLog);
+
+        accumulator.clear();
+        reqCtx.reset();
+        return true;
     }
 
     // trailer

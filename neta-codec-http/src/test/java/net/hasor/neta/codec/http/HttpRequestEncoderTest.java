@@ -1,246 +1,176 @@
-package net.hasor.neta.codec.http;
-
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
-import java.util.Queue;
-import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.channel.virtual.VrtTransfer;
-import org.junit.Test;
-import static org.junit.Assert.assertTrue;
-
-/**
- * Tests for {@link HttpRequestEncoder}.
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
  */
-public class HttpRequestEncoderTest {
+package net.hasor.neta.codec.http;
+import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import org.junit.Test;
+import static org.junit.Assert.*;
 
-    private static String readByteBuf(ByteBuf buf) {
-        return buf.readString(buf.readableBytes(), StandardCharsets.US_ASCII);
+public class HttpRequestEncoderTest extends AbstractHttpTest {
+    @Test
+    public void testRequestEncoderSupportsSeparatedHeadersAndTrailers() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
+
+            List<ByteBuf> parts = sendAndOutBound(pipe,//
+                    new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload"),//
+                    new DefaultLastHttpHeaders()                                                 //
+                            .addHeader("Host", "example.com")                        //
+                            .addHeader("Transfer-Encoding", HttpHeaderValues.CHUNKED),     //
+                    new DefaultHttpContent(ascii("Wiki")),                                 //
+                    new DefaultTrailerHttpHeaders()                                              //
+                            .addHeader("X-Trail", "done"),                           //
+                    DefaultLastHttpContent.EMPTY);
+
+            assertEquals("POST /upload HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\nX-Trail: done\r\n\r\n", text(parts));
+        });
     }
 
-    // ========================= Encode Simple GET Request =========================
-
     @Test
-    public void testEncodeSimpleGetRequest() throws Throwable {
-        NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLastEncoder(new HttpRequestEncoder());
-        }, VrtSoConfig.asClient());
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+    public void testRequestEncoderSupportsFullHttpRequestFixedLength() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
 
-        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/index.html");
-        request.headers().add("Host", "www.example.com");
-        client.sendData(request).get();
+            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload", ascii("Wiki"));
+            request.addHeader(HttpHeaderNames.HOST, "example.com");
+            request.addHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
 
-        assertTrue("should receive ByteBuf(s)", rcvData.size() >= 1);
-        StringBuilder result = new StringBuilder();
-        Object msg;
-        while ((msg = rcvData.poll()) != null) {
-            assertTrue("expected ByteBuf, got " + msg.getClass().getName(), msg instanceof ByteBuf);
-            result.append(readByteBuf((ByteBuf) msg));
-        }
-        String encoded = result.toString();
-        assertTrue("should contain request line", encoded.contains("GET /index.html HTTP/1.1\r\n"));
-        assertTrue("should contain Host header", encoded.contains("host: www.example.com\r\n"));
-        assertTrue("should end with CRLF CRLF", encoded.contains("\r\n\r\n"));
-
-        neta.shutdown();
+            List<ByteBuf> parts = sendAndOutBound(pipe, request);
+            assertEquals(3, parts.size());
+            assertEquals("POST /upload HTTP/1.1\r\nhost: example.com\r\ncontent-length: 4\r\n\r\nWiki", text(parts));
+        });
     }
 
-    // ========================= Encode POST Request with Body =========================
-
     @Test
-    public void testEncodePostRequestWithBody() throws Throwable {
-        NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLastEncoder(new HttpRequestEncoder());
-        }, VrtSoConfig.asClient());
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+    public void testRequestEncoderSupportsFullHttpRequestChunked() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
 
-        String body = "name=value";
-        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
-        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
-        bodyBuf.markWriter();
+            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload", ascii("Wiki"));
+            request.addHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED);
 
-        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/submit", bodyBuf);
-        request.headers().add("Host", "www.example.com");
-        request.headers().add("Content-Length", String.valueOf(body.length()));
-        request.headers().add("Content-Type", "application/x-www-form-urlencoded");
-        client.sendData(request).get();
-
-        assertTrue(rcvData.size() >= 1);
-        StringBuilder result = new StringBuilder();
-        Object msg;
-        while ((msg = rcvData.poll()) != null) {
-            result.append(readByteBuf((ByteBuf) msg));
-        }
-        String encoded = result.toString();
-        assertTrue("should contain request line", encoded.contains("POST /submit HTTP/1.1\r\n"));
-        assertTrue("should contain body", encoded.contains(body));
-
-        neta.shutdown();
+            List<ByteBuf> parts = sendAndOutBound(pipe, request);
+            assertEquals(6, parts.size());
+            assertEquals("POST /upload HTTP/1.1\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(parts));
+        });
     }
 
-    // ========================= Encode Streamed Chunked Request =========================
-
     @Test
-    public void testEncodeStreamedChunkedRequest() throws Throwable {
-        NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLastEncoder(new HttpRequestEncoder());
-        }, VrtSoConfig.asClient());
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+    public void testRequestFullObjectDelegatesAppendHeaders() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
 
-        // Send HttpRequest head
-        DefaultHttpRequest head = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload");
-        head.headers().add("Host", "www.example.com");
-        head.headers().add("Transfer-Encoding", "chunked");
-        client.sendData(head).get();
+            DefaultHttpHeaders extra = new DefaultHttpHeaders();
+            extra.addHeader("X-Request", "req");
 
-        // Send chunk 1
-        ByteBuf chunk1Buf = ByteBufAllocator.DEFAULT.buffer(16);
-        chunk1Buf.writeString("Hello", StandardCharsets.US_ASCII);
-        chunk1Buf.markWriter();
-        client.sendData(new DefaultHttpContent(chunk1Buf)).get();
+            DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
+            request.appendHeaders(extra);
+            extra.release();
 
-        // Send chunk 2 as last content
-        ByteBuf chunk2Buf = ByteBufAllocator.DEFAULT.buffer(16);
-        chunk2Buf.writeString("World", StandardCharsets.US_ASCII);
-        chunk2Buf.markWriter();
-        client.sendData(new DefaultLastHttpContent(chunk2Buf)).get();
-
-        // Collect all output
-        StringBuilder result = new StringBuilder();
-        Object msg;
-        while ((msg = rcvData.poll()) != null) {
-            result.append(readByteBuf((ByteBuf) msg));
-        }
-        String encoded = result.toString();
-        assertTrue("should contain request line", encoded.contains("POST /upload HTTP/1.1\r\n"));
-        assertTrue("should contain Transfer-Encoding header", encoded.contains("transfer-encoding: chunked\r\n"));
-        // Should contain chunk size "5" for "Hello"
-        assertTrue("should contain chunk size for Hello", encoded.contains("5\r\nHello\r\n"));
-        // Should contain chunk size "5" for "World"
-        assertTrue("should contain chunk size for World", encoded.contains("5\r\nWorld\r\n"));
-        // Should end with last chunk marker
-        assertTrue("should contain last chunk marker", encoded.contains("0\r\n"));
-
-        neta.shutdown();
+            List<ByteBuf> parts = sendAndOutBound(pipe, request);
+            assertEquals("GET / HTTP/1.1\r\nX-Request: req\r\n\r\n", text(parts));
+        });
     }
 
-    // ========================= Encode HEAD Request =========================
-
     @Test
-    public void testEncodeHeadRequest() throws Throwable {
-        NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLastEncoder(new HttpRequestEncoder());
-        }, VrtSoConfig.asClient());
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+    public void testRequestEncoderStreamsFixedLengthBodyZeroCopy() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
 
-        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.HEAD, "/status");
-        request.headers().add("Host", "www.example.com");
-        client.sendData(request).get();
+            ByteBuf body = ascii("Wiki");
+            DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload");
+            DefaultLastHttpHeaders headers = new DefaultLastHttpHeaders();
+            headers.addHeader(HttpHeaderNames.HOST, "example.com");
+            headers.addHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
+            DefaultHttpContent content = new DefaultHttpContent(body);
 
-        assertTrue(rcvData.size() >= 1);
-        StringBuilder result = new StringBuilder();
-        Object msg;
-        while ((msg = rcvData.poll()) != null) {
-            result.append(readByteBuf((ByteBuf) msg));
-        }
-        String encoded = result.toString();
-        assertTrue(encoded.contains("HEAD /status HTTP/1.1\r\n"));
-
-        neta.shutdown();
+            List<ByteBuf> outbound = sendAndOutBound(pipe, request, headers, content, DefaultLastHttpContent.EMPTY);
+            assertEquals("POST /upload HTTP/1.1\r\nhost: example.com\r\ncontent-length: 4\r\n\r\nWiki", text(outbound));
+        });
     }
 
-    // ========================= Encode HTTP/1.0 Request =========================
-
     @Test
-    public void testEncodeHttp10Request() throws Throwable {
-        NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLastEncoder(new HttpRequestEncoder());
-        }, VrtSoConfig.asClient());
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+    public void testRequestEncoderStreamsChunkBodyZeroCopy() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
 
-        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_0, HttpMethod.GET, "/");
-        request.headers().add("Host", "localhost");
-        client.sendData(request).get();
-
-        assertTrue(rcvData.size() >= 1);
-        StringBuilder result = new StringBuilder();
-        Object msg;
-        while ((msg = rcvData.poll()) != null) {
-            result.append(readByteBuf((ByteBuf) msg));
-        }
-        String encoded = result.toString();
-        assertTrue(encoded.contains("GET / HTTP/1.0\r\n"));
-
-        neta.shutdown();
+            List<ByteBuf> outbound = sendAndOutBound(pipe,//
+                    new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload"), //
+                    new DefaultLastHttpHeaders()//
+                            .addHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED), //
+                    new DefaultHttpContent(ascii("Wiki")),//
+                    DefaultLastHttpContent.EMPTY);
+            assertEquals("POST /upload HTTP/1.1\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(outbound));
+        });
     }
 
-    // ========================= Encode Multiple Headers =========================
+    @Test
+    public void testRequestEncoderTransparentModePassesRawByteBuf() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
+
+            HttpContext httpContext = pipe.channel().findProtoContext(HttpContext.class);
+            assertNotNull(httpContext);
+            assertTrue(httpContext.switchTransparentMode(true));
+            assertTrue(httpContext.isTransparentMode());
+
+            ByteBuf payload = ascii("raw-client-frame");
+            DefaultHttpByteBuf source = new DefaultHttpByteBuf(payload);
+            List<ByteBuf> outbound = sendAndOutBound(pipe, source);
+            assertEquals("raw-client-frame", text(outbound));
+        });
+    }
 
     @Test
-    public void testEncodeMultipleHeaders() throws Throwable {
-        NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLastEncoder(new HttpRequestEncoder());
-        }, VrtSoConfig.asClient());
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<Object> rcvData = new ArrayDeque<>();
-        server.subscribe(d -> rcvData.offer(d.getData()));
+    public void testRequestEncoderDisableTransparentModeResumesHttpEncoding() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
+            }, VrtSoConfig.asClient());
 
-        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/");
-        request.headers().add("Host", "example.com");
-        request.headers().add("Accept", "text/html");
-        request.headers().add("Accept", "application/json");
-        request.headers().add("User-Agent", "TestClient/1.0");
-        client.sendData(request).get();
+            HttpContext httpContext = pipe.channel().findProtoContext(HttpContext.class);
+            assertNotNull(httpContext);
+            assertTrue(httpContext.switchTransparentMode(true));
+            assertTrue(httpContext.switchTransparentMode(false));
+            assertFalse(httpContext.isTransparentMode());
 
-        assertTrue(rcvData.size() >= 1);
-        StringBuilder result = new StringBuilder();
-        Object msg;
-        while ((msg = rcvData.poll()) != null) {
-            result.append(readByteBuf((ByteBuf) msg));
-        }
-        String encoded = result.toString();
-        assertTrue(encoded.contains("host: example.com\r\n"));
-        assertTrue(encoded.contains("user-agent: TestClient/1.0\r\n"));
+            List<ByteBuf> parts = sendAndOutBound(pipe,//
+                    new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/resume"),//
+                    joinHeaders(DefaultLastHttpHeaders.class,//
+                            net.hasor.cobble.ref.Tuple.of(HttpHeaderNames.HOST, "example.com"),//
+                            net.hasor.cobble.ref.Tuple.of(HttpHeaderNames.CONTENT_LENGTH, "4")),//
+                    new DefaultLastHttpContent(ascii("Wiki")));
 
-        neta.shutdown();
+            assertEquals(3, parts.size());
+            assertEquals("POST /resume HTTP/1.1\r\nhost: example.com\r\ncontent-length: 4\r\n\r\nWiki", text(parts));
+        });
     }
 }

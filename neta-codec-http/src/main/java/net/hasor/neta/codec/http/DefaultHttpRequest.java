@@ -29,6 +29,8 @@ public class DefaultHttpRequest implements HttpRequest {
     private String      versionText;
     private String      methodText;
     private String      uriText;
+    private boolean     bad;
+    private String      badReason;
 
     /**
      * Creates a request start-line object.
@@ -84,6 +86,23 @@ public class DefaultHttpRequest implements HttpRequest {
     @Override
     public HttpRequest streamId(int streamId) {
         this.streamId = streamId;
+        return this;
+    }
+
+    @Override
+    public boolean isBad() {
+        return this.bad;
+    }
+
+    @Override
+    public String badReason() {
+        return this.badReason;
+    }
+
+    @Override
+    public HttpRequest markBad(String reason) {
+        this.bad = true;
+        this.badReason = reason;
         return this;
     }
 
@@ -151,7 +170,7 @@ public class DefaultHttpRequest implements HttpRequest {
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ')';
+        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", bad: " + this.bad + ')';
     }
 
     @Override
@@ -163,5 +182,7 @@ public class DefaultHttpRequest implements HttpRequest {
         this.versionText = null;
         this.methodText = null;
         this.uriText = null;
+        this.bad = false;
+        this.badReason = null;
     }
 }

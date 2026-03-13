@@ -19,7 +19,7 @@ package net.hasor.neta.codec.http;
  * <p>
  * A {@link FullHttpRequest} collapses the staged request flow into one object containing the
  * request line, the final header block, and the final content block. It is typically produced by
- * an {@link HttpObjectAggregator}.
+ * a {@link HttpRequestAggregator} or {@link HttpServerDuplexeAggregator}.
  */
 public interface FullHttpRequest extends HttpRequest, LastHttpHeaders, LastHttpContent {
 }

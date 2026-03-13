@@ -20,7 +20,8 @@ import net.hasor.neta.channel.ProtoContext;
  * Per-connection mutable state for all HTTP/1.x handlers.
  * <p>
  * Consolidates state used by {@link HttpRequestDecoder}, {@link HttpRequestEncoder},
- * {@link HttpResponseDecoder}, {@link HttpResponseEncoder}, {@link HttpObjectAggregator},
+ * {@link HttpResponseDecoder}, {@link HttpResponseEncoder}, {@link HttpRequestAggregator},
+ * {@link HttpResponseAggregator},
  * and {@link HttpServerDuplexe} into a single context object registered on
  * {@link ProtoContext} via {@code context.context(HttpContext.class, impl)}.
  * @author 赵永春 (zyc@hasor.net)

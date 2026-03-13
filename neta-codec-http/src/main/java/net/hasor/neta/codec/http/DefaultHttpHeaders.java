@@ -39,9 +39,6 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
 
     @Override
     public void release() {
-        for (DefaultHttpHeaderEntry entry : this.entries) {
-            entry.release();
-        }
         this.entries.clear();
     }
 
@@ -116,7 +113,6 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
         for (int i = this.entries.size() - 1; i >= 0; i--) {
             DefaultHttpHeaderEntry entry = this.entries.get(i);
             if (StringUtils.equalsIgnoreCase(entry.getName(), name)) {
-                entry.release();
                 this.entries.remove(i);
             }
         }

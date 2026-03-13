@@ -42,4 +42,19 @@ public interface HttpObject extends Release {
 
     /** Associates this object with an HTTP/2 stream ID and returns {@code this} for chaining. */
     HttpObject streamId(int streamId);
+
+    /** Returns whether this object belongs to a syntactically malformed HTTP message. */
+    default boolean isBad() {
+        return false;
+    }
+
+    /** Returns the parse failure reason when {@link #isBad()} is true, otherwise {@code null}. */
+    default String badReason() {
+        return null;
+    }
+
+    /** Marks this object as malformed and returns {@code this} for chaining. */
+    default HttpObject markBad(String reason) {
+        return this;
+    }
 }

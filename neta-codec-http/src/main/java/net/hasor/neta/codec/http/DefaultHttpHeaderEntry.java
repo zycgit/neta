@@ -19,9 +19,8 @@ import net.hasor.cobble.function.Release;
 
 /** Default implementation of one HTTP header entry. */
 public class DefaultHttpHeaderEntry implements Release {
-    private String name;
-    private String value;
-    private int    refCount;
+    private final String name;
+    private final String value;
 
     public DefaultHttpHeaderEntry(String name, String value) {
         if (StringUtils.isBlank(name)) {
@@ -33,7 +32,6 @@ public class DefaultHttpHeaderEntry implements Release {
 
         this.name = name;
         this.value = value;
-        this.refCount = 1;
     }
 
     public String getName() {
@@ -45,24 +43,11 @@ public class DefaultHttpHeaderEntry implements Release {
     }
 
     public DefaultHttpHeaderEntry retain() {
-        if (this.refCount <= 0) {
-            throw new IllegalStateException("HeaderEntry has been released");
-        }
-        this.refCount++;
         return this;
     }
 
     @Override
     public void release() {
-        if (this.refCount <= 0) {
-            return;
-        }
-
-        this.refCount--;
-        if (this.refCount > 0) {
-            return;
-        }
-        this.name = null;
-        this.value = null;
+        // HTTP header entries only hold immutable strings, so release is intentionally a no-op.
     }
 }

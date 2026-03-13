@@ -67,6 +67,9 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     protected HttpObject buildAggregatedMessage(HttpRequest message, ByteBuf aggregated, DefaultHttpHeaders headers) {
         DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(message.protocolVersion(), message.method(), message.uri(), aggregated, headers);
         fullReq.streamId(message.streamId());
+        if (message.isBad()) {
+            fullReq.markBad(message.badReason());
+        }
         return fullReq;
     }
 

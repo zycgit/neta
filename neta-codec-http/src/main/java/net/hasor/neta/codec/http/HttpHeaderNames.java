@@ -20,7 +20,7 @@ package net.hasor.neta.codec.http;
  * These are all defined as lowercase to support HTTP/2 requirements while also not
  * violating HTTP/1.x requirements.  New header names should always be lowercase.
  */
-public class HttpHeaderNames {
+public abstract class HttpHeaderNames {
     /** {@code "accept"} */
     public static final String ACCEPT                                 = "accept";
     /** {@code "accept-charset"} */

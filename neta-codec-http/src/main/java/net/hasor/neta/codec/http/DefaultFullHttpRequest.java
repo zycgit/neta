@@ -30,6 +30,8 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     private final HttpRequest      requestLine;
     private final HttpHeaders      headers;
     private final CompositeByteBuf contentBuffer;
+    private       boolean          bad;
+    private       String           badReason;
 
     /**
      * Creates an aggregated request with an empty payload and an empty final header block.
@@ -87,6 +89,10 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
         this.headers = headers;
         this.contentBuffer = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
         this.contentBuffer.addComponent(content.content());
+        if (requestLine.isBad()) {
+            this.bad = true;
+            this.badReason = requestLine.badReason();
+        }
     }
 
     @Override
@@ -98,6 +104,23 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     public FullHttpRequest streamId(int streamId) {
         this.requestLine.streamId(streamId);
         this.headers.streamId(streamId);
+        return this;
+    }
+
+    @Override
+    public boolean isBad() {
+        return this.bad;
+    }
+
+    @Override
+    public String badReason() {
+        return this.badReason;
+    }
+
+    @Override
+    public FullHttpRequest markBad(String reason) {
+        this.bad = true;
+        this.badReason = reason;
         return this;
     }
 
@@ -265,7 +288,7 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     public String toString() {
         ByteBuf currentContent = this.content();
         int readableBytes = currentContent != null ? currentContent.readableBytes() : 0;
-        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", headers: " + headerSize() + ", content: " + readableBytes + " bytes)";
+        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", headers: " + headerSize() + ", content: " + readableBytes + " bytes, bad: " + this.bad + ")";
     }
 
     @Override
@@ -273,5 +296,7 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
         this.requestLine.release();
         this.headers.release();
         this.contentBuffer.release();
+        this.bad = false;
+        this.badReason = null;
     }
 }
