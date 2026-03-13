@@ -52,7 +52,6 @@ import net.hasor.neta.codec.http.HttpHeaderNames;
  * <h3>Pipeline placement</h3>
  * <pre>
  *   ctx.addLast("http", new HttpServerDuplexe());
- *   ctx.addLastDecoder("http-agg", new HttpObjectAggregator(65536));
  *   ctx.addLast("ws-handshake", new WebSocketServerDuplexer());
  *   ctx.addLastDecoder("ws-decoder", new WebSocketFrameDecoder());
  *   ctx.addLastDecoder("ws-aggregator", new WebSocketFrameAggregator());
@@ -61,6 +60,7 @@ import net.hasor.neta.codec.http.HttpHeaderNames;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-12
  * @see WebSocketServerDuplexer
+ * @see WebSocketClientDuplexer
  */
 public class HandshakeWebSocketMessage extends AbstractWebSocketMessage {
     private final WebSocketVersion version;

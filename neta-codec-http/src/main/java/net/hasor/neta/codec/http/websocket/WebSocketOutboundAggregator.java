@@ -20,12 +20,36 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Converts application-level {@link WebSocketMessage} objects back into
- * transport-level {@link WebSocketFrame} objects.
+ * Converts outbound message-level WebSocket objects back into transport frames.
  * <p>
- * Non-{@link WebSocketMessage} objects are passed through unchanged. Raw
- * {@link WebSocketFrame} instances are also passed through so callers can still
- * control fragmentation manually when needed.
+ * This handler is the outbound mirror of {@link WebSocketInboundAggregator}. It takes
+ * application-visible {@link WebSocketMessage} instances and turns them into
+ * {@link WebSocketFrame} objects that can then be serialized by
+ * {@link WebSocketFrameEncoder}.
+ * <p>
+ * Typical manual pipeline:
+ * <pre>
+ *   App Handler
+ *      -> WebSocketOutboundAggregator
+ *      -> WebSocketFrameEncoder
+ *      -> HttpByteBuf
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   WebSocketMessage
+ *      -> WebSocketOutboundAggregator
+ *      -> WebSocketFrame
+ *      -> WebSocketFrameEncoder
+ *      -> HttpByteBuf
+ * </pre>
+ * <p>
+ * When {@code clientMode} is enabled and the selected version is in the RFC 6455 family,
+ * outbound frames are masked automatically to satisfy client-to-server framing rules.
+ * <p>
+ * Any non-{@link WebSocketMessage} object is passed through unchanged. Raw
+ * {@link WebSocketFrame} instances also pass through so callers can still control
+ * fragmentation and control-frame timing manually when needed.
  */
 public class WebSocketOutboundAggregator implements ProtoHandler<HttpObject, HttpObject> {
     private final WebSocketVersion version;

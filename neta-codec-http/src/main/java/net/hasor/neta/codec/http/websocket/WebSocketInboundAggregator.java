@@ -16,11 +16,23 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * Named inbound-side alias for {@link WebSocketFrameAggregator}.
+ * Direction-explicit inbound alias for {@link WebSocketFrameAggregator}.
  * <p>
- * It keeps the existing frame-to-message aggregation behavior, but makes the
- * direction explicit when paired with {@link WebSocketOutboundAggregator} and
- * the WebSocket aggregation duplexers.
+ * Use this class when the pipeline is assembled as a duplex unit and you want the role to
+ * be obvious from the type name. Behavior is identical to {@link WebSocketFrameAggregator}:
+ * inbound frames are reassembled into message-level objects, and control frames are handled
+ * according to the same rules.
+ * <p>
+ * Typical use is inside a duplex WebSocket stack:
+ * <pre>
+ *   HttpByteBuf
+ *      -> WebSocketFrameDecoder
+ *      -> WebSocketInboundAggregator
+ *      -> WebSocketMessage
+ * </pre>
+ * <p>
+ * This alias is mainly paired with {@link WebSocketOutboundAggregator} and
+ * {@link AbstractWebSocketDuplexeAggregator}.
  */
 public class WebSocketInboundAggregator extends WebSocketFrameAggregator {
     public WebSocketInboundAggregator() {

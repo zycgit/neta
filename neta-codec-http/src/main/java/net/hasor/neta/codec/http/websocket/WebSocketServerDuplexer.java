@@ -21,10 +21,9 @@ import net.hasor.neta.codec.http.event.HttpThroughEvent;
 /**
  * Server-side WebSocket opening-handshake duplexer.
  * <p>
- * This duplexer is intended to sit after {@link HttpObjectAggregator} and before
+ * This duplexer is intended to sit after {@link HttpServerDuplexe} and before
  * {@link WebSocketFrameDecoder}/{@link WebSocketFrameEncoder}. On the receive side
- * it consumes a {@link FullHttpRequest} WebSocket upgrade request, sends the HTTP 101
- * response, switches the shared {@link HttpContext} into transparent mode, installs
+ * it consumes a staged or aggregated HTTP upgrade request, sends the HTTP 101 response, switches the shared {@link HttpContext} into transparent mode, installs
  * {@link WebSocketContext}, and emits a synthetic {@link HandshakeWebSocketMessage}
  * downstream. After the handshake is complete it becomes a transparent pass-through
  * node for both directions.
@@ -39,19 +38,21 @@ import net.hasor.neta.codec.http.event.HttpThroughEvent;
  * <p><b>Pipeline placement:</b>
  * <pre>
  *   ctx.addLast("http", new HttpServerDuplexe());
- *   ctx.addLastDecoder("http-agg", new HttpObjectAggregator(65536));
  *   ctx.addLast("ws-handshake", new WebSocketServerDuplexer(WebSocketVersion.V13));
  *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13));
  *   ctx.addLastDecoder("ws-agg", new WebSocketFrameAggregator());
  *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
  * </pre>
  * <p><b>Ownership:</b> when an upgrade request is consumed by this duplexer, the
- * duplexer takes over that {@link FullHttpRequest} lifecycle and releases it after
+ * duplexer takes over that HTTP message lifecycle and releases the consumed request parts after
  * the handshake response and synthetic completion message have been produced.
  */
 public class WebSocketServerDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private static final class HandshakeState {
-        private boolean ready;
+        private boolean                                          ready;
+        private WebSocketVersion                                 pendingVersion;
+        private final WebSocketHandshakeHttpCollector.RequestCollector collector = new WebSocketHandshakeHttpCollector.RequestCollector();
+        private final java.util.ArrayList<HttpObject>            bufferedMessages = new java.util.ArrayList<>();
     }
 
     private final WebSocketVersion codecVersion;
@@ -89,6 +90,9 @@ public class WebSocketServerDuplexer implements ProtoDuplexer<HttpObject, HttpOb
 
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        if (isRcv) {
+            resetHandshakeState(state(context), true);
+        }
         return ProtoStatus.Next;
     }
 
@@ -104,12 +108,16 @@ public class WebSocketServerDuplexer implements ProtoDuplexer<HttpObject, HttpOb
             try {
                 if (!state.ready && msg instanceof FullHttpRequest) {
                     FullHttpRequest request = (FullHttpRequest) msg;
-                    WebSocketVersion requestedVersion = WebSocketServerHandshaker.detectVersion(request);
+                    WebSocketVersion requestedVersion = WebSocketServerDuplexerHelper.detectVersion(request);
                     if (requestedVersion != null) {
                         consumed = true;
                         handleUpgrade(context, state, request, requestedVersion, dst);
                         continue;
                     }
+                }
+
+                if (!state.ready && handleStagedUpgrade(context, state, msg, dst)) {
+                    continue;
                 }
 
                 dst.offerMessage(msg);
@@ -137,12 +145,45 @@ public class WebSocketServerDuplexer implements ProtoDuplexer<HttpObject, HttpOb
         return ProtoStatus.Next;
     }
 
+    private boolean handleStagedUpgrade(ProtoContext context, HandshakeState state, HttpObject msg, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        if (state.collector.isActive() || msg instanceof HttpRequest) {
+            state.bufferedMessages.add(msg);
+            state.collector.append(msg);
+
+            if (state.pendingVersion == null && state.collector.isHeadersClosed()) {
+                FullHttpRequest snapshot = state.collector.snapshot();
+                state.pendingVersion = snapshot != null ? WebSocketServerDuplexerHelper.detectVersion(snapshot) : null;
+                if (snapshot != null) {
+                    snapshot.release();
+                }
+                if (state.pendingVersion == null) {
+                    flushBuffered(state, dst);
+                    resetHandshakeState(state, false);
+                    return true;
+                }
+            }
+
+            if (state.pendingVersion != null && state.collector.isComplete()) {
+                FullHttpRequest request = state.collector.snapshot();
+                try {
+                    handleUpgrade(context, state, request, state.pendingVersion, dst);
+                } finally {
+                    request.release();
+                    resetHandshakeState(state, true);
+                }
+                return true;
+            }
+            return true;
+        }
+        return false;
+    }
+
     private void handleUpgrade(ProtoContext context, HandshakeState state, FullHttpRequest request, WebSocketVersion requestedVersion, ProtoSndQueue<HttpObject> dst) throws Throwable {
         if (!isCompatible(requestedVersion)) {
             throw new WebSocketProtocolViolationException("websocket handshake version " + requestedVersion + " is incompatible with frame codec version " + this.codecVersion + ".");
         }
 
-        FullHttpResponse handshakeResponse = WebSocketServerHandshaker.handshakeResponse(request);
+        FullHttpResponse handshakeResponse = WebSocketServerDuplexerHelper.handshakeResponse(request);
         context.sendData(handshakeResponse);
 
         ((NetChannel) context.getChannel()).fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
@@ -170,5 +211,28 @@ public class WebSocketServerDuplexer implements ProtoDuplexer<HttpObject, HttpOb
             context.context(HandshakeState.class, state);
         }
         return state;
+    }
+
+    private void flushBuffered(HandshakeState state, ProtoSndQueue<HttpObject> dst) {
+        for (HttpObject buffered : state.bufferedMessages) {
+            dst.offerMessage(buffered);
+        }
+        state.bufferedMessages.clear();
+    }
+
+    private void resetHandshakeState(HandshakeState state, boolean releaseBuffered) {
+        if (releaseBuffered) {
+            for (HttpObject buffered : state.bufferedMessages) {
+                buffered.release();
+            }
+        }
+        state.bufferedMessages.clear();
+        state.collector.reset();
+        state.pendingVersion = null;
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        resetHandshakeState(state(context), true);
     }
 }

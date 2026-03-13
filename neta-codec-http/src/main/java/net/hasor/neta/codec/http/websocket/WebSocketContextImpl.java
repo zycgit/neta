@@ -53,15 +53,31 @@ public class WebSocketContextImpl implements WebSocketContext {
         this.extensions = extensions != null ? Collections.unmodifiableList(extensions) : Collections.emptyList();
     }
 
+    private static List<String> parseExtensions(String extensions) {
+        if (StringUtils.isBlank(extensions)) {
+            return Collections.emptyList();
+        }
+
+        String[] parts = extensions.split(",");
+        List<String> extList = new java.util.ArrayList<>(parts.length);
+        for (String part : parts) {
+            String trimmed = part.trim();
+            if (StringUtils.isNotBlank(trimmed)) {
+                extList.add(trimmed);
+            }
+        }
+        return extList;
+    }
+
     /**
      * Creates a server-side {@link WebSocketContext} from handshake parameters.
      * <p>
-    * Typically called after {@link WebSocketServerDuplexer} completes the opening handshake:
+     * Typically called after {@link WebSocketServerDuplexer} completes the opening handshake:
      * <pre>{@code
-    * context.context(WebSocketContext.class,
-    *     WebSocketContextImpl.fromHandshake(version, request.uri(),
-    *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL),
-    *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS)));
+     * context.context(WebSocketContext.class,
+     *     WebSocketContextImpl.fromHandshake(version, request.uri(),
+     *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL),
+     *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS)));
      * }</pre>
      * @param version the detected WebSocket version
      * @param requestPath the request URI path
@@ -71,20 +87,7 @@ public class WebSocketContextImpl implements WebSocketContext {
      */
     public static WebSocketContextImpl fromHandshake(WebSocketVersion version, String requestPath, String subProtocol, String extensions) {
         int versionCode = version != null ? version.code() : 13;
-        List<String> extList;
-        if (StringUtils.isNotBlank(extensions)) {
-            String[] parts = extensions.split(",");
-            extList = new java.util.ArrayList<>(parts.length);
-            for (String part : parts) {
-                String trimmed = part.trim();
-                if (StringUtils.isNotBlank(trimmed)) {
-                    extList.add(trimmed);
-                }
-            }
-        } else {
-            extList = Collections.emptyList();
-        }
-        return new WebSocketContextImpl(true, subProtocol, versionCode, requestPath, extList);
+        return new WebSocketContextImpl(true, subProtocol, versionCode, requestPath, parseExtensions(extensions));
     }
 
     /**
@@ -93,6 +96,30 @@ public class WebSocketContextImpl implements WebSocketContext {
      */
     public static WebSocketContextImpl fromHandshake(String requestPath, String subProtocol, String extensions) {
         return fromHandshake(WebSocketVersion.V13, requestPath, subProtocol, extensions);
+    }
+
+    /**
+     * Creates a client-side {@link WebSocketContext} from handshake parameters.
+     * <p>
+     * Typically called after {@link WebSocketClientDuplexer} validates the server's
+     * HTTP 101 upgrade response.
+     * @param version the negotiated WebSocket version
+     * @param requestPath the request URI path originally used by the client
+     * @param subProtocol the negotiated sub-protocol returned by the server (may be null)
+     * @param extensions comma-separated negotiated extensions string (may be null)
+     * @return a new client-side WebSocketContext
+     */
+    public static WebSocketContextImpl fromClientHandshake(WebSocketVersion version, String requestPath, String subProtocol, String extensions) {
+        int versionCode = version != null ? version.code() : 13;
+        return new WebSocketContextImpl(false, subProtocol, versionCode, requestPath, parseExtensions(extensions));
+    }
+
+    /**
+     * Creates a client-side {@link WebSocketContext} from handshake parameters.
+     * Assumes RFC 6455 (version 13).
+     */
+    public static WebSocketContextImpl fromClientHandshake(String requestPath, String subProtocol, String extensions) {
+        return fromClientHandshake(WebSocketVersion.V13, requestPath, subProtocol, extensions);
     }
 
     @Override

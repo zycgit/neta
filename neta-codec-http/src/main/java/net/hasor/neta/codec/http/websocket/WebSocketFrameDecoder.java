@@ -22,19 +22,39 @@ import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Decodes {@link HttpByteBuf} into {@link WebSocketFrame} objects.
+ * Decodes transparent-mode HTTP payload bytes into {@link WebSocketFrame} objects.
  * <p>
- * Sits behind the HTTP decoder in the pipeline: after the HTTP layer switches to
- * transparent mode, inbound data arrives as {@link HttpByteBuf}. This handler extracts
- * the raw bytes and decodes them into WebSocket frames.
+ * This decoder is used only after the HTTP/1.x upgrade handshake has completed and the
+ * HTTP codec has switched into transparent mode. At that point inbound network bytes are
+ * wrapped as {@link HttpByteBuf}, and this handler turns those transport bytes into
+ * frame-level WebSocket objects.
  * <p>
- * Supports all protocol versions:
+ * Typical usage in a manually assembled inbound pipeline:
+ * <pre>
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLast("ws-handshake", new WebSocketServerDuplexer(WebSocketVersion.V13));
+ *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13));
+ *   ctx.addLastDecoder("ws-agg", new WebSocketFrameAggregator());
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   socket bytes
+ *      -> HttpServerDuplexe / HttpClientDuplexe
+ *      -> transparent HttpByteBuf
+ *      -> WebSocketFrameDecoder
+ *      -> WebSocketFrame
+ *      -> next inbound handler
+ * </pre>
+ * <p>
+ * Version support:
  * <ul>
- *   <li>{@link WebSocketVersion#V0} — Hixie-76 text framing ({@code 0x00…0xFF}).</li>
- *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8},
- *       {@link WebSocketVersion#V13} — RFC 6455 §5.2 binary framing.</li>
+ *   <li>{@link WebSocketVersion#V0}: Hixie-76 framing.</li>
+ *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8}, {@link WebSocketVersion#V13}: RFC 6455 framing family.</li>
  * </ul>
- * <p>Non-{@link HttpByteBuf} messages are passed through unchanged.
+ * <p>
+ * Any non-{@link HttpByteBuf} {@link HttpObject} is passed through unchanged so handshake
+ * events or already-decoded objects can continue through the same pipeline.
  */
 public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, HttpObject> {
     private static final Logger           logger           = Logger.getLogger(WebSocketFrameDecoder.class);

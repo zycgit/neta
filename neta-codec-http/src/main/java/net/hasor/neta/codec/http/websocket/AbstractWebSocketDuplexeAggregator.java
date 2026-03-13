@@ -17,13 +17,32 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 
-abstract class AbstractWebSocketAggregatorDuplexe implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
+/**
+ * Base duplex assembly for post-handshake WebSocket transport processing.
+ * <p>
+ * This type wires together four concrete stages into one duplex node:
+ * {@link WebSocketFrameDecoder}, {@link WebSocketInboundAggregator},
+ * {@link WebSocketOutboundAggregator}, and {@link WebSocketFrameEncoder}.
+ * Subclasses choose whether outbound frames should be client-masked and expose the
+ * assembled stack as either a client-side or server-side duplexer.
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   inbound:  HttpByteBuf -> FrameDecoder -> InboundAggregator -> WebSocketMessage
+ *   outbound: WebSocketMessage -> OutboundAggregator -> FrameEncoder -> HttpByteBuf
+ * </pre>
+ * <p>
+ * This duplexer assumes the opening handshake has already completed and the HTTP codec is
+ * already in transparent mode. It is the implementation base behind
+ * {@link WebSocketServerDuplexeAggregator} and {@link WebSocketClientDuplexeAggregator}.
+ */
+abstract class AbstractWebSocketDuplexeAggregator implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private final WebSocketFrameDecoder       frameDecoder;
     private final WebSocketInboundAggregator  inboundAggregator;
     private final WebSocketOutboundAggregator outboundAggregator;
     private final WebSocketFrameEncoder       frameEncoder;
 
-    protected AbstractWebSocketAggregatorDuplexe(WebSocketVersion version, boolean clientMode, int maxMessageSize) {
+    protected AbstractWebSocketDuplexeAggregator(WebSocketVersion version, boolean clientMode, int maxMessageSize) {
         this.frameDecoder = new WebSocketFrameDecoder(version);
         this.inboundAggregator = new WebSocketInboundAggregator(maxMessageSize);
         this.outboundAggregator = new WebSocketOutboundAggregator(version, clientMode);

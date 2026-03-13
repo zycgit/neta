@@ -21,23 +21,38 @@ import net.hasor.neta.codec.http.DefaultHttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Encodes {@link WebSocketFrame} objects into {@link net.hasor.neta.codec.http.HttpByteBuf}.
+ * Encodes {@link WebSocketFrame} objects into transparent-mode HTTP payload buffers.
  * <p>
- * Sits behind the HTTP encoder in the pipeline: the HTTP layer in transparent mode will
- * extract the raw {@link ByteBuf} from the produced {@link net.hasor.neta.codec.http.HttpByteBuf}
- * and send it on the wire.
+ * This encoder sits on the outbound side after WebSocket frame construction and before
+ * the HTTP/1.x codec writes raw bytes to the socket. It converts frame-level objects into
+ * {@link net.hasor.neta.codec.http.HttpByteBuf}, which the HTTP layer forwards unchanged
+ * once transparent mode is enabled by the opening handshake duplexer.
  * <p>
- * Supports all protocol versions:
+ * Typical usage in a manually assembled outbound pipeline:
+ * <pre>
+ *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   WebSocketFrame
+ *      -> WebSocketFrameEncoder
+ *      -> HttpByteBuf
+ *      -> HttpServerDuplexe / HttpClientDuplexe
+ *      -> socket bytes
+ * </pre>
+ * <p>
+ * Version support:
  * <ul>
- *   <li>{@link WebSocketVersion#V0} — Hixie-76: {@code 0x00…0xFF} text framing.</li>
- *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8},
- *       {@link WebSocketVersion#V13} — RFC 6455 §5.2 binary framing.</li>
+ *   <li>{@link WebSocketVersion#V0}: Hixie-76 framing.</li>
+ *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8}, {@link WebSocketVersion#V13}: RFC 6455 framing family.</li>
  * </ul>
- * <p><b>Ownership:</b> once a {@link WebSocketFrame} is consumed by this encoder,
- * the encoder takes over its lifecycle and releases the source frame after the
- * outbound bytes have been produced. Callers should not release a successfully
- * handed-off frame a second time.
- * <p>Non-{@link WebSocketFrame} messages are passed through unchanged.
+ * <p><b>Ownership:</b> once a {@link WebSocketFrame} is consumed by this encoder, the
+ * encoder takes over its lifecycle and releases the source frame after the outbound bytes
+ * have been produced. Callers should not release a successfully handed-off frame twice.
+ * <p>
+ * Any non-{@link WebSocketFrame} {@link HttpObject} is passed through unchanged.
  */
 public class WebSocketFrameEncoder implements ProtoHandler<HttpObject, HttpObject> {
     private static final Logger              logger           = Logger.getLogger(WebSocketFrameEncoder.class);

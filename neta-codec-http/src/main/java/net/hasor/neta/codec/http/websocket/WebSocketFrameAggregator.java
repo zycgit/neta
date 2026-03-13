@@ -22,38 +22,40 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Aggregates raw {@link WebSocketFrame}s into application-level messages.
+ * Aggregates inbound {@link WebSocketFrame} sequences into application-visible messages.
  * <p>
- * Sits after {@link WebSocketFrameDecoder} in the pipeline and performs:
- * <ul>
- *   <li><b>Fragment reassembly</b> — collects CONTINUATION frames and combines them
- *       with the initial TEXT or BINARY frame into a single {@link WebSocketMessage}.</li>
- *   <li><b>Control frame handling</b>:
- *     <ul>
- *       <li>PING → automatically replies with PONG (same payload) via {@code context.sendData()},
- *           no message is forwarded downstream.</li>
- *       <li>PONG → forwarded as a {@link WebSocketMessage} with type {@link WebSocketOpcode#PONG}.</li>
- *       <li>CLOSE → parsed into a {@link WebSocketCloseMessage} with status code and reason,
- *           and a close reply is automatically sent back.</li>
- *     </ul>
- *   </li>
- * </ul>
- * <h3>Pipeline placement</h3>
+ * This handler sits after {@link WebSocketFrameDecoder}. It reassembles fragmented text
+ * and binary messages, translates control frames into higher-level events, and keeps the
+ * downstream side focused on {@link WebSocketMessage} rather than transport fragments.
+ * <p>
+ * Typical manual pipeline:
  * <pre>
- *   // After HTTP aggregation and handshake gate:
- *   ctx.addLast("ws-handshake",   new WebSocketServerDuplexer(version));
- *   ctx.addLastDecoder("ws-decoder",     new WebSocketFrameDecoder(version));
- *   ctx.addLastDecoder("ws-aggregator",  new WebSocketFrameAggregator());
- *   ctx.addLastEncoder("ws-encoder",     new WebSocketFrameEncoder(version));
+ *   ctx.addLast("ws-handshake", new WebSocketServerDuplexer(version));
+ *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(version));
+ *   ctx.addLastDecoder("ws-msg", new WebSocketFrameAggregator(65536));
+ *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(version));
  * </pre>
- * <h3>Downstream receives</h3>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   HttpByteBuf
+ *      -> WebSocketFrameDecoder
+ *      -> WebSocketFrame / Continuation frame
+ *      -> WebSocketFrameAggregator
+ *      -> WebSocketMessage / WebSocketCloseMessage / passthrough event
+ * </pre>
+ * <p>
+ * Main behaviors:
  * <ul>
- *   <li>{@link WebSocketMessage} — for TEXT, BINARY, and PONG messages.</li>
- *   <li>{@link WebSocketCloseMessage} — for CLOSE frames.</li>
- *   <li>Any non-{@link WebSocketFrame} {@link HttpObject} is passed through unchanged.</li>
+ *   <li>Reassembles TEXT/BINARY + CONTINUATION fragments into one {@link WebSocketMessage}.</li>
+ *   <li>Consumes PING and sends PONG automatically.</li>
+ *   <li>Translates PONG into a message-level object for downstream inspection.</li>
+ *   <li>Translates CLOSE into {@link WebSocketCloseMessage} and emits the close reply.</li>
  * </ul>
- * @author 赵永春 (zyc@hasor.net)
- * @version : 2026-03-12
+ * <p>
+ * Any non-{@link WebSocketFrame} {@link HttpObject} is passed through unchanged.
+ * If you prefer a direction-explicit name, use {@link WebSocketInboundAggregator}, which
+ * keeps the same behavior but reads more clearly inside duplex assembly code.
  */
 public class WebSocketFrameAggregator implements ProtoHandler<HttpObject, HttpObject> {
     /** Default maximum message size (64 KB). */
