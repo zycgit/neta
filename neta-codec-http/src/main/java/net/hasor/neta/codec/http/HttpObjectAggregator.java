@@ -17,20 +17,31 @@ package net.hasor.neta.codec.http;
 import net.hasor.neta.channel.*;
 
 /**
- * Aggregates a sequence of {@link HttpObject}s (a start line followed by header blocks,
- * {@link HttpContent}s and a {@link LastHttpContent}) into a single
- * {@link FullHttpRequest} or {@link FullHttpResponse}.
+ * Compatibility aggregator that routes staged HTTP objects to request or response aggregation.
  * <p>
- * This handler sits after the decoder in the pipeline and collects the streamed
- * HTTP message parts into a complete message object.
+ * This handler keeps the old single-class aggregation entry point while internally delegating to
+ * {@link HttpRequestAggregator} and {@link HttpResponseAggregator}. It is useful for shared code
+ * paths that may see either direction, but new direction-specific code should usually prefer the
+ * explicit request/response aggregators or the duplex wrappers.
  * <p>
- * If the content exceeds {@code maxContentLength}, an
- * {@link HttpContentTooLargeException} is thrown.
- * <p>Pipeline usage:</p>
+ * pipeline view:
  * <pre>
- *   ctx.addLastDecoder("http-request", new HttpRequestDecoder());
- *   ctx.addLastDecoder("http-aggregator", new HttpObjectAggregator(1048576)); // 1MB max
+ *   HttpObject parts
+ *      -> HttpObjectAggregator
+ *      -> FullHttpRequest or FullHttpResponse
  * </pre>
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLastDecoder("http-agg", new HttpObjectAggregator(1048576));
+ * </pre>
+ * <p>
+ * Preferred modern alternatives:
+ * <ul>
+ *   <li>{@link HttpRequestAggregator} or {@link HttpResponseAggregator} when the direction is known.</li>
+ *   <li>{@link HttpServerDuplexeAggregator} or {@link HttpClientDuplexeAggregator} when a duplex node is preferred.</li>
+ * </ul>
  */
 public class HttpObjectAggregator implements ProtoHandler<HttpObject, HttpObject> {
     private final HttpRequestAggregator  requestAggregator;

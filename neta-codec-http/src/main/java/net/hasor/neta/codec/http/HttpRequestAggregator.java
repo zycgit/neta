@@ -21,6 +21,21 @@ import net.hasor.neta.channel.ProtoContext;
 
 /**
  * Aggregates staged request-side {@link HttpObject} sequences into {@link FullHttpRequest}.
+ * <p>
+ * Use this handler after {@link HttpRequestDecoder} when downstream code prefers complete
+ * request objects instead of staged headers and body chunks.
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   socket bytes
+ *      -> HttpRequestDecoder
+ *      -> HttpRequest + HttpHeaders + HttpContent ...
+ *      -> HttpRequestAggregator
+ *      -> FullHttpRequest
+ * </pre>
+ * <p>
+ * For server pipelines this is usually the receive-side aggregation choice. If you want the
+ * same idea packaged as a duplex node, use {@link HttpServerDuplexeAggregator}.
  */
 public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     private static final Logger logger = Logger.getLogger(HttpRequestAggregator.class);

@@ -19,17 +19,25 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
- * A server-side HTTP codec that combines {@link HttpRequestDecoder} and
- * {@link HttpResponseEncoder} into a single bidirectional handler.
+ * Server-side HTTP/1.x duplex codec that combines request decoding and response encoding.
  * <p>
- * RCV direction: ByteBuf → HttpObject (request decoding)
- * SND direction: HttpObject → ByteBuf (response encoding)
+ * This class packages {@link HttpRequestDecoder} and {@link HttpResponseEncoder} into one
+ * bidirectional pipeline node. It is the normal entry point for HTTP/1.x server traffic.
  * <p>
- * This is the Neta equivalent of Netty's {@code HttpServerCodec}.
- * <p>Pipeline usage:</p>
+ * pipeline view:
  * <pre>
- *   ctx.addLast("http", new HttpServerCodec());
+ *   inbound:  socket bytes -> HttpServerDuplexe -> HttpObject
+ *   outbound: HttpObject   -> HttpServerDuplexe -> socket bytes
  * </pre>
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1048576));
+ * </pre>
+ * <p>
+ * When {@link HttpThroughEvent} enables transparent mode, both halves stop interpreting HTTP
+ * framing and forward upgraded payload as raw buffers.
  */
 public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
     private final HttpRequestDecoder  decoder;

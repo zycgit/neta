@@ -22,34 +22,37 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
- * Encodes {@link HttpObject} instances into raw bytes for HTTP response messages.
+ * Encodes staged response-side {@link HttpObject} instances into outbound HTTP/1.x bytes.
  * <p>
- * This encoder handles the serialization of HTTP responses as defined in
- * <a href="https://tools.ietf.org/html/rfc7230#section-3.1.2">RFC 7230, Section 3.1.2</a>.
+ * This encoder accepts the same staged object sequence that {@link HttpResponseDecoder} emits:
+ * status line, header blocks, content chunks, and final markers. It is typically used in a
+ * server pipeline or in the outbound side of a proxy.
  * <p>
- * The encoder expects the following sequence of {@link HttpObject}s:
- * <ol>
- *   <li>{@link HttpResponse} - encodes the status-line</li>
- *   <li>One or more {@link HttpHeaders} blocks, closed by {@link LastHttpHeaders}</li>
- *   <li>Zero or more {@link HttpContent} - encodes body chunks</li>
- *   <li>Optional trailing {@link TrailerHttpHeaders} blocks for chunked bodies</li>
- *   <li>{@link LastHttpContent} - encodes the final body chunk</li>
- * </ol>
+ * Aggregated responses such as {@link FullHttpResponse} are encoded by the same staged dispatch
+ * path because they also implement {@link HttpResponse}, {@link LastHttpHeaders}, and
+ * {@link LastHttpContent}.
  * <p>
- * Aggregated responses such as {@link FullHttpResponse} are encoded by the same staged
- * dispatch path because they also implement {@link HttpResponse}, {@link LastHttpHeaders},
- * and {@link LastHttpContent}.
- * <p><b>Ownership:</b> once a response-side {@link HttpObject} is consumed by this
- * encoder, the encoder takes over its lifecycle and releases the source object
- * after the encoded output has been produced. Callers should not release a
- * successfully handed-off message a second time.
- * <p><b>Thread safety:</b> This handler is stateless. Per-connection state is stored in
- * {@link HttpContext} on the {@link ProtoContext}, making it safe to share a single
- * instance across multiple connections/pipelines.
- * <p>Pipeline usage:</p>
+ * Typical usage:
  * <pre>
- *   ctx.addLastEncoder("http-response", new HttpResponseEncoder());
+ *   ctx.addLastEncoder("http-resp", new HttpResponseEncoder());
  * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   HttpResponse + HttpHeaders + HttpContent ...
+ *      -> HttpResponseEncoder
+ *      -> socket bytes
+ * </pre>
+ * <p>
+ * In transparent mode, this encoder no longer serializes HTTP syntax and instead accepts only
+ * {@link HttpByteBuf}, forwarding its payload directly. That is the outbound half of HTTP/1.x
+ * protocol upgrade handling.
+ * <p><b>Ownership:</b> once a response-side {@link HttpObject} is consumed by this encoder, the
+ * encoder takes over its lifecycle and releases the source object after the encoded output has
+ * been produced. Callers should not release a successfully handed-off message a second time.
+ * <p><b>Thread safety:</b> this handler is stateless. Per-connection state is stored in
+ * {@link HttpContext} on the {@link ProtoContext}, making it safe to share a single instance
+ * across multiple connections or pipelines.
  */
 public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private static final Logger              logger         = Logger.getLogger(HttpResponseEncoder.class);

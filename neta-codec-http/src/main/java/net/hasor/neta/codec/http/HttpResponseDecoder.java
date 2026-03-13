@@ -23,31 +23,38 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
- * Decodes raw bytes into HTTP response objects ({@link HttpObject}).
+ * Decodes inbound socket bytes into staged HTTP/1.x response objects.
  * <p>
- * This decoder implements the HTTP/1.x response parsing state machine as defined in
- * <a href="https://tools.ietf.org/html/rfc7230">RFC 7230</a>.
+ * This decoder is the client-side counterpart to {@link HttpRequestDecoder}. It parses the
+ * response line, headers, and body framing, then emits a staged stream of {@link HttpObject}
+ * parts that can either be processed directly or aggregated into {@link FullHttpResponse}.
  * <p>
- * The decoder emits the following sequence of {@link HttpObject}s for each response:
+ * Output sequence per response:
  * <ol>
- *   <li>{@link DefaultHttpResponse} - the status line</li>
- *   <li>{@link DefaultLastHttpHeaders} - the initial header block</li>
- *   <li>Zero or more {@link DefaultHttpContent} - body chunks</li>
- *   <li>Zero or more {@link DefaultTrailerHttpHeaders} - trailing header blocks for chunked bodies</li>
- *   <li>{@link DefaultLastHttpContent} - marks the end of the response body</li>
+ *   <li>{@link DefaultHttpResponse}: status line.</li>
+ *   <li>{@link DefaultLastHttpHeaders}: initial header block.</li>
+ *   <li>Zero or more {@link DefaultHttpContent}: body chunks.</li>
+ *   <li>Zero or more {@link DefaultTrailerHttpHeaders}: trailing chunk headers.</li>
+ *   <li>{@link DefaultLastHttpContent}: end-of-body marker.</li>
  * </ol>
  * <p>
- * Supported transfer modes (RFC 7230 §3.3.3):
- * <ul>
- *   <li>Chunked transfer encoding (§4.1)</li>
- *   <li>Content-Length based body (§3.3.2)</li>
- *   <li>Connection close delimited body (HTTP/1.0 without Content-Length)</li>
- *   <li>No body (1xx, 204, 304 responses)</li>
- * </ul>
- * <p>Pipeline usage:</p>
+ * Typical usage:
  * <pre>
- *   ctx.addLastDecoder("http-response", new HttpResponseDecoder());
+ *   ctx.addLastDecoder("http-resp", new HttpResponseDecoder());
+ *   ctx.addLastDecoder("http-agg", new HttpResponseAggregator(1048576));
  * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   socket bytes
+ *      -> HttpResponseDecoder
+ *      -> HttpResponse + HttpHeaders + HttpContent ...
+ *      -> HttpResponseAggregator or business handler
+ * </pre>
+ * <p>
+ * After transparent mode is enabled, this decoder stops interpreting HTTP syntax and passes
+ * raw payload through as {@link HttpByteBuf}. This is used by upgraded protocols on the
+ * client side as well.
  */
 public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private static final Logger logger                          = Logger.getLogger(HttpResponseDecoder.class);

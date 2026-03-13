@@ -25,30 +25,38 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
- * Decodes raw bytes into HTTP request objects ({@link HttpObject}).
+ * Decodes inbound socket bytes into staged HTTP/1.x request objects.
  * <p>
- * This decoder implements the HTTP/1.x message parsing state machine as defined in
- * <a href="https://tools.ietf.org/html/rfc7230">RFC 7230</a>.
+ * This decoder implements the HTTP/1.x request parsing state machine. It is normally the
+ * first protocol handler on the receive side of an HTTP server pipeline and emits a staged
+ * stream of {@link HttpObject} parts rather than a single aggregated request.
  * <p>
- * The decoder emits the following sequence of {@link HttpObject}s for each request:
+ * Output sequence per request:
  * <ol>
- *   <li>{@link DefaultHttpRequest} - the request line</li>
- *   <li>{@link DefaultLastHttpHeaders} - the initial header block</li>
- *   <li>Zero or more {@link DefaultHttpContent} - body chunks</li>
- *   <li>Zero or more {@link DefaultTrailerHttpHeaders} - trailing header blocks for chunked bodies</li>
- *   <li>{@link DefaultLastHttpContent} - marks the end of the request body</li>
+ *   <li>{@link DefaultHttpRequest}: request line.</li>
+ *   <li>{@link DefaultLastHttpHeaders}: initial header block.</li>
+ *   <li>Zero or more {@link DefaultHttpContent}: body chunks.</li>
+ *   <li>Zero or more {@link DefaultTrailerHttpHeaders}: trailing chunk headers.</li>
+ *   <li>{@link DefaultLastHttpContent}: end-of-body marker.</li>
  * </ol>
  * <p>
- * Supported transfer modes:
- * <ul>
- *   <li>Content-Length based body (RFC 7230 §3.3.2)</li>
- *   <li>Chunked transfer encoding (RFC 7230 §4.1)</li>
- *   <li>No body (for methods like GET, HEAD, DELETE, etc.)</li>
- * </ul>
- * <p>Pipeline usage:</p>
+ * Typical usage:
  * <pre>
- *   ctx.addLastDecoder("http-request", new HttpRequestDecoder());
+ *   ctx.addLastDecoder("http-req", new HttpRequestDecoder());
+ *   ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1048576));
  * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   socket bytes
+ *      -> HttpRequestDecoder
+ *      -> HttpRequest + HttpHeaders + HttpContent ...
+ *      -> HttpRequestAggregator or business handler
+ * </pre>
+ * <p>
+ * After transparent mode is enabled, this decoder stops interpreting HTTP syntax and passes
+ * raw payload through as {@link HttpByteBuf}. That behavior is what allows the same HTTP/1.x
+ * pipeline to carry upgraded protocols such as WebSocket.
  */
 public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private static final Logger logger                          = Logger.getLogger(HttpRequestDecoder.class);

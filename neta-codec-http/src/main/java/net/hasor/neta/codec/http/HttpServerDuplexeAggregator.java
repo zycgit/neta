@@ -23,21 +23,33 @@ import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.channel.SoUserEvent;
 
 /**
- * Server-side aggregation duplexer.
+ * Server-side duplex wrapper for request and response aggregation.
  * <p>
- * RCV direction: request-side {@link HttpObject} → {@link FullHttpRequest}
+ * This class bundles {@link HttpRequestAggregator} on the receive side and
+ * {@link HttpResponseAggregator} on the send side, so a server pipeline can express full-message
+ * aggregation as one duplex node instead of wiring two independent handlers.
  * <p>
- * SND direction: response-side {@link HttpObject} → {@link FullHttpResponse}
+ * pipeline view:
+ * <pre>
+ *   inbound:  HttpObject parts -> HttpServerDuplexeAggregator -> FullHttpRequest
+ *   outbound: HttpObject parts -> HttpServerDuplexeAggregator -> FullHttpResponse
+ * </pre>
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLast("http-agg", new HttpServerDuplexeAggregator(1048576));
+ * </pre>
  */
-public class HttpServerAggregatorDuplexe implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
+public class HttpServerDuplexeAggregator implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private final HttpRequestAggregator  requestAggregator;
     private final HttpResponseAggregator responseAggregator;
 
-    public HttpServerAggregatorDuplexe() {
+    public HttpServerDuplexeAggregator() {
         this(AbstractHttpAggregator.DEFAULT_MAX_CONTENT_LENGTH);
     }
 
-    public HttpServerAggregatorDuplexe(int maxContentLength) {
+    public HttpServerDuplexeAggregator(int maxContentLength) {
         this.requestAggregator = new HttpRequestAggregator(maxContentLength);
         this.responseAggregator = new HttpResponseAggregator(maxContentLength);
     }

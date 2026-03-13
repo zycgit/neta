@@ -21,6 +21,33 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
+/**
+ * Shared base class for HTTP/1.x staged-message aggregation.
+ * <p>
+ * This handler converts the staged output of an HTTP decoder into one full in-memory message.
+ * Concrete subclasses decide whether the start line is request-side or response-side and which
+ * aggregated type to build.
+ * <p>
+ * Expected staged input shape:
+ * <pre>
+ *   Start-Line Object
+ *      -> HttpHeaders
+ *      -> HttpContent ...
+ *      -> LastHttpContent
+ *      => FullHttpRequest or FullHttpResponse
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   HttpRequestDecoder / HttpResponseDecoder
+ *      -> HttpObject parts
+ *      -> AbstractHttpAggregator subclass
+ *      -> FullHttpRequest / FullHttpResponse
+ * </pre>
+ * <p>
+ * When transparent mode is enabled, aggregation is reset and objects are forwarded as-is,
+ * because upgraded protocols no longer follow HTTP message framing.
+ */
 public abstract class AbstractHttpAggregator<M extends HttpObject> implements ProtoHandler<HttpObject, HttpObject> {
     private final       Logger                    logger                     = Logger.getLogger(this.getClass());
     public static final int                       DEFAULT_MAX_CONTENT_LENGTH = 1048576;

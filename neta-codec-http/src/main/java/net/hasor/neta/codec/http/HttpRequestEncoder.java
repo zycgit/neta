@@ -22,11 +22,30 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
- * Encodes {@link HttpObject} instances into raw bytes for HTTP request messages.
- * <p><b>Ownership:</b> once a request-side {@link HttpObject} is consumed by this
- * encoder, the encoder takes over its lifecycle and releases the source object
- * after the encoded output has been produced. Callers should not release a
- * successfully handed-off message a second time.
+ * Encodes staged request-side {@link HttpObject} instances into outbound HTTP/1.x bytes.
+ * <p>
+ * This encoder accepts the same staged object sequence that {@link HttpRequestDecoder} emits:
+ * request line, header blocks, content chunks, and final markers. It is typically used in a
+ * client pipeline or in the outbound side of a proxy.
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLastEncoder("http-req", new HttpRequestEncoder());
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   HttpRequest + HttpHeaders + HttpContent ...
+ *      -> HttpRequestEncoder
+ *      -> socket bytes
+ * </pre>
+ * <p>
+ * In transparent mode, this encoder no longer serializes HTTP syntax and instead accepts only
+ * {@link HttpByteBuf}, forwarding its payload directly. That is the outbound half of HTTP/1.x
+ * protocol upgrade handling.
+ * <p><b>Ownership:</b> once a request-side {@link HttpObject} is consumed by this encoder, the
+ * encoder takes over its lifecycle and releases the source object after the encoded output has
+ * been produced. Callers should not release a successfully handed-off message a second time.
  */
 public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private static final Logger              logger         = Logger.getLogger(HttpRequestEncoder.class);
