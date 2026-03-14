@@ -47,8 +47,8 @@ public class ProtoRoutingModeTest {
         List<Object> received = new ArrayList<>();
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
-        channel.onReceive(2);
-        channel.onReceive(3);
+        channel.receiveData(2);
+        channel.receiveData(3);
 
         Assert.assertEquals(2, received.size());
         Assert.assertEquals(2, received.get(0));
@@ -78,7 +78,7 @@ public class ProtoRoutingModeTest {
         List<Object> received = new ArrayList<>();
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
-        channel.onReceive(7);
+        channel.receiveData(7);
 
         Assert.assertEquals(1, RecordHandler.activeCount("odd"));
         Assert.assertEquals(0, RecordHandler.activeCount("even"));
@@ -106,9 +106,9 @@ public class ProtoRoutingModeTest {
         List<Object> received = new ArrayList<>();
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
-        channel.onReceive(10);
-        channel.onReceive(20);
-        channel.onReceive(30);
+        channel.receiveData(10);
+        channel.receiveData(20);
+        channel.receiveData(30);
 
         Assert.assertEquals(3, received.size());
         Assert.assertEquals(10, received.get(0));
@@ -145,8 +145,8 @@ public class ProtoRoutingModeTest {
         List<Object> received = new ArrayList<>();
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
-        channel.onReceive(10);
-        channel.onReceive(20);
+        channel.receiveData(10);
+        channel.receiveData(20);
 
         Assert.assertEquals(2, received.size());
         Assert.assertEquals(10, received.get(0));

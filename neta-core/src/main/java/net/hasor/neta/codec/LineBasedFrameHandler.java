@@ -31,6 +31,9 @@ import net.hasor.neta.channel.*;
  * <p>
  * {@code maxLength} limits the content length before the delimiter. If no delimiter
  * is found before that limit is exceeded, a {@link TooLongFrameException} is thrown.
+ * <p><b>Ownership:</b> emitted frames are newly allocated buffers owned by downstream.
+ * Source buffers remain managed by the pipeline queue; this handler only advances their
+ * read state while assembling the replacement frame.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */

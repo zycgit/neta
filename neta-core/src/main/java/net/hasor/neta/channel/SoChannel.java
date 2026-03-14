@@ -36,6 +36,12 @@ import net.hasor.cobble.concurrent.future.Future;
  * The {@code subscribe} family of methods lets callers observe decoded pipeline events
  * ({@link PlayLoad}) without modifying the handler chain. Subscriptions are scoped to
  * this channel and are automatically removed when the channel closes.
+ * <p>Payload objects remain owned by the pipeline/transport that emitted them. Listeners
+ * should therefore treat {@link PlayLoad#getData()} as a transient observation unless the
+ * concrete payload type states otherwise. In particular, virtual-channel outbound events may
+ * expose the same {@code ByteBuf} instance that is still owned by the current send operation;
+ * if a listener needs to access that buffer after the callback returns, it must retain or copy
+ * the buffer inside the callback.
  * <h3>Closing</h3>
  * <ul>
  *   <li>{@link #close()} – graceful: flushes the outbound queue, then closes.</li>
@@ -112,14 +118,27 @@ public interface SoChannel<T> {
     /** Finds a context attachment by type. */
     <V> V findProtoContext(Class<V> serviceType);
 
-    /** Subscribes to events emitted by this channel. */
+    /**
+     * Subscribes to events emitted by this channel.
+     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
+     * need to hold a reference-counted payload after the callback returns should retain or copy it
+     * before returning.
+     */
     SubscribeHolder subscribe(PlayLoadListener listener);
 
-    /** Subscribes to channel events with the given delivery mode. */
+    /**
+     * Subscribes to channel events with the given delivery mode.
+     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
+     * need to hold a reference-counted payload after the callback returns should retain or copy it
+     * before returning.
+     */
     SubscribeHolder subscribe(SubscribeMode mode, PlayLoadListener listener);
 
     /**
      * Subscribes to messages belonging to this channel and filters events using the provided predicate.
+     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
+     * need to hold a reference-counted payload after the callback returns should retain or copy it
+     * before returning.
      * @param select predicate to filter events
      * @param listener listener to handle filtered events
      */
@@ -127,6 +146,9 @@ public interface SoChannel<T> {
 
     /**
      * Subscribes to messages belonging to this channel with the specified filter and delivery mode.
+     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
+     * need to hold a reference-counted payload after the callback returns should retain or copy it
+     * before returning.
      * @param select predicate to filter events
      * @param mode delivery mode
      * @param listener listener to handle filtered events

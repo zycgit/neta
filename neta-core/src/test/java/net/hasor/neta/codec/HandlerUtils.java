@@ -71,9 +71,13 @@ public class HandlerUtils {
         tmpBuf.markWriter();
 
         //
-        String line = tmpBuf.readLine();
-        if (line != null) {
-            dst.offerMessage(line);
+        try {
+            String line = tmpBuf.readLine();
+            if (line != null) {
+                dst.offerMessage(line);
+            }
+        } finally {
+            tmpBuf.release();
         }
         return ProtoStatus.Next;
     }

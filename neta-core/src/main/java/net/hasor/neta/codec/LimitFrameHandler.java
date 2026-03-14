@@ -35,6 +35,9 @@ import net.hasor.neta.channel.*;
  * <p>
  * The same logic is used on whichever side of the pipeline the handler is added,
  * so it can be used as either a decoder or an encoder.
+ * <p><b>Ownership:</b> emitted frames are newly allocated buffers owned by downstream.
+ * Source buffers remain managed by the pipeline queue; this handler only advances their
+ * read state while copying bytes into replacement frames.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */

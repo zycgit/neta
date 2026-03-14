@@ -26,6 +26,9 @@ import net.hasor.neta.channel.*;
  * and the send side converts each outbound {@link String} back into bytes using
  * the same charset. Like its decoder half, it does not define message boundaries
  * for stream transports and should usually be placed after a frame splitter.
+ * <p><b>Ownership:</b> the receive side follows {@link StringDecoder} semantics and
+ * releases consumed {@link ByteBuf} inputs after conversion; the send side follows
+ * {@link StringEncoder} semantics and emits newly created outbound buffers.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */

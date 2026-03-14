@@ -28,6 +28,9 @@ package net.hasor.neta.channel;
  *       delivered in order.  Choose this for callbacks that may block or touch external
  *       systems.</li>
  * </ul>
+ * <p>The callback observes pipeline-owned payloads. When a listener needs to use a
+ * reference-counted object after {@link #onEvent(PlayLoad)} returns, it must retain or copy the
+ * object during the callback.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  * @see PlayLoad

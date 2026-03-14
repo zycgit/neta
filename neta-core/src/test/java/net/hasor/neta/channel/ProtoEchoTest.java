@@ -115,7 +115,7 @@ public class ProtoEchoTest {
             }
         });
 
-        channel.onReceive("hello");
+        channel.receiveData("hello");
         TypeRequest request = in.poll();
         assert request.getHeader().equals("TypeFrame>TypeRequest");
         assert request.getMessage().equals("hello");

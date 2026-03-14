@@ -59,7 +59,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
-        channel.onReceive(42); // even → "even" branch
+        channel.receiveData(42); // even → "even" branch
 
         //
         Assert.assertEquals("EvenDoNext", StringUtils.join(evenDecLog.toArray(), ","));
@@ -99,7 +99,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
-        channel.onReceive(7); // odd → "odd" branch
+        channel.receiveData(7); // odd → "odd" branch
 
         //
         Assert.assertTrue(evenDecLog.isEmpty());
@@ -136,7 +136,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
-        channel.onReceive(5); // selector returns null → no branch
+        channel.receiveData(5); // selector returns null → no branch
 
         //
         Assert.assertTrue(evenDecLog.isEmpty());
@@ -200,7 +200,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
-        channel.onReceive(5); // positive + <10 → L2:small
+        channel.receiveData(5); // positive + <10 → L2:small
 
         //
         Assert.assertEquals("smallDecLog=" + smallDecLog, "SmallDoNext", StringUtils.join(smallDecLog.toArray(), ","));
@@ -232,7 +232,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
-        channel.onReceive(42); // positive + >=10 → L2:large
+        channel.receiveData(42); // positive + >=10 → L2:large
 
         //
         Assert.assertTrue("smallDecLog should be empty: " + smallDecLog, smallDecLog.isEmpty());
@@ -264,7 +264,7 @@ public class ProtoRoutingSelectorTest extends AbstractStackTest {
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
 
         //
-        channel.onReceive(-3); // <=0 → L1:nonPos
+        channel.receiveData(-3); // <=0 → L1:nonPos
 
         //
         Assert.assertTrue("smallDecLog should be empty: " + smallDecLog, smallDecLog.isEmpty());

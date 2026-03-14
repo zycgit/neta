@@ -39,6 +39,8 @@ import net.hasor.neta.channel.*;
  * <p>
  * <b>Note:</b> this implementation is a placeholder; the actual delimiter-scanning
  * logic is not yet implemented and currently throws an exception.
+ * <p><b>Ownership:</b> once implemented, emitted delimiter frames are expected to be new
+ * buffers owned by downstream, while source buffers remain under queue-managed lifecycle.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  * @see LineBasedFrameHandler

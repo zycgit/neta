@@ -93,7 +93,7 @@ public class LifecycleNetworkOpsTest {
         assert order.size() == 1 : "Expected only onActive before first message, got: " + order;
         assert "onActive".equals(order.get(0)) : "First event must be onActive, got: " + order.get(0);
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(100);
 
         assert order.size() == 2 : "Expected onActive + onMessage, got: " + order;
@@ -133,7 +133,7 @@ public class LifecycleNetworkOpsTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(10, 20, 30);
+        channel.receiveData(10, 20, 30);
         Thread.sleep(100);
 
         // onActive must be first
@@ -248,7 +248,7 @@ public class LifecycleNetworkOpsTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(50);
 
         channel.close(); // local close — safe-close path through SoCloseTask
@@ -299,7 +299,7 @@ public class LifecycleNetworkOpsTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(30);
 
         channel.soContext.notifyChannelClose(channel.getChannelId(), true);
@@ -348,7 +348,7 @@ public class LifecycleNetworkOpsTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(50);
         channel.closeNow();
 
@@ -371,7 +371,7 @@ public class LifecycleNetworkOpsTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(50);
         channel.closeNow();
 

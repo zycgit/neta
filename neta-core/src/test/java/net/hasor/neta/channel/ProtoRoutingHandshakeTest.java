@@ -52,17 +52,17 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         // onReceive(10) → size=1 → null
         // onReceive(20) → size=2 → null
         // onReceive(30) → size=3 → "main"，三条数据一起 flush
-        channel.onReceive(10);
+        channel.receiveData(10);
         // step1: 路由未生效，selector 已调用 2 次，received 仍空
         Assert.assertEquals(2, selectorSeenSizes.size());
         Assert.assertTrue(received.isEmpty());
 
-        channel.onReceive(20);
+        channel.receiveData(20);
         // step2: 路由未生效，selector 已调用 3 次，received 仍空
         Assert.assertEquals(3, selectorSeenSizes.size());
         Assert.assertTrue(received.isEmpty());
 
-        channel.onReceive(30);
+        channel.receiveData(30);
         // step3: 路由生效，3 条积累数据一次性 flush
 
         Assert.assertEquals(4, selectorSeenSizes.size());
@@ -101,17 +101,17 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         // onReceive(1) → size=1 → null
         // onReceive(2) → size=2 → null
         // onReceive(3) → size=3 → null
-        channel.onReceive(1);
+        channel.receiveData(1);
         // step1: 路由未生效，selector 已调用 2 次，received 仍空
         Assert.assertEquals(2, selectorSeenSizes.size());
         Assert.assertTrue(received.isEmpty());
 
-        channel.onReceive(2);
+        channel.receiveData(2);
         // step2: 路由未生效，selector 已调用 3 次，received 仍空
         Assert.assertEquals(3, selectorSeenSizes.size());
         Assert.assertTrue(received.isEmpty());
 
-        channel.onReceive(3);
+        channel.receiveData(3);
         // step3: selector 仍返回 null，路由始终未生效，received 仍空
 
         Assert.assertEquals(4, selectorSeenSizes.size());
@@ -153,30 +153,30 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         // onReceive(30) → size=1, consume → count=3 → "main"（路由锁定）
         // onReceive(40) → fast-path，不再调用 selector → branch
         // onReceive(50) → fast-path → branch
-        channel.onReceive(10);
+        channel.receiveData(10);
         // step1: 握手包已消费，路由未生效，count=1，received 仍空
         Assert.assertEquals(2, selectorSeenSizes.size());
         Assert.assertEquals(1, handshakeCount[0]);
         Assert.assertTrue(received.isEmpty());
 
-        channel.onReceive(20);
+        channel.receiveData(20);
         // step2: 握手包已消费，路由未生效，count=2，received 仍空
         Assert.assertEquals(3, selectorSeenSizes.size());
         Assert.assertEquals(2, handshakeCount[0]);
         Assert.assertTrue(received.isEmpty());
 
-        channel.onReceive(30);
+        channel.receiveData(30);
         // step3: 握手包已消费，路由锁定，但 30 被 selector 丢弃，received 仍空
         Assert.assertEquals(4, selectorSeenSizes.size());
         Assert.assertEquals(3, handshakeCount[0]);
         Assert.assertTrue(received.isEmpty());
 
-        channel.onReceive(40);
+        channel.receiveData(40);
         // step4: fast-path，40 流入分支
         Assert.assertEquals(1, received.size());
         Assert.assertEquals(40, received.get(0));
 
-        channel.onReceive(50);
+        channel.receiveData(50);
 
         // selector 仅被调用 4 次（onActive + 3 次握手），路由锁定后不再调用
         Assert.assertEquals(4, selectorSeenSizes.size());

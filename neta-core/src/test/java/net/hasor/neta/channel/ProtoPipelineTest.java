@@ -49,7 +49,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(42);
+        channel.receiveData(42);
         Thread.sleep(200);
 
         // all 3 decoder layers should process in order
@@ -78,7 +78,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(200);
 
         // L1 and L2 should process, L3 should NOT be reached
@@ -107,7 +107,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(200);
 
         // L1 threw, so error chain is triggered
@@ -134,7 +134,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(200);
 
         // L1 should appear with retry count (3 retries + final next = total 4 calls of L1)
@@ -166,7 +166,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
         // rcv direction
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(200);
 
         // decoder should process
@@ -203,7 +203,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(200);
 
         assert record.contains("rcv") : "record=" + record;
@@ -224,7 +224,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
         // should not crash
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(100);
 
         channel.closeNow();
@@ -247,7 +247,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(200);
 
         // L1 throws
@@ -277,7 +277,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(200);
 
         // L1 throws, L2 re-throws — both should be recorded
@@ -308,7 +308,7 @@ public class ProtoPipelineTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
         // send more than capacity allows
-        channel.onReceive(1, 2, 3, 4, 5);
+        channel.receiveData(1, 2, 3, 4, 5);
         Thread.sleep(200);
 
         assert record.contains("1DoNext");

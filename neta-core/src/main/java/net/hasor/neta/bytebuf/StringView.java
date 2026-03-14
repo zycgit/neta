@@ -60,6 +60,26 @@ public class StringView implements CharSequence, Release {
         return view;
     }
 
+    public StringView duplicate() {
+        ByteBuf current = this.source;
+        if (current != null) {
+            ByteBuf duplicateBuf = ByteBufAllocator.DEFAULT.buffer(this.length, Integer.MAX_VALUE);
+            current.getBuffer(this.offset, duplicateBuf, this.length);
+            duplicateBuf.markWriter();
+
+            StringView duplicate = StringView.request(duplicateBuf, 0, this.length);
+            duplicateBuf.release();
+            return duplicate;
+        }
+
+        StringView duplicate = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
+        duplicate.source = null;
+        duplicate.offset = 0;
+        duplicate.length = this.length;
+        duplicate.cachedValue = this.resolve();
+        return duplicate;
+    }
+
     protected void init(ByteBuf source, int offset, int length) {
         if (source == null) {
             throw new IllegalArgumentException("source is null");

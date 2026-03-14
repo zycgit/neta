@@ -21,6 +21,12 @@ package net.hasor.neta.channel;
  * more messages into a send queue for the next stage in the same direction.
  * When both directions need to be coordinated in one type, use
  * {@link ProtoDuplexer} instead.
+ * <p><b>Ownership rule:</b> when a handler takes a message from {@code src} and
+ * fully consumes it without forwarding the same instance, the handler becomes
+ * responsible for any {@link net.hasor.neta.bytebuf.ReferenceHolder}
+ * lifecycle it has absorbed. In practice this means transformed or repackaged
+ * reference-counted inputs must be released by the consuming handler once
+ * ownership has been transferred to replacement output objects.
  * @see ProtoDuplexer
  */
 @FunctionalInterface

@@ -49,7 +49,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new SoException("Test"));
+        channel.sendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -79,7 +79,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new SoException("Test"));
+        channel.sendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -109,7 +109,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new SoException("Test"));
+        channel.sendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");
@@ -139,7 +139,7 @@ public class ProtoSndErrTest extends AbstractStackTest {
             output.add(data.getError());
         });
 
-        channel.onSendError(new SoException("Test"));
+        channel.sendError(new SoException("Test"));
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("");

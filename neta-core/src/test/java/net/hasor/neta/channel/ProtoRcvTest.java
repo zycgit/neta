@@ -49,7 +49,7 @@ public class ProtoRcvTest extends AbstractStackTest {
             input.add(data.getData());
         });
 
-        channel.onReceive(123); // RCV -> SND -> NET
+        channel.receiveData(123); // RCV -> SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoNext,3DecDoNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
         assert input.size() == 1 && input.get(0).equals(123);
@@ -77,7 +77,7 @@ public class ProtoRcvTest extends AbstractStackTest {
             input.add(data.getError());
         });
 
-        channel.onReceive(123); // RCV -> SND -> NET
+        channel.receiveData(123); // RCV -> SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoThrow");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("2DecErrThrow,3DecErrNext");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
@@ -107,7 +107,7 @@ public class ProtoRcvTest extends AbstractStackTest {
             input.add(data.getData());
         });
 
-        channel.onReceive(123); // RCV -> SND -> NET
+        channel.receiveData(123); // RCV -> SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoRetry,2DecDoRetry,2DecDoRetry,3DecDoNext");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("3EncDoNext,2EncDoNext,1EncDoNext");
@@ -137,7 +137,7 @@ public class ProtoRcvTest extends AbstractStackTest {
             input.add(data.getData());
         });
 
-        channel.onReceive(123); // RCV -> SND -> NET
+        channel.receiveData(123); // RCV -> SND -> NET
         assert StringUtils.join(decoderFinishCnt.toArray(), ",").equals("1DecDoNext,2DecDoExit");
         assert StringUtils.join(decoderFailedCnt.toArray(), ",").equals("");
         assert StringUtils.join(encoderFinishCnt.toArray(), ",").equals("2EncDoNext,1EncDoNext");

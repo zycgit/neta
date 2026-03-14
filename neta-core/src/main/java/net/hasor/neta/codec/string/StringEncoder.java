@@ -25,6 +25,8 @@ import net.hasor.neta.channel.*;
  * This handler only converts bytes and does not append delimiters or other framing
  * markers. Protocols that require separators, line endings, or length headers need
  * an additional outbound framing stage.
+ * <p><b>Ownership:</b> each emitted {@link ByteBuf} is newly created and belongs to
+ * downstream once offered. The consumed {@link String} itself has no release lifecycle.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */

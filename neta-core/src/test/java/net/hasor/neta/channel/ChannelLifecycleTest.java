@@ -102,7 +102,7 @@ public class ChannelLifecycleTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(100);
 
         assert "hello-context".equals(contextValue.get());
@@ -135,9 +135,9 @@ public class ChannelLifecycleTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(100);
-        channel.onReceive(2);
+        channel.receiveData(2);
         Thread.sleep(100);
 
         // flash should be cleared between onMessage calls. each call should see null.
@@ -191,7 +191,7 @@ public class ChannelLifecycleTest extends AbstractStackTest {
         assert lifecycle.contains("active");
         assert !lifecycle.contains("close");
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         Thread.sleep(100);
         assert lifecycle.contains("message");
 
@@ -303,8 +303,8 @@ public class ChannelLifecycleTest extends AbstractStackTest {
         ch1.subscribe(playLoad -> ch1Messages.add(playLoad.getData()));
         ch2.subscribe(playLoad -> ch2Messages.add(playLoad.getData()));
 
-        ch1.onReceive(100);
-        ch2.onReceive(200);
+        ch1.receiveData(100);
+        ch2.receiveData(200);
         Thread.sleep(200);
 
         // ch1 should only get message from ch1
@@ -335,7 +335,7 @@ public class ChannelLifecycleTest extends AbstractStackTest {
         // only accept inbound messages
         ch.subscribe(PlayLoad::isInbound, playLoad -> filtered.add(playLoad.getData()));
 
-        ch.onReceive(42);
+        ch.receiveData(42);
         Thread.sleep(200);
 
         assert filtered.size() == 1;
@@ -360,13 +360,13 @@ public class ChannelLifecycleTest extends AbstractStackTest {
 
         SubscribeHolder holder = ch.subscribe(playLoad -> received.add(playLoad.getData()));
 
-        ch.onReceive(1);
+        ch.receiveData(1);
         Thread.sleep(100);
         assert received.size() == 1;
 
         holder.unSubscribe();
 
-        ch.onReceive(2);
+        ch.receiveData(2);
         Thread.sleep(100);
         // should not have received the second message
         assert received.size() == 1;
@@ -391,8 +391,8 @@ public class ChannelLifecycleTest extends AbstractStackTest {
         VrtChannel ch1 = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), init, VrtSoConfig.asServer());
         VrtChannel ch2 = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), init, VrtSoConfig.asServer());
 
-        ch1.onReceive(1);
-        ch2.onReceive(2);
+        ch1.receiveData(1);
+        ch2.receiveData(2);
         Thread.sleep(200);
 
         // global subscriber got messages from both channels

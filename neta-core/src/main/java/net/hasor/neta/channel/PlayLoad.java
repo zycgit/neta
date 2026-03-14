@@ -41,6 +41,9 @@ public interface PlayLoad {
 
     /**
      * Gets the data contained in this payload.
+     * <p>The returned object is usually still owned by the pipeline/transport that emitted this
+     * event. Listeners that need to use reference-counted values such as {@code ByteBuf} after the
+     * callback returns should retain or copy them inside the callback.
      * @return the payload data object, or null if an error occurred
      */
     Object getData();

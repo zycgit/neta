@@ -58,6 +58,9 @@ import net.hasor.neta.channel.*;
  * | 0xCA | 0x000D | 0xFE | "HELLO, WORLD" |        | 0xFE | "HELLO, WORLD" |
  * +------+--------+------+----------------+        +------+----------------+
  * </pre>
+ * <p><b>Ownership:</b> decoded frames are newly allocated buffers owned by downstream.
+ * Source buffers remain managed by the pipeline queue; this decoder only advances their
+ * read state after a complete frame has been assembled.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-06-26
  */

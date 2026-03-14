@@ -45,7 +45,7 @@ public class PlayLoadTest extends AbstractStackTest {
 
         ch.subscribe(playLoad -> received.set(playLoad));
 
-        ch.onReceive(42);
+        ch.receiveData(42);
         Thread.sleep(200);
 
         PlayLoad p = received.get();
@@ -81,7 +81,7 @@ public class PlayLoadTest extends AbstractStackTest {
         });
 
         SoException err = new SoException("test error");
-        ch.onReceiveError(err);
+        ch.receiveError(err);
         Thread.sleep(200);
 
         PlayLoad p = received.get();
@@ -111,9 +111,9 @@ public class PlayLoadTest extends AbstractStackTest {
 
         ch.subscribe(playLoad -> messages.add(playLoad.getData()));
 
-        ch.onReceive(1);
-        ch.onReceive(2);
-        ch.onReceive(3);
+        ch.receiveData(1);
+        ch.receiveData(2);
+        ch.receiveData(3);
         Thread.sleep(300);
 
         assert messages.size() == 3;
@@ -141,7 +141,7 @@ public class PlayLoadTest extends AbstractStackTest {
         ch.subscribe(playLoad -> messages.add(playLoad.getData()));
 
         // batch send multiple objects
-        ch.onReceive(10, 20, 30);
+        ch.receiveData(10, 20, 30);
         Thread.sleep(300);
 
         assert messages.size() == 3 : "messages.size=" + messages.size();

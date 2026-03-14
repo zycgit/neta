@@ -37,7 +37,7 @@ public class VrtChannel extends AbstractVrtChannel {
      * Write messages to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param object the messages to be written
      */
-    public void onReceive(Object... object) {
+    public void receiveData(Object... object) {
         if (object != null) {
             this.soContext.notifyRcvChannelData(this.getChannelId(), object);
         }
@@ -47,7 +47,7 @@ public class VrtChannel extends AbstractVrtChannel {
      * Write error to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void onReceiveError(SoException e) {
+    public void receiveError(SoException e) {
         if (e != null) {
             this.soContext.notifyRcvChannelException(this.getChannelId(), true, e);
         }
@@ -57,7 +57,7 @@ public class VrtChannel extends AbstractVrtChannel {
      * Write error to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
      * @param e the messages to be written
      */
-    public void onSendError(SoException e) {
+    public void sendError(SoException e) {
         if (e != null) {
             this.soContext.notifySndChannelException(this.getChannelId(), true, e);
         }

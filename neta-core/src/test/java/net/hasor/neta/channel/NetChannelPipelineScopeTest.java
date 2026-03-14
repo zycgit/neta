@@ -53,7 +53,7 @@ public class NetChannelPipelineScopeTest extends AbstractStackTest {
             subscribeLatch.countDown();
         });
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         assert subscribeLatch.await(2, TimeUnit.SECONDS);
         assert inHandlerAny.get();
         assert inHandlerSelf.get();
@@ -85,7 +85,7 @@ public class NetChannelPipelineScopeTest extends AbstractStackTest {
             subscribeLatch.countDown();
         });
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         assert subscribeLatch.await(2, TimeUnit.SECONDS);
         assert sendCause.get() == null;
 
@@ -114,7 +114,7 @@ public class NetChannelPipelineScopeTest extends AbstractStackTest {
             subscribeLatch.countDown();
         });
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         assert subscribeLatch.await(2, TimeUnit.SECONDS);
         assert sendCause.get() instanceof IllegalStateException;
         assert sendCause.get().getMessage().contains("this channel's pipeline call chain");
@@ -143,7 +143,7 @@ public class NetChannelPipelineScopeTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(12), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
         assert handlerLatch.await(2, TimeUnit.SECONDS);
         assert sendCause.get() instanceof IllegalStateException;
         assert sendCause.get().getMessage().contains("this channel's pipeline call chain");
@@ -191,7 +191,7 @@ public class NetChannelPipelineScopeTest extends AbstractStackTest {
         }).build();
 
         VrtChannel source = (VrtChannel) neta.connectSync(new VrtSocketAddress(22), initializer, VrtSoConfig.asServer());
-        source.onReceive(1);
+        source.receiveData(1);
 
         assert handlerLatch.await(2, TimeUnit.SECONDS);
         assert anyInHandler.get();

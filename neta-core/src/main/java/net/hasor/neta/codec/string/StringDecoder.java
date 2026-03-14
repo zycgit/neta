@@ -28,6 +28,8 @@ import net.hasor.neta.codec.LineBasedFrameHandler;
  * stream into message boundaries, so stream transports such as TCP should pair it
  * with a frame decoder like {@link DelimiterBasedFrameHandler} or
  * {@link LineBasedFrameHandler} first.
+ * <p><b>Ownership:</b> once a {@link ByteBuf} is converted into a {@link String},
+ * this decoder releases the consumed buffer before returning.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-21
  */
@@ -54,8 +56,12 @@ public class StringDecoder implements ProtoHandler<ByteBuf, String> {
         while (src.hasMore()) {
             ByteBuf byteBuf = src.takeMessage();
             if (byteBuf != null) {
-                dst.offerMessage(byteBuf.readString(byteBuf.readableBytes(), this.charset));
-                hasAny = true;
+                try {
+                    dst.offerMessage(byteBuf.readString(byteBuf.readableBytes(), this.charset));
+                    hasAny = true;
+                } finally {
+                    byteBuf.release();
+                }
             }
         }
         return hasAny ? ProtoStatus.Next : ProtoStatus.Stop;

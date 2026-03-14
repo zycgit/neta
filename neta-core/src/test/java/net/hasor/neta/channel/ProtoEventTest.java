@@ -131,7 +131,7 @@ public class ProtoEventTest extends AbstractStackTest {
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
-        channel.onReceive(1);
+        channel.receiveData(1);
 
         // s1 fires fireUserEvent from within RCV — event travels RCV direction only (toward enc1/enc2
         // wrappers, which are transparent in RCV mode). Encoders receive no UserEvent.
@@ -161,7 +161,7 @@ public class ProtoEventTest extends AbstractStackTest {
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
-        channel.onReceive(1);
+        channel.receiveData(1);
 
         assert record.contains("dec1-OnMessage");
         assert record.contains("mid-OnMessage");

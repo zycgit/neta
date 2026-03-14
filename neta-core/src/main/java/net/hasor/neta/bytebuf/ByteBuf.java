@@ -45,6 +45,8 @@ import net.hasor.cobble.ref.RecycleObjectPool;
  * reference-count lifecycle inherited from {@link ReferenceHolder}.
  */
 public interface ByteBuf extends ByteChannel, ReferenceHolder {
+    int                 DEFAULT_EXPECT_SCAN_SIZE = 8192;
+    ThreadLocal<byte[]> EXPECT_SCAN_BUF          = ThreadLocal.withInitial(() -> new byte[DEFAULT_EXPECT_SCAN_SIZE]);
 
     ByteBuf EMPTY = new ByteBufProxy(ByteBuf.wrap(new byte[0])) {
         @Override
@@ -514,46 +516,78 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
 
     /** Finds the next occurrence of the expected string without changing readerIndex. */
     default int expect(String expect, Charset charset) {
-        int len = expect.getBytes(charset).length;
-        int readableBytes = this.readableBytes();
+        Objects.requireNonNull(expect, "expect is null.");
+        return this.expect(expect.getBytes(charset));
+    }
 
-        if (readableBytes >= len) {
-            int loopCount = readableBytes - len;
-            for (int i = 0; i <= loopCount; i++) {
-                String dat = this.getString(i, len, charset);
-                if (dat.equals(expect)) {
-                    return i;
-                }
+    /** Finds the next occurrence of the expected byte sequence without changing readerIndex. */
+    default int expect(byte[] expected) {
+        return this.expect(expected, this.readableBytes());
+    }
+
+    /** Finds the next occurrence of the expected byte sequence within the scan limit. */
+    default int expect(byte[] expected, int maxScanBytes) {
+        Objects.requireNonNull(expected, "expected is null.");
+
+        int expectedLength = expected.length;
+        if (expectedLength == 0) {
+            return 0;
+        }
+
+        int scanLength = Math.min(this.readableBytes(), Math.max(0, maxScanBytes));
+        if (scanLength < expectedLength) {
+            return -1;
+        }
+        if (expectedLength == 1) {
+            return this.expect(expected[0], scanLength);
+        }
+
+        byte[] scratch = expectScratch(Math.max(DEFAULT_EXPECT_SCAN_SIZE, expectedLength << 1));
+        int carryLength = 0;
+        int scanned = 0;
+
+        while (scanned < scanLength) {
+            int copyLength = Math.min(scanLength - scanned, scratch.length - carryLength);
+            this.getBytes(scanned, scratch, carryLength, copyLength);
+
+            int totalLength = carryLength + copyLength;
+            int localIndex = firstIndexOf(scratch, totalLength, expected);
+            if (localIndex >= 0) {
+                return scanned - carryLength + localIndex;
             }
+            if (scanned + copyLength >= scanLength) {
+                break;
+            }
+
+            carryLength = Math.min(expectedLength - 1, totalLength);
+            System.arraycopy(scratch, totalLength - carryLength, scratch, 0, carryLength);
+            scanned += copyLength;
         }
         return -1;
     }
 
     /** Finds the next line break without changing readerIndex. */
     default int expectLine() {
-        int available = this.readableBytes();
-        if (available == 0) {
+        return this.expectLine(this.readableBytes());
+    }
+
+    /** Finds the next line break within the scan limit without changing readerIndex. */
+    default int expectLine(int maxScanBytes) {
+        int lineFeedIndex = this.expect((byte) '\n', maxScanBytes);
+        if (lineFeedIndex < 0) {
             return -1;
         }
-
-        int findIndex = -1;
-        for (int i = 0; i < available; i++) {
-            if (this.getUInt8(i) == '\n') {
-                if (i > 0 && this.getUInt8(i - 1) == '\r') {
-                    findIndex = i - 1;
-                } else {
-                    findIndex = i;
-                }
-                break;
-            }
-        }
-
-        return findIndex;
+        return lineFeedIndex > 0 && this.getUInt8(lineFeedIndex - 1) == '\r' ? lineFeedIndex - 1 : lineFeedIndex;
     }
 
     /** Returns true when a full line terminator is available. */
     default boolean hasLine() {
         return expectLine() >= 0;
+    }
+
+    /** Returns true when a full line terminator is available within the scan limit. */
+    default boolean hasLine(int maxScanBytes) {
+        return expectLine(maxScanBytes) >= 0;
     }
 
     /** Reads one ASCII line. */
@@ -563,52 +597,100 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
 
     /** Reads one line using the given charset. */
     default String readLine(Charset charset) {
-        int available = this.readableBytes();
-        if (available == 0) {
+        return this.readLine(charset, this.readableBytes());
+    }
+
+    /** Reads one line using the given charset within the scan limit. */
+    default String readLine(Charset charset, int maxScanBytes) {
+        int lineFeedIndex = this.expect((byte) '\n', maxScanBytes);
+        if (lineFeedIndex < 0) {
             return null;
         }
 
-        int findIndex = -1;
-        int skipLength = -1;
-        for (int i = 0; i < available; i++) {
-            if (this.getUInt8(i) == '\n') {
-                if (i > 0 && this.getUInt8(i - 1) == '\r') {
-                    findIndex = i - 1;
-                    skipLength = 2;
-                } else {
-                    findIndex = i;
-                    skipLength = 1;
-                }
-                break;
-            }
-        }
+        boolean hasCarriageReturn = lineFeedIndex > 0 && this.getUInt8(lineFeedIndex - 1) == '\r';
+        int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
+        String str = this.readString(lineLength, charset);
+        this.skipReadableBytes(hasCarriageReturn ? 2 : 1);
+        return str;
+    }
 
-        if (findIndex >= 0) {
-            String str = this.readString(findIndex, charset);
-            this.skipReadableBytes(skipLength);
-            return str;
-        } else {
+    /** Reads one line as a ByteBuf view without decoding characters. */
+    default ByteBuf readLineBuffer() {
+        return this.readLineBuffer(this.readableBytes());
+    }
+
+    /** Reads one line as a ByteBuf view within the scan limit without decoding characters. */
+    default ByteBuf readLineBuffer(int maxScanBytes) {
+        int lineFeedIndex = this.expect((byte) '\n', maxScanBytes);
+        if (lineFeedIndex < 0) {
             return null;
         }
+
+        boolean hasCarriageReturn = lineFeedIndex > 0 && this.getUInt8(lineFeedIndex - 1) == '\r';
+        int lineLength = hasCarriageReturn ? lineFeedIndex - 1 : lineFeedIndex;
+        ByteBuf line = this.sliceOff(lineLength);
+        this.skipReadableBytes(hasCarriageReturn ? 2 : 1);
+        return line;
     }
 
     /** Finds the next occurrence of the expected character without changing readerIndex. */
     default int expect(char expect, Charset charset) {
-        return expect(String.valueOf(expect), charset);
+        return expect(String.valueOf(expect).getBytes(charset));
+    }
+
+    /** Finds the next occurrence of the expected byte without changing readerIndex. */
+    default int expect(byte expected) {
+        return this.expect(expected, this.readableBytes());
+    }
+
+    /** Finds the next occurrence of the expected byte within the scan limit. */
+    default int expect(byte expected, int maxScanBytes) {
+        int scanLength = Math.min(this.readableBytes(), Math.max(0, maxScanBytes));
+        if (scanLength <= 0) {
+            return -1;
+        }
+
+        byte[] scratch = expectScratch(DEFAULT_EXPECT_SCAN_SIZE);
+        int scanned = 0;
+        while (scanned < scanLength) {
+            int copyLength = Math.min(scanLength - scanned, scratch.length);
+            this.getBytes(scanned, scratch, 0, copyLength);
+            for (int i = 0; i < copyLength; i++) {
+                if (scratch[i] == expected) {
+                    return scanned + i;
+                }
+            }
+            scanned += copyLength;
+        }
+        return -1;
     }
 
     /**
      * Reads from the current position until the first expected string is reached.
      */
     default String readExpect(String expect, Charset charset) {
+        byte[] expected = expect.getBytes(charset);
         int readLen;
-        if ((readLen = this.expect(expect, charset)) >= 0) {
+        if ((readLen = this.expect(expected)) >= 0) {
             String str = readString(readLen, charset);
-            this.skipReadableBytes(expect.getBytes(charset).length);
+            this.skipReadableBytes(expected.length);
             return str;
         } else {
             return null;
         }
+    }
+
+    /** Reads from the current position until the first expected byte sequence is reached. */
+    default ByteBuf readExpect(byte[] expected) {
+        Objects.requireNonNull(expected, "expected is null.");
+        int readLen = this.expect(expected);
+        if (readLen < 0) {
+            return null;
+        }
+
+        ByteBuf result = this.sliceOff(readLen);
+        this.skipReadableBytes(expected.length);
+        return result;
     }
 
     /**
@@ -620,24 +702,88 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
 
     /** Finds the last occurrence of the expected string without changing readerIndex. */
     default int expectLast(String expect, Charset charset) {
-        int len = expect.getBytes(charset).length;
-        int readableBytes = this.readableBytes();
+        Objects.requireNonNull(expect, "expect is null.");
+        return this.expectLast(expect.getBytes(charset));
+    }
 
-        if (readableBytes >= len) {
-            int loopCount = readableBytes - len;
-            for (int i = loopCount; i >= 0; i--) {
-                String dat = this.getString(i, len, charset);
-                if (dat.equals(expect)) {
-                    return i;
-                }
-            }
+    /** Finds the last occurrence of the expected byte sequence without changing readerIndex. */
+    default int expectLast(byte[] expected) {
+        return this.expectLast(expected, this.readableBytes());
+    }
+
+    /** Finds the last occurrence of the expected byte sequence within the scan limit. */
+    default int expectLast(byte[] expected, int maxScanBytes) {
+        Objects.requireNonNull(expected, "expected is null.");
+
+        int expectedLength = expected.length;
+        if (expectedLength == 0) {
+            return 0;
         }
-        return -1;
+
+        int scanLength = Math.min(this.readableBytes(), Math.max(0, maxScanBytes));
+        if (scanLength < expectedLength) {
+            return -1;
+        }
+        if (expectedLength == 1) {
+            return this.expectLast(expected[0], scanLength);
+        }
+
+        byte[] scratch = expectScratch(Math.max(DEFAULT_EXPECT_SCAN_SIZE, expectedLength << 1));
+        int carryLength = 0;
+        int scanned = 0;
+        int lastMatch = -1;
+
+        while (scanned < scanLength) {
+            int copyLength = Math.min(scanLength - scanned, scratch.length - carryLength);
+            this.getBytes(scanned, scratch, carryLength, copyLength);
+
+            int totalLength = carryLength + copyLength;
+            int localIndex = lastIndexOf(scratch, totalLength, expected);
+            if (localIndex >= 0) {
+                lastMatch = scanned - carryLength + localIndex;
+            }
+            if (scanned + copyLength >= scanLength) {
+                break;
+            }
+
+            carryLength = Math.min(expectedLength - 1, totalLength);
+            System.arraycopy(scratch, totalLength - carryLength, scratch, 0, carryLength);
+            scanned += copyLength;
+        }
+        return lastMatch;
     }
 
     /** Finds the last occurrence of the expected character without changing readerIndex. */
     default int expectLast(char expect, Charset charset) {
-        return expectLast(String.valueOf(expect), charset);
+        return expectLast(String.valueOf(expect).getBytes(charset));
+    }
+
+    /** Finds the last occurrence of the expected byte without changing readerIndex. */
+    default int expectLast(byte expected) {
+        return this.expectLast(expected, this.readableBytes());
+    }
+
+    /** Finds the last occurrence of the expected byte within the scan limit. */
+    default int expectLast(byte expected, int maxScanBytes) {
+        int scanLength = Math.min(this.readableBytes(), Math.max(0, maxScanBytes));
+        if (scanLength <= 0) {
+            return -1;
+        }
+
+        byte[] scratch = expectScratch(DEFAULT_EXPECT_SCAN_SIZE);
+        int scanned = 0;
+        int lastMatch = -1;
+        while (scanned < scanLength) {
+            int copyLength = Math.min(scanLength - scanned, scratch.length);
+            this.getBytes(scanned, scratch, 0, copyLength);
+            for (int i = 0; i < copyLength; i++) {
+                if (scratch[i] == expected) {
+                    lastMatch = scanned + i;
+                }
+            }
+            scanned += copyLength;
+        }
+        return lastMatch;
     }
 
     /**
@@ -645,13 +791,27 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
      */
     default String readExpectLast(String expect, Charset charset) {
         int readLen = -1;
-        if ((readLen = this.expectLast(expect, charset)) >= 0) {
+        byte[] expected = expect.getBytes(charset);
+        if ((readLen = this.expectLast(expected)) >= 0) {
             String str = readString(readLen, charset);
-            this.skipReadableBytes(expect.getBytes(charset).length);
+            this.skipReadableBytes(expected.length);
             return str;
         } else {
             return null;
         }
+    }
+
+    /** Reads from the current position until the last expected byte sequence is reached. */
+    default ByteBuf readExpectLast(byte[] expected) {
+        Objects.requireNonNull(expected, "expected is null.");
+        int readLen = this.expectLast(expected);
+        if (readLen < 0) {
+            return null;
+        }
+
+        ByteBuf result = this.sliceOff(readLen);
+        this.skipReadableBytes(expected.length);
+        return result;
     }
 
     /**
@@ -659,6 +819,57 @@ public interface ByteBuf extends ByteChannel, ReferenceHolder {
      */
     default String readExpectLast(char expect, Charset charset) {
         return readExpectLast(String.valueOf(expect), charset);
+    }
+
+    static byte[] expectScratch(int minCapacity) {
+        byte[] scratch = EXPECT_SCAN_BUF.get();
+        return scratch.length >= minCapacity ? scratch : new byte[minCapacity];
+    }
+
+    static int firstIndexOf(byte[] source, int sourceLength, byte[] expected) {
+        int expectedLength = expected.length;
+        int limit = sourceLength - expectedLength;
+        byte first = expected[0];
+        for (int i = 0; i <= limit; i++) {
+            if (source[i] != first) {
+                continue;
+            }
+
+            boolean match = true;
+            for (int j = 1; j < expectedLength; j++) {
+                if (source[i + j] != expected[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    static int lastIndexOf(byte[] source, int sourceLength, byte[] expected) {
+        int expectedLength = expected.length;
+        int limit = sourceLength - expectedLength;
+        byte first = expected[0];
+        for (int i = limit; i >= 0; i--) {
+            if (source[i] != first) {
+                continue;
+            }
+
+            boolean match = true;
+            for (int j = 1; j < expectedLength; j++) {
+                if (source[i + j] != expected[j]) {
+                    match = false;
+                    break;
+                }
+            }
+            if (match) {
+                return i;
+            }
+        }
+        return -1;
     }
 
     /** implements {@link ReadableByteChannel} */

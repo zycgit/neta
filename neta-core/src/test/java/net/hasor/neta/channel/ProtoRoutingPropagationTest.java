@@ -139,7 +139,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
             }
         });
 
-        channel.onReceive(42);
+        channel.receiveData(42);
 
         // RCV direction: pre.dec → branch.dec → post.dec
         Assert.assertFalse("pre.dec should have run", preDecLog.isEmpty());
@@ -188,7 +188,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<Throwable> inboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
-        channel.onReceive(42);
+        channel.receiveData(42);
 
         // Branch throw handler's onMessage ran and threw
         Assert.assertFalse("branch.throw onMessage should run", brThrowLog.isEmpty());
@@ -224,7 +224,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<Throwable> inboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
-        channel.onReceive(42);
+        channel.receiveData(42);
 
         // Branch error-clear handler must have called eh.clear()
         Assert.assertTrue("branch errClear handler should have run", brClearLog.contains("BrClearErrClear"));
@@ -247,12 +247,12 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextDecoder("brH", errNextHandler("Br", brLog, brErr)))).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
-        channel.onReceive(1); // activate branch "a" so selectedRoute != null
+        channel.receiveData(1); // activate branch "a" so selectedRoute != null
 
         List<Throwable> inboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
-        channel.onReceiveError(new SoException("rcv-err"));
+        channel.receiveError(new SoException("rcv-err"));
 
         // Branch error handler was invoked
         Assert.assertFalse("branch onError should be called", brErr.isEmpty());
@@ -280,12 +280,12 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
                 }).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
-        channel.onReceive(1); // activate branch "a"
+        channel.receiveData(1); // activate branch "a"
 
         List<Throwable> inboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
-        channel.onReceiveError(new SoException("rcv-err"));
+        channel.receiveError(new SoException("rcv-err"));
 
         // Branch cleared the error
         Assert.assertTrue("branch errClear handler should have run", brClearLog.contains("BrErrClear"));
@@ -312,7 +312,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<Throwable> inboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
-        channel.onReceiveError(new SoException("pre-route-err"));
+        channel.receiveError(new SoException("pre-route-err"));
 
         // Branch handlers must NOT be called (route was never selected)
         Assert.assertTrue("branch must NOT be invoked when route is not selected", brErr.isEmpty());
@@ -339,12 +339,12 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextEncoder("brH", errNextHandler("BrEnc", brLog, brErr)))).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
-        channel.onReceive(1); // activate branch "a"
+        channel.receiveData(1); // activate branch "a"
 
         List<Throwable> outboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isOutbound() && p.getError() != null, SubscribeMode.SYNC, p -> outboundErrors.add(p.getError()));
 
-        channel.onSendError(new SoException("snd-err"));
+        channel.sendError(new SoException("snd-err"));
 
         // Branch SND error handler was invoked
         Assert.assertFalse("branch SND onError should be called", brErr.isEmpty());
@@ -365,12 +365,12 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextEncoder("brH", errClearHandler("BrEnc", brClearLog)))).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
-        channel.onReceive(1); // activate branch "a"
+        channel.receiveData(1); // activate branch "a"
 
         List<Throwable> outboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isOutbound() && p.getError() != null, SubscribeMode.SYNC, p -> outboundErrors.add(p.getError()));
 
-        channel.onSendError(new SoException("snd-err"));
+        channel.sendError(new SoException("snd-err"));
 
         // Branch SND error-clear handler must have cleared the error
         Assert.assertTrue("branch SND errClear handler should have run", brClearLog.contains("BrEncErrClear"));
@@ -396,7 +396,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextDecoder("brH", eventFireHandler("Br", evtLog)))).nextDuplex("post", eventRecordHandler("Post", evtLog), errNextHandler("Post", new ArrayList<>(), new ArrayList<>())).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
-        channel.onReceive(42);
+        channel.receiveData(42);
 
         // Branch decoder ran and fired the event
         Assert.assertTrue("branch decoder should have run and fired event", evtLog.contains("BrMsg"));
@@ -424,7 +424,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         })).nextDuplex("post", eventRecordHandler("Post", evtLog), errNextHandler("Post", new ArrayList<>(), new ArrayList<>())).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
-        channel.onReceive(42);
+        channel.receiveData(42);
 
         // Event fired by brFire
         Assert.assertTrue("brFire should have run", evtLog.contains("BrFireMsg"));
@@ -460,7 +460,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         List<Throwable> inboundErrors = new ArrayList<>();
         channel.subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
-        channel.onReceive(42);
+        channel.receiveData(42);
 
         // Error propagated through nested layers to outerPost in the main pipeline
         Assert.assertFalse("outerPost.onError must be called", outerPostErr.isEmpty());

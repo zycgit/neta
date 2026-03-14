@@ -90,7 +90,7 @@ public class ProtoStackTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
 
         assert record.size() == 6;
         assert record.get(0).equals("s1-OnInit");
@@ -133,7 +133,7 @@ public class ProtoStackTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
 
         assert record.size() == 5;
         assert record.get(0).equals("s1-OnInit");
@@ -176,7 +176,7 @@ public class ProtoStackTest extends AbstractStackTest {
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        channel.onReceive(1);
+        channel.receiveData(1);
 
         assert record.size() == 4;
         assert record.get(0).equals("s1-OnInit");
@@ -224,7 +224,7 @@ public class ProtoStackTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
         channel.fireUserEvent(ProtoStackTest.class, this);
 
-        channel.onReceive(1);
+        channel.receiveData(1);
 
         assert record.size() == 6;
         assert record.get(0).equals("s1-OnInit");

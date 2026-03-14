@@ -26,6 +26,8 @@ package net.hasor.neta.codec;
  * output frames: [10 bytes]
  * remainder:     [6 bytes] kept in the source queue
  * </pre>
+ * <p><b>Ownership:</b> same as {@link LimitFrameHandler}; emitted fixed-size frames are new
+ * buffers owned by downstream, while source buffers stay under queue-managed lifecycle.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-20
  */

@@ -40,7 +40,7 @@ class VrtTransferLink {
             int size = this.tempQueue.queueSize();
             try {
                 List<Object> objects = this.tempQueue.peekMessage(size);
-                this.target.onReceive(objects.toArray());
+                this.target.receiveData(objects.toArray());
             } catch (Throwable e) {
                 SoException ee = e instanceof SoException ? (SoException) e : new SoRcvException(e.getMessage(), e);
                 this.context.notifyRcvChannelException(this.target.getChannelId(), true, ee);
