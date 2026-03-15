@@ -132,12 +132,9 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     }
 
     /** Sets the protocol version carried by this aggregated request. */
+    @Override
     public FullHttpRequest protocolVersion(HttpVersion version) {
-        if (!(this.requestLine instanceof DefaultHttpRequest)) {
-            throw new IllegalArgumentException("requestLine must be an instance of DefaultHttpRequest");
-        }
-
-        ((DefaultHttpRequest) this.requestLine).protocolVersion(version);
+        this.requestLine.protocolVersion(version);
         return this;
     }
 
@@ -151,12 +148,9 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     }
 
     /** Sets the request method carried by this aggregated request. */
+    @Override
     public FullHttpRequest method(HttpMethod method) {
-        if (!(this.requestLine instanceof DefaultHttpRequest)) {
-            throw new IllegalArgumentException("requestLine must be an instance of DefaultHttpRequest");
-        }
-
-        ((DefaultHttpRequest) this.requestLine).method(method);
+        this.requestLine.method(method);
         return this;
     }
 
@@ -170,59 +164,41 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     }
 
     /** Sets the request target carried by this request line. */
+    @Override
     public FullHttpRequest uri(String uri) {
-        if (!(this.requestLine instanceof DefaultHttpRequest)) {
-            throw new IllegalArgumentException("requestLine must be an instance of DefaultHttpRequest");
-        }
-
-        ((DefaultHttpRequest) this.requestLine).uri(uri);
+        this.requestLine.uri(uri);
         return this;
     }
 
     //
 
+    @Override
     public FullHttpRequest addHeader(String name, String value) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).addHeader(name, value);
+        this.headers.addHeader(name, value);
         return this;
     }
 
+    @Override
     public FullHttpRequest setHeader(String name, String value) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).setHeader(name, value);
+        this.headers.setHeader(name, value);
         return this;
     }
 
+    @Override
     public FullHttpRequest clearHeader() {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).clearHeader();
+        this.headers.clearHeader();
         return this;
     }
 
+    @Override
     public FullHttpRequest removeHeader(String name) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).removeHeader(name);
+        this.headers.removeHeader(name);
         return this;
     }
 
+    @Override
     public FullHttpRequest appendHeaders(HttpHeaders headers) {
-        if (!(this.headers instanceof DefaultHttpHeaders)) {
-            throw new IllegalArgumentException("headers must be an instance of DefaultHttpHeaders");
-        }
-
-        ((DefaultHttpHeaders) this.headers).appendHeaders(headers);
+        this.headers.appendHeaders(headers);
         return this;
     }
 

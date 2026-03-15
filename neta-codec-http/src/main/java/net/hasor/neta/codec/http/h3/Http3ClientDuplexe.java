@@ -30,7 +30,7 @@ import net.hasor.neta.codec.http.HttpObject;
  * <p>Pipeline usage:</p>
  * <pre>
  *   ctx.addLast("h3", new Http3ClientDuplexe());
- *   ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
+ *   ctx.addLastDecoder("aggregator", new HttpResponseAggregator(1048576));
  * </pre>
  */
 public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
@@ -61,11 +61,11 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
-        this.frameDecoder.onInit(context);
-        this.frameToHttpDecoder.onInit(context);
-        this.httpToFrameEncoder.onInit(context);
-        this.frameEncoder.onInit(context);
+    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
+        this.frameDecoder.onInit(name, rcvSize, context);
+        this.frameToHttpDecoder.onInit(name, rcvSize, context);
+        this.httpToFrameEncoder.onInit(name, sndSize, context);
+        this.frameEncoder.onInit(name, sndSize, context);
         Http3DecoderContent decoderContent = context.context(Http3DecoderContent.class);
         context.context(Http3Context.class, new Http3ContextImpl(false, decoderContent));
     }

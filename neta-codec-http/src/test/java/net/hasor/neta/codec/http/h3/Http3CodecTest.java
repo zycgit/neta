@@ -20,6 +20,8 @@ import static org.junit.Assert.*;
  * error handling, and boundary conditions.
  */
 public class Http3CodecTest {
+    private static final String name     = "test";
+    private static final int    poolSize = 8;
 
     // ========================= Mock & Helpers =========================
 
@@ -102,8 +104,8 @@ public class Http3CodecTest {
         Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
-        frameEncoder.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
+        frameEncoder.onInit(name, poolSize, encCtx);
 
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
@@ -121,8 +123,8 @@ public class Http3CodecTest {
         Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
@@ -145,8 +147,8 @@ public class Http3CodecTest {
         Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
-        frameEncoder.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
+        frameEncoder.onInit(name, poolSize, encCtx);
 
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
@@ -164,8 +166,8 @@ public class Http3CodecTest {
         Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
@@ -197,22 +199,13 @@ public class Http3CodecTest {
         return last;
     }
 
-    private <T> List<T> findAll(List<HttpObject> objects, Class<T> type) {
-        List<T> result = new ArrayList<>();
-        for (HttpObject o : objects) {
-            if (type.isInstance(o))
-                result.add(type.cast(o));
-        }
-        return result;
-    }
-
     // ========================= Round-Trip Request Tests =========================
 
     @Test
     public void testRoundTripGetRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/index.html");
-        req.headers().add("host", "www.example.com");
-        req.headers().add("accept", "text/html");
+        req.addHeader("host", "www.example.com");
+        req.addHeader("accept", "text/html");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue("Should decode at least 1 object", decoded.size() >= 1);
@@ -232,8 +225,8 @@ public class Http3CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.POST, "/api/data", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/json");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "application/json");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue("Should decode at least 1 object", decoded.size() >= 1);
@@ -258,7 +251,7 @@ public class Http3CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, bodyBuf);
-        resp.headers().add("content-type", "text/plain");
+        resp.addHeader("content-type", "text/plain");
 
         List<HttpObject> decoded = serverToClient(resp);
         assertTrue("Should decode at least 1 object", decoded.size() >= 1);
@@ -272,7 +265,7 @@ public class Http3CodecTest {
     public void testRoundTripBidirectional() throws Throwable {
         // Client → Server
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/hello");
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
         List<HttpObject> serverSide = clientToServer(req);
         assertTrue(serverSide.size() >= 1);
 
@@ -287,7 +280,7 @@ public class Http3CodecTest {
     @Test
     public void testHeadRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.HEAD, "/status");
-        req.headers().add("host", "check.example.com");
+        req.addHeader("host", "check.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -302,8 +295,8 @@ public class Http3CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.PUT, "/resource/1", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "text/plain");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "text/plain");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpRequest received = findFirst(decoded, HttpRequest.class);
@@ -320,7 +313,7 @@ public class Http3CodecTest {
     @Test
     public void testDeleteRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.DELETE, "/resource/42");
-        req.headers().add("host", "api.example.com");
+        req.addHeader("host", "api.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -331,7 +324,7 @@ public class Http3CodecTest {
     @Test
     public void testOptionsRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.OPTIONS, "*");
-        req.headers().add("host", "api.example.com");
+        req.addHeader("host", "api.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -342,7 +335,7 @@ public class Http3CodecTest {
     @Test
     public void testConnectMethod() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.CONNECT, "proxy.example.com:443");
-        req.headers().add("host", "proxy.example.com");
+        req.addHeader("host", "proxy.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -357,8 +350,8 @@ public class Http3CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.PATCH, "/resource/1", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/json-patch+json");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "application/json-patch+json");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpRequest received = findFirst(decoded, HttpRequest.class);
@@ -392,13 +385,15 @@ public class Http3CodecTest {
     @Test
     public void test301Redirect() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.MOVED_PERMANENTLY);
-        resp.headers().add("location", "https://new.example.com/path");
+        resp.addHeader("location", "https://new.example.com/path");
 
         List<HttpObject> decoded = serverToClient(resp);
         HttpResponse received = findFirst(decoded, HttpResponse.class);
+        HttpHeaders headers = findFirst(decoded, HttpHeaders.class);
         assertNotNull(received);
         assertEquals(HttpStatus.MOVED_PERMANENTLY, received.status());
-        assertEquals("https://new.example.com/path", received.headers().get("location"));
+        assertNotNull(headers);
+        assertEquals("https://new.example.com/path", headers.getString("location"));
     }
 
     @Test
@@ -412,19 +407,21 @@ public class Http3CodecTest {
     @Test
     public void test304NotModified() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.NOT_MODIFIED);
-        resp.headers().add("etag", "\"abc123\"");
+        resp.addHeader("etag", "\"abc123\"");
 
         List<HttpObject> decoded = serverToClient(resp);
         HttpResponse received = findFirst(decoded, HttpResponse.class);
+        HttpHeaders headers = findFirst(decoded, HttpHeaders.class);
         assertNotNull(received);
         assertEquals(HttpStatus.NOT_MODIFIED, received.status());
-        assertEquals("\"abc123\"", received.headers().get("etag"));
+        assertNotNull(headers);
+        assertEquals("\"abc123\"", headers.getString("etag"));
     }
 
     @Test
     public void test503ServiceUnavailable() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.SERVICE_UNAVAILABLE);
-        resp.headers().add("retry-after", "120");
+        resp.addHeader("retry-after", "120");
 
         HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
         assertNotNull(received);
@@ -436,26 +433,29 @@ public class Http3CodecTest {
     @Test
     public void testMultipleHeaders() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/multi");
-        req.headers().add("host", "example.com");
-        req.headers().add("accept", "text/html");
-        req.headers().add("accept-language", "en-US");
-        req.headers().add("cache-control", "no-cache");
-        req.headers().add("user-agent", "Neta/1.0");
-        req.headers().add("x-custom-header", "custom-value");
+        req.addHeader("host", "example.com");
+        req.addHeader("accept", "text/html");
+        req.addHeader("accept-language", "en-US");
+        req.addHeader("cache-control", "no-cache");
+        req.addHeader("user-agent", "Neta/1.0");
+        req.addHeader("x-custom-header", "custom-value");
 
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        HttpHeaders headers = findFirst(decoded, HttpHeaders.class);
         assertNotNull(received);
-        assertEquals("text/html", received.headers().get("accept"));
-        assertEquals("en-US", received.headers().get("accept-language"));
-        assertEquals("no-cache", received.headers().get("cache-control"));
+        assertNotNull(headers);
+        assertEquals("text/html", headers.getString("accept"));
+        assertEquals("en-US", headers.getString("accept-language"));
+        assertEquals("no-cache", headers.getString("cache-control"));
     }
 
     @Test
     public void testManyHeaders() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/many-headers");
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
         for (int i = 0; i < 50; i++) {
-            req.headers().add("x-header-" + i, "value-" + i);
+            req.addHeader("x-header-" + i, "value-" + i);
         }
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
@@ -465,26 +465,32 @@ public class Http3CodecTest {
     @Test
     public void testHeaderWithEmptyValue() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/empty-header");
-        req.headers().add("host", "localhost");
-        req.headers().add("x-empty", "");
+        req.addHeader("host", "localhost");
+        req.addHeader("x-empty", "");
 
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        HttpHeaders headers = findFirst(decoded, HttpHeaders.class);
         assertNotNull(received);
-        assertEquals("", received.headers().get("x-empty"));
+        assertNotNull(headers);
+        assertEquals("", headers.getString("x-empty"));
     }
 
     @Test
     public void testResponseHeaders() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK);
-        resp.headers().add("content-type", "application/json");
-        resp.headers().add("x-request-id", "req-123-abc");
-        resp.headers().add("cache-control", "no-store");
+        resp.addHeader("content-type", "application/json");
+        resp.addHeader("x-request-id", "req-123-abc");
+        resp.addHeader("cache-control", "no-store");
 
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        List<HttpObject> decoded = serverToClient(resp);
+        HttpResponse received = findFirst(decoded, HttpResponse.class);
+        HttpHeaders headers = findFirst(decoded, HttpHeaders.class);
         assertNotNull(received);
-        assertEquals("application/json", received.headers().get("content-type"));
-        assertEquals("req-123-abc", received.headers().get("x-request-id"));
-        assertEquals("no-store", received.headers().get("cache-control"));
+        assertNotNull(headers);
+        assertEquals("application/json", headers.getString("content-type"));
+        assertEquals("req-123-abc", headers.getString("x-request-id"));
+        assertEquals("no-store", headers.getString("cache-control"));
     }
 
     // ========================= Boundary Tests =========================
@@ -495,7 +501,7 @@ public class Http3CodecTest {
         emptyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.POST, "/empty", emptyBuf);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue("Should decode at least 1 object", decoded.size() >= 1);
@@ -511,7 +517,7 @@ public class Http3CodecTest {
         }
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, uri.toString());
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -522,7 +528,7 @@ public class Http3CodecTest {
     public void testUriWithSpecialCharacters() throws Throwable {
         String uri = "/path/to/resource?q=hello%20world&lang=en&special=%E4%B8%AD%E6%96%87";
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, uri);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -536,7 +542,7 @@ public class Http3CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.POST, "/byte", bodyBuf);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() >= 1);
@@ -545,7 +551,7 @@ public class Http3CodecTest {
     @Test
     public void testGetRequestNoBody() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/");
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -566,7 +572,7 @@ public class Http3CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.POST, "/large", bodyBuf);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() > 0);
@@ -590,7 +596,7 @@ public class Http3CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, bodyBuf);
-        resp.headers().add("content-type", "application/octet-stream");
+        resp.addHeader("content-type", "application/octet-stream");
 
         List<HttpObject> decoded = serverToClient(resp);
         assertTrue(decoded.size() > 0);
@@ -608,15 +614,15 @@ public class Http3CodecTest {
         Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
         Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
-        frameEncoder.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
+        frameEncoder.onInit(name, poolSize, encCtx);
 
         // Decode pipeline (server)
         Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
         Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(true);
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         int requestCount = 0;
         for (int i = 0; i < 10; i++) {
@@ -624,7 +630,7 @@ public class Http3CodecTest {
             SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
             SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
             DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/page/" + i);
-            req.headers().add("host", "localhost");
+            req.addHeader("host", "localhost");
             encIn.add(req);
             httpToFrame.onMessage(encCtx, encIn, encBridge);
             frameEncoder.onMessage(encCtx, encBridge, encOut);
@@ -653,15 +659,15 @@ public class Http3CodecTest {
         Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(true);
         Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
-        frameEncoder.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
+        frameEncoder.onInit(name, poolSize, encCtx);
 
         // Decode pipeline (client)
         Http3FrameDecoder frameDecoder = new Http3FrameDecoder(false);
         Http3FrameToHttpDecoder frameToHttp = new Http3FrameToHttpDecoder(false);
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         HttpStatus[] statuses = { HttpStatus.OK, HttpStatus.NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR, HttpStatus.NO_CONTENT };
         int responseCount = 0;
@@ -702,25 +708,25 @@ public class Http3CodecTest {
         QpackEncoder encoder = new QpackEncoder(4096, false);
         QpackDecoder decoder = new QpackDecoder(4096, 65536);
 
-        HttpHeaders original = new HttpHeaders();
-        original.add(":method", "GET");
-        original.add(":path", "/");
-        original.add(":scheme", "https");
-        original.add(":authority", "example.com");
-        original.add("accept", "text/html");
-        original.add("user-agent", "test");
+        DefaultHttpHeaders original = new DefaultHttpHeaders();
+        original.addHeader(":method", "GET");
+        original.addHeader(":path", "/");
+        original.addHeader(":scheme", "https");
+        original.addHeader(":authority", "example.com");
+        original.addHeader("accept", "text/html");
+        original.addHeader("user-agent", "test");
 
         byte[] encoded = encoder.encode(original);
         assertNotNull(encoded);
         assertTrue(encoded.length > 0);
 
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals("GET", decoded.get(":method"));
-        assertEquals("/", decoded.get(":path"));
-        assertEquals("https", decoded.get(":scheme"));
-        assertEquals("example.com", decoded.get(":authority"));
-        assertEquals("text/html", decoded.get("accept"));
-        assertEquals("test", decoded.get("user-agent"));
+        assertEquals("GET", decoded.getString(":method"));
+        assertEquals("/", decoded.getString(":path"));
+        assertEquals("https", decoded.getString(":scheme"));
+        assertEquals("example.com", decoded.getString(":authority"));
+        assertEquals("text/html", decoded.getString("accept"));
+        assertEquals("test", decoded.getString("user-agent"));
     }
 
     @Test
@@ -728,17 +734,17 @@ public class Http3CodecTest {
         QpackEncoder encoder = new QpackEncoder(4096, false);
         QpackDecoder decoder = new QpackDecoder(4096, 65536);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(":method", "GET");
-        headers.add(":path", "/");
-        headers.add(":scheme", "https");
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader(":method", "GET");
+        headers.addHeader(":path", "/");
+        headers.addHeader(":scheme", "https");
 
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
 
-        assertEquals("GET", decoded.get(":method"));
-        assertEquals("/", decoded.get(":path"));
-        assertEquals("https", decoded.get(":scheme"));
+        assertEquals("GET", decoded.getString(":method"));
+        assertEquals("/", decoded.getString(":path"));
+        assertEquals("https", decoded.getString(":scheme"));
     }
 
     @Test
@@ -751,12 +757,12 @@ public class Http3CodecTest {
             largeValue.append("abcdefghij");
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-large-header", largeValue.toString());
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("x-large-header", largeValue.toString());
 
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals(largeValue.toString(), decoded.get("x-large-header"));
+        assertEquals(largeValue.toString(), decoded.getString("x-large-header"));
     }
 
     @Test
@@ -764,10 +770,10 @@ public class Http3CodecTest {
         QpackEncoder encoder = new QpackEncoder(4096, false);
         QpackDecoder decoder = new QpackDecoder(4096, 65536);
 
-        HttpHeaders headers = new HttpHeaders();
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertTrue(decoded.isEmpty());
+        assertEquals(0, decoded.headerSize());
     }
 
     @Test
@@ -775,14 +781,14 @@ public class Http3CodecTest {
         QpackEncoder encoder = new QpackEncoder(4096, false);
         QpackDecoder decoder = new QpackDecoder(4096, 65536);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-multi", "value1");
-        headers.add("x-multi", "value2");
-        headers.add("x-multi", "value3");
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("x-multi", "value1");
+        headers.addHeader("x-multi", "value2");
+        headers.addHeader("x-multi", "value3");
 
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        List<String> values = decoded.getAll("x-multi");
+        List<String> values = decoded.getValues("x-multi");
         assertEquals(3, values.size());
         assertTrue(values.contains("value1"));
         assertTrue(values.contains("value2"));
@@ -795,14 +801,14 @@ public class Http3CodecTest {
         QpackDecoder decoder = new QpackDecoder(4096, 65536);
 
         // Response pseudo-headers
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(":status", "200");
-        headers.add("content-type", "text/plain");
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader(":status", "200");
+        headers.addHeader("content-type", "text/plain");
 
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals("200", decoded.get(":status"));
-        assertEquals("text/plain", decoded.get("content-type"));
+        assertEquals("200", decoded.getString(":status"));
+        assertEquals("text/plain", decoded.getString("content-type"));
     }
 
     @Test
@@ -1012,8 +1018,8 @@ public class Http3CodecTest {
         Http3FrameBridgeQueue bridge = new Http3FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         // Construct a control stream (streamId with bit1 set): streamId=2 (unidirectional)
         // Control stream type = 0x00 + SETTINGS frame
@@ -1050,14 +1056,16 @@ public class Http3CodecTest {
     public void testDataTooSmallSkipped() throws Throwable {
         Http3FrameDecoder decoder = new Http3FrameDecoder(true);
         ProtoContext decCtx = mockContext();
-        decoder.onInit(decCtx);
+        decoder.onInit(name, poolSize, decCtx);
 
-        // Empty ByteBuf should be skipped gracefully
+        // In non-QUIC unit tests, provide fallback metadata so an empty buffer is not
+        // interpreted as a transport FIN-only signal.
         ByteBuf emptyBuf = ByteBufAllocator.DEFAULT.buffer(0);
         emptyBuf.markWriter();
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<Http3Frame> decOut = new SimpleProtoSndQueue<>();
+        decoder.pushFallbackMeta(0, false);
         decIn.add(emptyBuf);
         decoder.onMessage(decCtx, decIn, decOut);
         assertEquals(0, decOut.size());
@@ -1066,6 +1074,7 @@ public class Http3CodecTest {
         ByteBuf nullReadable = ByteBufAllocator.DEFAULT.buffer(5);
         // don't write anything, so readableBytes == 0
         nullReadable.markWriter();
+        decoder.pushFallbackMeta(4, false);
         decIn.add(nullReadable);
         decoder.onMessage(decCtx, decIn, decOut);
         assertEquals(0, decOut.size());
@@ -1146,12 +1155,12 @@ public class Http3CodecTest {
         Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
-        frameEncoder.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
+        frameEncoder.onInit(name, poolSize, encCtx);
 
         // Simulate some activity
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/test");
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
@@ -1165,8 +1174,8 @@ public class Http3CodecTest {
         Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();

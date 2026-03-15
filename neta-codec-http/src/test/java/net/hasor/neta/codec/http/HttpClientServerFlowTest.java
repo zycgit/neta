@@ -25,13 +25,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientEncoderToServerDecoderCompletesNormalRequestResponseFlow() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
-                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+                ctx.addLast("client-http", new HttpClientDuplexe());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLastDecoder("req-decoder", new HttpRequestDecoder());
-                ctx.addLastDecoder("req-agg", new HttpRequestAggregator(16));
-                ctx.addLastEncoder("resp-encoder", new HttpResponseEncoder());
+                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(16));
             });
 
             // batch_1
@@ -69,13 +67,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientServerFlowHandlesExpectContinueBeforeSendingRequestBody() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
-                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+                ctx.addLast("client-http", new HttpClientDuplexe());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLastDecoder("req-decoder", new HttpRequestDecoder());
-                ctx.addLastDecoder("req-agg", new HttpRequestAggregator(16));
-                ctx.addLastEncoder("resp-encoder", new HttpResponseEncoder());
+                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(16));
             });
 
             List<HttpObject> beforeBody = clientSendRequestObjects(pipe,//
@@ -118,13 +114,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientServerFlowAutoRepliesExpectationFailedForUnsupportedExpectation() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
-                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+                ctx.addLast("client-http", new HttpClientDuplexe());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLastDecoder("req-decoder", new HttpRequestDecoder());
-                ctx.addLastDecoder("req-agg", new HttpRequestAggregator(16));
-                ctx.addLastEncoder("resp-encoder", new HttpResponseEncoder());
+                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(16));
             });
 
             List<HttpObject> requests = clientSendRequestObjects(pipe,//
@@ -150,13 +144,11 @@ public class HttpClientServerFlowTest extends AbstractHttpTest {
     public void testClientServerFlowAutoRepliesRequestEntityTooLarge() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLastEncoder("req-encoder", new HttpRequestEncoder());
-                ctx.addLastDecoder("resp-decoder", new HttpResponseDecoder());
+                ctx.addLast("client-http", new HttpClientDuplexe());
                 ctx.addLastDecoder("resp-agg", new HttpResponseAggregator());
             }, ctx -> {
-                ctx.addLastDecoder("req-decoder", new HttpRequestDecoder());
-                ctx.addLastDecoder("req-agg", new HttpRequestAggregator(16));
-                ctx.addLastEncoder("resp-encoder", new HttpResponseEncoder());
+                ctx.addLast("server-http", new HttpServerDuplexe());
+                ctx.addLast("server-agg", new HttpServerDuplexeAggregator(2));
             });
 
             List<HttpObject> requests = clientSendRequestObjects(pipe,//

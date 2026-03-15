@@ -57,7 +57,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
+    public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
         context.context(Http3EncoderContent.class, new Http3EncoderContent(serverMode, maxTableSize));
     }
 
@@ -80,6 +80,8 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
                 encodeResponse(context, state, (HttpResponse) msg, dst, isPrintLog);
             } else if (msg instanceof HttpRequest) {
                 encodeRequest(context, state, (HttpRequest) msg, dst, isPrintLog);
+            } else if (msg instanceof HttpHeaders) {
+                encodeHeaders(context, state, (HttpHeaders) msg, dst, isPrintLog);
             } else if (msg instanceof LastHttpContent) {
                 encodeLastContent(context, state, (LastHttpContent) msg, dst, isPrintLog);
             } else if (msg instanceof HttpContent) {
@@ -92,6 +94,10 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
 
     /** Encodes a complete HTTP request (headers + body) as HEADERS + DATA frames. */
     private void encodeFullRequest(ProtoContext context, Http3EncoderContent state, FullHttpRequest request, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
+        if (!(request instanceof DefaultFullHttpRequest)) {
+            throw new IllegalArgumentException("FullHttpRequest must be DefaultFullHttpRequest");
+        }
+        DefaultFullHttpRequest fullRequest = (DefaultFullHttpRequest) request;
         long streamId = state.allocateNextStreamId();
 
         // QPACK encode headers
@@ -99,11 +105,11 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         state.encodeHeader(":method", request.method().name());
         state.encodeHeader(":path", request.uri());
         state.encodeHeader(":scheme", scheme.name());
-        String host = request.headers().get(HttpHeaderNames.HOST);
+        String host = fullRequest.getString(HttpHeaderNames.HOST);
         if (StringUtils.isNotBlank(host)) {
             state.encodeHeader(":authority", host);
         }
-        encodeNonPseudoHeaders(state, request.headers());
+        encodeNonPseudoHeaders(state, fullRequest);
         byte[] headerBlock = state.finishHeaderEncode();
 
         ByteBuf body = request.content();
@@ -127,12 +133,16 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
 
     /** Encodes a complete HTTP response (headers + body). */
     private void encodeFullResponse(ProtoContext context, Http3EncoderContent state, FullHttpResponse response, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
+        if (!(response instanceof DefaultFullHttpResponse)) {
+            throw new IllegalArgumentException("FullHttpResponse must be DefaultFullHttpResponse");
+        }
+        DefaultFullHttpResponse fullResponse = (DefaultFullHttpResponse) response;
         state.consumeResponseStreamId();
         long streamId = state.currentStreamId();
 
         state.beginHeaderEncode();
         state.encodeHeader(":status", String.valueOf(response.status().code()));
-        encodeNonPseudoHeaders(state, response.headers());
+        encodeNonPseudoHeaders(state, fullResponse);
         byte[] headerBlock = state.finishHeaderEncode();
 
         ByteBuf body = response.content();
@@ -157,19 +167,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
     /** Encodes an HTTP request (headers only). */
     private void encodeRequest(ProtoContext context, Http3EncoderContent state, HttpRequest request, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         long streamId = state.allocateNextStreamId();
-
-        state.beginHeaderEncode();
-        state.encodeHeader(":method", request.method().name());
-        state.encodeHeader(":path", request.uri());
-        state.encodeHeader(":scheme", scheme.name());
-        String host = request.headers().get(HttpHeaderNames.HOST);
-        if (StringUtils.isNotBlank(host)) {
-            state.encodeHeader(":authority", host);
-        }
-        encodeNonPseudoHeaders(state, request.headers());
-
-        int headerBlockLen = state.headerEncodedLength();
-        dst.offerMessage(Http3Frame.headers(streamId, false, state.headerEncodedBuffer(), 0, headerBlockLen));
+        state.beginRequest(streamId, request.method().name(), request.uri(), scheme.name());
 
         if (isPrintLog) {
             long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
@@ -181,17 +179,42 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
     private void encodeResponse(ProtoContext context, Http3EncoderContent state, HttpResponse response, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         state.consumeResponseStreamId();
         long streamId = state.currentStreamId();
-
-        state.beginHeaderEncode();
-        state.encodeHeader(":status", String.valueOf(response.status().code()));
-        encodeNonPseudoHeaders(state, response.headers());
-
-        int headerBlockLen = state.headerEncodedLength();
-        dst.offerMessage(Http3Frame.headers(streamId, false, state.headerEncodedBuffer(), 0, headerBlockLen));
+        state.beginResponse(streamId, response.status().code());
 
         if (isPrintLog) {
             long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
             logger.info("[H3-SND] ch=" + channelID + " RESPONSE stream=" + streamId + " status=" + response.status().code());
+        }
+    }
+
+    /** Encodes one staged header block after the request/response start line. */
+    private void encodeHeaders(ProtoContext context, Http3EncoderContent state, HttpHeaders headers, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
+        if (!state.hasPendingRequest() && !state.hasPendingResponse()) {
+            return;
+        }
+
+        state.beginHeaderEncode();
+        if (state.hasPendingRequest()) {
+            state.encodeHeader(":method", state.pendingMethod());
+            state.encodeHeader(":path", state.pendingPath());
+            state.encodeHeader(":scheme", state.pendingScheme());
+
+            String host = headers.getString(HttpHeaderNames.HOST);
+            if (StringUtils.isNotBlank(host)) {
+                state.encodeHeader(":authority", host);
+            }
+        } else {
+            state.encodeHeader(":status", String.valueOf(state.pendingStatus()));
+        }
+        encodeNonPseudoHeaders(state, headers);
+
+        int headerBlockLen = state.headerEncodedLength();
+        dst.offerMessage(Http3Frame.headers(state.currentStreamId(), false, state.headerEncodedBuffer(), 0, headerBlockLen));
+        state.clearPendingHeaders();
+
+        if (isPrintLog) {
+            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            logger.info("[H3-SND] ch=" + channelID + " HEADERS stream=" + state.currentStreamId() + " count=" + headers.headerSize());
         }
     }
 
@@ -236,10 +259,14 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
 
     /** Encodes non-pseudo headers into the QPACK encoder. */
     private void encodeNonPseudoHeaders(Http3EncoderContent state, HttpHeaders src) {
-        for (java.util.Map.Entry<String, String> entry : src) {
-            String name = entry.getKey();
-            if (!StringUtils.startsWith(name, ":") && !StringUtils.equalsIgnoreCase(name, HttpHeaderNames.HOST)) {
-                state.encodeHeader(name.toLowerCase(), entry.getValue());
+        if (src == null || src.headerSize() == 0) {
+            return;
+        }
+        for (String headerName : src.headerNames()) {
+            if (!StringUtils.startsWith(headerName, ":") && !StringUtils.equalsIgnoreCase(headerName, HttpHeaderNames.HOST)) {
+                for (String value : src.getValues(headerName)) {
+                    state.encodeHeader(headerName.toLowerCase(), value);
+                }
             }
         }
     }

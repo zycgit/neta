@@ -14,13 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
-import net.hasor.neta.channel.ProtoExceptionHolder;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
-import net.hasor.neta.channel.ProtoStatus;
-import net.hasor.neta.channel.SoUserEvent;
+import net.hasor.neta.channel.*;
 
 /**
  * Server-side duplex wrapper for request and response aggregation.

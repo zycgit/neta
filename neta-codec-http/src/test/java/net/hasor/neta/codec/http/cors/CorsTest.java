@@ -32,20 +32,20 @@ public class CorsTest {
 
     private static DefaultFullHttpRequest buildGetRequest(String origin) {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/api/data");
-        req.headers().set(HttpHeaderNames.ORIGIN, origin);
+        req.setHeader(HttpHeaderNames.ORIGIN, origin);
         return req;
     }
 
     private static DefaultFullHttpRequest buildOptionsRequest(String origin, String acrm, String acrh) {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.OPTIONS, "/api/data");
         if (origin != null) {
-            req.headers().set(HttpHeaderNames.ORIGIN, origin);
+            req.setHeader(HttpHeaderNames.ORIGIN, origin);
         }
         if (acrm != null) {
-            req.headers().set(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD, acrm);
+            req.setHeader(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD, acrm);
         }
         if (acrh != null) {
-            req.headers().set(HttpHeaderNames.ACCESS_CONTROL_REQUEST_HEADERS, acrh);
+            req.setHeader(HttpHeaderNames.ACCESS_CONTROL_REQUEST_HEADERS, acrh);
         }
         return req;
     }
@@ -174,15 +174,15 @@ public class CorsTest {
     @Test
     public void testIsPreflightRequest_true() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.OPTIONS, "/api");
-        req.headers().set(HttpHeaderNames.ORIGIN, "https://example.com");
-        req.headers().set(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD, "POST");
+        req.setHeader(HttpHeaderNames.ORIGIN, "https://example.com");
+        req.setHeader(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD, "POST");
         assertTrue(CorsUtil.isPreflightRequest(req));
     }
 
     @Test
     public void testIsPreflightRequest_noAcrm() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.OPTIONS, "/api");
-        req.headers().set(HttpHeaderNames.ORIGIN, "https://example.com");
+        req.setHeader(HttpHeaderNames.ORIGIN, "https://example.com");
         // No ACCESS_CONTROL_REQUEST_METHOD
         assertFalse(CorsUtil.isPreflightRequest(req));
     }
@@ -190,8 +190,8 @@ public class CorsTest {
     @Test
     public void testIsPreflightRequest_notOptions() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/api");
-        req.headers().set(HttpHeaderNames.ORIGIN, "https://example.com");
-        req.headers().set(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD, "POST");
+        req.setHeader(HttpHeaderNames.ORIGIN, "https://example.com");
+        req.setHeader(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD, "POST");
         assertFalse(CorsUtil.isPreflightRequest(req));
     }
 
@@ -203,7 +203,7 @@ public class CorsTest {
     @Test
     public void testGetOrigin() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/api");
-        req.headers().set(HttpHeaderNames.ORIGIN, "https://example.com");
+        req.setHeader(HttpHeaderNames.ORIGIN, "https://example.com");
         assertEquals("https://example.com", CorsUtil.getOrigin(req));
     }
 
@@ -230,8 +230,8 @@ public class CorsTest {
 
         CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
 
-        assertEquals("*", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
-        assertNull(resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        assertEquals("*", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
     }
 
     @Test
@@ -242,10 +242,10 @@ public class CorsTest {
 
         CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
 
-        assertEquals("https://example.com", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertEquals("https://example.com", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
         // Vary: Origin must be set when echoing a specific origin
-        assertNotNull(resp.headers().get(HttpHeaderNames.VARY));
-        assertTrue(resp.headers().get(HttpHeaderNames.VARY).contains("origin"));
+        assertNotNull(resp.getString(HttpHeaderNames.VARY));
+        assertTrue(resp.getString(HttpHeaderNames.VARY).contains("origin"));
     }
 
     @Test
@@ -257,7 +257,7 @@ public class CorsTest {
         CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
 
         // No CORS headers written for disallowed origin
-        assertNull(resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     @Test
@@ -268,7 +268,7 @@ public class CorsTest {
 
         CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
 
-        assertEquals("true", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        assertEquals("true", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
     }
 
     @Test
@@ -279,7 +279,7 @@ public class CorsTest {
 
         CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
 
-        String exposed = resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS);
+        String exposed = resp.getString(HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS);
         assertNotNull(exposed);
         assertTrue(exposed.contains("X-Custom"));
         assertTrue(exposed.contains("X-Token"));
@@ -295,7 +295,7 @@ public class CorsTest {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
         // Must not throw
         CorsUtil.applySimpleCorsHeaders(req, resp, null);
-        assertNull(resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     @Test
@@ -306,7 +306,7 @@ public class CorsTest {
 
         CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
 
-        assertNull(resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     @Test
@@ -317,8 +317,8 @@ public class CorsTest {
 
         CorsUtil.applyPreflightCorsHeaders(req, resp, cfg);
 
-        assertEquals("*", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
-        String methods = resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS);
+        assertEquals("*", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        String methods = resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS);
         assertNotNull(methods);
         assertTrue(methods.contains("GET"));
         assertTrue(methods.contains("POST"));
@@ -332,7 +332,7 @@ public class CorsTest {
 
         CorsUtil.applyPreflightCorsHeaders(req, resp, cfg);
 
-        assertEquals("1800", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
+        assertEquals("1800", resp.getString(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
     }
 
     @Test
@@ -343,7 +343,7 @@ public class CorsTest {
 
         CorsUtil.applyPreflightCorsHeaders(req, resp, cfg);
 
-        assertNull(resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
+        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
     }
 
     @Test
@@ -354,7 +354,7 @@ public class CorsTest {
 
         CorsUtil.applyPreflightCorsHeaders(req, resp, cfg);
 
-        String allowedHeaders = resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS);
+        String allowedHeaders = resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS);
         assertNotNull(allowedHeaders);
         // Should use configured headers, not echo back
         assertTrue(allowedHeaders.contains("content-type"));
@@ -373,7 +373,7 @@ public class CorsTest {
 
         CorsUtil.applyPreflightCorsHeaders(req, resp, cfg);
 
-        String allowedHeaders = resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS);
+        String allowedHeaders = resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS);
         assertNotNull(allowedHeaders);
         assertTrue(allowedHeaders.contains("X-Custom-Header"));
     }
@@ -386,7 +386,7 @@ public class CorsTest {
 
         CorsUtil.applyPreflightCorsHeaders(req, resp, cfg);
 
-        assertNull(resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     @Test
@@ -424,8 +424,8 @@ public class CorsTest {
         assertTrue("Expected FullHttpResponse for preflight", emitted instanceof FullHttpResponse);
         FullHttpResponse preflight = (FullHttpResponse) emitted;
         assertEquals(204, preflight.status().code());
-        assertEquals("*", preflight.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
-        String methods = preflight.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS);
+        assertEquals("*", preflight.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        String methods = preflight.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS);
         assertNotNull(methods);
         assertTrue(methods.contains("GET"));
         assertTrue(methods.contains("POST"));
@@ -517,11 +517,11 @@ public class CorsTest {
 
         FullHttpResponse resp = (FullHttpResponse) snd.poll();
         assertEquals(204, resp.status().code());
-        assertEquals("https://example.com", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
-        assertEquals("true", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
-        assertEquals("600", resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
+        assertEquals("https://example.com", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertEquals("true", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        assertEquals("600", resp.getString(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
         // Vary must be set
-        assertNotNull(resp.headers().get(HttpHeaderNames.VARY));
+        assertNotNull(resp.getString(HttpHeaderNames.VARY));
     }
 
     @Test
@@ -541,7 +541,7 @@ public class CorsTest {
         Object emitted = snd.poll();
         assertTrue(emitted instanceof FullHttpResponse);
         FullHttpResponse resp = (FullHttpResponse) emitted;
-        assertNull(resp.headers().get(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
     // =========================================================================

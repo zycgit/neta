@@ -85,7 +85,7 @@ public class Http3UdpProtocolTest {
     private void startH3Server() throws Exception {
         ProtoInitializer serverProto = ctx -> {
             ctx.addLast("h3-codec", new Http3ServerDuplexe());
-            ctx.addLastDecoder("h3-aggregator", new HttpObjectAggregator(1048576));
+            ctx.addLast("h3-aggregator", new HttpServerDuplexeAggregator(1048576));
         };
         UdpSoConfig udpConfig = SoConfig.UDP();
         udpConfig.setRcvPacketSize(65535);
@@ -98,7 +98,7 @@ public class Http3UdpProtocolTest {
     private NetChannel connectH3Client() throws Exception {
         ProtoInitializer clientProto = ctx -> {
             ctx.addLast("h3-codec", new Http3ClientDuplexe());
-            ctx.addLastDecoder("h3-aggregator", new HttpObjectAggregator(1048576));
+            ctx.addLast("h3-aggregator", new HttpClientDuplexeAggregator(1048576));
         };
         UdpSoConfig udpConfig = SoConfig.UDP();
         udpConfig.setRcvPacketSize(65535);
@@ -115,9 +115,9 @@ public class Http3UdpProtocolTest {
             if (data instanceof FullHttpRequest) {
                 FullHttpRequest req = (FullHttpRequest) data;
                 ByteBuf body = toBody("Hello HTTP/3 over UDP!");
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, body);
-                response.headers().set("content-type", "text/plain");
-                response.headers().set("content-length", String.valueOf(body.readableBytes()));
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, body);
+                response.setHeader("content-type", "text/plain");
+                response.setHeader("content-length", String.valueOf(body.readableBytes()));
                 ((NetChannel) payload.getSource()).sendData(response);
             }
         });
@@ -133,7 +133,7 @@ public class Http3UdpProtocolTest {
         });
 
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/index");
-        request.headers().add("host", "www.example.com");
+        request.addHeader("host", "www.example.com");
         client.sendData(request);
 
         FullHttpResponse response = future.get(5, TimeUnit.SECONDS);
@@ -156,9 +156,9 @@ public class Http3UdpProtocolTest {
                 ByteBuf content = req.content();
                 int size = content != null ? content.readableBytes() : 0;
                 ByteBuf body = toBody("{\"received\":" + size + "}");
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, body);
-                response.headers().set("content-type", "application/json");
-                response.headers().set("content-length", String.valueOf(body.readableBytes()));
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, body);
+                response.setHeader("content-type", "application/json");
+                response.setHeader("content-length", String.valueOf(body.readableBytes()));
                 ((NetChannel) payload.getSource()).sendData(response);
             }
         });
@@ -173,8 +173,8 @@ public class Http3UdpProtocolTest {
 
         ByteBuf reqBody = toBody("{\"key\":\"value\"}");
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.POST, "/api/data", reqBody);
-        request.headers().add("host", "api.example.com");
-        request.headers().add("content-type", "application/json");
+        request.addHeader("host", "api.example.com");
+        request.addHeader("content-type", "application/json");
         client.sendData(request);
 
         FullHttpResponse response = future.get(5, TimeUnit.SECONDS);
@@ -193,12 +193,12 @@ public class Http3UdpProtocolTest {
             Object data = payload.getData();
             if (data instanceof FullHttpRequest) {
                 FullHttpRequest req = (FullHttpRequest) data;
-                String id = req.headers().get("x-request-id");
+                String id = req.getString("x-request-id");
 
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK);
-                response.headers().set("x-echo-id", id != null ? id : "null");
-                response.headers().set("x-protocol", "h3");
-                response.headers().set("content-length", "0");
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK);
+                response.setHeader("x-echo-id", id != null ? id : "null");
+                response.setHeader("x-protocol", "h3");
+                response.setHeader("content-length", "0");
                 ((NetChannel) payload.getSource()).sendData(response);
             }
         });
@@ -212,15 +212,15 @@ public class Http3UdpProtocolTest {
         });
 
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/custom");
-        request.headers().add("host", "example.com");
-        request.headers().add("x-request-id", "udp-h3-001");
+        request.addHeader("host", "example.com");
+        request.addHeader("x-request-id", "udp-h3-001");
         client.sendData(request);
 
         FullHttpResponse response = future.get(5, TimeUnit.SECONDS);
         assertNotNull(response);
         assertEquals(200, response.status().code());
-        assertEquals("udp-h3-001", response.headers().get("x-echo-id"));
-        assertEquals("h3", response.headers().get("x-protocol"));
+        assertEquals("udp-h3-001", response.getString("x-echo-id"));
+        assertEquals("h3", response.getString("x-protocol"));
     }
 
     // ========================= Status 404 =========================
@@ -232,9 +232,9 @@ public class Http3UdpProtocolTest {
             Object data = payload.getData();
             if (data instanceof FullHttpRequest) {
                 ByteBuf body = toBody("Not Found");
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.NOT_FOUND, body);
-                response.headers().set("content-type", "text/plain");
-                response.headers().set("content-length", String.valueOf(body.readableBytes()));
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.NOT_FOUND, body);
+                response.setHeader("content-type", "text/plain");
+                response.setHeader("content-length", String.valueOf(body.readableBytes()));
                 ((NetChannel) payload.getSource()).sendData(response);
             }
         });
@@ -248,7 +248,7 @@ public class Http3UdpProtocolTest {
         });
 
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/missing");
-        request.headers().add("host", "example.com");
+        request.addHeader("host", "example.com");
         client.sendData(request);
 
         FullHttpResponse response = future.get(5, TimeUnit.SECONDS);
@@ -266,9 +266,9 @@ public class Http3UdpProtocolTest {
             Object data = payload.getData();
             if (data instanceof FullHttpRequest) {
                 ByteBuf body = toBody("Server Error");
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.INTERNAL_SERVER_ERROR, body);
-                response.headers().set("content-type", "text/plain");
-                response.headers().set("content-length", String.valueOf(body.readableBytes()));
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.INTERNAL_SERVER_ERROR, body);
+                response.setHeader("content-type", "text/plain");
+                response.setHeader("content-length", String.valueOf(body.readableBytes()));
                 ((NetChannel) payload.getSource()).sendData(response);
             }
         });
@@ -282,7 +282,7 @@ public class Http3UdpProtocolTest {
         });
 
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/error");
-        request.headers().add("host", "example.com");
+        request.addHeader("host", "example.com");
         client.sendData(request);
 
         FullHttpResponse response = future.get(5, TimeUnit.SECONDS);
@@ -298,8 +298,8 @@ public class Http3UdpProtocolTest {
         neta.subscribe(PlayLoad::isInbound, (payload) -> {
             Object data = payload.getData();
             if (data instanceof FullHttpRequest) {
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.NO_CONTENT);
-                response.headers().set("content-length", "0");
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.NO_CONTENT);
+                response.setHeader("content-length", "0");
                 ((NetChannel) payload.getSource()).sendData(response);
             }
         });
@@ -313,7 +313,7 @@ public class Http3UdpProtocolTest {
         });
 
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.DELETE, "/item/99");
-        request.headers().add("host", "example.com");
+        request.addHeader("host", "example.com");
         client.sendData(request);
 
         FullHttpResponse response = future.get(5, TimeUnit.SECONDS);
@@ -330,9 +330,9 @@ public class Http3UdpProtocolTest {
             Object data = payload.getData();
             if (data instanceof FullHttpRequest) {
                 ByteBuf body = toBody("{\"updated\":true}");
-                FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, body);
-                response.headers().set("content-type", "application/json");
-                response.headers().set("content-length", String.valueOf(body.readableBytes()));
+                DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, body);
+                response.setHeader("content-type", "application/json");
+                response.setHeader("content-length", String.valueOf(body.readableBytes()));
                 ((NetChannel) payload.getSource()).sendData(response);
             }
         });
@@ -347,8 +347,8 @@ public class Http3UdpProtocolTest {
 
         ByteBuf reqBody = toBody("{\"name\":\"new\"}");
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.PUT, "/item/7", reqBody);
-        request.headers().add("host", "api.example.com");
-        request.headers().add("content-type", "application/json");
+        request.addHeader("host", "api.example.com");
+        request.addHeader("content-type", "application/json");
         client.sendData(request);
 
         FullHttpResponse response = future.get(5, TimeUnit.SECONDS);

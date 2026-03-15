@@ -28,9 +28,16 @@ import net.hasor.neta.codec.http.HttpObject;
  * {@link net.hasor.neta.codec.http.HttpByteBuf}, which the HTTP layer forwards unchanged
  * once transparent mode is enabled by the opening handshake duplexer.
  * <p>
- * Typical usage in a manually assembled outbound pipeline:
+ * Preferred usage for a bidirectional pipeline is {@link WebSocketFrameDuplexer}.
+ * Install this encoder directly only when the send direction must be assembled
+ * independently from the receive direction.
+ * When the no-arg constructor is used behind {@link WebSocketHandshakeDuplexer},
+ * the encoder first tries to resolve the negotiated version from {@link WebSocketContext}
+ * and falls back to RFC 6455 version 13 when no handshake context is available.
+ * <p>
+ * Typical usage in a manually assembled outbound-only pipeline:
  * <pre>
- *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+ *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
  *   ctx.addLast("http", new HttpServerDuplexe());
  * </pre>
  * <p>
@@ -51,14 +58,13 @@ import net.hasor.neta.codec.http.HttpObject;
  * <p><b>Ownership:</b> once a {@link WebSocketFrame} is consumed by this encoder, the
  * encoder takes over its lifecycle and releases the source frame after the outbound bytes
  * have been produced. Callers should not release a successfully handed-off frame twice.
- * <p>
- * Any non-{@link WebSocketFrame} {@link HttpObject} is passed through unchanged.
  */
-public class WebSocketFrameEncoder implements ProtoHandler<HttpObject, HttpObject> {
+public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpObject> {
     private static final Logger              logger           = Logger.getLogger(WebSocketFrameEncoder.class);
     private static final int                 XOR_SCRATCH_SIZE = 4096;
     private static final ThreadLocal<byte[]> XOR_SCRATCH      = ThreadLocal.withInitial(() -> new byte[XOR_SCRATCH_SIZE]);
-    private final        WebSocketVersion    version;
+    private final        WebSocketVersion    defaultVersion;
+    private final        boolean             detectVersion;
 
     /** Creates an encoder for the specified WebSocket protocol version. */
     public WebSocketFrameEncoder(WebSocketVersion version) {
@@ -66,40 +72,51 @@ public class WebSocketFrameEncoder implements ProtoHandler<HttpObject, HttpObjec
             throw new IllegalArgumentException("version must not be null");
         }
 
-        this.version = version;
+        this.defaultVersion = version;
+        this.detectVersion = false;
     }
 
-    /** Creates an encoder for RFC 6455 (version 13). */
+    /** Creates an encoder that first uses the negotiated handshake version and falls back to RFC 6455 (version 13). */
     public WebSocketFrameEncoder() {
-        this(WebSocketVersion.V13);
+        this.defaultVersion = WebSocketVersion.V13;
+        this.detectVersion = true;
     }
 
-    /** Returns the protocol version this encoder handles. */
-    public WebSocketVersion getVersion() {
-        return this.version;
+    private WebSocketVersion resolveVersion(ProtoContext context) {
+        if (!this.detectVersion) {
+            return this.defaultVersion;
+        }
+        WebSocketContext wsContext = context.context(WebSocketContext.class);
+        if (wsContext != null) {
+            WebSocketVersion detectedVersion = WebSocketVersion.of(wsContext.version());
+            if (detectedVersion != null) {
+                return detectedVersion;
+            }
+        }
+        return this.defaultVersion;
     }
 
     // RFC 6455 encoding (V7, V8, V13)
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<WebSocketFrame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+        WebSocketVersion version = resolveVersion(context);
         while (src.hasMore()) {
-            HttpObject obj = src.takeMessage();
-            if (obj instanceof WebSocketFrame) {
-                try {
-                    WebSocketFrame frame = (WebSocketFrame) obj;
-                    ByteBuf encoded;
-                    if (this.version.isRfc6455Framing()) {
-                        encoded = encodeRfc6455(context, frame);
-                    } else {
-                        encoded = encodeHixie76(context, frame);
-                    }
-                    dst.offerMessage(new DefaultHttpByteBuf(encoded));
-                } finally {
-                    obj.release();
+            WebSocketFrame frame = src.takeMessage();
+            if (frame == null) {
+                continue;
+            }
+
+            try {
+                ByteBuf encoded;
+                if (version.isRfc6455Framing()) {
+                    encoded = encodeRfc6455(context, frame);
+                } else {
+                    encoded = encodeHixie76(context, frame);
                 }
-            } else {
-                dst.offerMessage(obj);
+                dst.offerMessage(new DefaultHttpByteBuf(encoded));
+            } finally {
+                frame.release();
             }
         }
         return ProtoStatus.Next;

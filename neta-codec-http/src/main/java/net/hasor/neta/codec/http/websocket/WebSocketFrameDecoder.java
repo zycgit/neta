@@ -29,12 +29,19 @@ import net.hasor.neta.codec.http.HttpObject;
  * wrapped as {@link HttpByteBuf}, and this handler turns those transport bytes into
  * frame-level WebSocket objects.
  * <p>
- * Typical usage in a manually assembled inbound pipeline:
+ * Preferred usage for a bidirectional pipeline is {@link WebSocketFrameDuplexer}.
+ * Install this decoder directly only when the receive direction must be assembled
+ * independently from the send direction.
+ * When the no-arg constructor is used behind {@link WebSocketHandshakeDuplexer},
+ * the decoder first tries to resolve the negotiated version from {@link WebSocketContext}
+ * and falls back to RFC 6455 version 13 when no handshake context is available.
+ * <p>
+ * Typical usage in a manually assembled inbound-only pipeline:
  * <pre>
  *   ctx.addLast("http", new HttpServerDuplexe());
- *   ctx.addLast("ws-handshake", new WebSocketServerDuplexer(WebSocketVersion.V13));
- *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13));
- *   ctx.addLastDecoder("ws-agg", new WebSocketFrameAggregator());
+ *   ctx.addLast("ws-handshake", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
+ *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
+ *   ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
  * </pre>
  * <p>
  * pipeline view:
@@ -53,16 +60,18 @@ import net.hasor.neta.codec.http.HttpObject;
  *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8}, {@link WebSocketVersion#V13}: RFC 6455 framing family.</li>
  * </ul>
  * <p>
- * Any non-{@link HttpByteBuf} {@link HttpObject} is passed through unchanged so handshake
- * events or already-decoded objects can continue through the same pipeline.
+ * This decoder only accepts transparent-mode {@link HttpByteBuf} input. Any other
+ * {@link HttpObject} type is unsupported and will be handled by the decoder error path,
+ * which resets the internal frame state for subsequent input.
  */
-public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, HttpObject> {
+public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocketFrame> {
     private static final Logger           logger           = Logger.getLogger(WebSocketFrameDecoder.class);
     private static final int              XOR_SCRATCH_SIZE = 4096;
     private final        byte[]           maskKeyBuf       = new byte[4];
     private final        byte[]           headerBuf        = new byte[14]; // 2 base + 8 ext-len + 4 mask-key
     private final        byte[]           xorScratch       = new byte[XOR_SCRATCH_SIZE];
-    private final        WebSocketVersion version;
+    private final        WebSocketVersion defaultVersion;
+    private final        boolean          detectVersion;
     private              CompositeByteBuf accumulator;
 
     /** Creates a decoder for the specified WebSocket protocol version. */
@@ -71,43 +80,54 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, HttpObjec
             throw new IllegalArgumentException("version must not be null");
         }
 
-        this.version = version;
+        this.defaultVersion = version;
+        this.detectVersion = false;
     }
 
-    /** Creates a decoder for RFC 6455 (version 13). */
+    /** Creates a decoder that first uses the negotiated handshake version and falls back to RFC 6455 (version 13). */
     public WebSocketFrameDecoder() {
-        this(WebSocketVersion.V13);
+        this.defaultVersion = WebSocketVersion.V13;
+        this.detectVersion = true;
     }
 
-    /** Returns the protocol version this decoder handles. */
-    public WebSocketVersion getVersion() {
-        return this.version;
+    private WebSocketVersion resolveVersion(ProtoContext context) {
+        if (!this.detectVersion) {
+            return this.defaultVersion;
+        }
+
+        WebSocketContext wsContext = context.context(WebSocketContext.class);
+        if (wsContext != null) {
+            WebSocketVersion detectedVersion = WebSocketVersion.of(wsContext.version());
+            if (detectedVersion != null) {
+                return detectedVersion;
+            }
+        }
+        return this.defaultVersion;
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
-        // Drain the input queue: accumulate HttpByteBuf content, pass through others
+    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
         while (src.hasMore()) {
-            HttpObject obj = src.takeMessage();
-            if (obj instanceof HttpByteBuf) {
-                try {
-                    ByteBuf content = ((HttpByteBuf) obj).content();
-                    if (content != null && content.readableBytes() > 0) {
-                        if (this.accumulator == null) {
-                            this.accumulator = new CompositeByteBuf(context.byteBufAllocator());
-                        }
-                        this.accumulator.addComponent(content);
+            HttpByteBuf obj = (HttpByteBuf) src.takeMessage();
+            if (obj == null) {
+                continue;
+            }
+            try {
+                ByteBuf content = obj.content();
+                if (content != null && content.readableBytes() > 0) {
+                    if (this.accumulator == null) {
+                        this.accumulator = new CompositeByteBuf(context.byteBufAllocator());
                     }
-                } finally {
-                    obj.release();
+                    this.accumulator.addComponent(content);
                 }
-            } else {
-                dst.offerMessage(obj);
+            } finally {
+                obj.release();
             }
         }
 
         if (this.accumulator != null && this.accumulator.readableBytes() > 0) {
-            if (this.version.isRfc6455Framing()) {
+            WebSocketVersion version = resolveVersion(context);
+            if (version.isRfc6455Framing()) {
                 while (decodeRfc6455Frame(context, dst)) { /* loop */ }
             } else {
                 while (decodeHixie76Frame(context, dst)) { /* loop */ }
@@ -135,7 +155,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, HttpObjec
     // RFC 6455 framing (V7, V8, V13)
     // =========================================================================
 
-    private boolean decodeRfc6455Frame(ProtoContext context, ProtoSndQueue<HttpObject> dst) {
+    private boolean decodeRfc6455Frame(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst) {
         int readable = this.accumulator.readableBytes();
         if (readable < 2) {
             return false;
@@ -264,7 +284,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, HttpObjec
     // Hixie-76 framing (V0)
     // =========================================================================
 
-    private boolean decodeHixie76Frame(ProtoContext context, ProtoSndQueue<HttpObject> dst) {
+    private boolean decodeHixie76Frame(ProtoContext context, ProtoSndQueue<WebSocketFrame> dst) {
         int readable = this.accumulator.readableBytes();
         if (readable < 1) {
             return false;

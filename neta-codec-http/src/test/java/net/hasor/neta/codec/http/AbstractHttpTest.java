@@ -18,27 +18,21 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.function.BooleanSupplier;
 import net.hasor.cobble.function.EConsumer;
 import net.hasor.cobble.function.Release;
 import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.ref.Tuple;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.PlayLoad;
-import net.hasor.neta.channel.ProtoInitializer;
-import net.hasor.neta.channel.SubscribeMode;
-import net.hasor.neta.channel.virtual.VrtChannel;
-import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.channel.virtual.VrtTransfer;
+import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.virtual.*;
 
 public class AbstractHttpTest {
-
     protected static int findFreePort() throws IOException {
         try (ServerSocket ss = new ServerSocket(0)) {
             return ss.getLocalPort();
@@ -50,7 +44,7 @@ public class AbstractHttpTest {
     }
 
     protected static String body(HttpContent content) {
-        return text(content.content());
+        return content == null || content.content() == null ? null : text(content.content());
     }
 
     protected static String text(List<ByteBuf> buffer) {
@@ -61,6 +55,9 @@ public class AbstractHttpTest {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
         try {
             for (ByteBuf b : buffer) {
+                if (b == null) {
+                    continue;
+                }
                 buf.writeBuffer(b);
                 b.free();
             }
@@ -69,6 +66,26 @@ public class AbstractHttpTest {
             byte[] bytes = new byte[buf.readableBytes()];
             buf.getBytes(0, bytes, 0, bytes.length);
             return new String(bytes, StandardCharsets.US_ASCII);
+        } finally {
+            buf.free();
+        }
+    }
+
+    protected static byte[] bytes(ByteBuf... buffer) {
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
+        try {
+            for (ByteBuf b : buffer) {
+                if (b == null) {
+                    continue;
+                }
+                buf.writeBuffer(b);
+                b.free();
+            }
+            buf.markWriter();
+
+            byte[] bytes = new byte[buf.readableBytes()];
+            buf.getBytes(0, bytes, 0, bytes.length);
+            return bytes;
         } finally {
             buf.free();
         }
@@ -87,6 +104,10 @@ public class AbstractHttpTest {
                 ((Release) message).release();
             }
         }
+    }
+
+    protected static HttpByteBuf httpByteBuf(byte[] data) {
+        return new DefaultHttpByteBuf(ByteBuf.wrap(data));
     }
 
     protected static DefaultFullHttpRequest emptyFullRequestGet(HttpMethod method, String uri) {
@@ -170,8 +191,6 @@ public class AbstractHttpTest {
     }
 
     //
-    //
-    //
 
     // client send and return server rcv.
     protected List<ByteBuf> sendAndReceiveRequest(VirtualPipe pipe, HttpObject... messages) throws Throwable {
@@ -229,6 +248,8 @@ public class AbstractHttpTest {
         return result;
     }
 
+    //
+
     protected void autoCloseNeta(EConsumer<NetManager, Throwable> consumer) throws Throwable {
         NetManager neta = new NetManager();
         try {
@@ -239,26 +260,32 @@ public class AbstractHttpTest {
     }
 
     protected VirtualPipe openVirtualPipe(NetManager neta, ProtoInitializer clientInit, ProtoInitializer serverInit) throws Throwable {
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), clientInit != null ? clientInit : ctx -> {
-        }, VrtSoConfig.asClient());
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), serverInit != null ? serverInit : ctx -> {
-        }, VrtSoConfig.asServer());
+        return openVirtualPipe(neta, clientInit, serverInit, VrtTransfer.duplicate());
+    }
+
+    protected VirtualPipe openVirtualPipe(NetManager neta, ProtoInitializer clientInit, ProtoInitializer serverInit, VrtTransferHandler transferHandler) throws Throwable {
+        Queue<SoUserEvent> clientUserEvents = new ConcurrentLinkedQueue<>();
+        Queue<SoUserEvent> serverUserEvents = new ConcurrentLinkedQueue<>();
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), attachUserEventCollector(clientInit, clientUserEvents), VrtSoConfig.asClient());
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), attachUserEventCollector(serverInit, serverUserEvents), VrtSoConfig.asServer());
 
         VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        transfer.linkTo(server, client, VrtTransfer.duplicate());
+        VrtTransferHandler handler = transferHandler == null ? VrtTransfer.duplicate() : transferHandler;
+        transfer.linkTo(client, server, handler);
+        transfer.linkTo(server, client, handler);
 
-        Queue<Object> clientInbound = new ArrayDeque<>();
-        Queue<Object> serverInbound = new ArrayDeque<>();
+        Queue<Object> clientInbound = new ConcurrentLinkedQueue<>();
+        Queue<Object> serverInbound = new ConcurrentLinkedQueue<>();
         client.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> clientInbound.offer(d.getData()));
         server.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> serverInbound.offer(d.getData()));
-        return new VirtualPipe(client, server, clientInbound, serverInbound);
+        return new VirtualPipe(client, server, clientInbound, clientUserEvents, serverInbound, serverUserEvents);
     }
 
     protected VirtualPipe openVirtualPipe(NetManager neta, ProtoInitializer initializer, VrtSoConfig config) throws Throwable {
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, config);
-        Queue<Object> channelInbound = new ArrayDeque<>();
-        Queue<Object> channelOutbound = new ArrayDeque<>();
+        Queue<SoUserEvent> channelUserEvents = new ConcurrentLinkedQueue<>();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), attachUserEventCollector(initializer, channelUserEvents), config);
+        Queue<Object> channelInbound = new ConcurrentLinkedQueue<>();
+        Queue<Object> channelOutbound = new ConcurrentLinkedQueue<>();
         channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> {
             if (d.getData() == null) {
                 return;
@@ -276,10 +303,23 @@ public class AbstractHttpTest {
                 channelOutbound.offer(outbound);
             }
         });
-        return new VirtualPipe(channel, channelInbound, channelOutbound);
+        return new VirtualPipe(channel, channelInbound, channelOutbound, channelUserEvents);
     }
 
-    protected <T> List<T> drainQueue(Queue<Object> queue) {
+    //
+
+    protected static boolean waitUntil(BooleanSupplier condition, long timeoutMs) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + Math.max(1L, timeoutMs);
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return true;
+            }
+            Thread.sleep(10L);
+        }
+        return condition.getAsBoolean();
+    }
+
+    protected <T> List<T> drainQueue(Queue<?> queue) {
         List<T> result = new ArrayList<>(queue.size());
         while (!queue.isEmpty()) {
             result.add((T) queue.poll());
@@ -288,63 +328,131 @@ public class AbstractHttpTest {
     }
 
     protected static final class VirtualPipe {
-        private final VrtChannel    channel;
-        private final Queue<Object> channelInbound;
-        private final Queue<Object> channelOutbound;
+        private final VrtChannel         channel;
+        private final Queue<Object>      channelInbound;
+        private final Queue<Object>      channelOutbound;
+        private final Queue<SoUserEvent> channelUserEvents;
         //
-        private final VrtChannel    client;
-        private final Queue<Object> clientInbound;
-        private final VrtChannel    server;
-        private final Queue<Object> serverInbound;
+        private final VrtChannel         client;
+        private final Queue<Object>      clientInbound;
+        private final Queue<SoUserEvent> clientUserEvents;
+        private final VrtChannel         server;
+        private final Queue<Object>      serverInbound;
+        private final Queue<SoUserEvent> serverUserEvents;
 
-        private VirtualPipe(VrtChannel channel, Queue<Object> channelInbound, Queue<Object> channelOutbound) {
+        private VirtualPipe(VrtChannel channel, Queue<Object> channelInbound, Queue<Object> channelOutbound, Queue<SoUserEvent> channelUserEvents) {
             this.channel = channel;
             this.channelInbound = channelInbound;
             this.channelOutbound = channelOutbound;
+            this.channelUserEvents = channelUserEvents;
             this.client = null;
             this.server = null;
             this.clientInbound = null;
             this.serverInbound = null;
+            this.clientUserEvents = null;
+            this.serverUserEvents = null;
         }
 
-        private VirtualPipe(VrtChannel client, VrtChannel server, Queue<Object> clientInbound, Queue<Object> serverInbound) {
+        private VirtualPipe(VrtChannel client, VrtChannel server, Queue<Object> clientInbound, Queue<SoUserEvent> clientUserEvents, Queue<Object> serverInbound, Queue<SoUserEvent> serverUserEvents) {
             this.channel = null;
             this.channelInbound = null;
             this.channelOutbound = null;
+            this.channelUserEvents = null;
             this.client = client;
             this.server = server;
             this.clientInbound = clientInbound;
+            this.clientUserEvents = clientUserEvents;
             this.serverInbound = serverInbound;
+            this.serverUserEvents = serverUserEvents;
         }
 
-        protected VrtChannel client() {
+        public VrtChannel client() {
             return this.client;
         }
 
-        protected VrtChannel server() {
+        public VrtChannel server() {
             return this.server;
         }
 
-        protected Queue<Object> clientInbound() {
+        public Queue<Object> clientInbound() {
             return this.clientInbound;
         }
 
-        protected Queue<Object> serverInbound() {
+        public Queue<SoUserEvent> clientUserEvents() {
+            return this.clientUserEvents;
+        }
+
+        public Queue<Object> serverInbound() {
             return this.serverInbound;
+        }
+
+        public Queue<SoUserEvent> serverUserEvents() {
+            return this.serverUserEvents;
         }
 
         //
 
-        protected VrtChannel channel() {
+        public VrtChannel channel() {
             return this.channel;
         }
 
-        protected Queue<Object> channelInbound() {
+        public Queue<Object> channelInbound() {
             return this.channelInbound;
         }
 
-        protected Queue<Object> channelOutbound() {
+        public Queue<Object> channelOutbound() {
             return this.channelOutbound;
+        }
+
+        public Queue<SoUserEvent> channelUserEvents() {
+            return this.channelUserEvents;
+        }
+    }
+
+    protected static final class UserEventCollectDuplexer implements ProtoDuplexer<Object, Object, Object, Object> {
+        private final Queue<SoUserEvent> userEvents;
+
+        private UserEventCollectDuplexer(Queue<SoUserEvent> userEvents) {
+            this.userEvents = userEvents;
+        }
+
+        @Override
+        public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
+            this.userEvents.offer(event);
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Object> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<Object> sndDown) {
+            if (isRcv) {
+                while (rcvUp.hasMore()) {
+                    rcvDown.offerMessage(rcvUp.takeMessage());
+                }
+            } else {
+                while (sndUp.hasMore()) {
+                    sndDown.offerMessage(sndUp.takeMessage());
+                }
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static ProtoInitializer attachUserEventCollector(ProtoInitializer initializer, Queue<SoUserEvent> userEvents) {
+        return ctx -> {
+            if (initializer != null) {
+                initializer.config(ctx);
+            }
+            ctx.addLast("__test-user-event-collector__", new UserEventCollectDuplexer(userEvents));
+        };
+    }
+
+    protected abstract static class ThroughProtoHandler<T> implements ProtoHandler<T, T> {
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<T> src, ProtoSndQueue<T> dst) throws Throwable {
+            while (src.hasMore()) {
+                dst.offerMessage(src.takeMessage());
+            }
+            return ProtoStatus.Next;
         }
     }
 }

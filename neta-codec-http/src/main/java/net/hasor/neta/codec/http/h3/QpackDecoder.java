@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.h3;
 import java.nio.charset.StandardCharsets;
+import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.HttpProtocolViolationException;
 
@@ -68,7 +69,7 @@ public class QpackDecoder {
      * @return the decoded headers
      */
     public HttpHeaders decode(byte[] data, int offset, int length) {
-        HttpHeaders headers = new HttpHeaders();
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         int end = offset + length;
         int pos = offset;
 
@@ -117,7 +118,7 @@ public class QpackDecoder {
                     field = dynamicTable.get(absIndex);
                 }
 
-                headers.add(field.name(), field.value());
+                headers.addHeader(field.name(), field.value());
                 totalSize += field.size();
             } else if ((firstByte & 0x40) != 0) {
                 // Literal Field Line With Name Reference
@@ -141,7 +142,7 @@ public class QpackDecoder {
                 String value = decodedString;
                 pos = decodedPos;
 
-                headers.add(name, value);
+                headers.addHeader(name, value);
                 totalSize += name.length() + value.length() + 32;
             } else if ((firstByte & 0x20) != 0) {
                 // Literal Field Line Without Name Reference
@@ -158,7 +159,7 @@ public class QpackDecoder {
                 String value = decodedString;
                 pos = decodedPos;
 
-                headers.add(name, value);
+                headers.addHeader(name, value);
                 totalSize += name.length() + value.length() + 32;
             } else if ((firstByte & 0x10) != 0) {
                 // Indexed Field Line With Post-Base Index
@@ -168,7 +169,7 @@ public class QpackDecoder {
 
                 int absIndex = base + index;
                 QpackHeaderField field = dynamicTable.get(absIndex);
-                headers.add(field.name(), field.value());
+                headers.addHeader(field.name(), field.value());
                 totalSize += field.size();
             } else {
                 // Literal Field Line With Post-Base Name Reference
@@ -183,7 +184,7 @@ public class QpackDecoder {
                 String value = decodedString;
                 pos = decodedPos;
 
-                headers.add(name, value);
+                headers.addHeader(name, value);
                 totalSize += name.length() + value.length() + 32;
             }
 

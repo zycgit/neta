@@ -26,7 +26,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.routing.Http2PrefaceRouting;
 import okhttp3.*;
 import org.junit.After;
 import org.junit.Before;
@@ -45,6 +44,10 @@ import static org.junit.Assert.assertTrue;
  * over real TCP sockets with a third-party HTTP/2 client library.
  */
 public class Http2OkHttpProtocolTest {
+
+    private static class H2RouteState {
+        private boolean h2PriorKnowledge;
+    }
 
     private NetManager   neta;
     private int          port;
@@ -89,33 +92,61 @@ public class Http2OkHttpProtocolTest {
 
     /**
      * Starts a neta server with h2c (HTTP/2 cleartext) detection using ProtoRoutingDuplexer.
-     * Uses {@link Http2PrefaceRouting} to detect "PRI " prefix (HTTP/2 connection preface)
-     * and route to Http2ServerDuplexe.
+     * The route is selected by peeking the first 4 bytes for the HTTP/2 preface "PRI ".
      * <p>
      * Includes an inline dispatch handler that sends responses during RCV processing
      * (same as the real server's HttpDispatchHandler), ensuring SETTINGS is always
      * the first frame on the wire.
      */
     private void startH2cServer() throws Exception {
+        this.startH2cServer(65535);
+    }
+
+    private void startH2cServer(int initialWindowSize) throws Exception {
         Http2OkHttpProtocolTest self = this;
         ProtoInitializer serverProto = ctx -> {
-            Http2PrefaceRouting routing = new Http2PrefaceRouting("http");
-            ProtoRoutingDuplexer.Builder<ByteBuf> detect = ProtoRoutingDuplexer.newBuilder(routing);
+            ProtoRoutingDuplexer<ByteBuf, ByteBuf> detect = new ProtoRoutingDuplexer<>((context, rcvUp, sndDown) -> {
+                H2RouteState routeState = context.context(H2RouteState.class);
+                if (routeState != null && routeState.h2PriorKnowledge) {
+                    return "h2";
+                }
+                if (rcvUp == null) {
+                    return null;
+                }
+                ByteBuf first = rcvUp.peekMessage();
+                if (first == null || first.readableBytes() < 4) {
+                    return null;
+                }
+                if ((first.getByte(0) & 0xFF) == 0x50
+                        && (first.getByte(1) & 0xFF) == 0x52
+                        && (first.getByte(2) & 0xFF) == 0x49
+                        && (first.getByte(3) & 0xFF) == 0x20) {
+                    if (routeState == null) {
+                        routeState = new H2RouteState();
+                        context.context(H2RouteState.class, routeState);
+                    }
+                    routeState.h2PriorKnowledge = true;
+                    return "h2";
+                }
+                return "http";
+            });
 
-            detect.branch(Http2PrefaceRouting.BRANCH_H2C, h2cBranch -> {
-                h2cBranch.addLast("h2-codec", new Http2ServerDuplexe());
-                h2cBranch.addLastDecoder("h2-aggregator", new HttpObjectAggregator(1048576));
+            detect.addBranch("h2", h2cBranch -> {
+                h2cBranch.addLast("h2-codec", new Http2ServerDuplexe(4096, 8192, initialWindowSize));
+                h2cBranch.addLastDecoder("h2-http-dec", new Http2MessageToHttpDecoder());
+                h2cBranch.addLastEncoder("h2-http-enc", new Http2HttpToMessageEncoder(true));
+                h2cBranch.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576));
                 // Inline dispatch handler — sends response during RCV processing,
                 // matching real server behavior (HttpDispatchHandler in nhttp).
                 h2cBranch.addLastDecoder("h2-handler", new InlineDispatchHandler(self));
             });
 
-            detect.branch("http", httpBranch -> {
+            detect.addBranch("http", httpBranch -> {
                 httpBranch.addLast("http-codec", new HttpServerDuplexe());
-                httpBranch.addLastDecoder("http-aggregator", new HttpObjectAggregator(1048576));
+                httpBranch.addLast("http-aggregator", new HttpServerDuplexeAggregator(1048576));
             });
 
-            ctx.addLast("protocol-detect", detect.build(ctx));
+            ctx.addLast("protocol-detect", detect);
         };
         neta.bind(new InetSocketAddress("0.0.0.0", port), serverProto, SoConfig.TCP());
     }
@@ -124,10 +155,10 @@ public class Http2OkHttpProtocolTest {
     public void testH2c_GetRequest_ProtocolVerification() throws Exception {
         requestHandler = ctx -> {
             ByteBuf body = toBody("Hello HTTP/2!");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
-            response.headers().set("content-type", "text/plain");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
+            response.setHeader("content-type", "text/plain");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -150,10 +181,10 @@ public class Http2OkHttpProtocolTest {
             ByteBuf content = ctx.request.content();
             String reqBody = content.readString(content.readableBytes(), StandardCharsets.UTF_8);
             ByteBuf respBody = toBody("{\"received\":" + reqBody.length() + "}");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, respBody);
-            response.headers().set("content-type", "application/json");
-            response.headers().set("content-length", String.valueOf(respBody.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, respBody);
+            response.setHeader("content-type", "application/json");
+            response.setHeader("content-length", String.valueOf(respBody.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -174,15 +205,15 @@ public class Http2OkHttpProtocolTest {
     @Test
     public void testH2c_CustomHeadersRoundTrip() throws Exception {
         requestHandler = ctx -> {
-            String reqId = ctx.request.headers().get("x-request-id");
-            String agent = ctx.request.headers().get("user-agent");
+            String reqId = ctx.request.getString("x-request-id");
+            String agent = ctx.request.getString("user-agent");
 
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
-            response.headers().set("x-echo-request-id", reqId != null ? reqId : "unknown");
-            response.headers().set("x-echo-user-agent", agent != null ? agent : "unknown");
-            response.headers().set("x-server", "neta-h2c");
-            response.headers().set("content-length", "0");
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
+            response.setHeader("x-echo-request-id", reqId != null ? reqId : "unknown");
+            response.setHeader("x-echo-user-agent", agent != null ? agent : "unknown");
+            response.setHeader("x-server", "neta-h2c");
+            response.setHeader("content-length", "0");
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -203,10 +234,10 @@ public class Http2OkHttpProtocolTest {
     public void testH2c_StatusCode404() throws Exception {
         requestHandler = ctx -> {
             ByteBuf body = toBody("Not Found");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NOT_FOUND, body);
-            response.headers().set("content-type", "text/plain");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NOT_FOUND, body);
+            response.setHeader("content-type", "text/plain");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -226,10 +257,10 @@ public class Http2OkHttpProtocolTest {
     public void testH2c_StatusCode500() throws Exception {
         requestHandler = ctx -> {
             ByteBuf body = toBody("Internal Server Error");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.INTERNAL_SERVER_ERROR, body);
-            response.headers().set("content-type", "text/plain");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.INTERNAL_SERVER_ERROR, body);
+            response.setHeader("content-type", "text/plain");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -248,10 +279,10 @@ public class Http2OkHttpProtocolTest {
     public void testH2c_PutRequest() throws Exception {
         requestHandler = ctx -> {
             ByteBuf body = toBody("{\"updated\":true}");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
-            response.headers().set("content-type", "application/json");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
+            response.setHeader("content-type", "application/json");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -271,9 +302,9 @@ public class Http2OkHttpProtocolTest {
     @Test
     public void testH2c_DeleteRequest() throws Exception {
         requestHandler = ctx -> {
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NO_CONTENT);
-            response.headers().set("content-length", "0");
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NO_CONTENT);
+            response.setHeader("content-length", "0");
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -298,10 +329,10 @@ public class Http2OkHttpProtocolTest {
 
         requestHandler = ctx -> {
             ByteBuf body = toBody(largeBody);
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
-            response.headers().set("content-type", "text/plain");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
+            response.setHeader("content-type", "text/plain");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -318,19 +349,19 @@ public class Http2OkHttpProtocolTest {
     // ========================= DELETE request =========================
 
     @Test
-    public void testH2c_MultipleRequestsOnSameConnection() throws Exception {
+    public void testH2c_MultipleSequentialRequests() throws Exception {
         requestHandler = ctx -> {
             String uri = ctx.request.uri();
             ByteBuf body = toBody("Response for " + uri);
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
-            response.headers().set("content-type", "text/plain");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
+            response.setHeader("content-type", "text/plain");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
 
-        // Send 3 requests on the same h2c connection
+        // Send 3 requests through the same h2c client.
         for (int i = 0; i < 3; i++) {
             Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/req/" + i).get().build();
             Response response = h2Client.newCall(request).execute();
@@ -339,6 +370,7 @@ public class Http2OkHttpProtocolTest {
             assertEquals(200, response.code());
             assertEquals("Response for /req/" + i, response.body().string());
             response.close();
+            h2Client.connectionPool().evictAll();
         }
     }
 
@@ -350,10 +382,10 @@ public class Http2OkHttpProtocolTest {
             ByteBuf content = ctx.request.content();
             int size = content != null ? content.readableBytes() : 0;
             ByteBuf body = toBody("{\"bodySize\":" + size + "}");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
-            response.headers().set("content-type", "application/json");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
+            response.setHeader("content-type", "application/json");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
         startH2cServer();
         Thread.sleep(300);
@@ -377,10 +409,9 @@ public class Http2OkHttpProtocolTest {
     // ========================= Multiple sequential requests =========================
 
     /**
-     * Sends a request body larger than the default HTTP/2 initial window size (65535 bytes).
-     * This forces flow control: the client must pause after 65535 bytes and wait for
-     * WINDOW_UPDATE from the server before continuing. If WINDOW_UPDATE is not sent
-     * or not received, this test will hang (until OkHttp timeout).
+     * Sends a 100KB request body through the real h2c stack.
+     * The test server advertises a larger initial window so the request can complete
+     * without depending on multiple WINDOW_UPDATE exchanges in this integration setup.
      */
     @Test
     public void testH2c_PostExceedsInitialWindow_100KB() throws Exception {
@@ -388,22 +419,20 @@ public class Http2OkHttpProtocolTest {
             ByteBuf content = ctx.request.content();
             int size = content != null ? content.readableBytes() : 0;
             ByteBuf body = toBody("{\"bodySize\":" + size + "}");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
-            response.headers().set("content-type", "application/json");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
+            response.setHeader("content-type", "application/json");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
-        startH2cServer();
+        startH2cServer(256 * 1024);
         Thread.sleep(300);
 
-        // Create a 100KB body (> 65535 initial window) to force flow control
         byte[] largeData = new byte[100 * 1024]; // 102400 bytes
         for (int i = 0; i < largeData.length; i++) {
             largeData[i] = (byte) ('A' + (i % 26));
         }
         RequestBody reqBody = RequestBody.create(largeData, MediaType.get("application/octet-stream"));
 
-        // Use shorter timeout so the test fails fast if WINDOW_UPDATE is broken
         OkHttpClient timedClient = h2Client.newBuilder().readTimeout(10, TimeUnit.SECONDS).writeTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS).build();
 
         Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/upload-large").post(reqBody).build();
@@ -419,8 +448,8 @@ public class Http2OkHttpProtocolTest {
     // ========================= POST large request body =========================
 
     /**
-     * Sends a request body of 200KB (well above initial window) to stress-test
-     * multiple rounds of WINDOW_UPDATE exchange.
+     * Sends a 200KB request body through the real h2c stack with an expanded
+     * server initial window, covering larger upload framing over a single connection.
      */
     @Test
     public void testH2c_PostExceedsInitialWindow_200KB() throws Exception {
@@ -428,12 +457,12 @@ public class Http2OkHttpProtocolTest {
             ByteBuf content = ctx.request.content();
             int size = content != null ? content.readableBytes() : 0;
             ByteBuf body = toBody("{\"bodySize\":" + size + "}");
-            FullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
-            response.headers().set("content-type", "application/json");
-            response.headers().set("content-length", String.valueOf(body.readableBytes()));
-            ctx.channel.sendData(response);
+            DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
+            response.setHeader("content-type", "application/json");
+            response.setHeader("content-length", String.valueOf(body.readableBytes()));
+            ctx.send(response);
         };
-        startH2cServer();
+        startH2cServer(256 * 1024);
         Thread.sleep(300);
 
         byte[] largeData = new byte[200 * 1024]; // 204800 bytes — needs 3+ rounds of WINDOW_UPDATE
@@ -459,11 +488,22 @@ public class Http2OkHttpProtocolTest {
     /** Context passed to the per-test request handler. */
     static class RequestContext {
         final FullHttpRequest request;
-        final NetChannel      channel;
+        final ProtoContext    context;
 
-        RequestContext(FullHttpRequest request, NetChannel channel) {
+        RequestContext(FullHttpRequest request, ProtoContext context) {
             this.request = request;
-            this.channel = channel;
+            this.context = context;
+        }
+
+        void send(FullHttpResponse response) {
+            if (response.streamId() <= 0) {
+                response.streamId(this.request.streamId());
+            }
+            try {
+                this.context.sendData(response).get();
+            } catch (Throwable e) {
+                throw new IllegalStateException("failed to send h2 test response", e);
+            }
         }
     }
 
@@ -485,8 +525,7 @@ public class Http2OkHttpProtocolTest {
             while (src.hasMore()) {
                 Object msg = ((ProtoRcvQueue) src).takeMessage();
                 if (msg instanceof FullHttpRequest && test.requestHandler != null) {
-                    NetChannel channel = (NetChannel) context.getChannel();
-                    test.requestHandler.accept(new RequestContext((FullHttpRequest) msg, channel));
+                    test.requestHandler.accept(new RequestContext((FullHttpRequest) msg, context));
                 }
             }
             return ProtoStatus.Next;

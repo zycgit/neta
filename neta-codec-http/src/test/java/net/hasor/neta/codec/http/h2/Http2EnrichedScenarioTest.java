@@ -18,6 +18,8 @@ import static org.junit.Assert.*;
  * header edge cases, content types, HPACK compression scenarios, and stream management.
  */
 public class Http2EnrichedScenarioTest {
+    private static final String name     = "test";
+    private static final int    poolSize = 8;
 
     // ========================= Mock & Helpers (same structure as Http2CodecTest) =========================
 
@@ -48,7 +50,7 @@ public class Http2EnrichedScenarioTest {
         Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
 
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
@@ -63,8 +65,8 @@ public class Http2EnrichedScenarioTest {
         Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
@@ -86,7 +88,7 @@ public class Http2EnrichedScenarioTest {
         Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
 
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
@@ -101,8 +103,8 @@ public class Http2EnrichedScenarioTest {
         Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
@@ -137,7 +139,7 @@ public class Http2EnrichedScenarioTest {
     @Test
     public void testOptionsRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.OPTIONS, "*");
-        req.headers().add("host", "api.example.com");
+        req.addHeader("host", "api.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -147,7 +149,7 @@ public class Http2EnrichedScenarioTest {
     @Test
     public void testConnectMethod() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.CONNECT, "proxy.example.com:443");
-        req.headers().add("host", "proxy.example.com");
+        req.addHeader("host", "proxy.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -164,8 +166,8 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.PATCH, "/resource/1", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/json-patch+json");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "application/json-patch+json");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpRequest received = findFirst(decoded, HttpRequest.class);
@@ -181,13 +183,15 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.CREATED, bodyBuf);
-        resp.headers().add("location", "/resource/42");
+        resp.addHeader("location", "/resource/42");
 
         List<HttpObject> decoded = serverToClient(resp);
         HttpResponse received = findFirst(decoded, HttpResponse.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
+        assertNotNull(headers);
         assertEquals(HttpStatus.CREATED, received.status());
-        assertEquals("/resource/42", received.headers().get("location"));
+        assertEquals("/resource/42", headers.getString("location"));
     }
 
     @Test
@@ -203,25 +207,29 @@ public class Http2EnrichedScenarioTest {
     @Test
     public void test301Redirect() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.MOVED_PERMANENTLY);
-        resp.headers().add("location", "https://new.example.com/path");
+        resp.addHeader("location", "https://new.example.com/path");
 
         List<HttpObject> decoded = serverToClient(resp);
         HttpResponse received = findFirst(decoded, HttpResponse.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
+        assertNotNull(headers);
         assertEquals(HttpStatus.MOVED_PERMANENTLY, received.status());
-        assertEquals("https://new.example.com/path", received.headers().get("location"));
+        assertEquals("https://new.example.com/path", headers.getString("location"));
     }
 
     @Test
     public void test304NotModified() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NOT_MODIFIED);
-        resp.headers().add("etag", "\"v1.2.3\"");
+        resp.addHeader("etag", "\"v1.2.3\"");
 
         List<HttpObject> decoded = serverToClient(resp);
         HttpResponse received = findFirst(decoded, HttpResponse.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
+        assertNotNull(headers);
         assertEquals(HttpStatus.NOT_MODIFIED, received.status());
-        assertEquals("\"v1.2.3\"", received.headers().get("etag"));
+        assertEquals("\"v1.2.3\"", headers.getString("etag"));
     }
 
     @Test
@@ -243,7 +251,7 @@ public class Http2EnrichedScenarioTest {
     @Test
     public void test503ServiceUnavailable() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.SERVICE_UNAVAILABLE);
-        resp.headers().add("retry-after", "60");
+        resp.addHeader("retry-after", "60");
         HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
         assertNotNull(received);
         assertEquals(HttpStatus.SERVICE_UNAVAILABLE, received.status());
@@ -257,13 +265,15 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/api/users", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/json");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "application/json");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpRequest received = findFirst(decoded, HttpRequest.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("application/json", received.headers().get("content-type"));
+        assertNotNull(headers);
+        assertEquals("application/json", headers.getString("content-type"));
 
         HttpContent lastContent = findLast(decoded, HttpContent.class);
         assertNotNull(lastContent);
@@ -278,13 +288,15 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/login", bodyBuf);
-        req.headers().add("host", "auth.example.com");
-        req.headers().add("content-type", "application/x-www-form-urlencoded");
+        req.addHeader("host", "auth.example.com");
+        req.addHeader("content-type", "application/x-www-form-urlencoded");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpRequest received = findFirst(decoded, HttpRequest.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("application/x-www-form-urlencoded", received.headers().get("content-type"));
+        assertNotNull(headers);
+        assertEquals("application/x-www-form-urlencoded", headers.getString("content-type"));
     }
 
     // ========================= Content-Type Diversity Tests =========================
@@ -297,13 +309,15 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/api/xml", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/xml");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "application/xml");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpRequest received = findFirst(decoded, HttpRequest.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("application/xml", received.headers().get("content-type"));
+        assertNotNull(headers);
+        assertEquals("application/xml", headers.getString("content-type"));
     }
 
     @Test
@@ -317,8 +331,8 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/upload", bodyBuf);
-        req.headers().add("host", "upload.example.com");
-        req.headers().add("content-type", "application/octet-stream");
+        req.addHeader("host", "upload.example.com");
+        req.addHeader("content-type", "application/octet-stream");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpContent lastContent = findLast(decoded, HttpContent.class);
@@ -336,23 +350,29 @@ public class Http2EnrichedScenarioTest {
     @Test
     public void testHeaderWithEmptyValue() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/test");
-        req.headers().add("host", "localhost");
-        req.headers().add("x-empty", "");
+        req.addHeader("host", "localhost");
+        req.addHeader("x-empty", "");
 
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("", received.headers().get("x-empty"));
+        assertNotNull(headers);
+        assertEquals("", headers.getString("x-empty"));
     }
 
     @Test
     public void testHeaderWithUnicodeValue() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/unicode");
-        req.headers().add("host", "localhost");
-        req.headers().add("x-description", "test-header-value");
+        req.addHeader("host", "localhost");
+        req.addHeader("x-description", "test-header-value");
 
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("test-header-value", received.headers().get("x-description"));
+        assertNotNull(headers);
+        assertEquals("test-header-value", headers.getString("x-description"));
     }
 
     // ========================= Header Edge Cases =========================
@@ -360,43 +380,51 @@ public class Http2EnrichedScenarioTest {
     @Test
     public void testMultiValueHeaders() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/accept");
-        req.headers().add("host", "localhost");
-        req.headers().add("accept", "text/html");
-        req.headers().add("accept", "application/json");
-        req.headers().add("accept", "text/plain");
+        req.addHeader("host", "localhost");
+        req.addHeader("accept", "text/html");
+        req.addHeader("accept", "application/json");
+        req.addHeader("accept", "text/plain");
 
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        // At least the first accept should be present
-        assertNotNull(received.headers().get("accept"));
+        assertNotNull(headers);
+        assertNotNull(headers.getString("accept"));
     }
 
     @Test
     public void testCommonSecurityHeaders() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
-        resp.headers().add("x-content-type-options", "nosniff");
-        resp.headers().add("x-frame-options", "DENY");
-        resp.headers().add("x-xss-protection", "1; mode=block");
-        resp.headers().add("strict-transport-security", "max-age=31536000");
-        resp.headers().add("content-security-policy", "default-src 'self'");
+        resp.addHeader("x-content-type-options", "nosniff");
+        resp.addHeader("x-frame-options", "DENY");
+        resp.addHeader("x-xss-protection", "1; mode=block");
+        resp.addHeader("strict-transport-security", "max-age=31536000");
+        resp.addHeader("content-security-policy", "default-src 'self'");
 
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        List<HttpObject> decoded = serverToClient(resp);
+        HttpResponse received = findFirst(decoded, HttpResponse.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("nosniff", received.headers().get("x-content-type-options"));
-        assertEquals("DENY", received.headers().get("x-frame-options"));
+        assertNotNull(headers);
+        assertEquals("nosniff", headers.getString("x-content-type-options"));
+        assertEquals("DENY", headers.getString("x-frame-options"));
     }
 
     @Test
     public void testCorsHeaders() throws Throwable {
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK);
-        resp.headers().add("access-control-allow-origin", "*");
-        resp.headers().add("access-control-allow-methods", "GET, POST, OPTIONS");
-        resp.headers().add("access-control-allow-headers", "Content-Type, Authorization");
-        resp.headers().add("access-control-max-age", "86400");
+        resp.addHeader("access-control-allow-origin", "*");
+        resp.addHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+        resp.addHeader("access-control-allow-headers", "Content-Type, Authorization");
+        resp.addHeader("access-control-max-age", "86400");
 
-        HttpResponse received = findFirst(serverToClient(resp), HttpResponse.class);
+        List<HttpObject> decoded = serverToClient(resp);
+        HttpResponse received = findFirst(decoded, HttpResponse.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("*", received.headers().get("access-control-allow-origin"));
+        assertNotNull(headers);
+        assertEquals("*", headers.getString("access-control-allow-origin"));
     }
 
     @Test
@@ -405,24 +433,24 @@ public class Http2EnrichedScenarioTest {
         HpackDecoder decoder = new HpackDecoder(4096, 65536);
 
         // First request
-        HttpHeaders h1 = new HttpHeaders();
-        h1.add(":method", "GET");
-        h1.add(":path", "/page1");
-        h1.add(":scheme", "https");
-        h1.add(":authority", "example.com");
+        DefaultHttpHeaders h1 = new DefaultHttpHeaders();
+        h1.addHeader(":method", "GET");
+        h1.addHeader(":path", "/page1");
+        h1.addHeader(":scheme", "https");
+        h1.addHeader(":authority", "example.com");
         byte[] e1 = encoder.encode(h1);
         HttpHeaders d1 = decoder.decode(e1, 0, e1.length);
-        assertEquals("/page1", d1.get(":path"));
+        assertEquals("/page1", d1.getString(":path"));
 
         // Second request with similar headers (should benefit from dynamic table)
-        HttpHeaders h2 = new HttpHeaders();
-        h2.add(":method", "GET");
-        h2.add(":path", "/page2");
-        h2.add(":scheme", "https");
-        h2.add(":authority", "example.com");
+        DefaultHttpHeaders h2 = new DefaultHttpHeaders();
+        h2.addHeader(":method", "GET");
+        h2.addHeader(":path", "/page2");
+        h2.addHeader(":scheme", "https");
+        h2.addHeader(":authority", "example.com");
         byte[] e2 = encoder.encode(h2);
         HttpHeaders d2 = decoder.decode(e2, 0, e2.length);
-        assertEquals("/page2", d2.get(":path"));
+        assertEquals("/page2", d2.getString(":path"));
 
         // Second encoding should be more compact due to shared context
         assertTrue("Second encoding should be <= first due to dynamic table", e2.length <= e1.length);
@@ -433,16 +461,16 @@ public class Http2EnrichedScenarioTest {
         HpackEncoder encoder = new HpackEncoder(4096);
         HpackDecoder decoder = new HpackDecoder(4096, 65536);
 
-        HttpHeaders headers = new HttpHeaders();
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         for (int i = 0; i < 100; i++) {
-            headers.add("x-unique-" + i, "value-" + i + "-with-some-extra-data");
+            headers.addHeader("x-unique-" + i, "value-" + i + "-with-some-extra-data");
         }
 
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
 
         for (int i = 0; i < 100; i++) {
-            assertEquals("value-" + i + "-with-some-extra-data", decoded.get("x-unique-" + i));
+            assertEquals("value-" + i + "-with-some-extra-data", decoded.getString("x-unique-" + i));
         }
     }
 
@@ -453,14 +481,14 @@ public class Http2EnrichedScenarioTest {
         HpackEncoder encoder = new HpackEncoder(4096);
         HpackDecoder decoder = new HpackDecoder(4096, 65536);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-special", "key=value; path=/; domain=.example.com");
-        headers.add("cookie", "session=abc123; lang=en-US");
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("x-special", "key=value; path=/; domain=.example.com");
+        headers.addHeader("cookie", "session=abc123; lang=en-US");
 
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals("key=value; path=/; domain=.example.com", decoded.get("x-special"));
-        assertEquals("session=abc123; lang=en-US", decoded.get("cookie"));
+        assertEquals("key=value; path=/; domain=.example.com", decoded.getString("x-special"));
+        assertEquals("session=abc123; lang=en-US", decoded.getString("cookie"));
     }
 
     @Test
@@ -468,12 +496,12 @@ public class Http2EnrichedScenarioTest {
         HpackEncoder encoder = new HpackEncoder(32);  // Very small table
         HpackDecoder decoder = new HpackDecoder(32, 65536);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-key", "value");
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("x-key", "value");
 
         byte[] encoded = encoder.encode(headers);
         HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals("value", decoded.get("x-key"));
+        assertEquals("value", decoded.getString("x-key"));
     }
 
     @Test
@@ -484,10 +512,10 @@ public class Http2EnrichedScenarioTest {
         Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(true);
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         HttpMethod[] methods = { HttpMethod.GET, HttpMethod.POST, HttpMethod.PUT, HttpMethod.DELETE, HttpMethod.HEAD };
         SimpleProtoSndQueue<ByteBuf> allEncOut = new SimpleProtoSndQueue<>();
@@ -497,7 +525,7 @@ public class Http2EnrichedScenarioTest {
             Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
             SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
             DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, method, "/api");
-            req.headers().add("host", "localhost");
+            req.addHeader("host", "localhost");
             encIn.add(req);
             httpToFrame.onMessage(encCtx, encIn, encodeBridge);
             frameEncoder.onMessage(encCtx, encodeBridge, encOut);
@@ -533,10 +561,10 @@ public class Http2EnrichedScenarioTest {
         Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(false);
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         HttpStatus[] statuses = { HttpStatus.OK, HttpStatus.CREATED, HttpStatus.NO_CONTENT, HttpStatus.NOT_FOUND, HttpStatus.INTERNAL_SERVER_ERROR };
         SimpleProtoSndQueue<ByteBuf> allEncOut = new SimpleProtoSndQueue<>();
@@ -583,7 +611,7 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/large-upload", bodyBuf);
-        req.headers().add("host", "upload.example.com");
+        req.addHeader("host", "upload.example.com");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() > 0);
@@ -604,7 +632,7 @@ public class Http2EnrichedScenarioTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, bodyBuf);
-        resp.headers().add("content-type", "application/octet-stream");
+        resp.addHeader("content-type", "application/octet-stream");
 
         List<HttpObject> decoded = serverToClient(resp);
         assertTrue(decoded.size() > 0);
@@ -641,7 +669,7 @@ public class Http2EnrichedScenarioTest {
     public void testUriWithFragment() throws Throwable {
         String uri = "/page?query=value#section";
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -651,11 +679,14 @@ public class Http2EnrichedScenarioTest {
     @Test
     public void testUriWithPort() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/resource");
-        req.headers().add("host", "localhost:8080");
+        req.addHeader("host", "localhost:8080");
 
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
+        List<HttpObject> decoded = clientToServer(req);
+        HttpRequest received = findFirst(decoded, HttpRequest.class);
+        LastHttpHeaders headers = findLast(decoded, LastHttpHeaders.class);
         assertNotNull(received);
-        assertEquals("localhost:8080", received.headers().get("host"));
+        assertNotNull(headers);
+        assertEquals("localhost:8080", headers.getString("host"));
     }
 
     // ========================= URI Variations =========================
@@ -664,7 +695,7 @@ public class Http2EnrichedScenarioTest {
     public void testUriWithDeepPath() throws Throwable {
         String uri = "/a/b/c/d/e/f/g/h/i/j/k/l/m/n/o/p";
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -675,13 +706,13 @@ public class Http2EnrichedScenarioTest {
     public void testFreshEncoderDecoderPairPerTest() throws Throwable {
         // Each call creates fresh encoder/decoder pair - verify independence
         DefaultFullHttpRequest req1 = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/test1");
-        req1.headers().add("host", "host1.com");
+        req1.addHeader("host", "host1.com");
         HttpRequest r1 = findFirst(clientToServer(req1), HttpRequest.class);
         assertNotNull(r1);
         assertEquals("/test1", r1.uri());
 
         DefaultFullHttpRequest req2 = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/test2");
-        req2.headers().add("host", "host2.com");
+        req2.addHeader("host", "host2.com");
         HttpRequest r2 = findFirst(clientToServer(req2), HttpRequest.class);
         assertNotNull(r2);
         assertEquals("/test2", r2.uri());

@@ -29,9 +29,18 @@ public interface HttpRequest extends HttpObject {
     /** Returns the protocol version carried by this request line. */
     HttpVersion protocolVersion();
 
+    /** Sets the protocol version carried by this aggregated request. */
+    HttpRequest protocolVersion(HttpVersion version);
+
     /** Returns the request method carried by this request line. */
     HttpMethod method();
 
+    /** Sets the request method carried by this aggregated request. */
+    HttpRequest method(HttpMethod method);
+
     /** Returns the request target carried by this request line. */
     String uri();
+
+    /** Sets the request target carried by this request line. */
+    HttpRequest uri(String uri);
 }

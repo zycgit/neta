@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Client-side HTTP/1.x duplex codec that combines response decoding and request encoding.

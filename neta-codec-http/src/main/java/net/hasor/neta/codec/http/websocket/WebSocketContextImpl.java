@@ -30,7 +30,7 @@ import net.hasor.cobble.StringUtils;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15
  */
-public class WebSocketContextImpl implements WebSocketContext {
+class WebSocketContextImpl implements WebSocketContext {
     private final boolean      server;
     private final String       subProtocol;
     private final int          version;
@@ -45,7 +45,7 @@ public class WebSocketContextImpl implements WebSocketContext {
      * @param requestPath the request URI path of the upgrade request
      * @param extensions negotiated extensions (or empty list)
      */
-    public WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath, List<String> extensions) {
+    WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath, List<String> extensions) {
         this.server = server;
         this.subProtocol = subProtocol;
         this.version = version;
@@ -72,7 +72,8 @@ public class WebSocketContextImpl implements WebSocketContext {
     /**
      * Creates a server-side {@link WebSocketContext} from handshake parameters.
      * <p>
-     * Typically called after {@link WebSocketServerDuplexer} completes the opening handshake:
+     * Typically called after a server-side {@link WebSocketHandshakeDuplexer}
+     * completes the opening handshake:
      * <pre>{@code
      * context.context(WebSocketContext.class,
      *     WebSocketContextImpl.fromHandshake(version, request.uri(),
@@ -101,8 +102,8 @@ public class WebSocketContextImpl implements WebSocketContext {
     /**
      * Creates a client-side {@link WebSocketContext} from handshake parameters.
      * <p>
-     * Typically called after {@link WebSocketClientDuplexer} validates the server's
-     * HTTP 101 upgrade response.
+     * Typically called after a client-side {@link WebSocketHandshakeDuplexer}
+     * validates the server's HTTP 101 upgrade response.
      * @param version the negotiated WebSocket version
      * @param requestPath the request URI path originally used by the client
      * @param subProtocol the negotiated sub-protocol returned by the server (may be null)
@@ -112,14 +113,6 @@ public class WebSocketContextImpl implements WebSocketContext {
     public static WebSocketContextImpl fromClientHandshake(WebSocketVersion version, String requestPath, String subProtocol, String extensions) {
         int versionCode = version != null ? version.code() : 13;
         return new WebSocketContextImpl(false, subProtocol, versionCode, requestPath, parseExtensions(extensions));
-    }
-
-    /**
-     * Creates a client-side {@link WebSocketContext} from handshake parameters.
-     * Assumes RFC 6455 (version 13).
-     */
-    public static WebSocketContextImpl fromClientHandshake(String requestPath, String subProtocol, String extensions) {
-        return fromClientHandshake(WebSocketVersion.V13, requestPath, subProtocol, extensions);
     }
 
     @Override

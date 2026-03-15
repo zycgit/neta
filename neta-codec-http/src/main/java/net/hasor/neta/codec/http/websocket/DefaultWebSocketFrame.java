@@ -24,7 +24,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * WebSocket frames remain transport-level objects; application-visible type
  * distinction should happen on {@link WebSocketMessage} rather than on frames.
  */
-public final class DefaultWebSocketFrame implements WebSocketFrame {
+final class DefaultWebSocketFrame implements WebSocketFrame {
     private static final int                               RECYCLE_INDEX   = RecycleObjectPool.registerType();
     private static final ObjHandler<DefaultWebSocketFrame> RECYCLE_HANDLER = new ObjHandler<DefaultWebSocketFrame>() {
         @Override

@@ -119,6 +119,7 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     /** Sets the protocol version carried by this request line. */
+    @Override
     public HttpRequest protocolVersion(HttpVersion version) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
@@ -141,6 +142,7 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     /** Sets the request method carried by this request line. */
+    @Override
     public HttpRequest method(HttpMethod method) {
         if (method == null) {
             throw new IllegalArgumentException("method must not be null");
@@ -159,6 +161,7 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     /** Sets the request target carried by this request line. */
+    @Override
     public HttpRequest uri(String uri) {
         if (uri == null) {
             throw new IllegalArgumentException("uri must not be null");

@@ -65,7 +65,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     @Override
-    public void onInit(ProtoContext context) throws Throwable {
+    public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
         context.context(Http3DecoderContent.class, new Http3DecoderContent(maxTableSize, maxHeaderListSize));
     }
 
@@ -146,10 +146,10 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
      * Emits an HttpRequest from decoded HEADERS (server mode).
      */
     private void emitHttpRequest(ProtoContext context, Http3DecoderContent state, ProtoSndQueue<HttpObject> dst, Http3Stream stream, HttpHeaders headers, boolean isPrintLog) {
-        String method = headers.get(":method");
-        String path = headers.get(":path");
-        String authority = headers.get(":authority");
-        String scheme = headers.get(":scheme");
+        String method = headers.getString(":method");
+        String path = headers.getString(":path");
+        String authority = headers.getString(":authority");
+        String scheme = headers.getString(":scheme");
 
         if (StringUtils.isBlank(method)) {
             method = "GET";
@@ -160,25 +160,29 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
 
         HttpMethod httpMethod = HttpMethod.valueOf(method);
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_3_0, httpMethod, path);
+        request.streamId((int) stream.streamId());
+        DefaultLastHttpHeaders regularHeaders = new DefaultLastHttpHeaders();
 
         // Copy non-pseudo headers
-        for (String name : headers.names()) {
+        for (String name : headers.headerNames()) {
             if (!StringUtils.startsWith(name, ":")) {
-                for (String value : headers.getAll(name)) {
-                    request.headers().add(name, value);
+                for (String value : headers.getValues(name)) {
+                    regularHeaders.addHeader(name, value);
                 }
             }
         }
 
         // Map pseudo-headers
         if (StringUtils.isNotBlank(authority)) {
-            request.headers().add(HttpHeaderNames.HOST, authority);
+            regularHeaders.addHeader(HttpHeaderNames.HOST, authority);
         }
         if (StringUtils.isNotBlank(scheme)) {
-            request.headers().add(HttpHeaderNames.X_FORWARDED_PROTO, scheme);
+            regularHeaders.addHeader(HttpHeaderNames.X_FORWARDED_PROTO, scheme);
         }
 
         dst.offerMessage(request);
+        regularHeaders.streamId((int) stream.streamId());
+        dst.offerMessage(regularHeaders);
         state.offerResponseStreamId(stream.streamId());
 
         if (isPrintLog) {
@@ -191,7 +195,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
      * Emits an HttpResponse from decoded HEADERS (client mode).
      */
     private void emitHttpResponse(ProtoContext context, ProtoSndQueue<HttpObject> dst, Http3Stream stream, HttpHeaders headers, boolean isPrintLog) {
-        String statusStr = headers.get(":status");
+        String statusStr = headers.getString(":status");
         int statusCode = 200;
         if (StringUtils.isNotBlank(statusStr)) {
             statusCode = Integer.parseInt(statusStr);
@@ -199,16 +203,20 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
 
         HttpStatus status = HttpStatus.valueOf(statusCode);
         DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_3_0, status);
+        response.streamId((int) stream.streamId());
+        DefaultLastHttpHeaders regularHeaders = new DefaultLastHttpHeaders();
 
-        for (String name : headers.names()) {
+        for (String name : headers.headerNames()) {
             if (!StringUtils.startsWith(name, ":")) {
-                for (String value : headers.getAll(name)) {
-                    response.headers().add(name, value);
+                for (String value : headers.getValues(name)) {
+                    regularHeaders.addHeader(name, value);
                 }
             }
         }
 
         dst.offerMessage(response);
+        regularHeaders.streamId((int) stream.streamId());
+        dst.offerMessage(regularHeaders);
 
         if (isPrintLog) {
             long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
@@ -221,16 +229,20 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
      */
     private void emitTrailers(ProtoContext context, Http3DecoderContent state, ProtoSndQueue<HttpObject> dst, Http3Stream stream, HttpHeaders headers, boolean isPrintLog) {
         stream.markTrailersReceived();
-        DefaultLastHttpContent lastContent = new DefaultLastHttpContent(context.byteBufAllocator().buffer(0));
+        DefaultTrailerHttpHeaders trailers = new DefaultTrailerHttpHeaders();
 
-        for (String name : headers.names()) {
+        for (String name : headers.headerNames()) {
             if (!StringUtils.startsWith(name, ":")) {
-                for (String value : headers.getAll(name)) {
-                    lastContent.trailerHeaders().add(name, value);
+                for (String value : headers.getValues(name)) {
+                    trailers.addHeader(name, value);
                 }
             }
         }
 
+        trailers.streamId((int) stream.streamId());
+        dst.offerMessage(trailers);
+        DefaultLastHttpContent lastContent = new DefaultLastHttpContent(context.byteBufAllocator().buffer(0));
+        lastContent.streamId((int) stream.streamId());
         dst.offerMessage(lastContent);
         stream.state(Http3StreamState.HALF_CLOSED);
         state.closeStream(stream.streamId());
@@ -253,7 +265,9 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
         content.markWriter();
 
         if (frame.fin()) {
-            dst.offerMessage(new DefaultLastHttpContent(content));
+            DefaultLastHttpContent lastContent = new DefaultLastHttpContent(content);
+            lastContent.streamId((int) stream.streamId());
+            dst.offerMessage(lastContent);
             stream.state(Http3StreamState.HALF_CLOSED);
             state.closeStream(stream.streamId());
 
@@ -262,7 +276,9 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
                 logger.info("[H3-RCV] ch=" + channelID + " LAST-DATA stream=" + stream.streamId() + " len=" + length);
             }
         } else {
-            dst.offerMessage(new DefaultHttpContent(content));
+            DefaultHttpContent httpContent = new DefaultHttpContent(content);
+            httpContent.streamId((int) stream.streamId());
+            dst.offerMessage(httpContent);
 
             if (isPrintLog) {
                 long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;

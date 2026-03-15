@@ -71,8 +71,8 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
 
     @Override
     protected void logAggregated(ProtoContext context, HttpResponse message, int contentLength) {
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+        if (context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel().getChannelId();
             logger.info(this.logPrefix() + " channel=" + channelID + " response status=" + message.status().code() + " streamId=" + message.streamId() + " contentLength=" + contentLength);
         }
     }

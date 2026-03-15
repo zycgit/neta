@@ -19,7 +19,6 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Encodes staged response-side {@link HttpObject} instances into outbound HTTP/1.x bytes.
@@ -75,7 +74,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
         HttpContext httpCtx = HttpContext.getOrCreate(context);
         boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+        if (context.getConfig().isPrintLog()) {
             long channelId = context.getChannel().getChannelId();
             logger.info("[HTTP-RESP-ENC] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
         }

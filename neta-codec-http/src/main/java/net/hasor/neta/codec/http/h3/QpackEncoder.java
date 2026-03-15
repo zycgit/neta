@@ -105,8 +105,8 @@ public class QpackEncoder {
         // S=0, Delta Base = 0
         encodePrefixedInt(0, 7, 0);
 
-        for (String name : headers.names()) {
-            for (String value : headers.getAll(name)) {
+        for (String name : headers.headerNames()) {
+            for (String value : headers.getValues(name)) {
                 encodeHeaderField(name.toLowerCase(), value);
             }
         }

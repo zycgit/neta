@@ -53,7 +53,8 @@ public final class CorsUtil {
         if (!StringUtils.equalsIgnoreCase(HttpMethod.OPTIONS.name(), request.method().name())) {
             return false;
         }
-        String acrm = request.headers().get(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD);
+        HttpHeaders headers = asHeaders(request);
+        String acrm = headers != null ? headers.getString(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD) : null;
         return StringUtils.isNotBlank(acrm);
     }
 
@@ -64,7 +65,8 @@ public final class CorsUtil {
         if (request == null) {
             return null;
         }
-        return request.headers().get(HttpHeaderNames.ORIGIN);
+        HttpHeaders headers = asHeaders(request);
+        return headers != null ? headers.getString(HttpHeaderNames.ORIGIN) : null;
     }
 
     // -------------------------------------------------------------------------
@@ -89,7 +91,10 @@ public final class CorsUtil {
             return;
         }
 
-        HttpHeaders headers = response.headers();
+        HttpHeaders headers = asHeaders(response);
+        if (headers == null) {
+            return;
+        }
         setAllowOrigin(headers, config, origin);
         setAllowCredentials(headers, config);
         setExposeHeaders(headers, config);
@@ -114,7 +119,10 @@ public final class CorsUtil {
             return;
         }
 
-        HttpHeaders headers = response.headers();
+        HttpHeaders headers = asHeaders(response);
+        if (headers == null) {
+            return;
+        }
         setAllowOrigin(headers, config, origin);
         setAllowCredentials(headers, config);
         setAllowMethods(headers, config);
@@ -128,36 +136,36 @@ public final class CorsUtil {
 
     private static void setAllowOrigin(HttpHeaders headers, CorsConfig config, String requestOrigin) {
         if (config.isAnyOrigin()) {
-            headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
+            setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, "*");
         } else {
-            headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, requestOrigin);
+            setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, requestOrigin);
             // When a specific origin is echoed back, the response must vary by Origin
-            String vary = headers.get(HttpHeaderNames.VARY);
+            String vary = headers.getString(HttpHeaderNames.VARY);
             if (StringUtils.isBlank(vary)) {
-                headers.set(HttpHeaderNames.VARY, HttpHeaderNames.ORIGIN);
+                setHeader(headers, HttpHeaderNames.VARY, HttpHeaderNames.ORIGIN);
             } else {
-                headers.set(HttpHeaderNames.VARY, vary + ", " + HttpHeaderNames.ORIGIN);
+                setHeader(headers, HttpHeaderNames.VARY, vary + ", " + HttpHeaderNames.ORIGIN);
             }
         }
     }
 
     private static void setAllowCredentials(HttpHeaders headers, CorsConfig config) {
         if (config.isAllowCredentials()) {
-            headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
+            setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS, "true");
         }
     }
 
     private static void setExposeHeaders(HttpHeaders headers, CorsConfig config) {
         Set<String> exposed = config.exposedHeaders();
         if (!exposed.isEmpty()) {
-            headers.set(HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS, String.join(", ", exposed));
+            setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS, String.join(", ", exposed));
         }
     }
 
     private static void setAllowMethods(HttpHeaders headers, CorsConfig config) {
         Set<String> methods = config.allowedMethods();
         if (!methods.isEmpty()) {
-            headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, String.join(", ", methods));
+            setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS, String.join(", ", methods));
         }
     }
 
@@ -165,19 +173,40 @@ public final class CorsUtil {
         Set<String> configHeaders = config.allowedHeaders();
         if (!configHeaders.isEmpty()) {
             // Use the configured allow-headers list
-            headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, String.join(", ", configHeaders));
+            setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, String.join(", ", configHeaders));
         } else {
             // Echo back the requested headers if no explicit allow-headers configured
-            String requested = request.headers().get(HttpHeaderNames.ACCESS_CONTROL_REQUEST_HEADERS);
+            HttpHeaders requestHeaders = asHeaders(request);
+            String requested = requestHeaders != null ? requestHeaders.getString(HttpHeaderNames.ACCESS_CONTROL_REQUEST_HEADERS) : null;
             if (StringUtils.isNotBlank(requested)) {
-                headers.set(HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, requested);
+                setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_ALLOW_HEADERS, requested);
             }
         }
     }
 
     private static void setMaxAge(HttpHeaders headers, CorsConfig config) {
         if (config.maxAge() >= 0) {
-            headers.set(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE, String.valueOf(config.maxAge()));
+            setHeader(headers, HttpHeaderNames.ACCESS_CONTROL_MAX_AGE, String.valueOf(config.maxAge()));
         }
+    }
+
+    private static HttpHeaders asHeaders(HttpObject httpObject) {
+        return httpObject instanceof HttpHeaders ? (HttpHeaders) httpObject : null;
+    }
+
+    private static void setHeader(HttpHeaders headers, String name, String value) {
+        if (headers instanceof DefaultHttpHeaders) {
+            ((DefaultHttpHeaders) headers).setHeader(name, value);
+            return;
+        }
+        if (headers instanceof DefaultFullHttpRequest) {
+            ((DefaultFullHttpRequest) headers).setHeader(name, value);
+            return;
+        }
+        if (headers instanceof DefaultFullHttpResponse) {
+            ((DefaultFullHttpResponse) headers).setHeader(name, value);
+            return;
+        }
+        throw new IllegalArgumentException("unsupported headers type: " + headers.getClass().getName());
     }
 }

@@ -27,6 +27,8 @@ import static org.junit.Assert.*;
  * through {@link Http2ServerDuplexe} and {@link Http2ClientDuplexe}.
  */
 public class Http2ContextTest {
+    private static final String name     = "test";
+    private static final int    poolSize = 8;
 
     private static ProtoContext mockContext() {
         Map<Class<?>, Object> contextMap = new ConcurrentHashMap<>();
@@ -53,7 +55,7 @@ public class Http2ContextTest {
         Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
         ProtoContext ctx = mockContext();
 
-        duplexe.onInit(ctx);
+        duplexe.onInit(name, poolSize, poolSize, ctx);
 
         Http2Context h2ctx = ctx.context(Http2Context.class);
         assertNotNull("Http2Context should be registered after onInit", h2ctx);
@@ -64,7 +66,7 @@ public class Http2ContextTest {
         Http2ClientDuplexe duplexe = new Http2ClientDuplexe();
         ProtoContext ctx = mockContext();
 
-        duplexe.onInit(ctx);
+        duplexe.onInit(name, poolSize, poolSize, ctx);
 
         Http2Context h2ctx = ctx.context(Http2Context.class);
         assertNotNull("Http2Context should be registered after onInit", h2ctx);
@@ -74,7 +76,7 @@ public class Http2ContextTest {
     public void serverContext_isServer() throws Throwable {
         Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
         ProtoContext ctx = mockContext();
-        duplexe.onInit(ctx);
+        duplexe.onInit(name, poolSize, poolSize, ctx);
 
         Http2Context h2ctx = ctx.context(Http2Context.class);
         assertTrue("Server duplexe should report isServer=true", h2ctx.isServer());
@@ -85,7 +87,7 @@ public class Http2ContextTest {
     public void clientContext_isClient() throws Throwable {
         Http2ClientDuplexe duplexe = new Http2ClientDuplexe();
         ProtoContext ctx = mockContext();
-        duplexe.onInit(ctx);
+        duplexe.onInit(name, poolSize, poolSize, ctx);
 
         Http2Context h2ctx = ctx.context(Http2Context.class);
         assertFalse("Client duplexe should report isServer=false", h2ctx.isServer());
@@ -96,7 +98,7 @@ public class Http2ContextTest {
     public void initialState_notReady() throws Throwable {
         Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
         ProtoContext ctx = mockContext();
-        duplexe.onInit(ctx);
+        duplexe.onInit(name, poolSize, poolSize, ctx);
 
         Http2Context h2ctx = ctx.context(Http2Context.class);
         // Before receiving the connection preface, isReady should be false (for server mode)
@@ -107,7 +109,7 @@ public class Http2ContextTest {
     public void initialState_defaultSettings() throws Throwable {
         Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
         ProtoContext ctx = mockContext();
-        duplexe.onInit(ctx);
+        duplexe.onInit(name, poolSize, poolSize, ctx);
 
         Http2Context h2ctx = ctx.context(Http2Context.class);
         // Default HTTP/2 settings (RFC 7540 Section 6.5.2)
@@ -120,7 +122,7 @@ public class Http2ContextTest {
     public void initialState_lastStreamIdZero() throws Throwable {
         Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
         ProtoContext ctx = mockContext();
-        duplexe.onInit(ctx);
+        duplexe.onInit(name, poolSize, poolSize, ctx);
 
         Http2Context h2ctx = ctx.context(Http2Context.class);
         assertEquals("No streams should exist initially", 0, h2ctx.lastStreamId());

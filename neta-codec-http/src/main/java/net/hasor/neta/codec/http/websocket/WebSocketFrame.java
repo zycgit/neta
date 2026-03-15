@@ -60,4 +60,8 @@ public interface WebSocketFrame extends HttpObject {
      * Returns the (already unmasked) payload of this frame.
      */
     ByteBuf content();
+
+    static WebSocketFrame create(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
+        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, masked, maskingKey, content);
+    }
 }

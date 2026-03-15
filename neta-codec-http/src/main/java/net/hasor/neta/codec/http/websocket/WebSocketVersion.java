@@ -66,6 +66,22 @@ public enum WebSocketVersion {
         }
     }
 
+    /** Resolves a numeric protocol version code. */
+    public static WebSocketVersion of(int version) {
+        switch (version) {
+            case 0:
+                return V0;
+            case 7:
+                return V7;
+            case 8:
+                return V8;
+            case 13:
+                return V13;
+            default:
+                return null;
+        }
+    }
+
     /** Returns the numeric version value used in the {@code Sec-WebSocket-Version} header. */
     public int code() {
         return code;

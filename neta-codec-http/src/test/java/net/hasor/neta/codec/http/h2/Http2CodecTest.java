@@ -18,6 +18,8 @@ import static org.junit.Assert.*;
  * Uses direct handler invocation instead of VrtChannel for round-trip testing.
  */
 public class Http2CodecTest {
+    private static final String name     = "test";
+    private static final int    poolSize = 8;
 
     // ========================= Mock & Helpers =========================
 
@@ -89,7 +91,7 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
 
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
@@ -104,8 +106,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
@@ -128,7 +130,7 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
 
         SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
@@ -143,8 +145,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
 
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
@@ -156,6 +158,47 @@ public class Http2CodecTest {
         List<HttpObject> result = new ArrayList<>();
         while (decOut.size() > 0)
             result.add(decOut.poll());
+        return result;
+    }
+
+    /** Encodes HttpObject into frames, then decodes only to the intermediate Http2Message layer. */
+    private List<Http2Message> clientToServerMessages(HttpObject... messages) throws Throwable {
+        Http2HttpToMessageEncoder httpToMessage = new Http2HttpToMessageEncoder(false);
+        Http2MessageToFrameEncoder messageToFrame = new Http2MessageToFrameEncoder(false);
+        Http2FrameEncoder frameEncoder = new Http2FrameEncoder();
+        Http2MessageBridgeQueue messageBridge = new Http2MessageBridgeQueue();
+        Http2FrameBridgeQueue frameBridge = new Http2FrameBridgeQueue();
+
+        ProtoContext encCtx = mockContext();
+        httpToMessage.onInit(name, poolSize, encCtx);
+        messageToFrame.onInit(name, poolSize, encCtx);
+
+        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+        for (HttpObject msg : messages)
+            encIn.add(msg);
+        httpToMessage.onMessage(encCtx, encIn, messageBridge);
+        messageToFrame.onMessage(encCtx, messageBridge, frameBridge);
+        frameEncoder.onMessage(encCtx, frameBridge, encOut);
+
+        Http2FrameDecoder frameDecoder = new Http2FrameDecoder(true);
+        Http2FrameToMessageDecoder frameToMessage = new Http2FrameToMessageDecoder(true);
+        Http2FrameBridgeQueue decodeBridge = new Http2FrameBridgeQueue();
+
+        ProtoContext decCtx = mockContext();
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToMessage.onInit(name, poolSize, decCtx);
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        Http2MessageBridgeQueue decOut = new Http2MessageBridgeQueue();
+        while (encOut.size() > 0)
+            decIn.add(encOut.poll());
+        frameDecoder.onMessage(decCtx, decIn, decodeBridge);
+        frameToMessage.onMessage(decCtx, decodeBridge, decOut);
+
+        List<Http2Message> result = new ArrayList<>();
+        while (decOut.hasMore())
+            result.add(decOut.takeMessage());
         return result;
     }
 
@@ -181,8 +224,8 @@ public class Http2CodecTest {
     @Test
     public void testRoundTripGetRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/index.html");
-        req.headers().add("host", "www.example.com");
-        req.headers().add("accept", "text/html");
+        req.addHeader("host", "www.example.com");
+        req.addHeader("accept", "text/html");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() >= 1);
@@ -202,8 +245,8 @@ public class Http2CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/api/data", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "application/json");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "application/json");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() >= 1);
@@ -220,6 +263,76 @@ public class Http2CodecTest {
         assertEquals(body, decodedBody);
     }
 
+    @Test
+    public void testRoundTripViaHttp2MessageLayer() throws Throwable {
+        String body = "hello-h2-message";
+        ByteBuf bodyBuf = ByteBufAllocator.DEFAULT.buffer(body.length());
+        bodyBuf.writeString(body, StandardCharsets.US_ASCII);
+        bodyBuf.markWriter();
+
+        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/msg", bodyBuf);
+        req.addHeader("host", "example.com");
+        req.addHeader("content-type", "text/plain");
+
+        List<Http2Message> decoded = clientToServerMessages(req);
+        Http2HeadersMessage headers = null;
+        Http2DataMessage data = null;
+        for (Http2Message message : decoded) {
+            if (message instanceof Http2HeadersMessage && headers == null) {
+                headers = (Http2HeadersMessage) message;
+            } else if (message instanceof Http2DataMessage && data == null) {
+                data = (Http2DataMessage) message;
+            }
+        }
+
+        assertNotNull(headers);
+        assertNotNull(data);
+        assertEquals("POST", headers.headers().getString(":method"));
+        assertEquals("/msg", headers.headers().getString(":path"));
+        assertFalse(headers.endStream());
+
+        assertTrue(data.endStream());
+        String text = data.content().readString(data.content().readableBytes(), StandardCharsets.US_ASCII);
+        assertEquals(body, text);
+    }
+
+    @Test
+    public void testMessageToHttpDecoder() throws Throwable {
+        ProtoContext ctx = mockContext();
+        Http2FrameToMessageDecoder frameToMessage = new Http2FrameToMessageDecoder(true);
+        Http2MessageToHttpDecoder messageToHttp = new Http2MessageToHttpDecoder();
+        frameToMessage.onInit(name, poolSize, ctx);
+        messageToHttp.onInit(name, poolSize, ctx);
+
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader(":method", "GET");
+        headers.addHeader(":path", "/decode");
+        headers.addHeader(":authority", "example.com");
+        Http2HeadersMessage headersMessage = new Http2HeadersMessage(3, headers, false);
+
+        ByteBuf dataBuf = ByteBufAllocator.DEFAULT.buffer(4);
+        dataBuf.writeString("done", StandardCharsets.US_ASCII);
+        dataBuf.markWriter();
+        Http2DataMessage dataMessage = new Http2DataMessage(3, dataBuf, true);
+
+        SimpleProtoRcvQueue<Http2Message> in = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> out = new SimpleProtoSndQueue<>();
+        in.add(headersMessage);
+        in.add(dataMessage);
+        messageToHttp.onMessage(ctx, in, out);
+
+        HttpRequest request = (HttpRequest) out.poll();
+        assertEquals(HttpMethod.GET, request.method());
+        assertEquals("/decode", request.uri());
+
+        LastHttpHeaders httpHeaders = (LastHttpHeaders) out.poll();
+        assertEquals("example.com", httpHeaders.getString(HttpHeaderNames.HOST));
+
+        LastHttpContent last = (LastHttpContent) out.poll();
+        String text = last.content().readString(last.content().readableBytes(), StandardCharsets.US_ASCII);
+        assertEquals("done", text);
+    }
+
     // ========================= Round-Trip Request Tests =========================
 
     @Test
@@ -230,7 +343,7 @@ public class Http2CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, bodyBuf);
-        resp.headers().add("content-type", "text/plain");
+        resp.addHeader("content-type", "text/plain");
 
         List<HttpObject> decoded = serverToClient(resp);
         assertTrue(decoded.size() >= 1);
@@ -244,7 +357,7 @@ public class Http2CodecTest {
     public void testRoundTripBidirectional() throws Throwable {
         // Client → Server
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/hello");
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
         List<HttpObject> serverSide = clientToServer(req);
         assertTrue(serverSide.size() >= 1);
 
@@ -257,7 +370,7 @@ public class Http2CodecTest {
     @Test
     public void testHeadRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.HEAD, "/status");
-        req.headers().add("host", "check.example.com");
+        req.addHeader("host", "check.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -272,8 +385,8 @@ public class Http2CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.PUT, "/resource/1", bodyBuf);
-        req.headers().add("host", "api.example.com");
-        req.headers().add("content-type", "text/plain");
+        req.addHeader("host", "api.example.com");
+        req.addHeader("content-type", "text/plain");
 
         List<HttpObject> decoded = clientToServer(req);
         HttpRequest received = findFirst(decoded, HttpRequest.class);
@@ -292,7 +405,7 @@ public class Http2CodecTest {
     @Test
     public void testDeleteRequest() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.DELETE, "/resource/42");
-        req.headers().add("host", "api.example.com");
+        req.addHeader("host", "api.example.com");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -326,26 +439,33 @@ public class Http2CodecTest {
     @Test
     public void testMultipleHeaders() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/multi");
-        req.headers().add("host", "example.com");
-        req.headers().add("accept", "text/html");
-        req.headers().add("accept-language", "en-US");
-        req.headers().add("cache-control", "no-cache");
-        req.headers().add("user-agent", "Neta/1.0");
-        req.headers().add("x-custom-header", "custom-value");
+        req.addHeader("host", "example.com");
+        req.addHeader("accept", "text/html");
+        req.addHeader("accept-language", "en-US");
+        req.addHeader("cache-control", "no-cache");
+        req.addHeader("user-agent", "Neta/1.0");
+        req.addHeader("x-custom-header", "custom-value");
 
-        HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
-        assertNotNull(received);
-        assertEquals("text/html", received.headers().get("accept"));
-        assertEquals("en-US", received.headers().get("accept-language"));
-        assertEquals("no-cache", received.headers().get("cache-control"));
+        List<Http2Message> decoded = clientToServerMessages(req);
+        Http2HeadersMessage headers = null;
+        for (Http2Message message : decoded) {
+            if (message instanceof Http2HeadersMessage) {
+                headers = (Http2HeadersMessage) message;
+                break;
+            }
+        }
+        assertNotNull(headers);
+        assertEquals("text/html", headers.headers().getString("accept"));
+        assertEquals("en-US", headers.headers().getString("accept-language"));
+        assertEquals("no-cache", headers.headers().getString("cache-control"));
     }
 
     @Test
     public void testManyHeaders() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/many-headers");
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
         for (int i = 0; i < 50; i++) {
-            req.headers().add("x-header-" + i, "value-" + i);
+            req.addHeader("x-header-" + i, "value-" + i);
         }
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
@@ -357,7 +477,7 @@ public class Http2CodecTest {
     @Test
     public void testGetRequestNoBody() throws Throwable {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/");
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -371,7 +491,7 @@ public class Http2CodecTest {
         emptyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/empty", emptyBuf);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() >= 1);
@@ -387,7 +507,7 @@ public class Http2CodecTest {
         }
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri.toString());
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -400,7 +520,7 @@ public class Http2CodecTest {
     public void testUriWithSpecialCharacters() throws Throwable {
         String uri = "/path/to/resource?q=hello%20world&lang=en&special=%E4%B8%AD%E6%96%87";
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, uri);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         HttpRequest received = findFirst(clientToServer(req), HttpRequest.class);
         assertNotNull(received);
@@ -414,7 +534,7 @@ public class Http2CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/byte", bodyBuf);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() >= 1);
@@ -432,7 +552,7 @@ public class Http2CodecTest {
         bodyBuf.markWriter();
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, "/large", bodyBuf);
-        req.headers().add("host", "localhost");
+        req.addHeader("host", "localhost");
 
         List<HttpObject> decoded = clientToServer(req);
         assertTrue(decoded.size() > 0);
@@ -453,10 +573,10 @@ public class Http2CodecTest {
         Http2FrameToHttpDecoder frameToHttp = new Http2FrameToHttpDecoder(true);
 
         ProtoContext encCtx = mockContext();
-        httpToFrame.onInit(encCtx);
+        httpToFrame.onInit(name, poolSize, encCtx);
         ProtoContext decCtx = mockContext();
-        frameDecoder.onInit(decCtx);
-        frameToHttp.onInit(decCtx);
+        frameDecoder.onInit(name, poolSize, decCtx);
+        frameToHttp.onInit(name, poolSize, decCtx);
 
         SimpleProtoSndQueue<ByteBuf> allEncOut = new SimpleProtoSndQueue<>();
         for (int i = 0; i < 20; i++) {
@@ -464,7 +584,7 @@ public class Http2CodecTest {
             Http2FrameBridgeQueue encodeBridge = new Http2FrameBridgeQueue();
             SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
             DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.GET, "/page/" + i);
-            req.headers().add("host", "localhost");
+            req.addHeader("host", "localhost");
             encIn.add(req);
             httpToFrame.onMessage(encCtx, encIn, encodeBridge);
             frameEncoder.onMessage(encCtx, encodeBridge, encOut);
@@ -495,25 +615,25 @@ public class Http2CodecTest {
         HpackEncoder encoder = new HpackEncoder(4096);
         HpackDecoder decoder = new HpackDecoder(4096, 8192);
 
-        HttpHeaders original = new HttpHeaders();
-        original.add(":method", "GET");
-        original.add(":path", "/");
-        original.add(":scheme", "https");
-        original.add(":authority", "example.com");
-        original.add("accept", "text/html");
-        original.add("user-agent", "test");
+        DefaultHttpHeaders original = new DefaultHttpHeaders();
+        original.addHeader(":method", "GET");
+        original.addHeader(":path", "/");
+        original.addHeader(":scheme", "https");
+        original.addHeader(":authority", "example.com");
+        original.addHeader("accept", "text/html");
+        original.addHeader("user-agent", "test");
 
         byte[] encoded = encoder.encode(original);
         assertNotNull(encoded);
         assertTrue(encoded.length > 0);
 
-        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals("GET", decoded.get(":method"));
-        assertEquals("/", decoded.get(":path"));
-        assertEquals("https", decoded.get(":scheme"));
-        assertEquals("example.com", decoded.get(":authority"));
-        assertEquals("text/html", decoded.get("accept"));
-        assertEquals("test", decoded.get("user-agent"));
+        DefaultHttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
+        assertEquals("GET", decoded.getString(":method"));
+        assertEquals("/", decoded.getString(":path"));
+        assertEquals("https", decoded.getString(":scheme"));
+        assertEquals("example.com", decoded.getString(":authority"));
+        assertEquals("text/html", decoded.getString("accept"));
+        assertEquals("test", decoded.getString("user-agent"));
     }
 
     @Test
@@ -521,17 +641,17 @@ public class Http2CodecTest {
         HpackEncoder encoder = new HpackEncoder(4096);
         HpackDecoder decoder = new HpackDecoder(4096, 8192);
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add(":method", "GET");
-        headers.add(":path", "/");
-        headers.add(":scheme", "https");
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader(":method", "GET");
+        headers.addHeader(":path", "/");
+        headers.addHeader(":scheme", "https");
 
         byte[] encoded = encoder.encode(headers);
-        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
+        DefaultHttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
 
-        assertEquals("GET", decoded.get(":method"));
-        assertEquals("/", decoded.get(":path"));
-        assertEquals("https", decoded.get(":scheme"));
+        assertEquals("GET", decoded.getString(":method"));
+        assertEquals("/", decoded.getString(":path"));
+        assertEquals("https", decoded.getString(":scheme"));
     }
 
     // ========================= HPACK Encoder/Decoder Unit Tests =========================
@@ -546,12 +666,12 @@ public class Http2CodecTest {
             largeValue.append("abcdefghij");
         }
 
-        HttpHeaders headers = new HttpHeaders();
-        headers.add("x-large-header", largeValue.toString());
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("x-large-header", largeValue.toString());
 
         byte[] encoded = encoder.encode(headers);
-        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertEquals(largeValue.toString(), decoded.get("x-large-header"));
+        DefaultHttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
+        assertEquals(largeValue.toString(), decoded.getString("x-large-header"));
     }
 
     @Test
@@ -559,10 +679,10 @@ public class Http2CodecTest {
         HpackEncoder encoder = new HpackEncoder(4096);
         HpackDecoder decoder = new HpackDecoder(4096, 8192);
 
-        HttpHeaders headers = new HttpHeaders();
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         byte[] encoded = encoder.encode(headers);
-        HttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
-        assertTrue(decoded.isEmpty());
+        DefaultHttpHeaders decoded = decoder.decode(encoded, 0, encoded.length);
+        assertEquals(0, decoded.headerSize());
     }
 
     @Test
@@ -570,16 +690,16 @@ public class Http2CodecTest {
         HpackEncoder encoder = new HpackEncoder(64);
         HpackDecoder decoder = new HpackDecoder(64, 8192);
 
-        HttpHeaders h1 = new HttpHeaders();
-        h1.add("x-key-1", "value-one-that-is-long");
+        DefaultHttpHeaders h1 = new DefaultHttpHeaders();
+        h1.addHeader("x-key-1", "value-one-that-is-long");
         byte[] e1 = encoder.encode(h1);
         decoder.decode(e1, 0, e1.length);
 
-        HttpHeaders h2 = new HttpHeaders();
-        h2.add("x-key-2", "value-two-that-is-long");
+        DefaultHttpHeaders h2 = new DefaultHttpHeaders();
+        h2.addHeader("x-key-2", "value-two-that-is-long");
         byte[] e2 = encoder.encode(h2);
-        HttpHeaders d2 = decoder.decode(e2, 0, e2.length);
-        assertEquals("value-two-that-is-long", d2.get("x-key-2"));
+        DefaultHttpHeaders d2 = decoder.decode(e2, 0, e2.length);
+        assertEquals("value-two-that-is-long", d2.getString("x-key-2"));
     }
 
     @Test
@@ -589,8 +709,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue bridge = new Http2FrameBridgeQueue();
 
         ProtoContext ctx = mockContext();
-        frameDecoder.onInit(ctx);
-        frameToHttp.onInit(ctx);
+        frameDecoder.onInit(name, poolSize, ctx);
+        frameToHttp.onInit(name, poolSize, ctx);
 
         byte[] data = concat(CLIENT_PREFACE, frameHeader(0, Http2FrameType.SETTINGS, Http2Flags.NONE, 0));
 
@@ -609,8 +729,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue bridge = new Http2FrameBridgeQueue();
 
         ProtoContext ctx = mockContext();
-        frameDecoder.onInit(ctx);
-        frameToHttp.onInit(ctx);
+        frameDecoder.onInit(name, poolSize, ctx);
+        frameToHttp.onInit(name, poolSize, ctx);
 
         byte[] payload = new byte[] { 0x00, 0x00, (byte) 0xFF, (byte) 0xFF };
         byte[] data = concat(CLIENT_PREFACE, frameHeader(4, Http2FrameType.WINDOW_UPDATE, Http2Flags.NONE, 0), payload);
@@ -630,7 +750,7 @@ public class Http2CodecTest {
         Http2FrameDecoder frameDecoder = new Http2FrameDecoder(true);
 
         ProtoContext ctx = mockContext();
-        frameDecoder.onInit(ctx);
+        frameDecoder.onInit(name, poolSize, ctx);
 
         SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
         Http2FrameBridgeQueue bridge = new Http2FrameBridgeQueue();
@@ -651,8 +771,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue bridge = new Http2FrameBridgeQueue();
 
         ProtoContext ctx = mockContext();
-        frameDecoder.onInit(ctx);
-        frameToHttp.onInit(ctx);
+        frameDecoder.onInit(name, poolSize, ctx);
+        frameToHttp.onInit(name, poolSize, ctx);
 
         byte[] badPayload = new byte[] { 0x01, 0x02, 0x03, 0x04, 0x05 };
         byte[] data = concat(CLIENT_PREFACE, frameHeader(5, Http2FrameType.SETTINGS, Http2Flags.NONE, 0), badPayload);
@@ -679,8 +799,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue bridge = new Http2FrameBridgeQueue();
 
         ProtoContext ctx = mockContext();
-        frameDecoder.onInit(ctx);
-        frameToHttp.onInit(ctx);
+        frameDecoder.onInit(name, poolSize, ctx);
+        frameToHttp.onInit(name, poolSize, ctx);
 
         byte[] badPayload = new byte[] { 0x01, 0x02 };
         byte[] data = concat(CLIENT_PREFACE, frameHeader(2, Http2FrameType.RST_STREAM, Http2Flags.NONE, 1), badPayload);
@@ -705,8 +825,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue bridge = new Http2FrameBridgeQueue();
 
         ProtoContext ctx = mockContext();
-        frameDecoder.onInit(ctx);
-        frameToHttp.onInit(ctx);
+        frameDecoder.onInit(name, poolSize, ctx);
+        frameToHttp.onInit(name, poolSize, ctx);
 
         byte[] payload = new byte[] { 0x00, 0x00, 0x00, 0x00 };
         byte[] data = concat(CLIENT_PREFACE, frameHeader(4, Http2FrameType.WINDOW_UPDATE, Http2Flags.NONE, 0), payload);
@@ -731,8 +851,8 @@ public class Http2CodecTest {
         Http2FrameBridgeQueue bridge = new Http2FrameBridgeQueue();
 
         ProtoContext ctx = mockContext();
-        frameDecoder.onInit(ctx);
-        frameToHttp.onInit(ctx);
+        frameDecoder.onInit(name, poolSize, ctx);
+        frameToHttp.onInit(name, poolSize, ctx);
 
         byte[] badPayload = new byte[] { 0x00, 0x00, 0x00, 0x01 };
         byte[] data = concat(CLIENT_PREFACE, frameHeader(4, Http2FrameType.GOAWAY, Http2Flags.NONE, 0), badPayload);

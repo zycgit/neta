@@ -19,7 +19,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Shared base class for HTTP/1.x staged-message aggregation.
@@ -86,8 +85,8 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
         HttpContext.getOrCreate(context).switchTransparentMode(modeEvent.enabled());
         this.resetAggregation();
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+        if (context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel().getChannelId();
             logger.info(this.logPrefix() + " channel=" + channelID + " transparent-mode=" + modeEvent.enabled() + ", aggregation reset");
         }
         return true;

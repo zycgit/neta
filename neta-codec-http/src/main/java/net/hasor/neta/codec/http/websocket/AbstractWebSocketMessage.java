@@ -17,28 +17,31 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Abstract base class for application-level WebSocket messages.
+ * Abstract base class for application-level WebSocket message chunks.
  * <p>
- * Message type distinction belongs here after frame aggregation, not on the raw
+ * Message type distinction and chunk sequence belong here after frame handling, not on the raw
  * transport frame model.
  */
 public abstract class AbstractWebSocketMessage implements WebSocketMessage {
     private int     streamId;
+    private int     sequence;
     private ByteBuf content;
 
     protected AbstractWebSocketMessage() {
     }
 
-    protected final void initMessage(ByteBuf content) {
+    protected final void initMessage(int sequence, ByteBuf content) {
         if (content == null) {
             throw new IllegalArgumentException("content must not be null");
         }
         this.streamId = 0;
+        this.sequence = sequence;
         this.content = content.retain();
     }
 
-    protected final void initEmptyMessage() {
+    protected final void initEmptyMessage(int sequence) {
         this.streamId = 0;
+        this.sequence = sequence;
         this.content = ByteBuf.EMPTY.retain();
     }
 
@@ -54,6 +57,17 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
     }
 
     @Override
+    public int sequence() {
+        return this.sequence;
+    }
+
+    @Override
+    public WebSocketMessage sequence(int sequence) {
+        this.sequence = sequence;
+        return this;
+    }
+
+    @Override
     public ByteBuf content() {
         return this.content;
     }
@@ -65,6 +79,7 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
             this.content = null;
         }
         this.streamId = 0;
+        this.sequence = WebSocketMessage.FINAL_SEQUENCE;
         this.recycle();
     }
 
@@ -72,6 +87,6 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
 
     @Override
     public String toString() {
-        return "WebSocketMessage{type=" + this.type() + ", len=" + (this.content != null ? this.content.readableBytes() : 0) + '}';
+        return "WebSocketMessage{type=" + this.type() + ", seq=" + this.sequence + ", len=" + (this.content != null ? this.content.readableBytes() : 0) + '}';
     }
 }

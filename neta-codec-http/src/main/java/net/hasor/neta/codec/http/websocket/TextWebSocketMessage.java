@@ -36,8 +36,12 @@ public final class TextWebSocketMessage extends AbstractWebSocketMessage {
     }
 
     public static TextWebSocketMessage request(ByteBuf content) {
+        return request(WebSocketMessage.FINAL_SEQUENCE, content);
+    }
+
+    public static TextWebSocketMessage request(int sequence, ByteBuf content) {
         TextWebSocketMessage msg = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
-        msg.initMessage(content);
+        msg.initMessage(sequence, content);
         return msg;
     }
 

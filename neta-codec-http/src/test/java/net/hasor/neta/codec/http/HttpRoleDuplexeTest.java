@@ -18,7 +18,6 @@ import java.util.List;
 import net.hasor.cobble.ref.Tuple;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.codec.http.event.HttpThroughEvent;
 import org.junit.Test;
 import static org.junit.Assert.*;
 

@@ -127,6 +127,7 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     /** Sets the protocol version carried by this status line. */
+    @Override
     public HttpResponse protocolVersion(HttpVersion version) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
@@ -149,6 +150,7 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     /** Sets the response status carried by this status line. */
+    @Override
     public HttpResponse status(HttpStatus status) {
         if (status == null) {
             throw new IllegalArgumentException("status must not be null");
@@ -164,6 +166,7 @@ public class DefaultHttpResponse implements HttpResponse {
         return this.statusText;
     }
 
+    @Override
     public HttpResponse reasonText(String reason) {
         this.reasonText = reason;
         return this;
@@ -188,5 +191,4 @@ public class DefaultHttpResponse implements HttpResponse {
         this.statusText = null;
         this.reasonText = null;
     }
-
 }

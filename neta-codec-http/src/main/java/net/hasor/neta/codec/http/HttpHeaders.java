@@ -31,4 +31,14 @@ public interface HttpHeaders extends HttpObject {
 
     /** Returns the number of stored header entries, including repeated names. */
     int headerSize();
+
+    HttpHeaders addHeader(String name, String value);
+
+    HttpHeaders setHeader(String name, String value);
+
+    HttpHeaders clearHeader();
+
+    HttpHeaders removeHeader(String name);
+
+    HttpHeaders appendHeaders(HttpHeaders headers);
 }

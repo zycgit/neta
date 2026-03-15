@@ -1,0 +1,101 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.codec.http.websocket;
+import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.HttpObject;
+
+/**
+ * Public bidirectional frame-codec entry for post-handshake WebSocket traffic.
+ * <p>
+ * This duplexer pairs {@link WebSocketFrameDecoder} and {@link WebSocketFrameEncoder}
+ * with the same {@link WebSocketVersion}, so a pipeline that needs both inbound frame
+ * decoding and outbound frame encoding can be wired as a single protocol node.
+ * <p>
+ * Typical usage:
+ * <pre>{@code
+ * ctx.addLast("http", new HttpServerDuplexe());
+ * ctx.addLast("ws-handshake", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
+ * ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
+ * }</pre>
+ * <p>
+ * Behavior summary:
+ * <ul>
+ *   <li>Receive direction: consumes transparent-mode {@link HttpObject} payload objects and emits {@link WebSocketFrame}.</li>
+ *   <li>Send direction: consumes {@link WebSocketFrame} and emits transparent-mode {@link HttpObject} payload objects.</li>
+ *   <li>The duplexer does not perform the opening handshake and does not aggregate fragmented messages.</li>
+ *   <li>When only one direction is needed, {@link WebSocketFrameDecoder} or {@link WebSocketFrameEncoder} can still be installed directly.</li>
+ * </ul>
+ */
+public class WebSocketFrameDuplexer implements ProtoDuplexer<HttpObject, WebSocketFrame, WebSocketFrame, HttpObject> {
+    private final WebSocketFrameDecoder decoder;
+    private final WebSocketFrameEncoder encoder;
+
+    public WebSocketFrameDuplexer() {
+        this(WebSocketVersion.V13);
+    }
+
+    public WebSocketFrameDuplexer(WebSocketVersion version) {
+        this.decoder = new WebSocketFrameDecoder(version);
+        this.encoder = new WebSocketFrameEncoder(version);
+    }
+
+    @Override
+    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
+        this.decoder.onInit(name, rcvSize, context);
+        this.encoder.onInit(name, sndSize, context);
+    }
+
+    @Override
+    public void onActive(ProtoContext context) throws Throwable {
+        this.decoder.onActive(context);
+        this.encoder.onActive(context);
+    }
+
+    @Override
+    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        if (isRcv) {
+            return this.decoder.onUserEvent(context, event);
+        } else {
+            return this.encoder.onUserEvent(context, event);
+        }
+    }
+
+    @Override
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,//
+            ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<WebSocketFrame> rcvDown,//
+            ProtoRcvQueue<WebSocketFrame> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+        if (isRcv) {
+            return this.decoder.onMessage(context, rcvUp, rcvDown);
+        } else {
+            return this.encoder.onMessage(context, sndUp, sndDown);
+        }
+    }
+
+    @Override
+    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        if (isRcv) {
+            return this.decoder.onError(context, e, eh);
+        } else {
+            return this.encoder.onError(context, e, eh);
+        }
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        this.decoder.onClose(context);
+        this.encoder.onClose(context);
+    }
+}

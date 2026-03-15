@@ -1,0 +1,200 @@
+/*
+ * Copyright 2008-2009 the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package net.hasor.neta.codec.http.websocket;
+import java.nio.charset.StandardCharsets;
+import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
+import net.hasor.neta.codec.http.HttpByteBuf;
+import net.hasor.neta.codec.http.HttpObject;
+import org.junit.Test;
+import static org.junit.Assert.*;
+
+public class WebSocketFrameEncoderTest extends AbstractWebSocketTest {
+    @Test
+    public void testFrameEncoderNoArgFallsBackToV13ForTextFrame() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
+            }, VrtSoConfig.asClient());
+
+            WebSocketFrame frame = WebSocketUtils.textFrame("Hello");
+            List<HttpObject> res = sendAndOutBound(pipe, frame);
+            assertEquals(1, res.size());
+            assertTrue(res.get(0) instanceof HttpByteBuf);
+
+            byte[] wire = bytes(((HttpByteBuf) res.get(0)).content());
+            assertEquals((byte) 0x81, wire[0]);
+            assertEquals((byte) 0x05, wire[1]);
+            assertEquals("Hello", new String(wire, 2, wire.length - 2, StandardCharsets.UTF_8));
+            assertNull(frame.content());
+        });
+    }
+
+    @Test
+    public void testFrameEncoderEncodesMaskedTextFrame() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asClient());
+
+            byte[] maskKey = { 0x37, (byte) 0xFA, 0x21, 0x3D };
+            byte[] payload = "Mask".getBytes(StandardCharsets.UTF_8);
+            WebSocketFrame frame = WebSocketUtils.textFrame(true, true, maskKey, ByteBuf.wrap(payload));
+
+            List<HttpObject> res = sendAndOutBound(pipe, frame);
+            assertEquals(1, res.size());
+            assertTrue(res.get(0) instanceof HttpByteBuf);
+
+            byte[] wire = bytes(((HttpByteBuf) res.get(0)).content());
+            assertEquals((byte) 0x81, wire[0]);
+            assertEquals((byte) 0x84, wire[1]);
+            assertArrayEquals(maskKey, new byte[] { wire[2], wire[3], wire[4], wire[5] });
+
+            byte[] maskedPayload = new byte[payload.length];
+            System.arraycopy(wire, 6, maskedPayload, 0, payload.length);
+            for (int i = 0; i < maskedPayload.length; i++) {
+                maskedPayload[i] = (byte) (maskedPayload[i] ^ maskKey[i & 3]);
+            }
+            assertArrayEquals(payload, maskedPayload);
+            assertNull(frame.content());
+        });
+    }
+
+    @Test
+    public void testFrameEncoderUsesExtended16BitPayloadLength() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asClient());
+
+            byte[] payload = new byte[130];
+            for (int i = 0; i < payload.length; i++) {
+                payload[i] = (byte) ('a' + (i % 26));
+            }
+            WebSocketFrame frame = WebSocketUtils.binaryFrame(payload);
+
+            List<HttpObject> res = sendAndOutBound(pipe, frame);
+            assertEquals(1, res.size());
+            assertTrue(res.get(0) instanceof HttpByteBuf);
+
+            byte[] wire = bytes(((HttpByteBuf) res.get(0)).content());
+            assertEquals((byte) 0x82, wire[0]);
+            assertEquals((byte) 126, wire[1]);
+            int length = ((wire[2] & 0xFF) << 8) | (wire[3] & 0xFF);
+            assertEquals(payload.length, length);
+            assertEquals(payload.length + 4, wire.length);
+        });
+    }
+
+    @Test
+    public void testFrameEncoderEncodesPingFrame() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asClient());
+
+            List<HttpObject> res = sendAndOutBound(pipe, WebSocketUtils.pingFrame());
+            assertEquals(1, res.size());
+            assertTrue(res.get(0) instanceof HttpByteBuf);
+
+            byte[] wire = bytes(((HttpByteBuf) res.get(0)).content());
+            assertEquals((byte) 0x89, wire[0]);
+            assertEquals((byte) 0x00, wire[1]);
+        });
+    }
+
+    @Test
+    public void testFrameEncoderNoArgUsesHandshakeContextVersion() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V0, "/auto"));
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
+            }, VrtSoConfig.asClient());
+
+            WebSocketFrame frame = WebSocketUtils.textFrame("Hixie");
+            List<HttpObject> res = sendAndOutBound(pipe, frame);
+            assertEquals(1, res.size());
+            assertTrue(res.get(0) instanceof HttpByteBuf);
+
+            byte[] wire = bytes(((HttpByteBuf) res.get(0)).content());
+            assertEquals((byte) 0x00, wire[0]);
+            assertEquals((byte) 0xFF, wire[wire.length - 1]);
+            assertEquals("Hixie", new String(wire, 1, wire.length - 2, StandardCharsets.UTF_8));
+        });
+    }
+
+    @Test
+    public void testFrameEncoderV0EncodesCloseFrame() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V0));
+            }, VrtSoConfig.asClient());
+
+            WebSocketFrame frame = WebSocketUtils.closeFrame(false, null, ByteBuf.EMPTY);
+            List<HttpObject> res = sendAndOutBound(pipe, frame);
+            assertEquals(1, res.size());
+            assertTrue(res.get(0) instanceof HttpByteBuf);
+
+            byte[] wire = bytes(((HttpByteBuf) res.get(0)).content());
+            assertArrayEquals(new byte[] { (byte) 0xFF, 0x00 }, wire);
+        });
+    }
+
+    @Test
+    public void testFrameEncoderV0EncodesBinaryFrame() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V0));
+            }, VrtSoConfig.asClient());
+
+            byte[] payload = { 0x01, 0x02, 0x03 };
+            WebSocketFrame frame = WebSocketUtils.binaryFrame(payload);
+            List<HttpObject> res = sendAndOutBound(pipe, frame);
+            assertEquals(1, res.size());
+            assertTrue(res.get(0) instanceof HttpByteBuf);
+
+            byte[] wire = bytes(((HttpByteBuf) res.get(0)).content());
+            assertEquals((byte) 0x80, wire[0]);
+            assertEquals((byte) 0x03, wire[1]);
+            assertEquals(payload[0], wire[2]);
+            assertEquals(payload[1], wire[3]);
+            assertEquals(payload[2], wire[4]);
+            assertFalse(frame.isMasked());
+        });
+    }
+
+    @Test
+    public void testFrameEncoderReleasesConsumedFrameContent() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asClient());
+
+            ByteBuf payload = ByteBufAllocator.DEFAULT.buffer(16, Integer.MAX_VALUE);
+            payload.writeString("Hi", StandardCharsets.UTF_8);
+            payload.markWriter();
+            WebSocketFrame frame = WebSocketUtils.textFrame(true, false, null, payload);
+
+            List<HttpObject> result = sendAndOutBound(pipe, frame);
+
+            assertNull(frame.content());
+            assertTrue(payload.isFree());
+            assertTrue(result.get(0) instanceof HttpByteBuf);
+        });
+    }
+}

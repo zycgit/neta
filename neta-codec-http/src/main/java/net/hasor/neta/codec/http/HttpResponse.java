@@ -29,10 +29,18 @@ public interface HttpResponse extends HttpObject {
     /** Returns the protocol version carried by this status line. */
     HttpVersion protocolVersion();
 
+    /** Sets the protocol version carried by this status line. */
+    HttpResponse protocolVersion(HttpVersion version);
+
     /** Returns the status carried by this status line. */
     HttpStatus status();
+
+    /** Sets the response status carried by this status line. */
+    HttpResponse status(HttpStatus status);
 
     String statusText();
 
     String reasonText();
+
+    HttpResponse reasonText(String reason);
 }

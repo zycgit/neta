@@ -596,9 +596,9 @@ public class CookieTest {
     @Test
     public void testIntegrationReadCookieFromHeader() {
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
-        headers.add("Cookie", "user=bob; role=admin");
+        headers.addHeader("Cookie", "user=bob; role=admin");
 
-        String cookieHeader = headers.get("cookie");
+        String cookieHeader = headers.getString("cookie");
         List<Cookie> cookies = CookieDecoder.decode(cookieHeader);
 
         assertEquals(2, cookies.size());
@@ -616,9 +616,9 @@ public class CookieTest {
     public void testIntegrationWriteSetCookieToHeader() {
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
         DefaultCookie c = new DefaultCookie("session", "tok").setPath("/").setHttpOnly(true).setMaxAge(1800);
-        headers.add("Set-Cookie", ServerCookieEncoder.encode(c));
+        headers.addHeader("Set-Cookie", ServerCookieEncoder.encode(c));
 
-        String setCookieHeader = headers.get("set-cookie");
+        String setCookieHeader = headers.getString("set-cookie");
         DefaultCookie decoded = ServerCookieDecoder.decode(setCookieHeader);
 
         assertNotNull(decoded);
@@ -631,10 +631,10 @@ public class CookieTest {
     @Test
     public void testIntegrationMultipleSetCookieHeaders() {
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
-        headers.add("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("a", "1").setPath("/")));
-        headers.add("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("b", "2").setSecure(true)));
+        headers.addHeader("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("a", "1").setPath("/")));
+        headers.addHeader("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("b", "2").setSecure(true)));
 
-        List<String> setCookies = headers.getAll("Set-Cookie");
+        List<String> setCookies = headers.getValues("Set-Cookie");
         assertEquals(2, setCookies.size());
 
         DefaultCookie c1 = ServerCookieDecoder.decode(setCookies.get(0));

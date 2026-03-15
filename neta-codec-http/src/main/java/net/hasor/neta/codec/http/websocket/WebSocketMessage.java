@@ -18,26 +18,41 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * A complete WebSocket message produced by {@link WebSocketFrameAggregator}.
+ * An application-visible WebSocket data message chunk produced by {@link WebSocketInboundHandler}.
  * <p>
- * Unlike {@link WebSocketFrame} (which maps 1:1 to wire frames and may be fragments),
- * a {@code WebSocketMessage} represents a fully reassembled application-level message.
+ * Unlike {@link WebSocketFrame}, a {@code WebSocketMessage} is the business-side TEXT/BINARY
+ * stream view. Fragmented websocket messages are exposed as a sequence of message chunks rather
+ * than being reassembled into one complete payload.
  * <p>
- * Message types:
+ * Sequence rules:
  * <ul>
- *   <li>{@link WebSocketOpcode#TEXT} — UTF-8 text message, retrievable via {@link #text()}.</li>
- *   <li>{@link WebSocketOpcode#BINARY} — binary message, retrievable via {@link #content()}.</li>
- *   <li>{@link WebSocketOpcode#CONTINUATION} — continuation message for explicit fragment-level handling.</li>
- *   <li>{@link WebSocketOpcode#PING} — ping control message.</li>
- *   <li>{@link WebSocketOpcode#PONG} — pong control message.</li>
- *   <li>{@link WebSocketOpcode#CLOSE} — close control message.</li>
- *   <li>{@link WebSocketOpcode#HANDSHAKE_COMPLETE} — synthetic message emitted after handshake success.</li>
+ *   <li>{@code 0}: start chunk of a fragmented message.</li>
+ *   <li>{@code 1..n}: middle chunks of the same fragmented message.</li>
+ *   <li>{@code -1}: final chunk. If it appears without a prior {@code 0}, the chunk is both start and end.</li>
  * </ul>
+ * <p>
+ * Only TEXT/BINARY application data is modeled as message flow here. Control semantics such as
+ * ping/pong/close are handled through websocket frames and user events.
  */
 public interface WebSocketMessage extends HttpObject {
+    /** Final chunk marker. When used alone it means start and end in one chunk. */
+    int FINAL_SEQUENCE = -1;
+    /** First chunk marker of a fragmented message stream. */
+    int START_SEQUENCE = 0;
 
     /** Returns the message type. */
     WebSocketOpcode type();
+
+    /**
+     * Returns the chunk sequence in the websocket message stream.
+     * <p>
+     * {@code -1} means final chunk, {@code 0} means first chunk, and positive values mean
+     * continuation chunks in order.
+     */
+    int sequence();
+
+    /** Sets the chunk sequence and returns this message instance. */
+    WebSocketMessage sequence(int sequence);
 
     /** Returns the raw payload content. */
     ByteBuf content();

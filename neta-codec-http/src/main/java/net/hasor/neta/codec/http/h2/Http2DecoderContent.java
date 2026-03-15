@@ -18,7 +18,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
 import java.util.Queue;
-import net.hasor.neta.codec.http.HttpHeaders;
+import net.hasor.neta.codec.http.DefaultHttpHeaders;
 
 /**
  * Per-connection state container shared between {@link Http2FrameToHttpDecoder}
@@ -100,7 +100,7 @@ class Http2DecoderContent {
     }
 
     /** Decodes an HPACK-compressed header block. */
-    HttpHeaders decodeHeaders(byte[] data, int offset, int length) {
+    DefaultHttpHeaders decodeHeaders(byte[] data, int offset, int length) {
         return hpackDecoder.decode(data, offset, length);
     }
 

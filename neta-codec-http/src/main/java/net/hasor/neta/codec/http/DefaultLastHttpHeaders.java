@@ -27,4 +27,10 @@ public class DefaultLastHttpHeaders extends DefaultHttpHeaders implements LastHt
     public DefaultLastHttpHeaders() {
         super();
     }
+
+    public DefaultLastHttpHeaders(HttpHeaders headers) {
+        if (headers != null) {
+            this.appendHeaders(headers);
+        }
+    }
 }

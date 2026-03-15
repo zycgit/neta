@@ -16,12 +16,13 @@
 package net.hasor.neta.codec.http.h3;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayDeque;
 import java.util.Queue;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.NetManager;
 import net.hasor.neta.channel.PlayLoad;
+import net.hasor.neta.channel.SubscribeMode;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
@@ -37,7 +38,21 @@ import static org.junit.Assert.assertTrue;
  * Simulates real client-server communication with HTTP/3 codec on both sides.
  * Uses {@link VrtChannel} + {@link VrtTransfer} to connect Http3ClientDuplexe and Http3ServerDuplexe.
  */
-public class Http3RealChannelTest {
+public class Http3RealChannelTest extends AbstractHttpTest {
+
+    private static VrtChannel openServer(NetManager neta) throws Throwable {
+        return (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
+            ctx.addLast("h3", new Http3ServerDuplexe());
+            ctx.addLast("aggregator", new HttpServerDuplexeAggregator(1048576));
+        }, VrtSoConfig.asServer());
+    }
+
+    private static VrtChannel openClient(NetManager neta) throws Throwable {
+        return (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
+            ctx.addLast("h3", new Http3ClientDuplexe());
+            ctx.addLast("aggregator", new HttpClientDuplexeAggregator(1048576));
+        }, VrtSoConfig.asClient());
+    }
 
     private static ByteBuf toBody(String text) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(text.length() + 16);
@@ -52,39 +67,46 @@ public class Http3RealChannelTest {
         return buf.readString(buf.readableBytes(), StandardCharsets.UTF_8);
     }
 
+    private static Queue<Object> subscribeInbound(VrtChannel channel) {
+        Queue<Object> inbound = new ConcurrentLinkedQueue<>();
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> {
+            Object data = d.getData();
+            if (data != null) {
+                inbound.offer(data);
+            }
+        });
+        return inbound;
+    }
+
+    private Object awaitInbound(Queue<Object> queue, String message) throws InterruptedException {
+        assertTrue(message, waitUntil(() -> !queue.isEmpty(), 1000L));
+        return queue.poll();
+    }
+
     // ========================= Basic GET Request =========================
 
     @Test
     public void testGetRequest() throws Throwable {
         NetManager neta = new NetManager();
 
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
+        VrtChannel server = openServer(neta);
 
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel client = openClient(neta);
 
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         transfer.linkTo(server, client, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        Queue<Object> clientRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
-        client.subscribe(PlayLoad::isInbound, d -> clientRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
+        Queue<Object> clientRcv = subscribeInbound(client);
 
         // Client sends GET
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/index");
-        request.headers().add("host", "www.example.com");
+        request.addHeader("host", "www.example.com");
         client.sendData(request).get();
 
         // Verify server received request
-        assertTrue("Server should receive data", serverRcv.size() >= 1);
-        Object req = serverRcv.poll();
+        Object req = awaitInbound(serverRcv, "Server should receive data");
         assertTrue("Should be FullHttpRequest", req instanceof FullHttpRequest);
         FullHttpRequest decodedReq = (FullHttpRequest) req;
         assertEquals(HttpMethod.GET, decodedReq.method());
@@ -93,12 +115,11 @@ public class Http3RealChannelTest {
         // Server responds
         ByteBuf respBody = toBody("Hello HTTP/3");
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK, respBody);
-        response.headers().set("content-type", "text/plain");
+        response.setHeader("content-type", "text/plain");
         server.sendData(response).get();
 
         // Verify client received response
-        assertTrue("Client should receive data", clientRcv.size() >= 1);
-        Object resp = clientRcv.poll();
+        Object resp = awaitInbound(clientRcv, "Client should receive data");
         assertTrue("Should be FullHttpResponse", resp instanceof FullHttpResponse);
         FullHttpResponse decodedResp = (FullHttpResponse) resp;
         assertEquals(200, decodedResp.status().code());
@@ -112,32 +133,23 @@ public class Http3RealChannelTest {
     @Test
     public void testPostWithJsonBody() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         transfer.linkTo(server, client, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        Queue<Object> clientRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
-        client.subscribe(PlayLoad::isInbound, d -> clientRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
+        Queue<Object> clientRcv = subscribeInbound(client);
 
         // Client sends POST with JSON
         ByteBuf reqBody = toBody("{\"user\":\"neta\",\"version\":3}");
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.POST, "/api/users", reqBody);
-        request.headers().add("host", "api.example.com");
-        request.headers().add("content-type", "application/json");
+        request.addHeader("host", "api.example.com");
+        request.addHeader("content-type", "application/json");
         client.sendData(request).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decodedReq = (FullHttpRequest) serverRcv.poll();
+        FullHttpRequest decodedReq = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive POST request");
         assertEquals(HttpMethod.POST, decodedReq.method());
         assertEquals("/api/users", decodedReq.uri());
         assertEquals("{\"user\":\"neta\",\"version\":3}", readBody(decodedReq.content()));
@@ -145,11 +157,10 @@ public class Http3RealChannelTest {
         // Server responds with 201
         ByteBuf respBody = toBody("{\"id\":1}");
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.CREATED, respBody);
-        response.headers().set("content-type", "application/json");
+        response.setHeader("content-type", "application/json");
         server.sendData(response).get();
 
-        assertTrue(clientRcv.size() >= 1);
-        FullHttpResponse decodedResp = (FullHttpResponse) clientRcv.poll();
+        FullHttpResponse decodedResp = (FullHttpResponse) awaitInbound(clientRcv, "Client should receive POST response");
         assertEquals(201, decodedResp.status().code());
         assertEquals("{\"id\":1}", readBody(decodedResp.content()));
 
@@ -161,26 +172,18 @@ public class Http3RealChannelTest {
     @Test
     public void testDeleteRequest() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
 
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.DELETE, "/items/42");
-        request.headers().add("host", "api.example.com");
+        request.addHeader("host", "api.example.com");
         client.sendData(request).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decoded = (FullHttpRequest) serverRcv.poll();
+        FullHttpRequest decoded = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive DELETE request");
         assertEquals(HttpMethod.DELETE, decoded.method());
         assertEquals("/items/42", decoded.uri());
 
@@ -192,28 +195,20 @@ public class Http3RealChannelTest {
     @Test
     public void testPutRequest() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
 
         ByteBuf body = toBody("{\"name\":\"updated\"}");
         DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.PUT, "/items/7", body);
-        request.headers().add("host", "api.example.com");
-        request.headers().add("content-type", "application/json");
+        request.addHeader("host", "api.example.com");
+        request.addHeader("content-type", "application/json");
         client.sendData(request).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decoded = (FullHttpRequest) serverRcv.poll();
+        FullHttpRequest decoded = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive PUT request");
         assertEquals(HttpMethod.PUT, decoded.method());
         assertEquals("/items/7", decoded.uri());
         assertEquals("{\"name\":\"updated\"}", readBody(decoded.content()));
@@ -226,35 +221,25 @@ public class Http3RealChannelTest {
     @Test
     public void testStatusCode404() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         transfer.linkTo(server, client, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        Queue<Object> clientRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
-        client.subscribe(PlayLoad::isInbound, d -> clientRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
+        Queue<Object> clientRcv = subscribeInbound(client);
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/not-found");
-        req.headers().add("host", "example.com");
+        req.addHeader("host", "example.com");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        serverRcv.poll();
+        awaitInbound(serverRcv, "Server should receive 404 request");
         ByteBuf body = toBody("Not Found");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.NOT_FOUND, body);
         server.sendData(resp).get();
 
-        assertTrue(clientRcv.size() >= 1);
-        FullHttpResponse decoded = (FullHttpResponse) clientRcv.poll();
+        FullHttpResponse decoded = (FullHttpResponse) awaitInbound(clientRcv, "Client should receive 404 response");
         assertEquals(404, decoded.status().code());
         assertEquals("Not Found", readBody(decoded.content()));
 
@@ -266,34 +251,24 @@ public class Http3RealChannelTest {
     @Test
     public void testStatusCode500() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         transfer.linkTo(server, client, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        Queue<Object> clientRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
-        client.subscribe(PlayLoad::isInbound, d -> clientRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
+        Queue<Object> clientRcv = subscribeInbound(client);
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/error");
-        req.headers().add("host", "example.com");
+        req.addHeader("host", "example.com");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        serverRcv.poll();
+        awaitInbound(serverRcv, "Server should receive 500 request");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.INTERNAL_SERVER_ERROR);
         server.sendData(resp).get();
 
-        assertTrue(clientRcv.size() >= 1);
-        FullHttpResponse decoded = (FullHttpResponse) clientRcv.poll();
+        FullHttpResponse decoded = (FullHttpResponse) awaitInbound(clientRcv, "Client should receive 500 response");
         assertEquals(500, decoded.status().code());
 
         neta.shutdown();
@@ -304,49 +279,39 @@ public class Http3RealChannelTest {
     @Test
     public void testCustomHeadersRoundTrip() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         transfer.linkTo(server, client, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        Queue<Object> clientRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
-        client.subscribe(PlayLoad::isInbound, d -> clientRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
+        Queue<Object> clientRcv = subscribeInbound(client);
 
         // Request with custom headers
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/custom");
-        req.headers().add("host", "example.com");
-        req.headers().add("x-request-id", "req-h3-001");
-        req.headers().add("accept", "application/json");
-        req.headers().add("user-agent", "neta/3.0");
+        req.addHeader("host", "example.com");
+        req.addHeader("x-request-id", "req-h3-001");
+        req.addHeader("accept", "application/json");
+        req.addHeader("user-agent", "neta/3.0");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decodedReq = (FullHttpRequest) serverRcv.poll();
-        assertEquals("req-h3-001", decodedReq.headers().get("x-request-id"));
-        assertEquals("application/json", decodedReq.headers().get("accept"));
-        assertEquals("neta/3.0", decodedReq.headers().get("user-agent"));
+        FullHttpRequest decodedReq = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive custom header request");
+        assertEquals("req-h3-001", decodedReq.getString("x-request-id"));
+        assertEquals("application/json", decodedReq.getString("accept"));
+        assertEquals("neta/3.0", decodedReq.getString("user-agent"));
 
         // Response with custom headers
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK);
-        resp.headers().set("x-response-id", "resp-h3-002");
-        resp.headers().set("cache-control", "no-store");
-        resp.headers().set("x-frame-options", "DENY");
+        resp.setHeader("x-response-id", "resp-h3-002");
+        resp.setHeader("cache-control", "no-store");
+        resp.setHeader("x-frame-options", "DENY");
         server.sendData(resp).get();
 
-        assertTrue(clientRcv.size() >= 1);
-        FullHttpResponse decodedResp = (FullHttpResponse) clientRcv.poll();
-        assertEquals("resp-h3-002", decodedResp.headers().get("x-response-id"));
-        assertEquals("no-store", decodedResp.headers().get("cache-control"));
-        assertEquals("DENY", decodedResp.headers().get("x-frame-options"));
+        FullHttpResponse decodedResp = (FullHttpResponse) awaitInbound(clientRcv, "Client should receive custom header response");
+        assertEquals("resp-h3-002", decodedResp.getString("x-response-id"));
+        assertEquals("no-store", decodedResp.getString("cache-control"));
+        assertEquals("DENY", decodedResp.getString("x-frame-options"));
 
         neta.shutdown();
     }
@@ -356,19 +321,12 @@ public class Http3RealChannelTest {
     @Test
     public void testLargeBodyRoundTrip() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
 
         // 8KB body
         StringBuilder sb = new StringBuilder();
@@ -379,11 +337,10 @@ public class Http3RealChannelTest {
 
         ByteBuf body = toBody(largeBody);
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.POST, "/upload", body);
-        req.headers().add("host", "upload.example.com");
+        req.addHeader("host", "upload.example.com");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decoded = (FullHttpRequest) serverRcv.poll();
+        FullHttpRequest decoded = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive large body request");
         assertEquals(HttpMethod.POST, decoded.method());
         assertEquals(largeBody, readBody(decoded.content()));
 
@@ -395,34 +352,24 @@ public class Http3RealChannelTest {
     @Test
     public void testNoBodyResponse204() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         transfer.linkTo(server, client, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        Queue<Object> clientRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
-        client.subscribe(PlayLoad::isInbound, d -> clientRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
+        Queue<Object> clientRcv = subscribeInbound(client);
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.DELETE, "/item/99");
-        req.headers().add("host", "example.com");
+        req.addHeader("host", "example.com");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        serverRcv.poll();
+        awaitInbound(serverRcv, "Server should receive 204 request");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.NO_CONTENT);
         server.sendData(resp).get();
 
-        assertTrue(clientRcv.size() >= 1);
-        FullHttpResponse decoded = (FullHttpResponse) clientRcv.poll();
+        FullHttpResponse decoded = (FullHttpResponse) awaitInbound(clientRcv, "Client should receive 204 response");
         assertEquals(204, decoded.status().code());
 
         neta.shutdown();
@@ -433,27 +380,19 @@ public class Http3RealChannelTest {
     @Test
     public void testPatchRequest() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
 
         ByteBuf body = toBody("{\"field\":\"patched\"}");
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.PATCH, "/item/5", body);
-        req.headers().add("host", "example.com");
+        req.addHeader("host", "example.com");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decoded = (FullHttpRequest) serverRcv.poll();
+        FullHttpRequest decoded = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive PATCH request");
         assertEquals(HttpMethod.PATCH, decoded.method());
         assertEquals("{\"field\":\"patched\"}", readBody(decoded.content()));
 
@@ -465,26 +404,18 @@ public class Http3RealChannelTest {
     @Test
     public void testHeadRequest() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.HEAD, "/resource");
-        req.headers().add("host", "example.com");
+        req.addHeader("host", "example.com");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decoded = (FullHttpRequest) serverRcv.poll();
+        FullHttpRequest decoded = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive HEAD request");
         assertEquals(HttpMethod.HEAD, decoded.method());
         assertEquals("/resource", decoded.uri());
 
@@ -496,40 +427,30 @@ public class Http3RealChannelTest {
     @Test
     public void testOptionsRequest() throws Throwable {
         NetManager neta = new NetManager();
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), ctx -> {
-            ctx.addLast("h3", new Http3ServerDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asServer());
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), ctx -> {
-            ctx.addLast("h3", new Http3ClientDuplexe());
-            ctx.addLastDecoder("aggregator", new HttpObjectAggregator(1048576));
-        }, VrtSoConfig.asClient());
+        VrtChannel server = openServer(neta);
+        VrtChannel client = openClient(neta);
         VrtTransfer transfer = new VrtTransfer(neta);
         transfer.linkTo(client, server, VrtTransfer.duplicate());
         transfer.linkTo(server, client, VrtTransfer.duplicate());
 
-        Queue<Object> serverRcv = new ArrayDeque<>();
-        Queue<Object> clientRcv = new ArrayDeque<>();
-        server.subscribe(PlayLoad::isInbound, d -> serverRcv.offer(d.getData()));
-        client.subscribe(PlayLoad::isInbound, d -> clientRcv.offer(d.getData()));
+        Queue<Object> serverRcv = subscribeInbound(server);
+        Queue<Object> clientRcv = subscribeInbound(client);
 
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.OPTIONS, "*");
-        req.headers().add("host", "example.com");
+        req.addHeader("host", "example.com");
         client.sendData(req).get();
 
-        assertTrue(serverRcv.size() >= 1);
-        FullHttpRequest decoded = (FullHttpRequest) serverRcv.poll();
+        FullHttpRequest decoded = (FullHttpRequest) awaitInbound(serverRcv, "Server should receive OPTIONS request");
         assertEquals(HttpMethod.OPTIONS, decoded.method());
 
         // Server responds with CORS headers
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_3_0, HttpStatus.OK);
-        resp.headers().set("access-control-allow-origin", "*");
-        resp.headers().set("access-control-allow-methods", "GET, POST, DELETE");
+        resp.setHeader("access-control-allow-origin", "*");
+        resp.setHeader("access-control-allow-methods", "GET, POST, DELETE");
         server.sendData(resp).get();
 
-        assertTrue(clientRcv.size() >= 1);
-        FullHttpResponse decodedResp = (FullHttpResponse) clientRcv.poll();
-        assertEquals("*", decodedResp.headers().get("access-control-allow-origin"));
+        FullHttpResponse decodedResp = (FullHttpResponse) awaitInbound(clientRcv, "Client should receive OPTIONS response");
+        assertEquals("*", decodedResp.getString("access-control-allow-origin"));
 
         neta.shutdown();
     }

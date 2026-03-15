@@ -14,33 +14,22 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import java.nio.charset.StandardCharsets;
-import net.hasor.cobble.StringUtils;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.*;
+import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Semantic HTTP/2 encoder that converts standard {@link HttpObject} instances
- * into {@link Http2Frame} objects.
+ * Compatibility encoder that keeps the classic {@code HttpObject -> Http2Frame}
+ * API while internally using the explicit message layer.
  * <p>
- * This encoder takes the same {@link HttpObject} types used by HTTP/1.x
- * ({@link HttpRequest}, {@link HttpResponse}, {@link HttpContent}, {@link LastHttpContent})
- * and converts them into typed {@link Http2Frame} instances with HPACK-compressed
- * headers, ready for binary serialization by {@link Http2FrameEncoder}.
- * <p>
- * <b>Encode path:</b> {@code HttpObject → Http2Frame → ByteBuf}
- * @see Http2Frame
- * @see Http2FrameEncoder
+ * Internal pipeline:
+ * <pre>
+ *   HttpObject -> Http2Message -> Http2Frame
+ * </pre>
  */
 public class Http2HttpToFrameEncoder implements ProtoHandler<HttpObject, Http2Frame> {
-    private static final Logger     logger         = Logger.getLogger(Http2HttpToFrameEncoder.class);
-    /** HTTP/2 connection preface sent by the client */
-    private static final byte[]     CLIENT_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
-    private final        HttpScheme scheme         = HttpScheme.HTTPS;
-    private final        boolean    serverMode;
-    private final        int        maxHeaderTableSize;
+    private final Http2HttpToMessageEncoder  httpToMessageEncoder;
+    private final Http2MessageToFrameEncoder messageToFrameEncoder;
+    private final Http2MessageBridgeQueue    bridgeQueue = new Http2MessageBridgeQueue();
 
     /**
      * Creates a new HttpObject-to-Http2Frame encoder with default HPACK settings.
@@ -56,229 +45,27 @@ public class Http2HttpToFrameEncoder implements ProtoHandler<HttpObject, Http2Fr
      * @param maxHeaderTableSize maximum HPACK dynamic table size in bytes
      */
     public Http2HttpToFrameEncoder(boolean serverMode, int maxHeaderTableSize) {
-        this.serverMode = serverMode;
-        this.maxHeaderTableSize = maxHeaderTableSize;
+        this.httpToMessageEncoder = new Http2HttpToMessageEncoder(serverMode, maxHeaderTableSize);
+        this.messageToFrameEncoder = new Http2MessageToFrameEncoder(serverMode, maxHeaderTableSize);
     }
 
     @Override
-    public void onInit(ProtoContext context) {
-        context.context(Http2EncoderContent.class, new Http2EncoderContent(this.serverMode, this.maxHeaderTableSize));
+    public void onInit(String name, int poolSize, ProtoContext context) {
+        this.httpToMessageEncoder.onInit(name, poolSize, context);
+        this.messageToFrameEncoder.onInit(name, poolSize, context);
     }
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Http2Frame> dst) throws Throwable {
-        Http2EncoderContent state = context.context(Http2EncoderContent.class);
-
-        // Send client preface as a special "preface" frame if needed
-        if (!state.isPrefaceSent()) {
-            // Emit client connection preface as a special frame
-            // The downstream Http2FrameEncoder will handle writing this as raw bytes
-            dst.offerMessage(new Http2Frame(Http2FrameType.PREFACE, 0, 0, CLIENT_PREFACE));
-
-            // Also send initial empty SETTINGS frame
-            dst.offerMessage(Http2Frame.settings(Http2Flags.NONE, new byte[0]));
-            state.markPrefaceSent();
-        }
-
-        while (src.hasMore()) {
-            HttpObject msg = src.takeMessage();
-            if (msg == null) {
-                continue;
-            }
-
-            if (msg instanceof FullHttpResponse) {
-                encodeFullResponse(state, context, (FullHttpResponse) msg, dst);
-            } else if (msg instanceof FullHttpRequest) {
-                encodeFullRequest(state, context, (FullHttpRequest) msg, dst);
-            } else if (msg instanceof HttpResponse) {
-                encodeResponseHeaders(state, context, (HttpResponse) msg, dst);
-            } else if (msg instanceof HttpRequest) {
-                encodeRequestHeaders(state, context, (HttpRequest) msg, dst);
-            } else if (msg instanceof LastHttpContent) {
-                encodeLastContent(state, context, (LastHttpContent) msg, dst);
-            } else if (msg instanceof HttpContent) {
-                encodeContent(state, context, (HttpContent) msg, dst);
-            }
-        }
-
+        this.bridgeQueue.clear();
+        this.httpToMessageEncoder.onMessage(context, src, this.bridgeQueue);
+        this.messageToFrameEncoder.onMessage(context, this.bridgeQueue, dst);
         return ProtoStatus.Next;
-    }
-
-    /**
-     * Encodes a complete HTTP response (headers + body) as HEADERS + DATA frames.
-     */
-    private void encodeFullResponse(Http2EncoderContent state, ProtoContext context, FullHttpResponse response, ProtoSndQueue<Http2Frame> dst) {
-        ByteBuf body = response.content();
-        boolean hasBody = body != null && body.readableBytes() > 0;
-        int bodyLen = hasBody ? body.readableBytes() : 0;
-
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H2-SND] ch=" + channelID + " FULL_RESPONSE stream=" + state.currentStreamId()//
-                    + " status=" + response.status().code() + " bodyLen=" + bodyLen//
-                    + " flags=" + (hasBody ? "END_HEADERS" : "END_STREAM|END_HEADERS"));
-        }
-
-        state.beginHeaderEncode();
-        state.encodeHeader(":status", String.valueOf(response.status().code()));
-        encodeHeadersDirect(state, response.headers());
-        byte[] headerBlock = state.finishHeaderEncode();
-
-        if (!hasBody) {
-            dst.offerMessage(Http2Frame.headers(state.currentStreamId(), Http2Flags.END_STREAM | Http2Flags.END_HEADERS, headerBlock));
-        } else {
-            dst.offerMessage(Http2Frame.headers(state.currentStreamId(), Http2Flags.END_HEADERS, headerBlock));
-            byte[] bodyBytes = extractBodyBytes(body);
-            dst.offerMessage(Http2Frame.data(state.currentStreamId(), Http2Flags.END_STREAM, bodyBytes));
-        }
-    }
-
-    /**
-     * Encodes a complete HTTP request (headers + body) as HEADERS + DATA frames.
-     */
-    private void encodeFullRequest(Http2EncoderContent state, ProtoContext context, FullHttpRequest request, ProtoSndQueue<Http2Frame> dst) {
-        state.allocateNextStreamId();
-
-        ByteBuf body = request.content();
-        boolean hasBody = body != null && body.readableBytes() > 0;
-        int bodyLen = hasBody ? body.readableBytes() : 0;
-
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H2-SND] ch=" + channelID + " FULL_REQUEST stream=" + state.currentStreamId()//
-                    + " " + request.method().name() + " " + request.uri()//
-                    + " bodyLen=" + bodyLen + " flags=" + (hasBody ? "END_HEADERS" : "END_STREAM|END_HEADERS"));
-        }
-
-        state.beginHeaderEncode();
-        state.encodeHeader(":method", request.method().name());
-        state.encodeHeader(":path", request.uri());
-        String host = request.headers().get(HttpHeaderNames.HOST);
-        if (StringUtils.isNotBlank(host)) {
-            state.encodeHeader(":authority", host);
-        }
-        state.encodeHeader(":scheme", scheme.name());
-        encodeHeadersDirect(state, request.headers());
-        byte[] headerBlock = state.finishHeaderEncode();
-
-        if (!hasBody) {
-            dst.offerMessage(Http2Frame.headers(state.currentStreamId(), Http2Flags.END_STREAM | Http2Flags.END_HEADERS, headerBlock));
-        } else {
-            dst.offerMessage(Http2Frame.headers(state.currentStreamId(), Http2Flags.END_HEADERS, headerBlock));
-            byte[] bodyBytes = extractBodyBytes(body);
-            dst.offerMessage(Http2Frame.data(state.currentStreamId(), Http2Flags.END_STREAM, bodyBytes));
-        }
-    }
-
-    /**
-     * Encodes HTTP response headers as a HEADERS frame.
-     */
-    private void encodeResponseHeaders(Http2EncoderContent state, ProtoContext context, HttpResponse response, ProtoSndQueue<Http2Frame> dst) {
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H2-SND] ch=" + channelID + " HEADERS stream=" + state.currentStreamId() + " RESPONSE status=" + response.status().code() + " flags=END_HEADERS");
-        }
-        state.beginHeaderEncode();
-        state.encodeHeader(":status", String.valueOf(response.status().code()));
-        encodeHeadersDirect(state, response.headers());
-        byte[] headerBlock = state.finishHeaderEncode();
-
-        dst.offerMessage(Http2Frame.headers(state.currentStreamId(), Http2Flags.END_HEADERS, headerBlock));
-    }
-
-    /**
-     * Encodes HTTP request headers as a HEADERS frame.
-     */
-    private void encodeRequestHeaders(Http2EncoderContent state, ProtoContext context, HttpRequest request, ProtoSndQueue<Http2Frame> dst) {
-        state.allocateNextStreamId();
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H2-SND] ch=" + channelID + " HEADERS stream=" + state.currentStreamId() + " REQUEST " + request.method().name() + " " + request.uri() + " flags=END_HEADERS");
-        }
-
-        state.beginHeaderEncode();
-        state.encodeHeader(":method", request.method().name());
-        state.encodeHeader(":path", request.uri());
-        String host = request.headers().get(HttpHeaderNames.HOST);
-        if (StringUtils.isNotBlank(host)) {
-            state.encodeHeader(":authority", host);
-        }
-        state.encodeHeader(":scheme", scheme.name());
-        encodeHeadersDirect(state, request.headers());
-        byte[] headerBlock = state.finishHeaderEncode();
-
-        dst.offerMessage(Http2Frame.headers(state.currentStreamId(), Http2Flags.END_HEADERS, headerBlock));
-    }
-
-    /**
-     * Encodes body content as a DATA frame.
-     */
-    private void encodeContent(Http2EncoderContent state, ProtoContext context, HttpContent content, ProtoSndQueue<Http2Frame> dst) {
-        ByteBuf body = content.content();
-        if (body == null || body.readableBytes() == 0) {
-            return;
-        }
-        byte[] bodyBytes = extractBodyBytes(body);
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H2-SND] ch=" + channelID + " DATA stream=" + state.currentStreamId() + " dataLen=" + bodyBytes.length);
-        }
-        dst.offerMessage(Http2Frame.data(state.currentStreamId(), Http2Flags.NONE, bodyBytes));
-    }
-
-    /**
-     * Encodes the last content chunk as a DATA frame with END_STREAM.
-     */
-    private void encodeLastContent(Http2EncoderContent state, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<Http2Frame> dst) {
-        ByteBuf body = lastContent.content();
-        int bodyLen = (body != null) ? body.readableBytes() : 0;
-
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H2-SND] ch=" + channelID + " DATA stream=" + state.currentStreamId() + " dataLen=" + bodyLen + " flags=END_STREAM");
-        }
-        if (bodyLen > 0) {
-            byte[] bodyBytes = extractBodyBytes(body);
-            dst.offerMessage(Http2Frame.data(state.currentStreamId(), Http2Flags.END_STREAM, bodyBytes));
-        } else {
-            dst.offerMessage(Http2Frame.data(state.currentStreamId(), Http2Flags.END_STREAM, new byte[0]));
-        }
-    }
-
-    /**
-     * Extracts body bytes from a ByteBuf.
-     */
-    private byte[] extractBodyBytes(ByteBuf body) {
-        int bodyLen = body.readableBytes();
-        byte[] bodyBytes = new byte[bodyLen];
-        body.getBytes(0, bodyBytes, 0, bodyLen);
-        return bodyBytes;
-    }
-
-    /**
-     * Copies regular headers (non-pseudo, non-connection) directly into the HPACK encoder.
-     */
-    private void encodeHeadersDirect(Http2EncoderContent state, HttpHeaders source) {
-        if (source == null || source.isEmpty()) {
-            return;
-        }
-        for (java.util.Map.Entry<String, String> entry : source) {
-            String name = entry.getKey().toLowerCase();
-            // Skip HTTP/2 connection-specific headers (RFC 9113, Section 8.2.2)
-            if (StringUtils.equals(HttpHeaderNames.CONNECTION, name)              //
-                    || StringUtils.equals(HttpHeaderNames.TRANSFER_ENCODING, name)//
-                    || StringUtils.equals(HttpHeaderNames.KEEP_ALIVE, name)       //
-                    || StringUtils.equals(HttpHeaderNames.PROXY_CONNECTION, name) //
-                    || StringUtils.equals(HttpHeaderNames.UPGRADE, name)          //
-                    || StringUtils.equals(HttpHeaderNames.HOST, name)) {
-                continue;
-            }
-            state.encodeHeader(name, entry.getValue());
-        }
     }
 
     @Override
     public void onClose(ProtoContext context) {
-        // No resources to clean up
+        this.httpToMessageEncoder.onClose(context);
+        this.messageToFrameEncoder.onClose(context);
     }
 }

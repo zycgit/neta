@@ -75,8 +75,8 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
 
     @Override
     protected void logAggregated(ProtoContext context, HttpRequest message, int contentLength) {
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+        if (context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel().getChannelId();
             logger.info(this.logPrefix() + " channel=" + channelID + " " + message.method() + " " + message.uri() + " streamId=" + message.streamId() + " contentLength=" + contentLength);
         }
     }
@@ -94,7 +94,6 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
             return;
         }
         if (this.handleExpectation(context, message, contentLength)) {
-            return;
         }
     }
 
@@ -163,8 +162,8 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         }
 
         context.sendData(response);
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+        if (context.getConfig().isPrintLog()) {
+            long channelID = context.getChannel().getChannelId();
             logger.info(this.logPrefix() + " channel=" + channelID + " auto-response status=" + status.code() + " keepAlive=" + keepAlive + " streamId=" + streamId);
         }
     }

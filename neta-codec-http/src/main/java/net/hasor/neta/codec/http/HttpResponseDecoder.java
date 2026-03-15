@@ -20,7 +20,6 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.event.HttpThroughEvent;
 
 /**
  * Decodes inbound socket bytes into staged HTTP/1.x response objects.
@@ -106,7 +105,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         HttpThroughEvent modeEvent = (HttpThroughEvent) event.getData();
         HttpContext httpCtx = HttpContext.getOrCreate(context);
         boolean changed = httpCtx.switchTransparentMode(modeEvent.enabled());
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+        if (context.getConfig().isPrintLog()) {
             long channelId = context.getChannel().getChannelId();
             logger.info("[HTTP-RESP] channel=" + channelId + " transparent-mode=" + modeEvent.enabled() + (changed ? "" : " (unchanged)"));
         }
@@ -255,7 +254,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
             httpCtx.resp.releaseAndReset();
         }
 
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+        if (context.getConfig().isPrintLog()) {
             long channelID = context.getChannel().getChannelId();
             logger.warn("[HTTP-RESP] channel=" + channelID + " decoder error, response state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
         }

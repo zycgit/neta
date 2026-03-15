@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http;
 import java.util.List;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
-import net.hasor.neta.codec.http.event.HttpThroughEvent;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -220,7 +219,7 @@ public class HttpRequestDecoderTest extends AbstractHttpTest {
             assertEquals(HttpVersion.HTTP_1_1, ((HttpRequest) res.get(0)).protocolVersion());
             assertEquals("example.com", ((HttpHeaders) res.get(1)).getString(HttpHeaderNames.HOST));
             assertEquals(1, ((HttpHeaders) res.get(1)).headerSize());
-            assertEquals("", body((HttpContent) res.get(2)));
+            assertNull(body((HttpContent) res.get(2)));
         });
     }
 }

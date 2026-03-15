@@ -36,6 +36,12 @@ class Http3EncoderContent {
     private       long         currentStreamId;
     private       long         responseStreamId;
     private       boolean      settingsSent;
+    private       boolean      pendingRequest;
+    private       String       pendingMethod;
+    private       String       pendingPath;
+    private       String       pendingScheme;
+    private       boolean      pendingResponse;
+    private       int          pendingStatus;
 
     Http3EncoderContent(boolean serverMode, int maxTableSize) {
         this.qpackEncoder = new QpackEncoder(maxTableSize, false);
@@ -43,6 +49,12 @@ class Http3EncoderContent {
         this.currentStreamId = 0;
         this.responseStreamId = -1;
         this.settingsSent = false;
+        this.pendingRequest = false;
+        this.pendingMethod = null;
+        this.pendingPath = null;
+        this.pendingScheme = null;
+        this.pendingResponse = false;
+        this.pendingStatus = 0;
     }
 
     // ─── preface / settings state ─────────────────────────────────────────────
@@ -104,6 +116,59 @@ class Http3EncoderContent {
             this.currentStreamId = id;
         }
         return id;
+    }
+
+    void beginRequest(long streamId, String method, String path, String scheme) {
+        this.currentStreamId = streamId;
+        this.pendingRequest = true;
+        this.pendingMethod = method;
+        this.pendingPath = path;
+        this.pendingScheme = scheme;
+        this.pendingResponse = false;
+        this.pendingStatus = 0;
+    }
+
+    void beginResponse(long streamId, int statusCode) {
+        this.currentStreamId = streamId;
+        this.pendingRequest = false;
+        this.pendingMethod = null;
+        this.pendingPath = null;
+        this.pendingScheme = null;
+        this.pendingResponse = true;
+        this.pendingStatus = statusCode;
+    }
+
+    boolean hasPendingRequest() {
+        return this.pendingRequest;
+    }
+
+    String pendingMethod() {
+        return this.pendingMethod;
+    }
+
+    String pendingPath() {
+        return this.pendingPath;
+    }
+
+    String pendingScheme() {
+        return this.pendingScheme;
+    }
+
+    boolean hasPendingResponse() {
+        return this.pendingResponse;
+    }
+
+    int pendingStatus() {
+        return this.pendingStatus;
+    }
+
+    void clearPendingHeaders() {
+        this.pendingRequest = false;
+        this.pendingMethod = null;
+        this.pendingPath = null;
+        this.pendingScheme = null;
+        this.pendingResponse = false;
+        this.pendingStatus = 0;
     }
 
     // ─── QPACK header encoding ────────────────────────────────────────────────

@@ -98,7 +98,7 @@ public class CorsHandler implements ProtoHandler<FullHttpRequest, Object> {
             return ProtoStatus.Next;
         }
 
-        String origin = request.headers().get(HttpHeaderNames.ORIGIN);
+        String origin = request.getString(HttpHeaderNames.ORIGIN);
 
         // No Origin header — not a cross-origin request; forward as-is
         if (StringUtils.isBlank(origin)) {

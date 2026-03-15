@@ -36,8 +36,12 @@ public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
     }
 
     public static BinaryWebSocketMessage request(ByteBuf content) {
+        return request(WebSocketMessage.FINAL_SEQUENCE, content);
+    }
+
+    public static BinaryWebSocketMessage request(int sequence, ByteBuf content) {
         BinaryWebSocketMessage msg = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
-        msg.initMessage(content);
+        msg.initMessage(sequence, content);
         return msg;
     }
 

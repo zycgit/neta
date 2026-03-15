@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
-import net.hasor.neta.codec.http.HttpHeaders;
+import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpProtocolViolationException;
 
 /**
@@ -51,8 +51,8 @@ class HpackDecoder {
      * @return the decoded HTTP headers
      * @throws HttpProtocolException if the header block is malformed
      */
-    public HttpHeaders decode(byte[] data, int offset, int length) {
-        HttpHeaders headers = new HttpHeaders();
+    public DefaultHttpHeaders decode(byte[] data, int offset, int length) {
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
         int end = offset + length;
         int pos = offset;
         int totalSize = 0;
@@ -69,7 +69,7 @@ class HpackDecoder {
                     throw new HttpProtocolViolationException("HPACK: invalid indexed header field index 0");
                 }
                 HpackHeaderField entry = getEntry(index);
-                headers.add(entry.name(), entry.value());
+                headers.addHeader(entry.name(), entry.value());
                 totalSize += entry.name().length() + entry.value().length();
             } else if ((b & 0xC0) == 0x40) {
                 // 01xxxxxx - Literal Header Field with Incremental Indexing (RFC 7541, Section 6.2.1)
@@ -90,7 +90,7 @@ class HpackDecoder {
                 pos = decodedPos;
                 String value = decodedString;
 
-                headers.add(name, value);
+                headers.addHeader(name, value);
                 dynamicTable.add(new HpackHeaderField(name, value));
                 totalSize += name.length() + value.length();
             } else if ((b & 0xF0) == 0x00) {
@@ -112,7 +112,7 @@ class HpackDecoder {
                 pos = decodedPos;
                 String value = decodedString;
 
-                headers.add(name, value);
+                headers.addHeader(name, value);
                 totalSize += name.length() + value.length();
             } else if ((b & 0xF0) == 0x10) {
                 // 0001xxxx - Literal Header Field Never Indexed (RFC 7541, Section 6.2.3)
@@ -133,7 +133,7 @@ class HpackDecoder {
                 pos = decodedPos;
                 String value = decodedString;
 
-                headers.add(name, value);
+                headers.addHeader(name, value);
                 totalSize += name.length() + value.length();
             } else if ((b & 0xE0) == 0x20) {
                 // 001xxxxx - Dynamic Table Size Update (RFC 7541, Section 6.3)

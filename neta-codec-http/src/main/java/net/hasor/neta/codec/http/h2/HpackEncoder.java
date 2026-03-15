@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import java.util.Map;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpHeaders;
 
@@ -59,10 +58,10 @@ class HpackEncoder {
     public byte[] encode(HttpHeaders headers) {
         pos = 0;
 
-        for (Map.Entry<String, String> entry : headers) {
-            String name = entry.getKey().toLowerCase();
-            String value = entry.getValue();
-            encodeHeader(name, value);
+        for (String name : headers.headerNames()) {
+            for (String value : headers.getValues(name)) {
+                encodeHeader(name.toLowerCase(), value);
+            }
         }
 
         byte[] result = new byte[pos];
@@ -80,10 +79,10 @@ class HpackEncoder {
     public int encodeTo(HttpHeaders headers, ByteBuf dst) {
         pos = 0;
 
-        for (Map.Entry<String, String> entry : headers) {
-            String name = entry.getKey().toLowerCase();
-            String value = entry.getValue();
-            encodeHeader(name, value);
+        for (String name : headers.headerNames()) {
+            for (String value : headers.getValues(name)) {
+                encodeHeader(name.toLowerCase(), value);
+            }
         }
 
         dst.writeBytes(buf, 0, pos);
