@@ -312,6 +312,28 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public <T> void fireUserEvent(Class<T> eventType, T event) throws Throwable {
+        this.fireUserEvent0(eventType, event, this.isRcv());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public <T> void fireUserEventReverse(Class<T> eventType, T event) throws Throwable {
+        this.fireUserEvent0(eventType, event, !this.isRcv());
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public <T> void fireUserEventRcv(Class<T> eventType, T event) throws Throwable {
+        this.fireUserEvent0(eventType, event, true);
+    }
+
+    /** {@inheritDoc} */
+    @Override
+    public <T> void fireUserEventSnd(Class<T> eventType, T event) throws Throwable {
+        this.fireUserEvent0(eventType, event, false);
+    }
+
+    private <T> void fireUserEvent0(Class<T> eventType, T event, boolean rcvDirection) throws Throwable {
         if (!(this.channel instanceof NetChannel)) {
             throw new UnsupportedOperationException("only NetChannel support fireUserEvent.");
         }
@@ -320,36 +342,23 @@ class ProtoContextService implements ProtoContext {
         current = StringUtils.isBlank(current) ? null : current;
 
         if (this.parentCtx != null) {
-            // Branch ctx: propagate within branch chain first
             SoUserEvent soEvent = SoUserEventObject.of(this.channel, eventType, event);
-            if (this.isRcv()) {
-                String found = this.chainRoot.findNextStack(current);
-                if (found != null) {
-                    // Deliver to next handler within the branch
+            String found = rcvDirection ?//
+                    this.chainRoot.findNextStack(current) ://
+                    this.chainRoot.findPreviousStack(current);
+
+            if (found != null) {
+                if (rcvDirection) {
                     this.chainRoot.onRcvUserEvent(this, found, soEvent);
                 } else {
-                    // End of branch chain — cross upward through the parent-ctx chain recursively.
-                    this.fireUserEventUpward(true, soEvent);
+                    this.chainRoot.onSndUserEvent(this, found, soEvent);
                 }
             } else {
-                String found = this.chainRoot.findPreviousStack(current);
-                if (found != null) {
-                    // Deliver to previous handler within the branch
-                    this.chainRoot.onSndUserEvent(this, found, soEvent);
-                } else {
-                    // Start of branch chain — cross upward through the parent-ctx chain recursively.
-                    this.fireUserEventUpward(false, soEvent);
-                }
+                this.fireUserEventUpward(rcvDirection, soEvent);
             }
         } else {
-            // Main ctx: fire in the current direction only.
-            if (this.isRcv()) {
-                String found = this.chainRoot.findNextStack(current);
-                ((NetChannel) this.channel).notifyUserEvent(true, found, eventType, event);
-            } else {
-                String found = this.chainRoot.findPreviousStack(current);
-                ((NetChannel) this.channel).notifyUserEvent(false, found, eventType, event);
-            }
+            String found = rcvDirection ? this.chainRoot.findNextStack(current) : this.chainRoot.findPreviousStack(current);
+            ((NetChannel) this.channel).notifyUserEvent(rcvDirection, found, eventType, event);
         }
     }
 

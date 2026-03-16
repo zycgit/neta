@@ -26,6 +26,48 @@ import org.junit.Test;
  * @version : 2022-11-01
  */
 public class ProtoEventTest extends AbstractStackTest {
+    public static ProtoDuplexer<Integer, Integer, Integer, Integer> theDuplexer(String tag, List<String> record) {
+        return new ProtoDuplexer<Integer, Integer, Integer, Integer>() {
+            @Override
+            public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
+                record.add(tag + "-OnInit");
+            }
+
+            @Override
+            public void onActive(ProtoContext context) {
+                record.add(tag + "-OnActive");
+            }
+
+            @Override
+            public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
+                record.add(tag + "-OnUserEvent-" + (isRcv ? "rcv" : "snd"));
+                return true;
+            }
+
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Integer> rcvUp, ProtoSndQueue<Integer> rcvDown, ProtoRcvQueue<Integer> sndUp, ProtoSndQueue<Integer> sndDown) {
+                if (isRcv) {
+                    record.add(tag + "-OnMessage-rcv");
+                    rcvDown.offerMessage(rcvUp.takeMessage(rcvUp.queueSize()));
+                } else {
+                    record.add(tag + "-OnMessage-snd");
+                    sndDown.offerMessage(sndUp.takeMessage(sndUp.queueSize()));
+                }
+                return ProtoStatus.Next;
+            }
+
+            @Override
+            public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) {
+                record.add(tag + "-OnError-" + (isRcv ? "rcv" : "snd"));
+                return ProtoStatus.Next;
+            }
+
+            @Override
+            public void onClose(ProtoContext context) {
+            }
+        };
+    }
+
     public static ProtoHandler<Integer, Integer> theHandler(String tag, List<String> record) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
@@ -169,6 +211,114 @@ public class ProtoEventTest extends AbstractStackTest {
         assert record.stream().filter("dec2-OnUserEvent"::equals).count() == 1;
         assert !record.contains("dec1-OnUserEvent");
         assert !record.contains("mid-OnUserEvent");
+        neta.shutdown();
+    }
+
+    @Test
+    public void eventTest_3_reverseFromRcvUsesSndDirection() throws Throwable {
+        List<String> record = new ArrayList<>();
+
+        ProtoInitializer initializer = (ctx) -> {
+            ctx.addLast("a", theDuplexer("a", record));
+            ctx.addLast("mid", new ProtoDuplexer<Integer, Integer, Integer, Integer>() {
+                @Override
+                public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
+                }
+
+                @Override
+                public void onActive(ProtoContext context) {
+                }
+
+                @Override
+                public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
+                    record.add("mid-OnUserEvent-" + (isRcv ? "rcv" : "snd"));
+                    return true;
+                }
+
+                @Override
+                public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Integer> rcvUp, ProtoSndQueue<Integer> rcvDown, ProtoRcvQueue<Integer> sndUp, ProtoSndQueue<Integer> sndDown) throws Throwable {
+                    if (isRcv) {
+                        context.fireUserEventReverse(String.class, "upstream");
+                        rcvDown.offerMessage(rcvUp.takeMessage(rcvUp.queueSize()));
+                    } else {
+                        sndDown.offerMessage(sndUp.takeMessage(sndUp.queueSize()));
+                    }
+                    return ProtoStatus.Next;
+                }
+
+                @Override
+                public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) {
+                    return ProtoStatus.Next;
+                }
+
+                @Override
+                public void onClose(ProtoContext context) {
+                }
+            });
+            ctx.addLast("c", theDuplexer("c", record));
+        };
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+        channel.receiveData(1);
+
+        assert record.contains("a-OnUserEvent-snd");
+        assert !record.contains("c-OnUserEvent-rcv");
+        assert !record.contains("mid-OnUserEvent-rcv");
+        neta.shutdown();
+    }
+
+    @Test
+    public void eventTest_4_explicitRcvFromSndUsesForwardDirection() throws Throwable {
+        List<String> record = new ArrayList<>();
+
+        ProtoInitializer initializer = (ctx) -> {
+            ctx.addLast("a", theDuplexer("a", record));
+            ctx.addLast("mid", new ProtoDuplexer<Integer, Integer, Integer, Integer>() {
+                @Override
+                public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
+                }
+
+                @Override
+                public void onActive(ProtoContext context) {
+                }
+
+                @Override
+                public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
+                    record.add("mid-OnUserEvent-" + (isRcv ? "rcv" : "snd"));
+                    return true;
+                }
+
+                @Override
+                public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Integer> rcvUp, ProtoSndQueue<Integer> rcvDown, ProtoRcvQueue<Integer> sndUp, ProtoSndQueue<Integer> sndDown) throws Throwable {
+                    if (isRcv) {
+                        rcvDown.offerMessage(rcvUp.takeMessage(rcvUp.queueSize()));
+                    } else {
+                        context.fireUserEventRcv(String.class, "force-rcv");
+                        sndDown.offerMessage(sndUp.takeMessage(sndUp.queueSize()));
+                    }
+                    return ProtoStatus.Next;
+                }
+
+                @Override
+                public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) {
+                    return ProtoStatus.Next;
+                }
+
+                @Override
+                public void onClose(ProtoContext context) {
+                }
+            });
+            ctx.addLast("c", theDuplexer("c", record));
+        };
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+        channel.sendData(1).get();
+
+        assert record.contains("c-OnUserEvent-rcv");
+        assert !record.contains("a-OnUserEvent-snd");
+        assert !record.contains("mid-OnUserEvent-snd");
         neta.shutdown();
     }
 }

@@ -213,6 +213,71 @@ public interface ProtoContext {
     <T> void fireUserEvent(Class<T> eventType, T event) throws Throwable;
 
     /**
+     * Fire a typed user event in the <b>opposite direction of the current data-flow</b>,
+     * starting from the next handler in that reverse direction and
+     * crossing branch boundaries upward when necessary.
+     * <p>
+     * This is useful when a downstream protocol needs to request a state change from an earlier
+     * protocol layer that sits before it in the pipeline, such as a websocket handshake asking
+     * the preceding HTTP codec to switch transport mode.
+     * </p>
+     * <ul>
+     *   <li>In a <b>RCV</b> context, the event travels backward (tail → head).</li>
+     *   <li>In a <b>SND</b> context, the event travels forward (head → tail).</li>
+     * </ul>
+     * <h3>Branch boundary crossing</h3>
+     * When the reverse-direction walk reaches the edge of the current branch pipeline,
+     * the event does not stop inside the branch. Instead it <em>crosses upward</em> into
+     * the parent pipeline and continues from the router boundary:
+     * <ul>
+     *   <li><b>RCV context</b>: crosses to the handler <em>before</em> the Router in the parent pipeline.</li>
+     *   <li><b>SND context</b>: crosses to the handler <em>after</em> the Router in the parent pipeline.</li>
+     * </ul>
+     * <p>Nested branches are traversed recursively until the outermost pipeline is reached.</p>
+     * <h3>Example — RCV context (handler C requests an upstream change)</h3>
+     * <pre>
+     *  Main: [A] ──▶ [Router] ──▶ [Z]
+     *                   │
+     *         Branch: [B] ──▶ [C*]
+     *  fireUserEventReverse path: (before C) → B → (cross boundary) → A → ...
+     * </pre>
+     * <h3>Example — SND context (handler B requests an upstream change)</h3>
+     * <pre>
+     *  Main: [A] ◀── [Router] ◀── [Z]
+     *                   │
+     *         Branch: [B*] ◀── [C]
+     *  fireUserEventReverse path: (after B) → C → (cross boundary) → Z → ...
+     * </pre>
+     * @param eventType the runtime type token used to route the event to interested handlers
+     * @param event the event payload
+     */
+    <T> void fireUserEventReverse(Class<T> eventType, T event) throws Throwable;
+
+    /**
+     * Fire a typed user event explicitly in the <b>RCV direction</b> (head → tail),
+     * regardless of whether the current callback is running in RCV or SND mode.
+     * <p>
+     * In a branch pipeline, when the event reaches the branch tail it automatically crosses
+     * into the parent pipeline after the Router and continues in RCV direction.
+     * </p>
+     * @param eventType the runtime type token used to route the event to interested handlers
+     * @param event the event payload
+     */
+    <T> void fireUserEventRcv(Class<T> eventType, T event) throws Throwable;
+
+    /**
+     * Fire a typed user event explicitly in the <b>SND direction</b> (tail → head),
+     * regardless of whether the current callback is running in RCV or SND mode.
+     * <p>
+     * In a branch pipeline, when the event reaches the branch head it automatically crosses
+     * into the parent pipeline before the Router and continues in SND direction.
+     * </p>
+     * @param eventType the runtime type token used to route the event to interested handlers
+     * @param event the event payload
+     */
+    <T> void fireUserEventSnd(Class<T> eventType, T event) throws Throwable;
+
+    /**
      * Flush the SND pipeline without sending new data, giving every SND handler an opportunity
      * to drain internal write buffers (e.g. compressors, chunked encoders).
      * <p>

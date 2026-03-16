@@ -76,6 +76,23 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         };
     }
 
+    private static ProtoHandler<Integer, Integer> reverseEventFireHandler(String tag, List<String> log) {
+        return new ProtoHandler<Integer, Integer>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) throws Throwable {
+                log.add(tag + "Msg");
+                context.fireUserEventReverse(String.class, "test-reverse-event");
+                dst.offerMessage(src.takeMessage(src.queueSize()));
+                return ProtoStatus.Next;
+            }
+
+            @Override
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                return ProtoStatus.Next;
+            }
+        };
+    }
+
     /** Handler that records received user events via onUserEvent. */
     private static ProtoHandler<Integer, Integer> eventRecordHandler(String tag, List<String> log) {
         return new ProtoHandler<Integer, Integer>() {
@@ -152,6 +169,25 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         // Data must reach SoContext
         Assert.assertEquals("SoContext should receive 42", 1, inbound.size());
         Assert.assertEquals(42, inbound.get(0));
+    }
+
+    @Test
+    public void user_event_upstream_crosses_from_branch_to_parent_before_router() throws Throwable {
+        List<String> preDecLog = new ArrayList<>();
+        List<String> preDecErr = new ArrayList<>();
+        List<String> brDecLog = new ArrayList<>();
+        List<String> brDecErr = new ArrayList<>();
+        List<String> postDecLog = new ArrayList<>();
+        List<String> postDecErr = new ArrayList<>();
+        List<String> eventLog = new ArrayList<>();
+
+        ProtoInitializer init = ProtoHelper.typed(Integer.class, Integer.class).nextDuplex("pre", doNextHandler("PreDec", preDecLog, preDecErr), doNextHandler("PreEnc", new ArrayList<>(), new ArrayList<>())).nextEncoder("preEvt", eventRecordHandler("Pre", eventLog)).nextRouteAsStatic("router", selectBranchOnData("a"), r -> r.branch("a", c -> c.nextDecoder("brFire", reverseEventFireHandler("Br", brDecLog)).nextDecoder("brNext", doNextHandler("BrNext", brDecLog, brDecErr)))).nextDecoder("postEvt", eventRecordHandler("Post", eventLog)).nextDuplex("post", doNextHandler("PostDec", postDecLog, postDecErr), doNextHandler("PostEnc", new ArrayList<>(), new ArrayList<>())).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), init, new VrtSoConfig());
+        channel.receiveData(42);
+
+        Assert.assertTrue(eventLog.contains("PreEvt"));
+        Assert.assertFalse(eventLog.contains("PostEvt"));
     }
 
     // -----------------------------------------------------------------
