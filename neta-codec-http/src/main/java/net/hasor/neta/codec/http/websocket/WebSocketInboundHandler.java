@@ -20,6 +20,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
@@ -45,10 +46,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
         Object eventData = event.getData();
-        if (eventData instanceof WebSocketHandshakeEvent) {
-            resetFragmentState();
-            this.closeReceived = false;
-        } else if (eventData instanceof WebSocketCloseEvent) {
+        if (eventData instanceof WebSocketCloseEvent) {
             this.closeReceived = true;
             resetFragmentState();
         } else if (eventData instanceof PingWebSocketEvent) {
@@ -74,6 +72,8 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
                     continue;
                 }
                 handleFrame(context, frame, dst);
+            } catch (WebSocketProtocolViolationException e) {
+                handleProtocolViolation(context, frame, e);
             } finally {
                 frame.release();
             }
@@ -125,7 +125,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     private void handleDataFrame(WebSocketFrame frame, ProtoSndQueue<WebSocketMessage> dst) {
         if (this.fragmentType != null) {
             resetFragmentState();
-            throw new WebSocketProtocolViolationException("received a new data frame before fragmented message completion.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "received a new data frame before fragmented message completion.");
         }
 
         WebSocketOpcode opcode = frame.opcode();
@@ -139,7 +139,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void handleContinuation(WebSocketFrame frame, ProtoSndQueue<WebSocketMessage> dst) {
         if (this.fragmentType == null) {
-            throw new WebSocketProtocolViolationException("received continuation frame outside fragmented message.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "received continuation frame outside fragmented message.");
         }
 
         int sequence = frame.isFinalFragment() ? WebSocketMessage.FINAL_SEQUENCE : this.fragmentSequence++;
@@ -157,7 +157,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         if (opcode == WebSocketOpcode.BINARY) {
             return WebSocketUtils.binaryMessage(sequence, frame.content()).streamId(frame.streamId());
         }
-        throw new WebSocketProtocolViolationException("unsupported websocket data opcode: " + opcode);
+        throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported websocket data opcode: " + opcode);
     }
 
     private void handlePing(ProtoContext context, WebSocketFrame frame) {
@@ -171,15 +171,31 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         fireEvent(context, PongWebSocketEvent.class, event);
     }
 
+    private void handleProtocolViolation(ProtoContext context, WebSocketFrame frame, WebSocketProtocolViolationException e) {
+        this.closeReceived = true;
+        resetFragmentState();
+
+        WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, closePayload(e.closeStatusCode())).streamId(frame.streamId());
+        context.sendData(closeReply);
+    }
+
     private static ByteBuf retainContent(ByteBuf content) {
         return content == null ? ByteBuf.EMPTY : content.retain();
+    }
+
+    private static ByteBuf closePayload(int statusCode) {
+        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(2, Integer.MAX_VALUE);
+        buf.writeByte((byte) ((statusCode >> 8) & 0xFF));
+        buf.writeByte((byte) (statusCode & 0xFF));
+        buf.markWriter();
+        return buf;
     }
 
     private void handleClose(ProtoContext context, WebSocketFrame frame) throws Throwable {
         ByteBuf content = frame.content();
         validateClosePayload(content);
 
-        int statusCode = WebSocketCloseCode.NO_STATUS;
+        int statusCode = WebSocketCode.NO_STATUS;
         String reason = null;
         if (content != null && content.readableBytes() >= 2) {
             statusCode = ((content.getByte(0) & 0xFF) << 8) | (content.getByte(1) & 0xFF);
@@ -219,34 +235,35 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void validateControlFrame(WebSocketFrame frame) {
         if (!frame.isFinalFragment()) {
-            throw new WebSocketProtocolViolationException("control frames must not be fragmented.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control frames must not be fragmented.");
         }
         ByteBuf content = frame.content();
         if (content != null && content.readableBytes() > 125) {
-            throw new WebSocketProtocolViolationException("control frame payload must not exceed 125 bytes.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control frame payload must not exceed 125 bytes.");
         }
     }
 
     private void validateClosePayload(ByteBuf content) {
         if (content != null && content.readableBytes() == 1) {
-            throw new WebSocketProtocolViolationException("close frame payload must be either empty or at least 2 bytes.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame payload must be either empty or at least 2 bytes.");
         }
     }
 
     private void validateCloseStatusCode(int statusCode) {
         if (!isValidCloseStatusCode(statusCode)) {
-            throw new WebSocketProtocolViolationException("close frame status code is invalid: " + statusCode);
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame status code is invalid: " + statusCode);
         }
     }
 
     private static boolean isValidCloseStatusCode(int statusCode) {
-        if (statusCode < 1000 || statusCode >= 5000) {
+        if (statusCode < WebSocketCode.NORMAL_CLOSURE || statusCode >= 5000) {
             return false;
         }
-        if (statusCode == WebSocketCloseCode.NO_STATUS || statusCode == WebSocketCloseCode.ABNORMAL_CLOSURE) {
+        if (statusCode == WebSocketCode.NO_STATUS || statusCode == WebSocketCode.ABNORMAL_CLOSURE) {
             return false;
         }
-        if (statusCode == 1004 || statusCode == 1010 || statusCode == 1012 || statusCode == 1013 || statusCode == 1014 || statusCode == 1015) {
+        if (statusCode == WebSocketCode.RESERVED || statusCode == WebSocketCode.MANDATORY_EXTENSION || //
+                statusCode == 1012 || statusCode == 1013 || statusCode == 1014 || statusCode == WebSocketCode.TLS_HANDSHAKE) {
             return false;
         }
         return statusCode < 1016 || statusCode >= 3000;
@@ -259,7 +276,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         try {
             return decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString();
         } catch (CharacterCodingException e) {
-            throw new WebSocketProtocolViolationException("close frame reason must be valid UTF-8.", e);
+            throw new WebSocketProtocolViolationException(WebSocketCode.INVALID_DATA, "close frame reason must be valid UTF-8.", e);
         }
     }
 

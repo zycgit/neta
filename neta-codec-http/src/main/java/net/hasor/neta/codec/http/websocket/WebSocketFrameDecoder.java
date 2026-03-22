@@ -247,7 +247,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             if (contentBuf != ByteBuf.EMPTY) {
                 contentBuf.release();
             }
-            throw new WebSocketProtocolViolationException("unsupported WebSocket opcode: " + opcodeVal);
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported WebSocket opcode: " + opcodeVal);
         }
         byte[] frameMaskKey = masked ? new byte[] { this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3] } : null;
         WebSocketFrame frame;
@@ -274,7 +274,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                 if (contentBuf != ByteBuf.EMPTY) {
                     contentBuf.release();
                 }
-                throw new WebSocketProtocolViolationException("unsupported WebSocket opcode: " + opcodeVal);
+                throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported WebSocket opcode: " + opcodeVal);
         }
         dst.offerMessage(frame);
         return true;

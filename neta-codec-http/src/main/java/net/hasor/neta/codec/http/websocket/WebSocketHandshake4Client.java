@@ -250,8 +250,7 @@ class WebSocketHandshake4Client extends AbstractWebSocketHandshake {
 
                 // finsh handshake
                 try {
-                    context.fireUserEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
-                    context.context(WebSocketContext.class, WebSocketContextImpl.fromClientHandshake(acceptedVersion, acceptedPath, subProtocol, extensions));
+                    this.finishWebSocketUpgrade(context, WebSocketContextImpl.fromClientHandshake(acceptedVersion, acceptedPath, subProtocol, extensions));
                     state.ready = true;
                     discardHandshakeRequestSnapshot(state);
                 } catch (Throwable e) {
@@ -259,13 +258,6 @@ class WebSocketHandshake4Client extends AbstractWebSocketHandshake {
                     this.resetHandshakeSession(state);
                     context.getChannel().close();
                     return ProtoStatus.Next;
-                }
-
-                try {
-                    WebSocketHandshakeEvent event = new WebSocketHandshakeEvent(acceptedVersion, acceptedPath, subProtocol, extensions);
-                    context.fireUserEventRcv(WebSocketHandshakeEvent.class, event);
-                } catch (Throwable e) {
-                    logger.error("Error occurred while publishing websocket client handshake event.", e);
                 }
             } finally {
                 msg.release();

@@ -18,12 +18,13 @@ import java.util.List;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     private static final String BRANCH_HANDSHAKE = "handshake";
-    private static final String BRANCH_WEBSOCKET = "websocket";
+    private static final String BRANCH_WEBSOCKET = HttpRouteKey.BRANCH_SOCKET;
 
     private ProtoHandler<HttpObject, HttpObject> relayOutboundEvents() {
         return new ThroughProtoHandler<HttpObject>() {
@@ -43,50 +44,28 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         };
     }
 
-    private ProtoHandler<HttpObject, HttpObject> handshakeBridge(ProtoContext[] contextRef) {
-        return new ThroughProtoHandler<HttpObject>() {
-            @Override
-            public void onActive(ProtoContext context) {
-                contextRef[0] = context;
-            }
-
-            @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                if (event.getData() instanceof WebSocketHandshakeEvent) {
-                    WebSocketContext webSocketContext = context.context(WebSocketContext.class);
-                    if (webSocketContext != null) {
-                        context.rootContext(WebSocketContext.class, webSocketContext);
-                    }
-                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
-                    if (routingControl != null) {
-                        routingControl.switchRoute(BRANCH_WEBSOCKET);
-                    }
-                }
-                return true;
-            }
-        };
-    }
-
-    private boolean hasReadyContext(ProtoContext[] contextRef) {
-        WebSocketContext webSocketContext = contextRef[0] != null ? contextRef[0].context(WebSocketContext.class) : null;
+    private boolean hasReadyContext(SoChannel<?> channel) {
+        WebSocketContext webSocketContext = channel.findProtoContext(WebSocketContext.class);
         return webSocketContext != null && webSocketContext.isReady();
     }
 
-    private void completeHandshake(VirtualPipe pipe, WebSocketVersion version, ProtoContext[] clientContextRef, ProtoContext[] serverContextRef) throws Throwable {
+    private void completeHandshake(VirtualPipe pipe, WebSocketVersion version) throws Throwable {
         pipe.client().sendData(WebSocketUtils.createHandshake(version, "/chat")).get();
-        assertTrue(waitUntil(() -> hasReadyContext(clientContextRef) && hasReadyContext(serverContextRef), 1000L));
+        assertTrue(waitUntil(() -> hasReadyContext(pipe.client()) && hasReadyContext(pipe.server()), 1000L));
         assertTrue(drainQueue(pipe.clientInbound()).isEmpty());
         assertTrue(drainQueue(pipe.serverInbound()).isEmpty());
     }
 
-    private ProtoInitializer clientInitializer(WebSocketVersion version, ProtoContext[] contextRef, boolean outboundEnabled) {
+    private ProtoInitializer clientInitializer(WebSocketVersion version, boolean outboundEnabled) {
         return ctx -> {
-            ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> {
-                return BRANCH_HANDSHAKE;
+            ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsStatic(new ProtoRoutingDataSelector<HttpObject, HttpObject>() {
+                @Override
+                public String route(ProtoContext context, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> sndDown) {
+                    return BRANCH_HANDSHAKE;
+                }
             });
             routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
                 branchCtx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, version));
-                branchCtx.addLastDecoder("bridge", handshakeBridge(contextRef));
             });
             routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
                 branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(version));
@@ -99,14 +78,16 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
         };
     }
 
-    private ProtoInitializer serverInitializer(WebSocketVersion version, ProtoContext[] contextRef, boolean outboundEnabled) {
+    private ProtoInitializer serverInitializer(WebSocketVersion version, boolean outboundEnabled) {
         return ctx -> {
-            ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> {
-                return BRANCH_HANDSHAKE;
+            ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsStatic(new ProtoRoutingDataSelector<HttpObject, HttpObject>() {
+                @Override
+                public String route(ProtoContext context, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> sndDown) {
+                    return BRANCH_HANDSHAKE;
+                }
             });
             routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
                 branchCtx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, version));
-                branchCtx.addLastDecoder("bridge", handshakeBridge(contextRef));
             });
             routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
                 branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(version));
@@ -122,13 +103,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testSingleTextMessageBecomesFinalTextFrame() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta,//
-                    clientInitializer(WebSocketVersion.V13, clientContextRef, false),//
-                    serverInitializer(WebSocketVersion.V13, serverContextRef, true), VrtTransfer.direct());
+                    clientInitializer(WebSocketVersion.V13, false),//
+                    serverInitializer(WebSocketVersion.V13, true), VrtTransfer.direct());
 
-            completeHandshake(pipe, WebSocketVersion.V13, clientContextRef, serverContextRef);
+            completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.server().sendData(WebSocketUtils.textMessage(ascii("hello"))).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
@@ -144,14 +123,12 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testFragmentedTextMessageStreamBecomesContinuationFrames() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta,//
-                    clientInitializer(WebSocketVersion.V13, clientContextRef, false),//
-                    serverInitializer(WebSocketVersion.V13, serverContextRef, true), //
+                    clientInitializer(WebSocketVersion.V13, false),//
+                    serverInitializer(WebSocketVersion.V13, true), //
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, WebSocketVersion.V13, clientContextRef, serverContextRef);
+            completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.server().sendData(WebSocketUtils.textMessage(0, ascii("A"))).get();
             pipe.server().sendData(WebSocketUtils.textMessage(1, ascii("B"))).get();
@@ -175,14 +152,12 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testClientModeMasksMessageFrames() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta,//
-                    clientInitializer(WebSocketVersion.V13, clientContextRef, true), //
-                    serverInitializer(WebSocketVersion.V13, serverContextRef, false),//
+                    clientInitializer(WebSocketVersion.V13, true), //
+                    serverInitializer(WebSocketVersion.V13, false),//
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, WebSocketVersion.V13, clientContextRef, serverContextRef);
+            completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.client().sendData(WebSocketUtils.binaryMessage(ascii("data"))).get();
             assertTrue(waitUntil(() -> !pipe.serverInbound().isEmpty(), 1000L));
@@ -197,14 +172,12 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testAutoDetectedV0ClientDoesNotMaskMessageFrames() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta,//
-                    clientInitializer(WebSocketVersion.V0, clientContextRef, true), //
-                    serverInitializer(WebSocketVersion.V0, serverContextRef, false),//
+                    clientInitializer(WebSocketVersion.V0, true), //
+                    serverInitializer(WebSocketVersion.V0, false),//
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, WebSocketVersion.V0, clientContextRef, serverContextRef);
+            completeHandshake(pipe, WebSocketVersion.V0);
 
             pipe.client().sendData(WebSocketUtils.binaryMessage(ascii("data"))).get();
             assertTrue(waitUntil(() -> !pipe.serverInbound().isEmpty(), 1000L));
@@ -219,13 +192,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testPingEventBecomesPingFrame() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta, //
-                    clientInitializer(WebSocketVersion.V13, clientContextRef, false), //
-                    serverInitializer(WebSocketVersion.V13, serverContextRef, true), VrtTransfer.direct());
+                    clientInitializer(WebSocketVersion.V13, false), //
+                    serverInitializer(WebSocketVersion.V13, true), VrtTransfer.direct());
 
-            completeHandshake(pipe, WebSocketVersion.V13, clientContextRef, serverContextRef);
+            completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.server().fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("hello")));
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
@@ -241,13 +212,11 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testPongEventBecomesPongFrame() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta, //
-                    clientInitializer(WebSocketVersion.V13, clientContextRef, false), //
-                    serverInitializer(WebSocketVersion.V13, serverContextRef, true), VrtTransfer.direct());
+                    clientInitializer(WebSocketVersion.V13, false), //
+                    serverInitializer(WebSocketVersion.V13, true), VrtTransfer.direct());
 
-            completeHandshake(pipe, WebSocketVersion.V13, clientContextRef, serverContextRef);
+            completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.server().fireUserEvent(PongWebSocketEvent.class, WebSocketUtils.pongEvent(ascii("hello")));
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));

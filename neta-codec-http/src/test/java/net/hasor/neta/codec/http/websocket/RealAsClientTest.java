@@ -24,25 +24,25 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpClientDuplexe;
-import net.hasor.neta.codec.http.HttpObject;
-import org.junit.Test;
+import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
+import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class RealAsClientTest extends AbstractWebSocketTest {
     private static final String BRANCH_HANDSHAKE = "handshake";
-    private static final String BRANCH_WEBSOCKET = "websocket";
+    private static final String BRANCH_WEBSOCKET = HttpRouteKey.BRANCH_SOCKET;
 
     private static final class EmbeddedWebSocketServer extends WebSocketServer implements Closeable {
-        private final CountDownLatch          startLatch       = new CountDownLatch(1);
-        private final CountDownLatch          openLatch        = new CountDownLatch(1);
-        private final CountDownLatch          textMessageLatch = new CountDownLatch(1);
-        private final CountDownLatch          binaryMessageLatch = new CountDownLatch(1);
-        private final AtomicReference<String> receivedText     = new AtomicReference<>();
-        private final AtomicReference<String> receivedBinary   = new AtomicReference<>();
-        private final AtomicReference<Throwable> failure       = new AtomicReference<>();
+        private final CountDownLatch             startLatch         = new CountDownLatch(1);
+        private final CountDownLatch             openLatch          = new CountDownLatch(1);
+        private final CountDownLatch             textMessageLatch   = new CountDownLatch(1);
+        private final CountDownLatch             binaryMessageLatch = new CountDownLatch(1);
+        private final AtomicReference<String>    receivedText       = new AtomicReference<>();
+        private final AtomicReference<String>    receivedBinary     = new AtomicReference<>();
+        private final AtomicReference<Throwable> failure            = new AtomicReference<>();
 
         private EmbeddedWebSocketServer(int port) {
             super(new InetSocketAddress("127.0.0.1", port));
@@ -130,19 +130,17 @@ public class RealAsClientTest extends AbstractWebSocketTest {
     }
 
     private static final class NetaWebSocketClientHarness implements Closeable {
-        private final NetChannel     channel;
-        private final Queue<Object>  inbound;
-        private final ProtoContext[] contextRef;
+        private final NetChannel    channel;
+        private final Queue<Object> inbound;
 
-        private NetaWebSocketClientHarness(NetChannel channel, Queue<Object> inbound, ProtoContext[] contextRef) {
+        private NetaWebSocketClientHarness(NetChannel channel, Queue<Object> inbound) {
             this.channel = channel;
             this.inbound = inbound;
-            this.contextRef = contextRef;
         }
 
         public void open(String path) throws Exception {
             this.channel.sendData(WebSocketUtils.createHandshake(WebSocketVersion.V13, path)).get();
-            assertTrue(waitUntil(() -> hasReadyContext(this.contextRef), 5000L));
+            assertTrue(waitUntil(() -> hasReadyContext(this.channel), 5000L));
         }
 
         public void sendText(String text) throws Exception {
@@ -176,46 +174,18 @@ public class RealAsClientTest extends AbstractWebSocketTest {
         }
     }
 
-    private static boolean hasReadyContext(ProtoContext[] contextRef) {
-        WebSocketContext webSocketContext = contextRef[0] != null ? contextRef[0].context(WebSocketContext.class) : null;
+    private static boolean hasReadyContext(SoChannel<?> channel) {
+        WebSocketContext webSocketContext = channel.findProtoContext(WebSocketContext.class);
         return webSocketContext != null && webSocketContext.isReady();
-    }
-
-    private static ProtoHandler<HttpObject, HttpObject> handshakeBridge(ProtoContext[] contextRef) {
-        return new ThroughProtoHandler<HttpObject>() {
-            @Override
-            public void onActive(ProtoContext context) {
-                contextRef[0] = context;
-            }
-
-            @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                if (event.getData() instanceof WebSocketHandshakeEvent) {
-                    WebSocketContext webSocketContext = context.context(WebSocketContext.class);
-                    if (webSocketContext != null) {
-                        context.rootContext(WebSocketContext.class, webSocketContext);
-                    }
-                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
-                    if (routingControl != null) {
-                        routingControl.switchRoute(BRANCH_WEBSOCKET);
-                    }
-                }
-                return true;
-            }
-        };
     }
 
     private static NetaWebSocketClientHarness netaClient(NetManager neta, int port) throws Exception {
         Queue<Object> inbound = new ConcurrentLinkedQueue<>();
-        ProtoContext[] contextRef = new ProtoContext[1];
         NetChannel channel = neta.connectSync(new InetSocketAddress("127.0.0.1", port), ctx -> {
             ctx.addLast("http-client", new HttpClientDuplexe());
-            ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> {
-                return BRANCH_HANDSHAKE;
-            });
+            ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> BRANCH_HANDSHAKE);
             routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
                 branchCtx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13));
-                branchCtx.addLastDecoder("bridge", handshakeBridge(contextRef));
             });
             routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
                 branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
@@ -238,7 +208,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 inbound.offer(d.getData());
             }
         });
-        return new NetaWebSocketClientHarness(channel, inbound, contextRef);
+        return new NetaWebSocketClientHarness(channel, inbound);
     }
 
     @Test

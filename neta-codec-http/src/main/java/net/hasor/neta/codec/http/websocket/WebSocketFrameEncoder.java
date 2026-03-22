@@ -280,7 +280,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
     private WebSocketOpcode requireOpcode(WebSocketFrame frame) {
         WebSocketOpcode opcode = frame.opcode();
         if (opcode == null) {
-            throw new WebSocketProtocolViolationException("WebSocket frame opcode must not be null.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "WebSocket frame opcode must not be null.");
         }
         return opcode;
     }

@@ -20,36 +20,17 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     private static final String BRANCH_HANDSHAKE = "handshake";
-    private static final String BRANCH_WEBSOCKET = "websocket";
+    private static final String BRANCH_WEBSOCKET = HttpRouteKey.BRANCH_SOCKET;
 
-    private ProtoHandler<HttpObject, HttpObject> handshakeBridge(ProtoContext[] contextRef) {
-        return new ThroughProtoHandler<HttpObject>() {
-            @Override
-            public void onActive(ProtoContext context) {
-                contextRef[0] = context;
-            }
-
-            @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                if (event.getData() instanceof WebSocketHandshakeEvent) {
-                    WebSocketContext webSocketContext = context.context(WebSocketContext.class);
-                    if (webSocketContext != null) {
-                        context.rootContext(WebSocketContext.class, webSocketContext);
-                    }
-                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
-                    if (routingControl != null) {
-                        routingControl.switchRoute(BRANCH_WEBSOCKET);
-                    }
-                }
-                return true;
-            }
-        };
+    private static int closeStatusCode(WebSocketFrame frame) {
+        return ((frame.content().getByte(0) & 0xFF) << 8) | (frame.content().getByte(1) & 0xFF);
     }
 
     private ProtoHandler<HttpObject, HttpObject> recordEvents(List<Object> serverEvents) {
@@ -62,24 +43,23 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
         };
     }
 
-    private boolean hasReadyContext(ProtoContext[] contextRef) {
-        WebSocketContext webSocketContext = contextRef[0] != null ? contextRef[0].context(WebSocketContext.class) : null;
+    private boolean hasReadyContext(SoChannel<?> channel) {
+        WebSocketContext webSocketContext = channel.findProtoContext(WebSocketContext.class);
         return webSocketContext != null && webSocketContext.isReady();
     }
 
-    private void completeHandshake(VirtualPipe pipe, ProtoContext[] clientContextRef, ProtoContext[] serverContextRef) throws Throwable {
+    private void completeHandshake(VirtualPipe pipe) throws Throwable {
         pipe.client().sendData(WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat")).get();
-        assertTrue(waitUntil(() -> hasReadyContext(clientContextRef) && hasReadyContext(serverContextRef), 1000L));
+        assertTrue(waitUntil(() -> hasReadyContext(pipe.client()) && hasReadyContext(pipe.server()), 1000L));
         assertTrue(drainQueue(pipe.clientInbound()).isEmpty());
         assertTrue(drainQueue(pipe.serverInbound()).isEmpty());
     }
 
-    private ProtoInitializer clientInitializer(ProtoContext[] contextRef) {
+    private ProtoInitializer clientInitializer() {
         return ctx -> {
             ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> BRANCH_HANDSHAKE);
             routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
                 branchCtx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13));
-                branchCtx.addLastDecoder("bridge", handshakeBridge(contextRef));
             });
             routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
                 branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
@@ -88,12 +68,11 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
         };
     }
 
-    private ProtoInitializer serverInitializer(ProtoContext[] contextRef, List<Object> serverEvents) {
+    private ProtoInitializer serverInitializer(List<Object> serverEvents) {
         return ctx -> {
             ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> BRANCH_HANDSHAKE);
             routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
                 branchCtx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
-                branchCtx.addLastDecoder("bridge", handshakeBridge(contextRef));
             });
             routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
                 branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
@@ -110,14 +89,12 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testSingleTextFrameBecomesFinalChunk() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta,    //
-                    clientInitializer(clientContextRef),//
-                    serverInitializer(serverContextRef, null),//
+                    clientInitializer(),//
+                    serverInitializer(null),//
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, clientContextRef, serverContextRef);
+            completeHandshake(pipe);
 
             pipe.client().sendData(WebSocketUtils.textFrame(true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("Hello"))).get();
             assertTrue(waitUntil(() -> !pipe.serverInbound().isEmpty(), 1000L));
@@ -135,14 +112,12 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testFragmentedTextMessageBecomesChunkStream() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             VirtualPipe pipe = openVirtualPipe(neta,    //
-                    clientInitializer(clientContextRef),//
-                    serverInitializer(serverContextRef, null),//
+                    clientInitializer(),//
+                    serverInitializer(null),//
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, clientContextRef, serverContextRef);
+            completeHandshake(pipe);
 
             pipe.client().sendData(WebSocketUtils.textFrame(false, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("Hel"))).get();
             pipe.client().sendData(WebSocketUtils.continuationFrame(false, true, new byte[] { 0x05, 0x06, 0x07, 0x08 }, ascii("lo-"))).get();
@@ -163,15 +138,13 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testPingAutoRepliesWithoutPublishingMessageOrEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             List<Object> serverEvents = new ArrayList<>();
             VirtualPipe pipe = openVirtualPipe(neta,    //
-                    clientInitializer(clientContextRef),//
-                    serverInitializer(serverContextRef, serverEvents),//
+                    clientInitializer(),//
+                    serverInitializer(serverEvents),//
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, clientContextRef, serverContextRef);
+            completeHandshake(pipe);
 
             pipe.client().sendData(WebSocketUtils.pingFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("hello"))).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
@@ -190,15 +163,13 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testPongBecomesInboundPongEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             List<Object> serverEvents = new ArrayList<>();
-            VirtualPipe pipe = openVirtualPipe(neta,    //
-                    clientInitializer(clientContextRef),//
-                    serverInitializer(serverContextRef, serverEvents),//
+            VirtualPipe pipe = openVirtualPipe(neta, //
+                    clientInitializer(),            //
+                    serverInitializer(serverEvents),//
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, clientContextRef, serverContextRef);
+            completeHandshake(pipe);
 
             pipe.client().sendData(WebSocketUtils.pongFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("hello"))).get();
             assertTrue(waitUntil(() -> !serverEvents.isEmpty(), 1000L));
@@ -218,17 +189,15 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     @Test
     public void testCloseAutoRepliesAndPublishesEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            ProtoContext[] clientContextRef = new ProtoContext[1];
-            ProtoContext[] serverContextRef = new ProtoContext[1];
             List<Object> serverEvents = new ArrayList<>();
-            VirtualPipe pipe = openVirtualPipe(neta,    //
-                    clientInitializer(clientContextRef),//
-                    serverInitializer(serverContextRef, serverEvents),//
+            VirtualPipe pipe = openVirtualPipe(neta,//
+                    clientInitializer(),            //
+                    serverInitializer(serverEvents),//
                     VrtTransfer.direct());
 
-            completeHandshake(pipe, clientContextRef, serverContextRef);
+            completeHandshake(pipe);
 
-            pipe.client().sendData(WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(new byte[] { (byte) (WebSocketCloseCode.NORMAL_CLOSURE >> 8), (byte) WebSocketCloseCode.NORMAL_CLOSURE, 'b', 'y', 'e' }))).get();
+            pipe.client().sendData(WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(new byte[] { (byte) (WebSocketCode.NORMAL_CLOSURE >> 8), (byte) WebSocketCode.NORMAL_CLOSURE, 'b', 'y', 'e' }))).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty() && !serverEvents.isEmpty(), 1000L));
             List<HttpObject> result = drainQueue(pipe.serverInbound());
             List<HttpObject> outbound = drainQueue(pipe.clientInbound());
@@ -237,10 +206,63 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertEquals(1, outbound.size());
             WebSocketFrame close = (WebSocketFrame) outbound.get(0);
             assertEquals(WebSocketOpcode.CLOSE, close.opcode());
-            assertEquals(WebSocketCloseCode.NORMAL_CLOSURE, ((close.content().getByte(0) & 0xFF) << 8) | (close.content().getByte(1) & 0xFF));
+            assertEquals(WebSocketCode.NORMAL_CLOSURE, ((close.content().getByte(0) & 0xFF) << 8) | (close.content().getByte(1) & 0xFF));
             assertEquals(1, serverEvents.size());
             assertTrue(serverEvents.get(0) instanceof WebSocketCloseEvent);
-            assertEquals(WebSocketCloseCode.NORMAL_CLOSURE, ((WebSocketCloseEvent) serverEvents.get(0)).statusCode());
+            assertEquals(WebSocketCode.NORMAL_CLOSURE, ((WebSocketCloseEvent) serverEvents.get(0)).statusCode());
+        });
+    }
+
+    @Test
+    public void testContinuationOutsideFragmentedMessageRepliesWithProtocolErrorCode() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> serverEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta,//
+                    clientInitializer(),            //
+                    serverInitializer(serverEvents),//
+                    VrtTransfer.direct());
+
+            completeHandshake(pipe);
+
+            pipe.client().sendData(WebSocketUtils.continuationFrame(true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("oops"))).get();
+            assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
+
+            List<HttpObject> result = drainQueue(pipe.serverInbound());
+            List<HttpObject> outbound = drainQueue(pipe.clientInbound());
+
+            assertTrue(result.isEmpty());
+            assertEquals(1, outbound.size());
+            WebSocketFrame close = (WebSocketFrame) outbound.get(0);
+            assertEquals(WebSocketOpcode.CLOSE, close.opcode());
+            assertEquals(WebSocketCode.PROTOCOL_ERROR, closeStatusCode(close));
+            assertTrue(serverEvents.isEmpty());
+        });
+    }
+
+    @Test
+    public void testInvalidCloseReasonRepliesWithInvalidDataCode() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> serverEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta,//
+                    clientInitializer(),            //
+                    serverInitializer(serverEvents),//
+                    VrtTransfer.direct());
+
+            completeHandshake(pipe);
+
+            byte[] payload = new byte[] { (byte) ((WebSocketCode.NORMAL_CLOSURE >> 8) & 0xFF), (byte) (WebSocketCode.NORMAL_CLOSURE & 0xFF), (byte) 0xC3, (byte) 0x28 };
+            pipe.client().sendData(WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(payload))).get();
+            assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
+
+            List<HttpObject> result = drainQueue(pipe.serverInbound());
+            List<HttpObject> outbound = drainQueue(pipe.clientInbound());
+
+            assertTrue(result.isEmpty());
+            assertEquals(1, outbound.size());
+            WebSocketFrame close = (WebSocketFrame) outbound.get(0);
+            assertEquals(WebSocketOpcode.CLOSE, close.opcode());
+            assertEquals(WebSocketCode.INVALID_DATA, closeStatusCode(close));
+            assertTrue(serverEvents.isEmpty());
         });
     }
 }

@@ -18,28 +18,34 @@ package net.hasor.neta.codec.http.websocket;
 /**
  * Standard WebSocket close status codes defined by RFC 6455 section 7.4.
  */
-public final class WebSocketCloseCode {
+public final class WebSocketCode {
     /** 1000 — Normal Closure. */
-    public static final int NORMAL_CLOSURE   = 1000;
+    public static final int NORMAL_CLOSURE      = 1000;
     /** 1001 — Going Away. */
-    public static final int GOING_AWAY       = 1001;
+    public static final int GOING_AWAY          = 1001;
     /** 1002 — Protocol Error. */
-    public static final int PROTOCOL_ERROR   = 1002;
+    public static final int PROTOCOL_ERROR      = 1002;
     /** 1003 — Unsupported Data. */
-    public static final int UNSUPPORTED_DATA = 1003;
+    public static final int UNSUPPORTED_DATA    = 1003;
+    /** 1004 — Reserved value, defined by RFC 6455 and must not be sent. */
+    public static final int RESERVED            = 1004;
     /** 1005 — No Status Received (synthetic, never sent on the wire). */
-    public static final int NO_STATUS        = 1005;
+    public static final int NO_STATUS           = 1005;
     /** 1006 — Abnormal Closure (synthetic, never sent on the wire). */
-    public static final int ABNORMAL_CLOSURE = 1006;
+    public static final int ABNORMAL_CLOSURE    = 1006;
     /** 1007 — Invalid frame payload data. */
-    public static final int INVALID_DATA     = 1007;
+    public static final int INVALID_DATA        = 1007;
     /** 1008 — Policy Violation. */
-    public static final int POLICY_VIOLATION = 1008;
+    public static final int POLICY_VIOLATION    = 1008;
     /** 1009 — Message Too Big. */
-    public static final int MESSAGE_TOO_BIG  = 1009;
+    public static final int MESSAGE_TOO_BIG     = 1009;
+    /** 1010 — Mandatory Extension, client-only and must not be sent by a server. */
+    public static final int MANDATORY_EXTENSION = 1010;
     /** 1011 — Unexpected Condition. */
-    public static final int UNEXPECTED       = 1011;
+    public static final int UNEXPECTED          = 1011;
+    /** 1015 — TLS Handshake failure (synthetic, never sent on the wire). */
+    public static final int TLS_HANDSHAKE       = 1015;
 
-    private WebSocketCloseCode() {
+    private WebSocketCode() {
     }
 }

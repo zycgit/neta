@@ -44,9 +44,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
         Object eventData = event.getData();
-        if (eventData instanceof WebSocketHandshakeEvent) {
-            resetState();
-        } else if (eventData instanceof PingWebSocketEvent) {
+        if (eventData instanceof PingWebSocketEvent) {
             sendControlEventFrame(context, (PingWebSocketEvent) eventData, true);
             return false;
         } else if (eventData instanceof PongWebSocketEvent) {
@@ -82,14 +80,14 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         int sequence = msg.sequence();
         boolean masked = masked(context);
         if (type == null) {
-            throw new WebSocketProtocolViolationException("WebSocket message type must not be null.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "WebSocket message type must not be null.");
         }
 
         WebSocketFrame frame;
         if (type == WebSocketOpcode.PING || type == WebSocketOpcode.PONG || type == WebSocketOpcode.CLOSE) {
             frame = buildControlMessage(context, msg, masked);
         } else if (type != WebSocketOpcode.TEXT && type != WebSocketOpcode.BINARY) {
-            throw new WebSocketProtocolViolationException("only TEXT, BINARY, and internal control WebSocketMessage types are encodable. actual=" + type);
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "only TEXT, BINARY, and internal control WebSocketMessage types are encodable. actual=" + type);
         } else if (sequence == WebSocketMessage.FINAL_SEQUENCE) {
             frame = buildFinalChunk(msg, masked);
         } else if (sequence == WebSocketMessage.START_SEQUENCE) {
@@ -97,7 +95,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         } else if (sequence > 0) {
             frame = buildMiddleChunk(msg, masked);
         } else {
-            throw new WebSocketProtocolViolationException("WebSocket message sequence is invalid: " + sequence);
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "WebSocket message sequence is invalid: " + sequence);
         }
         frame.streamId(msg.streamId());
         return frame;
@@ -115,7 +113,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
 
     private WebSocketFrame buildControlMessage(ProtoContext context, WebSocketMessage msg, boolean masked) {
         if (msg.sequence() != WebSocketMessage.FINAL_SEQUENCE) {
-            throw new WebSocketProtocolViolationException("control WebSocketMessage sequence must be FINAL_SEQUENCE.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage sequence must be FINAL_SEQUENCE.");
         }
         return buildControlFrame(msg.type(), retainContent(msg.content()), masked);
     }
@@ -123,11 +121,11 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
     private WebSocketFrame buildControlFrame(WebSocketOpcode opcode, ByteBuf content, boolean masked) {
         if (content.readableBytes() > 125) {
             content.release();
-            throw new WebSocketProtocolViolationException("control WebSocketMessage payload must not exceed 125 bytes.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage payload must not exceed 125 bytes.");
         }
         if (this.fragmentType != null) {
             content.release();
-            throw new WebSocketProtocolViolationException("control WebSocketMessage must not be sent during fragmented websocket message streaming.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage must not be sent during fragmented websocket message streaming.");
         }
         if (opcode == WebSocketOpcode.PING) {
             return WebSocketUtils.pingFrame(masked, maskingKey(masked), content);
@@ -139,12 +137,12 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             return WebSocketUtils.closeFrame(masked, maskingKey(masked), content);
         }
         content.release();
-        throw new WebSocketProtocolViolationException("unsupported internal control opcode: " + opcode);
+        throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported internal control opcode: " + opcode);
     }
 
     private WebSocketFrame buildStartChunk(WebSocketMessage msg, boolean masked) {
         if (this.fragmentType != null) {
-            throw new WebSocketProtocolViolationException("fragmented websocket message already started.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "fragmented websocket message already started.");
         }
 
         this.fragmentType = msg.type();
@@ -157,13 +155,13 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
 
     private WebSocketFrame buildMiddleChunk(WebSocketMessage msg, boolean masked) {
         if (this.fragmentType == null) {
-            throw new WebSocketProtocolViolationException("continuation message chunk requires an active fragmented websocket message.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "continuation message chunk requires an active fragmented websocket message.");
         }
         if (msg.type() != this.fragmentType) {
-            throw new WebSocketProtocolViolationException("message chunk type mismatch inside fragmented websocket message.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "message chunk type mismatch inside fragmented websocket message.");
         }
         if (msg.sequence() != this.expectedSequence) {
-            throw new WebSocketProtocolViolationException("fragmented websocket message sequence mismatch. expected=" + this.expectedSequence + ", actual=" + msg.sequence());
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "fragmented websocket message sequence mismatch. expected=" + this.expectedSequence + ", actual=" + msg.sequence());
         }
 
         this.expectedSequence++;
@@ -178,7 +176,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             return WebSocketUtils.binaryFrame(true, masked, maskingKey(masked), retainContent(msg.content()));
         }
         if (msg.type() != this.fragmentType) {
-            throw new WebSocketProtocolViolationException("final message chunk type mismatch inside fragmented websocket message.");
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "final message chunk type mismatch inside fragmented websocket message.");
         }
 
         WebSocketFrame frame = WebSocketUtils.continuationFrame(true, masked, maskingKey(masked), retainContent(msg.content()));

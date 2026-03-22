@@ -30,19 +30,16 @@ import net.hasor.neta.codec.http.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
-public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
+public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
     private static final String OUTBOUND_SIZE_FLASH_KEY = "test.outbound.size";
 
-    private static WebSocketHandshakeEvent handshakeEvent(Iterable<SoUserEvent> events) {
-        if (events == null) {
-            return null;
-        }
-        for (SoUserEvent event : events) {
-            if (event != null && event.getData() instanceof WebSocketHandshakeEvent) {
-                return (WebSocketHandshakeEvent) event.getData();
-            }
-        }
-        return null;
+    private static WebSocketContext webSocketContext(SoChannel<?> channel) {
+        return channel.findProtoContext(WebSocketContext.class);
+    }
+
+    private static boolean hasReadyContext(SoChannel<?> channel) {
+        WebSocketContext webSocketContext = webSocketContext(channel);
+        return webSocketContext != null && webSocketContext.isReady();
     }
 
     private static ProtoHandler<HttpObject, HttpObject> errorRecorder(List<Throwable> errors, AtomicInteger outboundCountAtError) {
@@ -84,7 +81,7 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
         };
     }
 
-    private static DefaultFullHttpResponse newUpgradeResponse(String path, String key) {
+    private static DefaultFullHttpResponse newUpgradeResponse(String key) {
         DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.SWITCHING_PROTOCOLS);
         response.streamId(11);
         response.setHeader(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
@@ -103,16 +100,26 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
         }
     }
 
-    // accept
-
     @Test
-    public void testServerPublishesHandshakeEventForRfc6455Success() throws Throwable {
+    public void testServerRfc6455HandshakeCreatesReadyContextAndAuthorizerSeesRequest() throws Throwable {
         autoCloseNeta(neta -> {
+            AtomicInteger requestStreamId = new AtomicInteger(-1);
+            AtomicReference<WebSocketVersion> requestVersion = new AtomicReference<>();
+            AtomicReference<String> requestPath = new AtomicReference<>();
+            AtomicReference<String> requestProtocols = new AtomicReference<>();
+            AtomicReference<String> requestExtensions = new AtomicReference<>();
+            AtomicReference<String> requestKey = new AtomicReference<>();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> callback.accept();
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
+                    requestStreamId.set(request.streamId());
+                    requestVersion.set(request.version());
+                    requestPath.set(request.requestPath());
+                    requestProtocols.set(request.requestedProtocols());
+                    requestExtensions.set(request.requestedExtensions());
+                    requestKey.set(request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY));
+                    callback.accept();
+                };
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
             FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
@@ -123,19 +130,22 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, request);
             List<Object> outbound = drainQueue(pipe.channelOutbound());
-            WebSocketHandshakeEvent event = handshakeEvent(pipe.channelUserEvents());
             HttpResponse response = (HttpResponse) outbound.get(0);
             HttpHeaders headers = (HttpHeaders) outbound.get(1);
             HttpContent content = (HttpContent) outbound.get(2);
+            WebSocketContext webSocketContext = webSocketContext(pipe.channel());
 
             assertTrue(inbound.isEmpty());
-            assertNotNull(event);
-            assertEquals(7, event.streamId());
-            assertEquals(WebSocketVersion.V13, event.version());
-            assertEquals("/chat", event.requestPath());
-            assertEquals("graphql-ws", event.subProtocol());
-            assertEquals("permessage-deflate", event.extensions());
-            assertEquals(wsKey, event.header(HttpHeaderNames.SEC_WEBSOCKET_KEY));
+            assertEquals(7, requestStreamId.get());
+            assertEquals(WebSocketVersion.V13, requestVersion.get());
+            assertEquals("/chat", requestPath.get());
+            assertEquals("graphql-ws", requestProtocols.get());
+            assertEquals("permessage-deflate", requestExtensions.get());
+            assertEquals(wsKey, requestKey.get());
+            assertNotNull(webSocketContext);
+            assertTrue(webSocketContext.isReady());
+            assertEquals(WebSocketVersion.V13.code(), webSocketContext.version());
+            assertEquals("/chat", webSocketContext.requestPath());
             assertEquals(3, outbound.size());
             assertEquals(101, response.status().code());
             assertEquals(computeAcceptKey(wsKey), headers.getString(HttpHeaderNames.SEC_WEBSOCKET_ACCEPT));
@@ -144,13 +154,15 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testServerPublishesHandshakeEventForLegacyV0Success() throws Throwable {
+    public void testServerLegacyV0HandshakeCreatesReadyContext() throws Throwable {
         autoCloseNeta(neta -> {
+            AtomicReference<WebSocketHandshakeRequest> requestRef = new AtomicReference<>();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> callback.accept();
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V0, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
+                    requestRef.set(request);
+                    callback.accept();
+                };
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V0, authorizer));
             }, VrtSoConfig.asServer());
 
             DefaultHttpHeaders headers = new DefaultHttpHeaders();
@@ -158,15 +170,19 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             headers.setHeader(HttpHeaderNames.HOST, "example.com");
             List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V0, "/legacy", headers));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
-            WebSocketHandshakeEvent event = handshakeEvent(pipe.channelUserEvents());
             HttpResponse response = (HttpResponse) outbound.get(0);
             HttpHeaders responseHeaders = (HttpHeaders) outbound.get(1);
             HttpContent content = (HttpContent) outbound.get(2);
+            WebSocketContext webSocketContext = webSocketContext(pipe.channel());
 
             assertTrue(inbound.isEmpty());
-            assertNotNull(event);
-            assertEquals(WebSocketVersion.V0, event.version());
-            assertEquals("/legacy", event.requestPath());
+            assertNotNull(requestRef.get());
+            assertEquals(WebSocketVersion.V0, requestRef.get().version());
+            assertEquals("/legacy", requestRef.get().requestPath());
+            assertNotNull(webSocketContext);
+            assertTrue(webSocketContext.isReady());
+            assertEquals(WebSocketVersion.V0.code(), webSocketContext.version());
+            assertEquals("/legacy", webSocketContext.requestPath());
             assertEquals(3, outbound.size());
             assertEquals(101, response.status().code());
             assertEquals("WebSocket", responseHeaders.getString(HttpHeaderNames.UPGRADE));
@@ -177,14 +193,9 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testServerRejectsMalformedHandshakeWithoutPublishingEvent() throws Throwable {
+    public void testServerRejectsMalformedHandshakeWithoutReadyContext() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> callback.accept();
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
-            }, VrtSoConfig.asServer());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13)), VrtSoConfig.asServer());
 
             DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/chat");
             request.setHeader(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
@@ -196,32 +207,9 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             HttpResponse response = (HttpResponse) outbound.get(0);
 
             assertTrue(inbound.isEmpty());
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertEquals(3, outbound.size());
             assertEquals(400, response.status().code());
-        });
-    }
-
-    @Test
-    public void testHandshakeEventListenerFailureDoesNotBlockSuccessfulResponse() throws Throwable {
-        autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
-                ctx.addLastDecoder("probe", new ThroughProtoHandler<HttpObject>() {
-                    @Override
-                    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                        throw new IllegalStateException("probe-event-failed");
-                    }
-                });
-            }, VrtSoConfig.asServer());
-
-            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
-            List<Object> outbound = drainQueue(pipe.channelOutbound());
-            HttpResponse response = (HttpResponse) outbound.get(0);
-
-            assertTrue(inbound.isEmpty());
-            assertEquals(3, outbound.size());
-            assertEquals(101, response.status().code());
         });
     }
 
@@ -229,26 +217,28 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
     public void testAuthorizerAcceptsAndAppendsResponseHeaders() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> {
-                    assertEquals("/chat", event.requestPath());
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
+                    assertEquals("/chat", request.requestPath());
                     DefaultHttpHeaders headers = new DefaultHttpHeaders();
                     headers.setHeader("X-Accept", "ok");
                     headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat");
                     headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
                     callback.accept(headers);
                 };
-
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-                ctx.addLast("ws-server", duplexer);
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
             HttpResponse response = (HttpResponse) outbound.get(0);
             HttpHeaders headers = (HttpHeaders) outbound.get(1);
+            WebSocketContext webSocketContext = webSocketContext(pipe.channel());
 
             assertTrue(inbound.isEmpty());
-            assertNotNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNotNull(webSocketContext);
+            assertTrue(webSocketContext.isReady());
+            assertEquals("chat", webSocketContext.subProtocol());
+            assertEquals("permessage-deflate", webSocketContext.extensions());
             assertEquals(101, response.status().code());
             assertEquals("ok", headers.getString("X-Accept"));
             assertEquals("chat", headers.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL));
@@ -256,16 +246,12 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
         });
     }
 
-    // reject
-
     @Test
     public void testAuthorizerRejectsWithDefaultMethodNotAllowed() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> callback.reject();
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> callback.reject();
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
@@ -274,7 +260,7 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             HttpHeaders headers = (HttpHeaders) outbound.get(1);
 
             assertTrue(inbound.isEmpty());
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertEquals(405, response.status().code());
             assertEquals("0", headers.getString(HttpHeaderNames.CONTENT_LENGTH));
         });
@@ -284,12 +270,10 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
     public void testAuthorizerExceptionTurnsInto500AndClosesChannel() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> {
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
                     throw new IllegalStateException("boom");
                 };
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
@@ -297,7 +281,7 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             HttpResponse response = (HttpResponse) outbound.get(0);
 
             assertTrue(inbound.isEmpty());
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertEquals(500, response.status().code());
             assertTrue(pipe.channel().isClose());
         });
@@ -310,23 +294,17 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             AtomicInteger outboundCountAtError = new AtomicInteger(-1);
             VirtualPipe[] pipeRef = new VirtualPipe[1];
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> {
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
                     throw new IllegalStateException("boom");
                 };
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
                 ctx.addLastDecoder("order-probe", outboundCountRecorder(pipeRef));
                 ctx.addLastDecoder("probe", errorRecorder(errors, outboundCountAtError));
             }, VrtSoConfig.asServer());
             pipeRef[0] = pipe;
 
             List<Throwable> inboundErrors = new CopyOnWriteArrayList<>();
-            pipe.channel().subscribe(p -> {
-                return p.isInbound() && p.getError() != null;
-            }, SubscribeMode.SYNC, p -> {
-                inboundErrors.add(p.getError());
-            });
+            pipe.channel().subscribe(p -> p.isInbound() && p.getError() != null, SubscribeMode.SYNC, p -> inboundErrors.add(p.getError()));
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
@@ -345,26 +323,22 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testAsyncAuthorizerAcceptPublishesEventAndResponse() throws Throwable {
+    public void testAsyncAuthorizerAcceptProducesReadyContextAndResponse() throws Throwable {
         autoCloseNeta(neta -> {
             AtomicReference<WebSocketHandshakeCallback> asyncCallback = new AtomicReference<>();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> {
-                    asyncCallback.set(callback);
-                };
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> asyncCallback.set(callback);
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
             assertTrue(inbound.isEmpty());
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertTrue(drainQueue(pipe.channelOutbound()).isEmpty());
 
-            //
             asyncCallback.get().accept();
-            assertTrue(waitUntil(() -> handshakeEvent(pipe.channelUserEvents()) != null, 1000L));
+
+            assertTrue(waitUntil(() -> hasReadyContext(pipe.channel()), 1000L));
             assertTrue(waitUntil(() -> pipe.channelOutbound().size() >= 3, 1000L));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
             HttpResponse response = (HttpResponse) outbound.get(0);
@@ -374,31 +348,26 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testAsyncAuthorizerRejectsWithoutPublishingEvent() throws Throwable {
+    public void testAsyncAuthorizerRejectsWithoutReadyContext() throws Throwable {
         autoCloseNeta(neta -> {
             AtomicReference<WebSocketHandshakeCallback> asyncCallback = new AtomicReference<>();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> {
-                    asyncCallback.set(callback);
-                };
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> asyncCallback.set(callback);
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
             assertTrue(inbound.isEmpty());
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
 
             asyncCallback.get().reject(HttpStatus.FORBIDDEN, "denied".getBytes(StandardCharsets.UTF_8));
 
-            //
             assertTrue(waitUntil(() -> pipe.channelOutbound().size() >= 3, 1000L));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
             HttpResponse response = (HttpResponse) outbound.get(0);
             HttpHeaders headers = (HttpHeaders) outbound.get(1);
 
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertEquals(403, response.status().code());
             assertEquals("6", headers.getString(HttpHeaderNames.CONTENT_LENGTH));
         });
@@ -409,12 +378,8 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             List<WebSocketHandshakeCallback> asyncCallback = new ArrayList<>();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (event, callback) -> {
-                    asyncCallback.add(callback);
-                };
-                WebSocketHandshakeDuplexer duplexer = new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer);
-
-                ctx.addLast("ws-server", duplexer);
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> asyncCallback.add(callback);
+                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
             assertTrue(receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat")).isEmpty());
@@ -427,14 +392,13 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             assertEquals(400, rejectedResponse.status().code());
 
             asyncCallback.get(0).accept();
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertTrue(drainQueue(pipe.channelOutbound()).isEmpty());
 
             assertTrue(receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat")).isEmpty());
             asyncCallback.get(1).accept();
 
-            //
-            assertTrue(waitUntil(() -> handshakeEvent(pipe.channelUserEvents()) != null, 1000L));
+            assertTrue(waitUntil(() -> hasReadyContext(pipe.channel()), 1000L));
             assertTrue(waitUntil(() -> pipe.channelOutbound().size() >= 3, 1000L));
             List<Object> success = drainQueue(pipe.channelOutbound());
             HttpResponse successResponse = (HttpResponse) success.get(0);
@@ -443,57 +407,29 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testClientPublishesHandshakeEventForValid101Response() throws Throwable {
+    public void testClientValid101ResponseCreatesReadyContext() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13));
-            }, VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
             request.streamId(11);
             String wsKey = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
             sendAndOutBound(pipe, request);
 
-            DefaultFullHttpResponse response = newUpgradeResponse("/chat", wsKey);
+            DefaultFullHttpResponse response = newUpgradeResponse(wsKey);
             List<HttpObject> inbound = receiveAndIntBound(pipe, response);
 
             assertTrue(inbound.isEmpty());
-            assertTrue(waitUntil(() -> handshakeEvent(pipe.channelUserEvents()) != null, 1000L));
-            assertEquals(WebSocketVersion.V13, handshakeEvent(pipe.channelUserEvents()).version());
-            assertEquals("/chat", handshakeEvent(pipe.channelUserEvents()).requestPath());
+            assertTrue(waitUntil(() -> hasReadyContext(pipe.channel()), 1000L));
+            assertEquals(WebSocketVersion.V13.code(), webSocketContext(pipe.channel()).version());
+            assertEquals("/chat", webSocketContext(pipe.channel()).requestPath());
         });
     }
 
     @Test
-    public void testClientHandshakeEventListenerFailureDoesNotAbortSuccessfulUpgrade() throws Throwable {
+    public void testClientRejectsNon101ResponseWithoutReadyContext() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13));
-                ctx.addLastDecoder("probe", new ThroughProtoHandler<HttpObject>() {
-                    @Override
-                    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                        throw new IllegalStateException("probe-event-failed");
-                    }
-                });
-            }, VrtSoConfig.asClient());
-
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
-            String wsKey = request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY);
-            sendAndOutBound(pipe, request);
-
-            List<HttpObject> inbound = receiveAndIntBound(pipe, newUpgradeResponse("/chat", wsKey));
-
-            assertTrue(inbound.isEmpty());
-            assertFalse(pipe.channel().isClose());
-        });
-    }
-
-    @Test
-    public void testClientRejectsNon101ResponseWithoutPublishingEvent() throws Throwable {
-        autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13));
-            }, VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             sendAndOutBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.FORBIDDEN);
@@ -501,30 +437,28 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             List<HttpObject> inbound = receiveAndIntBound(pipe, response);
 
             assertTrue(inbound.isEmpty());
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertTrue(pipe.channel().isClose());
         });
     }
 
     @Test
-    public void testClientRejectsUnexpectedAcceptKeyWithoutPublishingEvent() throws Throwable {
+    public void testClientRejectsUnexpectedAcceptKeyWithoutReadyContext() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13));
-            }, VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             sendAndOutBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
-            DefaultFullHttpResponse response = newUpgradeResponse("/chat", "another-key==");
+            DefaultFullHttpResponse response = newUpgradeResponse("another-key==");
             List<HttpObject> inbound = receiveAndIntBound(pipe, response);
 
             assertTrue(inbound.isEmpty());
-            assertNull(handshakeEvent(pipe.channelUserEvents()));
+            assertNull(webSocketContext(pipe.channel()));
             assertTrue(pipe.channel().isClose());
         });
     }
 
     @Test
-    public void testLinkedClientAndServerPipesBothPublishHandshakeEvent() throws Throwable {
+    public void testLinkedClientAndServerPipesBothCreateReadyContext() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, clientCtx -> {
                 clientCtx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13));
@@ -536,14 +470,11 @@ public class WebSocketHandshakeEventTest extends AbstractWebSocketTest {
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "graphql-ws");
             pipe.client().sendData(request).get();
 
-            assertTrue(waitUntil(() -> handshakeEvent(pipe.serverUserEvents()) != null && handshakeEvent(pipe.clientUserEvents()) != null, 1000L));
-
+            assertTrue(waitUntil(() -> hasReadyContext(pipe.client()) && hasReadyContext(pipe.server()), 1000L));
             assertTrue(drainQueue(pipe.serverInbound()).isEmpty());
             assertTrue(drainQueue(pipe.clientInbound()).isEmpty());
-            assertEquals("/chat", handshakeEvent(pipe.serverUserEvents()).requestPath());
-            assertEquals("/chat", handshakeEvent(pipe.clientUserEvents()).requestPath());
-            assertEquals("graphql-ws", handshakeEvent(pipe.serverUserEvents()).subProtocol());
-            assertEquals("graphql-ws", handshakeEvent(pipe.clientUserEvents()).subProtocol());
+            assertEquals("/chat", webSocketContext(pipe.server()).requestPath());
+            assertEquals("/chat", webSocketContext(pipe.client()).requestPath());
         });
     }
 }

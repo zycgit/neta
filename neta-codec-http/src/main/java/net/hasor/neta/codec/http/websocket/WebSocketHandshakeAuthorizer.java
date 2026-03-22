@@ -21,5 +21,5 @@ package net.hasor.neta.codec.http.websocket;
  */
 @FunctionalInterface
 public interface WebSocketHandshakeAuthorizer {
-    void authorize(WebSocketHandshakeEvent event, WebSocketHandshakeCallback callback) throws Throwable;
+    void authorize(WebSocketHandshakeRequest request, WebSocketHandshakeCallback callback) throws Throwable;
 }

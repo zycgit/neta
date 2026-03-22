@@ -19,8 +19,8 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpServerDuplexe;
+import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import okhttp3.*;
 import okio.ByteString;
 import org.junit.Test;
@@ -28,26 +28,7 @@ import static org.junit.Assert.*;
 
 public class RealAsServerTest extends AbstractWebSocketTest {
     private static final String BRANCH_HANDSHAKE = "handshake";
-    private static final String BRANCH_WEBSOCKET = "websocket";
-
-    private ProtoHandler<HttpObject, HttpObject> handshakeBridge() {
-        return new ThroughProtoHandler<HttpObject>() {
-            @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                if (event.getData() instanceof WebSocketHandshakeEvent) {
-                    WebSocketContext webSocketContext = context.context(WebSocketContext.class);
-                    if (webSocketContext != null) {
-                        context.rootContext(WebSocketContext.class, webSocketContext);
-                    }
-                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
-                    if (routingControl != null) {
-                        routingControl.switchRoute(BRANCH_WEBSOCKET);
-                    }
-                }
-                return true;
-            }
-        };
-    }
+    private static final String BRANCH_WEBSOCKET = HttpRouteKey.BRANCH_SOCKET;
 
     private ProtoInitializer buildServerProto() {
         return buildServerProto(null, null);
@@ -61,7 +42,6 @@ public class RealAsServerTest extends AbstractWebSocketTest {
             });
             routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
                 branchCtx.addLast("ws-handshake", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
-                branchCtx.addLastDecoder("bridge", handshakeBridge());
             });
             routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
                 branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));

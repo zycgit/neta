@@ -17,29 +17,43 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaders;
 
-public class WebSocketHandshakeEvent extends AbstractWebSocketEvent {
+/**
+ * Immutable snapshot of a server-side websocket opening-handshake request.
+ */
+public class WebSocketHandshakeRequest {
     private final WebSocketVersion   version;
     private final String             requestPath;
-    private final String             subProtocol;
-    private final String             extensions;
+    private final String             requestedProtocols;
+    private final String             requestedExtensions;
     private final DefaultHttpHeaders headers;
+    private       int                streamId;
+    private       boolean            released;
 
-    public WebSocketHandshakeEvent(WebSocketVersion version, String requestPath, String subProtocol, String extensions) {
-        this(version, requestPath, subProtocol, extensions, null);
+    public WebSocketHandshakeRequest(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions) {
+        this(version, requestPath, requestedProtocols, requestedExtensions, null);
     }
 
-    public WebSocketHandshakeEvent(WebSocketVersion version, String requestPath, String subProtocol, String extensions, HttpHeaders headers) {
+    public WebSocketHandshakeRequest(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions, HttpHeaders headers) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
         }
         this.version = version;
         this.requestPath = requestPath;
-        this.subProtocol = subProtocol;
-        this.extensions = extensions;
+        this.requestedProtocols = requestedProtocols;
+        this.requestedExtensions = requestedExtensions;
         this.headers = new DefaultHttpHeaders();
         if (headers != null) {
             this.headers.appendHeaders(headers);
         }
+    }
+
+    public int streamId() {
+        return this.streamId;
+    }
+
+    public WebSocketHandshakeRequest streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
     }
 
     public WebSocketVersion version() {
@@ -50,12 +64,12 @@ public class WebSocketHandshakeEvent extends AbstractWebSocketEvent {
         return this.requestPath;
     }
 
-    public String subProtocol() {
-        return this.subProtocol;
+    public String requestedProtocols() {
+        return this.requestedProtocols;
     }
 
-    public String extensions() {
-        return this.extensions;
+    public String requestedExtensions() {
+        return this.requestedExtensions;
     }
 
     public String header(String name) {
@@ -66,23 +80,27 @@ public class WebSocketHandshakeEvent extends AbstractWebSocketEvent {
         return this.headers;
     }
 
-    @Override
-    protected void doRelease() {
+    public void release() {
+        if (this.released) {
+            return;
+        }
+        this.released = true;
+        this.streamId = 0;
         this.headers.release();
     }
 
     @Override
     public String toString() {
-        StringBuilder sb = new StringBuilder("HandshakeWebSocketEvent{");
+        StringBuilder sb = new StringBuilder("WebSocketHandshakeRequest{");
         sb.append("version=").append(this.version);
         if (this.requestPath != null) {
             sb.append(", path='").append(this.requestPath).append('\'');
         }
-        if (this.subProtocol != null) {
-            sb.append(", subProtocol='").append(this.subProtocol).append('\'');
+        if (this.requestedProtocols != null) {
+            sb.append(", requestedProtocols='").append(this.requestedProtocols).append('\'');
         }
-        if (this.extensions != null) {
-            sb.append(", extensions='").append(this.extensions).append('\'');
+        if (this.requestedExtensions != null) {
+            sb.append(", requestedExtensions='").append(this.requestedExtensions).append('\'');
         }
         sb.append('}');
         return sb.toString();

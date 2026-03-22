@@ -21,11 +21,9 @@ import java.util.Base64;
 import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.channel.ProtoDuplexer;
-import net.hasor.neta.channel.ProtoExceptionHolder;
-import net.hasor.neta.channel.ProtoStatus;
+import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
+import net.hasor.neta.codec.http.routing.HttpRouteKey;
 
 abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private static final Logger           logger         = Logger.getLogger(AbstractWebSocketHandshake.class);
@@ -179,5 +177,16 @@ abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, H
             }
         }
         return count;
+    }
+
+    protected final void finishWebSocketUpgrade(ProtoContext context, WebSocketContext webSocketContext) throws Throwable {
+        context.context(WebSocketContext.class, webSocketContext);
+        context.rootContext(WebSocketContext.class, webSocketContext);
+        context.fireUserEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
+
+        ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
+        if (routingControl != null) {
+            routingControl.switchRoute(HttpRouteKey.BRANCH_SOCKET);
+        }
     }
 }

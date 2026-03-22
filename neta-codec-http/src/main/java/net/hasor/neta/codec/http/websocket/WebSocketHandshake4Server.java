@@ -32,25 +32,25 @@ class WebSocketHandshake4Server extends AbstractWebSocketHandshake {
     // 2) current handshake snapshot: request-derived metadata used to build 101/reject responses
     // 3) full handshake session state: requestParts + ready + the two layers above
     private static final class ServerHandshakeState {
-        private final HttpMessageParts        requestParts = new HttpMessageParts();
-        private       boolean                 ready;
-        private       boolean                 authPending;
-        private       long                    authAttemptId;
-        private       long                    attemptSeq;
-        private       HttpVersion             httpVersion;
-        private       HttpMethod              method;
-        private       int                     streamId;
-        private       WebSocketVersion        version;
-        private       String                  path;
-        private       String                  host;
-        private       String                  origin;
-        private       String                  protocols;
-        private       String                  extensions;
-        private       String                  key;
-        private       String                  key1;
-        private       String                  key2;
-        private       byte[]                  key3;
-        private       WebSocketHandshakeEvent handshakeEvent;
+        private final HttpMessageParts          requestParts = new HttpMessageParts();
+        private       boolean                   ready;
+        private       boolean                   authPending;
+        private       long                      authAttemptId;
+        private       long                      attemptSeq;
+        private       HttpVersion               httpVersion;
+        private       HttpMethod                method;
+        private       int                       streamId;
+        private       WebSocketVersion          version;
+        private       String                    path;
+        private       String                    host;
+        private       String                    origin;
+        private       String                    protocols;
+        private       String                    extensions;
+        private       String                    key;
+        private       String                    key1;
+        private       String                    key2;
+        private       byte[]                    key3;
+        private       WebSocketHandshakeRequest handshakeRequest;
     }
 
     private final WebSocketHandshakeAuthorizer authorizer;
@@ -224,7 +224,7 @@ class WebSocketHandshake4Server extends AbstractWebSocketHandshake {
                 state.authAttemptId = attemptId;
                 AuthorizationCallback callback = new AuthorizationCallback(context, attemptId);
                 try {
-                    this.authorizer.authorize(state.handshakeEvent, callback);
+                    this.authorizer.authorize(state.handshakeRequest, callback);
                 } catch (Throwable e) {
                     logger.error("Error occurred while authorizing websocket handshake.", e);
                     callback.reject(HttpStatus.INTERNAL_SERVER_ERROR);
@@ -326,9 +326,9 @@ class WebSocketHandshake4Server extends AbstractWebSocketHandshake {
         state.key1 = requestKey1;
         state.key2 = requestKey2;
         state.key3 = requestKey3;
-        WebSocketHandshakeEvent handshakeEvent = new WebSocketHandshakeEvent(state.version, state.path, state.protocols, state.extensions, request.headersSnapshot());
-        handshakeEvent.streamId(state.streamId);
-        state.handshakeEvent = handshakeEvent;
+        WebSocketHandshakeRequest handshakeRequest = new WebSocketHandshakeRequest(state.version, state.path, state.protocols, state.extensions, request.headersSnapshot());
+        handshakeRequest.streamId(state.streamId);
+        state.handshakeRequest = handshakeRequest;
         return true;
     }
 
@@ -457,20 +457,13 @@ class WebSocketHandshake4Server extends AbstractWebSocketHandshake {
             DefaultLastHttpHeaders responseHeaders = this.finishHandshake(context, state, headers);
             String negotiatedProtocol = responseHeaders.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
             String negotiatedExtensions = responseHeaders.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
-            context.context(WebSocketContext.class, WebSocketContextImpl.fromHandshake(state.version, state.path, negotiatedProtocol, negotiatedExtensions));
-            context.fireUserEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
+            this.finishWebSocketUpgrade(context, WebSocketContextImpl.fromHandshake(state.version, state.path, negotiatedProtocol, negotiatedExtensions));
             state.ready = true;
         } catch (Throwable e) {
             logger.error("Error occurred while finalizing websocket handshake protocol state.", e);
             this.resetHandshakeSession(state);
             context.getChannel().close();
             return;
-        }
-
-        try {
-            context.fireUserEventRcv(WebSocketHandshakeEvent.class, state.handshakeEvent);
-        } catch (Throwable e) {
-            logger.error("Error occurred while publishing websocket handshake event.", e);
         }
 
         discardHandshakeSnapshot(state);
@@ -580,7 +573,11 @@ class WebSocketHandshake4Server extends AbstractWebSocketHandshake {
         state.key1 = null;
         state.key2 = null;
         state.key3 = null;
-        state.handshakeEvent = null;
+        WebSocketHandshakeRequest handshakeRequest = state.handshakeRequest;
+        state.handshakeRequest = null;
+        if (handshakeRequest != null) {
+            handshakeRequest.release();
+        }
     }
 
     // Reset the whole opening-handshake session so the connection can either retry
