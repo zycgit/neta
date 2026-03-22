@@ -21,7 +21,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoRoutingSelector;
+import net.hasor.neta.channel.ProtoRoutingDataSelector;
 import net.hasor.neta.channel.ProtoSndQueue;
 import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaderValues;
@@ -84,7 +84,7 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  * Use this selector only for cleartext TCP HTTP entry points. For TLS + ALPN based routing,
  * use {@link Http2OverTlsRoute}.
  */
-public class HttpAggregatorRoute implements ProtoRoutingSelector<ByteBuf, ByteBuf>, HttpRouteKey {
+public class HttpAggregatorRoute implements ProtoRoutingDataSelector<ByteBuf, ByteBuf>, HttpRouteKey {
     private static final Logger logger           = Logger.getLogger(HttpAggregatorRoute.class);
     /** Minimum bytes required for protocol detection. */
     private static final int    MIN_DETECT_BYTES = 4;

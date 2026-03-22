@@ -16,11 +16,13 @@
 package net.hasor.neta.codec.http.routing;
 public interface HttpRouteKey {
     /** Branch key for HTTP/1.1 over TLS (ALPN protocol identifier "http/1.1"). */
-    String BRANCH_H1  = "http/1.1";
+    String BRANCH_H1     = "http/1.1";
     /** Branch key for HTTP/2 over TLS (ALPN protocol identifier "h2"). */
-    String BRANCH_H2  = "h2";
+    String BRANCH_H2     = "h2";
     /** Branch key for HTTP/1.1 Upgrade to h2c (RFC 7540 Section 3.2). */
-    String BRANCH_H2C = "h2c-upgrade";
+    String BRANCH_H2C    = "h2c-upgrade";
     /** Branch key for HTTP/3 over QUIC (ALPN protocol identifier "h3"). */
-    String BRANCH_H3  = "h3";
+    String BRANCH_H3     = "h3";
+    /** Branch key for HTTP-upgraded WebSocket traffic after the opening handshake completes. */
+    String BRANCH_SOCKET = "http-socket";
 }

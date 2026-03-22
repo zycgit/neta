@@ -19,7 +19,7 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoRoutingSelector;
+import net.hasor.neta.channel.ProtoRoutingDataSelector;
 import net.hasor.neta.channel.ProtoSndQueue;
 import net.hasor.neta.codec.ssl.SslContext;
 
@@ -77,7 +77,7 @@ import net.hasor.neta.codec.ssl.SslContext;
  * @see HttpAggregatorRoute
  * @see SslContext
  */
-public class Http2OverTlsRoute implements ProtoRoutingSelector<ByteBuf, ByteBuf>, HttpRouteKey {
+public class Http2OverTlsRoute implements ProtoRoutingDataSelector<ByteBuf, ByteBuf>, HttpRouteKey {
     private static final Logger logger = Logger.getLogger(Http2OverTlsRoute.class);
 
     @Override
