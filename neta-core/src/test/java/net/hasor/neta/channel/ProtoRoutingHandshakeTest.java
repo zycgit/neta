@@ -33,7 +33,7 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         List<String> branchLog = new ArrayList<>(), branchErr = new ArrayList<>();
         List<Integer> selectorSeenSizes = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
+                .nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> {
                     selectorSeenSizes.add(rcvUp.queueSize());
                     return rcvUp.queueSize() >= 3 ? "main" : null;
                 }, r -> {
@@ -81,7 +81,7 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
     public void peekAccumulate_neverActivate() throws Throwable {
         List<Integer> selectorSeenSizes = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
+                .nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> {
                     selectorSeenSizes.add(rcvUp.queueSize());
                     return null;
                 }, r -> {
@@ -130,10 +130,10 @@ public class ProtoRoutingHandshakeTest extends AbstractStackTest {
         int[] handshakeCount = { 0 };
 
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class)//
-                .<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
+                .nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> {
                     selectorSeenSizes.add(rcvUp.queueSize());
                     if (rcvUp.queueSize() > 0) {
-                        rcvUp.takeMessage(rcvUp.queueSize()); // 握手包：消费并丢弃
+                        rcvUp.takeMessage(rcvUp.queueSize());
                         handshakeCount[0]++;
                     }
                     return handshakeCount[0] >= 3 ? "main" : null;

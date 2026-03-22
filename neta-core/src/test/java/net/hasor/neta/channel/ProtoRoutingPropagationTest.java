@@ -119,7 +119,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
      * Routing selector that picks the given branch name when RCV data is present,
      * and returns null (defer) during onActive (no data yet).
      */
-    private static ProtoRoutingSelector<Integer, Integer> selectBranchOnData(String branchName) {
+    private static ProtoRoutingDataSelector<Integer, Integer> selectBranchOnData(String branchName) {
         return (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() > 0 ? branchName : null;
     }
 

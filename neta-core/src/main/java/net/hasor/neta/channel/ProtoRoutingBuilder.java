@@ -21,11 +21,11 @@ import java.util.function.Consumer;
  * <p>Use {@link #branchByInitializer(String, ProtoInitializer)} to register named sub-pipelines.</p>
  * <p>This builder is route-definition-focused and does not continue the parent fluent chain.
  * For nested branch-local fluent composition, use {@link #branch(String, Consumer)}.
- * For standalone router creation, start from {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingSelector)} or
- * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingSelector)}.</p>
+ * For standalone router creation, start from {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingDataSelector)} or
+ * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingDataSelector)}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
- * @see ProtoRoutingSelector
+ * @see ProtoRoutingDataSelector
  * @see ProtoRoutingDuplexer
  */
 public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {

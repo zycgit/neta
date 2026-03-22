@@ -16,10 +16,18 @@
 package net.hasor.neta.channel;
 
 /**
- * Backward-compatible alias for data-driven routing selection.
+ * Routing predicate used by {@link ProtoRoutingDuplexer} to choose a branch from a user event.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-22
  */
 @FunctionalInterface
-public interface ProtoRoutingSelector<RCV_UP, SND_DOWN> extends ProtoRoutingDataSelector<RCV_UP, SND_DOWN> {
+public interface ProtoRoutingEventSelector {
+    /**
+     * Evaluate routing condition from a user event and return the selected branch key.
+     * @param context the pipeline context
+     * @param event the user event currently being propagated
+     * @param isRcv {@code true} when the event is moving in RCV direction, {@code false} for SND direction
+     * @return the branch key matching a registered branch name, or {@code null} if the event does not determine routing
+     */
+    String route(ProtoContext context, SoUserEvent event, boolean isRcv);
 }

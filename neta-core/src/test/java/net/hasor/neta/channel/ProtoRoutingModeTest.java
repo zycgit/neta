@@ -92,7 +92,7 @@ public class ProtoRoutingModeTest {
     public void switchingBackToActivatedBranch_firesRouteEventInsteadOfSecondOnActive() throws Throwable {
         SwitchHandler.reset();
         List<String> routeEvents = new ArrayList<>();
-        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).<Integer, Integer>nextRouteAsStatic("router", (ctx, rcvUp, rcvDown) -> {
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> {
             if (rcvUp.queueSize() == 0) {
                 return null;
             }
@@ -124,21 +124,27 @@ public class ProtoRoutingModeTest {
     public void nestedRouter_prefersNearestRoutingControl() throws Throwable {
         SwitchHandler.reset();
         List<String> routeEvents = new ArrayList<>();
-        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).<Integer, Integer>nextRouteAsStatic("outer", (ctx, rcvUp, rcvDown) -> {
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("outer", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> {
             if (rcvUp.queueSize() == 0) {
                 return null;
             }
             return "nested";
         }, r -> {
-            r.branch("nested", branch -> branch.<Integer, Integer>nextRouteAsStatic("inner", (ctx2, rcvUp2, rcvDown2) -> {
-                if (rcvUp2.queueSize() == 0) {
-                    return null;
-                }
-                return "left";
-            }, r2 -> {
-                r2.branch("left", (ProtoBuilder<Integer, Integer> c2) -> c2.nextDecoder("left", new SwitchHandler("left", 10, "right", routeEvents)));
-                r2.branch("right", (ProtoBuilder<Integer, Integer> c2) -> c2.nextDecoder("right", new SwitchHandler("right", Integer.MIN_VALUE, "right", routeEvents)));
-            }));
+            r.branch("nested", branch -> {
+                branch.nextRouteAsStatic("inner", (ProtoRoutingDataSelector<Integer, Integer>) (ctx2, rcvUp2, rcvDown2) -> {
+                    if (rcvUp2.queueSize() == 0) {
+                        return null;
+                    }
+                    return "left";
+                }, r2 -> {
+                    r2.branch("left", (ProtoBuilder<Integer, Integer> c2) -> {
+                        c2.nextDecoder("left", new SwitchHandler("left", 10, "right", routeEvents));
+                    });
+                    r2.branch("right", (ProtoBuilder<Integer, Integer> c2) -> {
+                        c2.nextDecoder("right", new SwitchHandler("right", Integer.MIN_VALUE, "right", routeEvents));
+                    });
+                });
+            });
         }).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());

@@ -20,10 +20,11 @@ import net.hasor.cobble.logging.Logger;
 /**
  * A routing duplexer that forks the pipeline into multiple sub-pipeline branches.
  * <p>
- * Routing is attempted in two phases via {@link ProtoRoutingSelector#route}:
+ * Routing is attempted in up to three phases:
  * <ol>
- *   <li><b>onActive</b>: called with an empty {@code rcvUp} — supports context-based routing (e.g. ALPN).</li>
+ *   <li><b>onActive</b>: called with an empty {@code rcvUp} — supports context-based data routing (e.g. ALPN).</li>
  *   <li><b>onMessage (first RCV)</b>: called with real inbound data — supports data-based routing (e.g. TLS peek).</li>
+ *   <li><b>onUserEvent</b>: optionally called with an inbound/outbound user event while no branch is selected yet.</li>
  * </ol>
  * The predicate may peek/take from {@code rcvUp}; unconsumed data is re-presented on the next call.
  * Return {@code null} to defer; once a branch key is returned the decision is cached for the connection's lifetime.
@@ -47,27 +48,43 @@ import net.hasor.cobble.logging.Logger;
  * @version : 2024-01-15
  */
 public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, Object, OUT> {
-    private static final Logger                        logger = Logger.getLogger(ProtoRoutingDuplexer.class);
-    private final        ProtoRoutingSelector<IN, OUT> routing;
-    private final        Map<String, BranchEntry>      branches;
-    private final        List<String>                  branchOrder;
-    private final        Set<String>                   activatedBranches;
-    private final        ProtoRoutingControl           routingControl;
-    private final        ProtoRoutingMode              routingMode;
-    private              String                        selectedRoute;
-    private              String                        pendingRoute;
+    private static final Logger                            logger = Logger.getLogger(ProtoRoutingDuplexer.class);
+    private final        ProtoRoutingDataSelector<IN, OUT> routing4Data;
+    private final        ProtoRoutingEventSelector         routing4Event;
+    private final        Map<String, BranchEntry>          branches;
+    private final        List<String>                      branchOrder;
+    private final        Set<String>                       activatedBranches;
+    private final        ProtoRoutingControl               routingControl;
+    private final        ProtoRoutingMode                  routingMode;
+    private              String                            selectedRoute;
+    private              String                            pendingRoute;
 
-    public ProtoRoutingDuplexer(ProtoRoutingSelector<IN, OUT> routing) {
+    public ProtoRoutingDuplexer(ProtoRoutingDataSelector<IN, OUT> routing) {
         this(ProtoRoutingMode.STATIC, routing);
     }
 
-    public ProtoRoutingDuplexer(ProtoRoutingMode routingMode, ProtoRoutingSelector<IN, OUT> routing) {
+    public ProtoRoutingDuplexer(ProtoRoutingMode routingMode, ProtoRoutingDataSelector<IN, OUT> routing) {
         this.routingMode = Objects.requireNonNull(routingMode, "routingMode is null.");
-        this.routing = Objects.requireNonNull(routing, "routing is null.");
+        this.routing4Data = Objects.requireNonNull(routing, "routing is null.");
+        this.routing4Event = null;
         this.branches = new LinkedHashMap<>();
         this.branchOrder = new ArrayList<>();
         this.activatedBranches = new LinkedHashSet<>();
-        this.routingControl = new ProtoRoutingControl() {
+        this.routingControl = this.initRoutingControl(routingMode);
+    }
+
+    public ProtoRoutingDuplexer(ProtoRoutingEventSelector routing) {
+        this.routingMode = ProtoRoutingMode.STATIC;
+        this.routing4Data = null;
+        this.routing4Event = Objects.requireNonNull(routing, "routing is null.");
+        this.branches = new LinkedHashMap<>();
+        this.branchOrder = new ArrayList<>();
+        this.activatedBranches = new LinkedHashSet<>();
+        this.routingControl = this.initRoutingControl(this.routingMode);
+    }
+
+    private ProtoRoutingControl initRoutingControl(ProtoRoutingMode routingMode) {
+        return new ProtoRoutingControl() {
             @Override
             public ProtoRoutingMode getMode() {
                 return routingMode;
@@ -117,10 +134,10 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             return;
         }
 
-        if (this.selectedRoute == null) {
+        if (this.selectedRoute == null && this.routing4Data != null) {
             // No pre-selection: ask the routing selector (context-based, e.g. ALPN)
             ProtoSndQueue<?> headSndDown = ((ProtoContextService) context).getChainRoot().getHeadSndDown();
-            this.selectedRoute = this.routing.route(context, ProtoQueue.emptyRcv(), (ProtoSndQueue<OUT>) headSndDown);
+            this.selectedRoute = this.routing4Data.route(context, ProtoQueue.emptyRcv(), (ProtoSndQueue<OUT>) headSndDown);
         }
         if (this.selectedRoute != null) {
             this.activateBranchLifecycle(context, this.selectedRoute, null, false);
@@ -130,9 +147,18 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+        if (this.selectedRoute == null && this.routing4Event != null) {
+            String resolvedRoute = this.routing4Event.route(context, event, isRcv);
+            if (resolvedRoute != null) {
+                this.selectedRoute = resolvedRoute;
+                this.activateBranchLifecycle(context, resolvedRoute, null, false);
+            }
+        }
+
         if (this.selectedRoute == null) {
             return true;
         }
+
         BranchEntry branch = this.branches.get(this.selectedRoute);
         if (branch != null) {
             if (isRcv) {
@@ -148,16 +174,22 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
         if (isRcv) {
             if (this.routingMode == ProtoRoutingMode.REALTIME) {
-                String resolvedRoute = this.routing.route(context, rcvUp, sndDown);
+                if (this.routing4Data == null) {
+                    return ProtoStatus.Stop;
+                }
+                String resolvedRoute = this.routing4Data.route(context, rcvUp, sndDown);
                 if (resolvedRoute == null) {
                     return ProtoStatus.Stop;
                 }
                 this.selectedRoute = resolvedRoute;
                 this.activateBranchLifecycle(context, resolvedRoute, null, false);
             } else if (this.selectedRoute == null) {
+                if (this.routing4Data == null) {
+                    return ProtoStatus.Stop;
+                }
                 // Route not yet determined: pass the live rcvUp so the predicate can peek or partially consume.
                 // Data not consumed by the predicate stays in rcvUp and will reappear on the next invocation.
-                this.selectedRoute = this.routing.route(context, rcvUp, sndDown);
+                this.selectedRoute = this.routing4Data.route(context, rcvUp, sndDown);
                 if (this.selectedRoute == null) {
                     // Predicate deferred — unconsumed data remains in rcvUp naturally.
                     return ProtoStatus.Stop;
@@ -293,7 +325,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
 
     /**
      * Pre-selects the routing branch for this connection by name, as an imperative alternative to
-     * returning a branch name from {@link ProtoRoutingSelector#route}.
+     * returning a branch name from {@link ProtoRoutingDataSelector#route}.
      * <p>
      * This method <em>only</em> records the routing decision ({@code selectedRoute = name}).
      * It can be called at any time — even before {@code onInit} — and does <em>not</em> trigger

@@ -52,13 +52,13 @@ import net.hasor.neta.bytebuf.ByteBuf;
  */
 public final class ProtoHelper {
     /** Create a standalone routing builder using static route selection. */
-    public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsStatic(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
+    public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsStatic(ProtoRoutingDataSelector<RCV_UP, SND_DOWN> routing) {
         Objects.requireNonNull(routing, "routing is null.");
         return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, routing));
     }
 
     /** Create a standalone routing builder using realtime route selection. */
-    public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsRealtime(ProtoRoutingSelector<RCV_UP, SND_DOWN> routing) {
+    public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsRealtime(ProtoRoutingDataSelector<RCV_UP, SND_DOWN> routing) {
         Objects.requireNonNull(routing, "routing is null.");
         return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing));
     }
@@ -149,7 +149,7 @@ public final class ProtoHelper {
 
         @Override
         public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf, //
-                ProtoRoutingSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+                ProtoRoutingDataSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(name, "name is null.");
             Objects.requireNonNull(routing, "routing is null.");
@@ -164,13 +164,28 @@ public final class ProtoHelper {
 
         @Override
         public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsRealtime(String name, ProtoConfig protoConf, //
-                ProtoRoutingSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+                ProtoRoutingDataSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(name, "name is null.");
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
             ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing);
+            ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
+            branches.accept(routeBuilder);
+            this.taskAppend.add(c -> c.addLast(name, duplexer));
+            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf,//
+                ProtoRoutingEventSelector routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+            Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(routing, "routing is null.");
+            Objects.requireNonNull(branches, "branches is null.");
+
+            ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(routing);
             ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
             branches.accept(routeBuilder);
             this.taskAppend.add(c -> c.addLast(name, duplexer));

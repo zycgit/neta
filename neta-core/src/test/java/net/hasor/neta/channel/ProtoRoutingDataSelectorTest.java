@@ -28,7 +28,7 @@ import org.junit.Test;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15
  */
-public class ProtoRoutingSelectorTest extends AbstractStackTest {
+public class ProtoRoutingDataSelectorTest extends AbstractStackTest {
 
     /** 选 "even" 分支 */
     @Test

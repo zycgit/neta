@@ -20,8 +20,8 @@ package net.hasor.neta.channel;
  * or routing branches via {@code nextDuplex}/{@code nextDecoder}/{@code nextEncoder}/{@code nextRouteAsStatic}/{@code nextRouteAsRealtime},
  * then call {@link #build()} to produce a {@link ProtoInitializer}.</p>
  * <p>Routing nodes are added as one-shot fluent steps. For standalone router definitions,
- * use {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingSelector)} or
- * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingSelector)}.</p>
+ * use {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingDataSelector)} or
+ * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingDataSelector)}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  * @see ProtoHelper

@@ -57,7 +57,7 @@ public class SslRoutingTest extends AbstractSslTest {
     // =================================================================
     private static ProtoInitializer createPortUnificationStack(SslConfig sslConf) {
         return ProtoHelper.standard()//
-                .<ByteBuf, ByteBuf>nextRouteAsStatic("router", (context, rcvUp, rcvDown) -> {
+                .nextRouteAsStatic("router", (ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
                     // rcvUp is null during onActive (connection init) — no data yet, defer routing
                     if (rcvUp.queueSize() == 0) {
                         return null;
@@ -70,9 +70,13 @@ public class SslRoutingTest extends AbstractSslTest {
                     return null; // not enough data
                 }, r -> {
                     // TLS branch: SSL decryption → string codec
-                    r.branch("tls", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch.nextDuplex("SSL", new SslDuplexer(sslConf)).nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1));
+                    r.branch("tls", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> {
+                        branch.nextDuplex("SSL", new SslDuplexer(sslConf)).nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1);
+                    });
                     // Plaintext branch: direct string codec
-                    r.branch("plain", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch.nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1));
+                    r.branch("plain", (ProtoBuilder<ByteBuf, ByteBuf> branch) -> {
+                        branch.nextDuplex("string", AbstractSslTest::doDecoder1, AbstractSslTest::doEncoder1);
+                    });
                 }).build();
     }
 
@@ -95,7 +99,7 @@ public class SslRoutingTest extends AbstractSslTest {
             ctx.addLast("SSL", new SslDuplexer(sslConf));
 
             // ALPN-based router: after SSL decryption, route by negotiated protocol
-            ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((context, rcvUp, rcvDown) -> {
+            ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
                 SslContext sslContext = context.context(SslContext.class);
                 if (sslContext != null && sslContext.isReady()) {
                     String proto = sslContext.getApplicationProtocol();
@@ -130,7 +134,7 @@ public class SslRoutingTest extends AbstractSslTest {
     // =================================================================
     private static ProtoInitializer createFullStack(SslConfig sslConf, List<String> h2Events, List<String> http11Events) {
         return ctx -> {
-            ProtoRoutingDuplexer<ByteBuf, ByteBuf> outerRouter = new ProtoRoutingDuplexer<>((context, rcvUp, rcvDown) -> {
+            ProtoRoutingDuplexer<ByteBuf, ByteBuf> outerRouter = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
                 // rcvUp is null during onActive (connection init) — no data yet, defer routing
                 if (rcvUp.queueSize() == 0) {
                     return null;
@@ -148,7 +152,7 @@ public class SslRoutingTest extends AbstractSslTest {
                 branch.addLast("SSL", new SslDuplexer(sslConf));
 
                 // Nested ALPN router within the TLS branch
-                ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((context, rcvUp, rcvDown) -> {
+                ProtoRoutingDuplexer<ByteBuf, ByteBuf> alpnRouter = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, rcvDown) -> {
                     SslContext sslContext = context.context(SslContext.class);
                     if (sslContext != null && sslContext.isReady()) {
                         String proto = sslContext.getApplicationProtocol();
