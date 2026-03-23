@@ -24,18 +24,25 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
- * Handles inbound websocket frames and exposes TEXT/BINARY data as message chunks.
+ * Converts inbound {@link WebSocketFrame} flow into message chunks and control events.
  * <p>
- * This handler does not aggregate fragmented websocket messages. Instead it converts each data
- * frame into a {@link WebSocketMessage} chunk and marks chunk boundaries through
- * {@link WebSocketMessage#sequence()}.
+ * Function:
+ * <pre>
+ *   map TEXT/BINARY frames to WebSocketMessage chunks
+ *   keep fragmentation as sequence-based chunk flow
+ *   handle ping, pong, and close control semantics
+ * </pre>
  * <p>
- * Control-frame behavior is asymmetric by design:
- * <ul>
- *   <li>PING -> auto PONG, no inbound message published</li>
- *   <li>PONG -> published as {@link PongWebSocketEvent}</li>
- *   <li>CLOSE -> close reply + {@link WebSocketCloseEvent}</li>
- * </ul>
+ * pipeline view:
+ * <pre>
+ *   WebSocketFrame -> WebSocketInboundHandler -> WebSocketMessage / WebSocket events
+ * </pre>
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
+ *   ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
+ * </pre>
  */
 public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, WebSocketMessage> {
     private static final Logger          logger = Logger.getLogger(WebSocketInboundHandler.class);

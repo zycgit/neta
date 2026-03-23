@@ -17,6 +17,11 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.HttpStatus;
 
+/**
+ * Callback used to complete or reject a server-side handshake decision.
+ * <p>
+ * Supports plain accept as well as reject responses with custom status, headers, and body.
+ */
 public interface WebSocketHandshakeCallback {
     void accept();
 

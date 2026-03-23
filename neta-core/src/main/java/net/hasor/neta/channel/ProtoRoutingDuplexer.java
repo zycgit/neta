@@ -167,6 +167,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
                 branch.chainRoot.onSndUserEvent(branch.branchCtx, null, event);
             }
         }
+        this.checkAndExecutePendingUpgrade(context);
         return true;
     }
 

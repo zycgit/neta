@@ -16,33 +16,10 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * Protocol context interface for WebSocket connections.
+ * Resolved WebSocket session context.
  * <p>
- * Exposes WebSocket handshake and session state — including the negotiated
- * sub-protocol ({@code Sec-WebSocket-Protocol}) — so that
- * {@link net.hasor.neta.channel.ProtoRouting} can branch on sub-protocol.
- * </p>
- * <p>
- * Registered on {@link net.hasor.neta.channel.ProtoContext} via
- * {@code context.context(WebSocketContext.class, impl)}.
- * </p>
- * <p>
- * Usage in {@link net.hasor.neta.channel.ProtoRouting}:
- * <pre>{@code
- * (context, rcvUp, rcvDown) -> {
- *     WebSocketContext ws = context.context(WebSocketContext.class);
- *     if (ws != null && ws.isReady()) {
- *         String sub = ws.subProtocol();
- *         if ("graphql-transport-ws".equals(sub)) {
- *             return "graphql";
- *         }
- *         return "default-ws";
- *     }
- *     return null; // handshake not complete yet, defer routing
- * }
- * }</pre>
- * @author 赵永春 (zyc@hasor.net)
- * @version : 2024-01-15
+ * Exposes handshake outcome, negotiated sub-protocol, version, request path, and extensions to
+ * later pipeline stages and routing logic.
  */
 public interface WebSocketContext {
     /** Returns {@code true} when the WebSocket opening handshake is complete. */

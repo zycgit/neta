@@ -17,9 +17,29 @@ package net.hasor.neta.codec.http.websocket;
 import java.nio.charset.StandardCharsets;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoHandler;
+import net.hasor.neta.channel.ProtoRoutingControl;
+import net.hasor.neta.channel.SoUserEvent;
 import net.hasor.neta.codec.http.AbstractHttpTest;
+import net.hasor.neta.codec.http.HttpObject;
 
 public class AbstractWebSocketTest extends AbstractHttpTest {
+    protected static ProtoHandler<HttpObject, HttpObject> switchRouteOnHandshake(String targetRoute) {
+        return new ThroughProtoHandler<HttpObject>() {
+            @Override
+            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+                if (event.getData() instanceof WebSocketHandshakeEvent) {
+                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
+                    if (routingControl != null) {
+                        routingControl.switchRoute(targetRoute);
+                    }
+                }
+                return true;
+            }
+        };
+    }
+
     protected static String text(WebSocketFrame... buffer) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
         try {

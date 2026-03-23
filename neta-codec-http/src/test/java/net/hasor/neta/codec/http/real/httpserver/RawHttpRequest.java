@@ -1,4 +1,4 @@
-package net.hasor.neta.codec.http.simple;
+package net.hasor.neta.codec.http.real.httpserver;
 
 import java.nio.charset.StandardCharsets;
 

@@ -18,6 +18,11 @@ import net.hasor.cobble.ref.RecycleObjectPool;
 import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
 
+/**
+ * Pooled binary message chunk.
+ * <p>
+ * Represents application-visible BINARY data after frame decoding or before frame encoding.
+ */
 public final class BinaryWebSocketMessage extends AbstractWebSocketMessage {
     private static final int                                RECYCLE_INDEX   = RecycleObjectPool.registerType();
     private static final ObjHandler<BinaryWebSocketMessage> RECYCLE_HANDLER = new ObjHandler<BinaryWebSocketMessage>() {

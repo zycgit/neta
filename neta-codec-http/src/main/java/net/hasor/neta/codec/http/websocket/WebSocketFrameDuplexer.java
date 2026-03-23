@@ -18,26 +18,10 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Public bidirectional frame-codec entry for post-handshake WebSocket traffic.
+ * Bidirectional frame codec for post-handshake WebSocket traffic.
  * <p>
- * This duplexer pairs {@link WebSocketFrameDecoder} and {@link WebSocketFrameEncoder}
- * with the same {@link WebSocketVersion}, so a pipeline that needs both inbound frame
- * decoding and outbound frame encoding can be wired as a single protocol node.
- * <p>
- * Typical usage:
- * <pre>{@code
- * ctx.addLast("http", new HttpServerDuplexe());
- * ctx.addLast("ws-handshake", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
- * ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
- * }</pre>
- * <p>
- * Behavior summary:
- * <ul>
- *   <li>Receive direction: consumes transparent-mode {@link HttpObject} payload objects and emits {@link WebSocketFrame}.</li>
- *   <li>Send direction: consumes {@link WebSocketFrame} and emits transparent-mode {@link HttpObject} payload objects.</li>
- *   <li>The duplexer does not perform the opening handshake and does not aggregate fragmented messages.</li>
- *   <li>When only one direction is needed, {@link WebSocketFrameDecoder} or {@link WebSocketFrameEncoder} can still be installed directly.</li>
- * </ul>
+ * Pairs {@link WebSocketFrameDecoder} and {@link WebSocketFrameEncoder} so frame-level pipelines
+ * can be wired as one duplex node.
  */
 public class WebSocketFrameDuplexer implements ProtoDuplexer<HttpObject, WebSocketFrame, WebSocketFrame, HttpObject> {
     private final WebSocketFrameDecoder decoder;

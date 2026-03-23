@@ -16,7 +16,9 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * Signals that a WebSocket frame or codec operation violates the expected protocol format.
+ * Signals a WebSocket protocol-format violation.
+ * <p>
+ * Carries the close status code that should be used when the violation is fatal on the wire.
  */
 public class WebSocketProtocolViolationException extends RuntimeException {
     private final int closeStatusCode;

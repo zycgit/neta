@@ -22,25 +22,45 @@ import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.SoChannel;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.cookie.CookieDecoder;
 import net.hasor.neta.codec.http.cookie.CookieEncoder;
 
 /**
- * Utility methods for creating WebSocket frames, messages, events, and client handshake requests.
+ * Utility entry point for WebSocket frames, messages, events, and handshake helpers.
  * <p>
- * This class intentionally exposes two public construction levels for frame objects:
- * <ul>
- *   <li>Simple overloads for common business-side frame creation.</li>
- *   <li>Complete overloads for frame-level code that must control FIN, masking, and payload details explicitly.</li>
- * </ul>
+ * Provides the common factory and convenience methods used by tests and normal pipeline code.
  */
 public final class WebSocketUtils {
     private static final String DEFAULT_HANDSHAKE_HOST   = "localhost";
     private static final String DEFAULT_HANDSHAKE_ORIGIN = "http://localhost";
 
     private WebSocketUtils() {
+    }
+
+    /** Returns {@code true} when the channel contains a ready WebSocket context. */
+    public static boolean isReady(SoChannel<?> channel) {
+        return channel != null && isReady(channel.findProtoContext(WebSocketContext.class));
+    }
+
+    /** Returns {@code true} when the protocol context can resolve a ready WebSocket context. */
+    public static boolean isReady(ProtoContext context) {
+        if (context == null) {
+            return false;
+        }
+        WebSocketContext webSocketContext = context.context(WebSocketContext.class);
+        if (webSocketContext == null) {
+            webSocketContext = context.rootContext(WebSocketContext.class);
+        }
+        return isReady(webSocketContext);
+    }
+
+    /** Returns {@code true} when the WebSocket context exists and the opening handshake is complete. */
+    public static boolean isReady(WebSocketContext context) {
+        return context != null && context.isReady();
     }
 
     /** Creates a client opening-handshake request for the requested websocket version and applies custom headers and cookies. */

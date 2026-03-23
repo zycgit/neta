@@ -18,21 +18,10 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * An application-visible WebSocket data message chunk produced by {@link WebSocketInboundHandler}.
+ * Application-level WebSocket data chunk.
  * <p>
- * Unlike {@link WebSocketFrame}, a {@code WebSocketMessage} is the business-side TEXT/BINARY
- * stream view. Fragmented websocket messages are exposed as a sequence of message chunks rather
- * than being reassembled into one complete payload.
- * <p>
- * Sequence rules:
- * <ul>
- *   <li>{@code 0}: start chunk of a fragmented message.</li>
- *   <li>{@code 1..n}: middle chunks of the same fragmented message.</li>
- *   <li>{@code -1}: final chunk. If it appears without a prior {@code 0}, the chunk is both start and end.</li>
- * </ul>
- * <p>
- * Only TEXT/BINARY application data is modeled as message flow here. Control semantics such as
- * ping/pong/close are handled through websocket frames and user events.
+ * Represents TEXT or BINARY payload after frame parsing, with fragmentation preserved through the
+ * sequence field instead of eager aggregation.
  */
 public interface WebSocketMessage extends HttpObject {
     /** Final chunk marker. When used alone it means start and end in one chunk. */

@@ -18,8 +18,10 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * A WebSocket frame as defined in
- * <a href="https://tools.ietf.org/html/rfc6455#section-5">RFC 6455 §5</a>.
+ * Wire-level WebSocket frame model.
+ * <p>
+ * Maps directly to the RFC 6455 frame format and is used between frame codecs and message
+ * handlers.
  * <p>Fields map directly to the wire format:
  * <pre>
  *  0                   1                   2                   3

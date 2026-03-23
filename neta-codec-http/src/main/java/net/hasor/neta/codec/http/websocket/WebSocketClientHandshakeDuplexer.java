@@ -22,8 +22,33 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
-class WebSocketHandshake4Client extends AbstractWebSocketHandshake {
-    private static final Logger logger = LoggerFactory.getLogger(WebSocketHandshake4Client.class);
+/**
+ * Client-side WebSocket opening-handshake duplexer.
+ * <p>
+ * Function:
+ * <pre>
+ *   send client upgrade request
+ *   validate server HTTP 101 response
+ *   publish WebSocketContext and WebSocketHandshakeEvent
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   outbound: HttpObject handshake request -> WebSocketClientHandshakeDuplexer -> HttpObject
+ *   inbound:  HttpObject 101 response      -> WebSocketClientHandshakeDuplexer -> HttpObject or upgraded flow
+ * </pre>
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("http", new HttpClientDuplexe());
+ *   ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+ *   ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
+ *   ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+ * </pre>
+ */
+public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake {
+    private static final Logger                       logger = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
+    private final        WebSocketAutoHandshakeConfig autoHandshakeConfig;
 
     // Client-side handshake state is split into:
     // 1) buffered/aggregating request-response session state
@@ -43,13 +68,27 @@ class WebSocketHandshake4Client extends AbstractWebSocketHandshake {
         private       byte[]                key3;
     }
 
-    public WebSocketHandshake4Client(WebSocketVersion codecVersion) {
+    public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion) {
+        this(codecVersion, null);
+    }
+
+    public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketAutoHandshakeConfig autoHandshakeConfig) {
         super(codecVersion);
+        this.autoHandshakeConfig = autoHandshakeConfig;
     }
 
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         state(context);
+    }
+
+    @Override
+    public void onActive(ProtoContext context) throws Throwable {
+        ClientHandshakeState state = state(context);
+        if (this.autoHandshakeConfig == null || state.ready || state.requestPending) {
+            return;
+        }
+        context.sendData(WebSocketUtils.createHandshake(this.codecVersion, this.autoHandshakeConfig.requestPath(), this.autoHandshakeConfig.headers(), this.autoHandshakeConfig.cookies()));
     }
 
     @Override

@@ -21,43 +21,25 @@ import net.hasor.neta.codec.http.DefaultHttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Encodes {@link WebSocketFrame} objects into transparent-mode HTTP payload buffers.
+ * Encodes {@link WebSocketFrame} objects into upgraded HTTP payload.
  * <p>
- * This encoder sits on the outbound side after WebSocket frame construction and before
- * the HTTP/1.x codec writes raw bytes to the socket. It converts frame-level objects into
- * {@link net.hasor.neta.codec.http.HttpByteBuf}, which the HTTP layer forwards unchanged
- * once transparent mode is enabled by the opening handshake duplexer.
- * <p>
- * Preferred usage for a bidirectional pipeline is {@link WebSocketFrameDuplexer}.
- * Install this encoder directly only when the send direction must be assembled
- * independently from the receive direction.
- * When the no-arg constructor is used behind {@link WebSocketHandshakeDuplexer},
- * the encoder first tries to resolve the negotiated version from {@link WebSocketContext}
- * and falls back to RFC 6455 version 13 when no handshake context is available.
- * <p>
- * Typical usage in a manually assembled outbound-only pipeline:
+ * Function:
  * <pre>
- *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
- *   ctx.addLast("http", new HttpServerDuplexe());
+ *   serialize frame header and payload
+ *   apply RFC 6455 or V0 framing rules
+ *   emit transparent HttpByteBuf for the HTTP codec
  * </pre>
  * <p>
  * pipeline view:
  * <pre>
- *   WebSocketFrame
- *      -> WebSocketFrameEncoder
- *      -> HttpByteBuf
- *      -> HttpServerDuplexe / HttpClientDuplexe
- *      -> socket bytes
+ *   WebSocketFrame -> WebSocketFrameEncoder -> HttpByteBuf -> HTTP codec -> socket bytes
  * </pre>
  * <p>
- * Version support:
- * <ul>
- *   <li>{@link WebSocketVersion#V0}: Hixie-76 framing.</li>
- *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8}, {@link WebSocketVersion#V13}: RFC 6455 framing family.</li>
- * </ul>
- * <p><b>Ownership:</b> once a {@link WebSocketFrame} is consumed by this encoder, the
- * encoder takes over its lifecycle and releases the source frame after the outbound bytes
- * have been produced. Callers should not release a successfully handed-off frame twice.
+ * Typical usage:
+ * <pre>
+ *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
+ *   ctx.addLast("http", new HttpClientDuplexe());
+ * </pre>
  */
 public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpObject> {
     private static final Logger              logger           = Logger.getLogger(WebSocketFrameEncoder.class);

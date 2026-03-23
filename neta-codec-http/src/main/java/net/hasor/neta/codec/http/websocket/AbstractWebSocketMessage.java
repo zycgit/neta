@@ -17,10 +17,9 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Abstract base class for application-level WebSocket message chunks.
+ * Base implementation for application-level WebSocket message chunks.
  * <p>
- * Message type distinction and chunk sequence belong here after frame handling, not on the raw
- * transport frame model.
+ * Stores stream id, chunk sequence, and payload after frame-level processing has been completed.
  */
 public abstract class AbstractWebSocketMessage implements WebSocketMessage {
     private int     streamId;

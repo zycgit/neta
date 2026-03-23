@@ -18,6 +18,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
+import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
@@ -51,6 +52,16 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @see ProtoRoutingBuilder
  */
 public final class ProtoHelper {
+    /** Create a standalone routing builder using static route selection. */
+    public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsDefault(String defaultRouting, ProtoInitializer initializer) {
+        if (StringUtils.isBlank(defaultRouting) || initializer == null) {
+            throw new IllegalArgumentException("routingName is blank or routing is null.");
+        }
+
+        ProtoRoutingDuplexer<RCV_UP, SND_DOWN> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, (context, rcvUp, sndDown) -> defaultRouting);
+        return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, duplexer).branchByInitializer(defaultRouting, initializer);
+    }
+
     /** Create a standalone routing builder using static route selection. */
     public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsStatic(ProtoRoutingDataSelector<RCV_UP, SND_DOWN> routing) {
         Objects.requireNonNull(routing, "routing is null.");

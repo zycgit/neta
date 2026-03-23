@@ -22,47 +22,26 @@ import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Decodes transparent-mode HTTP payload bytes into {@link WebSocketFrame} objects.
+ * Decodes upgraded HTTP payload into {@link WebSocketFrame} objects.
  * <p>
- * This decoder is used only after the HTTP/1.x upgrade handshake has completed and the
- * HTTP codec has switched into transparent mode. At that point inbound network bytes are
- * wrapped as {@link HttpByteBuf}, and this handler turns those transport bytes into
- * frame-level WebSocket objects.
- * <p>
- * Preferred usage for a bidirectional pipeline is {@link WebSocketFrameDuplexer}.
- * Install this decoder directly only when the receive direction must be assembled
- * independently from the send direction.
- * When the no-arg constructor is used behind {@link WebSocketHandshakeDuplexer},
- * the decoder first tries to resolve the negotiated version from {@link WebSocketContext}
- * and falls back to RFC 6455 version 13 when no handshake context is available.
- * <p>
- * Typical usage in a manually assembled inbound-only pipeline:
+ * Function:
  * <pre>
- *   ctx.addLast("http", new HttpServerDuplexe());
- *   ctx.addLast("ws-handshake", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
- *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
- *   ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
+ *   read transparent HttpByteBuf payload
+ *   parse WebSocket frame header and payload
+ *   emit WebSocketFrame objects
  * </pre>
  * <p>
  * pipeline view:
  * <pre>
- *   socket bytes
- *      -> HttpServerDuplexe / HttpClientDuplexe
- *      -> transparent HttpByteBuf
- *      -> WebSocketFrameDecoder
- *      -> WebSocketFrame
- *      -> next inbound handler
+ *   socket bytes -> HTTP codec -> HttpByteBuf -> WebSocketFrameDecoder -> WebSocketFrame
  * </pre>
  * <p>
- * Version support:
- * <ul>
- *   <li>{@link WebSocketVersion#V0}: Hixie-76 framing.</li>
- *   <li>{@link WebSocketVersion#V7}, {@link WebSocketVersion#V8}, {@link WebSocketVersion#V13}: RFC 6455 framing family.</li>
- * </ul>
- * <p>
- * This decoder only accepts transparent-mode {@link HttpByteBuf} input. Any other
- * {@link HttpObject} type is unsupported and will be handled by the decoder error path,
- * which resets the internal frame state for subsequent input.
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+ *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
+ * </pre>
  */
 public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocketFrame> {
     private static final Logger           logger           = Logger.getLogger(WebSocketFrameDecoder.class);

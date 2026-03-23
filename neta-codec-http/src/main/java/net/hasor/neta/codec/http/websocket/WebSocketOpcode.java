@@ -15,8 +15,9 @@
  */
 package net.hasor.neta.codec.http.websocket;
 /**
- * WebSocket frame opcodes as defined in
- * <a href="https://tools.ietf.org/html/rfc6455#section-5.2">RFC 6455 §5.2</a>.
+ * WebSocket opcodes used by frames and internal control flow.
+ * <p>
+ * Covers the standard RFC 6455 values plus one internal synthetic handshake marker.
  */
 public enum WebSocketOpcode {
     /** Continuation frame (opcode 0x0). */

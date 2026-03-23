@@ -18,6 +18,11 @@ import java.util.Objects;
 import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.HttpStatus;
 
+/**
+ * Internal exception used to abort the opening handshake with an HTTP response.
+ * <p>
+ * Carries status, optional headers, optional body, and whether the channel should be closed.
+ */
 class WebSocketHandshakeException extends RuntimeException {
     private final HttpStatus  status;
     private final HttpHeaders headers;

@@ -19,23 +19,24 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Handles outbound websocket data-message chunks and converts them to websocket frames.
+ * Converts outbound message chunks and control events into {@link WebSocketFrame} flow.
  * <p>
- * Fragmented message flow is driven by {@link WebSocketMessage#sequence()} rather than by payload
- * aggregation. TEXT/BINARY chunks are translated to TEXT/BINARY or CONTINUATION frames.
+ * Function:
+ * <pre>
+ *   map TEXT/BINARY message chunks to frames
+ *   preserve fragmentation through sequence markers
+ *   generate ping, pong, and close control frames
+ * </pre>
  * <p>
- * This handler stays on the message layer. TEXT/BINARY chunks are translated to websocket frames
- * here, while ping/pong/close control semantics are driven through websocket user events or frame
- * level handling.
+ * pipeline view:
+ * <pre>
+ *   WebSocketMessage / WebSocket events -> WebSocketOutboundHandler -> WebSocketFrame
+ * </pre>
  * <p>
- * When paired inside {@link WebSocketMessageDuplexer}, protocol-generated control replies are
- * internally re-wrapped as package-private {@link InternalWebSocketMessage} objects before
- * they re-enter the send path. The public send-side contract remains {@link WebSocketMessage}.
- * <p>
- * This handler requires the negotiated {@link WebSocketContext} written by the handshake phase.
- * Version family and client/server masking behavior are resolved from that context on demand.
- * Installing this handler without a preceding {@link WebSocketHandshakeDuplexer} is a pipeline
- * assembly error.
+ * Typical usage:
+ * <pre>
+ *   ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+ * </pre>
  */
 public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, WebSocketFrame> {
     private WebSocketOpcode fragmentType;

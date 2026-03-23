@@ -1,4 +1,4 @@
-package net.hasor.neta.codec.http.simple;
+package net.hasor.neta.codec.http.real.httpserver;
 
 public final class RawHttpResponse {
     public final int    statusCode;

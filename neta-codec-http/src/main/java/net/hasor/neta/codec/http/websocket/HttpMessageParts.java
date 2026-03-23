@@ -19,6 +19,11 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.codec.http.*;
 
+/**
+ * Incremental collector for staged HTTP handshake parts.
+ * <p>
+ * Aggregates request or response line, headers, and body into one reusable handshake snapshot.
+ */
 final class HttpMessageParts {
     private HttpVersion        protocolVersion;
     private HttpMethod         method;

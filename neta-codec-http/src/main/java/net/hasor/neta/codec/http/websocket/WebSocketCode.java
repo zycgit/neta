@@ -16,7 +16,9 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * Standard WebSocket close status codes defined by RFC 6455 section 7.4.
+ * Standard WebSocket close status codes.
+ * <p>
+ * Collects the RFC 6455 section 7.4 constants used by close frames and protocol violations.
  */
 public final class WebSocketCode {
     /** 1000 — Normal Closure. */

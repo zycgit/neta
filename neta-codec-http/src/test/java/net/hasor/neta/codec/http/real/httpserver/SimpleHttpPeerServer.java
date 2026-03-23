@@ -1,4 +1,4 @@
-package net.hasor.neta.codec.http.simple;
+package net.hasor.neta.codec.http.real.httpserver;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -118,10 +118,7 @@ public class SimpleHttpPeerServer {
 
     private static void writeResponse(OutputStream outputStream, RawHttpResponse response) throws IOException {
         byte[] bodyBytes = response.body.getBytes(StandardCharsets.UTF_8);
-        String header = "HTTP/1.1 " + response.statusCode + " " + response.reason + "\r\n"
-                + "Content-Type: " + response.contentType + "\r\n"
-                + "Content-Length: " + bodyBytes.length + "\r\n"
-                + "Connection: close\r\n\r\n";
+        String header = "HTTP/1.1 " + response.statusCode + " " + response.reason + "\r\n" + "Content-Type: " + response.contentType + "\r\n" + "Content-Length: " + bodyBytes.length + "\r\n" + "Connection: close\r\n\r\n";
         outputStream.write(header.getBytes(StandardCharsets.US_ASCII));
         outputStream.write(bodyBytes);
         outputStream.flush();

@@ -19,16 +19,9 @@ import java.util.List;
 import net.hasor.cobble.StringUtils;
 
 /**
- * Default implementation of {@link WebSocketContext}.
+ * Default immutable {@link WebSocketContext} implementation.
  * <p>
- * Created after the WebSocket opening handshake completes and registered on
- * {@link net.hasor.neta.channel.ProtoContext} via
- * {@code context.context(WebSocketContext.class, impl)}.
- * <p>
- * Use the static factory method {@link #fromHandshake} to create an instance
- * from the handshake parameters.
- * @author 赵永春 (zyc@hasor.net)
- * @version : 2024-01-15
+ * Created by handshake duplexers after upgrade succeeds and then attached to the pipeline context.
  */
 class WebSocketContextImpl implements WebSocketContext {
     private final boolean      server;
@@ -72,7 +65,7 @@ class WebSocketContextImpl implements WebSocketContext {
     /**
      * Creates a server-side {@link WebSocketContext} from handshake parameters.
      * <p>
-     * Typically called after a server-side {@link WebSocketHandshakeDuplexer}
+     * Typically called after a server-side {@link WebSocketServerHandshakeDuplexer}
      * completes the opening handshake:
      * <pre>{@code
      * context.context(WebSocketContext.class,
@@ -102,7 +95,7 @@ class WebSocketContextImpl implements WebSocketContext {
     /**
      * Creates a client-side {@link WebSocketContext} from handshake parameters.
      * <p>
-     * Typically called after a client-side {@link WebSocketHandshakeDuplexer}
+     * Typically called after a client-side {@link WebSocketClientHandshakeDuplexer}
      * validates the server's HTTP 101 upgrade response.
      * @param version the negotiated WebSocket version
      * @param requestPath the request URI path originally used by the client

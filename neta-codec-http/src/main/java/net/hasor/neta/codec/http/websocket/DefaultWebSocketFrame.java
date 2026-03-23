@@ -19,10 +19,9 @@ import net.hasor.cobble.ref.RecycleObjectPool.ObjHandler;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Default pooled implementation of {@link WebSocketFrame}.
+ * Pooled default implementation of {@link WebSocketFrame}.
  * <p>
- * WebSocket frames remain transport-level objects; application-visible type
- * distinction should happen on {@link WebSocketMessage} rather than on frames.
+ * Holds the wire-level FIN, opcode, mask, masking key, and payload fields used by frame codecs.
  */
 final class DefaultWebSocketFrame implements WebSocketFrame {
     private static final int                               RECYCLE_INDEX   = RecycleObjectPool.registerType();

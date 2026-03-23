@@ -24,8 +24,32 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
-class WebSocketHandshake4Server extends AbstractWebSocketHandshake {
-    private static final Logger logger = LoggerFactory.getLogger(WebSocketHandshake4Server.class);
+/**
+ * Server-side WebSocket opening-handshake duplexer.
+ * <p>
+ * Function:
+ * <pre>
+ *   collect client upgrade request
+ *   authorize or reject the handshake
+ *   emit HTTP 101 response and publish WebSocketContext
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   inbound:  HttpObject request parts -> WebSocketServerHandshakeDuplexer -> upgraded flow
+ *   outbound: handshake response        -> WebSocketServerHandshakeDuplexer -> HttpObject
+ * </pre>
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+ *   ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
+ *   ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+ * </pre>
+ */
+public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake {
+    private static final Logger logger = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
 
     // Handshake state is intentionally split into three layers:
     // 1) authorization pending state: authPending/authAttemptId
@@ -55,11 +79,11 @@ class WebSocketHandshake4Server extends AbstractWebSocketHandshake {
 
     private final WebSocketHandshakeAuthorizer authorizer;
 
-    public WebSocketHandshake4Server(WebSocketVersion codecVersion) {
+    public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion) {
         this(codecVersion, (event, c) -> c.accept());
     }
 
-    public WebSocketHandshake4Server(WebSocketVersion codecVersion, WebSocketHandshakeAuthorizer authorizer) {
+    public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketHandshakeAuthorizer authorizer) {
         super(codecVersion);
         this.authorizer = Objects.requireNonNull(authorizer, "authorizer is null");
     }

@@ -13,13 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.channel;
+package net.hasor.neta.codec.http.real.websocket;
+import java.nio.charset.StandardCharsets;
+import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufAllocator;
 
-/**
- * Backward-compatible alias for data-driven routing selection.
- * @author 赵永春 (zyc@hasor.net)
- * @version : 2026-03-22
- */
-@FunctionalInterface
-public interface ProtoRoutingSelector<RCV_UP, SND_DOWN> extends ProtoRoutingDataSelector<RCV_UP, SND_DOWN> {
+public final class WebSocketTestData {
+    private WebSocketTestData() {
+    }
+
+    public static ByteBuf ascii(String value) {
+        byte[] bytes = value.getBytes(StandardCharsets.US_ASCII);
+        ByteBuf byteBuf = ByteBufAllocator.DEFAULT.buffer(bytes.length, Integer.MAX_VALUE);
+        byteBuf.writeBytes(bytes, 0, bytes.length);
+        byteBuf.markWriter();
+        return byteBuf;
+    }
 }

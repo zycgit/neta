@@ -53,7 +53,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     public void testServerRejectsRfc6455HandshakeWithRequestBodyWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13));
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
             }, VrtSoConfig.asServer());
 
             DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/chat", ascii("abc"));
@@ -79,7 +79,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testServerRejectsLegacyV0HandshakeWithInvalidChallengeLengthWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V0)), VrtSoConfig.asServer());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V0)), VrtSoConfig.asServer());
 
             FullHttpRequest base = WebSocketUtils.createHandshake(WebSocketVersion.V0, "/legacy");
             DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/legacy", ascii("short"));
@@ -105,7 +105,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testServerRejectsIncompatibleVersionWithUpgradeRequiredWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V0)), VrtSoConfig.asServer());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V0)), VrtSoConfig.asServer());
 
             FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
             List<HttpObject> inbound = receiveAndIntBound(pipe, request);
@@ -124,7 +124,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testServerCreatesReadyContextForStagedRfc6455Request() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketHandshakeDuplexer(true, WebSocketVersion.V13)), VrtSoConfig.asServer());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asServer());
 
             DefaultHttpRequest requestLine = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/chat");
             requestLine.streamId(23);
@@ -157,7 +157,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testClientCreatesReadyContextForStaged101Response() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             DefaultHttpRequest requestLine = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/chat");
             DefaultLastHttpHeaders requestHeaders = new DefaultLastHttpHeaders();
@@ -191,7 +191,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testClientRejects101WithoutConnectionUpgradeWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             sendAndOutBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
             DefaultFullHttpResponse response = newUpgradeResponse(RFC6455_KEY);
@@ -207,7 +207,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testClientRejects101WithoutUpgradeHeaderWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             sendAndOutBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
             DefaultFullHttpResponse response = newUpgradeResponse(RFC6455_KEY);
@@ -223,7 +223,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testClientRejectsUnexpectedSelectedSubProtocolWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
             request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat, graphql-ws");
@@ -242,7 +242,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     @Test
     public void testClientRejectsSelectedSubProtocolWhenNoneRequestedWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketHandshakeDuplexer(false, WebSocketVersion.V13)), VrtSoConfig.asClient());
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());
 
             FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
             sendAndOutBound(pipe, request);

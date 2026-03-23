@@ -18,7 +18,9 @@ import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
- * Immutable snapshot of a server-side websocket opening-handshake request.
+ * Immutable snapshot of a server-side opening-handshake request.
+ * <p>
+ * Exposes requested version, path, protocols, extensions, and headers to the authorizer.
  */
 public class WebSocketHandshakeRequest {
     private final WebSocketVersion   version;

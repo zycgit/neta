@@ -16,16 +16,9 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * WebSocket protocol versions.
- * <ul>
- *   <li>{@link #V0} — Hixie-76 / hybi-00: uses {@code 0x00…0xFF} text framing and MD5 handshake.</li>
- *   <li>{@link #V7} — hybi-07: uses RFC 6455–style binary framing and SHA-1 handshake.</li>
- *   <li>{@link #V8} — hybi-08/10: uses RFC 6455–style binary framing and SHA-1 handshake.</li>
- *   <li>{@link #V13} — RFC 6455: the final standard, same wire format as V7/V8.</li>
- * </ul>
+ * Supported WebSocket protocol versions.
  * <p>
- * V7, V8, and V13 share the same frame encoding; only the handshake version header differs.
- * V0 uses a completely different frame format.
+ * Distinguishes the legacy V0 handshake/framing family from the RFC 6455-compatible versions.
  */
 public enum WebSocketVersion {
     /** Hixie-76 / hybi-00 (version 0). */

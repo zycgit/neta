@@ -16,8 +16,9 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * Asynchronous strategy for deciding whether a server-side websocket handshake
- * should continue.
+ * Asynchronous decision hook for server-side WebSocket handshake acceptance.
+ * <p>
+ * Receives a snapshot of the opening request and answers through a callback.
  */
 @FunctionalInterface
 public interface WebSocketHandshakeAuthorizer {

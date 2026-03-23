@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 import net.hasor.neta.codec.http.HttpEvent;
 
+/**
+ * Base type for WebSocket user events.
+ * <p>
+ * Provides a common stream id and release lifecycle for handshake, ping/pong, and close events.
+ */
 public abstract class AbstractWebSocketEvent implements HttpEvent {
     private int     streamId;
     private boolean released;

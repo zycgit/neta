@@ -16,17 +16,15 @@
 package net.hasor.neta.codec.http.websocket;
 
 import java.util.List;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.SoChannel;
+import net.hasor.neta.channel.SoUserEvent;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.routing.HttpRouteKey;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
-    private static final String BRANCH_HANDSHAKE = "handshake";
-    private static final String BRANCH_WEBSOCKET = HttpRouteKey.BRANCH_SOCKET;
-    private static final String WS_PATH          = "/chat";
+    private static final String WS_PATH = "/chat";
 
     private static PongWebSocketEvent pongEvent(Iterable<SoUserEvent> events) {
         if (events == null) {
@@ -44,48 +42,9 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
         return channel.findProtoContext(WebSocketContext.class);
     }
 
-    private boolean hasReadyContext(SoChannel<?> channel) {
-        WebSocketContext webSocketContext = webSocketContext(channel);
-        return webSocketContext != null && webSocketContext.isReady();
-    }
-
-    private VirtualPipe openWebSocketPipe(NetManager neta, WebSocketVersion version) throws Throwable {
-        return openVirtualPipe(neta, ctx -> {
-            ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsStatic(new ProtoRoutingDataSelector<Object, Object>() {
-                @Override
-                public String route(ProtoContext context, ProtoRcvQueue<Object> rcvUp, ProtoSndQueue<Object> sndDown) {
-                    return BRANCH_HANDSHAKE;
-                }
-            });
-            routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
-                branchCtx.addLast("client-ws-handshake", new WebSocketHandshakeDuplexer(false, version));
-            });
-            routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
-                branchCtx.addLast("client-ws-frame", new WebSocketFrameDuplexer(version));
-                branchCtx.addLast("client-ws-message", new WebSocketMessageDuplexer());
-            });
-            ctx.addLast("client-ws-route", routing.build());
-        }, ctx -> {
-            ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsStatic(new ProtoRoutingDataSelector<Object, Object>() {
-                @Override
-                public String route(ProtoContext context, ProtoRcvQueue<Object> rcvUp, ProtoSndQueue<Object> sndDown) {
-                    return BRANCH_HANDSHAKE;
-                }
-            });
-            routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
-                branchCtx.addLast("server-ws-handshake", new WebSocketHandshakeDuplexer(true, version));
-            });
-            routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
-                branchCtx.addLast("server-ws-frame", new WebSocketFrameDuplexer(version));
-                branchCtx.addLast("server-ws-message", new WebSocketMessageDuplexer());
-            });
-            ctx.addLast("server-ws-route", routing.build());
-        }, VrtTransfer.direct());
-    }
-
     private void completeHandshake(VirtualPipe pipe, WebSocketVersion version) throws Throwable {
-        pipe.client().sendData(WebSocketUtils.createHandshake(version, WS_PATH)).get();
-        assertTrue(waitUntil(() -> hasReadyContext(pipe.client()) && hasReadyContext(pipe.server()), 1000L));
+        pipe.client().sendData(WebSocketUtils.createHandshake(version, WS_PATH), "ws-client").get();
+        assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.client()) && WebSocketUtils.isReady(pipe.server()), 1000L));
 
         WebSocketContext clientContext = webSocketContext(pipe.client());
         WebSocketContext serverContext = webSocketContext(pipe.server());
@@ -103,7 +62,15 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     @Test
     public void testClientMessageArrivesAsServerMessageAndServerReplyArrivesAsClientMessage() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openWebSocketPipe(neta, WebSocketVersion.V13);
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+            }, ctx -> {
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+            }, VrtTransfer.direct());
             completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.client().sendData(WebSocketUtils.textMessage(ascii("hello-server"))).get();
@@ -133,7 +100,15 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     @Test
     public void testClientBinaryMessageAndServerBinaryMessageFlowAcrossFullPipe() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openWebSocketPipe(neta, WebSocketVersion.V13);
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+            }, ctx -> {
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+            }, VrtTransfer.direct());
             completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.client().sendData(WebSocketUtils.binaryMessage(ascii("ABCD"))).get();
@@ -163,7 +138,15 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     @Test
     public void testClientPingEventProducesClientSidePongEvent() throws Throwable {
         autoCloseNeta(neta -> {
-            VirtualPipe pipe = openWebSocketPipe(neta, WebSocketVersion.V13);
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+            }, ctx -> {
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-message", new WebSocketMessageDuplexer());
+            }, VrtTransfer.direct());
             completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.client().fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-body")));

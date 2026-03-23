@@ -16,7 +16,12 @@
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 
-/** Internal message wrapper used when protocol handlers need to re-enter the outbound pipeline with control semantics. */
+/**
+ * Internal control-message wrapper for pipeline re-entry.
+ * <p>
+ * Used by protocol handlers when ping, pong, or close semantics need to be sent through the
+ * normal outbound message pipeline.
+ */
 final class InternalWebSocketMessage extends AbstractWebSocketMessage {
     private WebSocketOpcode opcode;
 

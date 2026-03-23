@@ -105,7 +105,7 @@ public class Http2OkHttpProtocolTest {
     private void startH2cServer(int initialWindowSize) throws Exception {
         Http2OkHttpProtocolTest self = this;
         ProtoInitializer serverProto = ctx -> {
-            ProtoRoutingDuplexer<ByteBuf, ByteBuf> detect = new ProtoRoutingDuplexer<>((context, rcvUp, sndDown) -> {
+            ProtoRoutingDuplexer<ByteBuf, ByteBuf> detect = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, sndDown) -> {
                 H2RouteState routeState = context.context(H2RouteState.class);
                 if (routeState != null && routeState.h2PriorKnowledge) {
                     return "h2";
@@ -117,9 +117,9 @@ public class Http2OkHttpProtocolTest {
                 if (first == null || first.readableBytes() < 4) {
                     return null;
                 }
-                if ((first.getByte(0) & 0xFF) == 0x50
-                        && (first.getByte(1) & 0xFF) == 0x52
-                        && (first.getByte(2) & 0xFF) == 0x49
+                if ((first.getByte(0) & 0xFF) == 0x50//
+                        && (first.getByte(1) & 0xFF) == 0x52//
+                        && (first.getByte(2) & 0xFF) == 0x49//
                         && (first.getByte(3) & 0xFF) == 0x20) {
                     if (routeState == null) {
                         routeState = new H2RouteState();
@@ -128,7 +128,7 @@ public class Http2OkHttpProtocolTest {
                     routeState.h2PriorKnowledge = true;
                     return "h2";
                 }
-                return "http";
+                return null;
             });
 
             detect.addBranch("h2", h2cBranch -> {

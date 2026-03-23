@@ -21,11 +21,36 @@ import java.util.Base64;
 import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.channel.*;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.channel.ProtoDuplexer;
+import net.hasor.neta.channel.ProtoExceptionHolder;
+import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.routing.HttpRouteKey;
 
-abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
+/**
+ * Shared foundation for WebSocket opening-handshake duplexers.
+ * <p>
+ * Function:
+ * <pre>
+ *   validate HTTP upgrade preconditions
+ *   share version-compatibility rules
+ *   build handshake results and failure handling helpers
+ * </pre>
+ * <p>
+ * pipeline view:
+ * <pre>
+ *   HttpObject request/response parts
+ *      -> AbstractWebSocketHandshake subclass
+ *      -> upgraded WebSocket context + handshake events
+ * </pre>
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+ *   ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+ * </pre>
+ */
+public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private static final Logger           logger         = Logger.getLogger(AbstractWebSocketHandshake.class);
     private static final String           WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     protected final      WebSocketVersion codecVersion;
@@ -183,10 +208,6 @@ abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, H
         context.context(WebSocketContext.class, webSocketContext);
         context.rootContext(WebSocketContext.class, webSocketContext);
         context.fireUserEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
-
-        ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
-        if (routingControl != null) {
-            routingControl.switchRoute(HttpRouteKey.BRANCH_SOCKET);
-        }
+        context.fireUserEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(webSocketContext));
     }
 }
