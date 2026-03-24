@@ -24,7 +24,7 @@ import static org.junit.Assert.*;
 
 /**
  * Tests for {@link Http2Context} implementation and registration
- * through {@link Http2ServerDuplexe} and {@link Http2ClientDuplexe}.
+ * through {@link Http2ObjectDuplexe}.
  */
 public class Http2ContextTest {
     private static final String name     = "test";
@@ -52,7 +52,7 @@ public class Http2ContextTest {
 
     @Test
     public void serverDuplexe_registersContext() throws Throwable {
-        Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
+        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
         ProtoContext ctx = mockContext();
 
         duplexe.onInit(name, poolSize, poolSize, ctx);
@@ -63,7 +63,7 @@ public class Http2ContextTest {
 
     @Test
     public void clientDuplexe_registersContext() throws Throwable {
-        Http2ClientDuplexe duplexe = new Http2ClientDuplexe();
+        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(false);
         ProtoContext ctx = mockContext();
 
         duplexe.onInit(name, poolSize, poolSize, ctx);
@@ -74,7 +74,7 @@ public class Http2ContextTest {
 
     @Test
     public void serverContext_isServer() throws Throwable {
-        Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
+        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -85,7 +85,7 @@ public class Http2ContextTest {
 
     @Test
     public void clientContext_isClient() throws Throwable {
-        Http2ClientDuplexe duplexe = new Http2ClientDuplexe();
+        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(false);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -96,7 +96,7 @@ public class Http2ContextTest {
 
     @Test
     public void initialState_notReady() throws Throwable {
-        Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
+        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -107,7 +107,7 @@ public class Http2ContextTest {
 
     @Test
     public void initialState_defaultSettings() throws Throwable {
-        Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
+        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -120,7 +120,7 @@ public class Http2ContextTest {
 
     @Test
     public void initialState_lastStreamIdZero() throws Throwable {
-        Http2ServerDuplexe duplexe = new Http2ServerDuplexe();
+        Http2ObjectDuplexe duplexe = new Http2ObjectDuplexe(true);
         ProtoContext ctx = mockContext();
         duplexe.onInit(name, poolSize, poolSize, ctx);
 
@@ -131,7 +131,7 @@ public class Http2ContextTest {
     @Test
     public void createContext_returnsLiveView() throws Throwable {
         // Verify that the context object delegates to live decoder state
-        Http2DecoderContent state = new Http2DecoderContent(true, 4096, 8192);
+        Http2DecoderContent state = new Http2DecoderContent(true, new Http2Settings().headerTableSize(4096).maxHeaderListSize(8192));
         Http2Context h2ctx = new Http2ContextImpl(true, state);
 
         assertTrue("createContext on server decoder should report isServer=true", h2ctx.isServer());
@@ -140,7 +140,7 @@ public class Http2ContextTest {
 
     @Test
     public void createContext_clientDecoder() {
-        Http2DecoderContent state = new Http2DecoderContent(false, 4096, 8192);
+        Http2DecoderContent state = new Http2DecoderContent(false, new Http2Settings().headerTableSize(4096).maxHeaderListSize(8192));
         Http2Context h2ctx = new Http2ContextImpl(false, state);
 
         assertFalse("createContext on client decoder should report isServer=false", h2ctx.isServer());

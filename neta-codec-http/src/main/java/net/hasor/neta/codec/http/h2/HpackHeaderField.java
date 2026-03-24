@@ -24,11 +24,8 @@ package net.hasor.neta.codec.http.h2;
  * </pre>
  */
 final class HpackHeaderField {
-    /** Overhead per entry in the HPACK dynamic table (RFC 7541, Section 4.1). */
-    static final int ENTRY_OVERHEAD = 32;
-
-    final String name;
-    final String value;
+    private final String name;
+    private final String value;
 
     public HpackHeaderField(String name, String value) {
         this.name = name;
@@ -37,7 +34,8 @@ final class HpackHeaderField {
 
     /** Returns the size of this entry as defined by RFC 7541, Section 4.1. */
     public int size() {
-        return name.length() + value.length() + ENTRY_OVERHEAD;
+        // Overhead per entry in the HPACK dynamic table (RFC 7541, Section 4.1).
+        return name.length() + value.length() + 32;
     }
 
     public String name() {

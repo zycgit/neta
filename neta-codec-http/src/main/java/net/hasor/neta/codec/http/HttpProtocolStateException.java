@@ -13,23 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.h2;
+package net.hasor.neta.codec.http;
 
-/** Semantic WINDOW_UPDATE message. */
-public class Http2WindowUpdateMessage extends AbstractHttp2Message {
-    private final int increment;
-
-    public Http2WindowUpdateMessage(int streamId, int increment) {
-        this.streamId(streamId);
-        this.increment = increment;
+/**
+ * Thrown when an HTTP codec observes an invalid protocol state transition,
+ * sequencing violation, or mode/state mismatch.
+ */
+public class HttpProtocolStateException extends HttpProtocolException {
+    public HttpProtocolStateException(String message) {
+        super(message);
     }
 
-    @Override
-    public Type messageType() {
-        return Type.WINDOW_UPDATE;
-    }
-
-    public int increment() {
-        return this.increment;
+    public HttpProtocolStateException(int streamId, String message) {
+        super(message);
+        this.setStreamId(streamId);
     }
 }

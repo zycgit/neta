@@ -30,10 +30,9 @@ import net.hasor.neta.codec.http.HttpHeaders;
 class HpackEncoder {
     private final HpackDynamicTable dynamicTable;
     private final boolean           useIndexing;
-
     // Reusable encode buffer to avoid ByteArrayOutputStream (which is synchronized)
-    private byte[] buf = new byte[256];
-    private int    pos;
+    private       byte[]            buf = new byte[256];
+    private       int               pos;
 
     /**
      * Creates a new HPACK encoder.

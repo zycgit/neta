@@ -218,7 +218,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
     private void handleMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
         if (this.isFullMessage(msg)) {
             if (this.phase != AggregatePhase.IDLE) {
-                throw new HttpProtocolViolationException("received a full HTTP message before the previous aggregated message completed");
+                throw new HttpProtocolStateException("received a full HTTP message before the previous aggregated message completed");
             }
             dst.offerMessage(msg);
             return;
@@ -226,7 +226,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
 
         if (this.isStartMessage(msg)) {
             if (this.phase != AggregatePhase.IDLE) {
-                throw new HttpProtocolViolationException("received " + msg.getClass().getSimpleName() + " before previous aggregated message completed");
+                throw new HttpProtocolStateException("received " + msg.getClass().getSimpleName() + " before previous aggregated message completed");
             }
             this.resetFor(this.castStartMessage(msg));
             return;
@@ -261,7 +261,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
             return;
         }
 
-        throw new HttpProtocolViolationException("unsupported HTTP object for aggregation: " + msg.getClass().getName());
+        throw new HttpProtocolException("unsupported HTTP object for aggregation: " + msg.getClass().getName());
     }
 
     private boolean discardMessage(HttpObject msg) {
@@ -286,7 +286,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
 
         if (headers instanceof TrailerHttpHeaders) {
             if (!this.headersClosed) {
-                throw new HttpProtocolViolationException("received trailer headers before header section completed");
+                throw new HttpProtocolStateException("received trailer headers before header section completed");
             }
             this.phase = AggregatePhase.TRAILERS;
             this.trailingHeaders.appendHeaders(headers);
@@ -294,7 +294,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         }
 
         if (this.headersClosed) {
-            throw new HttpProtocolViolationException("received initial headers after header section already closed");
+            throw new HttpProtocolStateException("received initial headers after header section already closed");
         }
 
         this.phase = AggregatePhase.HEADERS;
@@ -313,11 +313,11 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
             throw new HttpBadRequestException("received HttpContent without preceding HttpMessage");
         }
         if (!this.headersClosed) {
-            throw new HttpProtocolViolationException("received HttpContent before LastHttpHeaders");
+            throw new HttpProtocolStateException("received HttpContent before LastHttpHeaders");
         }
         if (this.phase == AggregatePhase.TRAILERS) {
             if (!lastContent || content != null && content.readableBytes() > 0) {
-                throw new HttpProtocolViolationException("received HttpContent after trailer headers");
+                throw new HttpProtocolStateException("received HttpContent after trailer headers");
             }
             return;
         }

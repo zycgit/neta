@@ -96,7 +96,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
                 if (httpCtx.isTransparentMode()) {
                     consumed = true;
                     if (!(msg instanceof HttpByteBuf)) {
-                        throw new HttpProtocolViolationException("transparent mode only accepts HttpByteBuf on response encoder.");
+                        throw new HttpProtocolStateException("transparent mode only accepts HttpByteBuf on response encoder.");
                     }
                     this.offerDirectContent(((HttpByteBuf) msg).content(), dst);
                     continue;

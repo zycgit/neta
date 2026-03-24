@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
  * Represents an HTTP/2 stream's accumulated state.
@@ -26,22 +25,17 @@ import net.hasor.neta.codec.http.HttpHeaders;
 class Http2Stream {
     private final int              streamId;
     private       Http2StreamState state;
-    private       HttpHeaders      accumulatedHeaders;
     private       ByteBuf          accumulatedHeaderBlock;
-    private       int              sendWindowSize;
-    private       int              recvWindowSize;
     private       boolean          endStreamPending;
+    private       boolean          initialHeadersEmitted;
 
     /**
      * Creates a new HTTP/2 stream.
      * @param streamId the stream identifier (odd for client-initiated, even for server-initiated)
-     * @param initialWindowSize initial flow-control window size
      */
-    public Http2Stream(int streamId, int initialWindowSize) {
+    public Http2Stream(int streamId) {
         this.streamId = streamId;
         this.state = Http2StreamState.IDLE;
-        this.sendWindowSize = initialWindowSize;
-        this.recvWindowSize = initialWindowSize;
     }
 
     public int streamId() {
@@ -56,36 +50,12 @@ class Http2Stream {
         this.state = state;
     }
 
-    public HttpHeaders accumulatedHeaders() {
-        return accumulatedHeaders;
-    }
-
-    public void accumulatedHeaders(HttpHeaders headers) {
-        this.accumulatedHeaders = headers;
-    }
-
     public ByteBuf accumulatedHeaderBlock() {
         return accumulatedHeaderBlock;
     }
 
     public void accumulatedHeaderBlock(ByteBuf buf) {
         this.accumulatedHeaderBlock = buf;
-    }
-
-    public int sendWindowSize() {
-        return sendWindowSize;
-    }
-
-    public void adjustSendWindowSize(int delta) {
-        this.sendWindowSize += delta;
-    }
-
-    public int recvWindowSize() {
-        return recvWindowSize;
-    }
-
-    public void adjustRecvWindowSize(int delta) {
-        this.recvWindowSize += delta;
     }
 
     /** Returns true if the original HEADERS frame carried END_STREAM but not END_HEADERS. */
@@ -98,13 +68,20 @@ class Http2Stream {
         this.endStreamPending = pending;
     }
 
+    public boolean isInitialHeadersEmitted() {
+        return this.initialHeadersEmitted;
+    }
+
+    public void setInitialHeadersEmitted(boolean initialHeadersEmitted) {
+        this.initialHeadersEmitted = initialHeadersEmitted;
+    }
+
     /** Releases resources held by this stream. */
     public void release() {
         if (accumulatedHeaderBlock != null) {
             accumulatedHeaderBlock.free();
             accumulatedHeaderBlock = null;
         }
-        accumulatedHeaders = null;
     }
 
     @Override

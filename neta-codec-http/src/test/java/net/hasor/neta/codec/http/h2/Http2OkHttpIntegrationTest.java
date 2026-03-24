@@ -15,20 +15,15 @@
  */
 package net.hasor.neta.codec.http.h2;
 
-import java.io.IOException;
 import java.net.InetSocketAddress;
-import java.net.ServerSocket;
 import java.nio.charset.StandardCharsets;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 import okhttp3.*;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
@@ -43,67 +38,21 @@ import static org.junit.Assert.assertTrue;
  * This verifies end-to-end HTTP/2 binary framing and HPACK header compression
  * over real TCP sockets with a third-party HTTP/2 client library.
  */
-public class Http2OkHttpProtocolTest {
+public class Http2OkHttpIntegrationTest extends AbstractHttpTest {
 
     private static class H2RouteState {
         private boolean h2PriorKnowledge;
     }
 
-    private NetManager   neta;
-    private int          port;
-    private OkHttpClient h2Client;
-
-    /** Per-test request handler. Set before starting the server or sending requests. */
-    private volatile Consumer<RequestContext> requestHandler;
-
-    private static int findFreePort() throws IOException {
-        try (ServerSocket ss = new ServerSocket(0)) {
-            return ss.getLocalPort();
-        }
+    private static OkHttpClient okHttpClient() {
+        return new OkHttpClient.Builder().protocols(Collections.singletonList(Protocol.H2_PRIOR_KNOWLEDGE)).build();
     }
 
     private static ByteBuf toBody(String text) {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(text.length() + 16);
-        buf.writeString(text, StandardCharsets.UTF_8);
-        buf.markWriter();
-        return buf;
+        return ByteBuf.wrap(text.getBytes(StandardCharsets.UTF_8));
     }
 
-    @Before
-    public void setUp() throws Exception {
-        Thread.sleep(50);
-        port = findFreePort();
-        neta = new NetManager();
-
-        // OkHttp client configured for h2c Prior Knowledge (cleartext HTTP/2)
-        h2Client = new OkHttpClient.Builder().protocols(Collections.singletonList(Protocol.H2_PRIOR_KNOWLEDGE)).build();
-    }
-
-    @After
-    public void tearDown() throws IOException {
-        if (h2Client != null) {
-            h2Client.dispatcher().executorService().shutdown();
-            h2Client.connectionPool().evictAll();
-        }
-        if (neta != null) {
-            neta.shutdown();
-        }
-    }
-
-    /**
-     * Starts a neta server with h2c (HTTP/2 cleartext) detection using ProtoRoutingDuplexer.
-     * The route is selected by peeking the first 4 bytes for the HTTP/2 preface "PRI ".
-     * <p>
-     * Includes an inline dispatch handler that sends responses during RCV processing
-     * (same as the real server's HttpDispatchHandler), ensuring SETTINGS is always
-     * the first frame on the wire.
-     */
-    private void startH2cServer() throws Exception {
-        this.startH2cServer(65535);
-    }
-
-    private void startH2cServer(int initialWindowSize) throws Exception {
-        Http2OkHttpProtocolTest self = this;
+    private static void startH2cServer(NetManager neta, int port, int initialWindowSize, Consumer<RequestContext> requestHandler) throws Throwable {
         ProtoInitializer serverProto = ctx -> {
             ProtoRoutingDuplexer<ByteBuf, ByteBuf> detect = new ProtoRoutingDuplexer<>((ProtoRoutingDataSelector<ByteBuf, ByteBuf>) (context, rcvUp, sndDown) -> {
                 H2RouteState routeState = context.context(H2RouteState.class);
@@ -132,13 +81,10 @@ public class Http2OkHttpProtocolTest {
             });
 
             detect.addBranch("h2", h2cBranch -> {
-                h2cBranch.addLast("h2-codec", new Http2ServerDuplexe(4096, 8192, initialWindowSize));
-                h2cBranch.addLastDecoder("h2-http-dec", new Http2MessageToHttpDecoder());
-                h2cBranch.addLastEncoder("h2-http-enc", new Http2HttpToMessageEncoder(true));
+                h2cBranch.addLast("h2-frame", new Http2FrameDuplexe(true));
+                h2cBranch.addLast("h2-message", new Http2ObjectDuplexe(true, new Http2Settings().headerTableSize(4096).maxHeaderListSize(8192).initialWindowSize(Math.max(initialWindowSize, 65535)).enablePush(false).maxConcurrentStreams(100L)));
                 h2cBranch.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576));
-                // Inline dispatch handler — sends response during RCV processing,
-                // matching real server behavior (HttpDispatchHandler in nhttp).
-                h2cBranch.addLastDecoder("h2-handler", new InlineDispatchHandler(self));
+                h2cBranch.addLastDecoder("h2-handler", new InlineDispatchHandler(requestHandler));
             });
 
             detect.addBranch("http", httpBranch -> {
@@ -151,31 +97,49 @@ public class Http2OkHttpProtocolTest {
         neta.bind(new InetSocketAddress("0.0.0.0", port), serverProto, SoConfig.TCP());
     }
 
+    private void withH2cServer(Consumer<RequestContext> requestHandler, H2cScenario scenario) throws Throwable {
+        withH2cServer(requestHandler, 65535, scenario);
+    }
+
+    private void withH2cServer(Consumer<RequestContext> requestHandler, int initialWindowSize, H2cScenario scenario) throws Throwable {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        OkHttpClient h2Client = okHttpClient();
+        try {
+            startH2cServer(neta, port, initialWindowSize, requestHandler);
+            Thread.sleep(300);
+            scenario.run(port, h2Client);
+        } finally {
+            h2Client.dispatcher().executorService().shutdown();
+            h2Client.connectionPool().evictAll();
+            neta.shutdown();
+        }
+    }
+
     @Test
-    public void testH2c_GetRequest_ProtocolVerification() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgeGetRequest() throws Throwable {
+        withH2cServer(ctx -> {
             ByteBuf body = toBody("Hello HTTP/2!");
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
             response.setHeader("content-type", "text/plain");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/index").get().build();
-        Response response = h2Client.newCall(request).execute();
-
-        // *** Critical: verify the protocol is genuinely HTTP/2 ***
-        assertEquals("Protocol must be h2_prior_knowledge (HTTP/2 cleartext)", Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        assertEquals("Hello HTTP/2!", response.body().string());
-        response.close();
+        }, (port, client) -> {
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/index").get().build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals("Protocol must be h2_prior_knowledge (HTTP/2 cleartext)", Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                assertEquals("Hello HTTP/2!", response.body().string());
+            } finally {
+                response.close();
+            }
+        });
     }
 
     @Test
-    public void testH2c_PostWithJsonBody() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgePostJsonBody() throws Throwable {
+        withH2cServer(ctx -> {
             assertEquals(HttpMethod.POST, ctx.request.method());
 
             ByteBuf content = ctx.request.content();
@@ -185,26 +149,26 @@ public class Http2OkHttpProtocolTest {
             response.setHeader("content-type", "application/json");
             response.setHeader("content-length", String.valueOf(respBody.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        RequestBody body = RequestBody.create("{\"key\":\"value\"}", MediaType.get("application/json"));
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/api/data").post(body).build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        String respBody = response.body().string();
-        assertTrue(respBody.contains("\"received\":15"));
-        response.close();
+        }, (port, client) -> {
+            RequestBody body = RequestBody.create("{\"key\":\"value\"}", MediaType.get("application/json"));
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/api/data").post(body).build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                String respBody = response.body().string();
+                assertTrue(respBody.contains("\"received\":15"));
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= GET — verify HTTP/2 protocol =========================
 
     @Test
-    public void testH2c_CustomHeadersRoundTrip() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgeCustomHeadersRoundTrip() throws Throwable {
+        withH2cServer(ctx -> {
             String reqId = ctx.request.getString("x-request-id");
             String agent = ctx.request.getString("user-agent");
 
@@ -214,171 +178,170 @@ public class Http2OkHttpProtocolTest {
             response.setHeader("x-server", "neta-h2c");
             response.setHeader("content-length", "0");
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/headers").header("X-Request-Id", "h2-test-42").header("User-Agent", "OkHttp-H2-Test/1.0").get().build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        assertEquals("h2-test-42", response.header("x-echo-request-id"));
-        assertEquals("neta-h2c", response.header("x-server"));
-        response.close();
+        }, (port, client) -> {
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/headers").header("X-Request-Id", "h2-test-42").header("User-Agent", "OkHttp-H2-Test/1.0").get().build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                assertEquals("h2-test-42", response.header("x-echo-request-id"));
+                assertEquals("neta-h2c", response.header("x-server"));
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= POST with JSON body =========================
 
     @Test
-    public void testH2c_StatusCode404() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgeNotFoundResponse() throws Throwable {
+        withH2cServer(ctx -> {
             ByteBuf body = toBody("Not Found");
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NOT_FOUND, body);
             response.setHeader("content-type", "text/plain");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/missing").get().build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(404, response.code());
-        assertEquals("Not Found", response.body().string());
-        response.close();
+        }, (port, client) -> {
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/missing").get().build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(404, response.code());
+                assertEquals("Not Found", response.body().string());
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= Custom headers round-trip =========================
 
     @Test
-    public void testH2c_StatusCode500() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgeInternalServerError() throws Throwable {
+        withH2cServer(ctx -> {
             ByteBuf body = toBody("Internal Server Error");
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.INTERNAL_SERVER_ERROR, body);
             response.setHeader("content-type", "text/plain");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/error").get().build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(500, response.code());
-        response.close();
+        }, (port, client) -> {
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/error").get().build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(500, response.code());
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= Status code 404 =========================
 
     @Test
-    public void testH2c_PutRequest() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgePutRequest() throws Throwable {
+        withH2cServer(ctx -> {
             ByteBuf body = toBody("{\"updated\":true}");
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
             response.setHeader("content-type", "application/json");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        RequestBody body = RequestBody.create("{\"name\":\"updated\"}", MediaType.get("application/json"));
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/item/1").put(body).build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        assertTrue(response.body().string().contains("\"updated\":true"));
-        response.close();
+        }, (port, client) -> {
+            RequestBody body = RequestBody.create("{\"name\":\"updated\"}", MediaType.get("application/json"));
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/item/1").put(body).build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                assertTrue(response.body().string().contains("\"updated\":true"));
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= Status code 500 =========================
 
     @Test
-    public void testH2c_DeleteRequest() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgeDeleteRequest() throws Throwable {
+        withH2cServer(ctx -> {
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.NO_CONTENT);
             response.setHeader("content-length", "0");
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/item/42").delete().build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(204, response.code());
-        response.close();
+        }, (port, client) -> {
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/item/42").delete().build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(204, response.code());
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= PUT request =========================
 
     @Test
-    public void testH2c_LargeResponseBody() throws Exception {
+    public void testPriorKnowledgeLargeResponseBody() throws Throwable {
         final StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 200; i++) {
             sb.append("Line ").append(i).append(": HTTP/2 h2c large body test payload data.\n");
         }
         final String largeBody = sb.toString();
 
-        requestHandler = ctx -> {
+        withH2cServer(ctx -> {
             ByteBuf body = toBody(largeBody);
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
             response.setHeader("content-type", "text/plain");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/large").get().build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        assertEquals(largeBody, response.body().string());
-        response.close();
+        }, (port, client) -> {
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/large").get().build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                assertEquals(largeBody, response.body().string());
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= DELETE request =========================
 
     @Test
-    public void testH2c_MultipleSequentialRequests() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgeMultipleSequentialRequests() throws Throwable {
+        withH2cServer(ctx -> {
             String uri = ctx.request.uri();
             ByteBuf body = toBody("Response for " + uri);
             DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, body);
             response.setHeader("content-type", "text/plain");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        // Send 3 requests through the same h2c client.
-        for (int i = 0; i < 3; i++) {
-            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/req/" + i).get().build();
-            Response response = h2Client.newCall(request).execute();
-
-            assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-            assertEquals(200, response.code());
-            assertEquals("Response for /req/" + i, response.body().string());
-            response.close();
-            h2Client.connectionPool().evictAll();
-        }
+        }, (port, client) -> {
+            for (int i = 0; i < 3; i++) {
+                Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/req/" + i).get().build();
+                Response response = client.newCall(request).execute();
+                try {
+                    assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                    assertEquals(200, response.code());
+                    assertEquals("Response for /req/" + i, response.body().string());
+                } finally {
+                    response.close();
+                }
+                client.connectionPool().evictAll();
+            }
+        });
     }
 
     // ========================= Large body =========================
 
     @Test
-    public void testH2c_PostLargeRequestBody() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgePostLargeRequestBody() throws Throwable {
+        withH2cServer(ctx -> {
             ByteBuf content = ctx.request.content();
             int size = content != null ? content.readableBytes() : 0;
             ByteBuf body = toBody("{\"bodySize\":" + size + "}");
@@ -386,24 +349,24 @@ public class Http2OkHttpProtocolTest {
             response.setHeader("content-type", "application/json");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer();
-        Thread.sleep(300);
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < 200; i++) {
-            sb.append("data-line-").append(i).append(": OkHttp h2c request body test.\n");
-        }
-        String largeReqBody = sb.toString();
-        RequestBody reqBody = RequestBody.create(largeReqBody, MediaType.get("text/plain"));
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/upload").post(reqBody).build();
-        Response response = h2Client.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        String respBody = response.body().string();
-        assertTrue("Body size should be reported", respBody.contains("\"bodySize\":" + largeReqBody.length()));
-        response.close();
+        }, (port, client) -> {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < 200; i++) {
+                sb.append("data-line-").append(i).append(": OkHttp h2c request body test.\n");
+            }
+            String largeReqBody = sb.toString();
+            RequestBody reqBody = RequestBody.create(largeReqBody, MediaType.get("text/plain"));
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/upload").post(reqBody).build();
+            Response response = client.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                String respBody = response.body().string();
+                assertTrue("Body size should be reported", respBody.contains("\"bodySize\":" + largeReqBody.length()));
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= Multiple sequential requests =========================
@@ -414,8 +377,8 @@ public class Http2OkHttpProtocolTest {
      * without depending on multiple WINDOW_UPDATE exchanges in this integration setup.
      */
     @Test
-    public void testH2c_PostExceedsInitialWindow_100KB() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgePostBodyExceedsInitialWindow100KB() throws Throwable {
+        withH2cServer(ctx -> {
             ByteBuf content = ctx.request.content();
             int size = content != null ? content.readableBytes() : 0;
             ByteBuf body = toBody("{\"bodySize\":" + size + "}");
@@ -423,26 +386,24 @@ public class Http2OkHttpProtocolTest {
             response.setHeader("content-type", "application/json");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer(256 * 1024);
-        Thread.sleep(300);
-
-        byte[] largeData = new byte[100 * 1024]; // 102400 bytes
-        for (int i = 0; i < largeData.length; i++) {
-            largeData[i] = (byte) ('A' + (i % 26));
-        }
-        RequestBody reqBody = RequestBody.create(largeData, MediaType.get("application/octet-stream"));
-
-        OkHttpClient timedClient = h2Client.newBuilder().readTimeout(10, TimeUnit.SECONDS).writeTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS).build();
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/upload-large").post(reqBody).build();
-        Response response = timedClient.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        String respBody = response.body().string();
-        assertTrue("Server should receive all 102400 bytes", respBody.contains("\"bodySize\":102400"));
-        response.close();
+        }, 256 * 1024, (port, client) -> {
+            byte[] largeData = new byte[100 * 1024];
+            for (int i = 0; i < largeData.length; i++) {
+                largeData[i] = (byte) ('A' + (i % 26));
+            }
+            RequestBody reqBody = RequestBody.create(largeData, MediaType.get("application/octet-stream"));
+            OkHttpClient timedClient = client.newBuilder().readTimeout(10, TimeUnit.SECONDS).writeTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS).build();
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/upload-large").post(reqBody).build();
+            Response response = timedClient.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                String respBody = response.body().string();
+                assertTrue("Server should receive all 102400 bytes", respBody.contains("\"bodySize\":102400"));
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= POST large request body =========================
@@ -452,8 +413,8 @@ public class Http2OkHttpProtocolTest {
      * server initial window, covering larger upload framing over a single connection.
      */
     @Test
-    public void testH2c_PostExceedsInitialWindow_200KB() throws Exception {
-        requestHandler = ctx -> {
+    public void testPriorKnowledgePostBodyExceedsInitialWindow200KB() throws Throwable {
+        withH2cServer(ctx -> {
             ByteBuf content = ctx.request.content();
             int size = content != null ? content.readableBytes() : 0;
             ByteBuf body = toBody("{\"bodySize\":" + size + "}");
@@ -461,26 +422,24 @@ public class Http2OkHttpProtocolTest {
             response.setHeader("content-type", "application/json");
             response.setHeader("content-length", String.valueOf(body.readableBytes()));
             ctx.send(response);
-        };
-        startH2cServer(256 * 1024);
-        Thread.sleep(300);
-
-        byte[] largeData = new byte[200 * 1024]; // 204800 bytes — needs 3+ rounds of WINDOW_UPDATE
-        for (int i = 0; i < largeData.length; i++) {
-            largeData[i] = (byte) ('0' + (i % 10));
-        }
-        RequestBody reqBody = RequestBody.create(largeData, MediaType.get("application/octet-stream"));
-
-        OkHttpClient timedClient = h2Client.newBuilder().readTimeout(10, TimeUnit.SECONDS).writeTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS).build();
-
-        Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/upload-large").post(reqBody).build();
-        Response response = timedClient.newCall(request).execute();
-
-        assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
-        assertEquals(200, response.code());
-        String respBody = response.body().string();
-        assertTrue("Server should receive all 204800 bytes", respBody.contains("\"bodySize\":204800"));
-        response.close();
+        }, 256 * 1024, (port, client) -> {
+            byte[] largeData = new byte[200 * 1024];
+            for (int i = 0; i < largeData.length; i++) {
+                largeData[i] = (byte) ('0' + (i % 10));
+            }
+            RequestBody reqBody = RequestBody.create(largeData, MediaType.get("application/octet-stream"));
+            OkHttpClient timedClient = client.newBuilder().readTimeout(10, TimeUnit.SECONDS).writeTimeout(10, TimeUnit.SECONDS).callTimeout(15, TimeUnit.SECONDS).build();
+            Request request = new Request.Builder().url("http://127.0.0.1:" + port + "/upload-large").post(reqBody).build();
+            Response response = timedClient.newCall(request).execute();
+            try {
+                assertEquals(Protocol.H2_PRIOR_KNOWLEDGE, response.protocol());
+                assertEquals(200, response.code());
+                String respBody = response.body().string();
+                assertTrue("Server should receive all 204800 bytes", respBody.contains("\"bodySize\":204800"));
+            } finally {
+                response.close();
+            }
+        });
     }
 
     // ========================= POST body exceeding initial flow control window =========================
@@ -514,21 +473,26 @@ public class Http2OkHttpProtocolTest {
      */
     @SuppressWarnings({ "unchecked", "rawtypes" })
     private static class InlineDispatchHandler implements ProtoHandler<HttpObject, Object> {
-        private final Http2OkHttpProtocolTest test;
+        private final Consumer<RequestContext> requestHandler;
 
-        InlineDispatchHandler(Http2OkHttpProtocolTest test) {
-            this.test = test;
+        InlineDispatchHandler(Consumer<RequestContext> requestHandler) {
+            this.requestHandler = requestHandler;
         }
 
         @Override
         public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Object> dst) {
             while (src.hasMore()) {
                 Object msg = ((ProtoRcvQueue) src).takeMessage();
-                if (msg instanceof FullHttpRequest && test.requestHandler != null) {
-                    test.requestHandler.accept(new RequestContext((FullHttpRequest) msg, context));
+                if (msg instanceof FullHttpRequest && this.requestHandler != null) {
+                    this.requestHandler.accept(new RequestContext((FullHttpRequest) msg, context));
                 }
             }
             return ProtoStatus.Next;
         }
+    }
+
+    @FunctionalInterface
+    private interface H2cScenario {
+        void run(int port, OkHttpClient client) throws Exception;
     }
 }

@@ -17,10 +17,10 @@ package net.hasor.neta.codec.http.h2;
 
 /**
  * Default implementation of {@link Http2Context} backed by the state
- * managed in {@link Http2FrameToHttpDecoder}.
+ * managed in {@link Http2ObjectDecoder}.
  * <p>
  * Registered on {@link net.hasor.neta.channel.ProtoContext} by
- * {@link Http2ServerDuplexe} or {@link Http2ClientDuplexe} during
+ * {@link Http2ObjectDuplexe} during
  * {@code onInit()}, providing live access to the HTTP/2 connection state.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15

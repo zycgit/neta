@@ -80,6 +80,43 @@ public class Http2Frame {
         this(type, flags, streamId, EMPTY, 0, 0);
     }
 
+    /** Returns the frame type code (e.g., {@link Http2FrameType#HEADERS}). */
+    public int type() {
+        return type;
+    }
+
+    /** Returns the frame flags (e.g., {@link Http2Flags#END_STREAM}). */
+    public int flags() {
+        return flags;
+    }
+
+    /** Returns the stream identifier (0 for connection-level frames). */
+    public int streamId() {
+        return streamId;
+    }
+
+    /** Returns the raw payload byte array. Use with {@link #payloadOffset()} and {@link #payloadLength()}. */
+    public byte[] payload() {
+        return payload;
+    }
+
+    /** Returns the offset into the payload array. */
+    public int payloadOffset() {
+        return payloadOffset;
+    }
+
+    /** Returns the number of payload bytes. */
+    public int payloadLength() {
+        return payloadLength;
+    }
+
+    @Override
+    public String toString() {
+        return "Http2Frame{type=" + Http2FrameType.name(type) + ", flags=0x" + Integer.toHexString(flags) + ", streamId=" + streamId + ", payloadLen=" + payloadLength + "}";
+    }
+
+    // ========================= Factory Methods =========================
+
     /** Creates a DATA frame. */
     public static Http2Frame data(int streamId, int flags, byte[] payload, int offset, int length) {
         return new Http2Frame(Http2FrameType.DATA, flags, streamId, payload, offset, length);
@@ -109,8 +146,6 @@ public class Http2Frame {
     public static Http2Frame settingsAck() {
         return new Http2Frame(Http2FrameType.SETTINGS, Http2Flags.ACK, 0);
     }
-
-    // ========================= Factory Methods =========================
 
     /** Creates a PING frame. */
     public static Http2Frame ping(int flags, byte[] opaqueData) {
@@ -147,38 +182,13 @@ public class Http2Frame {
         return new Http2Frame(Http2FrameType.PRIORITY, Http2Flags.NONE, streamId, payload);
     }
 
-    /** Returns the frame type code (e.g., {@link Http2FrameType#HEADERS}). */
-    public int type() {
-        return type;
+    /** Creates a PUSH_PROMISE frame. */
+    public static Http2Frame pushPromise(int streamId, int flags, byte[] payload, int offset, int length) {
+        return new Http2Frame(Http2FrameType.PUSH_PROMISE, flags, streamId, payload, offset, length);
     }
 
-    /** Returns the frame flags (e.g., {@link Http2Flags#END_STREAM}). */
-    public int flags() {
-        return flags;
-    }
-
-    /** Returns the stream identifier (0 for connection-level frames). */
-    public int streamId() {
-        return streamId;
-    }
-
-    /** Returns the raw payload byte array. Use with {@link #payloadOffset()} and {@link #payloadLength()}. */
-    public byte[] payload() {
-        return payload;
-    }
-
-    /** Returns the offset into the payload array. */
-    public int payloadOffset() {
-        return payloadOffset;
-    }
-
-    /** Returns the number of payload bytes. */
-    public int payloadLength() {
-        return payloadLength;
-    }
-
-    @Override
-    public String toString() {
-        return "Http2Frame{type=" + Http2FrameType.name(type) + ", flags=0x" + Integer.toHexString(flags) + ", streamId=" + streamId + ", payloadLen=" + payloadLength + "}";
+    /** Creates a PUSH_PROMISE frame with full payload. */
+    public static Http2Frame pushPromise(int streamId, int flags, byte[] payload) {
+        return new Http2Frame(Http2FrameType.PUSH_PROMISE, flags, streamId, payload);
     }
 }

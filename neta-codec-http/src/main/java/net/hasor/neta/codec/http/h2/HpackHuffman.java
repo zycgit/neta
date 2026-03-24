@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import net.hasor.neta.codec.http.HttpProtocolViolationException;
 
 /**
  * HPACK Huffman coding as defined in RFC 7541, Appendix B.
@@ -23,8 +22,7 @@ import net.hasor.neta.codec.http.HttpProtocolViolationException;
  * The Huffman code table is a static mapping of byte values to variable-length bit sequences.
  */
 final class HpackHuffman {
-    // Huffman code table from RFC 7541, Appendix B.
-    // Each entry is: [code, bitLength]
+    // Huffman code table from RFC 7541, Appendix B. Each entry is: [code, bitLength]
     // @formatter:off
     private static final int[][] HUFFMAN_TABLE = {
         {0x1ff8, 13}, {0x7fffd8, 23}, {0xfffffe2, 28}, {0xfffffe3, 28},
@@ -140,13 +138,13 @@ final class HpackHuffman {
 
         // Remaining bits should be padding (all 1s) per RFC 7541
         if (bitsLeft > 7) {
-            throw new HttpProtocolViolationException("HPACK Huffman: invalid padding");
+            throw new HpackDecodingException("HPACK Huffman: invalid padding");
         }
         if (bitsLeft > 0) {
             int padding = bits & ((1 << bitsLeft) - 1);
             int expectedPadding = (1 << bitsLeft) - 1;
             if (padding != expectedPadding) {
-                throw new HttpProtocolViolationException("HPACK Huffman: non-EOS padding");
+                throw new HpackDecodingException("HPACK Huffman: non-EOS padding");
             }
         }
 

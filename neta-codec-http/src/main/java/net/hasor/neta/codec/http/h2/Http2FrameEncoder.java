@@ -43,7 +43,7 @@ import net.hasor.neta.channel.*;
  *   +------------------------------------------------+
  * </pre>
  * @see Http2Frame
- * @see Http2HttpToFrameEncoder
+ * @see Http2ObjectEncoder
  */
 public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
     private static final Logger logger            = Logger.getLogger(Http2FrameEncoder.class);
@@ -51,39 +51,48 @@ public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http2Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
-        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        boolean isPrintLog = context.getConfig().isPrintLog();
+        long channelID = context.getChannel().getChannelId();
+
         while (src.hasMore()) {
             Http2Frame frame = src.takeMessage();
             if (frame == null) {
                 continue;
             }
-
-            if (frame.type() == Http2FrameType.PREFACE) {
-                // Special case: client connection preface is raw bytes, not a framed message
-                byte[] payload = frame.payload();
-                int offset = frame.payloadOffset();
-                int length = frame.payloadLength();
-                ByteBuf buf = context.byteBufAllocator().buffer(length);
-                buf.writeBytes(payload, offset, length);
-                buf.markWriter();
-                dst.offerMessage(buf);
-                if (isPrintLog) {
-                    long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-                    logger.info("[H2-SND-FRAME] ch=" + channelID + " PREFACE len=" + length);
+            dst.offerMessage(encodeFrame(context, frame));
+            if (isPrintLog) {
+                if (frame.type() == Http2FrameType.PREFACE) {
+                    logger.info("[H2-SND-FRAME] ch=" + channelID + " PREFACE len=" + frame.payloadLength());
+                } else {
+                    logger.info("[H2-SND-FRAME] ch=" + channelID + " " + Http2FrameType.name(frame.type()) +//
+                            " flags=" + Http2Flags.describe(frame.type(), frame.flags()) +//
+                            " stream=" + frame.streamId() + //
+                            " len=" + frame.payloadLength());
                 }
-            } else {
-                writeFrame(context, dst, frame);
             }
         }
 
         return ProtoStatus.Next;
     }
 
+    private static ByteBuf encodeFrame(ProtoContext context, Http2Frame frame) {
+        if (frame.type() == Http2FrameType.PREFACE) {
+            byte[] payload = frame.payload();
+            int offset = frame.payloadOffset();
+            int length = frame.payloadLength();
+            ByteBuf buf = context.byteBufAllocator().buffer(length);
+            buf.writeBytes(payload, offset, length);
+            buf.markWriter();
+            return buf;
+        }
+        return buildFrameBuffer(context, frame);
+    }
+
     /**
      * Writes a single HTTP/2 frame to the output.
      * Writes the 9-byte frame header followed by the payload.
      */
-    private void writeFrame(ProtoContext context, ProtoSndQueue<ByteBuf> dst, Http2Frame frame) {
+    private static ByteBuf buildFrameBuffer(ProtoContext context, Http2Frame frame) {
         int payloadLength = frame.payloadLength();
         ByteBuf buf = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + payloadLength);
 
@@ -99,16 +108,6 @@ public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
         }
 
         buf.markWriter();
-        dst.offerMessage(buf);
-        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
-        if (isPrintLog) {
-            long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-            logger.info("[H2-SND-FRAME] ch=" + channelID + " " + Http2FrameType.name(frame.type()) + " flags=" + Http2Flags.describe(frame.type(), frame.flags()) + " stream=" + frame.streamId() + " len=" + payloadLength);
-        }
-    }
-
-    @Override
-    public void onClose(ProtoContext context) {
-        // No resources to clean up
+        return buf;
     }
 }

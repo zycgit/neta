@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http.h2;
 import java.util.HashMap;
 import java.util.Map;
+import net.hasor.neta.codec.http.HttpHeaderNames;
 
 /**
  * HPACK static table as defined in RFC 7541, Appendix A.
@@ -35,67 +36,67 @@ final class HpackStaticTable {
     /** The static table entries (1-indexed; entry 0 is unused). */
     private static final HpackHeaderField[] STATIC_TABLE = {
             /* 0  */ null, // placeholder (HPACK is 1-indexed)
-            /* 1  */ new HpackHeaderField(":authority", ""),
-            /* 2  */ new HpackHeaderField(":method", "GET"),
-            /* 3  */ new HpackHeaderField(":method", "POST"),
-            /* 4  */ new HpackHeaderField(":path", "/"),
-            /* 5  */ new HpackHeaderField(":path", "/index.html"),
-            /* 6  */ new HpackHeaderField(":scheme", "http"),
-            /* 7  */ new HpackHeaderField(":scheme", "https"),
-            /* 8  */ new HpackHeaderField(":status", "200"),
-            /* 9  */ new HpackHeaderField(":status", "204"),
-            /* 10 */ new HpackHeaderField(":status", "206"),
-            /* 11 */ new HpackHeaderField(":status", "304"),
-            /* 12 */ new HpackHeaderField(":status", "400"),
-            /* 13 */ new HpackHeaderField(":status", "404"),
-            /* 14 */ new HpackHeaderField(":status", "500"),
-            /* 15 */ new HpackHeaderField("accept-charset", ""),
-            /* 16 */ new HpackHeaderField("accept-encoding", "gzip, deflate"),
-            /* 17 */ new HpackHeaderField("accept-language", ""),
-            /* 18 */ new HpackHeaderField("accept-ranges", ""),
-            /* 19 */ new HpackHeaderField("accept", ""),
-            /* 20 */ new HpackHeaderField("access-control-allow-origin", ""),
-            /* 21 */ new HpackHeaderField("age", ""),
-            /* 22 */ new HpackHeaderField("allow", ""),
-            /* 23 */ new HpackHeaderField("authorization", ""),
-            /* 24 */ new HpackHeaderField("cache-control", ""),
-            /* 25 */ new HpackHeaderField("content-disposition", ""),
-            /* 26 */ new HpackHeaderField("content-encoding", ""),
-            /* 27 */ new HpackHeaderField("content-language", ""),
-            /* 28 */ new HpackHeaderField("content-length", ""),
-            /* 29 */ new HpackHeaderField("content-location", ""),
-            /* 30 */ new HpackHeaderField("content-range", ""),
-            /* 31 */ new HpackHeaderField("content-type", ""),
-            /* 32 */ new HpackHeaderField("cookie", ""),
-            /* 33 */ new HpackHeaderField("date", ""),
-            /* 34 */ new HpackHeaderField("etag", ""),
-            /* 35 */ new HpackHeaderField("expect", ""),
-            /* 36 */ new HpackHeaderField("expires", ""),
-            /* 37 */ new HpackHeaderField("from", ""),
-            /* 38 */ new HpackHeaderField("host", ""),
-            /* 39 */ new HpackHeaderField("if-match", ""),
-            /* 40 */ new HpackHeaderField("if-modified-since", ""),
-            /* 41 */ new HpackHeaderField("if-none-match", ""),
-            /* 42 */ new HpackHeaderField("if-range", ""),
-            /* 43 */ new HpackHeaderField("if-unmodified-since", ""),
-            /* 44 */ new HpackHeaderField("last-modified", ""),
-            /* 45 */ new HpackHeaderField("link", ""),
-            /* 46 */ new HpackHeaderField("location", ""),
-            /* 47 */ new HpackHeaderField("max-forwards", ""),
-            /* 48 */ new HpackHeaderField("proxy-authenticate", ""),
-            /* 49 */ new HpackHeaderField("proxy-authorization", ""),
-            /* 50 */ new HpackHeaderField("range", ""),
-            /* 51 */ new HpackHeaderField("referer", ""),
-            /* 52 */ new HpackHeaderField("refresh", ""),
-            /* 53 */ new HpackHeaderField("retry-after", ""),
-            /* 54 */ new HpackHeaderField("server", ""),
-            /* 55 */ new HpackHeaderField("set-cookie", ""),
-            /* 56 */ new HpackHeaderField("strict-transport-security", ""),
-            /* 57 */ new HpackHeaderField("transfer-encoding", ""),
-            /* 58 */ new HpackHeaderField("user-agent", ""),
-            /* 59 */ new HpackHeaderField("vary", ""),
-            /* 60 */ new HpackHeaderField("via", ""),
-            /* 61 */ new HpackHeaderField("www-authenticate", ""), };
+            /* 1  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_AUTHORITY, ""),
+            /* 2  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_METHOD, "GET"),
+            /* 3  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_METHOD, "POST"),
+            /* 4  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_PATH, "/"),
+            /* 5  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_PATH, "/index.html"),
+            /* 6  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_SCHEME, "http"),
+            /* 7  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_SCHEME, "https"),
+            /* 8  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_STATUS, "200"),
+            /* 9  */ new HpackHeaderField(HttpHeaderNames.PSEUDO_STATUS, "204"),
+            /* 10 */ new HpackHeaderField(HttpHeaderNames.PSEUDO_STATUS, "206"),
+            /* 11 */ new HpackHeaderField(HttpHeaderNames.PSEUDO_STATUS, "304"),
+            /* 12 */ new HpackHeaderField(HttpHeaderNames.PSEUDO_STATUS, "400"),
+            /* 13 */ new HpackHeaderField(HttpHeaderNames.PSEUDO_STATUS, "404"),
+            /* 14 */ new HpackHeaderField(HttpHeaderNames.PSEUDO_STATUS, "500"),
+            /* 15 */ new HpackHeaderField(HttpHeaderNames.ACCEPT_CHARSET, ""),
+            /* 16 */ new HpackHeaderField(HttpHeaderNames.ACCEPT_ENCODING, "gzip, deflate"),
+            /* 17 */ new HpackHeaderField(HttpHeaderNames.ACCEPT_LANGUAGE, ""),
+            /* 18 */ new HpackHeaderField(HttpHeaderNames.ACCEPT_RANGES, ""),
+            /* 19 */ new HpackHeaderField(HttpHeaderNames.ACCEPT, ""),
+            /* 20 */ new HpackHeaderField(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN, ""),
+            /* 21 */ new HpackHeaderField(HttpHeaderNames.AGE, ""),
+            /* 22 */ new HpackHeaderField(HttpHeaderNames.ALLOW, ""),
+            /* 23 */ new HpackHeaderField(HttpHeaderNames.AUTHORIZATION, ""),
+            /* 24 */ new HpackHeaderField(HttpHeaderNames.CACHE_CONTROL, ""),
+            /* 25 */ new HpackHeaderField(HttpHeaderNames.CONTENT_DISPOSITION, ""),
+            /* 26 */ new HpackHeaderField(HttpHeaderNames.CONTENT_ENCODING, ""),
+            /* 27 */ new HpackHeaderField(HttpHeaderNames.CONTENT_LANGUAGE, ""),
+            /* 28 */ new HpackHeaderField(HttpHeaderNames.CONTENT_LENGTH, ""),
+            /* 29 */ new HpackHeaderField(HttpHeaderNames.CONTENT_LOCATION, ""),
+            /* 30 */ new HpackHeaderField(HttpHeaderNames.CONTENT_RANGE, ""),
+            /* 31 */ new HpackHeaderField(HttpHeaderNames.CONTENT_TYPE, ""),
+            /* 32 */ new HpackHeaderField(HttpHeaderNames.COOKIE, ""),
+            /* 33 */ new HpackHeaderField(HttpHeaderNames.DATE, ""),
+            /* 34 */ new HpackHeaderField(HttpHeaderNames.ETAG, ""),
+            /* 35 */ new HpackHeaderField(HttpHeaderNames.EXPECT, ""),
+            /* 36 */ new HpackHeaderField(HttpHeaderNames.EXPIRES, ""),
+            /* 37 */ new HpackHeaderField(HttpHeaderNames.FROM, ""),
+            /* 38 */ new HpackHeaderField(HttpHeaderNames.HOST, ""),
+            /* 39 */ new HpackHeaderField(HttpHeaderNames.IF_MATCH, ""),
+            /* 40 */ new HpackHeaderField(HttpHeaderNames.IF_MODIFIED_SINCE, ""),
+            /* 41 */ new HpackHeaderField(HttpHeaderNames.IF_NONE_MATCH, ""),
+            /* 42 */ new HpackHeaderField(HttpHeaderNames.IF_RANGE, ""),
+            /* 43 */ new HpackHeaderField(HttpHeaderNames.IF_UNMODIFIED_SINCE, ""),
+            /* 44 */ new HpackHeaderField(HttpHeaderNames.LAST_MODIFIED, ""),
+            /* 45 */ new HpackHeaderField(HttpHeaderNames.LINK, ""),
+            /* 46 */ new HpackHeaderField(HttpHeaderNames.LOCATION, ""),
+            /* 47 */ new HpackHeaderField(HttpHeaderNames.MAX_FORWARDS, ""),
+            /* 48 */ new HpackHeaderField(HttpHeaderNames.PROXY_AUTHENTICATE, ""),
+            /* 49 */ new HpackHeaderField(HttpHeaderNames.PROXY_AUTHORIZATION, ""),
+            /* 50 */ new HpackHeaderField(HttpHeaderNames.RANGE, ""),
+            /* 51 */ new HpackHeaderField(HttpHeaderNames.REFERER, ""),
+            /* 52 */ new HpackHeaderField(HttpHeaderNames.REFRESH, ""),
+            /* 53 */ new HpackHeaderField(HttpHeaderNames.RETRY_AFTER, ""),
+            /* 54 */ new HpackHeaderField(HttpHeaderNames.SERVER, ""),
+            /* 55 */ new HpackHeaderField(HttpHeaderNames.SET_COOKIE, ""),
+            /* 56 */ new HpackHeaderField(HttpHeaderNames.STRICT_TRANSPORT_SECURITY, ""),
+            /* 57 */ new HpackHeaderField(HttpHeaderNames.TRANSFER_ENCODING, ""),
+            /* 58 */ new HpackHeaderField(HttpHeaderNames.USER_AGENT, ""),
+            /* 59 */ new HpackHeaderField(HttpHeaderNames.VARY, ""),
+            /* 60 */ new HpackHeaderField(HttpHeaderNames.VIA, ""),
+            /* 61 */ new HpackHeaderField(HttpHeaderNames.WWW_AUTHENTICATE, ""), };
 
     /** Number of entries in the static table (1..61). */
     public static final int LENGTH = STATIC_TABLE.length - 1;
@@ -106,8 +107,8 @@ final class HpackStaticTable {
         NAME_VALUE_INDEX_MAP = new HashMap<>(64);
         for (int i = 1; i < STATIC_TABLE.length; i++) {
             HpackHeaderField f = STATIC_TABLE[i];
-            NAME_INDEX_MAP.putIfAbsent(f.name, i);
-            NAME_VALUE_INDEX_MAP.putIfAbsent(nameValueKey(f.name, f.value), i);
+            NAME_INDEX_MAP.putIfAbsent(f.name(), i);
+            NAME_VALUE_INDEX_MAP.putIfAbsent(nameValueKey(f.name(), f.value()), i);
         }
     }
 
@@ -124,11 +125,11 @@ final class HpackStaticTable {
      * Returns the static table entry at the given 1-based index.
      * @param index the 1-based index (1..61)
      * @return the header field entry
-     * @throws IndexOutOfBoundsException if index is out of range
+     * @throws HpackDecodingException if index is out of range
      */
     public static HpackHeaderField get(int index) {
         if (index < 1 || index >= STATIC_TABLE.length) {
-            throw new IndexOutOfBoundsException("invalid HPACK static table index: " + index);
+            throw new HpackDecodingException("HPACK: invalid static table index " + index);
         }
         return STATIC_TABLE[index];
     }
@@ -153,12 +154,12 @@ final class HpackStaticTable {
         Integer idx = NAME_VALUE_INDEX_MAP.get(key);
         if (idx != null) {
             HpackHeaderField f = STATIC_TABLE[idx];
-            if (f.name.equals(name) && f.value.equals(value)) {
+            if (f.name().equals(name) && f.value().equals(value)) {
                 return idx;
             }
             // Hash collision - fallback to linear scan (extremely rare)
             for (int i = 1; i < STATIC_TABLE.length; i++) {
-                if (STATIC_TABLE[i].name.equals(name) && STATIC_TABLE[i].value.equals(value)) {
+                if (STATIC_TABLE[i].name().equals(name) && STATIC_TABLE[i].value().equals(value)) {
                     return i;
                 }
             }

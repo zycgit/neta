@@ -30,32 +30,61 @@ package net.hasor.neta.codec.http;
  *   │   ├── HttpContentTooLargeException           (413 — body too large)
  *   │   ├── HttpInitialLineTooLongException        (414 — request/status line too long)
  *   │   └── HttpHeaderTooLargeException            (431 — headers too large)
- *   └── HttpProtocolViolationException             (varies — wire-protocol violations for HTTP/2 &amp; HTTP/3)
+ *   ├── HttpProtocolConnectionException            (connection-scoped protocol failure)
+ *   ├── HttpProtocolStreamException                (stream-scoped protocol failure)
+ *   ├── HttpProtocolStateException                 (invalid protocol state, sequencing, or mode mismatch)
+ *   ├── HttpProtocolOutOfBoundsException           (out-of-range or payload boundary violations)
+ *   ├── net.hasor.neta.codec.http.h2.HpackDecodingException
+ *   └── net.hasor.neta.codec.http.h3.QpackDecodingException
  * </pre>
  */
 public class HttpProtocolException extends RuntimeException {
     private final HttpStatus status;
+    private final long       errorCode;
+    private       int        streamId = -1;
 
     /** Creates an exception with the default status {@link HttpStatus#BAD_REQUEST 400}. */
     public HttpProtocolException(String message) {
-        this(HttpStatus.BAD_REQUEST, message);
+        this(HttpStatus.BAD_REQUEST, -1L, message);
     }
 
     /** Creates an exception with the default status {@link HttpStatus#BAD_REQUEST 400}. */
     public HttpProtocolException(String message, Throwable cause) {
-        this(HttpStatus.BAD_REQUEST, message, cause);
+        this(HttpStatus.BAD_REQUEST, -1L, message, cause);
+    }
+
+    /** Creates an exception carrying a protocol-specific error code. */
+    public HttpProtocolException(long errorCode, String message) {
+        this(HttpStatus.BAD_REQUEST, errorCode, message);
+    }
+
+    /** Creates an exception carrying a protocol-specific error code and cause. */
+    public HttpProtocolException(long errorCode, String message, Throwable cause) {
+        this(HttpStatus.BAD_REQUEST, errorCode, message, cause);
     }
 
     /** Creates an exception with the specified status. */
     public HttpProtocolException(HttpStatus status, String message) {
+        this(status, -1L, message);
+    }
+
+    /** Creates an exception with the specified status and protocol-specific error code. */
+    public HttpProtocolException(HttpStatus status, long errorCode, String message) {
         super(message);
         this.status = status != null ? status : HttpStatus.BAD_REQUEST;
+        this.errorCode = errorCode;
     }
 
     /** Creates an exception with the specified status and cause. */
     public HttpProtocolException(HttpStatus status, String message, Throwable cause) {
+        this(status, -1L, message, cause);
+    }
+
+    /** Creates an exception with the specified status, protocol-specific error code and cause. */
+    public HttpProtocolException(HttpStatus status, long errorCode, String message, Throwable cause) {
         super(message, cause);
         this.status = status != null ? status : HttpStatus.BAD_REQUEST;
+        this.errorCode = errorCode;
     }
 
     /**
@@ -79,5 +108,34 @@ public class HttpProtocolException extends RuntimeException {
      */
     public int statusCode() {
         return status.code();
+    }
+
+    /**
+     * Returns the protocol-specific error code, or {@code -1} when this
+     * exception does not carry one.
+     */
+    public long errorCode() {
+        return this.errorCode;
+    }
+
+    /** Returns the associated stream id, or {@code -1} when this error is not stream-bound. */
+    public int getStreamId() {
+        return this.streamId;
+    }
+
+    /** Updates the associated stream id for protocol stacks that can determine it later. */
+    public void setStreamId(int streamId) {
+        this.streamId = streamId;
+    }
+
+    /** Fluent shortcut for assigning the associated stream id. */
+    public HttpProtocolException streamId(int streamId) {
+        this.streamId = streamId;
+        return this;
+    }
+
+    /** Fluent-style accessor matching other HTTP object models in this module. */
+    public int streamId() {
+        return this.streamId;
     }
 }

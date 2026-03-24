@@ -21,16 +21,14 @@ import java.util.Queue;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 
 /**
- * Per-connection state container shared between {@link Http2FrameToHttpDecoder}
- * (writer / append path) and {@link net.hasor.neta.codec.http.h2.Http2ServerDuplexe}
- * (reader / poll path).
+ * Per-connection state container shared by the HTTP/2 message layer.
  * <p>
  * Operations are grouped into four categories:
  * <ul>
- *   <li><b>init</b>  — constructor + one-time configuration injected by the Duplexe.</li>
- *   <li><b>append</b> — called exclusively by {@link Http2FrameToHttpDecoder} to populate
+ *   <li><b>init</b>  — constructor + one-time configuration injected by the duplex entry.</li>
+ *   <li><b>append</b> — called exclusively by {@link Http2ObjectDecoder} to populate
  *       state as frames arrive.</li>
- *   <li><b>poll</b>   — called exclusively by the Duplexe on the SND cycle to drain
+ *   <li><b>poll</b>   — called by the message duplexe or higher HTTP adaptation on the SND cycle to drain
  *       queued control frames.</li>
  *   <li><b>release</b> — called on connection close to free resources.</li>
  * </ul>
@@ -42,25 +40,22 @@ class Http2DecoderContent {
     private final Queue<Http2Frame>         pendingWindowUpdates    = new LinkedList<>();
     private final Map<Integer, Http2Stream> streams                 = new HashMap<>();
     private final HpackDecoder              hpackDecoder;
+    private final Http2Settings             localSettings;
     private final Http2Settings             remoteSettings          = new Http2Settings();
     private       boolean                   prefaceReceived;
     private       boolean                   pendingSettingsAck;
-    private       int                       serverInitialWindowSize = 65535;
+    private       int                       openHeaderBlockStreamId = -1;
+    private       int                       openHeaderBlockType     = -1;
+    private       int                       openPromisedStreamId    = -1;
     private       int                       lastEmittedStreamId     = 0;
 
-    Http2DecoderContent(boolean serverMode, int maxHeaderTableSize, int maxHeaderListSize) {
-        this.hpackDecoder = new HpackDecoder(maxHeaderTableSize, maxHeaderListSize);
+    Http2DecoderContent(boolean serverMode, Http2Settings localSettings) {
+        this.localSettings = localSettings != null ? new Http2Settings(localSettings) : new Http2Settings();
+        this.hpackDecoder = new HpackDecoder((int) this.localSettings.headerTableSize(), normalizeHeaderListSize(this.localSettings.maxHeaderListSize()));
         this.prefaceReceived = !serverMode;
     }
 
-    // ─── init / config ──────────────────────────────────────────────────────────
-
-    /** Sets the server's desired initial flow control window size (injected by Duplexe on init). */
-    void setServerInitialWindowSize(int size) {
-        this.serverInitialWindowSize = size;
-    }
-
-    // ─── append (called by Http2FrameToHttpDecoder) ───────────────────────────────
+    // ─── append (called by Http2ObjectDecoder) ───────────────────────────────
 
     /** Marks the connection preface as received. */
     void markPrefaceReceived() {
@@ -69,7 +64,7 @@ class Http2DecoderContent {
 
     /** Returns or creates the stream for the given stream ID. */
     Http2Stream getOrCreateStream(int streamId) {
-        return streams.computeIfAbsent(streamId, id -> new Http2Stream(id, remoteSettings.initialWindowSize()));
+        return streams.computeIfAbsent(streamId, id -> new Http2Stream(id));
     }
 
     /** Returns the stream for the given stream ID, or {@code null} if absent. */
@@ -84,19 +79,16 @@ class Http2DecoderContent {
             stream.state(Http2StreamState.CLOSED);
             stream.release();
         }
+        if (this.openHeaderBlockStreamId == streamId) {
+            this.openHeaderBlockStreamId = -1;
+            this.openHeaderBlockType = -1;
+            this.openPromisedStreamId = -1;
+        }
     }
 
     /** Removes any pending response-stream-ID entry for the given stream from the FIFO queue. */
     void removeFromResponseQueue(int streamId) {
         responseStreamIdQueue.removeIf(id -> id == streamId);
-    }
-
-    /** Adjusts the send window of the given stream by {@code increment} bytes. */
-    void adjustStreamSendWindow(int streamId, int increment) {
-        Http2Stream stream = streams.get(streamId);
-        if (stream != null) {
-            stream.adjustSendWindowSize(increment);
-        }
     }
 
     /** Decodes an HPACK-compressed header block. */
@@ -124,6 +116,20 @@ class Http2DecoderContent {
         this.pendingSettingsAck = true;
     }
 
+    /** Marks that a fragmented header block is open on the given stream. */
+    void openHeaderBlockOn(int streamId, int frameType, int promisedStreamId) {
+        this.openHeaderBlockStreamId = streamId;
+        this.openHeaderBlockType = frameType;
+        this.openPromisedStreamId = promisedStreamId;
+    }
+
+    /** Clears the active fragmented header-block marker. */
+    void closeOpenHeaderBlock() {
+        this.openHeaderBlockStreamId = -1;
+        this.openHeaderBlockType = -1;
+        this.openPromisedStreamId = -1;
+    }
+
     /**
      * Applies a remote SETTINGS parameter and updates the HPACK decoder table size
      * atomically if {@code SETTINGS_HEADER_TABLE_SIZE} was included.
@@ -140,7 +146,7 @@ class Http2DecoderContent {
 
     /** Returns the server's configured initial flow control window size. */
     int serverInitialWindowSize() {
-        return serverInitialWindowSize;
+        return this.localSettings.initialWindowSize();
     }
 
     /** Returns the remote peer's negotiated initial flow control window size. */
@@ -148,7 +154,27 @@ class Http2DecoderContent {
         return remoteSettings.initialWindowSize();
     }
 
-    // ─── poll (called by Http2ServerDuplexe on SND cycle) ────────────────────────
+    /** Returns true if a HEADERS block is waiting for CONTINUATION frames. */
+    boolean hasOpenHeaderBlock() {
+        return this.openHeaderBlockStreamId > 0;
+    }
+
+    /** Returns the stream id that currently owns the open header block, or -1 when none exists. */
+    int openHeaderBlockStreamId() {
+        return this.openHeaderBlockStreamId;
+    }
+
+    /** Returns the frame type that owns the open header block, or -1 when none exists. */
+    int openHeaderBlockType() {
+        return this.openHeaderBlockType;
+    }
+
+    /** Returns the promised stream id associated with an open PUSH_PROMISE block, or -1 when none exists. */
+    int openPromisedStreamId() {
+        return this.openPromisedStreamId;
+    }
+
+    // ─── poll (called by Http2ObjectEncoder on SND cycle) ───────────────────────
 
     /** Polls the next response stream ID. Returns -1 if the queue is empty. */
     int pollResponseStreamId() {
@@ -193,6 +219,18 @@ class Http2DecoderContent {
         return max;
     }
 
+    /** Returns the highest stream id initiated by the remote endpoint. */
+    int lastRemoteInitiatedStreamId(boolean serverMode) {
+        int max = 0;
+        int remoteParity = serverMode ? 1 : 0;
+        for (Integer id : this.streams.keySet()) {
+            if (id != null && id > max && (id & 1) == remoteParity) {
+                max = id;
+            }
+        }
+        return max;
+    }
+
     /** Returns the stream ID of the most recently emitted HttpObject. */
     int lastEmittedStreamId() {
         return lastEmittedStreamId;
@@ -208,6 +246,10 @@ class Http2DecoderContent {
         return remoteSettings.maxFrameSize();
     }
 
+    Http2Settings localSettings() {
+        return new Http2Settings(this.localSettings);
+    }
+
     // ─── release ───────────────────────────────────────────────────────────────────
 
     /** Releases all stream resources on connection close. */
@@ -216,5 +258,12 @@ class Http2DecoderContent {
             stream.release();
         }
         streams.clear();
+    }
+
+    private static int normalizeHeaderListSize(long maxHeaderListSize) {
+        if (maxHeaderListSize <= 0 || maxHeaderListSize > Integer.MAX_VALUE) {
+            return Integer.MAX_VALUE;
+        }
+        return (int) maxHeaderListSize;
     }
 }

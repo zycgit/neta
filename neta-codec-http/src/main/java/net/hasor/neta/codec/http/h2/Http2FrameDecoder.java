@@ -19,7 +19,8 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.HttpProtocolViolationException;
+import net.hasor.neta.codec.http.HttpProtocolOutOfBoundsException;
+import net.hasor.neta.codec.http.HttpProtocolStateException;
 
 /**
  * HTTP/2 binary frame decoder that converts raw bytes into {@link Http2Frame} objects.
@@ -27,48 +28,51 @@ import net.hasor.neta.codec.http.HttpProtocolViolationException;
  * This decoder implements the HTTP/2 binary framing layer defined in RFC 9113.
  * It handles the connection preface, parses the 9-byte frame header, extracts
  * the payload, and emits {@link Http2Frame} instances for downstream semantic
- * processing by {@link Http2FrameToHttpDecoder}.
+ * processing by {@link Http2ObjectDecoder}.
  * <p>
- * <b>Decode path:</b> {@code ByteBuf → Http2Frame → HttpObject}
+ * <b>Decode path:</b> {@code ByteBuf → Http2Frame}; semantic conversion to {@link net.hasor.neta.codec.http.HttpObject}
+ * happens later in {@link Http2ObjectDecoder}.
  * <p>
  * Frame format (RFC 9113, Section 4):
  * <pre>
  *   +-----------------------------------------------+
- *   |                 Length (24)                     |
+ *   |                 Length (24)                   |
  *   +---------------+---------------+---------------+
  *   |   Type (8)    |   Flags (8)   |
- *   +-+-------------+---------------+--------------+
- *   |R|                 Stream Identifier (31)       |
- *   +=+==============================================+
- *   |                 Frame Payload (0...)            |
- *   +------------------------------------------------+
+ *   +-+-------------+---------------+---------------+
+ *   |R|                 Stream Identifier (31)      |
+ *   +=+=============================================+
+ *   |                 Frame Payload (0...)          |
+ *   +-----------------------------------------------+
  * </pre>
  * @see Http2Frame
- * @see Http2FrameToHttpDecoder
+ * @see Http2ObjectDecoder
  */
 public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
-    private static final Logger logger             = Logger.getLogger(Http2FrameDecoder.class);
+    private static final Logger  logger             = Logger.getLogger(Http2FrameDecoder.class);
     /** HTTP/2 connection preface: "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n" */
-    private static final byte[] CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
+    private static final byte[]  CONNECTION_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
     /** Frame header size: 9 bytes */
-    private static final int    FRAME_HEADER_SIZE  = 9;
-
-    private final boolean       serverMode;
-    private final Http2Settings localSettings;
+    private static final int     FRAME_HEADER_SIZE  = 9;
+    private final        int     maxFrameSize;
     /** Reusable frame header buffer to avoid per-frame byte[9] allocation. */
-    private final byte[]        frameHeaderBuf  = new byte[FRAME_HEADER_SIZE];
+    private final        byte[]  frameHeaderBuf     = new byte[FRAME_HEADER_SIZE];
     /** Reusable preface buffer. */
-    private final byte[]        prefaceCheckBuf = new byte[24]; // "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
-    private       ByteBuf       accumulator;
-    private       boolean       prefaceReceived;
+    private final        byte[]  prefaceCheckBuf    = new byte[24]; // "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n"
+    private              ByteBuf accumulator;
+    private              boolean prefaceReceived;
 
     /**
      * Creates a new HTTP/2 frame decoder.
      * @param serverMode true for server-side (expects client preface), false for client-side
      */
     public Http2FrameDecoder(boolean serverMode) {
-        this.serverMode = serverMode;
-        this.localSettings = new Http2Settings();
+        this(serverMode, new Http2Settings());
+    }
+
+    public Http2FrameDecoder(boolean serverMode, Http2Settings settings) {
+        Http2Settings localSettings = settings != null ? new Http2Settings(settings) : new Http2Settings();
+        this.maxFrameSize = localSettings.maxFrameSize();
         this.prefaceReceived = !serverMode; // Client doesn't receive a preface
     }
 
@@ -89,13 +93,14 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
             this.accumulator.getBytes(0, prefaceBytes, 0, prefaceBytes.length);
             for (int i = 0; i < CONNECTION_PREFACE.length; i++) {
                 if (prefaceBytes[i] != CONNECTION_PREFACE[i]) {
-                    throw new HttpProtocolViolationException("HTTP/2: invalid connection preface");
+                    throw new HttpProtocolStateException(0, "HTTP/2: invalid connection preface");
                 }
             }
+
             this.accumulator.skipReadableBytes(CONNECTION_PREFACE.length);
             this.prefaceReceived = true;
-            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            if (context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel().getChannelId();
                 logger.info("[H2-FRAME] channel=" + channelID + " connection preface received");
             }
         }
@@ -112,8 +117,9 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
             int streamId = ((headerBuf[5] & 0x7F) << 24) | ((headerBuf[6] & 0xFF) << 16) | ((headerBuf[7] & 0xFF) << 8) | (headerBuf[8] & 0xFF);
 
             // Validate frame size
-            if (payloadLength > localSettings.maxFrameSize()) {
-                throw new HttpProtocolViolationException("HTTP/2: frame size exceeds SETTINGS_MAX_FRAME_SIZE: " + payloadLength);
+            if (payloadLength > this.maxFrameSize) {
+                String msg = "HTTP/2: frame size exceeds SETTINGS_MAX_FRAME_SIZE: " + payloadLength;
+                throw new HttpProtocolOutOfBoundsException(streamId, msg);
             }
 
             int totalFrameSize = FRAME_HEADER_SIZE + payloadLength;
@@ -134,8 +140,8 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
 
             // Emit Http2Frame
             dst.offerMessage(new Http2Frame(type, flags, streamId, payload));
-            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
-                long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
+            if (context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel().getChannelId();
                 logger.info("[H2-RCV-FRAME] ch=" + channelID + " " + Http2FrameType.name(type)//
                         + " flags=" + Http2Flags.describe(type, flags)//
                         + " stream=" + streamId + " len=" + payloadLength);
@@ -144,21 +150,6 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
 
         this.accumulator.markReader();
         return ProtoStatus.Next;
-    }
-
-    /** Returns true if this is server mode. */
-    boolean isServerMode() {
-        return this.serverMode;
-    }
-
-    /** Returns true if the HTTP/2 connection preface has been received. */
-    boolean isPrefaceReceived(ProtoContext context) {
-        return this.prefaceReceived;
-    }
-
-    /** Returns the local HTTP/2 settings (for frame size validation). */
-    Http2Settings localSettings() {
-        return this.localSettings;
     }
 
     @Override

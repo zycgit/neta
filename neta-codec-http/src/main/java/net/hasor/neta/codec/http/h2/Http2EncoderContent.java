@@ -15,31 +15,38 @@
  */
 package net.hasor.neta.codec.http.h2;
 import java.util.concurrent.atomic.AtomicInteger;
+import net.hasor.neta.codec.http.HttpRequest;
+import net.hasor.neta.codec.http.HttpResponse;
 
 /**
- * Per-connection state container for {@link Http2HttpToFrameEncoder}.
+ * Per-connection state container for {@link Http2ObjectEncoder}.
  * <p>
  * Operations are grouped into four categories:
  * <ul>
  *   <li><b>init</b>   — constructor; all state is fully initialized at construction time.</li>
  *   <li><b>append</b> — called by the Encoder to build outbound frames (HPACK encoding,
  *       stream ID allocation, preface tracking).</li>
- *   <li><b>inject</b> — called by the Duplexe to set the current stream ID for server-mode
- *       responses before invoking the Encoder.</li>
+ *   <li><b>bind</b>   — current stream binding is refreshed from explicit outbound message
+ *       stream IDs or higher-layer response association.</li>
  *   <li><b>release</b> — no resources to release (HPACK encoder is GC-eligible).</li>
  * </ul>
  * All fields are private; no caller may access internal sub-objects directly.
  */
 class Http2EncoderContent {
     private final HpackEncoder  hpackEncoder;
+    private final Http2Settings localSettings;
     private final AtomicInteger nextStreamId;
     private       boolean       prefaceSent;
     private       int           currentStreamId = 0;
+    private       HttpRequest   pendingRequest;
+    private       HttpResponse  pendingResponse;
+    private       boolean       trailingHeadersSent;
 
-    Http2EncoderContent(boolean serverMode, int maxHeaderTableSize) {
-        this.hpackEncoder = new HpackEncoder(maxHeaderTableSize);
+    Http2EncoderContent(boolean serverMode, Http2Settings localSettings) {
+        this.localSettings = localSettings != null ? new Http2Settings(localSettings) : new Http2Settings();
+        this.hpackEncoder = new HpackEncoder((int) this.localSettings.headerTableSize());
         this.nextStreamId = new AtomicInteger(serverMode ? 2 : 1);
-        this.prefaceSent = serverMode; // Server doesn't send the connection preface
+        this.prefaceSent = false;
     }
 
     // ─── preface state ────────────────────────────────────────────────────────
@@ -61,12 +68,38 @@ class Http2EncoderContent {
         return currentStreamId;
     }
 
-    /**
-     * Sets the stream ID for the next outbound response (server-mode injection by Duplexe).
-     * Must be called by the Duplexe before invoking the Encoder on the SND path.
-     */
+    /** Sets the stream ID to be reused by the next outbound message fragment sequence. */
     void setCurrentStreamId(int streamId) {
         this.currentStreamId = streamId;
+    }
+
+    HttpRequest pendingRequest() {
+        return this.pendingRequest;
+    }
+
+    void pendingRequest(HttpRequest pendingRequest) {
+        this.pendingRequest = pendingRequest;
+    }
+
+    HttpResponse pendingResponse() {
+        return this.pendingResponse;
+    }
+
+    void pendingResponse(HttpResponse pendingResponse) {
+        this.pendingResponse = pendingResponse;
+    }
+
+    void clearPendingStartLine() {
+        this.pendingRequest = null;
+        this.pendingResponse = null;
+    }
+
+    boolean trailingHeadersSent() {
+        return this.trailingHeadersSent;
+    }
+
+    void trailingHeadersSent(boolean trailingHeadersSent) {
+        this.trailingHeadersSent = trailingHeadersSent;
     }
 
     /**

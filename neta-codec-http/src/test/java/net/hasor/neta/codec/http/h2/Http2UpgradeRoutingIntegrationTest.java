@@ -14,103 +14,105 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.*;
+import java.net.HttpURLConnection;
+import java.net.InetSocketAddress;
+import java.net.Socket;
+import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
-import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.routing.HttpAggregatorRoute;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
-import org.junit.After;
-import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
-public class H2cUpgradeRoutingTest {
-    private NetManager neta;
-    private int        port;
+public class Http2UpgradeRoutingIntegrationTest extends AbstractHttpTest {
 
-    @Before
-    public void setUp() throws Exception {
-        this.port = findFreePort();
-        this.neta = new NetManager();
-        startServer();
-        Thread.sleep(300);
-    }
-
-    @After
-    public void tearDown() throws IOException {
-        if (this.neta != null) {
-            this.neta.shutdown();
-        }
+    private static ByteBuf toBody(String text) {
+        return ByteBuf.wrap(text.getBytes(StandardCharsets.UTF_8));
     }
 
     @Test
     public void testHttp11FallbackRouting() throws Exception {
-        HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:" + this.port + "/plain").openConnection();
-        conn.setRequestMethod("GET");
-        conn.setConnectTimeout(5000);
-        conn.setReadTimeout(5000);
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        try {
+            startServer(neta, port);
+            Thread.sleep(300);
 
-        assertEquals(200, conn.getResponseCode());
-        assertEquals("http/1.1:/plain", readAll(conn.getInputStream()));
-        conn.disconnect();
+            HttpURLConnection conn = (HttpURLConnection) new URL("http://127.0.0.1:" + port + "/plain").openConnection();
+            conn.setRequestMethod("GET");
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+
+            assertEquals(200, conn.getResponseCode());
+            assertEquals("http/1.1:/plain", readAll(conn.getInputStream()));
+            conn.disconnect();
+        } finally {
+            neta.shutdown();
+        }
     }
 
     @Test
     public void testH2cUpgradeAndFollowUpStream() throws Exception {
-        try (Socket socket = new Socket("127.0.0.1", this.port)) {
-            socket.setSoTimeout(5000);
-            InputStream in = socket.getInputStream();
-            OutputStream out = socket.getOutputStream();
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        try {
+            startServer(neta, port);
+            Thread.sleep(300);
 
-            out.write(buildUpgradeRequest().getBytes(StandardCharsets.US_ASCII));
-            out.flush();
+            try (Socket socket = new Socket("127.0.0.1", port)) {
+                socket.setSoTimeout(5000);
+                InputStream in = socket.getInputStream();
+                OutputStream out = socket.getOutputStream();
 
-            String responseHead = readHttp1Head(in);
-            assertTrue(responseHead.startsWith("HTTP/1.1 101"));
-            assertTrue(responseHead.toLowerCase().contains("upgrade: h2c"));
+                out.write(buildUpgradeRequest(port).getBytes(StandardCharsets.US_ASCII));
+                out.flush();
 
-            out.write(CLIENT_PREFACE);
-            out.write(buildFrame(Http2FrameType.SETTINGS, Http2Flags.NONE, 0, new byte[0]));
-            out.flush();
+                String responseHead = readHttp1Head(in);
+                assertTrue(responseHead.startsWith("HTTP/1.1 101"));
+                assertTrue(responseHead.toLowerCase().contains("upgrade: h2c"));
 
-            Frame serverSettings = readFrame(in);
-            assertEquals(Http2FrameType.SETTINGS, serverSettings.type);
-            assertEquals(0, serverSettings.streamId);
+                out.write(CLIENT_PREFACE);
+                out.write(buildFrame(Http2FrameType.SETTINGS, Http2Flags.NONE, 0, new byte[0]));
+                out.flush();
 
-            out.write(buildFrame(Http2FrameType.SETTINGS, Http2Flags.ACK, 0, new byte[0]));
-            out.flush();
+                Frame serverSettings = readFrame(in);
+                assertEquals(Http2FrameType.SETTINGS, serverSettings.type);
+                assertEquals(0, serverSettings.streamId);
 
-            H2Response upgradeResponse = readResponse(in, 1);
-            assertEquals("200", upgradeResponse.status);
-            assertEquals("upgraded:/upgrade", upgradeResponse.body);
+                out.write(buildFrame(Http2FrameType.SETTINGS, Http2Flags.ACK, 0, new byte[0]));
+                out.flush();
 
-            out.write(buildHeadersFrame(3, "/after"));
-            out.flush();
+                H2Response upgradeResponse = readResponse(in, 1);
+                assertEquals("200", upgradeResponse.status);
+                assertEquals("upgraded:/upgrade", upgradeResponse.body);
 
-            H2Response secondResponse = readResponse(in, 3);
-            assertEquals("200", secondResponse.status);
-            assertEquals("upgraded:/after", secondResponse.body);
+                out.write(buildHeadersFrame(port, 3, "/after"));
+                out.flush();
+
+                H2Response secondResponse = readResponse(in, 3);
+                assertEquals("200", secondResponse.status);
+                assertEquals("upgraded:/after", secondResponse.body);
+            }
+        } finally {
+            neta.shutdown();
         }
     }
 
-    private void startServer() throws Exception {
+    private void startServer(NetManager neta, int port) throws Exception {
         ProtoInitializer serverProto = ProtoHelper.standard()//
                 .nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), routing -> {//
                     routing.branch(HttpRouteKey.BRANCH_H2, (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch//
-                            .nextDuplex("h2-codec", new Http2ServerDuplexe())//
-                            .nextDecoder("h2-http-dec", new Http2MessageToHttpDecoder())//
-                            .nextEncoder("h2-http-enc", new Http2HttpToMessageEncoder(true))//
+                            .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
+                            .nextDuplex("h2-message", new Http2ObjectDuplexe(true))//
                             .nextDecoder("h2-aggregator", new HttpRequestAggregator(1048576))//
                             .nextDecoder("h2-handler", new InlineDispatchHandler()));//
                     //
@@ -125,27 +127,27 @@ public class H2cUpgradeRoutingTest {
                             .nextDecoder("http-handler", new InlineDispatchHandler()));
                 }).build();
 
-        this.neta.bind(new InetSocketAddress("0.0.0.0", this.port), serverProto, SoConfig.TCP());
+        neta.bind(new InetSocketAddress("0.0.0.0", port), serverProto, SoConfig.TCP());
     }
 
-    private String buildUpgradeRequest() {
+    private String buildUpgradeRequest(int port) {
         byte[] settings = new byte[] { 0x00, 0x03, 0x00, 0x00, 0x00, 0x64 };
         String encodedSettings = Base64.getUrlEncoder().withoutPadding().encodeToString(settings);
         return "GET /upgrade HTTP/1.1\r\n"//
-                + "Host: 127.0.0.1:" + this.port + "\r\n"//
+                + "Host: 127.0.0.1:" + port + "\r\n"//
                 + "Connection: Upgrade, HTTP2-Settings\r\n"//
                 + "Upgrade: h2c\r\n"//
                 + "HTTP2-Settings: " + encodedSettings + "\r\n"//
                 + "\r\n";
     }
 
-    private byte[] buildHeadersFrame(int streamId, String path) {
+    private byte[] buildHeadersFrame(int port, int streamId, String path) {
         HpackEncoder encoder = new HpackEncoder(4096);
         encoder.beginEncode();
-        encoder.encodeHeaderDirect(":method", HttpMethod.GET.name());
-        encoder.encodeHeaderDirect(":path", path);
-        encoder.encodeHeaderDirect(":scheme", "http");
-        encoder.encodeHeaderDirect(":authority", "127.0.0.1:" + this.port);
+        encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_METHOD, HttpMethod.GET.name());
+        encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_PATH, path);
+        encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_SCHEME, "http");
+        encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_AUTHORITY, "127.0.0.1:" + port);
         byte[] headerBlock = new byte[encoder.encodedLength()];
         System.arraycopy(encoder.encodedBuffer(), 0, headerBlock, 0, headerBlock.length);
         return buildFrame(Http2FrameType.HEADERS, Http2Flags.END_HEADERS | Http2Flags.END_STREAM, streamId, headerBlock);
@@ -163,7 +165,7 @@ public class H2cUpgradeRoutingTest {
                 continue;
             }
             if (frame.type == Http2FrameType.HEADERS) {
-                response.status = decoder.decode(frame.payload, 0, frame.payload.length).getString(":status");
+                response.status = decoder.decode(frame.payload, 0, frame.payload.length).getString(HttpHeaderNames.PSEUDO_STATUS);
                 response.endStream = Http2Flags.endStream(frame.flags);
             } else if (frame.type == Http2FrameType.DATA) {
                 response.body += new String(frame.payload, StandardCharsets.UTF_8);
@@ -244,19 +246,6 @@ public class H2cUpgradeRoutingTest {
         return out.toString(StandardCharsets.UTF_8.name());
     }
 
-    private static ByteBuf toBody(String text) {
-        ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(text.length() + 16);
-        buf.writeString(text, StandardCharsets.UTF_8);
-        buf.markWriter();
-        return buf;
-    }
-
-    private static int findFreePort() throws IOException {
-        try (ServerSocket socket = new ServerSocket(0)) {
-            return socket.getLocalPort();
-        }
-    }
-
     private static final byte[] CLIENT_PREFACE = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
 
     private static class H2Response {
@@ -281,8 +270,6 @@ public class H2cUpgradeRoutingTest {
 
     @SuppressWarnings("rawtypes")
     private static class InlineDispatchHandler implements ProtoHandler<HttpObject, Object> {
-        private final AtomicInteger requests = new AtomicInteger();
-
         @Override
         public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Object> dst) throws Throwable {
             while (src.hasMore()) {
@@ -300,7 +287,6 @@ public class H2cUpgradeRoutingTest {
                 response.setHeader("content-length", String.valueOf(body.readableBytes()));
                 response.streamId(request.streamId());
                 context.sendData(response).get();
-                this.requests.incrementAndGet();
             }
             return ProtoStatus.Next;
         }

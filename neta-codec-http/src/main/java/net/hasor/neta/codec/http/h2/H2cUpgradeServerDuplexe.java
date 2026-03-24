@@ -27,46 +27,44 @@ import net.hasor.neta.codec.http.*;
  * <p>
  * The handler starts in HTTP/1.1 mode, aggregates the upgrade request,
  * emits a 101 response plus server HTTP/2 SETTINGS, then switches the
- * connection into the normal {@link Http2ServerDuplexe} path.
+ * connection into the normal {@link Http2ObjectDuplexe} path.
  */
 public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
-    private static final Logger                    logger = Logger.getLogger(H2cUpgradeServerDuplexe.class);
-    private final        HttpServerDuplexe         http1Codec;
-    private final        HttpRequestAggregator     http1Aggregator;
-    private final        Http2ServerDuplexe        http2Codec;
-    private final        Http2MessageToHttpDecoder http2ToHttp;
-    private final        Http2HttpToMessageEncoder httpToHttp2;
-    private              boolean                   upgraded;
+    private static final Logger                logger = Logger.getLogger(H2cUpgradeServerDuplexe.class);
+    private final        HttpServerDuplexe     http1Codec;
+    private final        HttpRequestAggregator http1Aggregator;
+    private final        Http2FrameDuplexe     http2FrameCodec;
+    private final        Http2ObjectDuplexe    http2ObjectCodec;
+    private              boolean               upgraded;
 
     public H2cUpgradeServerDuplexe() {
-        this(new HttpServerDuplexe(), new HttpRequestAggregator(1048576), new Http2ServerDuplexe());
+        this(new HttpServerDuplexe(), new HttpRequestAggregator(1048576), new Http2FrameDuplexe(true), new Http2ObjectDuplexe(true));
     }
 
     public H2cUpgradeServerDuplexe(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize, int maxContentLength) {
-        this(new HttpServerDuplexe(maxInitialLineLength, maxHeaderSize, maxChunkSize), new HttpRequestAggregator(maxContentLength), new Http2ServerDuplexe(4096, maxHeaderSize, maxContentLength));
+        this(new HttpServerDuplexe(maxInitialLineLength, maxHeaderSize, maxChunkSize), new HttpRequestAggregator(maxContentLength), new Http2FrameDuplexe(true), new Http2ObjectDuplexe(true, Http2Settings.defaultLocalSettings(true, maxHeaderSize, maxContentLength)));
     }
 
-    private H2cUpgradeServerDuplexe(HttpServerDuplexe http1Codec, HttpRequestAggregator http1Aggregator, Http2ServerDuplexe http2Codec) {
+    private H2cUpgradeServerDuplexe(HttpServerDuplexe http1Codec, HttpRequestAggregator http1Aggregator, Http2FrameDuplexe http2FrameCodec, Http2ObjectDuplexe http2ObjectCodec) {
         this.http1Codec = http1Codec;
         this.http1Aggregator = http1Aggregator;
-        this.http2Codec = http2Codec;
-        this.http2ToHttp = new Http2MessageToHttpDecoder();
-        this.httpToHttp2 = new Http2HttpToMessageEncoder(true);
+        this.http2FrameCodec = http2FrameCodec;
+        this.http2ObjectCodec = http2ObjectCodec;
     }
 
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.http1Codec.onInit(name + "-http1", rcvSize, sndSize, context);
         this.http1Aggregator.onInit(name + "-http1-agg", rcvSize, context);
-        this.http2Codec.onInit(name + "-h2", rcvSize, sndSize, context);
-        this.http2ToHttp.onInit(name + "-h2-http-dec", rcvSize, context);
-        this.httpToHttp2.onInit(name + "-h2-http-enc", sndSize, context);
+        this.http2FrameCodec.onInit(name + "-h2-frame", rcvSize, sndSize, context);
+        this.http2ObjectCodec.onInit(name + "-h2-object", rcvSize, sndSize, context);
     }
 
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         this.http1Codec.onActive(context);
-        this.http2Codec.onActive(context);
+        this.http2FrameCodec.onActive(context);
+        this.http2ObjectCodec.onActive(context);
     }
 
     @Override
@@ -75,33 +73,22 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
             if (this.upgraded) {
-                ProtoQueue<Http2Message> upgradedRcvDown = new ProtoQueue<>(-1);
-                ProtoStatus status = this.http2Codec.onMessage(context, true, rcvUp, upgradedRcvDown, new ProtoQueue<Http2Message>(-1), sndDown);
-                upgradedRcvDown.sndSubmit();
-                this.http2ToHttp.onMessage(context, upgradedRcvDown, rcvDown);
+                ProtoQueue<Http2Frame> inboundFrames = new ProtoQueue<>(-1);
+                ProtoQueue<Http2Frame> outboundFrames = new ProtoQueue<>(-1);
+                ProtoStatus status = this.http2FrameCodec.onMessage(context, true, rcvUp, inboundFrames, new ProtoQueue<Http2Frame>(-1), sndDown);
+                this.http2ObjectCodec.onMessage(context, true, inboundFrames, rcvDown, new ProtoQueue<HttpObject>(-1), outboundFrames);
+                if (outboundFrames.hasMore()) {
+                    this.http2FrameCodec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Frame>(-1), outboundFrames, sndDown);
+                }
                 return status;
             }
             return this.handleUpgradeRequest(context, rcvUp, rcvDown, sndDown);
         }
 
         if (this.upgraded) {
-            int nextStreamId = 0;
-            HttpObject peek = sndUp.peekMessage();
-            if (peek != null) {
-                nextStreamId = peek.streamId();
-            }
-            if (nextStreamId <= 0) {
-                Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
-                nextStreamId = decoderState.pollResponseStreamId();
-            }
-            if (nextStreamId > 0) {
-                Http2EncoderContent encoderState = context.context(Http2EncoderContent.class);
-                encoderState.setCurrentStreamId(nextStreamId);
-            }
-            ProtoQueue<Http2Message> upgradedSndUp = new ProtoQueue<>(-1);
-            this.httpToHttp2.onMessage(context, sndUp, upgradedSndUp);
-            upgradedSndUp.sndSubmit();
-            return this.http2Codec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Message>(-1), upgradedSndUp, sndDown);
+            ProtoQueue<Http2Frame> outboundFrames = new ProtoQueue<>(-1);
+            this.http2ObjectCodec.onMessage(context, false, new ProtoQueue<Http2Frame>(-1), new ProtoQueue<HttpObject>(-1), sndUp, outboundFrames);
+            return this.http2FrameCodec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Frame>(-1), outboundFrames, sndDown);
         }
         return this.http1Codec.onMessage(context, false, rcvUp, rcvDown, sndUp, sndDown);
     }
@@ -109,7 +96,7 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
     @Override
     public boolean onUserEvent(ProtoContext context, net.hasor.neta.channel.SoUserEvent event, boolean isRcv) throws Throwable {
         if (this.upgraded) {
-            return this.http2Codec.onUserEvent(context, event, isRcv);
+            return this.http2FrameCodec.onUserEvent(context, event, isRcv) && this.http2ObjectCodec.onUserEvent(context, event, isRcv);
         }
         return true;
     }
@@ -117,7 +104,10 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (this.upgraded) {
-            return this.http2Codec.onError(context, isRcv, e, eh);
+            if (isRcv) {
+                return this.http2FrameCodec.onError(context, true, e, eh);
+            }
+            return this.http2ObjectCodec.onError(context, false, e, eh);
         }
         return this.http1Codec.onError(context, isRcv, e, eh);
     }
@@ -126,13 +116,13 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
     public void onClose(ProtoContext context) {
         this.http1Codec.onClose(context);
         this.http1Aggregator.onClose(context);
-        this.http2Codec.onClose(context);
+        this.http2ObjectCodec.onClose(context);
+        this.http2FrameCodec.onClose(context);
     }
 
     private ProtoStatus handleUpgradeRequest(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         ProtoQueue<HttpObject> decodedQueue = new ProtoQueue<>(-1);
         this.http1Codec.onMessage(context, true, rcvUp, decodedQueue, new ProtoQueue<HttpObject>(-1), sndDown);
-        decodedQueue.sndSubmit();
 
         if (decodedQueue.queueSize() == 0) {
             return ProtoStatus.Next;
@@ -140,7 +130,6 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
 
         ProtoQueue<HttpObject> aggregatedQueue = new ProtoQueue<>(-1);
         this.http1Aggregator.onMessage(context, decodedQueue, aggregatedQueue);
-        aggregatedQueue.sndSubmit();
 
         while (aggregatedQueue.hasMore()) {
             HttpObject message = aggregatedQueue.takeMessage();
@@ -180,7 +169,7 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
         sendServerPreface(context, sndDown);
         promoteRequestToHttp2(context, request);
         rcvDown.offerMessage(request);
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+        if (context.getConfig().isPrintLog()) {
             logger.info("[H2C-UPGRADE] channel=" + context.getChannel().getChannelId() + " upgraded request to stream=1 uri=" + request.uri());
         }
     }
@@ -194,11 +183,11 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
         try {
             byte[] payload = Base64.getUrlDecoder().decode(value);
             if (payload.length % 6 != 0) {
-                throw new HttpProtocolViolationException("HTTP/2: invalid HTTP2-Settings payload length " + payload.length);
+                throw new HttpBadRequestException("HTTP/2: invalid HTTP2-Settings payload length " + payload.length);
             }
             return payload;
         } catch (IllegalArgumentException e) {
-            throw new HttpProtocolViolationException(HttpStatus.BAD_REQUEST, "HTTP/2: invalid HTTP2-Settings header", e);
+            throw new HttpBadRequestException("HTTP/2: invalid HTTP2-Settings header", e);
         }
     }
 
@@ -222,17 +211,20 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
 
         ProtoQueue<HttpObject> responseQueue = new ProtoQueue<>(-1);
         responseQueue.offerMessage(response);
-        responseQueue.sndSubmit();
         this.http1Codec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<HttpObject>(-1), responseQueue, sndDown);
     }
 
     private void sendServerPreface(ProtoContext context, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
-        this.http2Codec.onMessage(context, true, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Message>(-1), new ProtoQueue<Http2Message>(-1), sndDown);
+        ProtoQueue<Http2Frame> outboundFrames = new ProtoQueue<>(-1);
+        this.http2ObjectCodec.onMessage(context, true, new ProtoQueue<Http2Frame>(-1), new ProtoQueue<HttpObject>(-1), new ProtoQueue<HttpObject>(-1), outboundFrames);
+        if (outboundFrames.hasMore()) {
+            this.http2FrameCodec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Frame>(-1), outboundFrames, sndDown);
+        }
     }
 
     private void promoteRequestToHttp2(ProtoContext context, FullHttpRequest request) {
         if (!(request instanceof DefaultFullHttpRequest)) {
-            throw new IllegalArgumentException("FullHttpRequest must be DefaultFullHttpRequest for h2c upgrade");
+            throw new HttpProtocolStateException("HTTP/2: h2c upgrade requires DefaultFullHttpRequest");
         }
         DefaultFullHttpRequest fullRequest = (DefaultFullHttpRequest) request;
         fullRequest.removeHeader(HttpHeaderNames.CONNECTION);

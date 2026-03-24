@@ -14,23 +14,44 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+import net.hasor.neta.codec.http.HttpEvent;
 
-abstract class AbstractHttp2Message implements Http2Message {
-    private int streamId;
+/**
+ * Base type for HTTP2 user events.
+ */
+public abstract class AbstractHttp2Event implements HttpEvent {
+    private int     streamId;
+    private boolean remote;
+    private boolean released;
 
-    @Override
-    public int streamId() {
+    public final int streamId() {
         return this.streamId;
     }
 
-    @Override
-    public Http2Message streamId(int streamId) {
+    public AbstractHttp2Event streamId(int streamId) {
         this.streamId = streamId;
         return this;
     }
 
-    @Override
-    public void release() {
+    public final boolean isRemote() {
+        return this.remote;
+    }
+
+    public final <T extends AbstractHttp2Event> T remote(boolean remote) {
+        this.remote = remote;
+        return (T) this;
+    }
+
+    public final void release() {
+        if (this.released) {
+            return;
+        }
+        this.released = true;
         this.streamId = 0;
+        this.remote = false;
+        this.doRelease();
+    }
+
+    protected void doRelease() {
     }
 }

@@ -55,6 +55,26 @@ public class Http2Settings {
         this.maxHeaderListSize = other.maxHeaderListSize;
     }
 
+    public static Http2Settings defaultLocalSettings(boolean serverMode) {
+        return defaultLocalSettings(serverMode, 4096, 8192, 65535);
+    }
+
+    public static Http2Settings defaultLocalSettings(boolean serverMode, long maxHeaderListSize, int initialWindowSize) {
+        return defaultLocalSettings(serverMode, 4096, maxHeaderListSize, initialWindowSize);
+    }
+
+    public static Http2Settings defaultLocalSettings(boolean serverMode, long headerTableSize, long maxHeaderListSize, int initialWindowSize) {
+        Http2Settings settings = new Http2Settings();
+        settings.headerTableSize(headerTableSize);
+        settings.maxHeaderListSize(maxHeaderListSize);
+        settings.initialWindowSize(Math.max(initialWindowSize, 65535));
+        if (serverMode) {
+            settings.enablePush(false);
+            settings.maxConcurrentStreams(100L);
+        }
+        return settings;
+    }
+
     public long headerTableSize() {
         return headerTableSize;
     }

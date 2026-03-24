@@ -16,7 +16,7 @@
 package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
-import net.hasor.neta.codec.http.HttpProtocolViolationException;
+import net.hasor.neta.codec.http.HttpHeaderTooLargeException;
 
 /**
  * HPACK decoder as defined in RFC 7541.
@@ -43,14 +43,7 @@ class HpackDecoder {
         this.maxHeaderListSize = maxHeaderListSize;
     }
 
-    /**
-     * Decodes a compressed header block fragment into HTTP headers.
-     * @param data the compressed header block bytes
-     * @param offset start offset in the data array
-     * @param length number of bytes to decode
-     * @return the decoded HTTP headers
-     * @throws HttpProtocolException if the header block is malformed
-     */
+    /* Decodes a compressed header block fragment into HTTP headers. */
     public DefaultHttpHeaders decode(byte[] data, int offset, int length) {
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
         int end = offset + length;
@@ -66,7 +59,7 @@ class HpackDecoder {
                 pos = decodedPos;
                 int index = decodedInt;
                 if (index == 0) {
-                    throw new HttpProtocolViolationException("HPACK: invalid indexed header field index 0");
+                    throw new HpackDecodingException("HPACK: invalid indexed header field index 0");
                 }
                 HpackHeaderField entry = getEntry(index);
                 headers.addHeader(entry.name(), entry.value());
@@ -142,22 +135,18 @@ class HpackDecoder {
                 int newMaxSize = decodedInt;
                 dynamicTable.setMaxSize(newMaxSize);
             } else {
-                throw new HttpProtocolViolationException("HPACK: unknown header field representation: 0x" + Integer.toHexString(b));
+                throw new HpackDecodingException("HPACK: unknown header field representation: 0x" + Integer.toHexString(b));
             }
 
             if (totalSize > maxHeaderListSize) {
-                throw new HttpProtocolViolationException("HPACK: header list size exceeds maximum: " + totalSize + " > " + maxHeaderListSize);
+                throw new HttpHeaderTooLargeException("HPACK: header list size exceeds maximum: " + totalSize + " > " + maxHeaderListSize, maxHeaderListSize, totalSize);
             }
         }
 
         return headers;
     }
 
-    /**
-     * Gets an entry from the combined static + dynamic table.
-     * @param index 1-based HPACK index
-     * @return the header field entry
-     */
+    /* Gets an entry from the combined static + dynamic table. */
     private HpackHeaderField getEntry(int index) {
         if (index <= HpackStaticTable.LENGTH) {
             return HpackStaticTable.get(index);
@@ -166,14 +155,7 @@ class HpackDecoder {
         return dynamicTable.get(dynamicIdx);
     }
 
-    /**
-     * Decodes an HPACK integer representation (RFC 7541, Section 5.1).
-     * @param data the byte array
-     * @param pos current position
-     * @param end end position
-     * @param prefixBits number of prefix bits (1-8)
-     * @return int[2]: [0]=new position, [1]=decoded value
-     */
+    /* Decodes an HPACK integer representation (RFC 7541, Section 5.1). */
     private void decodeInteger(byte[] data, int pos, int end, int prefixBits) {
         int prefixMask = (1 << prefixBits) - 1;
         int value = data[pos] & prefixMask;
@@ -190,14 +172,14 @@ class HpackDecoder {
         int b;
         do {
             if (pos >= end) {
-                throw new HttpProtocolViolationException("HPACK: truncated integer");
+                throw new HpackDecodingException("HPACK: truncated integer");
             }
             b = data[pos] & 0xFF;
             pos++;
             value += (b & 0x7F) << shift;
             shift += 7;
             if (shift > 28) {
-                throw new HttpProtocolViolationException("HPACK: integer overflow");
+                throw new HpackDecodingException("HPACK: integer overflow");
             }
         } while ((b & 0x80) != 0);
 
@@ -205,17 +187,10 @@ class HpackDecoder {
         this.decodedInt = value;
     }
 
-    /**
-     * Decodes an HPACK string literal (RFC 7541, Section 5.2).
-     * Supports both raw and Huffman-encoded strings.
-     * @param data the byte array
-     * @param pos current position
-     * @param end end position
-     * @return Object[2]: [0]=new position (Integer), [1]=decoded string (String)
-     */
+    /* Decodes an HPACK string literal (RFC 7541, Section 5.2). */
     private void decodeString(byte[] data, int pos, int end) {
         if (pos >= end) {
-            throw new HttpProtocolViolationException("HPACK: truncated string");
+            throw new HpackDecodingException("HPACK: truncated string");
         }
 
         boolean huffman = (data[pos] & 0x80) != 0;
@@ -224,7 +199,7 @@ class HpackDecoder {
         int strLen = this.decodedInt;
 
         if (pos + strLen > end) {
-            throw new HttpProtocolViolationException("HPACK: string length exceeds available data");
+            throw new HpackDecodingException("HPACK: string length exceeds available data");
         }
 
         String value;
@@ -239,7 +214,7 @@ class HpackDecoder {
         this.decodedString = value;
     }
 
-    /** Updates the dynamic table maximum size (called on SETTINGS change). */
+    /* Updates the dynamic table maximum size (called on SETTINGS change). */
     public void setMaxHeaderTableSize(int maxSize) {
         dynamicTable.setMaxSize(maxSize);
     }

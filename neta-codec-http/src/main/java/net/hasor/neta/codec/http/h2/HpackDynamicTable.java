@@ -68,7 +68,7 @@ class HpackDynamicTable {
      */
     public HpackHeaderField get(int index) {
         if (index < 0 || index >= count) {
-            throw new IndexOutOfBoundsException("index: " + index + ", count: " + count);
+            throw new HpackDecodingException("HPACK: invalid dynamic table index " + index + " (count=" + count + ")");
         }
         int realIdx = (head - index - 1 + table.length) % table.length;
         return table[realIdx];
@@ -112,7 +112,7 @@ class HpackDynamicTable {
      */
     public void setMaxSize(int newMaxSize) {
         if (newMaxSize < 0) {
-            throw new IllegalArgumentException("maxSize must be >= 0");
+            throw new HpackDecodingException("HPACK: dynamic table size update must be non-negative: " + newMaxSize);
         }
         this.maxSize = newMaxSize;
         while (size > maxSize && count > 0) {

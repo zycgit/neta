@@ -15,20 +15,28 @@
  */
 package net.hasor.neta.codec.http.h2;
 
-/** Semantic RST_STREAM message. */
-public class Http2ResetStreamMessage extends AbstractHttp2Message {
+/**
+ * Event describing an HTTP/2 stream reset.
+ * <p>
+ * The protocol layer publishes this event both when a remote peer sends an
+ * inbound {@code RST_STREAM} frame and when the local endpoint detects a
+ * stream-scoped protocol error and resets the stream itself. This keeps stream
+ * lifecycle management inside the protocol layer while still exposing the
+ * outcome to application handlers.
+ */
+public class Http2ResetEvent extends AbstractHttp2Event {
+    public static final long CANCEL         = -1L;
+    public static final long INTERNAL_ERROR = -2L;
+    public static final long REFUSED        = -3L;
+
     private final long errorCode;
 
-    public Http2ResetStreamMessage(int streamId, long errorCode) {
+    public Http2ResetEvent(int streamId, long errorCode) {
         this.streamId(streamId);
         this.errorCode = errorCode;
     }
 
-    @Override
-    public Type messageType() {
-        return Type.RST_STREAM;
-    }
-
+    /** Returns the protocol-specific reset reason code. */
     public long errorCode() {
         return this.errorCode;
     }
