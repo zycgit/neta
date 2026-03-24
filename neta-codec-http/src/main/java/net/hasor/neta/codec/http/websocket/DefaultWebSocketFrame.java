@@ -43,6 +43,7 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
     private boolean         active;
     private byte[]          maskingKey;
     private ByteBuf         content;
+    private int             payloadLength;
     private WebSocketOpcode opcode;
 
     private DefaultWebSocketFrame() {
@@ -85,6 +86,11 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
     }
 
     @Override
+    public int payloadLength() {
+        return this.payloadLength;
+    }
+
+    @Override
     public void release() {
         if (!this.active) {
             return;
@@ -99,6 +105,7 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
         this.finalFragment = false;
         this.masked = false;
         this.maskingKey = null;
+        this.payloadLength = 0;
         this.recycle();
     }
 
@@ -109,10 +116,10 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
 
     @Override
     public String toString() {
-        return "WebSocketFrame{opcode=" + this.opcode + ", fin=" + this.finalFragment + ", masked=" + this.masked + ", payloadLen=" + (this.content != null ? this.content.readableBytes() : 0) + '}';
+        return "WebSocketFrame{opcode=" + this.opcode + ", fin=" + this.finalFragment + ", masked=" + this.masked + ", payloadLen=" + this.payloadLength + '}';
     }
 
-    static WebSocketFrame newFrame(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
+    static WebSocketFrame newFrame(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content, int payloadLength) {
         if (opcode == null) {
             throw new IllegalArgumentException("opcode must not be null");
         }
@@ -127,6 +134,7 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
         frame.active = true;
         frame.maskingKey = masked ? maskingKey : null;
         frame.content = content;
+        frame.payloadLength = payloadLength;
         frame.opcode = opcode;
         return frame;
     }

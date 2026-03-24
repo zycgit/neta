@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import java.util.ArrayList;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
@@ -62,7 +63,10 @@ import net.hasor.neta.codec.http.*;
 public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private final WebSocketClientHandshakeDuplexer delegate;
     private final String                           targetRoute;
+    private final HttpMessageParts                 requestParts         = new HttpMessageParts();
+    private final ArrayList<HttpObject>            bufferedRequestParts = new ArrayList<>();
     private       boolean                          handshakePending;
+    private       Boolean                          currentRequestHandshake;
 
     public WebSocketClientUpgradeRouteDuplexer(WebSocketVersion version, String targetRoute) {
         this.delegate = new WebSocketClientHandshakeDuplexer(version);
@@ -125,13 +129,52 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 continue;
             }
 
-            if (isHandshakeRequest(msg)) {
-                this.handshakePending = true;
-                this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, sndUp, sndDown);
+            if (this.currentRequestHandshake != null) {
+                msg = sndUp.takeMessage();
+                if (Boolean.TRUE.equals(this.currentRequestHandshake)) {
+                    this.forwardToHandshake(context, msg, sndDown);
+                } else {
+                    sndDown.offerMessage(msg);
+                }
+                if (isRequestComplete(msg)) {
+                    this.resetRequestRoutingState(false);
+                }
                 continue;
             }
 
-            sndDown.offerMessage(sndUp.takeMessage());
+            if (!this.requestParts.isActive() && !(msg instanceof HttpRequest)) {
+                sndDown.offerMessage(sndUp.takeMessage());
+                continue;
+            }
+
+            msg = sndUp.takeMessage();
+            this.bufferedRequestParts.add(msg);
+            this.requestParts.appendRequest(msg);
+
+            if (!isHeaderSectionClosed(msg)) {
+                if (isRequestComplete(msg)) {
+                    this.flushBufferedRequest(sndDown);
+                    this.resetRequestRoutingState(false);
+                }
+                continue;
+            }
+
+            boolean handshakeRequest = isHandshakeRequest(this.requestParts);
+            boolean requestComplete = isRequestComplete(msg);
+            if (handshakeRequest) {
+                this.handshakePending = true;
+                this.forwardBufferedToHandshake(context, sndDown);
+            } else {
+                this.flushBufferedRequest(sndDown);
+            }
+
+            if (requestComplete) {
+                this.resetRequestRoutingState(false);
+            } else {
+                this.currentRequestHandshake = handshakeRequest;
+                this.bufferedRequestParts.clear();
+                this.requestParts.reset();
+            }
         }
         return ProtoStatus.Next;
     }
@@ -139,12 +182,14 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         this.handshakePending = false;
+        this.resetRequestRoutingState(true);
         return this.delegate.onError(context, isRcv, e, eh);
     }
 
     @Override
     public void onClose(ProtoContext context) {
         this.handshakePending = false;
+        this.resetRequestRoutingState(true);
         this.delegate.onClose(context);
     }
 
@@ -155,14 +200,53 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
         }
     }
 
-    private static boolean isHandshakeRequest(HttpObject msg) {
-        if (!(msg instanceof FullHttpRequest)) {
-            return false;
+    private void forwardBufferedToHandshake(ProtoContext context, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+        ProtoQueue<HttpObject> queue = new ProtoQueue<>(this.bufferedRequestParts.size());
+        queue.offerMessage(this.bufferedRequestParts);
+        queue.sndSubmit();
+        this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
+    }
+
+    private void forwardToHandshake(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+        ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
+        queue.offerMessage(msg);
+        queue.sndSubmit();
+        this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
+    }
+
+    private void flushBufferedRequest(ProtoSndQueue<HttpObject> sndDown) {
+        sndDown.offerMessage(this.bufferedRequestParts);
+    }
+
+    private void resetRequestRoutingState(boolean releaseBuffered) {
+        if (releaseBuffered) {
+            for (HttpObject msg : this.bufferedRequestParts) {
+                if (msg != null) {
+                    msg.release();
+                }
+            }
         }
-        FullHttpRequest request = (FullHttpRequest) msg;
-        String upgrade = request.getString(HttpHeaderNames.UPGRADE);
-        String connection = request.getString(HttpHeaderNames.CONNECTION);
+        this.bufferedRequestParts.clear();
+        this.requestParts.reset();
+        this.currentRequestHandshake = null;
+    }
+
+    private static boolean isHandshakeRequest(HttpMessageParts request) {
+        String upgrade = request.header(HttpHeaderNames.UPGRADE);
+        String connection = request.header(HttpHeaderNames.CONNECTION);
         return HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains(HttpHeaderValues.UPGRADE);
+    }
+
+    private static boolean isHeaderSectionClosed(HttpObject msg) {
+        return msg instanceof LastHttpHeaders || isAggregateLikeRequest(msg);
+    }
+
+    private static boolean isRequestComplete(HttpObject msg) {
+        return msg instanceof LastHttpContent || isAggregateLikeRequest(msg);
+    }
+
+    private static boolean isAggregateLikeRequest(HttpObject msg) {
+        return msg instanceof HttpRequest && msg instanceof HttpContent;
     }
 
     private static boolean isHandshakeResponsePart(HttpObject msg) {

@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.StringUtils;
@@ -483,6 +485,11 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             String negotiatedExtensions = responseHeaders.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
             this.finishWebSocketUpgrade(context, WebSocketContextImpl.fromHandshake(state.version, state.path, negotiatedProtocol, negotiatedExtensions));
             state.ready = true;
+        } catch (WebSocketHandshakeException e) {
+            logger.warn("Websocket server handshake protocol violation: " + e.getMessage());
+            this.rejectHandshake(context, state, e.status().code(), e.getMessage(), e.headers(), e.body());
+            this.resetHandshakeSession(state);
+            return;
         } catch (Throwable e) {
             logger.error("Error occurred while finalizing websocket handshake protocol state.", e);
             this.resetHandshakeSession(state);
@@ -505,9 +512,6 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             headers.setHeader(HttpHeaderNames.UPGRADE, HttpHeaderValues.WEBSOCKET);
             headers.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
             headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_ACCEPT, computeAcceptKey(state.key));
-            if (StringUtils.isNotBlank(state.protocols)) {
-                headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, state.protocols);
-            }
             lastContent = new DefaultLastHttpContent(ByteBuf.EMPTY).streamId(state.streamId);
         } else {
             headers.setHeader(HttpHeaderNames.UPGRADE, "WebSocket");
@@ -517,9 +521,6 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             }
             if (StringUtils.isNotBlank(state.host)) {
                 headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_LOCATION, "ws://" + state.host + (state.path != null ? state.path : "/"));
-            }
-            if (StringUtils.isNotBlank(state.protocols)) {
-                headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, state.protocols);
             }
 
             byte[] challengeResponse = computeHixie76Response(state.key1, state.key2, state.key3);
@@ -533,10 +534,46 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             headers.appendHeaders(acceptHeaders);
         }
 
+        validateNegotiatedHeaders(state, headers);
+
         context.sendData(responseLine);
         context.sendData(headers);
         context.sendData(lastContent);
         return headers;
+    }
+
+    private void validateNegotiatedHeaders(ServerHandshakeState state, HttpHeaders headers) {
+        String selectedProtocol = headers.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
+        List<String> selectedProtocols = parseHeaderValues(selectedProtocol);
+        if (selectedProtocols.size() > 1) {
+            throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket handshake failed: server selected more than one websocket sub-protocol.");
+        }
+        if (!selectedProtocols.isEmpty()) {
+            List<String> requestedProtocols = parseHeaderValues(state.protocols);
+            if (requestedProtocols.isEmpty() || !requestedProtocols.contains(selectedProtocols.get(0))) {
+                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket handshake failed: server selected an unsupported websocket sub-protocol.");
+            }
+        }
+
+        List<String> negotiatedExtensions = parseHeaderValues(headers.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS));
+        if (!negotiatedExtensions.isEmpty()) {
+            throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket handshake failed: negotiated extensions are not supported.");
+        }
+    }
+
+    private List<String> parseHeaderValues(String headerValue) {
+        ArrayList<String> values = new ArrayList<>();
+        if (StringUtils.isBlank(headerValue)) {
+            return values;
+        }
+        String[] parts = headerValue.split(",");
+        for (String part : parts) {
+            String value = part != null ? part.trim() : null;
+            if (StringUtils.isNotBlank(value)) {
+                values.add(value);
+            }
+        }
+        return values;
     }
 
     private void rejectHandshake(ProtoContext context, ServerHandshakeState state, int code, String reasonPhrase, HttpHeaders headers, byte[] bodyBytes) {

@@ -23,8 +23,33 @@ import net.hasor.neta.channel.*;
  * work with {@link WebSocketMessage} instead of raw frames.
  */
 public class WebSocketMessageDuplexer implements ProtoDuplexer<WebSocketFrame, WebSocketMessage, WebSocketMessage, WebSocketFrame> {
-    private final WebSocketInboundHandler  inbound  = new WebSocketInboundHandler();
-    private final WebSocketOutboundHandler outbound = new WebSocketOutboundHandler();
+    private final WebSocketInboundHandler  inbound;
+    private final WebSocketOutboundHandler outbound;
+
+    public WebSocketMessageDuplexer() {
+        this.inbound = new WebSocketInboundHandler();
+        this.outbound = new WebSocketOutboundHandler();
+    }
+
+    public WebSocketMessageDuplexer(boolean aggregateFragments) {
+        this.inbound = new WebSocketInboundHandler(aggregateFragments);
+        this.outbound = new WebSocketOutboundHandler();
+    }
+
+    public WebSocketMessageDuplexer(boolean aggregateFragments, int maxMessagePayloadLength) {
+        this.inbound = new WebSocketInboundHandler(aggregateFragments, maxMessagePayloadLength);
+        this.outbound = new WebSocketOutboundHandler();
+    }
+
+    public WebSocketMessageDuplexer(int maxFramePayloadLength) {
+        this.inbound = new WebSocketInboundHandler();
+        this.outbound = new WebSocketOutboundHandler(maxFramePayloadLength);
+    }
+
+    public WebSocketMessageDuplexer(boolean aggregateFragments, int maxMessagePayloadLength, int maxFramePayloadLength) {
+        this.inbound = new WebSocketInboundHandler(aggregateFragments, maxMessagePayloadLength);
+        this.outbound = new WebSocketOutboundHandler(maxFramePayloadLength);
+    }
 
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {

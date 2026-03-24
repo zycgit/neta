@@ -197,4 +197,130 @@ public class WebSocketFrameEncoderTest extends AbstractWebSocketTest {
             assertTrue(result.get(0) instanceof HttpByteBuf);
         });
     }
+
+    @Test
+    public void testFrameEncoderRejectsFragmentedControlFrameAndKeepsNextFrameEncodable() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asClient());
+
+            List<HttpObject> result = sendAndOutBound(pipe, WebSocketFrame.create(WebSocketOpcode.PING, false, false, null, ByteBuf.EMPTY));
+            assertTrue(result.isEmpty());
+
+            List<HttpObject> recovered = sendAndOutBound(pipe, WebSocketUtils.pingFrame());
+            assertEquals(1, recovered.size());
+            byte[] wire = bytes(((HttpByteBuf) recovered.get(0)).content());
+            assertEquals((byte) 0x89, wire[0]);
+            assertEquals((byte) 0x00, wire[1]);
+        });
+    }
+
+    @Test
+    public void testFrameEncoderRejectsInvalidClosePayloadAndKeepsNextFrameEncodable() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asClient());
+
+            List<HttpObject> result = sendAndOutBound(pipe, WebSocketUtils.closeFrame(false, null, ByteBuf.wrap(new byte[] { 0x01 })));
+            assertTrue(result.isEmpty());
+
+            List<HttpObject> recovered = sendAndOutBound(pipe, WebSocketUtils.pingFrame());
+            assertEquals(1, recovered.size());
+            byte[] wire = bytes(((HttpByteBuf) recovered.get(0)).content());
+            assertEquals((byte) 0x89, wire[0]);
+            assertEquals((byte) 0x00, wire[1]);
+        });
+    }
+
+    @Test
+    public void testFrameEncoderAllowsClientMandatoryExtensionCloseCodeWhenHandshakeContextIsReady() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
+            }, VrtSoConfig.asClient());
+
+            byte[] payload = new byte[] { (byte) ((WebSocketCode.MANDATORY_EXTENSION >> 8) & 0xFF), (byte) (WebSocketCode.MANDATORY_EXTENSION & 0xFF) };
+            WebSocketFrame close = WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(payload));
+            List<HttpObject> result = sendAndOutBound(pipe, close);
+
+            assertEquals(1, result.size());
+            byte[] wire = bytes(((HttpByteBuf) result.get(0)).content());
+            assertEquals((byte) 0x88, wire[0]);
+            assertEquals((byte) 0x82, wire[1]);
+        });
+    }
+
+    @Test
+    public void testFrameEncoderRejectsServerMandatoryExtensionCloseCodeWhenHandshakeContextIsReady() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
+            }, VrtSoConfig.asServer());
+
+            byte[] payload = new byte[] { (byte) ((WebSocketCode.MANDATORY_EXTENSION >> 8) & 0xFF), (byte) (WebSocketCode.MANDATORY_EXTENSION & 0xFF) };
+            List<HttpObject> result = sendAndOutBound(pipe, WebSocketUtils.closeFrame(false, null, ByteBuf.wrap(payload)));
+            assertTrue(result.isEmpty());
+
+            List<HttpObject> recovered = sendAndOutBound(pipe, WebSocketUtils.textFrame("ok"));
+            assertEquals(1, recovered.size());
+            byte[] wire = bytes(((HttpByteBuf) recovered.get(0)).content());
+            assertEquals("ok", new String(wire, 2, wire.length - 2, StandardCharsets.UTF_8));
+        });
+    }
+
+    @Test
+    public void testFrameEncoderRejectsMaskedFrameWithoutMaskKeyAndKeepsNextFrameEncodable() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder(WebSocketVersion.V13));
+            }, VrtSoConfig.asClient());
+
+            assertTrue(sendAndOutBound(pipe, WebSocketFrame.create(WebSocketOpcode.TEXT, true, true, null, ByteBuf.wrap("bad".getBytes(StandardCharsets.UTF_8)))).isEmpty());
+
+            List<HttpObject> result = sendAndOutBound(pipe, WebSocketUtils.textFrame("ok"));
+            assertEquals(1, result.size());
+            byte[] wire = bytes(((HttpByteBuf) result.get(0)).content());
+            assertEquals("ok", new String(wire, 2, wire.length - 2, StandardCharsets.UTF_8));
+        });
+    }
+
+    @Test
+    public void testFrameEncoderRejectsUnmaskedClientFrameWhenHandshakeContextIsReady() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
+            }, VrtSoConfig.asClient());
+
+            assertTrue(sendAndOutBound(pipe, WebSocketUtils.textFrame("bad")).isEmpty());
+
+            WebSocketFrame masked = WebSocketUtils.textFrame(true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap("ok".getBytes(StandardCharsets.UTF_8)));
+            List<HttpObject> result = sendAndOutBound(pipe, masked);
+            assertEquals(1, result.size());
+            byte[] wire = bytes(((HttpByteBuf) result.get(0)).content());
+            assertEquals((byte) 0x82, (byte) (wire[1] & 0x82));
+        });
+    }
+
+    @Test
+    public void testFrameEncoderRejectsMaskedServerFrameWhenHandshakeContextIsReady() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
+            }, VrtSoConfig.asServer());
+
+            WebSocketFrame masked = WebSocketUtils.textFrame(true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap("bad".getBytes(StandardCharsets.UTF_8)));
+            assertTrue(sendAndOutBound(pipe, masked).isEmpty());
+
+            List<HttpObject> result = sendAndOutBound(pipe, WebSocketUtils.textFrame("ok"));
+            assertEquals(1, result.size());
+            byte[] wire = bytes(((HttpByteBuf) result.get(0)).content());
+            assertEquals((byte) 0x02, (byte) (wire[1] & 0x82));
+        });
+    }
 }

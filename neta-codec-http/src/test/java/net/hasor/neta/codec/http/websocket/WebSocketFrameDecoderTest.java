@@ -114,6 +114,36 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     }
 
     @Test
+    public void testFrameDecoderCanStreamSingleLargeFrameAsSyntheticFragmentSequence() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder(WebSocketVersion.V13, 3));
+            }, VrtSoConfig.asServer());
+
+            byte[] payload = "ABCDEFG".getBytes(StandardCharsets.UTF_8);
+            byte[] rfc6455Frame = buildRfc6455Frame(0x01, true, false, null, payload);
+            List<HttpObject> result = receiveAndIntBound(pipe, httpByteBuf(rfc6455Frame));
+
+            assertEquals(3, result.size());
+            WebSocketFrame first = (WebSocketFrame) result.get(0);
+            WebSocketFrame second = (WebSocketFrame) result.get(1);
+            WebSocketFrame third = (WebSocketFrame) result.get(2);
+            assertEquals(WebSocketOpcode.TEXT, first.opcode());
+            assertFalse(first.isFinalFragment());
+            assertEquals(3, first.payloadLength());
+            assertEquals("ABC", text(first));
+            assertEquals(WebSocketOpcode.CONTINUATION, second.opcode());
+            assertFalse(second.isFinalFragment());
+            assertEquals(3, second.payloadLength());
+            assertEquals("DEF", text(second));
+            assertEquals(WebSocketOpcode.CONTINUATION, third.opcode());
+            assertTrue(third.isFinalFragment());
+            assertEquals(1, third.payloadLength());
+            assertEquals("G", text(third));
+        });
+    }
+
+    @Test
     public void testFrameDecoderParsesPingFrame() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
@@ -145,6 +175,83 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
             List<HttpObject> recovered = receiveAndIntBound(pipe, httpByteBuf(rfc6455Frame2));
             assertEquals(1, recovered.size());
             assertEquals("ok", text((WebSocketFrame) recovered.get(0)));
+        });
+    }
+
+    @Test
+    public void testFrameDecoderRejectsRsvBitsWithoutNegotiatedExtension() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
+            }, VrtSoConfig.asServer());
+
+            byte[] broken = buildRfc6455Frame(0x01, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "bad".getBytes(StandardCharsets.UTF_8));
+            broken[0] = (byte) (broken[0] | 0x40);
+            assertTrue(receiveAndIntBound(pipe, httpByteBuf(broken)).isEmpty());
+
+            byte[] ok = buildRfc6455Frame(0x01, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "ok".getBytes(StandardCharsets.UTF_8));
+            List<HttpObject> recovered = receiveAndIntBound(pipe, httpByteBuf(ok));
+            assertEquals(1, recovered.size());
+            assertEquals("ok", text((WebSocketFrame) recovered.get(0)));
+        });
+    }
+
+    @Test
+    public void testFrameDecoderRejectsUnmaskedClientFrameWhenRunningAsServer() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
+            }, VrtSoConfig.asServer());
+
+            byte[] broken = buildRfc6455Frame(0x01, true, false, null, "bad".getBytes(StandardCharsets.UTF_8));
+            assertTrue(receiveAndIntBound(pipe, httpByteBuf(broken)).isEmpty());
+
+            byte[] ok = buildRfc6455Frame(0x01, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "ok".getBytes(StandardCharsets.UTF_8));
+            List<HttpObject> recovered = receiveAndIntBound(pipe, httpByteBuf(ok));
+            assertEquals(1, recovered.size());
+            assertEquals("ok", text((WebSocketFrame) recovered.get(0)));
+        });
+    }
+
+    @Test
+    public void testFrameDecoderRejectsMaskedServerFrameWhenRunningAsClient() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
+            }, VrtSoConfig.asClient());
+
+            byte[] broken = buildRfc6455Frame(0x01, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "bad".getBytes(StandardCharsets.UTF_8));
+            assertTrue(receiveAndIntBound(pipe, httpByteBuf(broken)).isEmpty());
+
+            byte[] ok = buildRfc6455Frame(0x01, true, false, null, "ok".getBytes(StandardCharsets.UTF_8));
+            List<HttpObject> recovered = receiveAndIntBound(pipe, httpByteBuf(ok));
+            assertEquals(1, recovered.size());
+            assertEquals("ok", text((WebSocketFrame) recovered.get(0)));
+        });
+    }
+
+    @Test
+    public void testFrameDecoderCanStartStreaming64BitPayloadBeforeReceivingFullBody() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
+            }, VrtSoConfig.asServer());
+
+            byte[] headerOnly = new byte[] { (byte) 0x81, (byte) 0xFF, 0x00, 0x00, 0x00, (byte) 0x80, 0x00, 0x00, 0x00, 0x00, 0x01, 0x02, 0x03, 0x04 };
+            assertTrue(receiveAndIntBound(pipe, httpByteBuf(headerOnly)).isEmpty());
+
+            byte[] partialBody = new byte[] { 0x60, 0x60, 0x60 };
+            List<HttpObject> streamed = receiveAndIntBound(pipe, httpByteBuf(partialBody));
+            assertEquals(1, streamed.size());
+            WebSocketFrame firstChunk = (WebSocketFrame) streamed.get(0);
+            assertEquals(WebSocketOpcode.TEXT, firstChunk.opcode());
+            assertFalse(firstChunk.isFinalFragment());
+            assertEquals(3, firstChunk.payloadLength());
+            assertEquals("abc", text(firstChunk));
         });
     }
 

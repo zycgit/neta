@@ -63,7 +63,29 @@ public interface WebSocketFrame extends HttpObject {
      */
     ByteBuf content();
 
+    /**
+     * Returns the payload length represented by this frame object.
+     * <p>
+     * For normal frames this equals {@code content().readableBytes()}. When the decoder is
+     * configured for streaming, a large wire frame may be emitted as multiple frame objects and
+     * this value then reflects the payload length of the current emitted slice.
+     */
+    int payloadLength();
+
     static WebSocketFrame create(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
-        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, masked, maskingKey, content);
+        if (content == null) {
+            throw new IllegalArgumentException("content must not be null");
+        }
+        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, masked, maskingKey, content, content.readableBytes());
+    }
+
+    static WebSocketFrame create(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content, int payloadLength) {
+        if (content == null) {
+            throw new IllegalArgumentException("content must not be null");
+        }
+        if (payloadLength < 0) {
+            throw new IllegalArgumentException("payloadLength must not be negative");
+        }
+        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, masked, maskingKey, content, payloadLength);
     }
 }

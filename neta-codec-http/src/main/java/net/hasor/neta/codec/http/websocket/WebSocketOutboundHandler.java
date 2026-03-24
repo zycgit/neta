@@ -39,8 +39,20 @@ import net.hasor.neta.channel.*;
  * </pre>
  */
 public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, WebSocketFrame> {
-    private WebSocketOpcode fragmentType;
-    private int             expectedSequence;
+    private final int             maxFramePayloadLength;
+    private       WebSocketOpcode fragmentType;
+    private       int             expectedSequence;
+
+    public WebSocketOutboundHandler() {
+        this(0);
+    }
+
+    public WebSocketOutboundHandler(int maxFramePayloadLength) {
+        if (maxFramePayloadLength < 0) {
+            throw new IllegalArgumentException("maxFramePayloadLength must not be negative.");
+        }
+        this.maxFramePayloadLength = maxFramePayloadLength;
+    }
 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
@@ -65,7 +77,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
 
             boolean consumed = false;
             try {
-                dst.offerMessage(this.toFrame(context, msg));
+                encodeMessage(context, msg, dst);
                 consumed = true;
             } finally {
                 if (consumed) {
@@ -74,6 +86,14 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             }
         }
         return ProtoStatus.Next;
+    }
+
+    private void encodeMessage(ProtoContext context, WebSocketMessage msg, ProtoSndQueue<WebSocketFrame> dst) {
+        if (shouldAutoFragment(msg)) {
+            emitAutoFragmentedMessage(context, msg, dst);
+            return;
+        }
+        dst.offerMessage(this.toFrame(context, msg));
     }
 
     private WebSocketFrame toFrame(ProtoContext context, WebSocketMessage msg) {
@@ -116,17 +136,13 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         if (msg.sequence() != WebSocketMessage.FINAL_SEQUENCE) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage sequence must be FINAL_SEQUENCE.");
         }
-        return buildControlFrame(msg.type(), retainContent(msg.content()), masked);
+        return buildControlFrame(context, msg.type(), retainContent(msg.content()), masked);
     }
 
-    private WebSocketFrame buildControlFrame(WebSocketOpcode opcode, ByteBuf content, boolean masked) {
+    private WebSocketFrame buildControlFrame(ProtoContext context, WebSocketOpcode opcode, ByteBuf content, boolean masked) {
         if (content.readableBytes() > 125) {
             content.release();
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage payload must not exceed 125 bytes.");
-        }
-        if (this.fragmentType != null) {
-            content.release();
-            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage must not be sent during fragmented websocket message streaming.");
         }
         if (opcode == WebSocketOpcode.PING) {
             return WebSocketUtils.pingFrame(masked, maskingKey(masked), content);
@@ -135,6 +151,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             return WebSocketUtils.pongFrame(masked, maskingKey(masked), content);
         }
         if (opcode == WebSocketOpcode.CLOSE) {
+            WebSocketUtils.markCloseSent(context);
             return WebSocketUtils.closeFrame(masked, maskingKey(masked), content);
         }
         content.release();
@@ -184,6 +201,58 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         this.fragmentType = null;
         this.expectedSequence = 0;
         return frame;
+    }
+
+    private boolean shouldAutoFragment(WebSocketMessage msg) {
+        if (this.maxFramePayloadLength <= 0) {
+            return false;
+        }
+        if (this.fragmentType != null) {
+            return false;
+        }
+        if (msg.sequence() != WebSocketMessage.FINAL_SEQUENCE) {
+            return false;
+        }
+        if (msg.type() != WebSocketOpcode.TEXT && msg.type() != WebSocketOpcode.BINARY) {
+            return false;
+        }
+        ByteBuf content = msg.content();
+        return content != null && content.readableBytes() > this.maxFramePayloadLength;
+    }
+
+    private void emitAutoFragmentedMessage(ProtoContext context, WebSocketMessage msg, ProtoSndQueue<WebSocketFrame> dst) {
+        boolean masked = masked(context);
+        ByteBuf content = msg.content();
+        int readableBytes = content.readableBytes();
+        int offset = 0;
+        boolean first = true;
+
+        while (offset < readableBytes) {
+            int chunkLength = Math.min(this.maxFramePayloadLength, readableBytes - offset);
+            boolean finalFragment = offset + chunkLength >= readableBytes;
+            ByteBuf chunk = copyChunk(context, content, offset, chunkLength);
+            WebSocketFrame frame;
+            if (first) {
+                if (msg.type() == WebSocketOpcode.TEXT) {
+                    frame = WebSocketUtils.textFrame(finalFragment, masked, maskingKey(masked), chunk);
+                } else {
+                    frame = WebSocketUtils.binaryFrame(finalFragment, masked, maskingKey(masked), chunk);
+                }
+                first = false;
+            } else {
+                frame = WebSocketUtils.continuationFrame(finalFragment, masked, maskingKey(masked), chunk);
+            }
+            frame.streamId(msg.streamId());
+            dst.offerMessage(frame);
+            offset += chunkLength;
+        }
+    }
+
+    private ByteBuf copyChunk(ProtoContext context, ByteBuf source, int offset, int length) {
+        ByteBuf chunk = context.byteBufAllocator().buffer(length, Integer.MAX_VALUE);
+        source.getBuffer(offset, chunk, length);
+        chunk.markWriter();
+        return chunk;
     }
 
     @Override

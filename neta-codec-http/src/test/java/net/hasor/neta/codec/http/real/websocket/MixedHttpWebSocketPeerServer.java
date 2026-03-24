@@ -14,11 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.real.websocket;
-import java.io.ByteArrayOutputStream;
-import java.io.Closeable;
-import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -37,16 +33,16 @@ import static org.junit.Assert.assertTrue;
 public class MixedHttpWebSocketPeerServer implements Closeable {
     private static final String WS_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
 
-    private final ServerSocket            serverSocket;
-    private final CountDownLatch          startLatch        = new CountDownLatch(1);
-    private final CountDownLatch          httpRequestLatch  = new CountDownLatch(1);
-    private final CountDownLatch          openLatch         = new CountDownLatch(1);
-    private final CountDownLatch          textMessageLatch  = new CountDownLatch(1);
-    private final AtomicReference<String> httpRequestMethod = new AtomicReference<>();
-    private final AtomicReference<String> httpRequestPath   = new AtomicReference<>();
-    private final AtomicReference<String> receivedText      = new AtomicReference<>();
-    private final AtomicReference<Throwable> failure        = new AtomicReference<>();
-    private final Thread                  worker;
+    private final ServerSocket               serverSocket;
+    private final CountDownLatch             startLatch        = new CountDownLatch(1);
+    private final CountDownLatch             httpRequestLatch  = new CountDownLatch(1);
+    private final CountDownLatch             openLatch         = new CountDownLatch(1);
+    private final CountDownLatch             textMessageLatch  = new CountDownLatch(1);
+    private final AtomicReference<String>    httpRequestMethod = new AtomicReference<>();
+    private final AtomicReference<String>    httpRequestPath   = new AtomicReference<>();
+    private final AtomicReference<String>    receivedText      = new AtomicReference<>();
+    private final AtomicReference<Throwable> failure           = new AtomicReference<>();
+    private final Thread                     worker;
 
     public MixedHttpWebSocketPeerServer(int port) throws IOException {
         this.serverSocket = new ServerSocket();
@@ -73,7 +69,7 @@ public class MixedHttpWebSocketPeerServer implements Closeable {
                 writeHandshakeResponse(output, webSocketKey);
                 this.openLatch.countDown();
 
-                String message = readMaskedTextFrame(input);
+                String message = readNextTextFrame(input, output);
                 this.receivedText.set(message);
                 writeTextFrame(output, "[Ack] " + message);
                 this.textMessageLatch.countDown();
@@ -217,16 +213,27 @@ public class MixedHttpWebSocketPeerServer implements Closeable {
         }
     }
 
-    private static String readMaskedTextFrame(InputStream input) throws IOException {
+    private static String readNextTextFrame(InputStream input, OutputStream output) throws IOException {
+        while (true) {
+            WebSocketFrameData frame = readMaskedFrame(input);
+            if (frame.opcode == 0x9) {
+                writePongFrame(output, frame.payload);
+                continue;
+            }
+            if (frame.opcode != 0x1) {
+                throw new IOException("expected text frame but got opcode=" + frame.opcode);
+            }
+            return new String(frame.payload, StandardCharsets.UTF_8);
+        }
+    }
+
+    private static WebSocketFrameData readMaskedFrame(InputStream input) throws IOException {
         int firstByte = input.read();
         int secondByte = input.read();
         if (firstByte < 0 || secondByte < 0) {
             throw new IOException("unexpected end of stream while reading websocket frame header");
         }
         int opcode = firstByte & 0x0F;
-        if (opcode != 0x1) {
-            throw new IOException("expected text frame but got opcode=" + opcode);
-        }
         boolean masked = (secondByte & 0x80) != 0;
         if (!masked) {
             throw new IOException("client websocket frame must be masked");
@@ -245,12 +252,20 @@ public class MixedHttpWebSocketPeerServer implements Closeable {
         for (int i = 0; i < payload.length; i++) {
             payload[i] = (byte) (payload[i] ^ maskKey[i & 3]);
         }
-        return new String(payload, StandardCharsets.UTF_8);
+        return new WebSocketFrameData(opcode, payload);
     }
 
     private static void writeTextFrame(OutputStream output, String text) throws IOException {
         byte[] payload = text.getBytes(StandardCharsets.UTF_8);
-        output.write(0x81);
+        writeFrame(output, 0x1, payload);
+    }
+
+    private static void writePongFrame(OutputStream output, byte[] payload) throws IOException {
+        writeFrame(output, 0xA, payload);
+    }
+
+    private static void writeFrame(OutputStream output, int opcode, byte[] payload) throws IOException {
+        output.write(0x80 | (opcode & 0x0F));
         if (payload.length < 126) {
             output.write(payload.length);
         } else {
@@ -284,6 +299,16 @@ public class MixedHttpWebSocketPeerServer implements Closeable {
             this.method = method;
             this.path = path;
             this.headers = headers;
+        }
+    }
+
+    private static final class WebSocketFrameData {
+        private final int    opcode;
+        private final byte[] payload;
+
+        private WebSocketFrameData(int opcode, byte[] payload) {
+            this.opcode = opcode;
+            this.payload = payload;
         }
     }
 }

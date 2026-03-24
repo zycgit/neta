@@ -14,13 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-import java.nio.charset.CharacterCodingException;
-import java.nio.charset.CharsetDecoder;
-import java.nio.charset.CodingErrorAction;
-import java.nio.charset.StandardCharsets;
+import java.nio.ByteBuffer;
+import java.nio.CharBuffer;
+import java.nio.charset.*;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
@@ -45,16 +45,40 @@ import net.hasor.neta.channel.*;
  * </pre>
  */
 public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, WebSocketMessage> {
-    private static final Logger          logger = Logger.getLogger(WebSocketInboundHandler.class);
-    private              WebSocketOpcode fragmentType;
-    private              int             fragmentSequence;
-    private              boolean         closeReceived;
+    private static final Logger           logger         = Logger.getLogger(WebSocketInboundHandler.class);
+    private static final byte[]           EMPTY_BYTES    = new byte[0];
+    private final        boolean          aggregateFragments;
+    private final        int              maxMessagePayloadLength;
+    private              WebSocketOpcode  fragmentType;
+    private              int              fragmentSequence;
+    private              boolean          closeReceived;
+    private              CompositeByteBuf aggregatedContent;
+    private              int              aggregatedStreamId;
+    private              CharsetDecoder   textDecoder;
+    private              byte[]           utf8CarryBytes = EMPTY_BYTES;
+
+    public WebSocketInboundHandler() {
+        this(false, Integer.MAX_VALUE);
+    }
+
+    public WebSocketInboundHandler(boolean aggregateFragments) {
+        this(aggregateFragments, Integer.MAX_VALUE);
+    }
+
+    public WebSocketInboundHandler(boolean aggregateFragments, int maxMessagePayloadLength) {
+        if (maxMessagePayloadLength <= 0) {
+            throw new IllegalArgumentException("maxMessagePayloadLength must be greater than 0.");
+        }
+        this.aggregateFragments = aggregateFragments;
+        this.maxMessagePayloadLength = maxMessagePayloadLength;
+    }
 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
         Object eventData = event.getData();
         if (eventData instanceof WebSocketCloseEvent) {
             this.closeReceived = true;
+            WebSocketUtils.markCloseReceived(context);
             resetFragmentState();
         } else if (eventData instanceof PingWebSocketEvent) {
             sendControlEventFrame(context, (PingWebSocketEvent) eventData, true);
@@ -75,7 +99,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             }
 
             try {
-                if (this.closeReceived) {
+                if (this.closeReceived || WebSocketUtils.hasCloseReceived(context)) {
                     continue;
                 }
                 handleFrame(context, frame, dst);
@@ -90,7 +114,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-        resetFragmentState();
+        resetState();
         if (e instanceof WebSocketProtocolViolationException) {
             eh.clear();
         }
@@ -105,7 +129,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         }
 
         if (isControlOpcode(opcode)) {
-            validateControlFrame(frame);
+            WebSocketUtils.validateControlFrame(frame, resolveRemoteClientMode(context));
         }
 
         switch (opcode) {
@@ -131,11 +155,22 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void handleDataFrame(WebSocketFrame frame, ProtoSndQueue<WebSocketMessage> dst) {
         if (this.fragmentType != null) {
-            resetFragmentState();
+            resetState();
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "received a new data frame before fragmented message completion.");
         }
 
+        ensureMessagePayloadLength(frame.content().readableBytes());
+
         WebSocketOpcode opcode = frame.opcode();
+        if (opcode == WebSocketOpcode.TEXT) {
+            startTextValidation();
+            validateTextChunk(frame.content(), frame.isFinalFragment());
+        }
+        if (this.aggregateFragments && !frame.isFinalFragment()) {
+            startAggregation(frame);
+            return;
+        }
+
         int sequence = frame.isFinalFragment() ? WebSocketMessage.FINAL_SEQUENCE : WebSocketMessage.START_SEQUENCE;
         dst.offerMessage(createMessage(opcode, sequence, frame));
         if (!frame.isFinalFragment()) {
@@ -149,6 +184,18 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "received continuation frame outside fragmented message.");
         }
 
+        if (this.fragmentType == WebSocketOpcode.TEXT) {
+            validateTextChunk(frame.content(), frame.isFinalFragment());
+        }
+
+        if (this.aggregateFragments) {
+            appendAggregation(frame);
+            if (frame.isFinalFragment()) {
+                dst.offerMessage(finishAggregation());
+            }
+            return;
+        }
+
         int sequence = frame.isFinalFragment() ? WebSocketMessage.FINAL_SEQUENCE : this.fragmentSequence++;
         WebSocketOpcode opcode = this.fragmentType;
         dst.offerMessage(createMessage(opcode, sequence, frame));
@@ -158,13 +205,45 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     }
 
     private WebSocketMessage createMessage(WebSocketOpcode opcode, int sequence, WebSocketFrame frame) {
+        return createMessage(opcode, sequence, frame.content(), frame.streamId());
+    }
+
+    private WebSocketMessage createMessage(WebSocketOpcode opcode, int sequence, ByteBuf content, int streamId) {
         if (opcode == WebSocketOpcode.TEXT) {
-            return WebSocketUtils.textMessage(sequence, frame.content()).streamId(frame.streamId());
+            return WebSocketUtils.textMessage(sequence, content).streamId(streamId);
         }
         if (opcode == WebSocketOpcode.BINARY) {
-            return WebSocketUtils.binaryMessage(sequence, frame.content()).streamId(frame.streamId());
+            return WebSocketUtils.binaryMessage(sequence, content).streamId(streamId);
         }
         throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported websocket data opcode: " + opcode);
+    }
+
+    private void startAggregation(WebSocketFrame frame) {
+        this.fragmentType = frame.opcode();
+        this.fragmentSequence = 1;
+        this.aggregatedStreamId = frame.streamId();
+        this.aggregatedContent = new CompositeByteBuf(frame.content().alloc());
+        this.aggregatedContent.addComponent(frame.content());
+    }
+
+    private void appendAggregation(WebSocketFrame frame) {
+        ByteBuf content = frame.content();
+        ensureMessagePayloadLength(this.aggregatedContent.readableBytes() + content.readableBytes());
+        this.aggregatedContent.addComponent(content);
+    }
+
+    private WebSocketMessage finishAggregation() {
+        CompositeByteBuf content = this.aggregatedContent;
+        WebSocketOpcode opcode = this.fragmentType;
+        int streamId = this.aggregatedStreamId;
+
+        this.aggregatedContent = null;
+        this.aggregatedStreamId = 0;
+        resetFragmentState();
+
+        WebSocketMessage message = createMessage(opcode, WebSocketMessage.FINAL_SEQUENCE, content, streamId);
+        content.release();
+        return message;
     }
 
     private void handlePing(ProtoContext context, WebSocketFrame frame) {
@@ -180,10 +259,17 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void handleProtocolViolation(ProtoContext context, WebSocketFrame frame, WebSocketProtocolViolationException e) {
         this.closeReceived = true;
-        resetFragmentState();
+        WebSocketUtils.markCloseReceived(context);
+        resetState();
+
+        if (WebSocketUtils.hasCloseSent(context)) {
+            context.getChannel().close();
+            return;
+        }
 
         WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, closePayload(e.closeStatusCode())).streamId(frame.streamId());
-        context.sendData(closeReply);
+        WebSocketUtils.markCloseSent(context);
+        WebSocketUtils.closeChannelAfterSend(context, context.sendData(closeReply));
     }
 
     private static ByteBuf retainContent(ByteBuf content) {
@@ -200,30 +286,36 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void handleClose(ProtoContext context, WebSocketFrame frame) throws Throwable {
         ByteBuf content = frame.content();
-        validateClosePayload(content);
 
         int statusCode = WebSocketCode.NO_STATUS;
         String reason = null;
         if (content != null && content.readableBytes() >= 2) {
             statusCode = ((content.getByte(0) & 0xFF) << 8) | (content.getByte(1) & 0xFF);
-            validateCloseStatusCode(statusCode);
             int reasonLen = content.readableBytes() - 2;
             if (reasonLen > 0) {
                 byte[] reasonBytes = new byte[reasonLen];
                 content.getBytes(2, reasonBytes, 0, reasonLen);
-                reason = decodeUtf8(reasonBytes);
+                reason = WebSocketUtils.decodeUtf8(reasonBytes, "close frame reason must be valid UTF-8.");
             }
         }
 
         this.closeReceived = true;
+        WebSocketUtils.markCloseReceived(context);
         resetFragmentState();
-
-        WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, retainContent(frame.content())).streamId(frame.streamId());
-        context.sendData(closeReply);
 
         WebSocketCloseEvent event = new WebSocketCloseEvent(statusCode, reason);
         event.streamId(frame.streamId());
         fireEvent(context, WebSocketCloseEvent.class, event);
+
+        if (WebSocketUtils.hasCloseSent(context)) {
+            context.getChannel().close();
+            return;
+        }
+
+        ByteBuf replyContent = buildCloseReplyContent(context, content);
+        WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, replyContent).streamId(frame.streamId());
+        WebSocketUtils.markCloseSent(context);
+        WebSocketUtils.closeChannelAfterSend(context, context.sendData(closeReply));
     }
 
     private void sendControlEventFrame(ProtoContext context, AbstractWebSocketEvent event, boolean ping) {
@@ -240,53 +332,6 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         return opcode == WebSocketOpcode.PING || opcode == WebSocketOpcode.PONG || opcode == WebSocketOpcode.CLOSE;
     }
 
-    private void validateControlFrame(WebSocketFrame frame) {
-        if (!frame.isFinalFragment()) {
-            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control frames must not be fragmented.");
-        }
-        ByteBuf content = frame.content();
-        if (content != null && content.readableBytes() > 125) {
-            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control frame payload must not exceed 125 bytes.");
-        }
-    }
-
-    private void validateClosePayload(ByteBuf content) {
-        if (content != null && content.readableBytes() == 1) {
-            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame payload must be either empty or at least 2 bytes.");
-        }
-    }
-
-    private void validateCloseStatusCode(int statusCode) {
-        if (!isValidCloseStatusCode(statusCode)) {
-            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame status code is invalid: " + statusCode);
-        }
-    }
-
-    private static boolean isValidCloseStatusCode(int statusCode) {
-        if (statusCode < WebSocketCode.NORMAL_CLOSURE || statusCode >= 5000) {
-            return false;
-        }
-        if (statusCode == WebSocketCode.NO_STATUS || statusCode == WebSocketCode.ABNORMAL_CLOSURE) {
-            return false;
-        }
-        if (statusCode == WebSocketCode.RESERVED || statusCode == WebSocketCode.MANDATORY_EXTENSION || //
-                statusCode == 1012 || statusCode == 1013 || statusCode == 1014 || statusCode == WebSocketCode.TLS_HANDSHAKE) {
-            return false;
-        }
-        return statusCode < 1016 || statusCode >= 3000;
-    }
-
-    private String decodeUtf8(byte[] bytes) {
-        CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
-        decoder.onMalformedInput(CodingErrorAction.REPORT);
-        decoder.onUnmappableCharacter(CodingErrorAction.REPORT);
-        try {
-            return decoder.decode(java.nio.ByteBuffer.wrap(bytes)).toString();
-        } catch (CharacterCodingException e) {
-            throw new WebSocketProtocolViolationException(WebSocketCode.INVALID_DATA, "close frame reason must be valid UTF-8.", e);
-        }
-    }
-
     private <T> void fireEvent(ProtoContext context, Class<T> eventType, T event) {
         try {
             context.fireUserEvent(eventType, event);
@@ -295,14 +340,152 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         }
     }
 
+    private void ensureMessagePayloadLength(int payloadLength) {
+        if (payloadLength > this.maxMessagePayloadLength) {
+            throw new WebSocketProtocolViolationException(WebSocketCode.MESSAGE_TOO_BIG, "websocket message payload exceeds configured max length: " + payloadLength + " > " + this.maxMessagePayloadLength);
+        }
+    }
+
+    private void resetState() {
+        releaseAggregatedContent();
+        resetFragmentState();
+        resetTextValidation();
+    }
+
+    private void releaseAggregatedContent() {
+        if (this.aggregatedContent != null) {
+            this.aggregatedContent.release();
+            this.aggregatedContent = null;
+        }
+        this.aggregatedStreamId = 0;
+    }
+
     private void resetFragmentState() {
         this.fragmentType = null;
         this.fragmentSequence = 0;
     }
 
+    private void startTextValidation() {
+        this.textDecoder = StandardCharsets.UTF_8.newDecoder();
+        this.textDecoder.onMalformedInput(CodingErrorAction.REPORT);
+        this.textDecoder.onUnmappableCharacter(CodingErrorAction.REPORT);
+        this.utf8CarryBytes = EMPTY_BYTES;
+    }
+
+    private void resetTextValidation() {
+        this.textDecoder = null;
+        this.utf8CarryBytes = EMPTY_BYTES;
+    }
+
+    private void validateTextChunk(ByteBuf content, boolean finalFragment) {
+        if (this.textDecoder == null) {
+            startTextValidation();
+        }
+
+        byte[] incoming = toBytes(content);
+        byte[] source;
+        if (this.utf8CarryBytes.length == 0) {
+            source = incoming;
+        } else {
+            source = new byte[this.utf8CarryBytes.length + incoming.length];
+            System.arraycopy(this.utf8CarryBytes, 0, source, 0, this.utf8CarryBytes.length);
+            System.arraycopy(incoming, 0, source, this.utf8CarryBytes.length, incoming.length);
+        }
+
+        ByteBuffer byteBuffer = ByteBuffer.wrap(source);
+        CharBuffer charBuffer = CharBuffer.allocate(Math.max(1, source.length));
+        try {
+            while (true) {
+                CoderResult decode = this.textDecoder.decode(byteBuffer, charBuffer, finalFragment);
+                if (decode.isOverflow()) {
+                    charBuffer.clear();
+                    continue;
+                }
+                if (decode.isError()) {
+                    decode.throwException();
+                }
+                break;
+            }
+
+            if (finalFragment) {
+                while (true) {
+                    CoderResult flush = this.textDecoder.flush(charBuffer);
+                    if (flush.isOverflow()) {
+                        charBuffer.clear();
+                        continue;
+                    }
+                    if (flush.isError()) {
+                        flush.throwException();
+                    }
+                    break;
+                }
+                if (byteBuffer.hasRemaining()) {
+                    throw new CharacterCodingException();
+                }
+                resetTextValidation();
+                return;
+            }
+
+            if (byteBuffer.hasRemaining()) {
+                this.utf8CarryBytes = new byte[byteBuffer.remaining()];
+                byteBuffer.get(this.utf8CarryBytes);
+            } else {
+                this.utf8CarryBytes = EMPTY_BYTES;
+            }
+        } catch (CharacterCodingException e) {
+            resetTextValidation();
+            throw new WebSocketProtocolViolationException(WebSocketCode.INVALID_DATA, "text frame payload must be valid UTF-8.", e);
+        }
+    }
+
+    private byte[] toBytes(ByteBuf content) {
+        if (content == null || content.readableBytes() == 0) {
+            return EMPTY_BYTES;
+        }
+        byte[] bytes = new byte[content.readableBytes()];
+        content.getBytes(0, bytes, 0, bytes.length);
+        return bytes;
+    }
+
+    private ByteBuf buildCloseReplyContent(ProtoContext context, ByteBuf content) {
+        if (content == null || content.readableBytes() == 0) {
+            return ByteBuf.EMPTY;
+        }
+        int statusCode = ((content.getByte(0) & 0xFF) << 8) | (content.getByte(1) & 0xFF);
+        try {
+            WebSocketUtils.validateCloseStatusCode(statusCode, resolveLocalClientMode(context));
+            return retainContent(content);
+        } catch (WebSocketProtocolViolationException e) {
+            return ByteBuf.EMPTY;
+        }
+    }
+
+    private boolean resolveRemoteClientMode(ProtoContext context) {
+        WebSocketContext webSocketContext = resolveHandshakeContext(context);
+        return webSocketContext != null && webSocketContext.isServer();
+    }
+
+    private boolean resolveLocalClientMode(ProtoContext context) {
+        WebSocketContext webSocketContext = resolveHandshakeContext(context);
+        return webSocketContext != null && webSocketContext.isClient();
+    }
+
+    private WebSocketContext resolveHandshakeContext(ProtoContext context) {
+        WebSocketContext webSocketContext = context.context(WebSocketContext.class);
+        if (webSocketContext != null && webSocketContext.isReady()) {
+            return webSocketContext;
+        }
+        webSocketContext = context.rootContext(WebSocketContext.class);
+        if (webSocketContext != null && webSocketContext.isReady()) {
+            return webSocketContext;
+        }
+        return null;
+    }
+
     @Override
     public void onClose(ProtoContext context) {
-        resetFragmentState();
+        resetState();
         this.closeReceived = false;
+        WebSocketUtils.clearCloseState(context);
     }
 }

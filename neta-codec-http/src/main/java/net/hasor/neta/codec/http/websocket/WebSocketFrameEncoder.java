@@ -140,8 +140,10 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
         WebSocketOpcode opcode = requireOpcode(frame);
         ByteBuf content = frame.content();
         int payloadLen = (content != null) ? content.readableBytes() : 0;
-        boolean masked = frame.isMasked() && frame.maskingKey() != null;
+        boolean masked = frame.isMasked();
         byte[] maskKey = masked ? frame.maskingKey() : null;
+
+        validateRfc6455Frame(context, frame, opcode, masked, maskKey);
 
         int headerSize = 2;
         if (payloadLen >= 126 && payloadLen <= 65535) {
@@ -265,5 +267,37 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "WebSocket frame opcode must not be null.");
         }
         return opcode;
+    }
+
+    private void validateRfc6455Frame(ProtoContext context, WebSocketFrame frame, WebSocketOpcode opcode, boolean masked, byte[] maskKey) {
+        if (masked && (maskKey == null || maskKey.length != 4)) {
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "masked websocket frame requires a 4-byte masking key.");
+        }
+
+        WebSocketContext wsContext = resolveHandshakeContext(context);
+        if (wsContext != null) {
+            if (wsContext.isClient() && !masked) {
+                throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "client-to-server websocket frames must be masked.");
+            }
+            if (wsContext.isServer() && masked) {
+                throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "server-to-client websocket frames must not be masked.");
+            }
+        }
+
+        if (opcode == WebSocketOpcode.PING || opcode == WebSocketOpcode.PONG || opcode == WebSocketOpcode.CLOSE) {
+            WebSocketUtils.validateControlFrame(frame, wsContext != null && wsContext.isClient());
+        }
+    }
+
+    private WebSocketContext resolveHandshakeContext(ProtoContext context) {
+        WebSocketContext wsContext = context.context(WebSocketContext.class);
+        if (wsContext != null && wsContext.isReady()) {
+            return wsContext;
+        }
+        wsContext = context.rootContext(WebSocketContext.class);
+        if (wsContext != null && wsContext.isReady()) {
+            return wsContext;
+        }
+        return null;
     }
 }

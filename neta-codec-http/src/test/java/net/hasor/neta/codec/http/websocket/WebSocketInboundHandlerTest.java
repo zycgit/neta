@@ -20,6 +20,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.SoUserEvent;
+import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
 import org.junit.Test;
@@ -109,6 +110,71 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertEquals("Hel", text(((WebSocketMessage) result.get(0)).content()));
             assertEquals("lo-", text(((WebSocketMessage) result.get(1)).content()));
             assertEquals("world", text(((WebSocketMessage) result.get(2)).content()));
+        });
+    }
+
+    @Test
+    public void testFragmentedTextMessageCanBeAggregatedIntoFinalMessage() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta,    //
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                        ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler(true));
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe);
+
+            pipe.client().sendData(WebSocketUtils.textFrame(false, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("Hel"))).get();
+            pipe.client().sendData(WebSocketUtils.continuationFrame(false, true, new byte[] { 0x05, 0x06, 0x07, 0x08 }, ascii("lo-"))).get();
+            pipe.client().sendData(WebSocketUtils.continuationFrame(true, true, new byte[] { 0x09, 0x0A, 0x0B, 0x0C }, ascii("world"))).get();
+            assertTrue(waitUntil(() -> !pipe.serverInbound().isEmpty(), 1000L));
+            List<HttpObject> result = drainQueue(pipe.serverInbound());
+
+            assertEquals(1, result.size());
+            assertTrue(result.get(0) instanceof WebSocketMessage);
+            WebSocketMessage msg = (WebSocketMessage) result.get(0);
+            assertEquals(WebSocketOpcode.TEXT, msg.type());
+            assertEquals(WebSocketMessage.FINAL_SEQUENCE, msg.sequence());
+            assertEquals("Hello-world", text(msg.content()));
+        });
+    }
+
+    @Test
+    public void testAggregatedMessageTooBigRepliesWithMessageTooBigCode() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> serverEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta,    //
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                        ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler(true, 5));
+                        ctx.addLastDecoder("events", recordEvents(serverEvents));
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe);
+
+            pipe.client().sendData(WebSocketUtils.textFrame(false, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ascii("Hello"))).get();
+            pipe.client().sendData(WebSocketUtils.continuationFrame(true, true, new byte[] { 0x05, 0x06, 0x07, 0x08 }, ascii("!"))).get();
+            assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
+
+            List<HttpObject> result = drainQueue(pipe.serverInbound());
+            List<HttpObject> outbound = drainQueue(pipe.clientInbound());
+
+            assertTrue(result.isEmpty());
+            assertEquals(1, outbound.size());
+            WebSocketFrame close = (WebSocketFrame) outbound.get(0);
+            assertEquals(WebSocketOpcode.CLOSE, close.opcode());
+            assertEquals(WebSocketCode.MESSAGE_TOO_BIG, closeStatusCode(close));
+            assertTrue(serverEvents.isEmpty());
         });
     }
 
@@ -208,6 +274,83 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertEquals(1, serverEvents.size());
             assertTrue(serverEvents.get(0) instanceof WebSocketCloseEvent);
             assertEquals(WebSocketCode.NORMAL_CLOSURE, ((WebSocketCloseEvent) serverEvents.get(0)).statusCode());
+            assertTrue(waitUntil(pipe.server()::isClose, 1000L));
+        });
+    }
+
+    @Test
+    public void testReceivingCloseAfterSendingCloseDoesNotSendDuplicateClose() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> serverEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta,//
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                        ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
+                        ctx.addLastDecoder("events", recordEvents(serverEvents));
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe);
+
+            ByteBuf localPayload = ByteBuf.wrap(new byte[] { (byte) ((WebSocketCode.NORMAL_CLOSURE >> 8) & 0xFF), (byte) (WebSocketCode.NORMAL_CLOSURE & 0xFF) });
+            pipe.server().sendData(InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, localPayload)).get();
+            assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
+
+            List<HttpObject> firstOutbound = drainQueue(pipe.clientInbound());
+            assertEquals(1, firstOutbound.size());
+            assertEquals(WebSocketOpcode.CLOSE, ((WebSocketFrame) firstOutbound.get(0)).opcode());
+
+            pipe.client().sendData(WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(new byte[] { (byte) ((WebSocketCode.NORMAL_CLOSURE >> 8) & 0xFF), (byte) (WebSocketCode.NORMAL_CLOSURE & 0xFF) }))).get();
+            assertTrue(waitUntil(pipe.server()::isClose, 1000L));
+
+            List<HttpObject> result = drainQueue(pipe.serverInbound());
+            List<HttpObject> secondOutbound = drainQueue(pipe.clientInbound());
+
+            assertTrue(result.isEmpty());
+            assertTrue(secondOutbound.isEmpty());
+            assertEquals(1, serverEvents.size());
+            assertTrue(serverEvents.get(0) instanceof WebSocketCloseEvent);
+            assertEquals(WebSocketCode.NORMAL_CLOSURE, ((WebSocketCloseEvent) serverEvents.get(0)).statusCode());
+        });
+    }
+
+    @Test
+    public void testServerAcceptsClientMandatoryExtensionCloseCode() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> serverEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta,//
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                        ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
+                        ctx.addLastDecoder("events", recordEvents(serverEvents));
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe);
+
+            byte[] payload = new byte[] { (byte) ((WebSocketCode.MANDATORY_EXTENSION >> 8) & 0xFF), (byte) (WebSocketCode.MANDATORY_EXTENSION & 0xFF) };
+            pipe.client().sendData(WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(payload))).get();
+            assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty() && !serverEvents.isEmpty(), 1000L));
+
+            List<HttpObject> result = drainQueue(pipe.serverInbound());
+            List<HttpObject> outbound = drainQueue(pipe.clientInbound());
+
+            assertTrue(result.isEmpty());
+            assertEquals(1, outbound.size());
+            WebSocketFrame close = (WebSocketFrame) outbound.get(0);
+            assertEquals(WebSocketOpcode.CLOSE, close.opcode());
+            assertEquals(0, close.content().readableBytes());
+            assertEquals(1, serverEvents.size());
+            assertTrue(serverEvents.get(0) instanceof WebSocketCloseEvent);
+            assertEquals(WebSocketCode.MANDATORY_EXTENSION, ((WebSocketCloseEvent) serverEvents.get(0)).statusCode());
         });
     }
 
@@ -241,11 +384,60 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             assertEquals(WebSocketOpcode.CLOSE, close.opcode());
             assertEquals(WebSocketCode.PROTOCOL_ERROR, closeStatusCode(close));
             assertTrue(serverEvents.isEmpty());
+            assertTrue(waitUntil(pipe.server()::isClose, 1000L));
         });
     }
 
     @Test
     public void testInvalidCloseReasonRepliesWithInvalidDataCode() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> serverEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.context(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
+                ctx.addLastDecoder("events", recordEvents(serverEvents));
+            }, VrtSoConfig.asServer());
+
+            byte[] payload = new byte[] { (byte) ((WebSocketCode.NORMAL_CLOSURE >> 8) & 0xFF), (byte) (WebSocketCode.NORMAL_CLOSURE & 0xFF), (byte) 0xC3, (byte) 0x28 };
+            List<Object> result = receiveAndIntBound(pipe, WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(payload)));
+            List<Object> outbound = receiveAndOutBound(pipe);
+
+            assertTrue(result.isEmpty());
+            assertEquals(1, outbound.size());
+            WebSocketFrame close = (WebSocketFrame) outbound.get(0);
+            assertEquals(WebSocketOpcode.CLOSE, close.opcode());
+            assertEquals(WebSocketCode.INVALID_DATA, closeStatusCode(close));
+            assertTrue(serverEvents.isEmpty());
+        });
+    }
+
+    @Test
+    public void testClientRejectsServerMandatoryExtensionCloseCode() throws Throwable {
+        autoCloseNeta(neta -> {
+            List<Object> clientEvents = new ArrayList<>();
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.context(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
+                ctx.addLastDecoder("events", recordEvents(clientEvents));
+            }, VrtSoConfig.asClient());
+
+            byte[] payload = new byte[] { (byte) ((WebSocketCode.MANDATORY_EXTENSION >> 8) & 0xFF), (byte) (WebSocketCode.MANDATORY_EXTENSION & 0xFF) };
+            List<Object> result = receiveAndIntBound(pipe, WebSocketUtils.closeFrame(false, null, ByteBuf.wrap(payload)));
+            List<Object> outbound = receiveAndOutBound(pipe);
+
+            assertTrue(result.isEmpty());
+            assertEquals(1, outbound.size());
+            WebSocketFrame close = (WebSocketFrame) outbound.get(0);
+            assertEquals(WebSocketOpcode.CLOSE, close.opcode());
+            assertEquals(WebSocketCode.PROTOCOL_ERROR, closeStatusCode(close));
+            assertTrue(clientEvents.isEmpty());
+        });
+    }
+
+    @Test
+    public void testInvalidTextFrameRepliesWithInvalidDataCode() throws Throwable {
         autoCloseNeta(neta -> {
             List<Object> serverEvents = new ArrayList<>();
             VirtualPipe pipe = openVirtualPipe(neta,//
@@ -262,8 +454,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
 
             completeHandshake(pipe);
 
-            byte[] payload = new byte[] { (byte) ((WebSocketCode.NORMAL_CLOSURE >> 8) & 0xFF), (byte) (WebSocketCode.NORMAL_CLOSURE & 0xFF), (byte) 0xC3, (byte) 0x28 };
-            pipe.client().sendData(WebSocketUtils.closeFrame(true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(payload))).get();
+            pipe.client().sendData(WebSocketUtils.textFrame(true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, ByteBuf.wrap(new byte[] { (byte) 0xC3, (byte) 0x28 }))).get();
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
 
             List<HttpObject> result = drainQueue(pipe.serverInbound());

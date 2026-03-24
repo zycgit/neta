@@ -230,4 +230,113 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
             assertEquals("hello", text(frame));
         });
     }
+
+    @Test
+    public void testControlFrameCanInterleaveWithFragmentedMessageStream() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, //
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
+                        ctx.addLast("ws-event-tail", relayOutboundEvents());
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe, WebSocketVersion.V13);
+
+            pipe.server().sendData(WebSocketUtils.textMessage(0, ascii("A"))).get();
+            pipe.server().fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("!")));
+            pipe.server().sendData(WebSocketUtils.textMessage(-1, ascii("B"))).get();
+            assertTrue(waitUntil(() -> pipe.clientInbound().size() >= 3, 1000L));
+
+            List<HttpObject> result = drainQueue(pipe.clientInbound());
+            assertEquals(3, result.size());
+
+            WebSocketFrame first = (WebSocketFrame) result.get(0);
+            WebSocketFrame second = (WebSocketFrame) result.get(1);
+            WebSocketFrame third = (WebSocketFrame) result.get(2);
+            assertEquals(WebSocketOpcode.TEXT, first.opcode());
+            assertFalse(first.isFinalFragment());
+            assertEquals("A", text(first));
+            assertEquals(WebSocketOpcode.PING, second.opcode());
+            assertTrue(second.isFinalFragment());
+            assertEquals("!", text(second));
+            assertEquals(WebSocketOpcode.CONTINUATION, third.opcode());
+            assertTrue(third.isFinalFragment());
+            assertEquals("B", text(third));
+        });
+    }
+
+    @Test
+    public void testFinalTextMessageCanBeAutoFragmentedIntoFrames() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta,//
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler(2));
+                        ctx.addLast("ws-event-tail", relayOutboundEvents());
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe, WebSocketVersion.V13);
+
+            pipe.server().sendData(WebSocketUtils.textMessage(ascii("ABCDEF"))).get();
+            assertTrue(waitUntil(() -> pipe.clientInbound().size() >= 3, 1000L));
+            List<HttpObject> result = drainQueue(pipe.clientInbound());
+
+            assertEquals(3, result.size());
+            WebSocketFrame first = (WebSocketFrame) result.get(0);
+            WebSocketFrame second = (WebSocketFrame) result.get(1);
+            WebSocketFrame third = (WebSocketFrame) result.get(2);
+            assertEquals(WebSocketOpcode.TEXT, first.opcode());
+            assertFalse(first.isFinalFragment());
+            assertEquals("AB", text(first));
+            assertEquals(WebSocketOpcode.CONTINUATION, second.opcode());
+            assertFalse(second.isFinalFragment());
+            assertEquals("CD", text(second));
+            assertEquals(WebSocketOpcode.CONTINUATION, third.opcode());
+            assertTrue(third.isFinalFragment());
+            assertEquals("EF", text(third));
+        });
+    }
+
+    @Test
+    public void testManualFragmentStreamBypassesAutoFragmentation() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta,//
+                    ctx -> {
+                        ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    }, ctx -> {
+                        ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                        ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                        ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler(1));
+                        ctx.addLast("ws-event-tail", relayOutboundEvents());
+                    }, VrtTransfer.direct());
+
+            completeHandshake(pipe, WebSocketVersion.V13);
+
+            pipe.server().sendData(WebSocketUtils.textMessage(0, ascii("AB"))).get();
+            pipe.server().sendData(WebSocketUtils.textMessage(-1, ascii("CD"))).get();
+            assertTrue(waitUntil(() -> pipe.clientInbound().size() >= 2, 1000L));
+            List<HttpObject> result = drainQueue(pipe.clientInbound());
+
+            assertEquals(2, result.size());
+            WebSocketFrame first = (WebSocketFrame) result.get(0);
+            WebSocketFrame second = (WebSocketFrame) result.get(1);
+            assertEquals(WebSocketOpcode.TEXT, first.opcode());
+            assertFalse(first.isFinalFragment());
+            assertEquals("AB", text(first));
+            assertEquals(WebSocketOpcode.CONTINUATION, second.opcode());
+            assertTrue(second.isFinalFragment());
+            assertEquals("CD", text(second));
+        });
+    }
+
 }

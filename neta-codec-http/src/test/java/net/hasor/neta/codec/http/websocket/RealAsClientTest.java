@@ -207,10 +207,13 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 assertEquals("GET", server.httpRequestMethod());
                 assertEquals("/http-echo", server.httpRequestPath());
 
-                // websocket upgrade on the same channel
+                // websocket upgrade on the same channel using staged request parts
                 FullHttpRequest handshake = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
                 handshake.setHeader(HttpHeaderNames.HOST, "127.0.0.1:" + port);
-                channel.sendData(handshake).get();
+                channel.sendData(new DefaultHttpRequest(handshake.protocolVersion(), handshake.method(), handshake.uri())).get();
+                channel.sendData(new DefaultLastHttpHeaders(handshake)).get();
+                channel.sendData(DefaultLastHttpContent.EMPTY).get();
+                handshake.release();
                 assertTrue(waitUntil(() -> WebSocketUtils.isReady(channel), 5000L));
                 server.awaitOpen();
 

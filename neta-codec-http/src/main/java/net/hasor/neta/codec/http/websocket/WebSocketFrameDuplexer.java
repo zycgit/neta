@@ -32,7 +32,11 @@ public class WebSocketFrameDuplexer implements ProtoDuplexer<HttpObject, WebSock
     }
 
     public WebSocketFrameDuplexer(WebSocketVersion version) {
-        this.decoder = new WebSocketFrameDecoder(version);
+        this(version, Integer.MAX_VALUE);
+    }
+
+    public WebSocketFrameDuplexer(WebSocketVersion version, int maxPayloadChunkLength) {
+        this.decoder = new WebSocketFrameDecoder(version, maxPayloadChunkLength);
         this.encoder = new WebSocketFrameEncoder(version);
     }
 

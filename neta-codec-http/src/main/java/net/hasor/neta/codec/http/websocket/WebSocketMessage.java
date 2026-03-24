@@ -45,4 +45,7 @@ public interface WebSocketMessage extends HttpObject {
 
     /** Returns the raw payload content. */
     ByteBuf content();
+
+    /** Returns the payload length represented by this message chunk. */
+    int payloadLength();
 }

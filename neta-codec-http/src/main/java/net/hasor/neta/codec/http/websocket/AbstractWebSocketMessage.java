@@ -24,6 +24,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 public abstract class AbstractWebSocketMessage implements WebSocketMessage {
     private int     streamId;
     private int     sequence;
+    private int     payloadLength;
     private ByteBuf content;
 
     protected AbstractWebSocketMessage() {
@@ -35,12 +36,14 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
         }
         this.streamId = 0;
         this.sequence = sequence;
+        this.payloadLength = content.readableBytes();
         this.content = content.retain();
     }
 
     protected final void initEmptyMessage(int sequence) {
         this.streamId = 0;
         this.sequence = sequence;
+        this.payloadLength = 0;
         this.content = ByteBuf.EMPTY.retain();
     }
 
@@ -72,6 +75,11 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
     }
 
     @Override
+    public int payloadLength() {
+        return this.payloadLength;
+    }
+
+    @Override
     public void release() {
         if (this.content != null) {
             this.content.release();
@@ -79,6 +87,7 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
         }
         this.streamId = 0;
         this.sequence = WebSocketMessage.FINAL_SEQUENCE;
+        this.payloadLength = 0;
         this.recycle();
     }
 
@@ -86,6 +95,6 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
 
     @Override
     public String toString() {
-        return "WebSocketMessage{type=" + this.type() + ", seq=" + this.sequence + ", len=" + (this.content != null ? this.content.readableBytes() : 0) + '}';
+        return "WebSocketMessage{type=" + this.type() + ", seq=" + this.sequence + ", len=" + this.payloadLength + '}';
     }
 }

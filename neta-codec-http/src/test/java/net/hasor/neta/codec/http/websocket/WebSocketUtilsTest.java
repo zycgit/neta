@@ -141,6 +141,43 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
     }
 
     @Test
+    public void testValidateControlFrameRejectsFragmentedPing() {
+        try {
+            WebSocketUtils.validateControlFrame(WebSocketFrame.create(WebSocketOpcode.PING, false, false, null, ByteBuf.EMPTY));
+            fail("expected protocol violation");
+        } catch (WebSocketProtocolViolationException e) {
+            assertEquals(WebSocketCode.PROTOCOL_ERROR, e.closeStatusCode());
+        }
+    }
+
+    @Test
+    public void testValidateControlFrameRejectsInvalidClosePayload() {
+        try {
+            WebSocketUtils.validateControlFrame(WebSocketUtils.closeFrame(false, null, ByteBuf.wrap(new byte[] { 0x01 })));
+            fail("expected protocol violation");
+        } catch (WebSocketProtocolViolationException e) {
+            assertEquals(WebSocketCode.PROTOCOL_ERROR, e.closeStatusCode());
+        }
+    }
+
+    @Test
+    public void testValidateControlFrameAllowsClientMandatoryExtensionCode() {
+        byte[] payload = new byte[] { (byte) ((WebSocketCode.MANDATORY_EXTENSION >> 8) & 0xFF), (byte) (WebSocketCode.MANDATORY_EXTENSION & 0xFF) };
+        WebSocketUtils.validateControlFrame(WebSocketUtils.closeFrame(true, null, ByteBuf.wrap(payload)), true);
+    }
+
+    @Test
+    public void testValidateControlFrameRejectsServerMandatoryExtensionCode() {
+        byte[] payload = new byte[] { (byte) ((WebSocketCode.MANDATORY_EXTENSION >> 8) & 0xFF), (byte) (WebSocketCode.MANDATORY_EXTENSION & 0xFF) };
+        try {
+            WebSocketUtils.validateControlFrame(WebSocketUtils.closeFrame(true, null, ByteBuf.wrap(payload)), false);
+            fail("expected protocol violation");
+        } catch (WebSocketProtocolViolationException e) {
+            assertEquals(WebSocketCode.PROTOCOL_ERROR, e.closeStatusCode());
+        }
+    }
+
+    @Test
     public void testHandshakeRequestDefaults() {
         HttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
 

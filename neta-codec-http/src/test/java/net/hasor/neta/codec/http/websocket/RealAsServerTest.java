@@ -20,35 +20,28 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.HttpServerDuplexe;
+import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.real.websocket.OkHttpWebSocketClientHarness;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
+import okhttp3.OkHttpClient;
+import org.eclipse.jetty.client.HttpClient;
+import org.eclipse.jetty.client.api.ContentResponse;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class RealAsServerTest extends AbstractWebSocketTest {
-    private static final String BRANCH_HANDSHAKE = "handshake";
     private static final String BRANCH_HTTP      = "http";
+    private static final String BRANCH_HANDSHAKE = "handshake";
+    private static final String WS_PATH          = "/chat";
     private static final String BRANCH_WEBSOCKET = HttpRouteKey.BRANCH_SOCKET;
 
-    private ProtoHandler<HttpObject, HttpObject> relayOutboundEvents() {
-        return new ThroughProtoHandler<HttpObject>() {
-            @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
-                Object eventData = event.getData();
-                if (eventData instanceof PingWebSocketEvent) {
-                    context.fireUserEventSnd(PingWebSocketEvent.class, (PingWebSocketEvent) eventData);
-                    return false;
-                }
-                if (eventData instanceof PongWebSocketEvent) {
-                    context.fireUserEventSnd(PongWebSocketEvent.class, (PongWebSocketEvent) eventData);
-                    return false;
-                }
-                return true;
-            }
-        };
+    private OkHttpClient okHttpClient() {
+        return new OkHttpClient.Builder()           //
+                .connectTimeout(5, TimeUnit.SECONDS)//
+                .readTimeout(5, TimeUnit.SECONDS)   //
+                .writeTimeout(5, TimeUnit.SECONDS)  //
+                .build();
     }
 
     private ThroughProtoHandler<WebSocketMessage> pongEventRecorder(CountDownLatch pongLatch, AtomicReference<String> pongPayload) {
@@ -66,7 +59,28 @@ public class RealAsServerTest extends AbstractWebSocketTest {
         };
     }
 
-    private ProtoHandler<WebSocketMessage, Object> webSocketBusinessHandler() {
+    private ProtoHandler<HttpObject, Object> httpBusinessHandler() {
+        return (context, src, dst) -> {
+            while (src.hasMore()) {
+                HttpObject message = src.takeMessage();
+                if (message instanceof FullHttpRequest) {
+                    FullHttpRequest request = (FullHttpRequest) message;
+                    try {
+                        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK, ascii("[HTTP] hello-http"));
+                        response.streamId(request.streamId());
+                        response.setHeader(HttpHeaderNames.CONTENT_TYPE, "text/plain");
+                        response.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(response.content().readableBytes()));
+                        context.sendData(response);
+                    } finally {
+                        request.release();
+                    }
+                }
+            }
+            return ProtoStatus.Next;
+        };
+    }
+
+    private ProtoHandler<WebSocketMessage, WebSocketMessage> webSocketBusinessHandler() {
         return (context, src, dst) -> {
             while (src.hasMore()) {
                 WebSocketMessage message = src.takeMessage();
@@ -79,10 +93,10 @@ public class RealAsServerTest extends AbstractWebSocketTest {
                         if ("trigger-ping".equals(content)) {
                             context.fireUserEventSnd(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-okhttp")));
                         } else {
-                            context.sendData(WebSocketUtils.textMessage(ascii("[Echo] " + content))).get();
+                            context.sendData(WebSocketUtils.textMessage(ascii("[Echo] " + content)));
                         }
                     } else if (message instanceof BinaryWebSocketMessage) {
-                        context.sendData(WebSocketUtils.binaryMessage(message.content().retain())).get();
+                        context.sendData(WebSocketUtils.binaryMessage(message.content().retain()));
                     }
                 } finally {
                     message.release();
@@ -92,102 +106,54 @@ public class RealAsServerTest extends AbstractWebSocketTest {
         };
     }
 
-    @Test
-    public void testNetaServerWithDynamicRoutingHandlesTextBinaryAndPingPong() throws Exception {
-        int port = findFreePort();
-        NetManager neta = new NetManager();
-        CountDownLatch pongLatch = new CountDownLatch(1);
-        AtomicReference<String> pongPayload = new AtomicReference<>();
-        OkHttpWebSocketClientHarness harness = null;
-        try {
-            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
-                ctx.addLast("http-server", new HttpServerDuplexe());
-                ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
-                    return BRANCH_WEBSOCKET;
-                });
-                routing.branch(BRANCH_HTTP, branch -> {
-                    branch.nextDecoder("http-pass", (context, src, dst) -> {
-                        while (src.hasMore()) {
-                            dst.offerMessage(src.takeMessage());
-                        }
-                        return ProtoStatus.Next;
-                    });
-                });
-                routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
-                    ProtoRoutingBuilder<Object, Object> webSocketRouting = ProtoHelper.typedRoutingAsStatic((innerContext, innerRcvUp, innerSndDown) -> BRANCH_HANDSHAKE);
-                    webSocketRouting.branchByInitializer(BRANCH_HANDSHAKE, innerBranchCtx -> {
-                        innerBranchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                        innerBranchCtx.addLastDecoder("ws-route-switch", switchRouteOnHandshake(BRANCH_WEBSOCKET));
-                    });
-                    webSocketRouting.branchByInitializer(BRANCH_WEBSOCKET, innerBranchCtx -> {
-                        innerBranchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                        innerBranchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
-                        innerBranchCtx.addLastDecoder("ws-events", pongEventRecorder(pongLatch, pongPayload));
-                        innerBranchCtx.addLastDecoder("ws-echo", webSocketBusinessHandler());
-                    });
-                    branchCtx.addLast("ws-route", webSocketRouting.build());
-                });
-                ctx.addLast("ws-route", routing.build());
-            }, SoConfig.TCP());
-            harness = OkHttpWebSocketClientHarness.connect(port, "/chat");
-            harness.awaitOpen();
-            harness.sendText("hello-neta");
-            assertEquals("[Echo] hello-neta", harness.awaitText());
-            harness.sendBinary("ABCD");
-            assertEquals("ABCD", harness.awaitBinary().utf8());
-            harness.sendText("trigger-ping");
-            assertTrue(pongLatch.await(5, TimeUnit.SECONDS));
-            assertEquals("ping-okhttp", pongPayload.get());
-        } finally {
-            if (harness != null) {
-                harness.close();
+    private ThroughProtoHandler<HttpObject> webSocketRouteSwitchHandler() {
+        return new ThroughProtoHandler<HttpObject>() {
+            @Override
+            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+                if (event.getData() instanceof WebSocketHandshakeEvent) {
+                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
+                    if (routingControl != null) {
+                        routingControl.switchRoute(BRANCH_WEBSOCKET);
+                    }
+                }
+                return true;
             }
-            neta.shutdown();
-        }
+        };
+    }
+
+    private ProtoInitializer webSocketBranchInitializer(CountDownLatch pongLatch, AtomicReference<String> pongPayload) {
+        return branchCtx -> {
+            ProtoRoutingBuilder<HttpObject, HttpObject> webSocketRouting = ProtoHelper.typedRoutingAsStatic((innerContext, innerRcvUp, innerSndDown) -> BRANCH_HANDSHAKE);
+
+            webSocketRouting.branchByInitializer(BRANCH_HANDSHAKE, innerBranchCtx -> {
+                innerBranchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                innerBranchCtx.addLastDecoder("ws-route-switch", webSocketRouteSwitchHandler());
+            });
+
+            webSocketRouting.branchByInitializer(BRANCH_WEBSOCKET, innerBranchCtx -> {
+                innerBranchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                innerBranchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                innerBranchCtx.addLastDecoder("ws-events", pongEventRecorder(pongLatch, pongPayload));
+                innerBranchCtx.addLastDecoder("ws-echo", webSocketBusinessHandler());
+            });
+
+            branchCtx.addLast("ws-route", webSocketRouting.build());
+        };
+    }
+
+    private void assertWebSocketFlow(OkHttpWebSocketClientHarness harness, CountDownLatch pongLatch, AtomicReference<String> pongPayload) throws Exception {
+        harness.awaitOpen();
+        harness.sendText("hello-neta");
+        assertEquals("[Echo] hello-neta", harness.awaitText());
+        harness.sendBinary("ABCD");
+        assertEquals("ABCD", harness.awaitBinary().utf8());
+        harness.sendText("trigger-ping");
+        assertTrue(pongLatch.await(5, TimeUnit.SECONDS));
+        assertEquals("ping-okhttp", pongPayload.get());
     }
 
     @Test
-    public void testNetaServerWithStaticRoutingHandlesTextBinaryAndPingPong() throws Exception {
-        int port = findFreePort();
-        NetManager neta = new NetManager();
-        CountDownLatch pongLatch = new CountDownLatch(1);
-        AtomicReference<String> pongPayload = new AtomicReference<>();
-        OkHttpWebSocketClientHarness harness = null;
-        try {
-            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
-                ctx.addLast("http-server", new HttpServerDuplexe());
-                ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> BRANCH_HANDSHAKE);
-                routing.branchByInitializer(BRANCH_HANDSHAKE, branchCtx -> {
-                    branchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                    branchCtx.addLastDecoder("ws-route-switch", switchRouteOnHandshake(BRANCH_WEBSOCKET));
-                });
-                routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
-                    branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                    branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
-                    branchCtx.addLastDecoder("ws-events", pongEventRecorder(pongLatch, pongPayload));
-                    branchCtx.addLastDecoder("ws-echo", webSocketBusinessHandler());
-                });
-                ctx.addLast("ws-route", routing.build());
-            }, SoConfig.TCP());
-            harness = OkHttpWebSocketClientHarness.connect(port, "/chat");
-            harness.awaitOpen();
-            harness.sendText("hello-neta");
-            assertEquals("[Echo] hello-neta", harness.awaitText());
-            harness.sendBinary("ABCD");
-            assertEquals("ABCD", harness.awaitBinary().utf8());
-            harness.sendText("trigger-ping");
-            assertTrue(pongLatch.await(5, TimeUnit.SECONDS));
-            assertEquals("ping-okhttp", pongPayload.get());
-        } finally {
-            if (harness != null) {
-                harness.close();
-            }
-            neta.shutdown();
-        }
-    }
-
-    @Test
-    public void testNetaServerWithWebSocketOnlyAutoModeHandlesTextBinaryAndPingPong() throws Exception {
+    public void socketOnlyServerHandlesTextBinaryAndPingPong() throws Exception {
         int port = findFreePort();
         NetManager neta = new NetManager();
         CountDownLatch pongLatch = new CountDownLatch(1);
@@ -202,15 +168,8 @@ public class RealAsServerTest extends AbstractWebSocketTest {
                 ctx.addLastDecoder("ws-events", pongEventRecorder(pongLatch, pongPayload));
                 ctx.addLastDecoder("ws-echo", webSocketBusinessHandler());
             }, SoConfig.TCP());
-            harness = OkHttpWebSocketClientHarness.connect(port, "/chat");
-            harness.awaitOpen();
-            harness.sendText("hello-neta");
-            assertEquals("[Echo] hello-neta", harness.awaitText());
-            harness.sendBinary("ABCD");
-            assertEquals("ABCD", harness.awaitBinary().utf8());
-            harness.sendText("trigger-ping");
-            assertTrue(pongLatch.await(5, TimeUnit.SECONDS));
-            assertEquals("ping-okhttp", pongPayload.get());
+            harness = OkHttpWebSocketClientHarness.connect(port, WS_PATH);
+            assertWebSocketFlow(harness, pongLatch, pongPayload);
         } finally {
             if (harness != null) {
                 harness.close();
@@ -220,36 +179,407 @@ public class RealAsServerTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testNetaServerWithWebSocketOnlyManualModeHandlesTextBinaryAndPingPong() throws Exception {
+    public void httpOnlyRouteServerHandlesHttpOnSamePort() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        HttpClient httpClient = new HttpClient();
+        try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
+
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+
+                ctx.addLast("server-route", routing.build());
+            }, SoConfig.TCP());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+        } finally {
+            httpClient.stop();
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void httpRouteWithUnusedSocketBranchStillHandlesHttp() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        HttpClient httpClient = new HttpClient();
+        try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
+
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+
+                    HttpObject object = rcvUp.peekMessage();
+                    if (object instanceof FullHttpRequest) {
+                        FullHttpRequest request = (FullHttpRequest) object;
+                        if (WS_PATH.equals(request.uri())) {
+                            return BRANCH_WEBSOCKET;
+                        }
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+                routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
+                });
+
+                ctx.addLast("server-route", routing.build());
+            }, SoConfig.TCP());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+        } finally {
+            httpClient.stop();
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void httpRouteWithHandshakeBranchStillHandlesHttp() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        HttpClient httpClient = new HttpClient();
+        try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
+
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+
+                    HttpObject object = rcvUp.peekMessage();
+                    if (object instanceof FullHttpRequest) {
+                        FullHttpRequest request = (FullHttpRequest) object;
+                        if (WS_PATH.equals(request.uri())) {
+                            return BRANCH_WEBSOCKET;
+                        }
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+                routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
+                    branchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                });
+
+                ctx.addLast("server-route", routing.build());
+            }, SoConfig.TCP());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+        } finally {
+            httpClient.stop();
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void httpRouteWithHandshakeAndFrameBranchStillHandlesHttp() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        HttpClient httpClient = new HttpClient();
+        try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
+
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+
+                    HttpObject object = rcvUp.peekMessage();
+                    if (object instanceof FullHttpRequest) {
+                        FullHttpRequest request = (FullHttpRequest) object;
+                        if (WS_PATH.equals(request.uri())) {
+                            return BRANCH_WEBSOCKET;
+                        }
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+                routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
+                    branchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                    branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                });
+
+                ctx.addLast("server-route", routing.build());
+            }, SoConfig.TCP());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+        } finally {
+            httpClient.stop();
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void httpRouteWithHandshakeFrameAndMessageBranchStillHandlesHttp() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        HttpClient httpClient = new HttpClient();
+        try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
+
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+
+                    HttpObject object = rcvUp.peekMessage();
+                    if (object instanceof FullHttpRequest) {
+                        FullHttpRequest request = (FullHttpRequest) object;
+                        if (WS_PATH.equals(request.uri())) {
+                            return BRANCH_WEBSOCKET;
+                        }
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+                routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
+                    branchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                    branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                });
+
+                ctx.addLast("server-route", routing.build());
+            }, SoConfig.TCP());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+        } finally {
+            httpClient.stop();
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void httpRouteWithEventRecorderBranchStillHandlesHttp() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        HttpClient httpClient = new HttpClient();
+        CountDownLatch pongLatch = new CountDownLatch(1);
+        AtomicReference<String> pongPayload = new AtomicReference<>();
+        try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
+
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+
+                    HttpObject object = rcvUp.peekMessage();
+                    if (object instanceof FullHttpRequest) {
+                        FullHttpRequest request = (FullHttpRequest) object;
+                        if (WS_PATH.equals(request.uri())) {
+                            return BRANCH_WEBSOCKET;
+                        }
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+                routing.branchByInitializer(BRANCH_WEBSOCKET, branchCtx -> {
+                    branchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
+                    branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                    branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+                    branchCtx.addLastDecoder("ws-events", pongEventRecorder(pongLatch, pongPayload));
+                });
+
+                ctx.addLast("server-route", routing.build());
+            }, SoConfig.TCP());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+        } finally {
+            httpClient.stop();
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void httpRouteWithMixSelectorStillHandlesHttp() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        HttpClient httpClient = new HttpClient();
+        CountDownLatch pongLatch = new CountDownLatch(1);
+        AtomicReference<String> pongPayload = new AtomicReference<>();
+        try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
+
+            neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+                ctx.addLast("http-server", new HttpServerDuplexe());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    WebSocketContext webSocketContext = context.rootContext(WebSocketContext.class);
+                    if (webSocketContext != null && webSocketContext.isReady()) {
+                        return BRANCH_WEBSOCKET;
+                    }
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+
+                    HttpObject object = rcvUp.peekMessage();
+                    if (object instanceof FullHttpRequest) {
+                        FullHttpRequest request = (FullHttpRequest) object;
+                        String upgrade = request.getString(HttpHeaderNames.UPGRADE);
+                        String connection = request.getString(HttpHeaderNames.CONNECTION);
+                        if (WS_PATH.equals(request.uri()) && HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains(HttpHeaderValues.UPGRADE)) {
+                            return BRANCH_WEBSOCKET;
+                        }
+                        return BRANCH_HTTP;
+                    }
+                    if (object instanceof HttpByteBuf) {
+                        return BRANCH_WEBSOCKET;
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+                routing.branchByInitializer(BRANCH_WEBSOCKET, webSocketBranchInitializer(pongLatch, pongPayload));
+
+                ctx.addLast("server-route", routing.build());
+            }, SoConfig.TCP());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+        } finally {
+            httpClient.stop();
+            neta.shutdown();
+        }
+    }
+
+    @Test
+    public void mixServerHandlesHttpAndWebSocketOnSamePort() throws Exception {
         int port = findFreePort();
         NetManager neta = new NetManager();
         CountDownLatch pongLatch = new CountDownLatch(1);
         AtomicReference<String> pongPayload = new AtomicReference<>();
+        HttpClient httpClient = new HttpClient();
         OkHttpWebSocketClientHarness harness = null;
         try {
+            httpClient.setConnectTimeout(5000);
+            httpClient.setIdleTimeout(5000);
+            httpClient.start();
             neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
                 ctx.addLast("http-server", new HttpServerDuplexe());
-                ctx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-                ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-                ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
-                ctx.addLastDecoder("ws-event-tail", relayOutboundEvents());
-                ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
-                ctx.addLastDecoder("ws-events", pongEventRecorder(pongLatch, pongPayload));
-                ctx.addLastDecoder("ws-echo", webSocketBusinessHandler());
+                ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+
+                ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
+                    WebSocketContext webSocketContext = context.rootContext(WebSocketContext.class);
+                    if (webSocketContext != null && webSocketContext.isReady()) {
+                        return BRANCH_WEBSOCKET;
+                    }
+                    if (rcvUp.queueSize() == 0) {
+                        return null;
+                    }
+
+                    HttpObject object = rcvUp.peekMessage();
+                    if (object instanceof FullHttpRequest) {
+                        FullHttpRequest request = (FullHttpRequest) object;
+                        String upgrade = request.getString(HttpHeaderNames.UPGRADE);
+                        String connection = request.getString(HttpHeaderNames.CONNECTION);
+                        if (WS_PATH.equals(request.uri()) && HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade) && connection != null && connection.toLowerCase().contains(HttpHeaderValues.UPGRADE)) {
+                            return BRANCH_WEBSOCKET;
+                        }
+                        return BRANCH_HTTP;
+                    }
+                    if (object instanceof HttpByteBuf) {
+                        return BRANCH_WEBSOCKET;
+                    }
+                    return BRANCH_HTTP;
+                });
+
+                routing.branchByInitializer(BRANCH_HTTP, branchCtx -> {
+                    branchCtx.addLastDecoder("http-handler", httpBusinessHandler());
+                });
+                routing.branchByInitializer(BRANCH_WEBSOCKET, webSocketBranchInitializer(pongLatch, pongPayload));
+
+                ctx.addLast("server-route", routing.build());
             }, SoConfig.TCP());
-            harness = OkHttpWebSocketClientHarness.connect(port, "/chat");
-            harness.awaitOpen();
-            harness.sendText("hello-neta");
-            assertEquals("[Echo] hello-neta", harness.awaitText());
-            harness.sendBinary("ABCD");
-            assertEquals("ABCD", harness.awaitBinary().utf8());
-            harness.sendText("trigger-ping");
-            assertTrue(pongLatch.await(5, TimeUnit.SECONDS));
-            assertEquals("ping-okhttp", pongPayload.get());
+
+            ContentResponse httpResponse = httpClient.newRequest("http://127.0.0.1:" + port + "/http-echo").timeout(5, TimeUnit.SECONDS).send();
+            assertEquals(200, httpResponse.getStatus());
+            assertEquals("[HTTP] hello-http", httpResponse.getContentAsString());
+
+            harness = OkHttpWebSocketClientHarness.connect(port, WS_PATH);
+            assertWebSocketFlow(harness, pongLatch, pongPayload);
         } finally {
             if (harness != null) {
                 harness.close();
             }
+            httpClient.stop();
             neta.shutdown();
         }
     }

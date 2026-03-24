@@ -234,13 +234,14 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
                     DefaultHttpHeaders headers = new DefaultHttpHeaders();
                     headers.setHeader("X-Accept", "ok");
                     headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat");
-                    headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
                     callback.accept(headers);
                 };
                 ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13, authorizer));
             }, VrtSoConfig.asServer());
 
-            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat");
+            List<HttpObject> inbound = receiveAndIntBound(pipe, request);
             List<Object> outbound = drainQueue(pipe.channelOutbound());
             HttpResponse response = (HttpResponse) outbound.get(0);
             HttpHeaders headers = (HttpHeaders) outbound.get(1);
@@ -250,11 +251,59 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
             assertNotNull(webSocketContext);
             assertTrue(webSocketContext.isReady());
             assertEquals("chat", webSocketContext.subProtocol());
-            assertEquals("permessage-deflate", webSocketContext.extensions());
+            assertNull(webSocketContext.extensions());
             assertEquals(101, response.status().code());
             assertEquals("ok", headers.getString("X-Accept"));
             assertEquals("chat", headers.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL));
-            assertEquals("permessage-deflate", headers.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS));
+            assertNull(headers.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS));
+        });
+    }
+
+    @Test
+    public void testAuthorizerSelectingUnsupportedExtensionBecomesBadRequest() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
+                    DefaultHttpHeaders headers = new DefaultHttpHeaders();
+                    headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
+                    callback.accept(headers);
+                };
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13, authorizer));
+            }, VrtSoConfig.asServer());
+
+            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
+            List<Object> outbound = drainQueue(pipe.channelOutbound());
+            HttpResponse response = (HttpResponse) outbound.get(0);
+
+            assertTrue(inbound.isEmpty());
+            assertNull(webSocketContext(pipe.channel()));
+            assertEquals(3, outbound.size());
+            assertEquals(400, response.status().code());
+        });
+    }
+
+    @Test
+    public void testAuthorizerSelectingUnsupportedSubProtocolBecomesBadRequest() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
+                    DefaultHttpHeaders headers = new DefaultHttpHeaders();
+                    headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "mqtt");
+                    callback.accept(headers);
+                };
+                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13, authorizer));
+            }, VrtSoConfig.asServer());
+
+            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
+            request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat, graphql-ws");
+            List<HttpObject> inbound = receiveAndIntBound(pipe, request);
+            List<Object> outbound = drainQueue(pipe.channelOutbound());
+            HttpResponse response = (HttpResponse) outbound.get(0);
+
+            assertTrue(inbound.isEmpty());
+            assertNull(webSocketContext(pipe.channel()));
+            assertEquals(3, outbound.size());
+            assertEquals(400, response.status().code());
         });
     }
 
