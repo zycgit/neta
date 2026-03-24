@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import net.hasor.neta.channel.*;
@@ -87,9 +88,15 @@ public class RealAsClientTest extends AbstractWebSocketTest {
 
                 // handshake
                 FullHttpRequest handshake = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
-                channel.sendData(handshake, "ws-client").get();// "ws-client" is WebSocketHandshake4Client target
+                channel.sendData(handshake, "ws-client").get();// "ws-client" is WebSocketClientHandshakeDuplexer target
                 assertTrue(waitUntil(() -> WebSocketUtils.isReady(channel), 5000L));
                 server.awaitOpen();
+
+                // ping/pong
+                channel.fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-manual")));
+                PongWebSocketEvent pong = awaitInbound(inbound, PongWebSocketEvent.class, 5000L);
+                assertEquals("ping-manual", pong.content().readString(pong.content().readableBytes(), StandardCharsets.US_ASCII));
+                pong.release();
 
                 // text Message
                 channel.sendData(WebSocketUtils.textMessage(ascii("hello-real"))).get();
@@ -131,6 +138,13 @@ public class RealAsClientTest extends AbstractWebSocketTest {
 
                 // auto handshake
                 assertTrue(waitUntil(() -> WebSocketUtils.isReady(channel), 5000L));
+                server.awaitOpen();
+
+                // ping/pong
+                channel.fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-auto")));
+                PongWebSocketEvent pong = awaitInbound(inbound, PongWebSocketEvent.class, 5000L);
+                assertEquals("ping-auto", pong.content().readString(pong.content().readableBytes(), StandardCharsets.US_ASCII));
+                pong.release();
 
                 // text Message
                 channel.sendData(WebSocketUtils.textMessage(ascii("hello-real"))).get();
@@ -200,6 +214,12 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 assertTrue(waitUntil(() -> WebSocketUtils.isReady(channel), 5000L));
                 server.awaitOpen();
 
+                // ping/pong after upgrade on the same channel
+                channel.fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-mixed")));
+                PongWebSocketEvent pong = awaitInbound(inbound, PongWebSocketEvent.class, 5000L);
+                assertEquals("ping-mixed", pong.content().readString(pong.content().readableBytes(), StandardCharsets.US_ASCII));
+                pong.release();
+
                 // text Message
                 channel.sendData(WebSocketUtils.textMessage(ascii("hello-real"))).get();
                 server.awaitTextMessage();
@@ -213,5 +233,4 @@ public class RealAsClientTest extends AbstractWebSocketTest {
             }
         });
     }
-
 }
