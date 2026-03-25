@@ -17,37 +17,34 @@ ByteBuf 的设计目标是：**高性能、低 GC 压力、灵活的内存模型
 
 ByteBuf 系统采用 **三层架构**，自底向上分别是：**Page（页面分配）→ Buffer（内存管理）→ ByteBuf（读写 API）**。
 
-```mermaid
-graph TB
-    subgraph "ByteBuf 层 — 用户 API"
-        A1[AutoArrayByteBuf<br/>连续内存]
-        A2[PooledByteBuf<br/>池化内存]
-        A3[RingArrayByteBuf<br/>环形内存]
-        A4[CompositeByteBuf<br/>组合缓冲区]
-        A5[ReadOnlyByteBuf<br/>只读视图]
-        A6[Wrap 系列<br/>包装缓冲区]
-    end
+```text
+ByteBuf 层 - 用户 API
+    +-- AutoArrayByteBuf    连续内存
+    +-- PooledByteBuf       池化内存
+    +-- RingArrayByteBuf    环形内存
+    +-- CompositeByteBuf    组合缓冲区
+    +-- ReadOnlyByteBuf     只读视图
+    `-- Wrap 系列           包装缓冲区
 
-    subgraph "Buffer 层 — 内存管理"
-        B1[BufferPool<br/>内存池]
-        B2[BufferArena<br/>使用率分区]
-        B3[BufferRing<br/>环形链表]
-        B4[BufferTarget<br/>内存块视图]
-    end
+Buffer 层 - 内存管理
+    +-- BufferPool          内存池
+    +-- BufferArena         使用率分区
+    +-- BufferRing          环形链表
+    `-- BufferTarget        内存块视图
 
-    subgraph "Page 层 — 页面分配"
-        C1[PageChunkPool<br/>伙伴算法]
-        C2[PageChunk<br/>伙伴树节点]
-        C3[PageChunkSplit<br/>已分配页面]
-    end
+Page 层 - 页面分配
+    +-- PageChunkPool       伙伴算法入口
+    +-- PageChunk           伙伴树节点
+    `-- PageChunkSplit      已分配页面
 
-    A2 --> B4
-    B4 --> B1
-    B1 --> B2
-    B2 --> B3
-    B3 --> C1
-    C1 --> C2
-    C1 --> C3
+关键管理链路
+    PooledByteBuf
+        -> BufferTarget
+        -> BufferPool
+        -> BufferArena
+        -> BufferRing
+        -> PageChunkPool
+        -> PageChunk / PageChunkSplit
 ```
 
 - **Page 层**：基于伙伴算法（Buddy Algorithm）管理页面分配，不直接产生内存开销，只提供分配算法支持。
@@ -173,43 +170,25 @@ ByteBuf 使用四个指针来管理数据的读写区域：
 
 ### 整体结构
 
-```mermaid
-graph TB
-    subgraph "BufferPool 内存池"
-        direction TB
-        BP[BufferPool<br/>顶层管理器]
+```text
+BufferPool 内存池
+    |
+    +-- qInit   0% ~ 25%
+    +-- q000    1% ~ 50%
+    +-- q025   25% ~ 75%
+    +-- q050   50% ~ 100%
+    +-- q075   75% ~ 100%
+    `-- q100  100%
 
-        subgraph "Arena 分区链"
-            direction LR
-            QI[qInit<br/>0~25%]
-            Q0[q000<br/>1~50%]
-            Q25[q025<br/>25~75%]
-            Q50[q050<br/>50~100%]
-            Q75[q075<br/>75~100%]
-            Q100[q100<br/>100%]
+Arena 分区迁移链
+    qInit <-> q000 <-> q025 <-> q050 <-> q075 <-> q100
 
-            QI <--> Q0
-            Q0 <--> Q25
-            Q25 <--> Q50
-            Q50 <--> Q75
-            Q75 <--> Q100
-        end
+PageChunkPool 挂接关系
+    q050
+        `-> BufferRing -> Chunk 1 (4096 pages)
 
-        BP --> QI
-        BP --> Q0
-        BP --> Q25
-        BP --> Q50
-        BP --> Q75
-        BP --> Q100
-    end
-
-    subgraph "PageChunkPool (伙伴树)"
-        PC1[Chunk 1<br/>4096 Pages]
-        PC2[Chunk 2<br/>4096 Pages]
-    end
-
-    Q50 -.->|BufferRing| PC1
-    Q25 -.->|BufferRing| PC2
+    q025
+        `-> BufferRing -> Chunk 2 (4096 pages)
 ```
 
 ### 分配流程
@@ -249,24 +228,24 @@ Arena 的核心思想是 **按内存使用率对 ChunkPool 进行分组管理**�
 一个 PageChunkPool 管理一块大的连续内存，将其划分为 $2^h$ 个页面（默认 $h=12$，即 4096 个页面）。
 伙伴树是一棵完全二叉树，从根到叶：
 
-```mermaid
-graph TB
-    L0["层 0: 1 个块 (4096 pages)"]
-    L1_0["层 1: 块 A (2048 pages)"]
-    L1_1["层 1: 块 B (2048 pages)"]
-    L2_0["..."]
-    L2_1["..."]
-    L2_2["..."]
-    L2_3["..."]
-    L12["层 12: 4096 个块 (各 1 page)"]
+```text
+层 0
+    1 个块 (4096 pages)
+        |
+        +-- 层 1: 块 A (2048 pages)
+        |     |
+        |     +-- 层 2: 子块 A1 (...)
+        |     `-- 层 2: 子块 A2 (...)
+        |
+        `-- 层 1: 块 B (2048 pages)
+                    |
+                    +-- 层 2: 子块 B1 (...)
+                    `-- 层 2: 子块 B2 (...)
 
-    L0 --- L1_0
-    L0 --- L1_1
-    L1_0 --- L2_0
-    L1_0 --- L2_1
-    L1_1 --- L2_2
-    L1_1 --- L2_3
-    L2_0 -.- L12
+... 逐层继续二分 ...
+
+层 12
+    4096 个块 (各 1 page)
 ```
 
 - **分配**：请求 $n$ 个页面时，将 $n$ 向上取整到 2 的幂次方，找到对应层级的空闲块，使用位图快速判断是否空闲。
@@ -294,21 +273,18 @@ Neta 的缓冲区系统在多个层面实现了缓存，形成了一个完整的
 
 **两级缓存策略：**
 
-```mermaid
-graph LR
-    subgraph "L1 — ThreadLocal 每线程缓存"
-        T1["线程 1 缓存<br/>每级别最多 256 个"]
-        T2["线程 2 缓存<br/>每级别最多 256 个"]
-    end
+```text
+L1 - ThreadLocal 每线程缓存
+  线程 1 缓存  (每级别最多 256 个)
+  线程 2 缓存  (每级别最多 256 个)
 
-    subgraph "L2 — 全局共享缓存"
-        G["ConcurrentLinkedQueue<br/>每级别最多 64 个"]
-    end
+        溢出
+  线程缓存 -------> L2 全局共享缓存
+                     ConcurrentLinkedQueue
+                     每级别最多 64 个
 
-    T1 -->|溢出| G
-    T2 -->|溢出| G
-    G -->|L1 为空时| T1
-    G -->|L1 为空时| T2
+        L1 为空时回填
+  线程缓存 <------- L2 全局共享缓存
 ```
 
 - **分配路径**：L1（无锁） → L2（CAS） → 新建对象
@@ -371,6 +347,8 @@ Neta 使用 `sun.misc.Unsafe` 来实现高性能的多字节读写操作（16/32
 
 ByteBuf 实现了引用计数（Reference Counting）机制来管理内存的生命周期。
 
+如果这里关注的是“谁该 retain、谁该 release、透传和重包装时谁接管对象生命周期”，统一以 [引用所有权](ownership.md) 中的原则为准。这里主要说明 ByteBuf 自身的引用计数机制和底层释放链路。
+
 ### 引用计数规则
 
 - 每个 ByteBuf 创建时引用计数为 **1**。
@@ -397,6 +375,8 @@ ByteBuf.release()
 ```
 
 ### 所有权语义
+
+这一节只保留 ByteBuf 视角下的基本术语。更完整的 Handler / codec 所有权判断规则见 [引用所有权](ownership.md)。
 
 - **持有所有权** = 持有引用计数中的一份。可以安全地进行读写操作。
 - **转移所有权** = 将缓冲区传递给另一方后，发送方不再调用 release()，接收方负责释放。
