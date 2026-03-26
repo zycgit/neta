@@ -188,7 +188,6 @@ public class VrtTransfer {
             }
 
             link.cacheQueue.offerMessage(p);
-            link.cacheQueue.sndSubmit();
             logger.info("transfer " + srcChannelId + " -> " + dstChannelId + ", packet has been accepted, queueSize " + link.cacheQueue.queueSize());
 
             if (this.asynchronous) {

@@ -143,6 +143,17 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
+    /**
+     * Final queue cleanup after {@link #onClose(ProtoContext)} has returned.
+     * <p>This method releases any queue-owned messages still buffered in this invocation.
+     * It is intentionally separated from {@code onClose} so handler shutdown logic runs first,
+     * followed by unconditional queue reclamation in the stack close path.</p>
+     */
+    public void afterClose() {
+        this.rcvUp.clearAndClose();
+        this.sndUp.clearAndClose();
+    }
+
     /** Delivers a user-defined event to the wrapped handler. return {@code true} to continue propagation, {@code false} to consume the event */
     public boolean onEvent(ProtoContext protoCtx, SoUserEvent event, boolean isRcv) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
@@ -198,10 +209,6 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
             return this.handler.onError(protoCtx, isRcv, ctxError, this.createExceptionHandler(isRcv, ctx));
         } finally {
             ctx.setStackName(null);
-            rcvUp.rcvSubmit();
-            rcvDown.sndSubmit();
-            sndUp.rcvSubmit();
-            sndDown.sndSubmit();
         }
     }
 

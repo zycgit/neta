@@ -401,8 +401,8 @@ final class QueueByteBuf extends AbstractByteBuf {
      * Fully consumed ByteBuf messages are removed via {@link ProtoRcvQueue#skipMessage(int)}.
      * A partially consumed ByteBuf message has its {@code readerIndex} advanced.
      * <p>
-     * <b>Warning:</b> After calling this method, the queue's {@code rcvReset()} must not be called,
-     * as partially consumed ByteBuf state cannot be reverted.
+     * The underlying queue is consumed destructively via {@link ProtoRcvQueue#skipMessage(int)}.
+     * Consumed messages are removed immediately and are not restored by the queue.
      */
     @Override
     public void discardReadBytes() {

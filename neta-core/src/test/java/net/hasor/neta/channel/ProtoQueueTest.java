@@ -32,72 +32,39 @@ public class ProtoQueueTest {
         assert queue.offerMessage(1);
         assert queue.offerMessage(2);
         assert queue.offerMessage(3);
-        assert queue.queueSize() == 0;
+        assert queue.queueSize() == 3;
         assert queue.slotSize() == 7;
-
-        queue.sndReset();
-        assert queue.queueSize() == 0;
-        assert queue.slotSize() == 10;
 
         assert queue.offerMessage(4);
         assert queue.offerMessage(Arrays.asList(5, 6)) == 2;
-        assert queue.queueSize() == 0;
-        assert queue.slotSize() == 7;
-
-        queue.rcvSubmit();
-        assert queue.queueSize() == 0;
-        assert queue.slotSize() == 7;
-
-        queue.sndSubmit();
-        assert queue.queueSize() == 3;
-        assert queue.slotSize() == 7;
+        assert queue.queueSize() == 6;
+        assert queue.slotSize() == 4;
 
         assert queue.offerMessage(Arrays.asList(7, 8)) == 2;
-        assert queue.queueSize() == 3;
-        assert queue.slotSize() == 5;
+        assert queue.queueSize() == 8;
+        assert queue.slotSize() == 2;
 
-        assert queue.offerMessage(Arrays.asList(10, 11, 12, 13, 14, 15, 16, 17, 18, 19)) == 5;
-        assert queue.queueSize() == 3;
-        assert queue.slotSize() == 0;
+        assert queue.offerMessage(Arrays.asList(10, 11, 12, 13, 14, 15, 16, 17, 18, 19)) == 0;
+        assert queue.queueSize() == 8;
+        assert queue.slotSize() == 2;
 
-        queue.sndSubmit();
+        assert queue.offerMessage(Arrays.asList(10, 11)) == 2;
         assert queue.queueSize() == 10;
         assert queue.slotSize() == 0;
 
         List<Object> list = queue.takeMessage(100);
         assert list.size() == 10;
-        assert (int) list.get(0) == 4;
-        assert (int) list.get(1) == 5;
-        assert (int) list.get(2) == 6;
-        assert (int) list.get(3) == 7;
-        assert (int) list.get(4) == 8;
-        assert (int) list.get(5) == 10;
-        assert (int) list.get(6) == 11;
-        assert (int) list.get(7) == 12;
-        assert (int) list.get(8) == 13;
-        assert (int) list.get(9) == 14;
+        assert (int) list.get(0) == 1;
+        assert (int) list.get(1) == 2;
+        assert (int) list.get(2) == 3;
+        assert (int) list.get(3) == 4;
+        assert (int) list.get(4) == 5;
+        assert (int) list.get(5) == 6;
+        assert (int) list.get(6) == 7;
+        assert (int) list.get(7) == 8;
+        assert (int) list.get(8) == 10;
+        assert (int) list.get(9) == 11;
 
-        assert queue.queueSize() == 0;
-        assert queue.slotSize() == 0;
-
-        queue.rcvReset();
-        assert queue.queueSize() == 10;
-        assert queue.slotSize() == 0;
-
-        List<Object> list2 = queue.takeMessage(100);
-        assert list2.size() == 10;
-        assert (int) list2.get(0) == 4;
-        assert (int) list2.get(1) == 5;
-        assert (int) list2.get(2) == 6;
-        assert (int) list2.get(3) == 7;
-        assert (int) list2.get(4) == 8;
-        assert (int) list2.get(5) == 10;
-        assert (int) list2.get(6) == 11;
-        assert (int) list2.get(7) == 12;
-        assert (int) list2.get(8) == 13;
-        assert (int) list2.get(9) == 14;
-
-        queue.rcvSubmit();
         assert queue.queueSize() == 0;
         assert queue.slotSize() == 10;
     }

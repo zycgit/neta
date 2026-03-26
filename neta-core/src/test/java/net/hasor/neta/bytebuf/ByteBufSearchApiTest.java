@@ -27,7 +27,6 @@ public class ByteBufSearchApiTest {
         queue.offerMessage(ByteBuf.wrap(new byte[] { 0x01, 0x02 }));
         queue.offerMessage(ByteBuf.wrap(new byte[] { 0x03, 0x04 }));
         queue.offerMessage(ByteBuf.wrap(new byte[] { 0x05, 0x06 }));
-        queue.sndSubmit();
 
         ByteBuf queueBuf = ByteBufUtils.queueBuffer(queue);
         try {
@@ -43,7 +42,6 @@ public class ByteBufSearchApiTest {
         ProtoQueue<ByteBuf> queue = new ProtoQueue<>(-1);
         queue.offerMessage(ByteBuf.wrap("GET /hel".getBytes(StandardCharsets.US_ASCII)));
         queue.offerMessage(ByteBuf.wrap("lo HTTP/1.1\r\nbody".getBytes(StandardCharsets.US_ASCII)));
-        queue.sndSubmit();
 
         ByteBuf queueBuf = ByteBufUtils.queueBuffer(queue);
         try {

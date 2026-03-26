@@ -159,7 +159,6 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
                 ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
                 queue.offerMessage(msg);
-                queue.sndSubmit();
                 this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
 
                 if (isResponseComplete(msg)) {
@@ -212,14 +211,12 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     private void forwardBufferedToHandshake(ProtoContext context, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
         ProtoQueue<HttpObject> queue = new ProtoQueue<>(this.bufferedRequestParts.size());
         queue.offerMessage(this.bufferedRequestParts);
-        queue.sndSubmit();
         this.delegate.onMessage(context, true, queue, rcvDown, ProtoQueue.emptyRcv(), null);
     }
 
     private void forwardToHandshake(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
         ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
         queue.offerMessage(msg);
-        queue.sndSubmit();
         this.delegate.onMessage(context, true, queue, rcvDown, ProtoQueue.emptyRcv(), null);
     }
 

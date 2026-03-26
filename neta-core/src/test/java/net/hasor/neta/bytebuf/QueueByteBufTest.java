@@ -32,7 +32,6 @@ public class QueueByteBufTest {
 
     private void offer(ProtoQueue<ByteBuf> queue, byte[] data) {
         queue.offerMessage(ByteBuf.wrap(data));
-        queue.sndSubmit();
     }
 
     private void offer(ProtoQueue<ByteBuf> queue, String text) {
@@ -996,8 +995,8 @@ public class QueueByteBufTest {
     // ========== Queue Integration Tests ==========
 
     @Test
-    public void test_markReader_with_rcvSubmit() {
-        // Simulate the handler pattern: read -> markReader -> rcvSubmit
+    public void test_markReader_after_queue_consumption() {
+        // Simulate the handler pattern: read -> markReader
         ProtoQueue<ByteBuf> queue = newQueue();
         offer(queue, new byte[] { 1, 2 });
         offer(queue, new byte[] { 3, 4 });
@@ -1006,7 +1005,6 @@ public class QueueByteBufTest {
             buf.readByte(); // 1
             buf.readByte(); // 2
             buf.markReader(); // consume first message
-            queue.rcvSubmit(); // framework commits
 
             // Queue should have 1 remaining message
             assert queue.queueSize() == 1;
@@ -1016,8 +1014,8 @@ public class QueueByteBufTest {
     }
 
     @Test
-    public void test_no_markReader_with_rcvReset() {
-        // Simulate the handler pattern: read (peek) -> insufficient data -> reset
+    public void test_no_markReader_keeps_queue_unchanged() {
+        // Simulate probing buffered bytes, then rewinding QueueByteBuf's local reader cursor.
         ProtoQueue<ByteBuf> queue = newQueue();
         offer(queue, new byte[] { 1, 2 });
         offer(queue, new byte[] { 3, 4 });
@@ -1026,11 +1024,9 @@ public class QueueByteBufTest {
             buf.readByte(); // 1
             buf.readByte(); // 2
             buf.readByte(); // 3
-            // Not enough data, don't markReader
-            buf.resetReader(); // revert reads
-            queue.rcvReset(); // framework resets
+            buf.resetReader(); // rewind local reader cursor
 
-            // Queue unchanged
+            // Underlying queue is unchanged because markReader() was never called.
             assert queue.queueSize() == 2;
         } finally {
             buf.free();
@@ -1172,7 +1168,7 @@ public class QueueByteBufTest {
             String payload = buf.readString(len, StandardCharsets.UTF_8);
             assert "Hello".equals(payload);
 
-            // Commit consumption via markReader
+            // Finalize the already-consumed prefix inside QueueByteBuf.
             buf.markReader();
             assert buf.readableBytes() == 0;
         } finally {

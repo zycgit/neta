@@ -171,6 +171,14 @@ class ProtoStackChain {
                 current = current.next;
             }
         } finally {
+            // Handlers close first, then each stage releases any queue-owned residue.
+            ProtoInvocation<?, ?, ?, ?> current = this.head;
+            while (current != null) {
+                current.afterClose();
+                current = current.next;
+            }
+            this.tailRcvDown.clearAndClose();
+            this.headSndDown.clearAndClose();
             if (!this.branchMode) {
                 ctx.clearStatus();
                 ctx.clearFlash();
@@ -182,10 +190,7 @@ class ProtoStackChain {
         if (offerData == null) {
             return;
         }
-        if (queue.offerMessage(offerData) == offerData.length) {
-            queue.sndSubmit();
-        } else {
-            queue.sndReset();
+        if (queue.offerMessage(offerData) != offerData.length) {
             String msgTag = isRcv ? "rcv" : "snd";
             int slotSize = queue.slotSize();
             int require = offerData.length;
@@ -210,9 +215,7 @@ class ProtoStackChain {
         if (queueSize == 0) {
             return EMPTY;
         }
-        Object[] result = this.headSndDown.takeMessageToArray(queueSize);
-        this.headSndDown.rcvSubmit();
-        return result;
+        return this.headSndDown.takeMessageToArray(queueSize);
     }
 
     // ------------------------------------------------------------
@@ -336,7 +339,6 @@ class ProtoStackChain {
                 PlayLoad playLoad = PlayLoadObject.of(ctx.getChannel(), this.tailRcvDown.takeMessage(), true, false);
                 ((SoContextService) ctx.getSoContext()).trigger(playLoad);
             }
-            this.tailRcvDown.rcvSubmit();
         }
 
         // 2st onError

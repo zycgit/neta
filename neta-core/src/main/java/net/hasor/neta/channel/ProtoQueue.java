@@ -14,10 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import net.hasor.cobble.function.Release;
+import net.hasor.cobble.io.IOUtils;
+import net.hasor.neta.bytebuf.ReferenceHolder;
 
 /**
  * Concrete, capacity-bounded implementation of both {@link ProtoRcvQueue} and
@@ -28,16 +32,21 @@ import java.util.List;
  * contained in a single object.
  * <h3>Capacity and overflow</h3>
  * Capacity is set at construction time.  If {@code capacity < 0} the queue is effectively
- * unbounded ({@link Integer#MAX_VALUE}).  Once all capacity is consumed,
- * {@link #offerMessage} returns {@code 0} (no items accepted), and the pipeline send path
- * raises {@link ProtoFullException} as a backpressure signal.
- * <h3>Transaction semantics</h3>
- * Both paths use a two-phase commit:
+ * unbounded ({@link Integer#MAX_VALUE}). Multi-element {@link #offerMessage} calls are
+ * atomic: the whole batch is accepted or the call returns {@code 0} without changing queue
+ * state. Once all capacity is consumed, {@link #offerMessage} returns {@code 0}
+ * (no items accepted), and the pipeline send path raises {@link ProtoFullException} as a
+ * backpressure signal.
+ * <h3>Ownership semantics</h3>
+ * Both directions are immediate: send-side writes become visible as soon as an
+ * {@link #offerMessage} call succeeds, and receive-side reads/destructive skips consume the
+ * queue immediately.
+ * <p>Ownership rules are:</p>
  * <ul>
- *   <li>Receive side: call {@link #rcvSubmit()} to finalise a take, or
- *       {@link #rcvReset()} to return taken items to the front of the queue.</li>
- *   <li>Send side: call {@link #sndSubmit()} to lock offered items in place, or
- *       {@link #sndReset()} to discard items that were offered but not yet committed.</li>
+ *   <li>{@code offerMessage(...)} success means ownership moves into the queue.</li>
+ *   <li>{@code takeMessage(...)} means ownership moves out of the queue to the caller.</li>
+ *   <li>{@code peekMessage(...)} never transfers ownership.</li>
+ *   <li>{@code skipMessage(...)} discards queue-owned objects and releases/close them when applicable.</li>
  * </ul>
  * @param <T> the type of message stored in this queue
  * @author 赵永春 (zyc@hasor.net)
@@ -48,7 +57,7 @@ import java.util.List;
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     private static final Object[]      EMPTY_ARRAY = new Object[0];
-    /** Canonical immutable empty {@link ProtoRcvQueue} singleton (no data, all operations are no-ops). */
+    /** Canonical immutable empty {@link ProtoRcvQueue} singleton with no ownership obligations. */
     @SuppressWarnings("rawtypes")
     private static final ProtoRcvQueue EMPTY_RCV   = new ProtoRcvQueue() {
         @Override
@@ -59,16 +68,6 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         @Override
         public int queueSize() {
             return 0;
-        }
-
-        @Override
-        public ProtoRcvQueue rcvSubmit() {
-            return this;
-        }
-
-        @Override
-        public ProtoRcvQueue rcvReset() {
-            return this;
         }
 
         @Override
@@ -88,8 +87,6 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     private final int     capacity;
     private final List<T> linkedList;
-    private final List<T> offerTemp;
-    protected     int     takeCount;
 
     /**
      * Creates a queue with the given capacity.
@@ -98,13 +95,13 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
         this.linkedList = new ArrayList<>();
-        this.offerTemp = new ArrayList<>();
     }
 
     /**
      * Returns an immutable empty {@link ProtoRcvQueue} singleton.
      * <p>Useful when a non-null queue reference is required but no data is available,
      * e.g. when invoking a routing predicate during the {@code onActive} phase.</p>
+     * <p>The returned queue never owns any message and all destructive operations are no-ops.</p>
      */
     public static <T> ProtoRcvQueue<T> emptyRcv() {
         return (ProtoRcvQueue<T>) EMPTY_RCV;
@@ -117,97 +114,78 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
 
     @Override
     public int queueSize() {
-        return this.linkedList.size() - this.takeCount;
+        return this.linkedList.size();
     }
 
     @Override
     public int slotSize() {
-        return this.capacity - this.linkedList.size() - this.offerTemp.size();
-    }
-
-    @Override
-    public boolean hasCommit() {
-        return this.takeCount > 0 || !this.offerTemp.isEmpty();
-    }
-
-    @Override
-    public ProtoRcvQueue<T> rcvSubmit() {
-        if (this.takeCount == 1) {
-            // Fast path for the common single-element case: avoid SubList allocation
-            this.linkedList.remove(0);
-        } else if (this.takeCount > 1) {
-            this.linkedList.subList(0, this.takeCount).clear();
-        }
-        this.takeCount = 0;
-        return this;
-    }
-
-    @Override
-    public ProtoRcvQueue<T> rcvReset() {
-        this.takeCount = 0;
-        return this;
-    }
-
-    @Override
-    public ProtoSndQueue<T> sndSubmit() {
-        int size = this.offerTemp.size();
-        if (size == 1) {
-            // Fast path: avoid addAll overhead for single element
-            this.linkedList.add(this.offerTemp.get(0));
-        } else if (size > 1) {
-            this.linkedList.addAll(this.offerTemp);
-        }
-        this.offerTemp.clear();
-        return this;
-    }
-
-    @Override
-    public ProtoSndQueue<T> sndReset() {
-        this.offerTemp.clear();
-        return this;
+        return this.capacity - this.linkedList.size();
     }
 
     @Override
     public int offerMessage(T[] offerList) {
-        int size = Math.min(this.slotSize(), offerList.length);
-        this.offerTemp.addAll(Arrays.asList(offerList).subList(0, size));
-        return size;
+        if (offerList == null || offerList.length == 0) {
+            return 0;
+        }
+
+        if (this.slotSize() < offerList.length) {
+            return 0;
+        }
+
+        this.linkedList.addAll(Arrays.asList(offerList));
+        return offerList.length;
     }
 
     @Override
     public int offerMessage(List<T> offerList) {
-        int size = Math.min(this.slotSize(), offerList.size());
+        if (offerList == null || offerList.isEmpty()) {
+            return 0;
+        }
+
+        int size = offerList.size();
+        if (this.slotSize() < size) {
+            return 0;
+        }
+
         for (int i = 0; i < size; i++) {
-            this.offerTemp.add(offerList.get(i));
+            this.linkedList.add(offerList.get(i));
         }
         return size;
     }
 
-    /** Single-element fast path: avoid Collections.singletonList allocation */
+    /** Single-element fast path: avoids {@link Collections#singletonList(Object)} allocation. */
     @Override
     public boolean offerMessage(T offerMessage) {
         if (this.slotSize() <= 0) {
             return false;
         }
-        this.offerTemp.add(offerMessage);
+
+        this.linkedList.add(offerMessage);
         return true;
     }
 
     @Override
     public int offerMessage(ProtoRcvQueue<T> offerList) {
-        int size = Math.min(offerList.queueSize(), this.slotSize());
+        if (offerList == null) {
+            return 0;
+        }
+
+        int size = offerList.queueSize();
+        if (size <= 0 || this.slotSize() < size) {
+            return 0;
+        }
+
         return this.offerMessage(offerList.takeMessage(size));
     }
 
-    /** Single-element fast path: avoid ArrayList allocation */
+    /** Single-element fast path: avoids {@link ArrayList} allocation and transfers ownership immediately. */
     @Override
     public T takeMessage() {
-        if (this.queueSize() <= 0) {
+        if (this.linkedList.isEmpty()) {
             return null;
         }
-        T result = this.linkedList.get(this.takeCount);
-        this.takeCount++;
-        return result;
+
+        return this.linkedList.remove(0);
     }
 
     @Override
@@ -217,59 +195,96 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         }
 
         if (cnt < 0) {
-            cnt = this.queueSize();
+            cnt = this.linkedList.size();
         }
 
-        int fixCnt = Math.min(cnt, this.queueSize());
-        int to = this.takeCount + fixCnt;
-
-        List<T> result = new ArrayList<>(fixCnt);
-        for (int i = this.takeCount; i < to; i++) {
-            result.add(this.linkedList.get(i));
+        int fixCnt = Math.min(cnt, this.linkedList.size());
+        if (fixCnt == 0) {
+            return Collections.emptyList();
         }
-        this.takeCount += fixCnt;
+
+        List<T> result = new ArrayList<>(this.linkedList.subList(0, fixCnt));
+        this.linkedList.subList(0, fixCnt).clear();
         return result;
     }
 
-    /** Single-element fast path: avoid ArrayList allocation */
+    /** Single-element fast path: avoids {@link ArrayList} allocation without transferring ownership. */
     @Override
     public T peekMessage() {
-        if (this.queueSize() <= 0) {
+        if (this.linkedList.isEmpty()) {
             return null;
         }
-        return this.linkedList.get(this.takeCount);
+
+        return this.linkedList.get(0);
     }
 
     @Override
     public List<T> peekMessage(int cnt) {
         if (cnt < 0) {
-            cnt = this.queueSize();
+            cnt = this.linkedList.size();
         }
 
-        int fixCnt = Math.min(cnt, this.queueSize());
-        return new ArrayList<>(this.linkedList.subList(this.takeCount, this.takeCount + fixCnt));
+        int fixCnt = Math.min(cnt, this.linkedList.size());
+        return new ArrayList<>(this.linkedList.subList(0, fixCnt));
     }
 
     @Override
     public void skipMessage(int cnt) {
-        int fixCnt = Math.min(cnt, this.queueSize());
-        this.takeCount += fixCnt;
+        int fixCnt = Math.min(cnt, this.linkedList.size());
+        if (fixCnt > 0) {
+            for (int i = 0; i < fixCnt; i++) {
+                releaseOwned(this.linkedList.get(i));
+            }
+            this.linkedList.subList(0, fixCnt).clear();
+        }
     }
 
-    /** Direct {@code Object[]} return — avoids intermediate ArrayList + toArray() overhead. */
+    /**
+     * Releases and removes all queue-owned items that still remain in this queue.
+     * <p>This is primarily used by the protocol stack close path as a final cleanup step.
+     * Items previously returned by {@link #takeMessage()} are not part of this cleanup because
+     * ownership has already been transferred to the caller.</p>
+     */
+    void clearAndClose() {
+        for (Object item : this.linkedList) {
+            releaseOwned(item);
+        }
+        this.linkedList.clear();
+    }
+
+    /**
+     * Releases a queue-owned item when the queue discards it.
+     * <p>{@link ReferenceHolder} is released via reference counting. Plain {@link Closeable}
+     * objects are closed quietly. All other object types are left untouched.</p>
+     */
+    private static void releaseOwned(Object item) {
+        if (item instanceof ReferenceHolder) {
+            ((ReferenceHolder) item).release();
+        } else if (item instanceof Release) {
+            ((Release) item).release();
+        } else if (item instanceof Closeable) {
+            IOUtils.closeQuietly((Closeable) item);
+        }
+    }
+
+    /**
+     * Takes up to {@code cnt} messages and returns them as a raw array.
+     * <p>This is a performance-oriented bulk-transfer helper used by the protocol stack to avoid
+     * intermediate list allocation. As with {@link #takeMessage(int)}, ownership transfers to the caller.</p>
+     */
     public Object[] takeMessageToArray(int cnt) {
         if (cnt <= 0) {
             return EMPTY_ARRAY;
         }
-        int fixCnt = Math.min(cnt, this.queueSize());
+        int fixCnt = Math.min(cnt, this.linkedList.size());
         if (fixCnt == 0) {
             return EMPTY_ARRAY;
         }
         Object[] result = new Object[fixCnt];
         for (int i = 0; i < fixCnt; i++) {
-            result[i] = this.linkedList.get(this.takeCount + i);
+            result[i] = this.linkedList.get(i);
         }
-        this.takeCount += fixCnt;
+        this.linkedList.subList(0, fixCnt).clear();
         return result;
     }
 

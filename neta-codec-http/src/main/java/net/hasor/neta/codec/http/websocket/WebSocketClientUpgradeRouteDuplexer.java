@@ -203,14 +203,12 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     private void forwardBufferedToHandshake(ProtoContext context, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         ProtoQueue<HttpObject> queue = new ProtoQueue<>(this.bufferedRequestParts.size());
         queue.offerMessage(this.bufferedRequestParts);
-        queue.sndSubmit();
         this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
     }
 
     private void forwardToHandshake(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
         queue.offerMessage(msg);
-        queue.sndSubmit();
         this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
     }
 

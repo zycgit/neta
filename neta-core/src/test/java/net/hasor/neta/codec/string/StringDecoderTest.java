@@ -34,11 +34,8 @@ public class StringDecoderTest {
         ByteBuf input = ByteBuf.wrap("hello".getBytes(StandardCharsets.UTF_8));
 
         assert src.offerMessage(input);
-        src.sndSubmit();
 
         ProtoStatus status = decoder.onMessage(null, src, dst);
-        src.rcvSubmit();
-        dst.sndSubmit();
 
         assert status == ProtoStatus.Next;
         assert dst.queueSize() == 1;

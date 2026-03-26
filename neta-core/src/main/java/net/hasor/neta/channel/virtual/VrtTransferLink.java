@@ -32,21 +32,16 @@ class VrtTransferLink {
     public void onReceive(int batchSize) {
         if (this.cacheQueue.queueSize() >= batchSize) {
             this.convert.doTransfer(this.cacheQueue, this.tempQueue);
-            this.cacheQueue.rcvSubmit();
-            this.tempQueue.sndSubmit();
         }
 
         if (this.tempQueue.hasMore()) {
             int size = this.tempQueue.queueSize();
+            List<Object> objects = this.tempQueue.takeMessage(size);
             try {
-                List<Object> objects = this.tempQueue.peekMessage(size);
                 this.target.receiveData(objects.toArray());
             } catch (Throwable e) {
                 SoException ee = e instanceof SoException ? (SoException) e : new SoRcvException(e.getMessage(), e);
                 this.context.notifyRcvChannelException(this.target.getChannelId(), true, ee);
-            } finally {
-                this.tempQueue.skipMessage(size);
-                this.tempQueue.rcvSubmit();
             }
             logger.info("transfer to " + this.target.getChannelId() + ", " + size + " packet onReceive.");
         } else {

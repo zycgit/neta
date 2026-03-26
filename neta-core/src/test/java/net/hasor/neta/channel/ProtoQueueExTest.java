@@ -17,6 +17,7 @@ package net.hasor.neta.channel;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import net.hasor.neta.bytebuf.ReferenceHolder;
 import org.junit.Test;
 
 /**
@@ -53,8 +54,6 @@ public class ProtoQueueExTest {
         // slot full, cannot add more
         assert !q.offerMessage(4);
         assert q.slotSize() == 0;
-
-        q.sndSubmit();
         assert q.queueSize() == 3;
         assert q.slotSize() == 0;
     }
@@ -67,7 +66,6 @@ public class ProtoQueueExTest {
         q.offerMessage("a");
         q.offerMessage("b");
         q.offerMessage("c");
-        q.sndSubmit();
 
         List<String> peeked = q.peekMessage(2);
         assert peeked.size() == 2;
@@ -87,7 +85,6 @@ public class ProtoQueueExTest {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         q.offerMessage(1);
         q.offerMessage(2);
-        q.sndSubmit();
 
         List<Integer> all = q.peekMessage(-1);
         assert all.size() == 2;
@@ -98,7 +95,6 @@ public class ProtoQueueExTest {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         q.offerMessage(1);
         q.offerMessage(2);
-        q.sndSubmit();
 
         List<Integer> peeked = q.peekMessage(2);
         peeked.clear(); // mutating the returned list
@@ -113,7 +109,6 @@ public class ProtoQueueExTest {
     public void peekSingle_defaultMethod() {
         ProtoQueue<String> q = new ProtoQueue<>(10);
         q.offerMessage("hello");
-        q.sndSubmit();
 
         String val = q.peekMessage();
         assert "hello".equals(val);
@@ -134,7 +129,6 @@ public class ProtoQueueExTest {
         q.offerMessage(1);
         q.offerMessage(2);
         q.offerMessage(3);
-        q.sndSubmit();
 
         q.skipMessage(2);
         assert q.queueSize() == 1;
@@ -146,7 +140,6 @@ public class ProtoQueueExTest {
     public void skipMessage_moreThanAvailable() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         q.offerMessage(1);
-        q.sndSubmit();
 
         q.skipMessage(100);
         assert q.queueSize() == 0;
@@ -158,7 +151,6 @@ public class ProtoQueueExTest {
     public void takeMessage_zeroCount_emptyList() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         q.offerMessage(1);
-        q.sndSubmit();
 
         List<Integer> taken = q.takeMessage(0);
         assert taken.isEmpty();
@@ -171,7 +163,6 @@ public class ProtoQueueExTest {
         q.offerMessage(1);
         q.offerMessage(2);
         q.offerMessage(3);
-        q.sndSubmit();
 
         List<Integer> all = q.takeMessage(-1);
         assert all.size() == 3;
@@ -182,7 +173,6 @@ public class ProtoQueueExTest {
     public void takeSingle_defaultMethod() {
         ProtoQueue<String> q = new ProtoQueue<>(10);
         q.offerMessage("abc");
-        q.sndSubmit();
 
         String val = q.takeMessage();
         assert "abc".equals(val);
@@ -195,7 +185,7 @@ public class ProtoQueueExTest {
         assert q.takeMessage() == null;
     }
 
-    // --- hasMore / hasSlot / hasCommit ---
+    // --- hasMore / hasSlot ---
 
     @Test
     public void hasMore_and_hasSlot() {
@@ -205,30 +195,10 @@ public class ProtoQueueExTest {
 
         q.offerMessage(1);
         q.offerMessage(2);
-        assert !q.hasMore(); // not yet submitted
-        assert !q.hasSlot();
-
-        q.sndSubmit();
         assert q.hasMore();
         assert !q.hasSlot();
-    }
-
-    @Test
-    public void hasCommit_afterOfferBeforeSubmit() {
-        ProtoQueue<Integer> q = new ProtoQueue<>(10);
-        assert !q.hasCommit();
-
-        q.offerMessage(1);
-        assert q.hasCommit(); // offerTemp not empty
-
-        q.sndSubmit();
-        assert !q.hasCommit();
-
-        q.takeMessage();
-        assert q.hasCommit(); // takeCount > 0
-
-        q.rcvSubmit();
-        assert !q.hasCommit();
+        assert q.hasMore();
+        assert !q.hasSlot();
     }
 
     // --- offerMessage with array ---
@@ -239,8 +209,6 @@ public class ProtoQueueExTest {
         Integer[] data = { 10, 20, 30 };
         int accepted = q.offerMessage(data);
         assert accepted == 3;
-
-        q.sndSubmit();
         assert q.queueSize() == 3;
 
         List<Integer> items = q.takeMessage(-1);
@@ -254,7 +222,23 @@ public class ProtoQueueExTest {
         ProtoQueue<Integer> q = new ProtoQueue<>(2);
         Integer[] data = { 1, 2, 3, 4, 5 };
         int accepted = q.offerMessage(data);
-        assert accepted == 2;
+        assert accepted == 0;
+        assert q.slotSize() == 2;
+    }
+
+    @Test
+    public void offerMessage_fromRcvQueue_overflowKeepsSourceUntouched() {
+        ProtoQueue<Integer> src = new ProtoQueue<>(10);
+        src.offerMessage(1);
+        src.offerMessage(2);
+        src.offerMessage(3);
+
+        ProtoQueue<Integer> dst = new ProtoQueue<>(2);
+        int accepted = dst.offerMessage(src);
+        assert accepted == 0;
+        assert dst.queueSize() == 0;
+        assert dst.slotSize() == 2;
+        assert src.queueSize() == 3;
     }
 
     // --- offerMessage with ProtoRcvQueue ---
@@ -265,44 +249,63 @@ public class ProtoQueueExTest {
         src.offerMessage(1);
         src.offerMessage(2);
         src.offerMessage(3);
-        src.sndSubmit();
 
         ProtoQueue<Integer> dst = new ProtoQueue<>(10);
         int accepted = dst.offerMessage(src);
         assert accepted == 3;
         assert src.queueSize() == 0; // all taken
-
-        dst.sndSubmit();
         assert dst.queueSize() == 3;
     }
 
-    // --- sndReset / rcvReset ---
+    // --- immediate semantics ---
 
     @Test
-    public void sndReset_discardsOffered() {
+    public void offer_is_immediately_visible() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         q.offerMessage(1);
         q.offerMessage(2);
-        assert q.slotSize() == 8; // 2 in temp
-
-        q.sndReset();
-        assert q.slotSize() == 10;
-        assert q.queueSize() == 0;
+        assert q.slotSize() == 8;
+        assert q.queueSize() == 2;
     }
 
     @Test
-    public void rcvReset_restoresTaken() {
+    public void take_does_not_restore_taken() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
         q.offerMessage(1);
         q.offerMessage(2);
         q.offerMessage(3);
-        q.sndSubmit();
 
         q.takeMessage(2);
         assert q.queueSize() == 1;
+    }
 
-        q.rcvReset();
-        assert q.queueSize() == 3;
+    @Test
+    public void skip_releasesReferenceHolder() {
+        ProtoQueue<TestRefHolder> q = new ProtoQueue<>(10);
+        TestRefHolder holder = new TestRefHolder();
+        q.offerMessage(holder);
+
+        assert holder.refCnt() == 1;
+        q.skipMessage(1);
+        assert q.queueSize() == 0;
+        assert holder.refCnt() == 0;
+        assert holder.releaseCount == 1;
+    }
+
+    @Test
+    public void take_transfersReferenceHolderOwnership() {
+        ProtoQueue<TestRefHolder> q = new ProtoQueue<>(10);
+        TestRefHolder holder = new TestRefHolder();
+        q.offerMessage(holder);
+
+        TestRefHolder taken = q.takeMessage();
+        assert taken == holder;
+        assert q.queueSize() == 0;
+        assert holder.refCnt() == 1;
+        assert holder.releaseCount == 0;
+
+        holder.release();
+        assert holder.refCnt() == 0;
     }
 
     // --- toString ---
@@ -342,25 +345,22 @@ public class ProtoQueueExTest {
         assert cnt == 0;
     }
 
-    // --- interleaved offer/submit/take/reset cycles ---
+    // --- interleaved offer/take cycles ---
 
     @Test
     public void interleavedCycles() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
 
-        // cycle 1: offer, submit, take, submit
+        // cycle 1: offer, take
         q.offerMessage(1);
         q.offerMessage(2);
-        q.sndSubmit();
         assert q.queueSize() == 2;
 
         q.takeMessage();
-        q.rcvSubmit();
         assert q.queueSize() == 1;
 
-        // cycle 2: offer more, submit, take all
+        // cycle 2: offer more, take all
         q.offerMessage(3);
-        q.sndSubmit();
         assert q.queueSize() == 2;
 
         List<Integer> all = q.takeMessage(-1);
@@ -368,8 +368,40 @@ public class ProtoQueueExTest {
         assert all.get(0) == 2;
         assert all.get(1) == 3;
 
-        q.rcvSubmit();
         assert q.queueSize() == 0;
         assert q.slotSize() == 10;
+    }
+
+    private static class TestRefHolder implements ReferenceHolder {
+        private int refCnt = 1;
+        private int releaseCount;
+
+        @Override
+        public int refCnt() {
+            return this.refCnt;
+        }
+
+        @Override
+        public ReferenceHolder retain() {
+            return this.retain(1);
+        }
+
+        @Override
+        public ReferenceHolder retain(int increment) {
+            this.refCnt += increment;
+            return this;
+        }
+
+        @Override
+        public boolean release() {
+            return this.release(1);
+        }
+
+        @Override
+        public boolean release(int decrement) {
+            this.releaseCount++;
+            this.refCnt -= decrement;
+            return this.refCnt == 0;
+        }
     }
 }

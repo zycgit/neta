@@ -259,7 +259,6 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         ProtoQueue<Object> branchTailRcvDown = (ProtoQueue<Object>) branch.chainRoot.getTailRcvDown();
         if (branchTailRcvDown.queueSize() > 0) {
             List<Object> branchRcvOutput = branchTailRcvDown.takeMessage(branchTailRcvDown.queueSize());
-            branchTailRcvDown.rcvSubmit();
             rcvDown.offerMessage(branchRcvOutput);
         }
 
