@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http.websocket;
 import java.util.Objects;
 import net.hasor.neta.codec.http.HttpHeaders;
+import net.hasor.neta.codec.http.HttpProtocolException;
 import net.hasor.neta.codec.http.HttpStatus;
 
 /**
@@ -23,7 +24,7 @@ import net.hasor.neta.codec.http.HttpStatus;
  * <p>
  * Carries status, optional headers, optional body, and whether the channel should be closed.
  */
-class WebSocketHandshakeException extends RuntimeException {
+class WebSocketHandshakeException extends HttpProtocolException {
     private final HttpStatus  status;
     private final HttpHeaders headers;
     private final byte[]      body;

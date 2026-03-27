@@ -51,12 +51,9 @@ import net.hasor.neta.codec.http.*;
  * </pre>
  */
 public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake {
-    private static final Logger logger = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
+    private static final Logger                       logger = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
+    private final        WebSocketHandshakeAuthorizer authorizer;
 
-    // Handshake state is intentionally split into three layers:
-    // 1) authorization pending state: authPending/authAttemptId
-    // 2) current handshake snapshot: request-derived metadata used to build 101/reject responses
-    // 3) full handshake session state: requestParts + ready + the two layers above
     private static final class ServerHandshakeState {
         private final HttpMessageParts          requestParts = new HttpMessageParts();
         private       boolean                   ready;
@@ -78,8 +75,6 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         private       byte[]                    key3;
         private       WebSocketHandshakeRequest handshakeRequest;
     }
-
-    private final WebSocketHandshakeAuthorizer authorizer;
 
     public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion) {
         this(codecVersion, (event, c) -> c.accept());

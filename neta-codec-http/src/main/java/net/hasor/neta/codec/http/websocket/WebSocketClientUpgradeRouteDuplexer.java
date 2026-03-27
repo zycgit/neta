@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.util.ArrayList;
+import java.util.List;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
@@ -64,7 +65,7 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     private final WebSocketClientHandshakeDuplexer delegate;
     private final String                           targetRoute;
     private final HttpMessageParts                 requestParts         = new HttpMessageParts();
-    private final ArrayList<HttpObject>            bufferedRequestParts = new ArrayList<>();
+    private final List<HttpObject>                 bufferedRequestParts = new ArrayList<>();
     private       boolean                          handshakePending;
     private       Boolean                          currentRequestHandshake;
 

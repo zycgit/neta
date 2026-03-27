@@ -32,6 +32,7 @@ final class InternalWebSocketMessage extends AbstractWebSocketMessage {
         if (opcode != WebSocketOpcode.PING && opcode != WebSocketOpcode.PONG && opcode != WebSocketOpcode.CLOSE) {
             throw new IllegalArgumentException("unsupported control opcode: " + opcode);
         }
+
         InternalWebSocketMessage message = new InternalWebSocketMessage();
         message.opcode = opcode;
         message.initMessage(WebSocketMessage.FINAL_SEQUENCE, content == null ? ByteBuf.EMPTY : content);

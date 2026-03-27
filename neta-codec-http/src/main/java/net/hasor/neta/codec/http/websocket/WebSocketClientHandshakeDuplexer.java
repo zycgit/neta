@@ -51,9 +51,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     private static final Logger                       logger = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
     private final        WebSocketAutoHandshakeConfig autoHandshakeConfig;
 
-    // Client-side handshake state is split into:
-    // 1) buffered/aggregating request-response session state
-    // 2) current request snapshot remembered for validating the 101 response
     private static final class ClientHandshakeState {
         private final HttpMessageParts      requestParts         = new HttpMessageParts();
         private final HttpMessageParts      responseParts        = new HttpMessageParts();

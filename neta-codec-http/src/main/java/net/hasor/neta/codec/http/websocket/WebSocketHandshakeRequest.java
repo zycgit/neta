@@ -23,13 +23,13 @@ import net.hasor.neta.codec.http.HttpHeaders;
  * Exposes requested version, path, protocols, extensions, and headers to the authorizer.
  */
 public class WebSocketHandshakeRequest {
+    private       int                streamId;
+    private       boolean            released;
     private final WebSocketVersion   version;
     private final String             requestPath;
     private final String             requestedProtocols;
     private final String             requestedExtensions;
     private final DefaultHttpHeaders headers;
-    private       int                streamId;
-    private       boolean            released;
 
     public WebSocketHandshakeRequest(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions) {
         this(version, requestPath, requestedProtocols, requestedExtensions, null);
