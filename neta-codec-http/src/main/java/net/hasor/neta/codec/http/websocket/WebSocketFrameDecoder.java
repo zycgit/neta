@@ -162,8 +162,8 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         this.resetAccumulator();
         this.streamingState = null;
 
-        long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-        if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+        long channelID = context.getChannel().getChannelId();
+        if (context.getConfig().isPrintLog()) {
             logger.warn("[WS-DEC] channel=" + channelID + " decoder error, frame state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
         } else {
             logger.warn("[WS-DEC] channel=" + channelID + " decoder error, frame state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage());

@@ -19,17 +19,9 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
-import java.util.ArrayDeque;
-import java.util.Base64;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.Map;
+import java.util.*;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.NetChannel;
-import net.hasor.neta.channel.NetManager;
-import net.hasor.neta.channel.PlayLoad;
-import net.hasor.neta.channel.SubscribeMode;
-import net.hasor.neta.channel.SoConfig;
+import net.hasor.neta.channel.*;
 import static org.junit.Assert.*;
 
 public class NetaWebSocketClientHarness implements Closeable {
@@ -77,6 +69,7 @@ public class NetaWebSocketClientHarness implements Closeable {
     }
 
     public void handshake(String path, long timeoutMs) throws Exception {
+        // @formatter:off
         String key = Base64.getEncoder().encodeToString(("neta-" + System.nanoTime()).getBytes(StandardCharsets.US_ASCII));
         String request = "GET " + path + " HTTP/1.1\r\n"
                 + "Host: 127.0.0.1:" + this.port + "\r\n"
@@ -85,6 +78,7 @@ public class NetaWebSocketClientHarness implements Closeable {
                 + "Sec-WebSocket-Version: 13\r\n"
                 + "Sec-WebSocket-Key: " + key + "\r\n"
                 + "\r\n";
+        // @formatter:on
         this.sendAscii(request);
 
         HttpResponseView response = this.readHttpResponse(timeoutMs);
@@ -99,10 +93,12 @@ public class NetaWebSocketClientHarness implements Closeable {
     }
 
     public HttpResponseView sendHttpGet(String path, long timeoutMs) throws Exception {
+        // @formatter:off
         String request = "GET " + path + " HTTP/1.1\r\n"
                 + "Host: 127.0.0.1:" + this.port + "\r\n"
                 + "Connection: keep-alive\r\n"
                 + "\r\n";
+        // @formatter:on
         this.sendAscii(request);
         return this.readHttpResponse(timeoutMs);
     }
