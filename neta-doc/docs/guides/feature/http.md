@@ -236,7 +236,7 @@ ctx.addLast("app-handler", appHandler);
 
 - 出站请求由 HttpRequestEncoder 负责编码
 - 入站响应由 HttpResponseDecoder 负责解析
-- 如果后面要接 WebSocket 或其他 Upgrade 协议，这个入口最常见
+- 如果后面要接 WebSocket 或其他 Upgrade 协议，这是常用入口
 
 ### 4.4 客户端：完整请求与完整响应
 
@@ -348,7 +348,7 @@ Response side
 - Content-Length
 - 无 body
 
-也就是说，只要请求头里声明了 chunked，就会忽略 Content-Length，直接进入 chunk size 和 chunk data 读取流程。请求侧没有 connection close 结束 body 这一条路。
+这意味着，请求头里声明 chunked 后，就会忽略 Content-Length，直接进入 chunk size 和 chunk data 读取流程。请求侧不支持 connection close 结束 body 的处理路径。
 
 响应侧优先级更复杂：
 
@@ -408,12 +408,12 @@ Upgrade Handler        HttpServerDuplexe        HttpContext            Next Prot
   |                         |                       |                        |
   | HttpThroughEvent.enable()                       |                        |
   |------------------------>|                       |                        |
-  |                         |---------------------->| switchTransparentMode |
+  |                         |---------------------->| switchTransparentMode  |
   |                         |                       | reset req/resp state   |
   |                         |                       | reset encode state     |
   |                         |<----------------------| transparentMode=true   |
   |                         |----------------------------------------------->|
-  |                         | subsequent HttpByteBuf passthrough            |
+  |                         | subsequent HttpByteBuf passthrough             |
 ```
 
 这里的关键点是状态重置先发生，后续透传才开始生效。因此 transparent mode 不是“继续保留半截 HTTP 状态再往后跑”。
@@ -542,7 +542,7 @@ HttpServerDuplexe / HttpClientDuplexe
           +--> FullHttpRequest / FullHttpResponse
                   v
                app handler
-``` 
+```
 
 ```text title='outbound'
 app handler
@@ -582,7 +582,7 @@ socket bytes
 
 排错线索：
 
-- 服务端突然回了 100、417、413，先看是否挂了 HttpRequestAggregator
+- 服务端返回 100、417、413 时，先检查是否挂了 HttpRequestAggregator
 - 同一连接前一条消息出错但后一条还能正常收，说明 decoder 走的是“状态重置后继续解析”路径
 - FullHttpRequest.isBad() 为 true 时，不要误判为聚合器生成了错误对象，根因通常在 decoder 阶段
 

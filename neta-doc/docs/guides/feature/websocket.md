@@ -26,7 +26,7 @@ description: 说明 Neta 在 WebSocket 上的支持范围、典型装配方式�
 
 ## 1. 简介
 
-WebSocket 是建立在 HTTP Upgrade 之上的全双工长连接协议。它的目标很简单：
+WebSocket 是建立在 HTTP Upgrade 之上的全双工长连接协议。它的目标如下：
 
 - 先通过 HTTP/1.x 完成升级协商。
 - 握手成功后切换到持续连接。
@@ -35,9 +35,9 @@ WebSocket 是建立在 HTTP Upgrade 之上的全双工长连接协议。它的�
 
 Neta 对 WebSocket 的支持位于 neta-codec-http 模块中，整体上分成 3 层：
 
-- 握手层：处理 handshake、校验、拒绝响应、transparent mode 切换。
-- frame 层：处理 WebSocketFrame 和 HttpByteBuf 之间的双向转换。
-- message 层：处理 WebSocketMessage、消息片段流、控制事件、可选聚合和可选自动分帧。
+- Handshake 层：处理 handshake、校验、拒绝响应、transparent mode 切换。
+- Frame 层：处理 WebSocketFrame 和 HttpByteBuf 之间的双向转换。
+- Message 层：处理 WebSocketMessage、消息片段流、控制事件、可选聚合和可选自动分帧。
 
 ## 2. 支持范围与能力清单
 
@@ -50,11 +50,11 @@ Neta 对 WebSocket 的支持位于 neta-codec-http 模块中，整体上分成 3
 - 协议版本
   - RFC 6455 家族：V7、V8、V13
   - 兼容旧版 V0/Hixie-76 framing
-- frame 层编解码
+- Frame 层编解码
   - TEXT、BINARY、CONTINUATION、PING、PONG、CLOSE
   - 客户端掩码与服务端非掩码方向校验
   - 16 位和 64 位扩展长度解析
-- message 层能力
+- Message 层能力
   - 默认保留 frame 语义
   - 可选，把 frame 序列聚合为一条完整消息
   - 可选，把单条完整消息自动拆成多个 frame，避免必须一次性聚合成单块内容
@@ -117,16 +117,16 @@ Neta 对 WebSocket 的支持位于 neta-codec-http 模块中，整体上分成 3
 ### 3.1 整体分层
 
 ```text
-HTTP codec 层
+HTTP Codec 层
   负责 HTTP/1.x 解析、编码，以及 transparent mode 切换
 
-WebSocket 握手层
+WebSocket Handshake 层
   负责 handshake、HTTP reject、上下文安装、事件发布
 
-WebSocket frame 层
+WebSocket Frame 层
   负责 WebSocketFrame <-> HttpByteBuf
 
-WebSocket message 层
+WebSocket Message 层
   负责 WebSocketMessage、消息片段流、控制事件、聚合与自动分帧
 ```
 
@@ -134,8 +134,8 @@ WebSocket message 层
 
 常规场景优先使用双工器，而不是直接拼底层部件：
 
-- frame 层推荐：WebSocketFrameDuplexer
-- message 层推荐：WebSocketMessageDuplexer
+- Frame 层推荐：WebSocketFrameDuplexer
+- Message 层推荐：WebSocketMessageDuplexer
 
 只有在这些场景才建议直接挂底层 handler：
 
@@ -183,7 +183,7 @@ ctx.addLast("app-handler", appHandler);
 
 - HTTP codec 只负责 Upgrade 前后的协议切换。
 - 握手成功后，HTTP codec 切到 transparent mode。
-- 后续 websocket 数据进入 frame 层，再进入 message 层。
+- 后续 websocket 数据进入 Frame 层，再进入 Message 层。
 
 ### 4.2 服务端：HTTP + WebSocket 混用端口
 
@@ -192,87 +192,45 @@ ctx.addLast("app-handler", appHandler);
 - 同一端口既处理普通 HTTP，也处理 WebSocket
 - 适合统一入口服务或管理端口
 
-推荐思路：
+推荐做法：
 
-- 外层路由先区分 HTTP 和 WebSocket 分支。
-- WebSocket 分支内部再区分 handshake 阶段和 socket 阶段。
-- 握手成功后，通过 WebSocketHandshakeEvent 切换到 websocket codec 链。
+- pipeline 只放协议和路由组件，不在里面写业务回包逻辑。
+- HTTP 分支负责普通请求和 upgrade 检测。
+- WebSocket 分支负责 frame 和 message 编解码。
+- 真正的业务处理，统一放到 `neta.subscribe(...)` 里。
 
-核心原则只有两条：
-
-- handshake 的整段 HttpObject 流必须留在 websocket 分支。
-- 握手成功后的 HttpByteBuf 也必须继续落在 websocket 分支。
-
-一个完整的服务端混用端口写法可以写成这样：
+下面这个写法就是当前推荐模式，和 `RealAsServerTest` 一致：
 
 ```java
-ctx.addLast("http", new HttpServerDuplexe());
-ctx.addLast("http-agg", new HttpServerDuplexeAggregator(1024 * 1024));
-
-ProtoRoutingBuilder<HttpObject, HttpObject> routing = ProtoHelper.typedRoutingAsRealtime((context, rcvUp, sndDown) -> {
-  WebSocketContext webSocketContext = context.rootContext(WebSocketContext.class, null);
-  if (webSocketContext != null && webSocketContext.isReady()) {
-    return HttpRouteKey.BRANCH_SOCKET;
-  }
-  if (rcvUp.queueSize() == 0) {
-    return null;
-  }
-  HttpObject object = rcvUp.peekMessage();
-  if (object instanceof FullHttpRequest) {
-    FullHttpRequest request = (FullHttpRequest) object;
-    String upgrade = request.getString(HttpHeaderNames.UPGRADE);
-    if (upgrade != null && HttpHeaderValues.WEBSOCKET.equalsIgnoreCase(upgrade)) {
-      return HttpRouteKey.BRANCH_SOCKET;
-    }
-    return "http";
-  }
-  if (object instanceof HttpByteBuf) {
-    return HttpRouteKey.BRANCH_SOCKET;
-  }
-  return "http";
-});
-
-routing.branch("http", branch -> {
-  branch.nextDecoder("http-handler", httpHandler);
-});
-
-routing.branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
-  ProtoRoutingBuilder<HttpObject, HttpObject> webSocketRouting =
-      ProtoHelper.typedRoutingAsStatic((innerContext, innerRcvUp, innerSndDown) -> "handshake");
-
-  webSocketRouting.branchByInitializer("handshake", innerBranchCtx -> {
-    innerBranchCtx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
-    innerBranchCtx.addLastDecoder("ws-route-switch", new ThroughProtoHandler<HttpObject>() {
-      @Override
-      public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-        if (event.getData() instanceof WebSocketHandshakeEvent) {
-          ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
-          if (routingControl != null) {
-            routingControl.switchRoute(HttpRouteKey.BRANCH_SOCKET);
-          }
-        }
-        return true;
-      }
+neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
+    ctx.addLast("http-server", new HttpServerDuplexe());
+  ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsDefault(BRANCH_HTTP, branchCtx -> {
+        // for http
+        branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplexer(WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+        branchCtx.addLastDecoder("ws-handshake-events", handshakeEventTap(serverEvents));
+        branchCtx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
+    }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
+        // for websocket
+        branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+        branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
+        branchCtx.addLastDecoder("ws-events", serverEventTap(serverEvents));
     });
-  });
-
-  webSocketRouting.branchByInitializer(HttpRouteKey.BRANCH_SOCKET, innerBranchCtx -> {
-    innerBranchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
-    innerBranchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
-    innerBranchCtx.addLast("ws-handler", webSocketHandler);
-  });
-
-  branchCtx.addLast("ws-route", webSocketRouting.build());
-});
-
-ctx.addLast("server-route", routing.build());
+    ctx.addLast("server-route", routing.build());
+}, SoConfig.TCP());
 ```
 
-这个模式核心思路是：
+这个版本有 3 个特点：
 
-- 普通 HTTP 流量先留在默认 HTTP 分支。
-- 只有 upgrade 请求才进入 websocket 分支。
-- 握手成功后，不是动态重拼整条主链，而是切换到握手后的 websocket codec 链。
+- 路由默认固定在 HTTP 分支。`WebSocketServerUpgradeRouteDuplexer` 在握手完成后主动切到 WebSocket 分支。
+- `WebSocketServerUpgradeRouteDuplexer` 负责把 upgrade 请求导到 WebSocket 分支，不需要再额外套一层 handshake 子路由。
+- HTTP 回包和 WebSocket 回包都放在订阅器里处理，pipeline 只负责把协议数据解出来。
+
+“同端口 HTTP + WebSocket”服务端可按以下结构装配：
+
+- `HttpServerDuplexe` 负责 HTTP 编解码。
+- HTTP 分支放 `WebSocketServerUpgradeRouteDuplexer` 和 `HttpRequestAggregator`。
+- WebSocket 分支放 `WebSocketFrameDuplexer` 和 `WebSocketMessageDuplexer`。
+- 业务层通过 `neta.subscribe(...)` 统一处理 `FullHttpRequest` 和 `WebSocketMessage`。
 
 ### 4.3 客户端：WebSocket Only，自动握手
 
@@ -381,7 +339,7 @@ handshake.release();
 - 只有 upgrade 请求会被 `WebSocketClientUpgradeRouteDuplexer` 接管。
 - 握手成功后，当前路由切到 websocket 分支，后续消息就不再按普通 HTTP 处理。
 
-### 4.6 只用 frame 层
+### 4.6 只用 Frame 层
 
 适用范围：
 
@@ -414,7 +372,7 @@ ctx.addLast("ws-message", new WebSocketMessageDuplexer(true, 1024 * 1024));
 ctx.addLastDecoder("app-handler", appHandler);
 ```
 
-如果不使用 `WebSocketMessageDuplexer`，也可以只挂入站 handler，在 frame 层后面显式打开聚合：
+如果不使用 `WebSocketMessageDuplexer`，也可以只挂入站 handler，在 Frame 层后面显式打开聚合：
 
 ```java
 new WebSocketInboundHandler(true)
@@ -489,9 +447,9 @@ Client/App           HTTP codec            WS Handshake               WS Frame  
 - 握手后：HTTP codec 切成 transparent mode，流里变成 HttpByteBuf
 - 然后 frame decoder 再把 HttpByteBuf 解释成 WebSocketFrame
 
-### 5.3 message 层的默认非聚合语义
+### 5.3 Message 层的默认非聚合语义
 
-默认不聚合的原因很实际：
+默认不聚合的原因如下：
 
 - 这最贴近 WebSocket 原生分片语义
 - 业务可以自己决定是流式消费还是自定义聚合
@@ -499,12 +457,12 @@ Client/App           HTTP codec            WS Handshake               WS Frame  
 
 ### 5.4 超大单帧的流式切片策略
 
-原因也很直接：
+原因如下：
 
 - 协议头里的扩展长度字段需要按 64 位规则解析
 - 但对外的 payloadLength 与各类 message/frame 长度阈值已经统一为 int
 - 底层 ByteBuf 读写和索引本身也仍然是 int 模型
-- 所以对超大单帧最稳妥的实现不是试图构造超大单块缓冲，而是按片段序列输出
+- 因此当前实现对超大单帧采用片段序列输出，而不是构造超大单块缓冲
 
 这也是 WebSocketFrameDecoder 新增 maxPayloadChunkLength 的意义。
 
@@ -601,7 +559,7 @@ App         Client Handshake                HTTP codec          Server
              +-----------+  +-------+
 ```
 
-服务端握手器的放行规则可以直接记成：
+服务端握手器的放行规则如下：
 
 ```text
 Inbound -> Server Handshake
@@ -693,7 +651,7 @@ Inbound -> Client Handshake
         -> pass through
 ```
 
-容易误解的点：`WebSocketClientUpgradeRouteDuplexer` 不是“观察到 upgrade 就顺便切路由”，而是先让客户端握手器完整拦截一次 upgrade 事务，等 `requestPending -> ready` 后再切到 websocket 分支。
+需要注意的是：`WebSocketClientUpgradeRouteDuplexer` 不是“观察到 upgrade 就顺便切路由”，而是先让客户端握手器完整拦截一次 upgrade 事务，等 `requestPending -> ready` 后再切到 websocket 分支。
 
 ### 5.8 客户端对 101 响应的校验过程
 
@@ -729,7 +687,7 @@ Server                 HTTP codec                Client Handshake
   |                         |--------------------------->| WebSocketHandshakeEvent
 ```
 
-因此客户端侧最稳妥的排错顺序通常是：
+客户端侧建议按以下顺序排查：
 
 1. 先确认这次请求是否真的被识别为 websocket upgrade
 2. 再确认 `requestPending` 是否被正确建立
@@ -739,26 +697,26 @@ Server                 HTTP codec                Client Handshake
 
 要正确理解调试信息，最好把当前实现里的异常分成三层，而不是笼统地看成“websocket 出错”。
 
-握手层异常：
+Handshake 层异常：
 
 - 处理对象仍是 `HttpObject`
 - 典型结果是 reject、clear，部分致命路径会 close
 - `WebSocketHandshakeException` 属于这一层的领域异常
-- 服务端拒绝时当前代码中最常见的 HTTP 状态是：
+- 服务端拒绝时当前代码中常见的 HTTP 状态如下：
   - `400 Bad Request`：请求片段类型不对、payload 非法、握手头不完整、授权等待期间又收到额外输入、协商结果非法。
   - `405 Method Not Allowed`：authorizer 直接调用默认 `reject()`。
   - `426 Upgrade Required`：版本不兼容，同时附带 `Sec-WebSocket-Version` 响应头。
   - `500 Internal Server Error`：authorizer 自身执行失败或显式拒绝为 500。
 - 客户端校验 101 响应失败时，当前实现统一抛出带 `400 Bad Request` 的 `WebSocketHandshakeException`，用于标识“升级响应内容不符合预期”。
 
-frame 层异常：
+Frame 层异常：
 
 - 处理对象是 `HttpByteBuf` 或 `WebSocketFrame`
 - decoder/encoder 主要负责状态复位和日志
 - frame codec 本身不直接决定 transport close
-- 但 frame 和 message 层抛出的 `WebSocketProtocolViolationException` 会携带一个明确的 closeStatusCode。
+- 但 Frame 层和 Message 层抛出的 `WebSocketProtocolViolationException` 会携带一个明确的 closeStatusCode。
 
-message 层异常：
+Message 层异常：
 
 - 处理对象是 `WebSocketFrame` 或 `WebSocketMessage`
 - 聚合超限、控制帧非法、UTF-8 非法等都在这一层体现
@@ -825,9 +783,9 @@ Peer/App          Handshake          Frame Codec         Message Handler        
 
 调试时最重要的不是只看“有没有异常”，而是先判定异常属于哪一层，因为三层的恢复动作完全不同：
 
-- 握手层先看 reject、版本协商、request/response 片段是否对齐
-- frame 层先看 opcode、mask、payload header 和 decoder 状态
-- message 层先看 sequence、聚合阈值、控制帧和 UTF-8 语义
+- Handshake 层先看 reject、版本协商、request/response 片段是否对齐
+- Frame 层先看 opcode、mask、payload header 和 decoder 状态
+- Message 层先看 sequence、聚合阈值、控制帧和 UTF-8 语义
 
 ### 5.10 FrameDecoder 的内部工作方式
 
@@ -890,7 +848,7 @@ if payload complete
 - `onError(...)` 主要负责 reset accumulator 和记录日志
 - decoder 自身不直接决定是否关闭连接
 
-因此 frame 层异常和握手层异常在恢复语义上完全不同。
+因此 Frame 层异常和 Handshake 层异常在恢复语义上完全不同。
 
 ### 5.11 FrameEncoder 的内部工作方式
 
@@ -933,11 +891,11 @@ WebSocketUtils.validateControlFrame(frame)
 WebSocketUtils.validateControlFrame(frame, senderIsClient)
 ```
 
-也就是说，encoder 负责“能否被正确序列化”，而不是无条件替上层承担全部控制帧协议审计。
+encoder 负责“能否被正确序列化”，而不是无条件替上层承担全部控制帧协议审计。
 
 ### 5.12 事件通道与消息通道边界
 
-message 层里最容易混淆的是“消息通道”和“事件通道”是两套不同传播路径。
+Message 层里最容易混淆的是“消息通道”和“事件通道”是两套不同传播路径。
 
 消息通道：
 
@@ -993,17 +951,17 @@ Peer/App          Message Handler                 Business Listener
 
 ### 5.13 公开入口与底层部件的关系
 
-frame 层：
+Frame 层：
 
 - `WebSocketFrameDuplexer` 是常规推荐入口
 - `WebSocketFrameDecoder` / `WebSocketFrameEncoder` 是底层单向部件
 
-message 层：
+Message 层：
 
 - `WebSocketMessageDuplexer` 是常规推荐入口
 - `WebSocketInboundHandler` / `WebSocketOutboundHandler` 是底层单向部件
 
-可以直接记成：
+可概括为：
 
 ```text
 WebSocketFrameDuplexer   = WebSocketFrameDecoder   + WebSocketFrameEncoder
@@ -1097,19 +1055,19 @@ websocket bytes
 ```text
 输入对象或输入字节
   |
-  +--> 握手层
+  +--> Handshake 层
   |      |
   |      +--> bad handshake
   |      +--> reject / clear
   |      `--> optional close
   |
-  +--> frame 层
+  +--> Frame 层
   |      |
   |      +--> bad frame bytes
   |      +--> reset / log
   |      `--> bubble up
   |
-  `--> message 层
+  `--> Message 层
          |
          +--> bad message / control
          +--> close / event split
@@ -1222,10 +1180,10 @@ websocket bytes
 
 这一张图的重点是把四层链路放到同一个总览里：
 
-- HTTP codec 负责 Upgrade 前置协议和 transparent mode 切换
-- 握手层负责协商、拒绝和上下文安装
-- frame 层负责 WebSocketFrame 和 HttpByteBuf 之间的转换
-- message 层负责业务可见的 WebSocketMessage 和控制事件
+- HTTP Codec 层负责 Upgrade 前置协议和 transparent mode 切换
+- Handshake 层负责协商、拒绝和上下文安装
+- Frame 层负责 WebSocketFrame 和 HttpByteBuf 之间的转换
+- Message 层负责业务可见的 WebSocketMessage 和控制事件
 
 ## 7. 关键编码器、解码器、聚合器说明
 
@@ -1411,7 +1369,7 @@ new WebSocketOutboundHandler(16 * 1024)
 
 ### 8.1 握手前后输入类型不同
 
-这是最常见的误用来源：
+常见误用如下：
 
 - 握手前是 HttpObject
 - 握手后是 HttpByteBuf
@@ -1420,7 +1378,7 @@ new WebSocketOutboundHandler(16 * 1024)
 
 ### 8.2 HTTP + WebSocket 混用时，路由边界必须正确
 
-错误做法通常是：
+常见错误做法如下：
 
 - 把 HttpRequest 放进 HTTP 分支
 - 但把后续 HttpHeaders 或 HttpContent 留在 WebSocket 分支
@@ -1433,7 +1391,7 @@ new WebSocketOutboundHandler(16 * 1024)
 
 ### 8.4 超大单帧输入要显式设置流式切片阈值
 
-`maxPayloadChunkLength` 是 frame 层参数，不是另一种独立协议栈。
+`maxPayloadChunkLength` 是 Frame 层参数，不是另一种独立协议栈。
 
 如果对端可能发来一个非常大的单帧，而本端需要按切片方式流式消费，需要显式设置：
 
@@ -1447,7 +1405,7 @@ new WebSocketFrameDuplexer(WebSocketVersion.V13, 16 * 1024)
 - 当单帧 payload 超过 `maxPayloadChunkLength` 时，decoder 会把它切成等价的分片序列。
 - 首片保留原始 opcode。
 - 后续片使用 CONTINUATION。
-- message 层因此可以继续按非聚合方式消费这些片段。
+- Message 层因此可以继续按非聚合方式消费这些片段。
 
 如果没有这个设置，业务层不能把“超大单帧输入”直接理解成“默认会被平滑拆成多个消息对象”。
 

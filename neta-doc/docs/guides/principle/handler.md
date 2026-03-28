@@ -5,9 +5,7 @@ title: 数据处理
 description: 本文将会介绍 Neta 中 ProtoStack 的数据处理流程。
 ---
 
-# 数据处理
-
-在 Neta 中处理数据你需要了解：
+在 Neta 中处理数据需要先明确以下几点：
 
 - 处理数据时遵循上游、下游概念。数据就像河水一样从上游流到下游，即：UP -&gt; DOWN。
 - 根据事件的传播方向可以分为上行数据和下行数据，分别对应接收和发送。即：RCV、SND。
@@ -44,7 +42,7 @@ public class DemoProtoHandler implements ProtoHandler<ByteBuf, ByteBuf> {
 
 通过下面这张图可以充分理解双工器端点之间的关系
 
-![](../../../static/docs/duplex_endpoints.png)
+![双工器四个端点之间的关系图](../../../static/docs/duplex_endpoints.png)
 
 一个双工器的基本定义代码如下：
 
@@ -68,7 +66,7 @@ public class DemoProtoDuplex implements ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, B
 
 无论使用的是单工器还是双工器，它们都遵循相同的生命周期：
 
-![](../../../static/docs/handler_lifecycle.png)
+![Handler 生命周期示意图](../../../static/docs/handler_lifecycle.png)
 
 - `onInit`：每个 Socket 链接在建立之初都会触发，此时 Channel 刚刚被创建出来链接建立还在进行中并不一定可以用来发送和接收数据。
 - `onActive`：当 Channel 可用时触发，在此阶段可以向远程机器发送数据但不能接收数据。
@@ -101,7 +99,7 @@ public class DemoProtoDuplex implements ProtoDuplex<ByteBuf, ByteBuf, ByteBuf, B
 
 对于引用计数对象，Neta 的 Handler 推荐遵循 [引用所有权](ownership.md) 中定义的同一套原则：
 
-- 如果只是透传原对象，那么不要额外释放它。
+- 如果透传原对象，那么不要额外释放它。
 - 如果从 SRC 取出原对象后，转换成了新的对象再放到 DST，那么当前 Handler 就接管原对象生命周期。
 - 如果需要让原对象和新对象同时继续存活，必须显式 retain，然后让各自所有者分别 release。
 
