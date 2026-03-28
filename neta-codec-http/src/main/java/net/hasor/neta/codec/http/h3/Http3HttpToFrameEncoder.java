@@ -64,7 +64,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Http3Frame> dst) throws Throwable {
         Http3EncoderContent state = context.context(Http3EncoderContent.class);
-        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        boolean isPrintLog = context.getConfig().isPrintLog();
 
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();

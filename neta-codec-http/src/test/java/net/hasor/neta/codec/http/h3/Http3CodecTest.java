@@ -832,6 +832,17 @@ public class Http3CodecTest {
         assertEquals(-1, QpackStaticTable.findNameIndex("x-nonexistent"));
     }
 
+    @Test
+    public void testQpackInvalidStaticIndexUsesCompressionException() {
+        QpackDecoder decoder = new QpackDecoder(4096, 65536);
+        try {
+            decoder.decode(new byte[] { 0x00, 0x00, (byte) 0xFF, 0x40 }, 0, 4);
+            fail("expected compression exception");
+        } catch (QpackDecodingException e) {
+            assertTrue(e.getMessage().contains("static table index out of range"));
+        }
+    }
+
     // ========================= Http3 Frame Types and Constants =========================
 
     @Test
@@ -1210,16 +1221,6 @@ public class Http3CodecTest {
         }
 
         @Override
-        public ProtoRcvQueue<T> rcvSubmit() {
-            return this;
-        }
-
-        @Override
-        public ProtoRcvQueue<T> rcvReset() {
-            return this;
-        }
-
-        @Override
         public List<T> takeMessage(int cnt) {
             if (list.isEmpty())
                 return Collections.emptyList();
@@ -1255,21 +1256,6 @@ public class Http3CodecTest {
         @Override
         public int slotSize() {
             return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public boolean hasCommit() {
-            return true;
-        }
-
-        @Override
-        public ProtoSndQueue<T> sndSubmit() {
-            return this;
-        }
-
-        @Override
-        public ProtoSndQueue<T> sndReset() {
-            return this;
         }
 
         @Override

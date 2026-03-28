@@ -85,7 +85,7 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<Http3Frame> dst) throws Throwable {
         SoChannel<?> ch = context.getChannel();
         QuicStreamChannel streamChannel = (ch instanceof QuicStreamChannel) ? (QuicStreamChannel) ch : null;
-        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        boolean isPrintLog = context.getConfig().isPrintLog();
 
         while (src.hasMore()) {
             ByteBuf msg = src.takeMessage();

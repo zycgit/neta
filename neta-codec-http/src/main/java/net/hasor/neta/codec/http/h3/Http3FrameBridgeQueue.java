@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import net.hasor.cobble.function.Release;
+import net.hasor.cobble.io.IOUtils;
+import net.hasor.neta.bytebuf.ReferenceHolder;
 import net.hasor.neta.channel.ProtoRcvQueue;
 import net.hasor.neta.channel.ProtoSndQueue;
 
@@ -34,6 +38,18 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
 
     // ========================= ProtoSndQueue =========================
 
+    public boolean hasCommit() {
+        return true;
+    }
+
+    public ProtoSndQueue<Http3Frame> sndSubmit() {
+        return this;
+    }
+
+    public ProtoSndQueue<Http3Frame> sndReset() {
+        return this;
+    }
+
     @Override
     public int getCapacity() {
         return Integer.MAX_VALUE;
@@ -42,21 +58,6 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
     @Override
     public int slotSize() {
         return Integer.MAX_VALUE;
-    }
-
-    @Override
-    public boolean hasCommit() {
-        return true;
-    }
-
-    @Override
-    public ProtoSndQueue<Http3Frame> sndSubmit() {
-        return this;
-    }
-
-    @Override
-    public ProtoSndQueue<Http3Frame> sndReset() {
-        return this;
     }
 
     @Override
@@ -88,12 +89,10 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
         return list.size();
     }
 
-    @Override
     public ProtoRcvQueue<Http3Frame> rcvSubmit() {
         return this;
     }
 
-    @Override
     public ProtoRcvQueue<Http3Frame> rcvReset() {
         return this;
     }
@@ -121,11 +120,29 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
     @Override
     public void skipMessage(int cnt) {
         int skip = Math.min(cnt, list.size());
-        list.subList(0, skip).clear();
+        if (skip > 0) {
+            for (int i = 0; i < skip; i++) {
+                releaseOwned(list.get(i));
+            }
+            list.subList(0, skip).clear();
+        }
     }
 
     /** Clears all frames from the queue. */
     void clear() {
+        for (Http3Frame item : list) {
+            releaseOwned(item);
+        }
         list.clear();
+    }
+
+    private static void releaseOwned(Object item) {
+        if (item instanceof ReferenceHolder) {
+            ((ReferenceHolder) item).release();
+        } else if (item instanceof Release) {
+            ((Release) item).release();
+        } else if (item instanceof Closeable) {
+            IOUtils.closeQuietly((Closeable) item);
+        }
     }
 }

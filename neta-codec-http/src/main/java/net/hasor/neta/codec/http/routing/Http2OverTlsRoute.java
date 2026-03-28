@@ -45,7 +45,7 @@ import net.hasor.neta.codec.ssl.SslContext;
  *        |             |
  *        |             +--> BRANCH_H1 --> HttpServerDuplexe  --> HttpRequestAggregator --> handler
  *        |
- *        +----------------> BRANCH_H2 --> Http2ServerDuplexe --> HttpRequestAggregator --> handler
+ *        +----------------> BRANCH_H2 --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpRequestAggregator --> handler
  * </pre>
  * <p>
  * Decision rules:
@@ -59,7 +59,8 @@ import net.hasor.neta.codec.ssl.SslContext;
  * <pre>
  *   ProtoRoutingBuilder&lt;ByteBuf, ByteBuf&gt; alpn = ProtoHelper.typedRoutingAsStatic(new Http2OverTlsRoute());
  *   alpn.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -&gt; {
- *       branch.addLast("h2-codec", new Http2ServerDuplexe(4096, 8192, 1048576));
+ *       branch.addLast("h2-frame", new Http2FrameDuplexe(true));
+ *       branch.addLast("h2-object", new Http2ObjectDuplexe(true));
  *       branch.addLastDecoder("h2-aggregator", new HttpRequestAggregator(1048576));
  *       branch.addLastDecoder("h2-handler", new HttpDispatchHandler(true));
  *   });
@@ -82,7 +83,7 @@ public class Http2OverTlsRoute implements ProtoRoutingDataSelector<ByteBuf, Byte
 
     @Override
     public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
-        boolean printLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        boolean printLog = context.getConfig().isPrintLog();
         SslContext sslCtx = context.context(SslContext.class);
         if (sslCtx == null || !sslCtx.isReady()) {
             return null; // SSL handshake not complete, wait

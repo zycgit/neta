@@ -72,7 +72,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         Http3DecoderContent state = context.context(Http3DecoderContent.class);
-        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        boolean isPrintLog = context.getConfig().isPrintLog();
 
         while (src.hasMore()) {
             Http3Frame frame = src.takeMessage();
@@ -294,9 +294,11 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
         if (frame.type() == Http3FrameType.SETTINGS) {
             processSettingsFrame(context, state, frame, isPrintLog);
         } else if (frame.type() == Http3FrameType.GOAWAY) {
+            long[] goawayId = QuicVarInt.decode(frame.payload(), frame.payloadOffset());
+            fireEvent(context, HttpConnectionGoAwayEvent.class, new HttpConnectionGoAwayEvent(goawayId[0], 0L, new byte[0]));
             if (isPrintLog) {
                 long channelID = context.getChannel() != null ? context.getChannel().getChannelId() : 0;
-                logger.info("[H3-RCV] ch=" + channelID + " GOAWAY");
+                logger.info("[H3-RCV] ch=" + channelID + " GOAWAY lastAcceptedId=" + goawayId[0]);
             }
         }
     }
@@ -332,6 +334,14 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     /** Returns true if this is server mode. */
     boolean isServerMode() {
         return this.serverMode;
+    }
+
+    private <T> void fireEvent(ProtoContext context, Class<T> eventType, T event) {
+        try {
+            context.fireUserEvent(eventType, event);
+        } catch (Throwable e) {
+            logger.error("Error occurred while publishing HTTP/3 event: " + eventType.getSimpleName(), e);
+        }
     }
 
     @Override

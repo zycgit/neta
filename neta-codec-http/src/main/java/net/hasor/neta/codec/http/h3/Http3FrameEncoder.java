@@ -57,7 +57,7 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
             return ProtoStatus.Next;
         }
 
-        boolean isPrintLog = context.getConfig() != null && context.getConfig().isPrintLog();
+        boolean isPrintLog = context.getConfig().isPrintLog();
         SoChannel<?> ch = context.getChannel();
         boolean isQuic = (ch instanceof QuicStreamChannel);
 

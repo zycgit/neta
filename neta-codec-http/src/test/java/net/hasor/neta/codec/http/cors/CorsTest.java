@@ -14,8 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cors;
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Set;
+import net.hasor.neta.channel.ProtoRcvQueue;
+import net.hasor.neta.channel.ProtoSndQueue;
+import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.codec.http.*;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -492,7 +497,7 @@ public class CorsTest {
         SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
         SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
 
-        net.hasor.neta.channel.ProtoStatus status = handler.onMessage(null, rcv, snd);
+        ProtoStatus status = handler.onMessage(null, rcv, snd);
 
         assertEquals(net.hasor.neta.channel.ProtoStatus.Stop, status);
         assertEquals(0, snd.size());
@@ -548,8 +553,8 @@ public class CorsTest {
     // Minimal ProtoRcvQueue / ProtoSndQueue stubs
     // =========================================================================
 
-    private static class SimpleProtoRcvQueue<T> implements net.hasor.neta.channel.ProtoRcvQueue<T> {
-        private final java.util.List<T> list = new java.util.ArrayList<>();
+    private static class SimpleProtoRcvQueue<T> implements ProtoRcvQueue<T> {
+        private final List<T> list = new ArrayList<>();
 
         public void add(T item) {
             list.add(item);
@@ -566,21 +571,11 @@ public class CorsTest {
         }
 
         @Override
-        public net.hasor.neta.channel.ProtoRcvQueue<T> rcvSubmit() {
-            return this;
-        }
-
-        @Override
-        public net.hasor.neta.channel.ProtoRcvQueue<T> rcvReset() {
-            return this;
-        }
-
-        @Override
-        public java.util.List<T> takeMessage(int cnt) {
+        public List<T> takeMessage(int cnt) {
             if (list.isEmpty())
-                return java.util.Collections.emptyList();
+                return Collections.emptyList();
             int take = Math.min(cnt, list.size());
-            java.util.List<T> result = new java.util.ArrayList<>(list.subList(0, take));
+            List<T> result = new ArrayList<>(list.subList(0, take));
             list.subList(0, take).clear();
             return result;
         }
@@ -588,9 +583,9 @@ public class CorsTest {
         @Override
         public java.util.List<T> peekMessage(int cnt) {
             if (list.isEmpty())
-                return java.util.Collections.emptyList();
+                return Collections.emptyList();
             int take = Math.min(cnt, list.size());
-            return new java.util.ArrayList<>(list.subList(0, take));
+            return new ArrayList<>(list.subList(0, take));
         }
 
         @Override
@@ -600,8 +595,8 @@ public class CorsTest {
         }
     }
 
-    private static class SimpleProtoSndQueue<T> implements net.hasor.neta.channel.ProtoSndQueue<T> {
-        private final java.util.List<T> list = new java.util.ArrayList<>();
+    private static class SimpleProtoSndQueue<T> implements ProtoSndQueue<T> {
+        private final List<T> list = new ArrayList<>();
 
         @Override
         public int getCapacity() {
@@ -614,34 +609,19 @@ public class CorsTest {
         }
 
         @Override
-        public boolean hasCommit() {
-            return true;
-        }
-
-        @Override
-        public net.hasor.neta.channel.ProtoSndQueue<T> sndSubmit() {
-            return this;
-        }
-
-        @Override
-        public net.hasor.neta.channel.ProtoSndQueue<T> sndReset() {
-            return this;
-        }
-
-        @Override
         public int offerMessage(T[] offerList) {
             Collections.addAll(list, offerList);
             return offerList.length;
         }
 
         @Override
-        public int offerMessage(java.util.List<T> offerList) {
+        public int offerMessage(List<T> offerList) {
             list.addAll(offerList);
             return offerList.size();
         }
 
         @Override
-        public int offerMessage(net.hasor.neta.channel.ProtoRcvQueue<T> offerList) {
+        public int offerMessage(ProtoRcvQueue<T> offerList) {
             int count = 0;
             while (offerList.hasMore()) {
                 list.add(offerList.takeMessage());

@@ -16,8 +16,8 @@
 package net.hasor.neta.codec.http.h3;
 import java.nio.charset.StandardCharsets;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
+import net.hasor.neta.codec.http.HttpHeaderTooLargeException;
 import net.hasor.neta.codec.http.HttpHeaders;
-import net.hasor.neta.codec.http.HttpProtocolViolationException;
 
 /**
  * QPACK decoder for HTTP/3 header compression (RFC 9204).
@@ -109,7 +109,7 @@ public class QpackDecoder {
                 QpackHeaderField field;
                 if (isStatic) {
                     if (index >= QpackStaticTable.length()) {
-                        throw new HttpProtocolViolationException("QPACK: static table index out of range: " + index);
+                        throw new QpackDecodingException("QPACK: static table index out of range: " + index);
                     }
                     field = QpackStaticTable.get(index);
                 } else {
@@ -130,7 +130,7 @@ public class QpackDecoder {
                 String name;
                 if (isStatic) {
                     if (nameIndex >= QpackStaticTable.length()) {
-                        throw new HttpProtocolViolationException("QPACK: static table name index out of range: " + nameIndex);
+                        throw new QpackDecodingException("QPACK: static table name index out of range: " + nameIndex);
                     }
                     name = QpackStaticTable.get(nameIndex).name();
                 } else {
@@ -189,7 +189,7 @@ public class QpackDecoder {
             }
 
             if (totalSize > maxHeaderListSize) {
-                throw new HttpProtocolViolationException("QPACK: header list size exceeds limit: " + totalSize);
+                throw new HttpHeaderTooLargeException("QPACK: header list size exceeds limit: " + totalSize + " > " + maxHeaderListSize, maxHeaderListSize, totalSize);
             }
         }
 

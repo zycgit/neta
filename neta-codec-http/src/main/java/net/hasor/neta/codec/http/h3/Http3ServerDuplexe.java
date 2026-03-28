@@ -19,7 +19,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.quic.QuicStreamChannel;
 import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.event.HttpStreamResetEvent;
 
 /**
  * A server-side HTTP/3 codec that combines frame-level and semantic-level
@@ -64,13 +63,13 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         this.frameEncoder = new Http3FrameEncoder();
     }
 
-    /** Maps a semantic {@link HttpStreamResetEvent} error-code sentinel to the corresponding HTTP/3 application error code (RFC 9114 §8.1). */
+    /** Maps a semantic {@link Http3ResetEvent} error-code sentinel to the corresponding HTTP/3 application error code (RFC 9114 §8.1). */
     private static long resolveH3ErrorCode(long code) {
-        if (code == HttpStreamResetEvent.CANCEL) {
+        if (code == Http3ResetEvent.CANCEL) {
             return Http3ErrorCode.H3_REQUEST_CANCELLED;
-        } else if (code == HttpStreamResetEvent.INTERNAL_ERROR) {
+        } else if (code == Http3ResetEvent.INTERNAL_ERROR) {
             return Http3ErrorCode.H3_INTERNAL_ERROR;
-        } else if (code == HttpStreamResetEvent.REFUSED) {
+        } else if (code == Http3ResetEvent.REFUSED) {
             return Http3ErrorCode.H3_REQUEST_REJECTED;
         } else if (code < 0) {
             return Http3ErrorCode.H3_INTERNAL_ERROR; // unknown sentinel → H3_INTERNAL_ERROR
@@ -154,8 +153,8 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
 
     @Override
     public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
-        if (event.getEventType() == HttpStreamResetEvent.class) {
-            HttpStreamResetEvent reset = (HttpStreamResetEvent) event.getData();
+        if (event.getEventType() == Http3ResetEvent.class) {
+            Http3ResetEvent reset = (Http3ResetEvent) event.getData();
             long streamId = reset.streamId();
             long errorCode = resolveH3ErrorCode(reset.errorCode());
             // Clean up stream state and orphaned response-queue entry
@@ -167,7 +166,7 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             if (channel instanceof QuicStreamChannel) {
                 ((QuicStreamChannel) channel).sendReset(errorCode, 0L);
             }
-            if (context.getConfig() != null && context.getConfig().isPrintLog()) {
+            if (context.getConfig().isPrintLog()) {
                 logger.info("[H3-SND] ch=" + channel.getChannelId() + " RESET_STREAM errorCode=0x" + Long.toHexString(errorCode) + " (via UserEvent)");
             }
             return false; // event consumed
