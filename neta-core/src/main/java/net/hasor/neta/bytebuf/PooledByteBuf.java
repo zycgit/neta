@@ -107,7 +107,7 @@ final class PooledByteBuf extends AbstractByteBuf {
             }
             // Direct buffer path: use Unsafe for direct address
             if (t.isDirect() && UnsafeMemory.HAS_UNSAFE) {
-                java.nio.ByteBuffer bb = t.getTarget();
+                ByteBuffer bb = t.getTarget();
                 this.heapArray = null;
                 this.heapOffset = 0;
                 this.directAddress = UnsafeMemory.getDirectAddress(bb) + t.getOffset();
@@ -115,7 +115,7 @@ final class PooledByteBuf extends AbstractByteBuf {
             }
             // Fallback: use getTarget() for non-direct buffers that don't support heapArray()
             if (!t.isDirect()) {
-                java.nio.ByteBuffer bb = t.getTarget();
+                ByteBuffer bb = t.getTarget();
                 if (bb != null && bb.hasArray()) {
                     this.heapArray = bb.array();
                     this.heapOffset = bb.arrayOffset() + t.getOffset();

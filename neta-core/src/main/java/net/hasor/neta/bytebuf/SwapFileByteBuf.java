@@ -468,7 +468,7 @@ public class SwapFileByteBuf extends AbstractByteBuf {
         this.readerIndex = Math.max(0, this.readerIndex - splitOffset);
         this.markedReaderIndex = Math.max(0, this.markedReaderIndex - splitOffset);
 
-        java.nio.ByteBuffer nb = java.nio.ByteBuffer.wrap(sliceData);
+        ByteBuffer nb = ByteBuffer.wrap(sliceData);
         WrapByteBuffer sliceBuf = RecycleObjectPool.get(WrapByteBuffer.RECYCLE_INDEX, WrapByteBuffer.RECYCLE_HANDLER);
         sliceBuf.initBuffer(nb, false);
         return sliceBuf;

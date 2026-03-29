@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 import net.hasor.cobble.logging.Logger;
@@ -124,7 +126,7 @@ class QuicStreamReassembler {
 
         // Collect contiguous fragments
         int totalLen = 0;
-        java.util.List<Map.Entry<Long, byte[]>> contiguous = new java.util.ArrayList<>();
+        List<Map.Entry<Long, byte[]>> contiguous = new ArrayList<>();
         long expected = this.nextExpectedOffset;
 
         while (true) {

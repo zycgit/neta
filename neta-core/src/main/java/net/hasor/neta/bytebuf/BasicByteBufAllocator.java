@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.bytebuf;
 import java.nio.ByteBuffer;
+import java.util.ArrayDeque;
+import java.util.Iterator;
 import net.hasor.cobble.ObjectUtils;
 import net.hasor.cobble.ref.RecycleObjectPool;
 
@@ -211,9 +213,9 @@ public abstract class BasicByteBufAllocator implements ByteBufAllocator {
         } else {
             // Check thread-local pooled buffer cache first (skips buddy tree search)
             target = null;
-            java.util.ArrayDeque<Buffer> cache = PooledByteBuf.BUFFER_CACHE.get();
+            ArrayDeque<Buffer> cache = PooledByteBuf.BUFFER_CACHE.get();
             if (!cache.isEmpty()) {
-                java.util.Iterator<Buffer> it = cache.iterator();
+                Iterator<Buffer> it = cache.iterator();
                 while (it.hasNext()) {
                     Buffer candidate = it.next();
                     if (candidate.capacity() >= initCapacity && candidate.isDirect() == alloc.isDirect()) {

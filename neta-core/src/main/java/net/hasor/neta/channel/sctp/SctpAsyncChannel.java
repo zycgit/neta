@@ -155,7 +155,7 @@ class SctpAsyncChannel implements AsyncChannel {
 
     private void completeConnect(ProtoInitializer initializer, Future<NetChannel> future, boolean startLoop) throws Throwable {
         net.hasor.neta.channel.sctp.SctpChannel netChannel =//
-                new net.hasor.neta.channel.sctp.SctpChannel(this.channelId, new NetMonitor(), null, initializer, this, this.context);
+            new net.hasor.neta.channel.sctp.SctpChannel(this.channelId, new NetMonitor(), null, initializer, this, this.context);
         this.context.initChannel(netChannel, true);
         future.completed(netChannel);
 

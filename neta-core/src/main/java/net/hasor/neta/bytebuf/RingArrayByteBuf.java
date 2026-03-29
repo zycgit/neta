@@ -452,8 +452,8 @@ final class RingArrayByteBuf extends AbstractByteBuf {
     @Override
     public int readBytes(byte[] dst, int off, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(off, "off");
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(off, "off");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int minLen = Math.min(len, this.markedWriterIndex - this.readerIndex);
         int idx = nextReadableN(minLen);
         // delegate to existing _getBytes which handles wrap-around
@@ -464,7 +464,7 @@ final class RingArrayByteBuf extends AbstractByteBuf {
     @Override
     public int writeBytes(byte[] src, int off, int len) {
         checkFree();
-        net.hasor.cobble.ObjectUtils.checkPositiveOrZero(len, "len");
+        ObjectUtils.checkPositiveOrZero(len, "len");
         int minLen = Math.min(len, this.getMaxCapacity() - (this.writerIndex - this.markedReaderIndex));
         int idx = nextWritableN(minLen);
         // delegate to existing _putBytes which handles wrap-around

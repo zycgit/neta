@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.channel.quic;
 import java.io.IOException;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
@@ -81,8 +82,8 @@ public class QuicChannel extends UdpChannel {
             SocketAddress remote = connCh.getRemoteAddress();
             String peerHost = (sniHost != null && !sniHost.isEmpty()) ? sniHost : null;
             int peerPort = 0;
-            if (remote instanceof java.net.InetSocketAddress) {
-                java.net.InetSocketAddress inet = (java.net.InetSocketAddress) remote;
+            if (remote instanceof InetSocketAddress) {
+                InetSocketAddress inet = (InetSocketAddress) remote;
                 if (peerHost == null) {
                     peerHost = inet.getHostString();
                 }

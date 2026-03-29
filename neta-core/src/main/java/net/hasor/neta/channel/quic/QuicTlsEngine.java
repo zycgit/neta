@@ -18,6 +18,7 @@ import java.io.ByteArrayOutputStream;
 import java.math.BigInteger;
 import java.nio.charset.StandardCharsets;
 import java.security.*;
+import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.security.interfaces.ECPublicKey;
 import java.security.spec.*;
@@ -1384,8 +1385,8 @@ class QuicTlsEngine {
         pos += 3;
         int certListEnd = pos + certListLen;
 
-        java.util.List<X509Certificate> certs = new ArrayList<>();
-        java.security.cert.CertificateFactory cf = java.security.cert.CertificateFactory.getInstance("X.509");
+        List<X509Certificate> certs = new ArrayList<>();
+        CertificateFactory cf = CertificateFactory.getInstance("X.509");
 
         while (pos + 3 <= certListEnd && pos + 3 <= certMsg.length) {
             int certDerLen = ((certMsg[pos] & 0xFF) << 16) | ((certMsg[pos + 1] & 0xFF) << 8) | (certMsg[pos + 2] & 0xFF);

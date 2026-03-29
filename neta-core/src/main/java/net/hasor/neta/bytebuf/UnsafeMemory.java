@@ -19,6 +19,8 @@ import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
 import java.lang.reflect.Field;
+import java.lang.reflect.Method;
+import java.nio.Buffer;
 
 /**
  * Provides fast byte-array access via sun.misc.Unsafe for int/long read/write.
@@ -83,11 +85,11 @@ final class UnsafeMemory {
             unsafe = f.get(null);
 
             // arrayBaseOffset and objectFieldOffset via reflection (init-time only)
-            java.lang.reflect.Method abom = unsafeClass.getMethod("arrayBaseOffset", Class.class);
+            Method abom = unsafeClass.getMethod("arrayBaseOffset", Class.class);
             base = ((Number) abom.invoke(unsafe, byte[].class)).longValue();
 
-            java.lang.reflect.Method ofom = unsafeClass.getMethod("objectFieldOffset", Field.class);
-            Field addressField = java.nio.Buffer.class.getDeclaredField("address");
+            Method ofom = unsafeClass.getMethod("objectFieldOffset", Field.class);
+            Field addressField = Buffer.class.getDeclaredField("address");
             addrOffset = ((Number) ofom.invoke(unsafe, addressField)).longValue();
 
             // Build MethodHandles for heap array access (Object base + long offset)

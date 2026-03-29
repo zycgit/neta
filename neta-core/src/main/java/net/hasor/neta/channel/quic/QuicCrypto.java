@@ -14,6 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
+import java.security.MessageDigest;
 import javax.crypto.Cipher;
 import javax.crypto.Mac;
 import javax.crypto.spec.GCMParameterSpec;
@@ -209,13 +210,13 @@ final class QuicCrypto {
 
     /** Computes the SHA-256 digest of the given data. */
     public static byte[] sha256(byte[] data) throws Exception {
-        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         return md.digest(data);
     }
 
     /** Computes the SHA-256 digest of multiple concatenated data arrays. */
     public static byte[] sha256(byte[]... dataArrays) throws Exception {
-        java.security.MessageDigest md = java.security.MessageDigest.getInstance("SHA-256");
+        MessageDigest md = MessageDigest.getInstance("SHA-256");
         for (byte[] data : dataArrays) {
             if (data != null) {
                 md.update(data);
