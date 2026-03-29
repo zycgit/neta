@@ -270,4 +270,11 @@ public interface ProtoBuilder<RCV_UP, SND_DOWN> extends ProtoBuild {
      */
     <RCV_DOWN, SND_UP> ProtoBuilder<RCV_DOWN, SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf, ProtoRoutingEventSelector routing, Consumer<ProtoRoutingBuilder<RCV_DOWN, SND_UP>> branches);
 
+    /** Create a standalone partition builder with custom partition close condition. */
+    default ProtoBuilder<RCV_UP, SND_DOWN> nextPartition(String name, ProtoPartitionSelector<RCV_UP> routing, Consumer<ProtoPartitionBuilder<RCV_UP, SND_DOWN>> initializer) {
+        return this.nextPartition(name, ProtoConfig.DEFAULT, routing, initializer);
+    }
+
+    /** Create a standalone partition builder with custom partition close condition. */
+    ProtoBuilder<RCV_UP, SND_DOWN> nextPartition(String name, ProtoConfig protoConf, ProtoPartitionSelector<RCV_UP> routing, Consumer<ProtoPartitionBuilder<RCV_UP, SND_DOWN>> initializer);
 }

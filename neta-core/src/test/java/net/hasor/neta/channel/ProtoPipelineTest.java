@@ -32,6 +32,28 @@ import org.junit.Test;
  * @author test
  */
 public class ProtoPipelineTest extends AbstractStackTest {
+    private static final class InitSizeRecorder implements ProtoDuplexer<Integer, Integer, Integer, Integer> {
+        private final List<String> sizes;
+
+        private InitSizeRecorder(List<String> sizes) {
+            this.sizes = sizes;
+        }
+
+        @Override
+        public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
+            this.sizes.add(name + ":" + rcvSize + "/" + sndSize);
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Integer> rcvUp, ProtoSndQueue<Integer> rcvDown, ProtoRcvQueue<Integer> sndUp, ProtoSndQueue<Integer> sndDown) throws Throwable {
+            if (isRcv) {
+                rcvDown.offerMessage(rcvUp.takeMessage(rcvUp.queueSize()));
+            } else {
+                sndDown.offerMessage(sndUp.takeMessage(sndUp.queueSize()));
+            }
+            return ProtoStatus.Next;
+        }
+    }
 
     // --- Decoder-only pipeline (no encoder) ---
 
@@ -294,24 +316,80 @@ public class ProtoPipelineTest extends AbstractStackTest {
 
     @Test
     public void capacityLimited_decoderPipeline() throws Throwable {
-        List<String> record = Collections.synchronizedList(new ArrayList<>());
-        List<String> errors = Collections.synchronizedList(new ArrayList<>());
+        final boolean[] onMessageCalled = { false };
 
         ProtoConfig limitedConfig = new ProtoConfig();
         limitedConfig.setRcvSlotSize(2);
 
         ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class, limitedConfig)  //
-                .nextDecoder("L1", doCopyHandler("1", record, errors))                                 //
+                .nextDecoder("L1", new ProtoHandler<Integer, Integer>() {
+                    @Override
+                    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+                        onMessageCalled[0] = true;
+                        return ProtoStatus.Next;
+                    }
+
+                    @Override
+                    public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                        return ProtoStatus.Next;
+                    }
+                })                                                                                       //
                 .build();
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
 
-        // send more than capacity allows
         channel.receiveData(1, 2, 3, 4, 5);
         Thread.sleep(200);
 
-        assert record.contains("1DoNext");
+        assert !onMessageCalled[0] : "onMessage should not run when the first queue overflows";
+        assert channel.isClose();
+
+        channel.closeNow();
+        neta.shutdown();
+    }
+
+    @Test
+    public void builderDefaultConfig_appliesToConvenienceMethods() throws Throwable {
+        List<String> sizes = Collections.synchronizedList(new ArrayList<>());
+
+        ProtoConfig limitedConfig = new ProtoConfig();
+        limitedConfig.setRcvSlotSize(2);
+        limitedConfig.setSndSlotSize(3);
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class, limitedConfig)  //
+                .nextDuplex("L1", new InitSizeRecorder(sizes))                                          //
+                .build();
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+
+        assert sizes.contains("L1:2/3") : "sizes=" + sizes;
+
+        channel.closeNow();
+        neta.shutdown();
+    }
+
+    @Test
+    public void explicitNodeConfig_overridesBuilderDefault() throws Throwable {
+        List<String> sizes = Collections.synchronizedList(new ArrayList<>());
+
+        ProtoConfig builderConfig = new ProtoConfig();
+        builderConfig.setRcvSlotSize(2);
+        builderConfig.setSndSlotSize(3);
+
+        ProtoConfig nodeConfig = new ProtoConfig();
+        nodeConfig.setRcvSlotSize(5);
+        nodeConfig.setSndSlotSize(7);
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class, builderConfig)  //
+                .nextDuplex("L1", nodeConfig, new InitSizeRecorder(sizes))                            //
+                .build();
+
+        NetManager neta = new NetManager();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
+
+        assert sizes.contains("L1:5/7") : "sizes=" + sizes;
 
         channel.closeNow();
         neta.shutdown();

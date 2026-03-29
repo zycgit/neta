@@ -23,6 +23,8 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * <p>A connection has one root {@code ProtoContext} attached to the public channel and may create
  * additional branch contexts under routing nodes. The API serves two roles: pipeline construction
  * during initialization and runtime interaction while handlers are processing data or user events.
+ * <p><b>Design principle:</b> structure is determined during initialization. Runtime code may switch
+ * state, route, or partition, but should not arbitrarily mutate pipeline structure.
  * <p><b>Structure:</b>
  * <pre>
  *   NetChannel / QuicStreamChannel
@@ -302,6 +304,11 @@ public interface ProtoContext {
 
     /**
      * using decoder and encoder to combined for duplex.
+     * <p>All {@code add*} methods on this interface are structural registration APIs intended for
+     * the initialization phase driven by {@link ProtoInitializer#config(ProtoContext)}. Calling
+     * them from runtime message or event callbacks is legacy behavior and is discouraged. Runtime
+     * protocol evolution should be modeled with state transitions, routing changes, and partition
+     * changes instead of ad-hoc pipeline mutation.</p>
      * <ul>
      *  <li>RCV_UP is {@link ByteBuf} or Message</li>
      *  <li>RCV_DOWN is {@link ByteBuf} or Message</li>
@@ -329,6 +336,13 @@ public interface ProtoContext {
      */
     void addFirst(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder);
 
+    default void addFirst(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addFirst(name, decoder, encoder);
+    }
+
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
      * <ul>
@@ -355,6 +369,13 @@ public interface ProtoContext {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     void addFirst(String name, ProtoDuplexer<?, ?, ?, ?> duplexer);
+
+    default void addFirst(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addFirst(name, duplexer);
+    }
 
     /**
      * using decoder and encoder to combined for duplex.
@@ -385,6 +406,13 @@ public interface ProtoContext {
      */
     void addLast(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder);
 
+    default void addLast(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addLast(name, decoder, encoder);
+    }
+
     /**
      * this is a Duplexer, The data flow direction is identified by the isRcv parameter.
      * <ul>
@@ -412,6 +440,13 @@ public interface ProtoContext {
      */
     void addLast(String name, ProtoDuplexer<?, ?, ?, ?> duplexer);
 
+    default void addLast(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addLast(name, duplexer);
+    }
+
     /**
      * using encoder, the decoder is transparent
      * <ul>
@@ -435,6 +470,13 @@ public interface ProtoContext {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     void addFirstEncoder(String name, ProtoHandler<?, ?> encoder);
+
+    default void addFirstEncoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addFirstEncoder(name, encoder);
+    }
 
     /**
      * using encoder, the decoder is transparent
@@ -460,6 +502,13 @@ public interface ProtoContext {
      */
     void addLastEncoder(String name, ProtoHandler<?, ?> encoder);
 
+    default void addLastEncoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addLastEncoder(name, encoder);
+    }
+
     /**
      * using decoder, the encoder is transparent
      * <ul>
@@ -484,6 +533,13 @@ public interface ProtoContext {
      */
     void addFirstDecoder(String name, ProtoHandler<?, ?> decoder);
 
+    default void addFirstDecoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addFirstDecoder(name, decoder);
+    }
+
     /**
      * using decoder, the encoder is transparent
      * <ul>
@@ -507,4 +563,11 @@ public interface ProtoContext {
      * @throws NullPointerException if the specified handler is {@code null}
      */
     void addLastDecoder(String name, ProtoHandler<?, ?> decoder);
+
+    default void addLastDecoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
+        if (protoConf == null) {
+            throw new NullPointerException("protoConf is null.");
+        }
+        this.addLastDecoder(name, decoder);
+    }
 }

@@ -52,6 +52,22 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @see ProtoRoutingBuilder
  */
 public final class ProtoHelper {
+    private static void addLast(ProtoContext context, String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+        context.addLast(name, protoConf, duplexer);
+    }
+
+    private static void addLast(ProtoContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
+        context.addLast(name, protoConf, decoder, encoder);
+    }
+
+    private static void addLastDecoder(ProtoContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
+        context.addLastDecoder(name, protoConf, decoder);
+    }
+
+    private static void addLastEncoder(ProtoContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
+        context.addLastEncoder(name, protoConf, encoder);
+    }
+
     /** Create a standalone routing builder using static route selection. */
     public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsDefault(String defaultRouting, ProtoInitializer initializer) {
         if (StringUtils.isBlank(defaultRouting) || initializer == null) {
@@ -100,8 +116,8 @@ public final class ProtoHelper {
     }
 
     /** Create a typed {@link ProtoBuilder} with specified RCV/SND endpoint types and custom config. */
-    public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown, ProtoConfig terminalConfig) {
-        return new ProtoHelper().nextTo(terminalConfig);
+    public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown, ProtoConfig protoConf) {
+        return new ProtoHelper().nextTo(protoConf);
     }
 
     private <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> nextTo(ProtoConfig protoConf) {
@@ -118,88 +134,185 @@ public final class ProtoHelper {
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoConfig protoConf, //
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(ProtoDuplexer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+            return this.nextDuplex(duplexer.getClass().getSimpleName(), this.defaultConf, duplexer);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoDuplexer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+            return this.nextDuplex(name, this.defaultConf, duplexer);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(ProtoHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, ProtoHandler<NEXT_SND_UP, SND_UP> encoder) {
+            Objects.requireNonNull(decoder, "decoder is null.");
+            Objects.requireNonNull(encoder, "encoder is null.");
+
+            String decName = decoder.getClass().getSimpleName();
+            String encName = encoder.getClass().getSimpleName();
+            decName = StringUtils.isBlank(decName) ? Integer.toHexString(System.identityHashCode(decoder)) : decName;
+            encName = StringUtils.isBlank(encName) ? Integer.toHexString(System.identityHashCode(encoder)) : encName;
+
+            String name = String.format("%s/%s", decName, encName);
+            return this.nextDuplex(name, this.defaultConf, decoder, encoder);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, ProtoHandler<NEXT_SND_UP, SND_UP> encoder) {
+            return this.nextDuplex(name, this.defaultConf, decoder, encoder);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN> ProtoBuilder<NEXT_RCV_DOWN, SND_UP> nextDecoder(ProtoHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder) {
+            Objects.requireNonNull(decoder, "decoder is null.");
+            String decName = decoder.getClass().getSimpleName();
+            decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
+
+            String name = String.format("%s/--", decName);
+            return this.nextDecoder(name, this.defaultConf, decoder);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN> ProtoBuilder<NEXT_RCV_DOWN, SND_UP> nextDecoder(String name, ProtoHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder) {
+            return this.nextDecoder(name, this.defaultConf, decoder);
+        }
+
+        @Override
+        public <PREV_SND_UP> ProtoBuilder<RCV_DOWN, PREV_SND_UP> nextEncoder(ProtoHandler<PREV_SND_UP, SND_UP> encoder) {
+            Objects.requireNonNull(encoder, "encoder is null.");
+            String decName = encoder.getClass().getSimpleName();
+            decName = StringUtils.isBlank(decName) ? "Unknown" : decName;
+
+            String name = String.format("--/%s", decName);
+            return this.nextEncoder(name, this.defaultConf, encoder);
+        }
+
+        @Override
+        public <PREV_SND_UP> ProtoBuilder<RCV_DOWN, PREV_SND_UP> nextEncoder(String name, ProtoHandler<PREV_SND_UP, SND_UP> encoder) {
+            return this.nextEncoder(name, this.defaultConf, encoder);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoRoutingDataSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+            return this.nextRouteAsStatic(name, this.defaultConf, routing, branches);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsRealtime(String name, ProtoRoutingDataSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+            return this.nextRouteAsRealtime(name, this.defaultConf, routing, branches);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoRoutingEventSelector routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+            return this.nextRouteAsStatic(name, this.defaultConf, routing, branches);
+        }
+
+        @Override
+        public ProtoBuilder<RCV_DOWN, SND_UP> nextPartition(String name, ProtoPartitionSelector<RCV_DOWN> routing, Consumer<ProtoPartitionBuilder<RCV_DOWN, SND_UP>> initializer) {
+            return this.nextPartition(name, this.defaultConf, routing, initializer);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoConfig protoConf,//
                 ProtoDuplexer<RCV_DOWN, NEXT_RCV_DOWN, NEXT_SND_UP, SND_UP> duplexer) {
+            Objects.requireNonNull(name, "name is null.");
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(duplexer, "duplexer is null.");
 
-            this.taskAppend.add(c -> c.addLast(name, duplexer));
+            this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
         @Override
-        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoConfig protoConf, //
+        public <NEXT_RCV_DOWN, NEXT_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, NEXT_SND_UP> nextDuplex(String name, ProtoConfig protoConf,//
                 ProtoHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder, ProtoHandler<NEXT_SND_UP, SND_UP> encoder) {
-            Objects.requireNonNull(protoConf, "protoConf is null.");
-            Objects.requireNonNull(decoder, "decoder is null.");
-            Objects.requireNonNull(encoder, "encoder is null.");
-
-            this.taskAppend.add(c -> c.addLast(name, decoder, encoder));
-            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
-        }
-
-        @Override
-        public <NEXT_RCV_DOWN> ProtoBuilder<NEXT_RCV_DOWN, SND_UP> nextDecoder(String name, ProtoConfig protoConf, //
-                ProtoHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder) {
-            Objects.requireNonNull(protoConf, "protoConf is null.");
-            Objects.requireNonNull(decoder, "decoder is null.");
-
-            this.taskAppend.add(c -> c.addLastDecoder(name, decoder));
-            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
-        }
-
-        @Override
-        public <PREV_SND_UP> ProtoBuilder<RCV_DOWN, PREV_SND_UP> nextEncoder(String name, ProtoConfig protoConf, //
-                ProtoHandler<PREV_SND_UP, SND_UP> encoder) {
-            Objects.requireNonNull(protoConf, "protoConf is null.");
-            Objects.requireNonNull(encoder, "encoder is null.");
-
-            this.taskAppend.add(c -> c.addLastEncoder(name, encoder));
-            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
-        }
-
-        @Override
-        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf, //
-                ProtoRoutingDataSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
-            Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(decoder, "decoder is null.");
+            Objects.requireNonNull(encoder, "encoder is null.");
+
+            this.taskAppend.add(c -> addLast(c, name, protoConf, decoder, encoder));
+            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN> ProtoBuilder<NEXT_RCV_DOWN, SND_UP> nextDecoder(String name, ProtoConfig protoConf,//
+                ProtoHandler<RCV_DOWN, NEXT_RCV_DOWN> decoder) {
+            Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(decoder, "decoder is null.");
+
+            this.taskAppend.add(c -> addLastDecoder(c, name, protoConf, decoder));
+            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
+        }
+
+        @Override
+        public <PREV_SND_UP> ProtoBuilder<RCV_DOWN, PREV_SND_UP> nextEncoder(String name, ProtoConfig protoConf,//
+                ProtoHandler<PREV_SND_UP, SND_UP> encoder) {
+            Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(encoder, "encoder is null.");
+
+            this.taskAppend.add(c -> addLastEncoder(c, name, protoConf, encoder));
+            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
+        }
+
+        @Override
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf,//
+                ProtoRoutingDataSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
+            Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
             ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, routing);
             ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
             branches.accept(routeBuilder);
-            this.taskAppend.add(c -> c.addLast(name, duplexer));
+            this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
         @Override
-        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsRealtime(String name, ProtoConfig protoConf, //
+        public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsRealtime(String name, ProtoConfig protoConf,//
                 ProtoRoutingDataSelector<NEXT_RCV_DOWN, PREV_SND_UP> routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
-            Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
             ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing);
             ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
             branches.accept(routeBuilder);
-            this.taskAppend.add(c -> c.addLast(name, duplexer));
+            this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
         @Override
         public <NEXT_RCV_DOWN, PREV_SND_UP> ProtoBuilder<NEXT_RCV_DOWN, PREV_SND_UP> nextRouteAsStatic(String name, ProtoConfig protoConf,//
                 ProtoRoutingEventSelector routing, Consumer<ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP>> branches) {
-            Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(routing, "routing is null.");
             Objects.requireNonNull(branches, "branches is null.");
 
             ProtoRoutingDuplexer<NEXT_RCV_DOWN, PREV_SND_UP> duplexer = new ProtoRoutingDuplexer<>(routing);
             ProtoRoutingBuilder<NEXT_RCV_DOWN, PREV_SND_UP> routeBuilder = new ProtoRoutingBuilderImpl<>(this.defaultConf, duplexer);
             branches.accept(routeBuilder);
-            this.taskAppend.add(c -> c.addLast(name, duplexer));
+            this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
+            return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
+        }
+
+        @Override
+        public ProtoBuilder<RCV_DOWN, SND_UP> nextPartition(String name, ProtoConfig protoConf,//
+                ProtoPartitionSelector<RCV_DOWN> routing, Consumer<ProtoPartitionBuilder<RCV_DOWN, SND_UP>> initializer) {
+            Objects.requireNonNull(name, "name is null.");
+            Objects.requireNonNull(protoConf, "protoConf is null.");
+            Objects.requireNonNull(routing, "routing is null.");
+
+            ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer = new ProtoPartitionDuplexer<>(routing);
+            ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> routeBuilder = new ProtoPartitionBuilderImpl<>(duplexer);
+            initializer.accept(routeBuilder);
+            this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
 
@@ -240,6 +353,25 @@ public final class ProtoHelper {
 
         @Override
         public ProtoDuplexer<RCV_DOWN, ?, ?, SND_UP> build() {
+            return this.duplexer;
+        }
+    }
+
+    private static class ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> implements ProtoPartitionBuilder<RCV_DOWN, SND_UP> {
+        private final ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer;
+
+        public ProtoPartitionBuilderImpl(ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer) {
+            this.duplexer = duplexer;
+        }
+
+        @Override
+        public ProtoPartitionBuilder<RCV_DOWN, SND_UP> byInitializer(ProtoInitializer initializer) {
+            duplexer.setInitializer(initializer);
+            return this;
+        }
+
+        @Override
+        public ProtoDuplexer<RCV_DOWN, RCV_DOWN, SND_UP, SND_UP> build() {
             return this.duplexer;
         }
     }

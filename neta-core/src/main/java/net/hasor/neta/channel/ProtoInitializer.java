@@ -20,6 +20,10 @@ package net.hasor.neta.channel;
  * for a freshly created channel's root pipeline, and also for branch pipelines owned by
  * {@link ProtoRoutingDuplexer}. The callback therefore configures a context; it is not limited to
  * a single top-level connect or accept event.
+ * <p><b>Design principle:</b> this callback is the structural boundary of a pipeline. Handlers,
+ * routes, and partitions should be declared here so the connection structure is fixed before data
+ * processing starts. Runtime processing may switch state, route, or partition, but should not rely
+ * on arbitrary structural mutation.
  * <p>Implementations add decoders, encoders, and business-logic handlers to the
  * {@link ProtoContext} pipeline:
  * <pre>
@@ -38,6 +42,6 @@ package net.hasor.neta.channel;
  */
 @FunctionalInterface
 public interface ProtoInitializer {
-    /** Called once per new channel; add pipeline handlers to {@code ctx}. */
+    /** Called once per new channel or branch context; determine pipeline structure on {@code ctx}. */
     void config(ProtoContext ctx);
 }

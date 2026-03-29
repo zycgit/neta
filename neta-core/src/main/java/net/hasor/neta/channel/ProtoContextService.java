@@ -418,14 +418,20 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public void addFirst(String name, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+        this.addFirst(name, ProtoConfig.DEFAULT, duplexer);
+    }
+
+    @Override
+    public void addFirst(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(name, "name is null.");
+        Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(duplexer, "duplexer is null.");
 
         if (this.namedHandlerMap.containsKey(name)) {
             throw new UnsupportedOperationException("the duplexer name '" + name + "' already exists.");
         }
 
-        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, -1, -1, duplexer, this.chainRoot);
+        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), duplexer, this.chainRoot);
         this.chainRoot.insertProtoStack(invocation);
         this.namedHandlerMap.put(name, duplexer);
     }
@@ -452,16 +458,36 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public void addLast(String name, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+        this.addLast(name, ProtoConfig.DEFAULT, duplexer);
+    }
+
+    @Override
+    public void addLast(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(name, "name is null.");
+        Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(duplexer, "duplexer is null.");
 
         if (this.namedHandlerMap.containsKey(name)) {
             throw new UnsupportedOperationException("the duplexer name '" + name + "' already exists.");
         }
 
-        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, -1, -1, duplexer, this.chainRoot);
+        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), duplexer, this.chainRoot);
         this.chainRoot.appendProtoStack(invocation);
         this.namedHandlerMap.put(name, duplexer);
+    }
+
+    @Override
+    public void addLast(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
+        Objects.requireNonNull(decoder, "decoder is null.");
+        Objects.requireNonNull(encoder, "encoder is null.");
+        this.addLast(name, protoConf, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
+    }
+
+    @Override
+    public void addFirst(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
+        Objects.requireNonNull(decoder, "decoder is null.");
+        Objects.requireNonNull(encoder, "encoder is null.");
+        this.addFirst(name, protoConf, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
     @Override
@@ -472,7 +498,13 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public void addFirstEncoder(String name, ProtoHandler<?, ?> encoder) {
+        this.addFirstEncoder(name, ProtoConfig.DEFAULT, encoder);
+    }
+
+    @Override
+    public void addFirstEncoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(name, "name is null.");
+        Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
 
         if (this.namedHandlerMap.containsKey(name)) {
@@ -480,7 +512,7 @@ class ProtoContextService implements ProtoContext {
         }
 
         ProtoEncoderDuplexWrap<Object, ?, ?> duplexer = new ProtoEncoderDuplexWrap<>(encoder);
-        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, -1, -1, duplexer, this.chainRoot);
+        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), duplexer, this.chainRoot);
         this.chainRoot.insertProtoStack(invocation);
         this.namedHandlerMap.put(name, encoder);
     }
@@ -493,7 +525,13 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public void addLastEncoder(String name, ProtoHandler<?, ?> encoder) {
+        this.addLastEncoder(name, ProtoConfig.DEFAULT, encoder);
+    }
+
+    @Override
+    public void addLastEncoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(name, "name is null.");
+        Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(encoder, "encoder is null.");
 
         if (this.namedHandlerMap.containsKey(name)) {
@@ -501,7 +539,7 @@ class ProtoContextService implements ProtoContext {
         }
 
         ProtoEncoderDuplexWrap<Object, ?, ?> duplexer = new ProtoEncoderDuplexWrap<>(encoder);
-        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, -1, -1, duplexer, this.chainRoot);
+        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), duplexer, this.chainRoot);
         this.chainRoot.appendProtoStack(invocation);
         this.namedHandlerMap.put(name, encoder);
     }
@@ -514,7 +552,13 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public void addFirstDecoder(String name, ProtoHandler<?, ?> decoder) {
+        this.addFirstDecoder(name, ProtoConfig.DEFAULT, decoder);
+    }
+
+    @Override
+    public void addFirstDecoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
         Objects.requireNonNull(name, "name is null.");
+        Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(decoder, "decoder is null.");
 
         if (this.namedHandlerMap.containsKey(name)) {
@@ -522,7 +566,7 @@ class ProtoContextService implements ProtoContext {
         }
 
         ProtoDecoderDuplexWrap<?, ?, Object> duplexer = new ProtoDecoderDuplexWrap<>(decoder);
-        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, -1, -1, duplexer, this.chainRoot);
+        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), duplexer, this.chainRoot);
         this.chainRoot.insertProtoStack(invocation);
         this.namedHandlerMap.put(name, decoder);
     }
@@ -535,7 +579,13 @@ class ProtoContextService implements ProtoContext {
 
     @Override
     public void addLastDecoder(String name, ProtoHandler<?, ?> decoder) {
+        this.addLastDecoder(name, ProtoConfig.DEFAULT, decoder);
+    }
+
+    @Override
+    public void addLastDecoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
         Objects.requireNonNull(name, "name is null.");
+        Objects.requireNonNull(protoConf, "protoConf is null.");
         Objects.requireNonNull(decoder, "decoder is null.");
 
         if (this.namedHandlerMap.containsKey(name)) {
@@ -543,7 +593,7 @@ class ProtoContextService implements ProtoContext {
         }
 
         ProtoDecoderDuplexWrap<?, ?, Object> duplexer = new ProtoDecoderDuplexWrap<>(decoder);
-        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, -1, -1, duplexer, this.chainRoot);
+        ProtoInvocation<?, ?, ?, ?> invocation = new ProtoInvocation<>(name, protoConf.getRcvSlotSize(), protoConf.getSndSlotSize(), duplexer, this.chainRoot);
         this.chainRoot.appendProtoStack(invocation);
         this.namedHandlerMap.put(name, decoder);
     }
