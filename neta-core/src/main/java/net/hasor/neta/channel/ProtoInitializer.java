@@ -15,8 +15,8 @@
  */
 package net.hasor.neta.channel;
 /**
- * Callback used to populate a {@link ProtoContext} with handlers.
- * <p>The framework invokes {@link #config(ProtoContext)} whenever it needs to build a protocol chain:
+ * Callback used to populate a {@link ProtoBuildContext} with handlers.
+ * <p>The framework invokes {@link #config(ProtoBuildContext)} whenever it needs to build a protocol chain:
  * for a freshly created channel's root pipeline, and also for branch pipelines owned by
  * {@link ProtoRoutingDuplexer}. The callback therefore configures a context; it is not limited to
  * a single top-level connect or accept event.
@@ -25,7 +25,7 @@ package net.hasor.neta.channel;
  * processing starts. Runtime processing may switch state, route, or partition, but should not rely
  * on arbitrary structural mutation.
  * <p>Implementations add decoders, encoders, and business-logic handlers to the
- * {@link ProtoContext} pipeline:
+ * {@link ProtoBuildContext} pipeline:
  * <pre>
  * manager.bind(address, ctx -&gt; {               // &lt;-- ProtoInitializer
  *     ctx.addLastDecoder("frame",  new LineBasedFrameHandler(4096, false));
@@ -37,11 +37,11 @@ package net.hasor.neta.channel;
  * stay deterministic and non-blocking.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
- * @see ProtoContext
+ * @see ProtoBuildContext
  * @see ProtoHelper
  */
 @FunctionalInterface
 public interface ProtoInitializer {
     /** Called once per new channel or branch context; determine pipeline structure on {@code ctx}. */
-    void config(ProtoContext ctx);
+    void config(ProtoBuildContext ctx);
 }

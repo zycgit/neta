@@ -52,19 +52,19 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @see ProtoRoutingBuilder
  */
 public final class ProtoHelper {
-    private static void addLast(ProtoContext context, String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
+    private static void addLast(ProtoBuildContext context, String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
         context.addLast(name, protoConf, duplexer);
     }
 
-    private static void addLast(ProtoContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
+    private static void addLast(ProtoBuildContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         context.addLast(name, protoConf, decoder, encoder);
     }
 
-    private static void addLastDecoder(ProtoContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
+    private static void addLastDecoder(ProtoBuildContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
         context.addLastDecoder(name, protoConf, decoder);
     }
 
-    private static void addLastEncoder(ProtoContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
+    private static void addLastEncoder(ProtoBuildContext context, String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
         context.addLastEncoder(name, protoConf, encoder);
     }
 
@@ -125,10 +125,10 @@ public final class ProtoHelper {
     }
 
     private static class ProtoBuilderImpl<RCV_DOWN, SND_UP> implements ProtoBuilder<RCV_DOWN, SND_UP> {
-        private final ProtoConfig                  defaultConf;
-        private final List<Consumer<ProtoContext>> taskAppend;
+        private final ProtoConfig                       defaultConf;
+        private final List<Consumer<ProtoBuildContext>> taskAppend;
 
-        ProtoBuilderImpl(ProtoConfig protoConf, List<Consumer<ProtoContext>> taskAppend) {
+        ProtoBuilderImpl(ProtoConfig protoConf, List<Consumer<ProtoBuildContext>> taskAppend) {
             this.defaultConf = Objects.requireNonNull(protoConf, "ProtoConfig is null.");
             this.taskAppend = taskAppend;
         }
@@ -319,7 +319,7 @@ public final class ProtoHelper {
         @Override
         public ProtoInitializer build() {
             return ctx -> {
-                for (Consumer<ProtoContext> consumer : taskAppend) {
+                for (Consumer<ProtoBuildContext> consumer : taskAppend) {
                     consumer.accept(ctx);
                 }
             };
