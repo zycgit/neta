@@ -123,6 +123,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 return ProtoStatus.Next;
             }
         }
+
         return ProtoStatus.Next;
     }
 
@@ -196,7 +197,6 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             }
         }
 
-        @SuppressWarnings("unchecked")
         private boolean flushTo(ProtoSndQueue<IN> finalOutput) {
             ProtoQueue<Object> branchTailRcvDown = (ProtoQueue<Object>) this.chainRoot.getTailRcvDown();
             int pendingSize = branchTailRcvDown.queueSize();
@@ -213,6 +213,11 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                     throw new IllegalStateException("ProtoPartitionDuplexer failed to flush partition output.");
                 }
             }
+
+            if (branchTailRcvDown.wasFull()) {
+                this.chainRoot.fireRcvRecover();
+            }
+
             return branchTailRcvDown.queueSize() == 0;
         }
 

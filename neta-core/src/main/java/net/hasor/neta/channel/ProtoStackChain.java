@@ -36,7 +36,9 @@ class ProtoStackChain {
     private static final ByteBuf[]                   EMPTY    = new ByteBuf[0];
     private final        Object                      pipeLock = new Object();
     private final        ProtoQueue<Object>          tailRcvDown;
+    private              Runnable                    tailRcvDownWritable;
     private final        ProtoQueue<Object>          headSndDown;
+    private              Runnable                    headSndDownWritable;
     private final        boolean                     branchMode;
     private              ProtoInvocation<?, ?, ?, ?> head;
     private              ProtoInvocation<?, ?, ?, ?> tail;
@@ -136,7 +138,22 @@ class ProtoStackChain {
             ProtoInvocation<?, ?, ?, ?> current = this.head;
             while (current != null) {
                 current.onInit(protoCtx);
+
+                if (current.previous != null) {
+                    current.bindRcvUpWritable(() -> ctx.registerRecovery(true));
+                }
+                if (current.next != null) {
+                    current.bindSndUpWritable(() -> ctx.registerRecovery(false));
+                }
+
                 current = current.next;
+            }
+
+            if (this.tail != null) {
+                this.tailRcvDownWritable = () -> ctx.registerRecovery(true);
+            }
+            if (this.head != null) {
+                this.headSndDownWritable = () -> ctx.registerRecovery(false);
             }
         } finally {
             if (!this.branchMode) {
@@ -179,6 +196,8 @@ class ProtoStackChain {
             }
             this.tailRcvDown.clearAndClose();
             this.headSndDown.clearAndClose();
+            this.tailRcvDownWritable = null;
+            this.headSndDownWritable = null;
             if (!this.branchMode) {
                 ctx.clearStatus();
                 ctx.clearFlash();
@@ -186,13 +205,23 @@ class ProtoStackChain {
         }
     }
 
-    private void offerMessage(boolean isRcv, ProtoQueue<Object> queue, Object[] offerData) throws ProtoFullException {
+    private void offerMessage(boolean isRcv, ProtoInvocation<?, ?, ?, ?> invocation, Object[] offerData) throws ProtoFullException {
         if (offerData == null) {
             return;
         }
-        if (queue.offerMessage(offerData) != offerData.length) {
+
+        int accepted;
+        int slotSize;
+        if (isRcv) {
+            accepted = invocation.offerRcvUp(offerData);
+            slotSize = invocation.rcvUpSlotSize();
+        } else {
+            accepted = invocation.offerSndUp(offerData);
+            slotSize = invocation.sndUpSlotSize();
+        }
+
+        if (accepted != offerData.length) {
             String msgTag = isRcv ? "rcv" : "snd";
-            int slotSize = queue.slotSize();
             int require = offerData.length;
 
             String msg = String.format("%s(%s) ProtoStackChain slot is full, available slot is %s, require %s.", msgTag, this.channelID, slotSize, require);
@@ -215,7 +244,75 @@ class ProtoStackChain {
         if (queueSize == 0) {
             return EMPTY;
         }
-        return this.headSndDown.takeMessageToArray(queueSize);
+        Object[] result = this.headSndDown.takeMessageToArray(queueSize);
+
+        if (this.headSndDown.wasFull()) {
+            this.fireSndRecover();
+        }
+
+        return result;
+    }
+
+    // ------------------------------------------------------------
+    // Recovery
+    // ------------------------------------------------------------
+
+    public void fireRcvRecover() {
+        if (this.tailRcvDown.slotSize() <= 0 || this.tailRcvDownWritable == null) {
+            return;
+        }
+
+        this.tailRcvDownWritable.run();
+    }
+
+    public void fireSndRecover() {
+        if (this.headSndDown.slotSize() <= 0 || this.headSndDownWritable == null) {
+            return;
+        }
+
+        this.headSndDownWritable.run();
+    }
+
+    private ChainResult drainRecover(ProtoContextService ctx, ChainResult baseResult) throws Throwable {
+        ChainResult currentResult = baseResult;
+        while (ctx.hasRecovery()) {
+            int recoveryMask = ctx.beginRecovery();
+            try {
+                if ((recoveryMask & ProtoRecoveryState.RECOVERY_RCV) != 0) {
+                    currentResult = this.mergeResult(currentResult, this.onRcvLife(ctx, null, null));
+                }
+
+                if ((recoveryMask & ProtoRecoveryState.RECOVERY_SND) != 0) {
+                    ProtoStatus lastStatus = this.doSndLife(ctx, null, null);
+                    currentResult = this.mergeResult(currentResult, new ChainResult(this.drainHeadSndDown(), lastStatus, ctx.getSndError()));
+                }
+            } finally {
+                ctx.endRecovery();
+            }
+        }
+        return currentResult;
+    }
+
+    private ChainResult mergeResult(ChainResult current, ChainResult extra) {
+        if (extra == null) {
+            return current;
+        }
+        if (current == null) {
+            return extra;
+        }
+
+        Throwable error = extra.error != null ? extra.error : current.error;
+        if (extra.data == null || extra.data.length == 0) {
+            return new ChainResult(current.data, extra.status, error);
+        }
+        if (current.data == null || current.data.length == 0) {
+            return new ChainResult(extra.data, extra.status, error);
+        }
+
+        Object[] mergeData = new Object[current.data.length + extra.data.length];
+        System.arraycopy(current.data, 0, mergeData, 0, current.data.length);
+        System.arraycopy(extra.data, 0, mergeData, current.data.length, extra.data.length);
+        return new ChainResult(mergeData, extra.status, error);
     }
 
     // ------------------------------------------------------------
@@ -227,10 +324,17 @@ class ProtoStackChain {
         synchronized (this.pipeLock) {
             ctx.beginRcv(rcvError);
             try {
+                ChainResult result;
                 if (this.head == null) {
-                    return this.triggerRcvWithEmpty(ctx, rcvData);
+                    result = this.triggerRcvWithEmpty(ctx, rcvData);
                 } else {
-                    return this.onRcvLife(ctx, stackName, rcvData);
+                    result = this.onRcvLife(ctx, stackName, rcvData);
+                }
+
+                if (this.branchMode || !ctx.hasRecovery()) {
+                    return result;
+                } else {
+                    return this.drainRecover(ctx, result);
                 }
             } finally {
                 ctx.end();
@@ -272,7 +376,7 @@ class ProtoStackChain {
                 if (!found) {
                     if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
                         found = true;
-                        this.offerMessage(true, current.rcvUp, rcvData);
+                        this.offerMessage(true, current, rcvData);
                     } else {
                         continue;
                     }
@@ -337,6 +441,11 @@ class ProtoStackChain {
         if (this.tailRcvDown.hasMore()) {
             while (this.tailRcvDown.hasMore()) {
                 PlayLoad playLoad = PlayLoadObject.of(ctx.getChannel(), this.tailRcvDown.takeMessage(), true, false);
+
+                if (this.tailRcvDown.wasFull()) {
+                    this.fireRcvRecover();
+                }
+
                 ((SoContextService) ctx.getSoContext()).trigger(playLoad);
             }
         }
@@ -358,16 +467,23 @@ class ProtoStackChain {
         synchronized (this.pipeLock) {
             ctx.beginSnd(sndError);
             try {
+                ChainResult result;
                 if (this.tail == null) {
                     if (sndError != null) {
                         this.triggerSend(ctx);
                     }
-                    return new ChainResult(sndData, ProtoStatus.Next, sndError);
+                    result = new ChainResult(sndData, ProtoStatus.Next, sndError);
                 } else {
                     ProtoStatus lastStatus = this.doSndLife(ctx, stackName, sndData);
                     Throwable residualError = ctx.getSndError();
-                    Object[] result = drainHeadSndDown();
-                    return new ChainResult(result, lastStatus, residualError);
+                    Object[] data = drainHeadSndDown();
+                    result = new ChainResult(data, lastStatus, residualError);
+                }
+
+                if (this.branchMode || !ctx.hasRecovery()) {
+                    return result;
+                } else {
+                    return this.drainRecover(ctx, result);
                 }
             } finally {
                 ctx.end();
@@ -387,7 +503,7 @@ class ProtoStackChain {
                 if (!found) {
                     if (stackName == null || StringUtils.equals(current.getName(), stackName)) {
                         found = true;
-                        this.offerMessage(false, current.sndUp, sndData);
+                        this.offerMessage(false, current, sndData);
                     } else {
                         continue;
                     }

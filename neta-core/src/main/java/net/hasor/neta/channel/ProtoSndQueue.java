@@ -47,6 +47,10 @@ public interface ProtoSndQueue<T> {
     /** Returns the number of writable slots remaining. */
     int slotSize();
 
+    default boolean wasFull() {
+        return this.slotSize() == 0;
+    }
+
     /** Returns {@code true} when at least one message can be written immediately. */
     default boolean hasSlot() {
         return slotSize() > 0;

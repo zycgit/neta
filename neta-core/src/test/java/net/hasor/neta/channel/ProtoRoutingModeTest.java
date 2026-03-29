@@ -162,6 +162,66 @@ public class ProtoRoutingModeTest {
         Assert.assertTrue(routeEvents.isEmpty());
     }
 
+    @Test
+    public void routeSwitchShouldWaitUntilPreviousBranchPendingOutputFlushed() throws Throwable {
+        List<Integer> downstream = new ArrayList<>();
+        List<String> routeEvents = new ArrayList<>();
+        ProtoConfig limitedConfig = new ProtoConfig();
+        limitedConfig.setRcvSlotSize(1);
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> {
+            if (rcvUp.queueSize() == 0) {
+                return null;
+            }
+            return "alpha";
+        }, r -> {
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new SplitSwitchHandler("beta", routeEvents)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new BetaHandler(routeEvents)));
+        }).nextDecoder("collector", limitedConfig, new CollectIntegerHandler(downstream)).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+
+        channel.receiveData(1);
+        Assert.assertEquals(2, downstream.size());
+        Assert.assertEquals(Integer.valueOf(101), downstream.get(0));
+        Assert.assertEquals(Integer.valueOf(102), downstream.get(1));
+        Assert.assertTrue(routeEvents.isEmpty());
+
+        channel.receiveData(2);
+        Assert.assertEquals(3, downstream.size());
+        Assert.assertEquals(Integer.valueOf(2002), downstream.get(2));
+    }
+
+    @Test
+    public void nestedRouteSwitchShouldResumeWithinNearestRouterScope() throws Throwable {
+        List<Integer> downstream = new ArrayList<>();
+        List<String> innerRouteEvents = new ArrayList<>();
+        List<String> outerRouteEvents = new ArrayList<>();
+        ProtoConfig limitedConfig = new ProtoConfig();
+        limitedConfig.setRcvSlotSize(1);
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("outer", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "nested", outer -> {
+            outer.branch("nested", branch -> branch.nextRouteAsStatic("inner", (ProtoRoutingDataSelector<Integer, Integer>) (ctx2, rcvUp2, rcvDown2) -> rcvUp2.queueSize() == 0 ? null : "alpha", inner -> {
+                inner.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha", new SplitSwitchHandler("beta", innerRouteEvents)));
+                inner.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new BetaHandler(innerRouteEvents)));
+            }).nextDecoder("outer-observer", new RouteEventObserver(outerRouteEvents)));
+        }).nextDecoder("collector", limitedConfig, new CollectIntegerHandler(downstream)).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+
+        channel.receiveData(1);
+        Assert.assertEquals(2, downstream.size());
+        Assert.assertEquals(Integer.valueOf(101), downstream.get(0));
+        Assert.assertEquals(Integer.valueOf(102), downstream.get(1));
+        Assert.assertTrue(innerRouteEvents.isEmpty());
+        Assert.assertTrue(outerRouteEvents.isEmpty());
+
+        channel.receiveData(2);
+        Assert.assertEquals(3, downstream.size());
+        Assert.assertEquals(Integer.valueOf(2002), downstream.get(2));
+        Assert.assertTrue(outerRouteEvents.isEmpty());
+    }
+
     private static class RecordHandler implements ProtoHandler<Integer, Integer> {
         private static final java.util.Map<String, Integer> ACTIVE_COUNTS  = new java.util.HashMap<>();
         private static final java.util.Map<String, Integer> MESSAGE_COUNTS = new java.util.HashMap<>();
@@ -242,6 +302,104 @@ public class ProtoRoutingModeTest {
                 Assert.assertNotNull(routingControl);
                 routingControl.switchRoute(this.targetRoute);
             }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class SplitSwitchHandler implements ProtoHandler<Integer, Integer> {
+        private final String       targetRoute;
+        private final List<String> routeEvents;
+
+        private SplitSwitchHandler(String targetRoute, List<String> routeEvents) {
+            this.targetRoute = targetRoute;
+            this.routeEvents = routeEvents;
+        }
+
+        @Override
+        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            if (event.getEventType() == ProtoRouteEvent.class) {
+                ProtoRouteEvent changedEvent = (ProtoRouteEvent) event.getData();
+                this.routeEvents.add(changedEvent.getFromRoute() + "->" + changedEvent.getToRoute());
+            }
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            Integer value = src.takeMessage();
+            if (value == null) {
+                return ProtoStatus.Next;
+            }
+            dst.offerMessage(value + 100);
+            dst.offerMessage(value + 101);
+            ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
+            Assert.assertNotNull(routingControl);
+            routingControl.switchRoute(this.targetRoute);
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class BetaHandler implements ProtoHandler<Integer, Integer> {
+        private final List<String> routeEvents;
+
+        private BetaHandler(List<String> routeEvents) {
+            this.routeEvents = routeEvents;
+        }
+
+        @Override
+        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            if (event.getEventType() == ProtoRouteEvent.class) {
+                ProtoRouteEvent changedEvent = (ProtoRouteEvent) event.getData();
+                this.routeEvents.add(changedEvent.getFromRoute() + "->" + changedEvent.getToRoute());
+            }
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            Integer value = src.takeMessage();
+            if (value != null) {
+                dst.offerMessage(value + 2000);
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class CollectIntegerHandler implements ProtoHandler<Integer, Integer> {
+        private final List<Integer> downstream;
+
+        private CollectIntegerHandler(List<Integer> downstream) {
+            this.downstream = downstream;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            while (src.hasMore()) {
+                this.downstream.add(src.takeMessage());
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class RouteEventObserver implements ProtoHandler<Integer, Integer> {
+        private final List<String> routeEvents;
+
+        private RouteEventObserver(List<String> routeEvents) {
+            this.routeEvents = routeEvents;
+        }
+
+        @Override
+        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            if (event.getEventType() == ProtoRouteEvent.class) {
+                ProtoRouteEvent changedEvent = (ProtoRouteEvent) event.getData();
+                this.routeEvents.add(changedEvent.getFromRoute() + "->" + changedEvent.getToRoute());
+            }
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            dst.offerMessage(src.takeMessage(src.queueSize()));
             return ProtoStatus.Next;
         }
     }

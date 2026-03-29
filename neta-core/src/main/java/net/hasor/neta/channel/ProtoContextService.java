@@ -36,7 +36,7 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
  * @see ProtoContext
  * @see ProtoStackChain
  */
-class ProtoContextService implements ProtoContext {
+class ProtoContextService implements ProtoBuildContext {
     private final    SoChannel<?>          channel;
     private final    SoContext             soContext;
     private final    Map<Class<?>, Object> contextData;  // local to this ctx; upward lookup via context(Class<T>)
@@ -49,6 +49,7 @@ class ProtoContextService implements ProtoContext {
     private final    Map<String, Object>   flashMap;
     private final    Deque<ProtoStatus>    statusStack;
     private volatile ProtoStatus           statusCurrent;
+    private final    ProtoRecoveryState    recoveryState;
 
     ProtoContextService(SoChannel<?> channel, SoContext soContext) {
         this.channel = channel;
@@ -62,6 +63,7 @@ class ProtoContextService implements ProtoContext {
         this.statusStack = new ArrayDeque<>();
         this.statusStack.push(new ProtoStatus());
         this.statusCurrent = this.statusStack.peek();
+        this.recoveryState = new ProtoRecoveryState();
         //
         this.chainRoot = new ProtoStackChain(channel.getConfig());
         this.namedHandlerMap = new HashMap<>();
@@ -80,6 +82,7 @@ class ProtoContextService implements ProtoContext {
         this.statusStack = new ArrayDeque<>();
         this.statusStack.push(new ProtoStatus());
         this.statusCurrent = this.statusStack.peek();
+        this.recoveryState = new ProtoRecoveryState();
         //
         this.chainRoot = new ProtoStackChain(rcvSlotSize, sndSlotSize, true);
         this.namedHandlerMap = new HashMap<>();
@@ -88,6 +91,41 @@ class ProtoContextService implements ProtoContext {
     ProtoStackChain getChainRoot() {
         return this.chainRoot;
     }
+
+    private ProtoContextService rootRecoveryContext() {
+        return this.parentCtx != null ? this.parentCtx.rootRecoveryContext() : this;
+    }
+
+    // recovery
+
+    void setupRecovery(String ownerId, String branchName) {
+        this.recoveryState.setupSource(ownerId, branchName);
+    }
+
+    void registerRecovery(boolean isRcv) {
+        this.rootRecoveryContext().recoveryState.registerRecovery(this.recoveryState, isRcv);
+    }
+
+    int beginRecovery() {
+        return this.rootRecoveryContext().recoveryState.beginRecovery();
+    }
+
+    void endRecovery() {
+        this.rootRecoveryContext().recoveryState.endRecovery();
+    }
+
+    boolean hasRecovery() {
+        return this.rootRecoveryContext().recoveryState.hasRecovery();
+    }
+
+    boolean hasRecovery(boolean isRcv, String ownerId, String branchName) {
+        return this.rootRecoveryContext().recoveryState.hasRecovery(isRcv, ownerId, branchName);
+    }
+
+    String activeRecovery(boolean isRcv, String ownerId) {
+        return this.rootRecoveryContext().recoveryState.activeRecovery(isRcv, ownerId);
+    }
+    //
 
     /** Returns the registered handler instance by name and type, or {@code null} if not found. */
     <T> T getHandler(String name, Class<T> type) {
@@ -124,8 +162,9 @@ class ProtoContextService implements ProtoContext {
         T val = (T) this.contextData.get(attachment);
         if (val == null && this.parentCtx != null) {
             return this.parentCtx.context(attachment);
+        } else {
+            return val;
         }
-        return val;
     }
 
     @Override
@@ -143,8 +182,9 @@ class ProtoContextService implements ProtoContext {
     public <T> T rootContext(Class<T> type, T value) {
         if (this.parentCtx != null) {
             return this.parentCtx.rootContext(type, value);
+        } else {
+            return this.context(type, value);
         }
-        return context(type, value);
     }
 
     /** Enter a new re-entrant pipeline frame. */

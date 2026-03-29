@@ -24,7 +24,7 @@ import net.hasor.neta.channel.virtual.VrtSocketAddress;
 import org.junit.Assert;
 import org.junit.Test;
 
-public class ProtoPartitionDuplexerTest extends AbstractStackTest {
+public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test
     public void interleavedPartitionsKeepIndependentState() throws Throwable {
         ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()))).nextEncoder("pass-through", new PassThroughEncoder()).build();
@@ -128,6 +128,25 @@ public class ProtoPartitionDuplexerTest extends AbstractStackTest {
         Assert.assertEquals(1, rcvUp.queueSize());
     }
 
+    @Test
+    public void writableRecoveryShouldRestartFromRootDirection() throws Throwable {
+        List<String> downstream = new ArrayList<>();
+        ProtoConfig limitedConfig = new ProtoConfig();
+        limitedConfig.setRcvSlotSize(1);
+
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
+                .nextPartition("partition", new MessagePartitionSelector(), partition -> partition.byInitializer(ctx -> ctx.addLastDecoder("splitter", new SplitOutputHandler())))
+                .nextDecoder("collector", limitedConfig, new DownstreamCollectHandler(downstream))
+                .build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(4), initializer, new VrtSoConfig());
+        channel.receiveData(new PartitionMessage(1, "A", false));
+
+        Assert.assertEquals(2, downstream.size());
+        Assert.assertEquals("A-1", downstream.get(0));
+        Assert.assertEquals("A-2", downstream.get(1));
+    }
+
     private static ProtoContextService extractProtoContext(SoChannel<?> channel) throws Exception {
         Field field = NetChannel.class.getDeclaredField("protoCtx");
         field.setAccessible(true);
@@ -198,6 +217,22 @@ public class ProtoPartitionDuplexerTest extends AbstractStackTest {
                 PartitionMessage item = src.takeMessage();
                 dst.offerMessage(new PartitionMessage(item.partitionId(), item.body() + "-1", false));
                 dst.offerMessage(new PartitionMessage(item.partitionId(), item.body() + "-2", false));
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class DownstreamCollectHandler implements ProtoHandler<PartitionMessage, PartitionMessage> {
+        private final List<String> downstream;
+
+        private DownstreamCollectHandler(List<String> downstream) {
+            this.downstream = downstream;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<PartitionMessage> src, ProtoSndQueue<PartitionMessage> dst) {
+            while (src.hasMore()) {
+                this.downstream.add(src.takeMessage().body());
             }
             return ProtoStatus.Next;
         }

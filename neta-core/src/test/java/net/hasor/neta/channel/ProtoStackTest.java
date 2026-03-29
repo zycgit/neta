@@ -59,6 +59,10 @@ public class ProtoStackTest extends AbstractStackTest {
         };
     }
 
+    private static ProtoBuildContext asBuildContext(ProtoContext context) {
+        return (ProtoBuildContext) context;
+    }
+
     @Test
     public void initAddTest_0() throws Throwable {
         List<String> record = new ArrayList<>();
@@ -69,7 +73,7 @@ public class ProtoStackTest extends AbstractStackTest {
                 public void onInit(String name, int poolSize, ProtoContext context) {
                     record.add("s1-OnInit");
                     ProtoHandler<Integer, Integer> decode = recordHandler("s2", record);
-                    context.addLastDecoder("s2", decode);
+                    asBuildContext(context).addLastDecoder("s2", decode);
                 }
 
                 @Override
@@ -117,7 +121,7 @@ public class ProtoStackTest extends AbstractStackTest {
                 public void onActive(ProtoContext context) {
                     record.add("s1-OnActive");
                     ProtoHandler<Integer, Integer> decode = recordHandler("s2", record);
-                    context.addLastDecoder("s2", decode);
+                    asBuildContext(context).addLastDecoder("s2", decode);
                 }
 
                 @Override
@@ -165,7 +169,7 @@ public class ProtoStackTest extends AbstractStackTest {
                     record.add("s1-OnMessage");
 
                     ProtoHandler<Integer, Integer> decode = recordHandler("s2", record);
-                    context.addLastDecoder("s2", decode);
+                    asBuildContext(context).addLastDecoder("s2", decode);
                     dst.offerMessage(src.takeMessage(src.queueSize()));
                     return ProtoStatus.Next;
                 }
@@ -206,7 +210,7 @@ public class ProtoStackTest extends AbstractStackTest {
                 public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
                     record.add("s1-OnUserEvent");
                     ProtoHandler<Integer, Integer> decode = recordHandler("s2", record);
-                    context.addLastDecoder("s2", decode);
+                    asBuildContext(context).addLastDecoder("s2", decode);
                     return true;
                 }
 

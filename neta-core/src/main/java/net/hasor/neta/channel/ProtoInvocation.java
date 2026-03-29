@@ -38,8 +38,8 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     public static final  String                                            RCV_ERROR_TAG = ProtoStackChain.class.getName() + "-rcv-error-tag";
     public static final  String                                            SND_ERROR_TAG = ProtoStackChain.class.getName() + "-snd-error-tag";
     private static final Logger                                            logger        = Logger.getLogger(ProtoInvocation.class);
-    protected final      ProtoQueue<Object>                                rcvUp;
-    protected final      ProtoQueue<Object>                                sndUp;
+    private final        ProtoQueueView                                    rcvUp;
+    private final        ProtoQueueView                                    sndUp;
     private final        String                                            name;
     private final        ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> handler;
     //
@@ -52,9 +52,33 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
         this.name = name;
         this.handler = handler;
-        this.rcvUp = new ProtoQueue<>(rcvSize < 0 ? -1 : rcvSize);
-        this.sndUp = new ProtoQueue<>(sndSize < 0 ? -1 : sndSize);
+        this.rcvUp = new ProtoQueueView(rcvSize);
+        this.sndUp = new ProtoQueueView(sndSize);
         this.chainRoot = chainRoot;
+    }
+
+    public void bindRcvUpWritable(Runnable callback) {
+        this.rcvUp.onRecoveredWritable(callback);
+    }
+
+    public void bindSndUpWritable(Runnable callback) {
+        this.sndUp.onRecoveredWritable(callback);
+    }
+
+    public int offerRcvUp(Object[] offerData) {
+        return this.rcvUp.offerMessage(offerData);
+    }
+
+    public int offerSndUp(Object[] offerData) {
+        return this.sndUp.offerMessage(offerData);
+    }
+
+    public int rcvUpSlotSize() {
+        return this.rcvUp.slotSize();
+    }
+
+    public int sndUpSlotSize() {
+        return this.sndUp.slotSize();
     }
 
     /** return this {@link ProtoDuplexer} name. */
@@ -86,6 +110,8 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
             return this.sndUp.queueSize() + "/" + capacity;
         }
     }
+
+    //
 
     /** Calls {@link ProtoDuplexer#onInit} on the wrapped handler, with {@code stackName} set in context. */
     public void onInit(ProtoContext protoCtx) throws Throwable {

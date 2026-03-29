@@ -56,6 +56,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     private final        Set<String>                       activatedBranches;
     private final        ProtoRoutingControl               routingControl;
     private final        ProtoRoutingMode                  routingMode;
+    private final        String                            recoveryOwnerId;
     private              String                            selectedRoute;
     private              String                            pendingRoute;
 
@@ -71,6 +72,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         this.branchOrder = new ArrayList<>();
         this.activatedBranches = new LinkedHashSet<>();
         this.routingControl = this.initRoutingControl(routingMode);
+        this.recoveryOwnerId = "route@" + Integer.toHexString(System.identityHashCode(this));
     }
 
     public ProtoRoutingDuplexer(ProtoRoutingEventSelector routing) {
@@ -81,6 +83,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         this.branchOrder = new ArrayList<>();
         this.activatedBranches = new LinkedHashSet<>();
         this.routingControl = this.initRoutingControl(this.routingMode);
+        this.recoveryOwnerId = "route@" + Integer.toHexString(System.identityHashCode(this));
     }
 
     private ProtoRoutingControl initRoutingControl(ProtoRoutingMode routingMode) {
@@ -116,6 +119,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         for (String branchName : this.branchOrder) {
             BranchEntry entry = this.branches.get(branchName);
             ProtoContextService branchCtx = new ProtoContextService(parentCtxService, rcvSize, sndSize, prevStackName, nextStackName);
+            branchCtx.setupRecovery(this.recoveryOwnerId, branchName);
+
             ProtoStackChain chainRoot = branchCtx.getChainRoot();
             branchCtx.context(ProtoRoutingControl.class, this.routingControl);
 
@@ -174,20 +179,28 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
         if (isRcv) {
+            ProtoStatus recoveryStatus = this.tryRecoverRcvBranch((ProtoContextService) context, rcvUp, rcvDown, sndDown);
+            if (recoveryStatus != null) {
+                return recoveryStatus;
+            }
+
             if (this.routingMode == ProtoRoutingMode.REALTIME) {
                 if (this.routing4Data == null) {
                     return ProtoStatus.Stop;
                 }
+
                 String resolvedRoute = this.routing4Data.route(context, rcvUp, sndDown);
                 if (resolvedRoute == null) {
                     return ProtoStatus.Stop;
                 }
+
                 this.selectedRoute = resolvedRoute;
                 this.activateBranchLifecycle(context, resolvedRoute, null, false);
             } else if (this.selectedRoute == null) {
                 if (this.routing4Data == null) {
                     return ProtoStatus.Stop;
                 }
+
                 // Route not yet determined: pass the live rcvUp so the predicate can peek or partially consume.
                 // Data not consumed by the predicate stays in rcvUp and will reappear on the next invocation.
                 this.selectedRoute = this.routing4Data.route(context, rcvUp, sndDown);
@@ -197,15 +210,29 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
                 }
             }
 
+            BranchEntry branch = this.branches.get(this.selectedRoute);
+            if (branch == null) {
+                return ProtoStatus.Stop;
+            }
+
             // Route is now known. Fire branch onActive
             this.activateBranchLifecycle(context, this.selectedRoute, null, false);
+            if (!this.flushBranchOutputs(branch, rcvDown, sndDown)) {
+                this.checkAndExecutePendingUpgrade(context);
+                return ProtoStatus.Next;
+            }
 
             // Fast path: forward data to the selected branch.
             List<IN> data = rcvUp.takeMessage(rcvUp.queueSize());
-            ProtoStatus status = this.doRcvRoute(this.branches.get(this.selectedRoute), data, rcvDown, sndDown);
+            ProtoStatus status = this.doRcvRoute(branch, data, rcvDown, sndDown);
             this.checkAndExecutePendingUpgrade(context);
             return status;
         } else {
+            ProtoStatus recoveryStatus = this.tryRecoverSndBranch((ProtoContextService) context, sndUp, sndDown);
+            if (recoveryStatus != null) {
+                return recoveryStatus;
+            }
+
             ProtoStatus status = this.doSndRoute(context, sndUp, sndDown);
             this.checkAndExecutePendingUpgrade(context);
             return status;
@@ -213,6 +240,11 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     }
 
     private ProtoStatus doSndRoute(ProtoContext context, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
+        BranchEntry branch = this.branches.get(this.selectedRoute);
+        if (branch != null && !this.flushBranchSndOutput(branch, sndDown)) {
+            return ProtoStatus.Next;
+        }
+
         if (!sndUp.hasMore()) {
             return ProtoStatus.Next;
         }
@@ -225,7 +257,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             return ProtoStatus.Next;
         }
 
-        BranchEntry branch = this.branches.get(this.selectedRoute);
+        branch = this.branches.get(this.selectedRoute);
         this.activateBranchLifecycle(context, this.selectedRoute, null, false);
 
         // Collect data from sndUp
@@ -236,9 +268,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         ChainResult cr = branch.chainRoot.onSnd(branch.branchCtx, null, sndArray, null);
 
         // onSndMessage already drains headSndDown internally and returns the result directly.
-        for (Object obj : cr.data) {
-            sndDown.offerMessage((OUT) obj);
-        }
+        branch.addPendingSnd(cr.data);
+        this.flushBranchSndOutput(branch, sndDown);
 
         if (cr.error != null) {
             throw cr.error;
@@ -254,18 +285,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         Object[] rcvArray = dataList.toArray();
         // Execute branch RCV chain (which may also trigger branch SND chain internally)
         ChainResult cr = branch.chainRoot.onRcv(branch.branchCtx, null, rcvArray, null);
-
-        // Collect RCV output from branch tailRcvDown
-        ProtoQueue<Object> branchTailRcvDown = (ProtoQueue<Object>) branch.chainRoot.getTailRcvDown();
-        if (branchTailRcvDown.queueSize() > 0) {
-            List<Object> branchRcvOutput = branchTailRcvDown.takeMessage(branchTailRcvDown.queueSize());
-            rcvDown.offerMessage(branchRcvOutput);
-        }
-
-        // Forward branch SND results to main pipeline sndDown
-        for (Object obj : cr.data) {
-            sndDown.offerMessage((OUT) obj);
-        }
+        branch.addPendingSnd(cr.data);
+        this.flushBranchOutputs(branch, rcvDown, sndDown);
 
         if (cr.error != null) {
             throw cr.error;
@@ -298,6 +319,61 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             }
             branch.chainRoot.onClose(branch.branchCtx);
         }
+    }
+
+    // recover
+
+    private ProtoStatus tryRecoverRcvBranch(ProtoContextService context, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<OUT> sndDown) {
+        BranchEntry recoveryBranch = this.recoveryBranch(context, true);
+        if (recoveryBranch == null) {
+            return null;
+        }
+
+        if (!this.flushBranchOutputs(recoveryBranch, rcvDown, sndDown)) {
+            this.checkAndExecutePendingUpgrade(context);
+            return ProtoStatus.Next;
+        }
+
+        if (!rcvUp.hasMore()) {
+            this.checkAndExecutePendingUpgrade(context);
+            return ProtoStatus.Next;
+        }
+
+        return null;
+    }
+
+    private ProtoStatus tryRecoverSndBranch(ProtoContextService context, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) {
+        BranchEntry recoveryBranch = this.recoveryBranch(context, false);
+        if (recoveryBranch == null) {
+            return null;
+        }
+
+        if (!this.flushBranchSndOutput(recoveryBranch, sndDown)) {
+            this.checkAndExecutePendingUpgrade(context);
+            return ProtoStatus.Next;
+        }
+
+        if (!sndUp.hasMore()) {
+            this.checkAndExecutePendingUpgrade(context);
+            return ProtoStatus.Next;
+        }
+
+        return null;
+    }
+
+    private BranchEntry recoveryBranch(ProtoContextService context, boolean isRcv) {
+        String recoveryRoute = this.currentRecoveryBranch(context, isRcv);
+        if (recoveryRoute == null) {
+            return null;
+        }
+
+        BranchEntry recoveryBranch = this.branches.get(recoveryRoute);
+        if (recoveryBranch == null) {
+            return null;
+        }
+
+        this.selectedRoute = recoveryRoute;
+        return recoveryBranch;
     }
 
     // -- Builder --------------------------------------------------------
@@ -349,6 +425,71 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         }
     }
 
+    private boolean flushBranchOutputs(BranchEntry branch, ProtoSndQueue<Object> rcvDown, ProtoSndQueue<OUT> sndDown) {
+        if (!this.flushBranchRcvOutput(branch.chainRoot, rcvDown, "ProtoRoutingDuplexer failed to flush branch receive output.")) {
+            return false;
+        }
+        return this.flushBranchSndOutput(branch, sndDown);
+    }
+
+    private boolean flushBranchSndOutput(BranchEntry branch, ProtoSndQueue<OUT> sndDown) {
+        int flushCount = Math.min(branch.pendingSnd.size(), sndDown.slotSize());
+        if (flushCount <= 0) {
+            return branch.pendingSnd.isEmpty();
+        }
+        for (int i = 0; i < flushCount; i++) {
+            Object item = branch.pendingSnd.removeFirst();
+            if (!sndDown.offerMessage((OUT) item)) {
+                throw new IllegalStateException("ProtoRoutingDuplexer failed to flush branch send output.");
+            }
+        }
+        return branch.pendingSnd.isEmpty();
+    }
+
+    @SuppressWarnings("unchecked")
+    private boolean flushBranchRcvOutput(ProtoStackChain chainRoot, ProtoSndQueue<Object> rcvDown, String errorMessage) {
+        ProtoQueue<Object> branchTailRcvDown = (ProtoQueue<Object>) chainRoot.getTailRcvDown();
+        int pendingSize = branchTailRcvDown.queueSize();
+        if (pendingSize <= 0) {
+            return true;
+        }
+        int flushCount = Math.min(pendingSize, rcvDown.slotSize());
+        if (flushCount <= 0) {
+            return false;
+        }
+
+        for (Object item : branchTailRcvDown.takeMessage(flushCount)) {
+            if (!rcvDown.offerMessage(item)) {
+                throw new IllegalStateException(errorMessage);
+            }
+        }
+
+        if (branchTailRcvDown.wasFull()) {
+            chainRoot.fireRcvRecover();
+        }
+
+        return branchTailRcvDown.queueSize() == 0;
+    }
+
+    private boolean shouldDelayPendingUpgrade(ProtoContext context) {
+        if (this.selectedRoute == null) {
+            return false;
+        }
+        BranchEntry branch = this.branches.get(this.selectedRoute);
+        if (branch == null) {
+            return false;
+        }
+        if (branch.hasPendingOutput()) {
+            return true;
+        }
+        ProtoContextService ctx = (ProtoContextService) context;
+        return ctx.hasRecovery(true, this.recoveryOwnerId, branch.branchName) || ctx.hasRecovery(false, this.recoveryOwnerId, branch.branchName);
+    }
+
+    private String currentRecoveryBranch(ProtoContextService context, boolean isRcv) {
+        return context.activeRecovery(isRcv, this.recoveryOwnerId);
+    }
+
     private void activateBranchLifecycle(ProtoContext context, String routeName, String fromRoute, boolean fireRouteChangedEvent) {
         if (context.getConfig().isPrintLog()) {
             logger.info("[ROUTE] channel=" + context.getChannel().getChannelId() + " selected='" + routeName + "'");
@@ -391,6 +532,10 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         if (this.pendingRoute == null) {
             return;
         }
+        if (this.shouldDelayPendingUpgrade(context)) {
+            return;
+        }
+
         String newRoute = this.pendingRoute;
         this.pendingRoute = null;
         String oldRoute = this.selectedRoute;
@@ -413,13 +558,29 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         return entry != null ? entry.branchCtx : null;
     }
 
-    private static class BranchEntry {
+    private final class BranchEntry {
+        final String           branchName;
         final ProtoInitializer initializer;
+        final Deque<Object>    pendingSnd;
         ProtoStackChain     chainRoot;
         ProtoContextService branchCtx;
 
         BranchEntry(String name, ProtoInitializer initializer) {
+            this.branchName = name;
             this.initializer = initializer;
+            this.pendingSnd = new ArrayDeque<>();
+        }
+
+        private void addPendingSnd(Object[] data) {
+            if (data == null || data.length == 0) {
+                return;
+            }
+            Collections.addAll(this.pendingSnd, data);
+        }
+
+        @SuppressWarnings("unchecked")
+        private boolean hasPendingOutput() {
+            return !this.pendingSnd.isEmpty() || this.chainRoot.getTailRcvDown().queueSize() > 0;
         }
     }
 }
