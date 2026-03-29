@@ -14,6 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
+import java.util.LinkedList;
+import java.util.Queue;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.hasor.neta.codec.http.HttpRequest;
 import net.hasor.neta.codec.http.HttpResponse;
@@ -33,19 +35,21 @@ import net.hasor.neta.codec.http.HttpResponse;
  * All fields are private; no caller may access internal sub-objects directly.
  */
 class Http2EncoderContent {
-    private final HpackEncoder  hpackEncoder;
-    private final Http2Settings localSettings;
-    private final AtomicInteger nextStreamId;
-    private       boolean       prefaceSent;
-    private       int           currentStreamId = 0;
-    private       HttpRequest   pendingRequest;
-    private       HttpResponse  pendingResponse;
-    private       boolean       trailingHeadersSent;
+    private final HpackEncoder      hpackEncoder;
+    private final Http2Settings     localSettings;
+    private final AtomicInteger     nextStreamId;
+    private final Queue<Http2Frame> pendingOutboundFrames;
+    private       boolean           prefaceSent;
+    private       int               currentStreamId = 0;
+    private       HttpRequest       pendingRequest;
+    private       HttpResponse      pendingResponse;
+    private       boolean           trailingHeadersSent;
 
     Http2EncoderContent(boolean serverMode, Http2Settings localSettings) {
         this.localSettings = localSettings != null ? new Http2Settings(localSettings) : new Http2Settings();
         this.hpackEncoder = new HpackEncoder((int) this.localSettings.headerTableSize());
         this.nextStreamId = new AtomicInteger(serverMode ? 2 : 1);
+        this.pendingOutboundFrames = new LinkedList<>();
         this.prefaceSent = false;
     }
 
@@ -110,6 +114,29 @@ class Http2EncoderContent {
         int id = nextStreamId.getAndAdd(2);
         this.currentStreamId = id;
         return id;
+    }
+
+    void queueOutboundFrame(Http2Frame frame) {
+        if (frame != null) {
+            this.pendingOutboundFrames.offer(frame);
+        }
+    }
+
+    void queueOutboundFrames(Iterable<Http2Frame> frames) {
+        if (frames == null) {
+            return;
+        }
+        for (Http2Frame frame : frames) {
+            this.queueOutboundFrame(frame);
+        }
+    }
+
+    Http2Frame pollPendingOutboundFrame() {
+        return this.pendingOutboundFrames.poll();
+    }
+
+    boolean hasPendingOutboundFrames() {
+        return !this.pendingOutboundFrames.isEmpty();
     }
 
     // ─── HPACK header encoding ────────────────────────────────────────────────

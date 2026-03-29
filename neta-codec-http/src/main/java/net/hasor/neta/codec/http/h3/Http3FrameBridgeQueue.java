@@ -36,20 +36,6 @@ import net.hasor.neta.channel.ProtoSndQueue;
 final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSndQueue<Http3Frame> {
     private final List<Http3Frame> list = new ArrayList<>();
 
-    // ========================= ProtoSndQueue =========================
-
-    public boolean hasCommit() {
-        return true;
-    }
-
-    public ProtoSndQueue<Http3Frame> sndSubmit() {
-        return this;
-    }
-
-    public ProtoSndQueue<Http3Frame> sndReset() {
-        return this;
-    }
-
     @Override
     public int getCapacity() {
         return Integer.MAX_VALUE;
@@ -82,19 +68,9 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
         return count;
     }
 
-    // ========================= ProtoRcvQueue =========================
-
     @Override
     public int queueSize() {
         return list.size();
-    }
-
-    public ProtoRcvQueue<Http3Frame> rcvSubmit() {
-        return this;
-    }
-
-    public ProtoRcvQueue<Http3Frame> rcvReset() {
-        return this;
     }
 
     @Override

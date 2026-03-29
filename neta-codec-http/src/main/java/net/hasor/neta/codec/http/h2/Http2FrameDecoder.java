@@ -103,6 +103,12 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
                 long channelID = context.getChannel().getChannelId();
                 logger.info("[H2-FRAME] channel=" + channelID + " connection preface received");
             }
+        } else if (this.accumulator.readableBytes() >= CONNECTION_PREFACE.length && this.isConnectionPreface(this.accumulator)) {
+            this.accumulator.skipReadableBytes(CONNECTION_PREFACE.length);
+            if (context.getConfig().isPrintLog()) {
+                long channelID = context.getChannel().getChannelId();
+                logger.warn("[H2-FRAME] channel=" + channelID + " duplicate connection preface ignored");
+            }
         }
 
         // Decode frames
@@ -150,6 +156,17 @@ public class Http2FrameDecoder implements ProtoHandler<ByteBuf, Http2Frame> {
 
         this.accumulator.markReader();
         return ProtoStatus.Next;
+    }
+
+    private boolean isConnectionPreface(ByteBuf buffer) {
+        byte[] prefaceBytes = this.prefaceCheckBuf;
+        buffer.getBytes(0, prefaceBytes, 0, prefaceBytes.length);
+        for (int i = 0; i < CONNECTION_PREFACE.length; i++) {
+            if (prefaceBytes[i] != CONNECTION_PREFACE[i]) {
+                return false;
+            }
+        }
+        return true;
     }
 
     @Override

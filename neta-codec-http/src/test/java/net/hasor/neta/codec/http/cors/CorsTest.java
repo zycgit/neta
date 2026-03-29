@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cors;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
 import java.util.Set;
-import net.hasor.neta.channel.ProtoRcvQueue;
-import net.hasor.neta.channel.ProtoSndQueue;
+import net.hasor.neta.channel.ProtoQueue;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.codec.http.*;
 import org.junit.Test;
@@ -418,14 +414,14 @@ public class CorsTest {
 
         DefaultFullHttpRequest req = buildOptionsRequest("https://example.com", "POST", null);
 
-        SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
-        rcv.add(req);
-        SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
+        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(req);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        assertEquals(1, snd.size());
-        Object emitted = snd.poll();
+        assertEquals(1, snd.queueSize());
+        Object emitted = snd.takeMessage();
         assertTrue("Expected FullHttpResponse for preflight", emitted instanceof FullHttpResponse);
         FullHttpResponse preflight = (FullHttpResponse) emitted;
         assertEquals(204, preflight.status().code());
@@ -443,14 +439,14 @@ public class CorsTest {
 
         DefaultFullHttpRequest req = buildGetRequest("https://example.com");
 
-        SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
-        rcv.add(req);
-        SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
+        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(req);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        assertEquals(1, snd.size());
-        assertSame(req, snd.poll());
+        assertEquals(1, snd.queueSize());
+        assertSame(req, snd.takeMessage());
     }
 
     @Test
@@ -461,14 +457,14 @@ public class CorsTest {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/api");
         // No Origin header
 
-        SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
-        rcv.add(req);
-        SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
+        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(req);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        assertEquals(1, snd.size());
-        assertSame(req, snd.poll());
+        assertEquals(1, snd.queueSize());
+        assertSame(req, snd.takeMessage());
     }
 
     @Test
@@ -478,15 +474,15 @@ public class CorsTest {
 
         DefaultFullHttpRequest req = buildOptionsRequest("https://example.com", "POST", null);
 
-        SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
-        rcv.add(req);
-        SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
+        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(req);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
         // Disabled — passes through even OPTIONS preflight
-        assertEquals(1, snd.size());
-        assertSame(req, snd.poll());
+        assertEquals(1, snd.queueSize());
+        assertSame(req, snd.takeMessage());
     }
 
     @Test
@@ -494,13 +490,13 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowAnyOrigin().build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
-        SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
+        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         ProtoStatus status = handler.onMessage(null, rcv, snd);
 
-        assertEquals(net.hasor.neta.channel.ProtoStatus.Stop, status);
-        assertEquals(0, snd.size());
+        assertEquals(ProtoStatus.Stop, status);
+        assertEquals(0, snd.queueSize());
     }
 
     // =========================================================================
@@ -514,13 +510,13 @@ public class CorsTest {
 
         DefaultFullHttpRequest req = buildOptionsRequest("https://example.com", "DELETE", "Authorization");
 
-        SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
-        rcv.add(req);
-        SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
+        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(req);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        FullHttpResponse resp = (FullHttpResponse) snd.poll();
+        FullHttpResponse resp = (FullHttpResponse) snd.takeMessage();
         assertEquals(204, resp.status().code());
         assertEquals("https://example.com", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
         assertEquals("true", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
@@ -536,106 +532,16 @@ public class CorsTest {
 
         DefaultFullHttpRequest req = buildOptionsRequest("https://disallowed.com", "POST", null);
 
-        SimpleProtoRcvQueue<FullHttpRequest> rcv = new SimpleProtoRcvQueue<>();
-        rcv.add(req);
-        SimpleProtoSndQueue<Object> snd = new SimpleProtoSndQueue<>();
+        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(req);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
         // A 204 response is still emitted for the OPTIONS, but without CORS allow-origin header
-        Object emitted = snd.poll();
+        Object emitted = snd.takeMessage();
         assertTrue(emitted instanceof FullHttpResponse);
         FullHttpResponse resp = (FullHttpResponse) emitted;
         assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
-    }
-
-    // =========================================================================
-    // Minimal ProtoRcvQueue / ProtoSndQueue stubs
-    // =========================================================================
-
-    private static class SimpleProtoRcvQueue<T> implements ProtoRcvQueue<T> {
-        private final List<T> list = new ArrayList<>();
-
-        public void add(T item) {
-            list.add(item);
-        }
-
-        @Override
-        public int getCapacity() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public int queueSize() {
-            return list.size();
-        }
-
-        @Override
-        public List<T> takeMessage(int cnt) {
-            if (list.isEmpty())
-                return Collections.emptyList();
-            int take = Math.min(cnt, list.size());
-            List<T> result = new ArrayList<>(list.subList(0, take));
-            list.subList(0, take).clear();
-            return result;
-        }
-
-        @Override
-        public java.util.List<T> peekMessage(int cnt) {
-            if (list.isEmpty())
-                return Collections.emptyList();
-            int take = Math.min(cnt, list.size());
-            return new ArrayList<>(list.subList(0, take));
-        }
-
-        @Override
-        public void skipMessage(int cnt) {
-            int skip = Math.min(cnt, list.size());
-            list.subList(0, skip).clear();
-        }
-    }
-
-    private static class SimpleProtoSndQueue<T> implements ProtoSndQueue<T> {
-        private final List<T> list = new ArrayList<>();
-
-        @Override
-        public int getCapacity() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public int slotSize() {
-            return Integer.MAX_VALUE;
-        }
-
-        @Override
-        public int offerMessage(T[] offerList) {
-            Collections.addAll(list, offerList);
-            return offerList.length;
-        }
-
-        @Override
-        public int offerMessage(List<T> offerList) {
-            list.addAll(offerList);
-            return offerList.size();
-        }
-
-        @Override
-        public int offerMessage(ProtoRcvQueue<T> offerList) {
-            int count = 0;
-            while (offerList.hasMore()) {
-                list.add(offerList.takeMessage());
-                count++;
-            }
-            return count;
-        }
-
-        public int size() {
-            return list.size();
-        }
-
-        public T poll() {
-            return list.isEmpty() ? null : list.remove(0);
-        }
     }
 }

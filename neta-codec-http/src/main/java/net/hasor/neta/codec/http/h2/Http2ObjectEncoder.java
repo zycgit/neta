@@ -150,29 +150,40 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private boolean flushPendingControlFrames(ProtoContext context, ProtoSndQueue<Http2Frame> dst) {
+        Http2EncoderContent encoderState = context.context(Http2EncoderContent.class);
         Http2DecoderContent decoderState = context.context(Http2DecoderContent.class);
-        if (decoderState == null) {
+        if (decoderState == null && (encoderState == null || !encoderState.hasPendingOutboundFrames())) {
             return false;
         }
 
         boolean hasAny = false;
-        if (decoderState.consumeSettingsAck()) {
-            dst.offerMessage(settingsFrame(true, null));
-            hasAny = true;
+        if (decoderState != null) {
+            if (decoderState.consumeSettingsAck()) {
+                dst.offerMessage(settingsFrame(true, null));
+                hasAny = true;
+            }
+
+            byte[] pingPayload;
+            while ((pingPayload = decoderState.pollPendingPingAck()) != null) {
+                dst.offerMessage(pingFrame(true, pingPayload));
+                hasAny = true;
+            }
+
+            Http2Frame windowUpdate;
+            while ((windowUpdate = decoderState.pollPendingWindowUpdate()) != null) {
+                int increment = parseWindowUpdateIncrement(windowUpdate.payload(), windowUpdate.payloadOffset());
+                Http2Frame frame = buildWindowUpdateFrame(windowUpdate.streamId(), increment);
+                dst.offerMessage(frame);
+                hasAny = true;
+            }
         }
 
-        byte[] pingPayload;
-        while ((pingPayload = decoderState.pollPendingPingAck()) != null) {
-            dst.offerMessage(pingFrame(true, pingPayload));
-            hasAny = true;
-        }
-
-        Http2Frame windowUpdate;
-        while ((windowUpdate = decoderState.pollPendingWindowUpdate()) != null) {
-            int increment = parseWindowUpdateIncrement(windowUpdate.payload(), windowUpdate.payloadOffset());
-            Http2Frame frame = buildWindowUpdateFrame(windowUpdate.streamId(), increment);
-            dst.offerMessage(frame);
-            hasAny = true;
+        if (encoderState != null) {
+            Http2Frame pendingFrame;
+            while ((pendingFrame = encoderState.pollPendingOutboundFrame()) != null) {
+                dst.offerMessage(pendingFrame);
+                hasAny = true;
+            }
         }
 
         return hasAny;
@@ -488,7 +499,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             byte[] opaqueData = new byte[8];
             event.getData().getBytes(0, opaqueData, 0, opaqueData.length);
             Http2Frame frame = pingFrame(false, opaqueData);
-            this.sendFrameDirect(context, frame);
+            this.queueControlFrame(context, frame);
         } finally {
             event.release();
         }
@@ -496,7 +507,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private void sendGoaway(ProtoContext context, Http2GoawayEvent event) {
         Http2Frame frame = goawayFrame((int) event.lastAcceptedId(), event.errorCode(), event.debugData());
-        this.sendFrameDirect(context, frame);
+        this.queueControlFrame(context, frame);
     }
 
     private void sendResetStream(ProtoContext context, Http2ResetEvent resetEvent) {
@@ -507,12 +518,12 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
         long code = normalizeResetErrorCode(resetEvent.errorCode());
         Http2Frame frame = resetStreamFrame((int) streamId, code);
-        this.sendFrameDirect(context, frame);
+        this.queueControlFrame(context, frame);
     }
 
     private void sendPriority(ProtoContext context, Http2PriorityEvent event) {
         Http2Frame frame = priorityFrame(event.streamId(), event.streamDependency(), event.weight(), event.exclusive());
-        this.sendFrameDirect(context, frame);
+        this.queueControlFrame(context, frame);
     }
 
     private void sendPushPromise(ProtoContext context, Http2PushPromiseEvent event) {
@@ -523,53 +534,32 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
         int maxFrameSize = this.resolvePeerMaxFrameSize(context);
         List<Http2Frame> frames = pushPromiseFrames(event.streamId(), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
-        this.ensurePrefaceSent(context);
-        for (Http2Frame frame : frames) {
-            this.sendFrame(context, frame);
-        }
-        this.flushFrames(context);
+        this.queueControlFrames(context, frames);
     }
 
-    private void sendFrameDirect(ProtoContext context, Http2Frame frame) {
-        this.ensurePrefaceSent(context);
-        this.sendFrame(context, frame);
-        this.flushFrames(context);
+    private void queueControlFrame(ProtoContext context, Http2Frame frame) {
+        Http2EncoderContent state = this.encoderState(context);
+        state.queueOutboundFrame(frame);
+        this.triggerPendingControlWrite(context);
     }
 
-    private void ensurePrefaceSent(ProtoContext context) {
+    private void queueControlFrames(ProtoContext context, List<Http2Frame> frames) {
+        Http2EncoderContent state = this.encoderState(context);
+        state.queueOutboundFrames(frames);
+        this.triggerPendingControlWrite(context);
+    }
+
+    private Http2EncoderContent encoderState(ProtoContext context) {
         Http2EncoderContent state = context.context(Http2EncoderContent.class);
-        if (state != null && !state.isPrefaceSent()) {
-            // Mark first to avoid re-entrant duplicate preface emission on synchronous transports.
-            state.markPrefaceSent();
-            if (this.serverMode) {
-                int initialWindowSize = this.localSettings.initialWindowSize();
-                this.sendFrame(context, serverSettingsFrame(this.localSettings));
-                if (initialWindowSize > 65535) {
-                    this.sendFrame(context, buildWindowUpdateFrame(0, initialWindowSize - 65535));
-                }
-            } else {
-                this.sendFrame(context, new Http2Frame(Http2FrameType.PREFACE, 0, 0, CLIENT_PREFACE));
-                this.sendFrame(context, settingsFrame(false, toSettingsMap(this.localSettings)));
-            }
+        if (state == null) {
+            state = new Http2EncoderContent(this.serverMode, this.localSettings);
+            context.context(Http2EncoderContent.class, state);
         }
+        return state;
     }
 
-    private void sendFrame(ProtoContext context, Http2Frame frame) {
-        String previousStack = context.getPreviousStackName();
-        if (StringUtils.isNotBlank(previousStack)) {
-            context.sendData(frame, previousStack);
-        } else {
-            context.sendData(frame);
-        }
-    }
-
-    private void flushFrames(ProtoContext context) {
-        String previousStack = context.getPreviousStackName();
-        if (StringUtils.isNotBlank(previousStack)) {
-            context.flush(previousStack);
-        } else {
-            context.flush();
-        }
+    private void triggerPendingControlWrite(ProtoContext context) {
+        context.flush();
     }
 
     private int resolvePeerMaxFrameSize(ProtoContext context) {
@@ -593,7 +583,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
         long errorCode = resolveErrorCode(protocolError.errorCode(), Http2ErrorCode.INTERNAL_ERROR);
         Http2Frame frame = resetStreamFrame(streamId, errorCode);
-        this.sendFrameDirect(context, frame);
+        this.queueControlFrame(context, frame);
 
         Http2ResetEvent event = new Http2ResetEvent(streamId, errorCode).remote(false);
         this.fireEvent(context, Http2ResetEvent.class, event);
@@ -605,7 +595,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         byte[] debugData = buildDebugData(protocolError);
         long errorCode = resolveErrorCode(protocolError.errorCode(), Http2ErrorCode.INTERNAL_ERROR);
         Http2Frame frame = goawayFrame(lastAcceptedStreamId, errorCode, debugData);
-        this.sendFrameDirect(context, frame);
+        this.queueControlFrame(context, frame);
 
         Http2GoawayEvent event = new Http2GoawayEvent(0, lastAcceptedStreamId, errorCode, debugData).remote(false);
         this.fireEvent(context, Http2GoawayEvent.class, event);
@@ -822,4 +812,5 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         String message = protocolError.getMessage();
         return message == null ? null : message.getBytes(StandardCharsets.UTF_8);
     }
+
 }

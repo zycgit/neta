@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http;
 import java.util.List;
+import net.hasor.cobble.ref.Tuple;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import org.junit.Test;
@@ -165,8 +166,8 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
             List<ByteBuf> parts = sendAndOutBound(pipe,//
                     new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/resume"),//
                     joinHeaders(DefaultLastHttpHeaders.class,//
-                            net.hasor.cobble.ref.Tuple.of(HttpHeaderNames.HOST, "example.com"),//
-                            net.hasor.cobble.ref.Tuple.of(HttpHeaderNames.CONTENT_LENGTH, "4")),//
+                        Tuple.of(HttpHeaderNames.HOST, "example.com"),//
+                        Tuple.of(HttpHeaderNames.CONTENT_LENGTH, "4")),//
                     new DefaultLastHttpContent(ascii("Wiki")));
 
             assertEquals(3, parts.size());

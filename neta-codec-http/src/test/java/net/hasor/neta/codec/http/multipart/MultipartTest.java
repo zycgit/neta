@@ -14,8 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.multipart;
+import java.io.ByteArrayOutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import org.junit.Test;
@@ -93,7 +96,7 @@ public class MultipartTest {
 
     @Test
     public void testDefaultFileUpload_header() {
-        java.util.Map<String, String> headers = new java.util.LinkedHashMap<>();
+        Map<String, String> headers = new LinkedHashMap<>();
         headers.put("content-type", "application/octet-stream");
         headers.put("x-custom", "value");
         DefaultFileUpload fu = new DefaultFileUpload("f", null, "application/octet-stream", toBuf("data"), headers);
@@ -195,7 +198,7 @@ public class MultipartTest {
     public void testDecode_binaryContent() {
         String boundary = "binbound";
         byte[] fileData = new byte[] { 0x00, 0x01, 0x02, (byte) 0xFF, (byte) 0xFE };
-        java.io.ByteArrayOutputStream bos = new java.io.ByteArrayOutputStream();
+        ByteArrayOutputStream bos = new ByteArrayOutputStream();
         writeStr(bos, "--binbound\r\n");
         writeStr(bos, "Content-Disposition: form-data; name=\"bin\"; filename=\"data.bin\"\r\n");
         writeStr(bos, "Content-Type: application/octet-stream\r\n");

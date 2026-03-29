@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.codec.http;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
@@ -402,7 +404,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
     // header
     private HttpHeaders decodeHeaders(HttpContext.ResponseDecodeState respCtx, ByteBuf accumulator) {
-        java.util.List<DefaultHttpHeaderEntry> headerEntries = null;
+        List<DefaultHttpHeaderEntry> headerEntries = null;
         boolean endOfHeaders = false;
         try {
             ByteBuf line;
@@ -447,7 +449,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     }
 
                     if (headerEntries == null) {
-                        headerEntries = new java.util.ArrayList<>();
+                        headerEntries = new ArrayList<>();
                     }
 
                     String name = line.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII);

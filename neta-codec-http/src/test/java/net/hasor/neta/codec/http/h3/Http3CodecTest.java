@@ -1,11 +1,15 @@
 package net.hasor.neta.codec.http.h3;
 
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.channel.NetConfig;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoRcvQueue;
 import net.hasor.neta.channel.ProtoSndQueue;
@@ -26,10 +30,15 @@ public class Http3CodecTest {
     // ========================= Mock & Helpers =========================
 
     private static ProtoContext mockContext() {
-        java.util.Map<Class<?>, Object> contextMap = new java.util.concurrent.ConcurrentHashMap<>();
-        return (ProtoContext) java.lang.reflect.Proxy.newProxyInstance(ProtoContext.class.getClassLoader(), new Class[] { ProtoContext.class }, (proxy, method, args) -> {
+        Map<Class<?>, Object> contextMap = new ConcurrentHashMap<>();
+        NetConfig config = new NetConfig();
+        config.setBufAllocator(ByteBufAllocator.DEFAULT);
+        return (ProtoContext) Proxy.newProxyInstance(ProtoContext.class.getClassLoader(), new Class[] { ProtoContext.class }, (proxy, method, args) -> {
             if ("byteBufAllocator".equals(method.getName())) {
                 return ByteBufAllocator.DEFAULT;
+            }
+            if ("getConfig".equals(method.getName())) {
+                return config;
             }
             if ("context".equals(method.getName())) {
                 if (args.length == 1) {
