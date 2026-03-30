@@ -22,6 +22,11 @@ package net.hasor.neta.channel;
  * pipeline invocation and switches subsequent handlers from {@code onMessage} to
  * {@code onError}.  The exception propagates to the end of the pipeline; if nothing clears
  * it the channel is closed.
+ * <p>For outbound {@link ProtoContext#sendData(Object)} calls, a failed send attempt does not
+ * automatically discard queue-owned messages that are still buffered in the current pipeline
+ * stage. If the channel remains open, those messages stay queued and may be processed again on
+ * a later send/recovery pass. Final reclamation of such queued data happens in the stack close
+ * path only.
  * <p>A handler can intercept the exception and resume normal processing by calling
  * {@link #clear()} from its {@code onError} implementation:
  * <pre>
@@ -34,8 +39,8 @@ package net.hasor.neta.channel;
  */
 public interface ProtoExceptionHolder {
     /**
-     * clear the exception state and continue piple execution
-     * <p>You can clear the exception flag with the {@link ProtoExceptionHolder#clear()} method, and piple execution will continue normally</p>
+        * clear the exception state and continue piple execution
+        * <p>You can clear the exception flag with the {@link ProtoExceptionHolder#clear()} method, and piple execution will continue normally</p>
      * <pre>
      *  ... -> onMessage -> onError -> onError(invoker clear) -> onMessage -> ...
      * </pre>

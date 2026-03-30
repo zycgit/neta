@@ -14,16 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-public interface ProtoPartitionBuilder<RCV_UP, SND_DOWN> {
-    /** Returns the control handle bound to the partition node being configured. */
-    ProtoPartitionControl control();
-
-    /** Registers a partition policy that can consume messages or events before default routing. */
-    ProtoPartitionBuilder<RCV_UP, SND_DOWN> policy(ProtoPartitionPolicy policy);
-
-    /** Registers a branch from an existing initializer. */
-    ProtoPartitionBuilder<RCV_UP, SND_DOWN> byInitializer(ProtoInitializer initializer);
-
-    /** Builds the routing duplexer defined by this builder. */
-    ProtoDuplexer<RCV_UP, RCV_UP, SND_DOWN, SND_DOWN> build();
+public enum PartitionDataKind {
+    Message,
+    Event
 }

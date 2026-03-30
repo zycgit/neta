@@ -19,6 +19,7 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.concurrent.ThreadUtils;
@@ -324,6 +325,71 @@ public class SoWriteTest extends AbstractSoTest {
         assert future.getCause() instanceof IllegalArgumentException;
         assert "L1 OnError Throw".equals(future.getCause().getMessage());
         assert !channel.isClose();
+
+        client.close();
+        server.shutdown();
+    }
+
+    @Test
+    public void sndThrow_sendDataRetainsBufferedMessageForNextSend() throws Throwable {
+        AtomicBoolean sndErr1 = new AtomicBoolean(false);
+        AtomicInteger sendAttempt = new AtomicInteger(0);
+        ProtoInitializer initializer = ProtoHelper.standard().nextEncoder("L1", new ProtoHandler<ByteBuf, ByteBuf>() {
+            @Override
+            public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+                if (sendAttempt.incrementAndGet() == 1) {
+                    throw new IllegalStateException("L1 Throw");
+                }
+                dst.offerMessage(src.takeMessage(Math.min(src.queueSize(), dst.slotSize())));
+                return ProtoStatus.Next;
+            }
+
+            @Override
+            public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) {
+                sndErr1.set(e instanceof IllegalStateException && "L1 Throw".equals(e.getMessage()));
+                throw new IllegalArgumentException("L1 OnError Throw");
+            }
+        }).build();
+
+        int safePort = safePort();
+        InetSocketAddress address = new InetSocketAddress("127.0.0.1", safePort);
+        TcpSoConfig tcpConf = tcpConfig(4, 30);
+        NetConfig netConfig = globalConf();
+        netConfig.setPrintLog(false);
+
+        NetManager server = new NetManager(netConfig);
+        SoContext context = server.getContext();
+        NetListen listen = server.bind(address, initializer, tcpConf);
+
+        Socket client = new Socket("127.0.0.1", safePort);
+        listen.waitAnyAccept();
+        NetChannel channel = (NetChannel) context.findChannel(2);
+
+        Future<?> first = channel.sendData(ByteBuf.wrap(new byte[] { 1 }));
+        while (!first.isDone()) {
+            ThreadUtils.sleep(50);
+        }
+
+        assert sndErr1.get();
+        assert first.getCause() instanceof IllegalArgumentException;
+        assert !channel.isClose();
+
+        Future<?> second = channel.sendData(ByteBuf.wrap(new byte[] { 2 }));
+        while (!second.isDone()) {
+            ThreadUtils.sleep(50);
+        }
+
+        assert second.getCause() == null;
+        ThreadUtils.sleep(200);
+
+        InputStream soIn = client.getInputStream();
+        int available = soIn.available();
+        byte[] rcvBytes = new byte[available];
+        soIn.read(rcvBytes);
+
+        assert available == 2;
+        assert rcvBytes[0] == 1;
+        assert rcvBytes[1] == 2;
 
         client.close();
         server.shutdown();

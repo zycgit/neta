@@ -167,8 +167,13 @@ public interface ProtoContext {
      * </pre>
      * @param writeData the application-level object to send; must be compatible with the
      * first SND handler's expected input type
-     * @return a {@link Future} that completes when the encoded bytes have been handed off
-     * to the network task queue; failure is reported via {@link Future#getCause()}
+    * <p>If the returned {@link Future} fails because a SND handler throws during the current
+    * send pass, that failure describes only the current attempt. Queue-owned outbound messages
+    * that are still buffered inside pipeline stages are retained while the channel stays open,
+    * so a later send/recovery pass may continue processing them. Those queued messages are only
+    * released automatically when the channel close path runs.</p>
+    * @return a {@link Future} that completes when the encoded bytes have been handed off
+    * to the network task queue; failure is reported via {@link Future#getCause()}
      */
     Future<?> sendData(Object writeData);
 

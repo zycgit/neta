@@ -208,7 +208,7 @@ public final class ProtoHelper {
         }
 
         @Override
-        public ProtoBuilder<RCV_DOWN, SND_UP> nextPartition(String name, ProtoPartitionSelector<RCV_DOWN> routing, Consumer<ProtoPartitionBuilder<RCV_DOWN, SND_UP>> initializer) {
+        public ProtoBuilder<RCV_DOWN, SND_UP> nextPartition(String name, ProtoPartitionSelector routing, Consumer<ProtoPartitionBuilder<RCV_DOWN, SND_UP>> initializer) {
             return this.nextPartition(name, this.defaultConf, routing, initializer);
         }
 
@@ -304,7 +304,7 @@ public final class ProtoHelper {
 
         @Override
         public ProtoBuilder<RCV_DOWN, SND_UP> nextPartition(String name, ProtoConfig protoConf,//
-                ProtoPartitionSelector<RCV_DOWN> routing, Consumer<ProtoPartitionBuilder<RCV_DOWN, SND_UP>> initializer) {
+                ProtoPartitionSelector routing, Consumer<ProtoPartitionBuilder<RCV_DOWN, SND_UP>> initializer) {
             Objects.requireNonNull(name, "name is null.");
             Objects.requireNonNull(protoConf, "protoConf is null.");
             Objects.requireNonNull(routing, "routing is null.");
@@ -312,6 +312,7 @@ public final class ProtoHelper {
             ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer = new ProtoPartitionDuplexer<>(routing);
             ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> routeBuilder = new ProtoPartitionBuilderImpl<>(duplexer);
             initializer.accept(routeBuilder);
+            routeBuilder.build();
             this.taskAppend.add(c -> addLast(c, name, protoConf, duplexer));
             return new ProtoBuilderImpl<>(this.defaultConf, this.taskAppend);
         }
@@ -359,19 +360,33 @@ public final class ProtoHelper {
 
     private static class ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> implements ProtoPartitionBuilder<RCV_DOWN, SND_UP> {
         private final ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer;
+        private       ProtoPartitionPolicy                     policy;
+        private       ProtoInitializer                         initializer;
 
         public ProtoPartitionBuilderImpl(ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer) {
             this.duplexer = duplexer;
         }
 
         @Override
-        public ProtoPartitionBuilder<RCV_DOWN, SND_UP> byInitializer(ProtoInitializer initializer) {
-            duplexer.setInitializer(initializer);
+        public ProtoPartitionBuilder<RCV_DOWN, SND_UP> policy(ProtoPartitionPolicy policy) {
+            this.policy = Objects.requireNonNull(policy, "policy is null.");
             return this;
         }
 
         @Override
+        public ProtoPartitionBuilder<RCV_DOWN, SND_UP> byInitializer(ProtoInitializer initializer) {
+            this.initializer = Objects.requireNonNull(initializer, "initializer is null.");
+            return this;
+        }
+
+        @Override
+        public ProtoPartitionControl control() {
+            return this.duplexer.getControl();
+        }
+
+        @Override
         public ProtoDuplexer<RCV_DOWN, RCV_DOWN, SND_UP, SND_UP> build() {
+            this.duplexer.configDuplexer(this.policy, this.initializer);
             return this.duplexer;
         }
     }

@@ -33,53 +33,48 @@ import org.junit.Test;
  * @version : 2023-09-24
  */
 public class LengthFieldBasedFrameHandlerTest {
+    private static void closeTransport(NetManager neta, VrtTransfer transfer) throws java.io.IOException {
+        if (transfer != null) {
+            transfer.close();
+        }
+        if (neta != null) {
+            neta.shutdown();
+        }
+    }
+
+    private static void assertNextFrame(Queue<ByteBuf> rcvData, int readableBytes, byte[] expected) {
+        ByteBuf buf = rcvData.poll();
+        if (buf == null) {
+            throw new AssertionError("expected frame but queue is empty");
+        }
+        try {
+            assert buf.readableBytes() == readableBytes;
+            assert Objects.deepEquals(buf.asByteArray(), expected);
+        } finally {
+            buf.free();
+        }
+    }
+
     private void coderTest1_case1(Queue<ByteBuf> rcvData) {
-        ByteBuf buf1 = rcvData.poll();
-        assert buf1.readableBytes() == 6;
-        assert Objects.deepEquals(buf1.asByteArray(), new byte[] { 0, 4, 1, 2, 3, 4 });
-
-        ByteBuf buf2 = rcvData.poll();
-        assert buf2.readableBytes() == 4;
-        assert Objects.deepEquals(buf2.asByteArray(), new byte[] { 0, 2, 1, 2 });
-
-        ByteBuf buf3 = rcvData.poll();
-        assert buf3.readableBytes() == 10;
-        assert Objects.deepEquals(buf3.asByteArray(), new byte[] { 0, 8, 1, 2, 3, 4, 5, 6, 7, 8 });
-
-        ByteBuf buf4 = rcvData.poll();
-        assert buf4.readableBytes() == 2;
-        assert Objects.deepEquals(buf4.asByteArray(), new byte[] { 0, 0 });
-
-        ByteBuf buf5 = rcvData.poll();
-        assert buf5.readableBytes() == 3;
-        assert Objects.deepEquals(buf5.asByteArray(), new byte[] { 0, 1, 1 });
+        assertNextFrame(rcvData, 6, new byte[] { 0, 4, 1, 2, 3, 4 });
+        assertNextFrame(rcvData, 4, new byte[] { 0, 2, 1, 2 });
+        assertNextFrame(rcvData, 10, new byte[] { 0, 8, 1, 2, 3, 4, 5, 6, 7, 8 });
+        assertNextFrame(rcvData, 2, new byte[] { 0, 0 });
+        assertNextFrame(rcvData, 3, new byte[] { 0, 1, 1 });
     }
 
     private void coderTest1_case2(Queue<ByteBuf> rcvData) {
-        ByteBuf buf1 = rcvData.poll();
-        assert buf1.readableBytes() == 4;
-        assert Objects.deepEquals(buf1.asByteArray(), new byte[] { 1, 2, 3, 4 });
-
-        ByteBuf buf2 = rcvData.poll();
-        assert buf2.readableBytes() == 2;
-        assert Objects.deepEquals(buf2.asByteArray(), new byte[] { 1, 2 });
-
-        ByteBuf buf3 = rcvData.poll();
-        assert buf3.readableBytes() == 8;
-        assert Objects.deepEquals(buf3.asByteArray(), new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
-
-        ByteBuf buf4 = rcvData.poll();
-        assert buf4.readableBytes() == 0;
-        assert Objects.deepEquals(buf4.asByteArray(), new byte[0]);
-
-        ByteBuf buf5 = rcvData.poll();
-        assert buf5.readableBytes() == 1;
-        assert Objects.deepEquals(buf5.asByteArray(), new byte[] { 1 });
+        assertNextFrame(rcvData, 4, new byte[] { 1, 2, 3, 4 });
+        assertNextFrame(rcvData, 2, new byte[] { 1, 2 });
+        assertNextFrame(rcvData, 8, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
+        assertNextFrame(rcvData, 0, new byte[0]);
+        assertNextFrame(rcvData, 1, new byte[] { 1 });
     }
 
     @Test
     public void coder_1_case1() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -90,26 +85,24 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        client.sendData(ByteBuf.wrap(new byte[] {//
-                0, 4, 1, 2, 3, 4,                //
-                0, 2, 1, 2,                      //
-                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,    //
-                0, 0,                            //
-                0, 1, 1,                         //
-                99, 99 }));
-        assert rcvData.size() == 5;
-        coderTest1_case1(rcvData);
+            client.sendData(ByteBuf.wrap(new byte[] { 0, 4, 1, 2, 3, 4, 0, 2, 1, 2, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
+            assert rcvData.size() == 5;
+            coderTest1_case1(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
+        }
     }
 
     @Test
     public void coder_1_case2() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -120,26 +113,24 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        client.sendData(ByteBuf.wrap(new byte[] {//
-                0, 4, 1, 2, 3, 4,                //
-                0, 2, 1, 2,                      //
-                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,    //
-                0, 0,                            //
-                0, 1, 1,                         //
-                99, 99 }));
-        assert rcvData.size() == 5;
-        coderTest1_case2(rcvData);
+            client.sendData(ByteBuf.wrap(new byte[] { 0, 4, 1, 2, 3, 4, 0, 2, 1, 2, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
+            assert rcvData.size() == 5;
+            coderTest1_case2(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
+        }
     }
 
     @Test
     public void coder_1_case3() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -150,26 +141,24 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        client.sendData(ByteBuf.wrap(new byte[] {//
-                1, 0, 4, 1, 2, 3, 4,             //
-                2, 0, 2, 1, 2,                   //
-                3, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, //
-                4, 0, 0,                         //
-                5, 0, 1, 1,                      //
-                6, 99, 99 }));
-        assert rcvData.size() == 5;
-        coderTest1_case2(rcvData);
+            client.sendData(ByteBuf.wrap(new byte[] { 1, 0, 4, 1, 2, 3, 4, 2, 0, 2, 1, 2, 3, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, 4, 0, 0, 5, 0, 1, 1, 6, 99, 99 }));
+            assert rcvData.size() == 5;
+            coderTest1_case2(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
+        }
     }
 
     @Test
     public void coder_2_case1() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -180,29 +169,27 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        byte[] bytes1 = new byte[] {            //
-                0, 4, 1, 2, 3, 4,               //
-                0, 2, 1, 2,                     //
-                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,   //
-                0, 0,                           //
-                0, 1, 1,                        //
-                99, 99 };
-        for (byte b : bytes1) {
-            client.sendData(ByteBuf.wrap(new byte[] { b }));
+            byte[] bytes1 = new byte[] { 0, 4, 1, 2, 3, 4, 0, 2, 1, 2, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 };
+            for (byte b : bytes1) {
+                client.sendData(ByteBuf.wrap(new byte[] { b }));
+            }
+            assert rcvData.size() == 5;
+            coderTest1_case1(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
         }
-        assert rcvData.size() == 5;
-        coderTest1_case1(rcvData);
     }
 
     @Test
     public void coder_2_case2() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -213,29 +200,27 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        byte[] bytes1 = new byte[] {            //
-                0, 4, 1, 2, 3, 4,               //
-                0, 2, 1, 2,                     //
-                0, 8, 1, 2, 3, 4, 5, 6, 7, 8,   //
-                0, 0,                           //
-                0, 1, 1,                        //
-                99, 99 };
-        for (byte b : bytes1) {
-            client.sendData(ByteBuf.wrap(new byte[] { b }));
+            byte[] bytes1 = new byte[] { 0, 4, 1, 2, 3, 4, 0, 2, 1, 2, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 };
+            for (byte b : bytes1) {
+                client.sendData(ByteBuf.wrap(new byte[] { b }));
+            }
+            assert rcvData.size() == 5;
+            coderTest1_case2(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
         }
-        assert rcvData.size() == 5;
-        coderTest1_case2(rcvData);
     }
 
     @Test
     public void coder_2_case3() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -246,29 +231,27 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        byte[] bytes1 = new byte[] {            //
-                1, 0, 4, 1, 2, 3, 4,            //
-                2, 0, 2, 1, 2,                  //
-                3, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8,//
-                4, 0, 0,                        //
-                5, 0, 1, 1,                     //
-                6, 99, 99 };
-        for (byte b : bytes1) {
-            client.sendData(ByteBuf.wrap(new byte[] { b }));
+            byte[] bytes1 = new byte[] { 1, 0, 4, 1, 2, 3, 4, 2, 0, 2, 1, 2, 3, 0, 8, 1, 2, 3, 4, 5, 6, 7, 8, 4, 0, 0, 5, 0, 1, 1, 6, 99, 99 };
+            for (byte b : bytes1) {
+                client.sendData(ByteBuf.wrap(new byte[] { b }));
+            }
+            assert rcvData.size() == 5;
+            coderTest1_case2(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
         }
-        assert rcvData.size() == 5;
-        coderTest1_case2(rcvData);
     }
 
     @Test
     public void coder_3_case1() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -279,24 +262,28 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        client.sendData(ByteBuf.wrap(new byte[] { 0 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
-        assert rcvData.size() == 5;
-        coderTest1_case1(rcvData);
+            client.sendData(ByteBuf.wrap(new byte[] { 0 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
+            assert rcvData.size() == 5;
+            coderTest1_case1(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
+        }
     }
 
     @Test
     public void coder_3_case2() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -307,24 +294,28 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        client.sendData(ByteBuf.wrap(new byte[] { 0 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
-        assert rcvData.size() == 5;
-        coderTest1_case2(rcvData);
+            client.sendData(ByteBuf.wrap(new byte[] { 0 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 0 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 0, 8, 1, 2, 3 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 0, 0, 0, 1, 1, 99, 99 }));
+            assert rcvData.size() == 5;
+            coderTest1_case2(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
+        }
     }
 
     @Test
     public void coder_3_case3() throws Throwable {
         NetManager neta = new NetManager();
+        VrtTransfer transfer = null;
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
             ProtoHelper.standard().build().config(ctx);
         }, VrtSoConfig.asServer());
@@ -335,19 +326,22 @@ public class LengthFieldBasedFrameHandlerTest {
         }, VrtSoConfig.asClient());
 
         //
-        VrtTransfer transfer = new VrtTransfer(neta);
-        transfer.linkTo(client, server, VrtTransfer.duplicate());
-        Queue<ByteBuf> rcvData = new ArrayDeque<>();
-        server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
+        try {
+            transfer = new VrtTransfer(neta);
+            transfer.linkTo(client, server, VrtTransfer.duplicate());
+            Queue<ByteBuf> rcvData = new ArrayDeque<>();
+            server.subscribe(SubscribeMode.SYNC, d -> rcvData.offer((ByteBuf) d.getData()));
 
-        //
-        client.sendData(ByteBuf.wrap(new byte[] { 1, 0 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 2, 0 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 3, 0, 8, 1, 2, 3 }));
-        client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 4, 0, 0, 5, 0, 1, 1 }));
-        assert rcvData.size() == 5;
-        coderTest1_case2(rcvData);
+            client.sendData(ByteBuf.wrap(new byte[] { 1, 0 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 4, 1 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 2, 3, 4, 2, 0 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 2, 1, 2, 3, 0, 8, 1, 2, 3 }));
+            client.sendData(ByteBuf.wrap(new byte[] { 4, 5, 6, 7, 8, 4, 0, 0, 5, 0, 1, 1 }));
+            assert rcvData.size() == 5;
+            coderTest1_case2(rcvData);
+        } finally {
+            closeTransport(neta, transfer);
+        }
     }
 
     // ===========================================
@@ -375,9 +369,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 4, 0, 1, 2, 3, 4 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 4;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 1, 2, 3, 4 });
+        assertNextFrame(rcvData, 4, new byte[] { 1, 2, 3, 4 });
     }
 
     // ===========================================
@@ -405,9 +397,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 3, 10, 20, 30 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 3;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 10, 20, 30 });
+        assertNextFrame(rcvData, 3, new byte[] { 10, 20, 30 });
     }
 
     @Test
@@ -431,9 +421,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 0, 0, 2, 10, 20 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 2;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 10, 20 });
+        assertNextFrame(rcvData, 2, new byte[] { 10, 20 });
     }
 
     @Test
@@ -457,9 +445,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 0, 0, 0, 3, 10, 20, 30 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 3;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 10, 20, 30 });
+        assertNextFrame(rcvData, 3, new byte[] { 10, 20, 30 });
     }
 
     // ===========================================
@@ -488,9 +474,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 0, 2, 1, 2, 3, 4 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 4;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 1, 2, 3, 4 });
+        assertNextFrame(rcvData, 4, new byte[] { 1, 2, 3, 4 });
     }
 
     @Test
@@ -515,9 +499,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 0, 6, 1, 2, 3, 4 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 4;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 1, 2, 3, 4 });
+        assertNextFrame(rcvData, 4, new byte[] { 1, 2, 3, 4 });
     }
 
     // ===========================================
@@ -625,8 +607,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 0, 0 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 0;
+        assertNextFrame(rcvData, 0, new byte[0]);
     }
 
     // ===========================================
@@ -653,9 +634,7 @@ public class LengthFieldBasedFrameHandlerTest {
         client.sendData(ByteBuf.wrap(new byte[] { 0, 4, 1, 2, 3, 4 }));
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 4;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 1, 2, 3, 4 });
+        assertNextFrame(rcvData, 4, new byte[] { 1, 2, 3, 4 });
     }
 
     @Test
@@ -681,13 +660,8 @@ public class LengthFieldBasedFrameHandlerTest {
                 0, 2, 40, 50 }));
         assert rcvData.size() == 2;
 
-        ByteBuf buf1 = rcvData.poll();
-        assert buf1.readableBytes() == 5;
-        assert Objects.deepEquals(buf1.asByteArray(), new byte[] { 0, 3, 10, 20, 30 });
-
-        ByteBuf buf2 = rcvData.poll();
-        assert buf2.readableBytes() == 4;
-        assert Objects.deepEquals(buf2.asByteArray(), new byte[] { 0, 2, 40, 50 });
+        assertNextFrame(rcvData, 5, new byte[] { 0, 3, 10, 20, 30 });
+        assertNextFrame(rcvData, 4, new byte[] { 0, 2, 40, 50 });
     }
 
     @Test
@@ -714,8 +688,6 @@ public class LengthFieldBasedFrameHandlerTest {
         }
         assert rcvData.size() == 1;
 
-        ByteBuf buf = rcvData.poll();
-        assert buf.readableBytes() == 3;
-        assert Objects.deepEquals(buf.asByteArray(), new byte[] { 10, 20, 30 });
+        assertNextFrame(rcvData, 3, new byte[] { 10, 20, 30 });
     }
 }

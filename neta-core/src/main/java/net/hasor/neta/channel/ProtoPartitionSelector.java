@@ -22,12 +22,10 @@ package net.hasor.neta.channel;
  * partition identity observed by {@link ProtoPartitionDuplexer}; implementations should therefore keep the route
  * value stable for all messages/events that belong to the same partition.
  * </p>
- * @param <T> partitioned message type
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-29
  */
-public interface ProtoPartitionSelector<T> {
-    String route(ProtoContext context, boolean isRcv, T message);
-
-    String route(ProtoContext context, boolean isRcv, SoUserEvent event);
+@FunctionalInterface
+public interface ProtoPartitionSelector {
+    PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data);
 }

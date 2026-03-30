@@ -55,6 +55,10 @@ public interface ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     /**
      * Handles an exception raised by this node or a downstream node.
+     * <p>On the outbound side, if {@link ProtoContext#sendData(Object)} fails but the channel is
+     * still usable, queue-owned outbound messages buffered at the current stage are retained rather
+     * than discarded. They may be processed by a later send/recovery pass and are reclaimed
+     * automatically only during channel close.</p>
      */
     default ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         return ProtoStatus.Next;

@@ -1,12 +1,29 @@
 package net.hasor.neta.bytebuf;
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
+import java.util.logging.Level;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
 /**
  * Tests for {@link ResourceLeakDetector} - PhantomReference based leak detection.
  */
 public class ResourceLeakDetectorTest {
+    private static java.util.logging.Logger leakLogger;
+    private static Level                    oldLeakLoggerLevel;
+
+    @BeforeClass
+    public static void disableLeakLoggerForThisTestClass() {
+        leakLogger = java.util.logging.Logger.getLogger(ResourceLeakDetector.class.getName());
+        oldLeakLoggerLevel = leakLogger.getLevel();
+        leakLogger.setLevel(Level.OFF);
+    }
+
+    @AfterClass
+    public static void restoreLeakLoggerAfterThisTestClass() {
+        if (leakLogger != null) {
+            leakLogger.setLevel(oldLeakLoggerLevel);
+        }
+    }
 
     // ========================================================================
     // Basic open/close lifecycle
@@ -67,31 +84,18 @@ public class ResourceLeakDetectorTest {
     // ========================================================================
 
     @Test
-    public void leakedObject_reportsToStderr() throws Exception {
+    public void leakedObject_reportsToLogger() throws Exception {
         ResourceLeakDetector<Object> detector = new ResourceLeakDetector<>("TestResource");
 
         // Create a tracked object and intentionally "leak" it
         createLeakedObject(detector);
 
-        // Force GC to enqueue the PhantomReference
-        PrintStream originalErr = System.err;
-        ByteArrayOutputStream errCapture = new ByteArrayOutputStream();
-        System.setErr(new PrintStream(errCapture));
-
-        try {
-            // Multiple GC attempts to trigger PhantomReference collection
-            for (int attempt = 0; attempt < 10; attempt++) {
-                System.gc();
-                Thread.sleep(100);
-                // trigger reportLeak via opening a new resource
-                detector.open(new Object()).close();
-
-                if (errCapture.toString().contains("LEAK:")) {
-                    break;
-                }
-            }
-        } finally {
-            System.setErr(originalErr);
+        // Multiple GC attempts to trigger PhantomReference collection.
+        // The logger is muted for this whole test class because this case intentionally creates leaks.
+        for (int attempt = 0; attempt < 10; attempt++) {
+            System.gc();
+            Thread.sleep(100);
+            detector.open(new Object()).close();
         }
 
         // Note: GC-based leak detection is non-deterministic, so we don't assert

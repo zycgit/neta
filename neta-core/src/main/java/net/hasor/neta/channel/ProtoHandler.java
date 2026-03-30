@@ -55,6 +55,10 @@ public interface ProtoHandler<IN, OUT> {
 
     /**
      * Handles an exception raised by this handler or a downstream handler.
+     * <p>On the outbound side, if {@link ProtoContext#sendData(Object)} triggers this callback and
+     * the channel remains open, queue-owned outbound messages buffered at the current stage are not
+     * discarded by the framework. They remain available for a later send/recovery pass unless the
+     * handler consumes them explicitly or the channel close path runs.</p>
      */
     default ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         return ProtoStatus.Next;

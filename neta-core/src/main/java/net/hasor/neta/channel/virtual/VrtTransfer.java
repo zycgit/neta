@@ -98,7 +98,12 @@ public class VrtTransfer {
                 if (data == null) {
                     dst.offerMessage((Object) null);
                 } else if (data instanceof ByteBuf) {
-                    dst.offerMessage(((ByteBuf) data).copy());
+                    ByteBuf byteBuf = (ByteBuf) data;
+                    try {
+                        dst.offerMessage(byteBuf.copy());
+                    } finally {
+                        byteBuf.free();
+                    }
                 } else if (data instanceof List) {
                     dst.offerMessage(new CopyOnWriteArrayList<>((List) data));
                 } else if (data.getClass().isArray()) {
