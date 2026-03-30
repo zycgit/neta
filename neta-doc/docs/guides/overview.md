@@ -2,57 +2,63 @@
 id: overview
 sidebar_position: 1
 title: 介绍
-description: dbVisitor 是一个轻量小巧的数据库 ORM 工具，提供对象映射、丰富的类型处理、动态SQL、存储过程、内置分页方言20+。支持嵌套事务、多数据源、条件构造器、INSERT 策略、多语句/多结果。并兼容 Spring 及 MyBatis 用法。
+description: Neta 是一个基于 Java AIO 的异步网络应用框架，用于构建高性能、可维护、可扩展的协议服务端和客户端。
 ---
-# 介绍
 
-The Neta project is an effort to provide an asynchronous event-driven network application
-framework and tooling for the rapid development of maintainable high-performance and high-scalability protocol servers and clients.
+Neta 是一个基于 Java AIO 的异步事件驱动网络框架，用于构建高性能、可维护的协议服务端和客户端。
 
-In other words, Netty is an NIO client server framework that enables quick and easy development of network applications such as protocol servers and clients. It greatly simplifies and streamlines network programming such as TCP and UDP socket server development.
+```text
+                  Protocol Stack              API
+Net In  -> [ decode -> route -> encode ] -> subscribe -> Application
+Net Out <- [ decode <- route <- encode ] <- sendData  <- Application
+```
 
-## 功能特性
+## 设计哲学
 
-- 熟悉的方式
-    - JdbcTemplate 接口方式（高度兼容 Spring JDBC）
-    - Mapper 文件方式（高度兼容 MyBatis）
-    - LambdaTemplate （高度接近 MyBatis Plus、jOOQ 和 BeetlSQL）
-    - @Insert、@Update、@Delete、@Query、@Callable 注解（类似 JPA）
+Neta 的设计重点不在于堆叠更多网络组件，而在于把连接、协议和业务之间的边界定义清楚。
 
-- 事务支持
-    - 支持 5 个事务隔离级别、7 个事务传播行为（与 Spring tx 相同）
-    - 提供 TransactionTemplate、TransactionManager 接口方式声明式事务控制能力（用法与 Spring 相同）
+- 统一模型：TCP、UDP、QUIC、SCTP 和虚拟通道使用同一套 API。
+- 边界清晰：连接负责生命周期，协议栈负责协议处理，业务通过 `subscribe` 消费消息。
+- 静态装配：协议栈在初始化期完成定义，运行期通过路由、状态和分区切换流程。
 
-- 特色优势
-    - 支持 分页查询 并且提供多种数据库方言（20+）
-    - 支持 INSERT 策略（INTO、UPDATE、IGNORE）
-    - 更加丰富的 TypeHandler（MyBatis 40+，dbVisitor 60+）
-    - Mapper XML 支持多语句、多结果
-    - 提供独特的规则机制，让动态 SQL 更加简单
-    - 支持 存储过程
-    - 支持 JDBC 4.2 和 Java8 中时间类型
-    - 支持多数据源
+## 特性
 
-## 同类工具
+### 编程模型
 
-**Hibernate**
-诞生于 2001 年由 Gavin King 发布第一个版本。它是 ORM 领域的标志性工具，在此之前 ORM 实践均是通过 EJB 来完成。
-Hibernate 的价值在于它终结了由 EJB 所主导的 ORM 使用习惯，并开创了以 轻量化ORM 和 SpringJDBC 的新生态。同时它推动了 EJB3、和 JPA 规范的建立。
+- **统一 API**：TCP、UDP、QUIC、SCTP 和虚拟通道使用一致的开发接口。
+- **消息驱动**：应用围绕 `subscribe` 消费数据，围绕 `sendData` 发送数据。
+- **低成本验证**：虚拟通道可在无真实网络连接的情况下组装和验证协议栈。
 
-- https://hibernate.org/
+### 协议栈模型
 
+- **协议管线**：通过将多个单工器/双工器首尾相连组成协议栈，完成编解码、路由和发送链路的装配。
+- **单工器/双工器**：单工器用于单向处理（编码器/解码器），双工器可同时处理两个方向的数据流。
+- **静态模型**：管线结构只能在初始化时确定；运行期只能切状态、切路由、切分区。
+- **三类管线**：
+  - 常规管线：适用于整条连接始终遵循同一处理流程的场景，按固定顺序完成编解码、握手和连接级协议处理。
+  - 路由管线：适用于同一连接需要在多条预定义分支之间切换的场景，用于表达协议探测、升级或协商后的链路切换。
+  - 分区管线：适用于同一连接内并存多路消息且各路需要状态隔离的场景，用于按稳定 key 将消息分流到各自独立的局部子链。
 
-**SpringJDBC**
-从 Spring 框架推出就存在于 Spring 体系之内至今如此。它比 Hibernate 更加轻量和敏捷，它独特的通过编码的方式将 SQL 和程序结合在一起，使用起来十分轻巧。
-除此之外 SpringJDBC 是第一个提出了 7 种事务传播行为。
+### 消息流模型
 
-- https://spring.io/
+- **单向传递**：消息进入协议栈后沿当前方向顺序传播直到应用为止。
+  - 上行消息，自底向上进入终点是应用（Net -> App）
+  - 下行消息，自顶向下进入终点是网络（App -> Net）
+- **事件流、数据流、异常流**：协议栈内的消息分为三类流，分别承载不同类型的消息：
+  - 事件流，承载状态变化与协议控制事件
+  - 数据流，承载原始数据和编解码后的消息对象
+  - 异常流，承载错误传播与恢复过程
 
+### 内存管理
 
-**MyBatis**
-是一款非常棒的数据库访问框架，它虽然不具备 Hibernate 强大的 ORM 能力。但别具风格的 Mapper 文件，完美的解决了动态 SQL 编写和管理上的难题。
-本质上来讲 MyBatis 是 SpringJDBC 和 Hibernate 之间的一个折中方案。对于研发管理更加友好。
+- **三层架构**：ByteBuf 系统按 **Page（页面分配）→ Buffer（内存管理）→ ByteBuf（读写 API）** 分层
+- **所有权模型**：遵循谁使用谁释放的原则。
+- **内存池**：池化缓冲区基于伙伴算法分配和管理内存。
+- **泄漏监控**：用于协助发现未正确释放的 `ByteBuf`，开发排查时可更快的定位泄漏为止。
 
-围绕 MyBatis 涌现出了 MyBatisPlus、MyBatis-Spring 等家喻户晓的工具，前者基于 MyBatis 进行了更多扩展的封装、后者整合了 Spring 提供更加友好的开发体验。
+### 内置协议
 
-- https://blog.mybatis.org/
+- **直接装配**：常用协议组件可直接加入协议栈并继续组合
+- **传输层协议**：TCP、UDP、SCTP、QUIC
+- **HTTP协议栈**：HTTP/1.1、HTTP/2、HTTP/3、WebSocket
+- **安全**：SSL、TLS、DTLS，支持 NPN/ALPN、客户端验证：NONE、OPTIONAL、REQUIRE
