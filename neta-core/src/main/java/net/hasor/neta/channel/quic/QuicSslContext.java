@@ -19,13 +19,11 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * Post-handshake {@link SslContext} view for a QUIC connection.
- * <p>
- * The object exposes the TLS metadata produced by {@link QuicTlsEngine}, such as
- * certificate configuration, negotiated ALPN, peer host information, and SNI.
- * It is not a general-purpose live TLS controller like the stream SSL codec layer:
- * QUIC packet protection is owned by the connection runtime, while this class mainly
- * serves as a read-oriented facade for application code.
+ * Public {@link SslContext} view exposed by a QUIC connection after the handshake completes.
+ * <p>This object wraps the TLS metadata produced by {@link QuicTlsEngine}, such as certificate configuration,
+ * negotiated ALPN, peer host information, and SNI. It is not a general online TLS controller like a streaming
+ * SSL codec; QUIC packet protection is handled by the connection runtime, while this type mainly provides a
+ * read-only access point for the application layer.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-01-01
  */
@@ -36,10 +34,12 @@ public class QuicSslContext implements SslContext {
     private final    String        negotiatedAlpn;
     private final    String        peerHost;
     private final    int           peerPort;
-    private final    String        sniHostName;    // SNI server_name from TLS handshake
+    private final    String        sniHostName;    // SNI server_name extracted during the TLS handshake phase
     private volatile boolean       ready;
 
-    /** Creates a QuicSslContext wrapping the results of a completed QUIC handshake. */
+    /**
+     * Creates the SSL context view from a completed QUIC handshake result.
+     */
     QuicSslContext(SoChannel<?> channel, SslCertConfig certConfig, boolean clientMode, String negotiatedAlpn, String peerHost, int peerPort, String sniHostName) {
         this.channel = channel;
         this.certConfig = certConfig;
@@ -51,62 +51,96 @@ public class QuicSslContext implements SslContext {
         this.ready = true;
     }
 
+    /**
+     * Returns the certificate configuration.
+     */
     @Override
     public SslCertConfig getConfig() {
         return this.certConfig;
     }
 
+    /**
+     * Returns the associated channel object.
+     */
     @Override
     public SoChannel<?> getChannel() {
         return this.channel;
     }
 
+    /**
+     * Returns whether the current context is operating in server mode.
+     */
     @Override
     public boolean isServer() {
         return !this.clientMode;
     }
 
+    /**
+     * Returns whether the current context is operating in client mode.
+     */
     @Override
     public boolean isClient() {
         return this.clientMode;
     }
 
+    /**
+     * Returns whether the SSL context is in a usable state.
+     */
     @Override
     public boolean isReady() {
         return this.ready;
     }
 
+    /**
+     * Returns the negotiated application-layer protocol.
+     * <p>If the negotiation result is empty, it falls back to the default protocol in the certificate configuration.
+     */
     @Override
     public String getApplicationProtocol() {
         if (this.negotiatedAlpn != null) {
             return this.negotiatedAlpn;
         }
-        // fallback to configured default
+        // Fall back to the default protocol from the configuration.
         return this.certConfig.resolveDefaultProtocol();
     }
 
+    /**
+     * Returns the peer host name.
+     */
     @Override
     public String getPeerHost() {
         return this.peerHost;
     }
 
+    /**
+     * Returns the peer port.
+     */
     @Override
     public int getPeerPort() {
         return this.peerPort;
     }
 
+    /**
+     * Returns the SNI host name from the TLS handshake.
+     */
     @Override
     public String getSniHostName() {
         return this.sniHostName;
     }
 
-    /** No-op: QUIC encryption cannot be switched off on a live connection. */
+    /**
+     * Closes the SSL flag.
+     * <p>For QUIC, this only updates the availability flag; encryption on a live connection cannot actually be turned off.
+     */
     @Override
     public void closeSSL() {
         this.ready = false;
     }
 
-    /** No-op: QUIC encryption is managed by the connection lifecycle, not an on/off toggle. */
+    /**
+     * Opens the SSL flag.
+     * <p>For QUIC, this only restores the availability flag; the real encryption lifecycle is managed by the connection runtime.
+     */
     @Override
     public void openSSL() {
         this.ready = true;

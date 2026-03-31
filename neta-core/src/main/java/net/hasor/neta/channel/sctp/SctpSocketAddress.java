@@ -20,8 +20,9 @@ import com.sun.nio.sctp.Association;
 import net.hasor.cobble.StringUtils;
 
 /**
- * Wrapper for SCTP Socket Address information.
- * Contains both the Association and the set of bound addresses.
+ * Wrapper object for SCTP address information.
+ * <p>This type holds both the {@link Association} and a set of bound addresses so that
+ * multi-homed address information can be represented uniformly at the framework level.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -34,14 +35,26 @@ public class SctpSocketAddress extends SocketAddress {
         this.addresses = addresses;
     }
 
+    /**
+     * Return the SCTP association for the current address.
+     * @return the SCTP association
+     */
     public Association getAssociation() {
         return this.association;
     }
 
+    /**
+     * Return the set of addresses currently bound to this association.
+     * @return the address set
+     */
     public Set<SocketAddress> getAddresses() {
         return this.addresses;
     }
 
+    /**
+     * Return an address description suitable for logging.
+     * @return the textual address description
+     */
     @Override
     public String toString() {
         return "association=" + this.association + ", addresses[" + StringUtils.join(this.addresses.toArray(), ", ") + "]";

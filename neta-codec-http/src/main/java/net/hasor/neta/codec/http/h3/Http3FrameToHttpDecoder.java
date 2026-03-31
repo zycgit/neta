@@ -338,7 +338,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
 
     private <T> void fireEvent(ProtoContext context, Class<T> eventType, T event) {
         try {
-            context.fireUserEvent(eventType, event);
+            context.fireEvent(eventType, event);
         } catch (Throwable e) {
             logger.error("Error occurred while publishing HTTP/3 event: " + eventType.getSimpleName(), e);
         }

@@ -20,14 +20,11 @@ import java.util.function.Predicate;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Skeletal base class for {@link NetManager} that initialises and holds the shared
- * {@link NetConfig}, {@link SoContextService}, and lifecycle shutdown state.
- * <p>The constructor enforces that only {@link NetManager} may extend this class
- * (verified via an {@code instanceof} check at construction time), preventing accidental
- * subclassing that would bypass the required protocol-provider registration logic.
- * <p>This class exposes the subscribe API that {@link NetManager} inherits, allowing
- * callers to observe pipeline events by channel ID or custom predicate without holding
- * a specific {@link SoChannel} reference.
+ * Skeleton base class of {@link NetManager}. It initializes and owns the shared {@link NetConfig},
+ * {@link SoContextService}, and shutdown lifecycle state.
+ * <p>This class also exposes the subscription APIs inherited by {@link NetManager}, allowing
+ * callers to observe pipeline events by channel ID or custom predicates without holding a specific
+ * {@link SoChannel} reference.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see NetManager
@@ -39,6 +36,10 @@ public abstract class AbstractNetManager {
     protected final      SoContextService context;
     protected final      AtomicBoolean    shutdown;
 
+    /**
+     * Create the manager skeleton with the given configuration and initialize the shared context.
+     * @param config global network configuration
+     */
     public AbstractNetManager(NetConfig config) {
         if (!(this instanceof NetManager)) {
             throw new IllegalStateException("AbstractNetManager must be extended by NetManager");
@@ -48,19 +49,19 @@ public abstract class AbstractNetManager {
         this.shutdown = new AtomicBoolean(false);
     }
 
-    /** Returns the global configuration shared by all channels. */
+    /** Return the global configuration shared by all channels. */
     public NetConfig getConfig() {
         return this.config;
     }
 
-    /** Returns the shared socket context that manages all channels and listeners. */
+    /** Return the shared context used by all channels and listeners. */
     public SoContext getContext() {
         return this.context;
     }
 
     /**
-     * Subscribes to all messages (inbound and outbound) for the specified channel.
-     * @param channelId the target channel ID
+     * Subscribe to all messages emitted by the specified channel.
+     * @param channelId target channel ID
      * @param listener callback invoked for each {@link PlayLoad} event
      */
     public SubscribeHolder subscribe(long channelId, PlayLoadListener listener) {
@@ -68,8 +69,8 @@ public abstract class AbstractNetManager {
     }
 
     /**
-     * Subscribes to all messages for the specified channel using the given delivery mode.
-     * @param channelId the target channel ID
+     * Subscribe to all messages emitted by the specified channel using the given delivery mode.
+     * @param channelId target channel ID
      * @param mode delivery mode
      * @param listener callback invoked for each {@link PlayLoad} event
      */
@@ -78,7 +79,7 @@ public abstract class AbstractNetManager {
     }
 
     /**
-     * Subscribes to messages that match the given predicate across all channels.
+     * Subscribe to messages across all channels that match the given predicate.
      * @param select filter predicate
      * @param listener callback invoked for each matching {@link PlayLoad} event
      */
@@ -87,7 +88,7 @@ public abstract class AbstractNetManager {
     }
 
     /**
-     * Subscribes to messages that match the given predicate using the specified delivery mode.
+     * Subscribe to messages matching the given predicate using the specified delivery mode.
      * @param select filter predicate
      * @param mode delivery mode
      * @param listener callback invoked for each matching {@link PlayLoad} event
@@ -96,10 +97,10 @@ public abstract class AbstractNetManager {
         return this.context.subscribe(select, mode, listener);
     }
 
-    /** Gracefully shuts down the manager, closing all channels and releasing resources. */
+    /** Gracefully shut down the manager, closing all channels and releasing resources. */
     public final void shutdown() throws IOException {
         if (this.shutdown.compareAndSet(false, true)) {
-            // do close
+            // Perform shutdown.
             this.shutdown0(true);
 
             logger.info("service is shutdown.");
@@ -108,5 +109,9 @@ public abstract class AbstractNetManager {
         }
     }
 
+    /**
+     * Execute the underlying shutdown logic.
+     * @param now when {@code true}, indicates immediate close
+     */
     protected abstract void shutdown0(boolean now) throws IOException;
 }

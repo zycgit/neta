@@ -20,23 +20,11 @@ import net.hasor.cobble.StringUtils;
 
 /**
  * Internal utility methods for the Neta channel layer.
- * <p>Currently provides two groups of helpers:
- * <ul>
- *   <li><b>Timeout exception factories</b> – methods such as {@link #newConnectTimeout}
- *       that build {@link SoTimeoutException} instances with descriptive messages encoding
- *       the channel ID, I/O direction (rcv/snd), and remote address, while preserving the
- *       original stack trace from the low-level {@code IOException}.</li>
- *   <li><b>Pipeline debug dump</b> – {@link #printStackTrace} writes a human-readable
- *       summary of a channel’s ID, local/remote addresses, and the full
- *       {@link ProtoStackChain} handler list to a {@link java.io.PrintStream}, useful
- *       for troubleshooting pipeline configuration.</li>
- * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public class SoUtils {
-
-    /** Builds a {@link SoConnectTimeoutException} for the channel's remote address. */
+    /** Build a {@link SoConnectTimeoutException} for the remote address of the specified channel. */
     public static SoConnectTimeoutException newConnectTimeout(boolean isRcv, long channelId, SoContextService context, Throwable e) {
         SocketAddress address = context.getRemoteAddress(channelId);
         String errorMsg = (isRcv ? "rcv(" : "snd(") + channelId + ") Connection timed out: " + address;
@@ -46,8 +34,8 @@ public class SoUtils {
     }
 
     /**
-     * Prints this {@link ProtoStackChain} status and its backtrace to the specified print stream.
-     * @param s {@link PrintStream} to use for output
+     * Print the current {@link ProtoStackChain} state and backtrace information to the specified output stream.
+     * @param s {@link PrintStream} used for output
      */
     public static void printStackTrace(PrintStream s, SoChannel<?> channel, ProtoStackChain protoStack) {
         String body = protoStack == null ? "--- There is no ProtoStackChain ---" : protoStack.toString();

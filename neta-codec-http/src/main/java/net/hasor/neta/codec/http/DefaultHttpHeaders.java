@@ -21,6 +21,8 @@ import net.hasor.cobble.StringUtils;
 public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
     private final List<DefaultHttpHeaderEntry> entries;
     private       int                          streamId;
+    private       boolean                      bad;
+    private       String                       badReason;
 
     public DefaultHttpHeaders() {
         this.entries = new ArrayList<>();
@@ -38,8 +40,28 @@ public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
     }
 
     @Override
+    public boolean isBad() {
+        return this.bad;
+    }
+
+    @Override
+    public String badReason() {
+        return this.badReason;
+    }
+
+    @Override
+    public HttpHeaders markBad(String reason) {
+        this.bad = true;
+        this.badReason = reason;
+        return this;
+    }
+
+    @Override
     public void release() {
         this.entries.clear();
+        this.streamId = 0;
+        this.bad = false;
+        this.badReason = null;
     }
 
     // write

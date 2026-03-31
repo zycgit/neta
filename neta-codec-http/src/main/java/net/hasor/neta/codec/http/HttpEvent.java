@@ -14,7 +14,7 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http;
-import net.hasor.neta.channel.SoUserEventData;
+import net.hasor.neta.channel.SoEventData;
 
-public interface HttpEvent extends SoUserEventData {
+public interface HttpEvent extends SoEventData {
 }

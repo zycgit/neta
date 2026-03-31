@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.h3;
 import net.hasor.neta.codec.http.HttpEvent;
 
 /**
- * User event that requests an active reset of a specific HTTP/3 request stream.
+ * Network event that requests an active reset of a specific HTTP/3 request stream.
  */
 public class Http3ResetEvent implements HttpEvent {
     public static final long CANCEL         = -1L;

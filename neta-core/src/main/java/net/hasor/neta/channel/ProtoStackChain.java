@@ -21,12 +21,12 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Root of the bidirectional handler chain.
- * <p>Manages a doubly-linked list of {@link ProtoInvocation} nodes.
- * RCV events propagate head→tail; SND events propagate tail→head.</p>
+ * Root object of the bidirectional handler chain.
+ * <p>It manages the doubly linked list composed of {@link ProtoInvocation} nodes. RCV events
+ * propagate head to tail, while SND events propagate tail to head.</p>
  * <pre>
  *   head → [Inv-0] → [Inv-1] → ... → [Inv-N] → tailRcvDown   (RCV)
- *   headSndDown ← [Inv-0] ← [Inv-1] ← ... ← [Inv-N] ← tail      (SND)
+ *   headSndDown ← [Inv-0] ← [Inv-1] ← ... ← [Inv-N] ← tail   (SND)
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
@@ -54,18 +54,18 @@ class ProtoStackChain {
         this.branchMode = branchMode;
     }
 
-    /** Returns the tail RCV-down queue — decoded output from the last handler in the RCV chain. */
+    /** Return the tail RCV-down queue, the decoded output of the last handler in the RCV chain. */
     public ProtoQueue<?> getTailRcvDown() {
         return this.tailRcvDown;
     }
 
-    /** Returns the head SND-down queue — encoded output pushed toward the wire by the SND chain. */
+    /** Return the head SND-down queue, the encoded output that the SND chain pushes toward the network. */
     public ProtoQueue<?> getHeadSndDown() {
         return this.headSndDown;
     }
 
     /**
-     * Appends {@code invocation} to the tail of the handler chain.
+     * Append {@code invocation} to the tail of the handler chain.
      * <pre>  head → … → [existing tail] → [invocation]  (RCV direction)</pre>
      */
     public void appendProtoStack(ProtoInvocation<?, ?, ?, ?> invocation) {
@@ -79,7 +79,7 @@ class ProtoStackChain {
     }
 
     /**
-     * Inserts {@code invocation} at the head of the handler chain.
+     * Insert {@code invocation} at the head of the handler chain.
      * <pre>  [invocation] → [existing head] → … → tail  (RCV direction)</pre>
      */
     public void insertProtoStack(ProtoInvocation<?, ?, ?, ?> invocation) {
@@ -92,11 +92,15 @@ class ProtoStackChain {
         }
     }
 
+    /**
+     * Return the current remaining slot count of the root send-down queue.
+     * @return remaining writable slot count of the send queue
+     */
     public int getSndSlotSize() {
         return this.headSndDown.slotSize();
     }
 
-    /** Returns the name of the handler immediately after {@code withName} in the RCV chain. */
+    /** Return the name of the handler immediately following {@code withName} in the RCV chain. */
     public String findNextStack(String withName) {
         ProtoInvocation<?, ?, ?, ?> current = this.head;
         while (current != null) {
@@ -113,7 +117,7 @@ class ProtoStackChain {
         return null;
     }
 
-    /** Returns the name of the handler immediately before {@code withName} in the RCV chain. */
+    /** Return the name of the handler immediately preceding {@code withName} in the RCV chain. */
     public String findPreviousStack(String withName) {
         ProtoInvocation<?, ?, ?, ?> current = this.tail;
         while (current != null) {
@@ -130,6 +134,11 @@ class ProtoStackChain {
         return null;
     }
 
+    /**
+     * Trigger the initialization lifecycle of the whole handler chain and bind recovery callbacks.
+     * @param protoCtx current protocol context
+     * @throws Throwable thrown when initialization of any handler fails
+     */
     public void onInit(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -163,6 +172,11 @@ class ProtoStackChain {
         }
     }
 
+    /**
+     * Trigger the activation lifecycle of the whole handler chain.
+     * @param protoCtx current protocol context
+     * @throws Throwable thrown when activation of any handler fails
+     */
     public void onActive(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -179,6 +193,10 @@ class ProtoStackChain {
         }
     }
 
+    /**
+     * Trigger the close lifecycle of the whole handler chain and release leftover queue data afterward.
+     * @param protoCtx current protocol context
+     */
     public void onClose(ProtoContext protoCtx) {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -210,7 +228,7 @@ class ProtoStackChain {
             return;
         }
 
-        int accepted;
+        boolean accepted;
         int slotSize;
         if (isRcv) {
             accepted = invocation.offerRcvUp(offerData);
@@ -220,7 +238,7 @@ class ProtoStackChain {
             slotSize = invocation.sndUpSlotSize();
         }
 
-        if (accepted != offerData.length) {
+        if (!accepted) {
             String msgTag = isRcv ? "rcv" : "snd";
             int require = offerData.length;
 
@@ -238,7 +256,7 @@ class ProtoStackChain {
         }
     }
 
-    /** Drain all pending data from {@code headSndDown} into a single array. */
+    /** Drain all pending data in {@code headSndDown} into an array. */
     private Object[] drainHeadSndDown() {
         int queueSize = this.headSndDown.queueSize();
         if (queueSize == 0) {
@@ -257,6 +275,9 @@ class ProtoStackChain {
     // Recovery
     // ------------------------------------------------------------
 
+    /**
+     * Register one writable-recovered notification in the receive direction.
+     */
     public void fireRcvRecover() {
         if (this.tailRcvDown.slotSize() <= 0 || this.tailRcvDownWritable == null) {
             return;
@@ -265,6 +286,9 @@ class ProtoStackChain {
         this.tailRcvDownWritable.run();
     }
 
+    /**
+     * Register one writable-recovered notification in the send direction.
+     */
     public void fireSndRecover() {
         if (this.headSndDown.slotSize() <= 0 || this.headSndDownWritable == null) {
             return;
@@ -319,6 +343,15 @@ class ProtoStackChain {
     // RCV
     // ------------------------------------------------------------
 
+    /**
+     * Execute one receive-direction pipeline run starting from the specified node.
+     * @param protoCtx current protocol context
+     * @param stackName start handler name; when {@code null}, start from the chain head
+     * @param rcvData input data
+     * @param rcvError initial receive error
+     * @return chain result produced by this run
+     * @throws Throwable thrown when pipeline execution fails
+     */
     public ChainResult onRcv(ProtoContext protoCtx, String stackName, Object[] rcvData, Throwable rcvError) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
@@ -462,6 +495,15 @@ class ProtoStackChain {
     // SND
     // ------------------------------------------------------------
 
+    /**
+     * Execute one send-direction pipeline run starting from the specified node.
+     * @param protoCtx current protocol context
+     * @param stackName start handler name; when {@code null}, start from the chain tail
+     * @param sndData input data
+     * @param sndError initial send error
+     * @return chain result produced by this run
+     * @throws Throwable thrown when pipeline execution fails
+     */
     public ChainResult onSnd(ProtoContext protoCtx, String stackName, Object[] sndData, Throwable sndError) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
@@ -555,10 +597,18 @@ class ProtoStackChain {
     }
 
     // ------------------------------------------------------------
-    // User Event
+    // Event
     // ------------------------------------------------------------
 
-    public boolean onRcvUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+    /**
+     * Propagate a network event in receive direction starting from the specified node.
+     * @param protoCtx current protocol context
+     * @param stackName start handler name; when {@code null}, start from the chain head
+     * @param event network event to propagate
+     * @return {@code true} when the event was not consumed on this chain and may keep propagating
+     * @throws Throwable thrown when event handling fails
+     */
+    public boolean onRcvEvent(ProtoContext protoCtx, String stackName, SoEvent event) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             ctx.beginRcv(null);
@@ -593,7 +643,15 @@ class ProtoStackChain {
         }
     }
 
-    public boolean onSndUserEvent(ProtoContext protoCtx, String stackName, SoUserEvent event) throws Throwable {
+    /**
+     * Propagate a network event in send direction starting from the specified node.
+     * @param protoCtx current protocol context
+     * @param stackName start handler name; when {@code null}, start from the chain tail
+     * @param event network event to propagate
+     * @return {@code true} when the event was not consumed on this chain and may keep propagating
+     * @throws Throwable thrown when event handling fails
+     */
+    public boolean onSndEvent(ProtoContext protoCtx, String stackName, SoEvent event) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         synchronized (this.pipeLock) {
             ctx.beginSnd(null);
@@ -633,8 +691,8 @@ class ProtoStackChain {
     // ------------------------------------------------------------
 
     /**
-     * Renders the handler chain as a bordered table showing each layer's name and its
-     * current RCV/SND queue occupancy ({@code current/capacity}).
+     * Render the handler chain as a bordered table that shows the name of each layer and the
+     * current RCV/SND queue occupancy, {@code current/capacity}.
      * <pre>
      * ┏━ name ━━━━━━━━ rcv ↓  snd ━┓
      * ┃ handlerA  [↑ 0/8,  ↓ 0/8 ] ┃

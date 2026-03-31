@@ -28,6 +28,7 @@ class Http2Stream {
     private       ByteBuf          accumulatedHeaderBlock;
     private       boolean          endStreamPending;
     private       boolean          initialHeadersEmitted;
+    private       boolean          terminalObjectEmitted;
 
     /**
      * Creates a new HTTP/2 stream.
@@ -76,12 +77,23 @@ class Http2Stream {
         this.initialHeadersEmitted = initialHeadersEmitted;
     }
 
+    public boolean isTerminalObjectEmitted() {
+        return this.terminalObjectEmitted;
+    }
+
+    public void setTerminalObjectEmitted(boolean terminalObjectEmitted) {
+        this.terminalObjectEmitted = terminalObjectEmitted;
+    }
+
     /** Releases resources held by this stream. */
     public void release() {
         if (accumulatedHeaderBlock != null) {
             accumulatedHeaderBlock.free();
             accumulatedHeaderBlock = null;
         }
+        this.endStreamPending = false;
+        this.initialHeadersEmitted = false;
+        this.terminalObjectEmitted = false;
     }
 
     @Override

@@ -21,43 +21,41 @@ import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.function.Release;
 import net.hasor.cobble.io.IOUtils;
+import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ReferenceHolder;
 
 /**
- * Concrete, capacity-bounded implementation of both {@link ProtoRcvQueue} and
- * {@link ProtoSndQueue}.
- * <p>A single {@code ProtoQueue} instance serves simultaneously as the receive queue
- * (consumer side) and the send queue (producer side) for one pipeline stage boundary,
- * so the staging buffer between the upstream consumer and the downstream producer is
- * contained in a single object.
+ * Queue implementation that simultaneously implements {@link ProtoRcvQueue} and {@link ProtoSndQueue};
+ * concrete capacity limits are controlled by the {@code capacity} parameter.
+ * <p>One {@code ProtoQueue} instance serves as both the receive queue, the consumer side, and the
+ * send queue, the producer side, at a pipeline stage boundary. That means the staging buffer
+ * between upstream consumers and downstream producers is concentrated in a single object.</p>
  * <h3>Capacity and overflow</h3>
- * Capacity is set at construction time.  If {@code capacity < 0} the queue is effectively
- * unbounded ({@link Integer#MAX_VALUE}). Multi-element {@link #offerMessage} calls are
- * atomic: the whole batch is accepted or the call returns {@code 0} without changing queue
- * state. Once all capacity is consumed, {@link #offerMessage} returns {@code 0}
- * (no items accepted), and the pipeline send path raises {@link ProtoFullException} as a
- * backpressure signal.
+ * Capacity is set at construction time. When {@code capacity < 0}, the queue behaves as unbounded,
+ * {@link Integer#MAX_VALUE}. Multi-element {@link #offerMessage} calls are atomic: the entire batch
+ * is either accepted or rejected with {@code false} and no queue-state change.
+ * When capacity is exhausted, {@link #offerMessage} only returns {@code false}. Whether that write
+ * failure should be upgraded to {@link ProtoFullException} is determined by outer pipeline scheduling code.
  * <h3>Ownership semantics</h3>
- * Both directions are immediate: send-side writes become visible as soon as an
- * {@link #offerMessage} call succeeds, and receive-side reads/destructive skips consume the
- * queue immediately.
+ * Both directions use immediate-effect semantics: once a send-side {@link #offerMessage} succeeds,
+ * it becomes visible immediately, and receive-side reads or destructive skips affect the queue at once.
  * <p>Ownership rules are:</p>
  * <ul>
- *   <li>{@code offerMessage(...)} success means ownership moves into the queue.</li>
- *   <li>{@code takeMessage(...)} means ownership moves out of the queue to the caller.</li>
- *   <li>{@code peekMessage(...)} never transfers ownership.</li>
- *   <li>{@code skipMessage(...)} discards queue-owned objects and releases/close them when applicable.</li>
+ *   <li>After successful {@code offerMessage(...)}, ownership transfers to the queue.</li>
+ *   <li>After {@code takeMessage(...)}, ownership transfers to the caller.</li>
+ *   <li>{@code peekMessage(...)} is read-only and does not transfer ownership.</li>
+ *   <li>{@code skipMessage(...)} discards objects still owned by the queue and releases or closes them when applicable.</li>
  * </ul>
- * @param <T> the type of message stored in this queue
+ * @param <T> message type stored in the queue
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see ProtoRcvQueue
  * @see ProtoSndQueue
- * @see ProtoFullException
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
+    private static final Logger        logger      = Logger.getLogger(ProtoQueue.class);
     private static final Object[]      EMPTY_ARRAY = new Object[0];
-    /** Canonical immutable empty {@link ProtoRcvQueue} singleton with no ownership obligations. */
+    /** Standard immutable empty {@link ProtoRcvQueue} singleton with no ownership obligations. */
     @SuppressWarnings("rawtypes")
     private static final ProtoRcvQueue EMPTY_RCV   = new ProtoRcvQueue() {
         @Override
@@ -89,8 +87,8 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     private final List<T> linkedList;
 
     /**
-     * Creates a queue with the given capacity.
-     * @param capacity max number of simultaneously queued messages; negative means unbounded ({@link Integer#MAX_VALUE})
+     * Create a queue with the given capacity.
+     * @param capacity maximum number of queued messages at once; a negative value means unbounded, {@link Integer#MAX_VALUE}
      */
     public ProtoQueue(int capacity) {
         this.capacity = capacity < 0 ? Integer.MAX_VALUE : capacity;
@@ -98,62 +96,67 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     /**
-     * Returns an immutable empty {@link ProtoRcvQueue} singleton.
-     * <p>Useful when a non-null queue reference is required but no data is available,
-     * e.g. when invoking a routing predicate during the {@code onActive} phase.</p>
-     * <p>The returned queue never owns any message and all destructive operations are no-ops.</p>
+     * Return an immutable empty {@link ProtoRcvQueue} singleton.
+     * <p>This is useful when a non-null queue reference is needed but no data is currently available,
+     * for example when invoking a routing predicate during the {@code onActive} phase.</p>
+     * <p>The returned queue never owns any messages, and all destructive operations are no-ops.</p>
      */
     public static <T> ProtoRcvQueue<T> emptyRcv() {
         return (ProtoRcvQueue<T>) EMPTY_RCV;
     }
 
+    /** {@inheritDoc} */
     @Override
     public int getCapacity() {
         return this.capacity;
     }
 
+    /** {@inheritDoc} */
     @Override
     public int queueSize() {
         return this.linkedList.size();
     }
 
+    /** {@inheritDoc} */
     @Override
     public int slotSize() {
         return this.capacity - this.linkedList.size();
     }
 
+    /** {@inheritDoc} */
     @Override
-    public int offerMessage(T[] offerList) {
+    public boolean offerMessage(T[] offerList) {
         if (offerList == null || offerList.length == 0) {
-            return 0;
+            return false;
         }
 
         if (this.slotSize() < offerList.length) {
-            return 0;
+            return false;
         }
 
         this.linkedList.addAll(Arrays.asList(offerList));
-        return offerList.length;
+        return true;
     }
 
+    /** {@inheritDoc} */
     @Override
-    public int offerMessage(List<T> offerList) {
+    public boolean offerMessage(List<T> offerList) {
         if (offerList == null || offerList.isEmpty()) {
-            return 0;
+            return false;
         }
 
         int size = offerList.size();
         if (this.slotSize() < size) {
-            return 0;
+            return false;
         }
 
         for (int i = 0; i < size; i++) {
             this.linkedList.add(offerList.get(i));
         }
-        return size;
+        return true;
     }
 
-    /** Single-element fast path: avoids {@link Collections#singletonList(Object)} allocation. */
+    /** Single-element fast path that avoids allocating {@link Collections#singletonList(Object)}. */
     @Override
     public boolean offerMessage(T offerMessage) {
         if (this.slotSize() <= 0) {
@@ -164,21 +167,22 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return true;
     }
 
+    /** {@inheritDoc} */
     @Override
-    public int offerMessage(ProtoRcvQueue<T> offerList) {
+    public boolean offerMessage(ProtoRcvQueue<T> offerList) {
         if (offerList == null) {
-            return 0;
+            return false;
         }
 
         int size = offerList.queueSize();
         if (size <= 0 || this.slotSize() < size) {
-            return 0;
+            return false;
         }
 
         return this.offerMessage(offerList.takeMessage(size));
     }
 
-    /** Single-element fast path: avoids {@link ArrayList} allocation and transfers ownership immediately. */
+    /** Single-element fast path that avoids allocating {@link ArrayList} and transfers ownership immediately. */
     @Override
     public T takeMessage() {
         if (this.linkedList.isEmpty()) {
@@ -188,6 +192,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return this.linkedList.remove(0);
     }
 
+    /** {@inheritDoc} */
     @Override
     public List<T> takeMessage(int cnt) {
         if (cnt == 0) {
@@ -208,7 +213,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return result;
     }
 
-    /** Single-element fast path: avoids {@link ArrayList} allocation without transferring ownership. */
+    /** Single-element fast path that avoids allocating {@link ArrayList} and does not transfer ownership. */
     @Override
     public T peekMessage() {
         if (this.linkedList.isEmpty()) {
@@ -218,6 +223,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return this.linkedList.get(0);
     }
 
+    /** {@inheritDoc} */
     @Override
     public List<T> peekMessage(int cnt) {
         if (cnt < 0) {
@@ -228,6 +234,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return new ArrayList<>(this.linkedList.subList(0, fixCnt));
     }
 
+    /** {@inheritDoc} */
     @Override
     public void skipMessage(int cnt) {
         int fixCnt = Math.min(cnt, this.linkedList.size());
@@ -240,10 +247,10 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     /**
-     * Releases and removes all queue-owned items that still remain in this queue.
-     * <p>This is primarily used by the protocol stack close path as a final cleanup step.
-     * Items previously returned by {@link #takeMessage()} are not part of this cleanup because
-     * ownership has already been transferred to the caller.</p>
+     * Release and remove all elements still left in the queue and still owned by it.
+     * <p>This is mainly used as the final cleanup step in the protocol-stack close path. Elements
+     * previously returned through {@link #takeMessage()} are excluded because their ownership has
+     * already been transferred away.</p>
      */
     void clearAndClose() {
         for (Object item : this.linkedList) {
@@ -253,24 +260,29 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
     }
 
     /**
-     * Releases a queue-owned item when the queue discards it.
-     * <p>{@link ReferenceHolder} is released via reference counting. Plain {@link Closeable}
-     * objects are closed quietly. All other object types are left untouched.</p>
+     * Release an element when the queue discards something it still owns.
+     * <p>{@link ReferenceHolder} instances are released through reference counting. Ordinary
+     * {@link Closeable} objects are closed quietly. Other object types are left unchanged.</p>
      */
     private static void releaseOwned(Object item) {
-        if (item instanceof ReferenceHolder) {
-            ((ReferenceHolder) item).release();
-        } else if (item instanceof Release) {
-            ((Release) item).release();
-        } else if (item instanceof Closeable) {
-            IOUtils.closeQuietly((Closeable) item);
+        try {
+            if (item instanceof ReferenceHolder) {
+                ((ReferenceHolder) item).release();
+            } else if (item instanceof Release) {
+                ((Release) item).release();
+            } else if (item instanceof Closeable) {
+                IOUtils.closeQuietly((Closeable) item);
+            }
+        } catch (Throwable e) {
+            logger.error("ProtoQueue releaseOwned failed: " + e.getMessage(), e);
         }
     }
 
     /**
-     * Takes up to {@code cnt} messages and returns them as a raw array.
+     * Take up to {@code cnt} messages and return them directly as a raw array.
      * <p>This is a performance-oriented bulk-transfer helper used by the protocol stack to avoid
-     * intermediate list allocation. As with {@link #takeMessage(int)}, ownership transfers to the caller.</p>
+     * intermediate {@link List} allocation. As with {@link #takeMessage(int)}, ownership transfers
+     * to the caller after return.</p>
      */
     public Object[] takeMessageToArray(int cnt) {
         if (cnt <= 0) {
@@ -288,6 +300,10 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         return result;
     }
 
+    /**
+     * Return the monitoring string for the current queue.
+     * @return string containing capacity, queue length, and remaining slot count
+     */
     @Override
     public String toString() {
         if (Integer.MAX_VALUE == this.capacity) {

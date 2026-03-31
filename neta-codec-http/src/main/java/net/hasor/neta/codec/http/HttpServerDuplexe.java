@@ -72,17 +72,17 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (event.getEventType() == HttpThroughEvent.class) {
-            this.decoder.onUserEvent(context, event);
-            this.encoder.onUserEvent(context, event);
+            this.decoder.onEvent(context, event);
+            this.encoder.onEvent(context, event);
             return true;
         }
 
         if (isRcv) {
-            return this.decoder.onUserEvent(context, event);
+            return this.decoder.onEvent(context, event);
         } else {
-            return this.encoder.onUserEvent(context, event);
+            return this.encoder.onEvent(context, event);
         }
     }
 

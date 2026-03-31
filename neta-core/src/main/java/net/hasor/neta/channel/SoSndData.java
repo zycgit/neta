@@ -22,14 +22,15 @@ import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * A single logical write request carrying one or more {@link ByteBuf} fragments and a
- * completion {@link Future} to notify callers when the send finishes.
- * <p>Neta supports <em>gather I/O</em>: one {@code SoSndData} can reference multiple
- * {@link ByteBuf} segments consumed sequentially via {@link #transferTo}.  This avoids
- * an extra copy when the application assembles a multi-part message (e.g. a fixed-size
- * protocol header followed by a variable-length payload buffer).
- * <p>The {@link Future} is completed with the associated {@link NetChannel} on success,
- * or with a {@link SoSndException} subclass on failure, allowing send-completion callbacks:
+ * One logical write request carrying one or more {@link ByteBuf} fragments plus a completion
+ * {@link Future} used to notify the caller when sending finishes.
+ * <p>Neta supports <em>gather I/O</em>: a single {@code SoSndData} can reference multiple
+ * {@link ByteBuf} fragments and consume them sequentially through {@link #transferTo}. This avoids
+ * extra copies when an application assembles multipart messages such as a fixed-length header plus
+ * a variable-length payload.</p>
+ * <p>On success, the {@link Future} completes with the associated {@link NetChannel}. On failure,
+ * it completes with a subtype of {@link SoSndException}, making it convenient to register send
+ * completion callbacks:</p>
  * <pre>
  * channel.write(buf).onComplete(result -&gt; {
  *     if (result.isSuccess()) { log.debug("sent"); }
@@ -56,21 +57,21 @@ public class SoSndData {
     }
 
     /**
-     * packet size.
+     * Return the total size of the current data packet.
      */
     public long getDataSize() {
         return this.dataSize;
     }
 
     /**
-     * packet has any data.
+     * Return whether the current data packet still contains readable data.
      */
     public boolean hasReadable() {
         return this.readIdx < this.data.length;
     }
 
     /**
-     * copy packet data to {@link ByteBuf}
+     * Copy packet content into the destination buffer.
      */
     public int transferTo(ByteBuffer dst) {
         if (!this.hasReadable()) {
@@ -94,7 +95,7 @@ public class SoSndData {
     }
 
     /**
-     * Returns the next chunk as a raw byte array and advances the read cursor.
+     * Return the next data fragment as a raw byte array and advance the read cursor.
      * Returns {@code null} when all fragments have been consumed.
      */
     public byte[] transferPull() {
@@ -119,8 +120,8 @@ public class SoSndData {
     }
 
     /**
-     * Returns the next raw data element (typically a {@link ByteBuf}) without copying
-     * and advances the read cursor. Returns {@code null} when exhausted.
+     * Return the next raw data element, usually a {@link ByteBuf}, without copying and advance the read cursor.
+     * Returns {@code null} when all elements have been consumed.
      */
     public Object transferTake() {
         if (!this.hasReadable()) {
@@ -135,7 +136,7 @@ public class SoSndData {
     }
 
     /**
-     * Marks the send as successful: fulfills the completion future and releases all {@link ByteBuf} fragments.
+     * Mark sending as successful, complete the callback Future, and release all {@link ByteBuf} fragments.
      */
     public void completed() {
         try {
@@ -150,8 +151,8 @@ public class SoSndData {
     }
 
     /**
-     * Marks the send as failed: propagates {@code e} to the completion future and releases all {@link ByteBuf} fragments.
-     * @param e the cause of the failure
+     * Mark sending as failed, propagate {@code e} to the completion Future, and release all {@link ByteBuf} fragments.
+     * @param e failure cause
      */
     public void failed(Throwable e) {
         try {

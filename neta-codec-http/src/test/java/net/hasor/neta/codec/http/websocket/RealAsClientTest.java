@@ -45,7 +45,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
     private ProtoHandler<WebSocketMessage, WebSocketMessage> inboundEventTap(Queue<Object> inbound) {
         return new ProtoHandler<WebSocketMessage, WebSocketMessage>() {
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getData() != null) {
                     inbound.offer(event.getData());
                 }
@@ -93,7 +93,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 server.awaitOpen();
 
                 // ping/pong
-                channel.fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-manual")));
+                channel.fireEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-manual")));
                 PongWebSocketEvent pong = awaitInbound(inbound, PongWebSocketEvent.class, 5000L);
                 assertEquals("ping-manual", pong.content().readString(pong.content().readableBytes(), StandardCharsets.US_ASCII));
                 pong.release();
@@ -141,7 +141,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 server.awaitOpen();
 
                 // ping/pong
-                channel.fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-auto")));
+                channel.fireEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-auto")));
                 PongWebSocketEvent pong = awaitInbound(inbound, PongWebSocketEvent.class, 5000L);
                 assertEquals("ping-auto", pong.content().readString(pong.content().readableBytes(), StandardCharsets.US_ASCII));
                 pong.release();
@@ -218,7 +218,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 server.awaitOpen();
 
                 // ping/pong after upgrade on the same channel
-                channel.fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-mixed")));
+                channel.fireEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-mixed")));
                 PongWebSocketEvent pong = awaitInbound(inbound, PongWebSocketEvent.class, 5000L);
                 assertEquals("ping-mixed", pong.content().readString(pong.content().readableBytes(), StandardCharsets.US_ASCII));
                 pong.release();

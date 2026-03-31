@@ -18,37 +18,29 @@ import java.io.Closeable;
 import java.io.IOException;
 
 /**
- * Transport-specific listen-side endpoint used behind {@link NetListen}.
- * <p>Implementations cover several different listen models: a real socket acceptor for TCP/SCTP,
- * a bound datagram endpoint that demultiplexes peers for UDP/QUIC, or an in-memory registry-backed
- * listener for the virtual transport. Calling {@link #bind(ProtoInitializer)} creates the
- * corresponding {@link NetListen} facade and activates the transport-specific receive or accept path.
- * <p>The application layer does not interact with {@code AsyncServerChannel} directly; it works with
- * the higher-level {@link NetListen} returned by {@link #bind(ProtoInitializer)}.
+ * Transport-layer abstraction behind a server-side channel, typically exposed as a {@link NetListen} listener.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-08-06
- * @see AsyncChannelProvider#createServerChannel
- * @see NetListen
  */
 public interface AsyncServerChannel extends Closeable {
     /**
-     * Gets the unique identifier of this channel.
-     * @return The channel ID as a long value
+     * Return the unique identifier of this channel.
+     * @return channel ID as a long value
      */
     long getChannelId();
 
-    /** return socket config. */
+    /** Return the socket configuration. */
     SoConfig getSoConfig();
 
     /**
-     * Checks if the channel is currently open.
-     * @return true if the channel is open, false otherwise
+     * Return whether the channel is currently open.
+     * @return {@code true} if the channel is open, otherwise {@code false}
      */
     boolean isOpen();
 
     /**
-     * Binds the server channel to a specific network address and starts listening for connections.
-     * @throws IOException If an I/O error occurs during binding
+     * Bind the server channel to the target network address and start listening for connections.
+     * @throws IOException thrown when an I/O error occurs during bind
      */
     NetListen bind(ProtoInitializer initializer) throws IOException;
 }

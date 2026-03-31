@@ -36,19 +36,19 @@ public class ProtoQueueTest {
         assert queue.slotSize() == 7;
 
         assert queue.offerMessage(4);
-        assert queue.offerMessage(Arrays.asList(5, 6)) == 2;
+        assert queue.offerMessage(Arrays.asList(5, 6));
         assert queue.queueSize() == 6;
         assert queue.slotSize() == 4;
 
-        assert queue.offerMessage(Arrays.asList(7, 8)) == 2;
+        assert queue.offerMessage(Arrays.asList(7, 8));
         assert queue.queueSize() == 8;
         assert queue.slotSize() == 2;
 
-        assert queue.offerMessage(Arrays.asList(10, 11, 12, 13, 14, 15, 16, 17, 18, 19)) == 0;
+        assert !queue.offerMessage(Arrays.asList(10, 11, 12, 13, 14, 15, 16, 17, 18, 19));
         assert queue.queueSize() == 8;
         assert queue.slotSize() == 2;
 
-        assert queue.offerMessage(Arrays.asList(10, 11)) == 2;
+        assert queue.offerMessage(Arrays.asList(10, 11));
         assert queue.queueSize() == 10;
         assert queue.slotSize() == 0;
 

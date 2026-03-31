@@ -207,7 +207,7 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
     protected final void finishWebSocketUpgrade(ProtoContext context, WebSocketContext webSocketContext) throws Throwable {
         context.context(WebSocketContext.class, webSocketContext);
         context.rootContext(WebSocketContext.class, webSocketContext);
-        context.fireUserEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
-        context.fireUserEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(webSocketContext));
+        context.fireEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
+        context.fireEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(webSocketContext));
     }
 }

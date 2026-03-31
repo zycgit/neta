@@ -21,11 +21,11 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * Application-facing TCP {@link NetChannel} facade.
+ * Application-facing TCP {@link NetChannel} implementation.
  * <p>This class binds one {@link TcpAsyncChannel} together with its dedicated
- * {@link TcpRcvCompletionHandler} and {@link TcpSndCompletionHandler}, then exposes
- * the normal Neta channel API to protocol handlers and subscribers.
- * <p>It does not implement transport mechanics itself; instead it owns the handler
+ * {@link TcpRcvCompletionHandler} and {@link TcpSndCompletionHandler}, and exposes the standard
+ * Neta channel API to protocol handlers and subscribers.
+ * <p>It does not implement the low-level transport mechanics itself. Instead, it owns the handler
  * pair and closes them together when the channel is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
@@ -41,7 +41,7 @@ public class TcpChannel extends NetChannel {
         this.readHandler = readHandler;
         this.writeHandler = writeHandler;
 
-        // set direct reference for fast RCV path (bypasses ConcurrentHashMap lookup)
+        // Set the direct reference for the fast receive path and bypass ConcurrentHashMap lookup.
         this.readHandler.setNetChannel(this);
 
         this.onClose(c -> {
@@ -58,12 +58,17 @@ public class TcpChannel extends NetChannel {
         return this.writeHandler;
     }
 
-    /** Returns whether the read channel is closed. */
+    /**
+     * Return whether the read side has been shut down.
+     * @return true if the read side is shut down
+     */
     public boolean isShutdownInput() {
         return ((TcpAsyncChannel) this.asyncChannel).isShutdownInput();
     }
 
-    /** Shutdown the connection for reading without closing the channel. */
+    /**
+     * Shut down the read side of the connection without closing the entire channel.
+     */
     public void shutdownInput() {
         try {
             ((TcpAsyncChannel) this.asyncChannel).shutdownInput();

@@ -27,30 +27,29 @@ import net.hasor.cobble.concurrent.timer.HashedWheelTimer;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Low-latency, fixed-thread-pool task dispatcher used by {@link SoContextService} for all
- * Neta pipeline and subscriber tasks.
+ * Low-latency fixed-thread-pool task dispatcher used by {@link SoContextService} to execute all
+ * Neta pipeline and subscription tasks.
  * <h3>Architecture</h3>
  * <ul>
- *   <li>Tasks are added to a single lock-free {@link ConcurrentLinkedQueue} shared by
- *       all worker threads.</li>
- *   <li>Workers block via {@link LockSupport#park} when the queue is empty — no
- *       condition-variable or blocking-queue overhead.</li>
- *   <li>On task submission, the dispatcher wakes <em>one</em> worker using a round-robin
- *       index ({@code wakeIndex}) to distribute wake-ups evenly and avoid thundering-herd
- *       situations when multiple tasks are queued simultaneously.</li>
- *   <li>Delayed tasks are registered with the shared {@link HashedWheelTimer} and re-queued
- *       automatically after the delay expires.</li>
+ *   <li>All tasks are added to one lock-free {@link ConcurrentLinkedQueue} shared by all worker threads.</li>
+ *   <li>When the queue is empty, workers suspend through {@link LockSupport#park}, avoiding the
+ *       extra overhead of condition variables or blocking queues.</li>
+ *   <li>When a task is submitted, the dispatcher wakes only <b>one</b> worker thread using the
+ *       round-robin index {@code wakeIndex}, spreading wake-up pressure and avoiding a thundering
+ *       herd when many tasks arrive in a short period.</li>
+ *   <li>Delayed tasks are registered on the shared {@link HashedWheelTimer} and re-queued
+ *       automatically when the delay expires.</li>
  * </ul>
  * <h3>Shutdown</h3>
- * {@link #close()} clears the run flag, unparks all worker threads, waits up to three
- * seconds per thread for a graceful drain, then executes any remaining queued tasks on
- * the calling thread to ensure no work is silently discarded.
+ * {@link #close()} first clears the running flag, then wakes all worker threads, and waits up to
+ * three seconds for each thread to drain gracefully. If tasks still remain, they continue running
+ * on the calling thread so work is not silently dropped.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  * @see SoContextService
  */
-class SoEventExecutor implements Closeable {
-    private static final Logger               logger = Logger.getLogger(SoEventExecutor.class);
+class SoTaskExecutor implements Closeable {
+    private static final Logger               logger = Logger.getLogger(SoTaskExecutor.class);
     private final        HashedWheelTimer     timer;
     private final        Queue<TaskWorker<?>> tasks;
     //
@@ -58,7 +57,7 @@ class SoEventExecutor implements Closeable {
     private final        Thread[]             workerThreads;
     private final        AtomicInteger        wakeIndex;
 
-    public SoEventExecutor(ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads, HashedWheelTimer timer) {
+    public SoTaskExecutor(ClassLoader classLoader, SoThreadFactory soThreadFactory, int taskThreads, HashedWheelTimer timer) {
         this.timer = timer;
         this.tasks = new ConcurrentLinkedQueue<>();
         this.runTag = new AtomicBoolean(false);
@@ -165,12 +164,12 @@ class SoEventExecutor implements Closeable {
     }
 
     private static class TaskWorker<T> implements Runnable {
-        private final SoEventExecutor executor;
-        private final DefaultSoTask   task;
-        private final Future<T>       future;
-        private final T               result;
+        private final SoTaskExecutor executor;
+        private final DefaultSoTask  task;
+        private final Future<T>      future;
+        private final T              result;
 
-        public TaskWorker(SoEventExecutor executor, DefaultSoTask task, Future<T> future, T result) {
+        public TaskWorker(SoTaskExecutor executor, DefaultSoTask task, Future<T> future, T result) {
             this.executor = executor;
             this.task = task;
             this.future = future;

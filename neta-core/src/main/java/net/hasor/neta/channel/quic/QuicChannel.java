@@ -29,27 +29,21 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * Post-handshake connection-level QUIC channel exposed to application code.
- * <p>This object is created only after {@link QuicAsyncChannelHandshake} has
- * produced an established connection. It owns the public connection API for
- * stream creation, DATAGRAM access, connection-level flow-control updates, path
- * probing, and graceful or error-driven shutdown.
- * <p><b>Relationship to the internal stack:</b>
+ * Post-handshake QUIC connection channel exposed to the application layer.
+ * <p>This object is created only after {@link QuicAsyncChannelHandshake} completes connection establishment and
+ * provides public APIs for stream creation, DATAGRAM access, connection-level flow-control adjustment, path probing,
+ * and graceful or error-based shutdown.
+ * <p><b>Its position inside the internal protocol stack is as follows:</b>
  * <pre>
  *   UDP socket
- *      |
- *      v
- *   QuicChannelAsync   -- packet/ACK/loss/path/CID machinery
- *      |
- *      +-- QuicChannel           -- public connection handle
- *             |
- *             +-- QuicStreamChannel*    (multiplexed reliable streams)
- *             |
- *             +-- QuicDatagramChannel?  (optional RFC 9221 unreliable datagrams)
+ *     v
+ *   QuicChannelAsync   -- packet, ACK, loss, path, and CID management
+ *     +-- QuicChannel           -- public connection handle
+ *        +-- QuicStreamChannel*    (multiplexed reliable streams)
+ *        +-- QuicDatagramChannel?  (optional RFC 9221 unreliable datagrams)
  * </pre>
- * <p>The channel itself does not parse packets directly; all packet processing
- * stays in {@link QuicChannelAsync}. This class is the stable, post-handshake
- * facade presented to user code.
+ * <p>This channel does not parse packets directly; all packet processing remains the responsibility of
+ * {@link QuicChannelAsync}.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicChannel extends UdpChannel {
@@ -61,7 +55,9 @@ public class QuicChannel extends UdpChannel {
     private final AtomicLong     localMaxStreamsUni; // max uni streams we allow peer to open
     private final QuicSslContext sslContext;         // SSL context from completed handshake
 
-    /** Creates a QuicChannel from a completed handshake, reading all negotiation results from the given QuicChannelAsync. */
+    /**
+     * Creates a QuicChannel from a completed handshake result and reads negotiated outputs from the given QuicChannelAsync.
+     */
     QuicChannel(QuicChannelAsync connCh) throws Throwable {
         super(connCh.getChannelId(), new QuicMonitor(connCh), connCh.getForListen(), connCh.getInitializer(), connCh, connCh.getContext());
         this.quicSoConfig = connCh.getSoConfig();
@@ -71,13 +67,13 @@ public class QuicChannel extends UdpChannel {
         this.localMaxStreamsBidi = new AtomicLong(this.quicSoConfig.getTpInitialMaxStreamsBidi());
         this.localMaxStreamsUni = new AtomicLong(this.quicSoConfig.getTpInitialMaxStreamsUni());
 
-        // Build QuicSslContext from handshake results
+        // Build QuicSslContext from the handshake result.
         QuicAsyncChannelHandshake handshake = connCh.getHandshake();
         QuicTlsEngine tlsEngine = (handshake != null) ? handshake.getTlsEngine() : null;
         if (tlsEngine != null) {
             SslCertConfig certConfig = this.quicSoConfig.getSslConfig();
             String negotiatedAlpn = tlsEngine.getNegotiatedAlpn();
-            // Prefer SNI hostname from TLS ClientHello; fall back to socket address
+            // Prefer the SNI host name from TLS ClientHello and fall back to the socket address when absent.
             String sniHost = tlsEngine.getPeerSniHost();
             SocketAddress remote = connCh.getRemoteAddress();
             String peerHost = (sniHost != null && !sniHost.isEmpty()) ? sniHost : null;
@@ -104,7 +100,9 @@ public class QuicChannel extends UdpChannel {
         return (QuicChannelAsync) this.asyncChannel;
     }
 
-    /** Returns the {@link SslContext} for this QUIC connection, or {@code null} if SSL is disabled. */
+    /**
+     * Returns the {@link SslContext} associated with the current QUIC connection; returns {@code null} when SSL is disabled.
+     */
     public SslContext getSslContext() {
         return this.sslContext;
     }
@@ -113,20 +111,23 @@ public class QuicChannel extends UdpChannel {
         return (QuicMonitor) this.getMonitor();
     }
 
-    /** Returns the set of currently open stream IDs (protocol-level tracking). */
+    /**
+     * Returns the set of stream IDs that are still open, for protocol-level tracking.
+     */
     public Set<Long> getOpenStreams() {
         return this.asyncChannel().getStreamIds();
     }
 
     /**
-     * Returns the effective connection-level data limit; can only increase via {@link #sendMaxDataSize(long)}.
+     * Returns the current connection-level data limit; this value can only be increased through {@link #sendMaxDataSize(long)}.
      */
     public long getMaxDataSize() {
         return this.asyncChannel().getConnectionMaxData();
     }
 
     /**
-     * Sends a MAX_DATA frame (RFC 9000 §19.9) increasing the connection-level flow-control limit; new value must be ≥ current.
+     * Sends a MAX_DATA frame (RFC 9000 §19.9) to raise the connection-level flow-control limit; the new value must be
+     * greater than or equal to the current value.
      */
     public Future<QuicChannel> sendMaxDataSize(long newMaxDataSize) {
         long currentDataSize = this.asyncChannel().getConnectionMaxData();
@@ -156,28 +157,31 @@ public class QuicChannel extends UdpChannel {
     // ── Keep-alive / Probe API ─────────────────────────────────────────
 
     /**
-     * Sends a PING frame and returns a future completing with RTT in ms; equivalent to {@code ping(0)} (no timeout).
+     * Sends a PING frame and returns a future completed with RTT in milliseconds; equivalent to {@code ping(0)},
+     * meaning no timeout is set.
      */
     public Future<Long> ping() {
         return this.asyncChannel().sendPingRtt(0);
     }
 
     /**
-     * Sends a PING frame and returns a future completing with RTT in ms, failing with TimeoutException after timeoutMs (0 = no timeout).
+     * Sends a PING frame and returns a future completed with RTT in milliseconds; fails when timeoutMs is exceeded,
+     * and 0 means no timeout.
      */
     public Future<Long> ping(long timeoutMs) {
         return this.asyncChannel().sendPingRtt(timeoutMs);
     }
 
     /**
-     * Initiates active connection migration to a new network path (RFC 9000 §9); returns a future with the measured path RTT.
+     * Actively starts connection migration to a new network path (RFC 9000 §9) and returns a future containing the
+     * measured path RTT.
      */
     public Future<Long> migrate() throws IOException {
         return this.asyncChannel().migrate();
     }
 
     /**
-     * Sends a PATH_CHALLENGE frame with exactly 8 bytes of challenge data; peer responds with matching PATH_RESPONSE.
+     * Sends a PATH_CHALLENGE frame carrying 8 bytes of challenge data; the peer should return a matching PATH_RESPONSE.
      */
     public Future<QuicChannel> pathChallenge(byte[] data) {
         if (data == null || data.length != 8) {
@@ -202,7 +206,8 @@ public class QuicChannel extends UdpChannel {
     // ── Connection lifecycle ───────────────────────────────────────────
 
     /**
-     * Sends a CONNECTION_CLOSE frame with the given error code and reason, then tears down the connection (see {@link QuicErrorCode}).
+     * Sends a CONNECTION_CLOSE frame with the given error code and reason, then closes the connection; see
+     * {@link QuicErrorCode} for error-code meanings.
      */
     public Future<QuicChannel> closeWithError(long errorCode, String reason) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
@@ -211,14 +216,16 @@ public class QuicChannel extends UdpChannel {
     }
 
     /**
-     * Gracefully closes this QUIC connection by sending CONNECTION_CLOSE with {@link QuicErrorCode#NO_ERROR}.
+     * Gracefully closes the current QUIC connection by sending a CONNECTION_CLOSE frame carrying
+     * {@link QuicErrorCode#NO_ERROR}.
      */
     public Future<QuicChannel> closeGracefully() {
         return closeWithError(QuicErrorCode.NO_ERROR, "");
     }
 
     /**
-     * Returns the open {@link QuicStreamChannel} for the given stream ID (RFC 9000 §2.1), or null if none exists.
+     * Returns the open {@link QuicStreamChannel} corresponding to the given stream ID (RFC 9000 §2.1); returns null
+     * if none exists.
      */
     public QuicStreamChannel findStream(long streamId) {
         return this.asyncChannel().findStream(streamId);
@@ -226,25 +233,29 @@ public class QuicChannel extends UdpChannel {
 
     // ── Bidi Stream ────────────────────────────────────────────────
 
-    /** Returns the maximum number of bidirectional streams the peer allows us to open. */
+    /**
+     * Returns the maximum number of bidirectional streams the peer allows this endpoint to open.
+     */
     public long getBidiMaxStreams() {
         return this.asyncChannel().getPeerMaxStreamsBidi();
     }
 
     /**
-     * Asynchronously creates a new bidirectional stream with an automatically allocated stream ID.
+     * Asynchronously creates a new bidirectional stream, with the stream ID assigned automatically by the framework.
      */
     public Future<QuicStreamChannel> newBidiStream() {
         return this.asyncChannel().newStreamChannel(nextBidiStreamId());
     }
 
-    /** the next bidirectional stream ID */
+    /**
+     * Computes the next bidirectional stream ID.
+     */
     private long nextBidiStreamId() {
         long id = this.nextBidiStreamId.getAndAdd(4);
         long streamIndex = id / 4;
         long peerMax = this.asyncChannel().getPeerMaxStreamsBidi();
         if (streamIndex >= peerMax) {
-            this.nextBidiStreamId.addAndGet(-4); // rollback
+            this.nextBidiStreamId.addAndGet(-4); // Roll back.
             throw new IllegalStateException("Bidirectional stream limit exceeded: " + peerMax);
         }
 
@@ -252,7 +263,8 @@ public class QuicChannel extends UdpChannel {
     }
 
     /**
-     * Sends a MAX_STREAMS (bidi) frame (RFC 9000 §19.11) to increase the bidirectional stream limit by upgradeIncr.
+     * Sends a MAX_STREAMS (bidirectional) frame (RFC 9000 §19.11) and increases the bidirectional stream limit by
+     * upgradeIncr.
      */
     public Future<QuicChannel> upgradeBidiStreams(long upgradeIncr) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
@@ -276,25 +288,29 @@ public class QuicChannel extends UdpChannel {
 
     // ── Uni Stream ────────────────────────────────────────────────
 
-    /** Returns the maximum number of unidirectional streams the peer allows us to open. */
+    /**
+     * Returns the maximum number of unidirectional streams the peer allows this endpoint to open.
+     */
     public long getUniMaxStreams() {
         return this.asyncChannel().getPeerMaxStreamsUni();
     }
 
     /**
-     * Asynchronously creates a new unidirectional stream with an automatically allocated stream ID.
+     * Asynchronously creates a new unidirectional stream, with the stream ID assigned automatically by the framework.
      */
     public Future<QuicStreamChannel> newUniStream() {
         return this.asyncChannel().newStreamChannel(nextUniStreamId());
     }
 
-    /** the next unidirectional stream ID */
+    /**
+     * Computes the next unidirectional stream ID.
+     */
     private long nextUniStreamId() {
         long id = this.nextUniStreamId.getAndAdd(4);
         long streamIndex = id / 4;
         long peerMax = this.asyncChannel().getPeerMaxStreamsUni();
         if (streamIndex >= peerMax) {
-            this.nextUniStreamId.addAndGet(-4); // rollback
+            this.nextUniStreamId.addAndGet(-4); // Roll back.
             throw new IllegalStateException("Unidirectional stream limit exceeded: " + peerMax);
         }
 
@@ -302,7 +318,8 @@ public class QuicChannel extends UdpChannel {
     }
 
     /**
-     * Sends a MAX_STREAMS (uni) frame (RFC 9000 §19.11) to increase the unidirectional stream limit by upgradeIncr.
+     * Sends a MAX_STREAMS (unidirectional) frame (RFC 9000 §19.11) and increases the unidirectional stream limit by
+     * upgradeIncr.
      */
     public Future<QuicChannel> upgradeUniStreams(long upgradeIncr) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
@@ -327,28 +344,32 @@ public class QuicChannel extends UdpChannel {
     // ── DATAGRAM API (RFC 9221) ────────────────────────────────────────
 
     /**
-     * Returns true if DATAGRAM frames are supported on this connection (both sides advertised non-zero max_datagram_frame_size).
+     * Returns whether the current connection supports DATAGRAM frames, which requires both sides to advertise a non-zero
+     * max_datagram_frame_size.
      */
     public boolean isSupportDatagram() {
         return this.getDatagramFrameSize() > 0;
     }
 
     /**
-     * Returns the negotiated maximum DATAGRAM frame payload size (min of local/peer max); 0 if unsupported.
+     * Returns the negotiated maximum DATAGRAM frame payload size, taking the smaller of the local and peer limits;
+     * returns 0 when unsupported.
      */
     public long getDatagramFrameSize() {
         return this.asyncChannel().getPeerDatagramMaxData();
     }
 
     /**
-     * Returns the existing {@link QuicDatagramChannel}, or null if none has been opened yet (does not create one).
+     * Returns the existing {@link QuicDatagramChannel}; returns null if it has not been opened yet and will not create
+     * one automatically.
      */
     public QuicDatagramChannel getDatagramChannel() {
         return this.asyncChannel().onlyGetDatagramChannel();
     }
 
     /**
-     * Asynchronously opens (or returns) the DATAGRAM channel for this connection; throws if DATAGRAM is disabled or unsupported.
+     * Asynchronously opens the DATAGRAM channel for the current connection, returning the existing one if it is already
+     * present; throws when DATAGRAM is disabled or unsupported.
      */
     public Future<QuicDatagramChannel> openDatagramChannel() throws IOException {
         if (this.quicSoConfig.isDisableDatagram()) {

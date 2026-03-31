@@ -16,19 +16,26 @@
 package net.hasor.neta.channel.quic;
 
 /**
- * Thrown when a QUIC STOP_SENDING frame is received from the peer (RFC 9000 §19.5).
+ * Exception thrown when a QUIC STOP_SENDING frame sent by the peer is received.
+ * <p>Corresponds to RFC 9000 Section 19.5 and notifies the application layer that a stream should stop sending further data.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicStopSendingException extends QuicException {
     private final long streamId;
 
-    /** Creates a QuicStopSendingException with an application error code and stream ID. */
+    /**
+     * Creates a STOP_SENDING exception.
+     * @param errorCode application error code
+     * @param streamId target stream ID
+     */
     public QuicStopSendingException(long errorCode, long streamId) {
         super(errorCode, "STOP_SENDING: stream=" + streamId + ", errorCode=0x" + Long.toHexString(errorCode));
         this.streamId = streamId;
     }
 
-    /** Returns the stream ID on which STOP_SENDING was received. */
+    /**
+     * Returns the stream ID for which STOP_SENDING was received.
+     */
     public long getStreamId() {
         return this.streamId;
     }

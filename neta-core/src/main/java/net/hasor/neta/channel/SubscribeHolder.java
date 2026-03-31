@@ -15,13 +15,10 @@
  */
 package net.hasor.neta.channel;
 /**
- * Handle returned by {@link SoChannel#subscribe} (and its overloads).
- * <p>Calling {@link #unSubscribe()} deactivates the registration and removes it from the
- * owning {@link SoContextService} listener list. For asynchronous subscriptions any queued,
- * not-yet-drained events are also discarded.
- * <p>The current implementation does not perform a dedicated automatic unregister step when a
- * channel closes; callers that need deterministic cleanup should explicitly call
- * {@link #unSubscribe()}.
+ * Subscription handle returned by {@link SoChannel#subscribe} and its overloads.
+ * <p>Calling {@link #unSubscribe()} deactivates the current registration and removes it from the
+ * listener list owned by {@link SoContextService}. For asynchronous subscriptions, any events that
+ * have already been queued but not yet dispatched are discarded as well.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-09-24
  * @see SoChannel#subscribe
@@ -29,11 +26,11 @@ package net.hasor.neta.channel;
  */
 public interface SubscribeHolder {
     /**
-     * Unsubscribes from the associated channel or event.
-     * After calling this method, the subscription should be considered inactive,
-     * and no further events will be received.
+     * Cancel the subscription associated with the channel or event.
+     * After this method returns, the subscription is considered inactive and no further events are delivered.
      */
     void unSubscribe();
 
+    /** Return the delivery mode used by the current subscription. */
     SubscribeMode getSubscribeMode();
 }

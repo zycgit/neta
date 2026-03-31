@@ -17,12 +17,11 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Routes outbound payloads between linked virtual channels.
- * <p>This is the core in-memory transport bus used by the virtual channel
- * package. It subscribes to {@link PlayLoad} publication from the shared
- * {@link SoContext}, finds every {@link VrtTransferLink} registered for the
- * source channel, optionally simulates loss, and then hands the payload to the
- * target channel after conversion and batching.
+ * Route outbound payloads between linked virtual channels.
+ * <p>This type is the core in-memory transport bus in the virtual package. It subscribes to
+ * {@link PlayLoad} objects published by the shared {@link SoContext}, finds all
+ * {@link VrtTransferLink} instances associated with the source channel, optionally simulates packet
+ * loss, and then hands the payload to target channels after conversion and batching.
  * <p><b>Data path:</b>
  * <pre>
  *   sender NetChannel.sendData(...)
@@ -34,15 +33,15 @@ import net.hasor.neta.channel.*;
  *       -> target.onReceive(...)
  * </pre>
  * <ul>
- *   <li><b>Link scope:</b> the routing table is keyed by source channel id, and each
- *       source may fan out to multiple target links.</li>
- *   <li><b>Conversion:</b> {@link #duplicate()} creates per-receiver copies for
- *       {@link ByteBuf} payloads, while {@link #direct()} forwards references as-is.</li>
- *   <li><b>Delivery mode:</b> when constructed as asynchronous, each target dispatch is
- *       submitted back to the manager executor; otherwise delivery happens inline.</li>
- *   <li><b>Loss simulation:</b> {@code lossRate} is applied as the current implementation's
- *       threshold filter. A value of {@code 0} disables dropping, and larger values make
- *       dropping less likely because a packet is skipped only when {@code random(0..99) > lossRate}.</li>
+ *   <li><b>Link scope:</b> the routing table is indexed by source channel ID, and each source
+ *       channel can fan out to multiple target links.</li>
+ *   <li><b>Conversion:</b> {@link #duplicate()} creates per-receiver copies of {@link ByteBuf}
+ *       payloads, while {@link #direct()} forwards references as-is.</li>
+ *   <li><b>Delivery mode:</b> when asynchronous mode is enabled, each target delivery is submitted
+ *       back to the manager executor; otherwise it runs inline on the current thread.</li>
+ *   <li><b>Packet-loss simulation:</b> in the current implementation, {@code lossRate} is used as
+ *       a threshold filter. A value of {@code 0} means no packet loss, and larger values make a
+ *       payload less likely to be skipped because loss occurs only when {@code random(0..99) > lossRate}.</li>
  * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
@@ -64,16 +63,17 @@ public class VrtTransfer {
     private volatile int                              lossRate;
 
     /**
-     * Constructor for VrtTransfer.
-     * @param manager The NetManager instance to manage the network channels.
+     * Create a synchronous virtual transport object.
+     * @param manager the NetManager instance
      */
     public VrtTransfer(NetManager manager) {
         this(manager, false);
     }
 
     /**
-     * Constructor for VrtTransfer.
-     * @param manager The NetManager instance to manage the network channels.
+     * Create a virtual transport object.
+     * @param manager the NetManager instance
+     * @param asynchronous whether delivery is asynchronous
      */
     public VrtTransfer(NetManager manager, boolean asynchronous) {
         this.manager = manager;
@@ -85,6 +85,10 @@ public class VrtTransfer {
         this.closed = new AtomicBoolean(false);
     }
 
+    /**
+     * Return a receive-side converter that processes data with copy semantics.
+     * @return the receive-side conversion handler
+     */
     public static VrtTransferHandler duplicate() {
         return (src, dst) -> {
             while (src.hasMore()) {
@@ -120,6 +124,10 @@ public class VrtTransfer {
         };
     }
 
+    /**
+     * Return a receive-side converter that processes data with pass-through semantics.
+     * @return the receive-side conversion handler
+     */
     public static VrtTransferHandler direct() {
         return (src, dst) -> {
             while (src.hasMore()) {
@@ -128,28 +136,51 @@ public class VrtTransfer {
         };
     }
 
+    /**
+     * Determine whether the current transport uses asynchronous delivery.
+     * @return true if asynchronous delivery is enabled
+     */
     public boolean isAsynchronous() {
         return this.asynchronous;
     }
 
+    /**
+     * Return the current batching threshold.
+     * @return the batch size
+     */
     public int getBatchSize() {
         return this.batchSize;
     }
 
+    /**
+     * Set the batching threshold.
+     * @param batchSize the batch size
+     */
     public void setBatchSize(int batchSize) {
         this.batchSize = Math.max(1, batchSize);
         logger.warn("set batchSize to " + this.batchSize);
     }
 
+    /**
+     * Return the current packet-loss configuration.
+     * @return the packet loss rate
+     */
     public int getLossRate() {
         return this.lossRate;
     }
 
+    /**
+     * Set the current packet-loss configuration.
+     * @param lossRate the packet loss rate
+     */
     public void setLossRate(int lossRate) {
         this.lossRate = NumberUtils.between(lossRate, 0, 100);
         logger.warn("set lossRate to " + this.lossRate + "%");
     }
 
+    /**
+     * Close the current virtual transport and release its subscription and routing table.
+     */
     public void close() {
         if (this.closed.compareAndSet(false, true)) {
             this.subscribeHolder.unSubscribe();
@@ -157,13 +188,21 @@ public class VrtTransfer {
         }
     }
 
+    /**
+     * Create the filter used to select forwardable payloads.
+     * @return the payload filter
+     */
     private Predicate<PlayLoad> playLoadFilter() {
         return playLoad -> playLoad.isOutbound() && this.distributeMap.containsKey(playLoad.getSource().getChannelId());
     }
 
+    /**
+     * Distribute one payload to all target links associated with the source channel.
+     * @param playLoad the payload to distribute
+     */
     private void playLoadDistribute(PlayLoad playLoad) {
         if (this.closed.get()) {
-            return;// is close
+            return;// Already closed.
         }
 
         long srcChannelId = playLoad.getSource().getChannelId();
@@ -205,12 +244,11 @@ public class VrtTransfer {
     }
 
     /**
-     * Links two virtual channels with a conversion function.
-     * @param from The source VrtChannel.
-     * @param to The target VrtChannel.
-     * @param rcvConvert The conversion function to apply to the data.
-     * @throws IllegalArgumentException If the from or to channels do not belong to the same NetaManager.
-     * @throws IllegalStateException If the link already exists.
+     * Establish a transport link with conversion capability between two virtual channels.
+     * @param from the source channel
+     * @param to the target channel
+     * @param rcvConvert the receive-side conversion handler
+     * @throws SocketException if link creation fails
      */
     public void linkTo(VrtChannel from, VrtChannel to, VrtTransferHandler rcvConvert) throws SocketException {
         Objects.requireNonNull(rcvConvert, "rcvConvert is null.");
@@ -228,20 +266,20 @@ public class VrtTransfer {
             throw new SocketException("channels and VrtTransfer need same NetaManager.");
         }
 
-        // create link list if not exists.
+        // Create the link list if it does not exist.
         List<VrtTransferLink> linkList = this.distributeMap.get(from.getChannelId());
         if (linkList == null) {
             linkList = new CopyOnWriteArrayList<>();
             this.distributeMap.put(from.getChannelId(), linkList);
 
-            // when source channel closed, remove all distribute.
+            // Remove all routing entries when the source channel closes.
             from.onClose(channel -> {
                 logger.info("unlink " + from.getChannelId() + " -> all.");
                 this.distributeMap.remove(from.getChannelId());
             });
         }
 
-        //
+        // Register the target-side close callback and create the link.
         if (linkList.stream().anyMatch(l -> l.target.getChannelId() == to.getChannelId())) {
             throw new SocketException("link " + from.getChannelId() + " -> " + to.getChannelId() + " already exists");
         } else {
@@ -252,6 +290,11 @@ public class VrtTransfer {
         }
     }
 
+    /**
+     * Remove one link from the source channel to the target channel.
+     * @param from the source channel
+     * @param to the target channel
+     */
     private void removeLink(VrtChannel from, VrtChannel to) {
         logger.info("unlink " + from.getChannelId() + " -> " + to.getChannelId() + ".");
         List<VrtTransferLink> links = this.distributeMap.get(from.getChannelId());

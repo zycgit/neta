@@ -19,21 +19,21 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Predicate;
 
 /**
- * Skeletal implementation of {@link SoChannel} providing the attribute map and
- * subscription plumbing shared by all concrete channel types.
- * <p>Responsibilities handled by this class:
+ * Skeleton implementation of {@link SoChannel} that provides shared attribute storage and
+ * subscription forwarding for all concrete channel types.
+ * <p>This class handles:</p>
  * <ul>
- *   <li><b>Attributes</b> – thread-safe key-value storage backed by a
- *       {@link ConcurrentHashMap}. Attributes persist for the full lifetime of the
- *       channel and are accessible from any thread.</li>
- *   <li><b>Subscriptions</b> – the four {@code subscribe} overloads are pre-wired to
- *       delegate to {@link SoContext#subscribe}, automatically AND-ing the caller’s
- *       filter predicate with a channel-ID check, so that only events originating from
- *       <em>this</em> channel are delivered to the listener.</li>
+ *   <li><b>Attributes</b>: thread-safe key/value storage backed by {@link ConcurrentHashMap}.
+ *       Attributes remain available for the full lifetime of the channel and may be accessed from
+ *       any thread.</li>
+ *   <li><b>Subscriptions</b>: the four {@code subscribe} overloads are pre-wired to
+ *       {@link SoContext#subscribe}, automatically AND-ing the caller's filter predicate with the
+ *       current channel ID so only events originating from <b>this</b> channel are delivered to the
+ *       listener.</li>
  * </ul>
- * <p>Subclasses must implement the remaining abstract members of {@link SoChannel}
- * (lifecycle, addressing, context access, and close semantics).
- * @param <T> the result type of the {@link SoChannel#close()} future
+ * <p>Subclasses must implement the remaining abstract members of {@link SoChannel}, including
+ * lifecycle, address information, context access, and close semantics.</p>
+ * @param <T> result type of the Future returned by {@link SoChannel#close()}
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoChannel
@@ -41,33 +41,56 @@ import java.util.function.Predicate;
 public abstract class SoAttrChannel<T> implements SoChannel<T> {
     private final Map<String, Object> attributes = new ConcurrentHashMap<>();
 
+    /**
+     * Set a named attribute on the current channel.
+     * @param key attribute name
+     * @param value attribute value
+     */
     @Override
     public void setAttribute(String key, Object value) {
         this.attributes.put(key, value);
     }
 
+    /**
+     * Read a named attribute from the current channel.
+     * @param key attribute name
+     * @return attribute value, or {@code null} if none exists
+     */
     @Override
     public Object getAttribute(String key) {
         return this.attributes.get(key);
     }
 
-    /** Subscribes to all {@link PlayLoad} events originating from this channel. */
+    /** Subscribe to all {@link PlayLoad} events originating from the current channel. */
     @Override
     public SubscribeHolder subscribe(PlayLoadListener listener) {
         return this.subscribe(t -> true, SubscribeMode.ASYNC, listener);
     }
 
+    /**
+     * Subscribe to all {@link PlayLoad} events originating from the current channel using the given delivery mode.
+     * @param mode subscription delivery mode
+     * @param listener event listener
+     * @return subscription handle
+     */
     @Override
     public SubscribeHolder subscribe(SubscribeMode mode, PlayLoadListener listener) {
         return this.subscribe(t -> true, mode, listener);
     }
 
-    /** Subscribes to events from this channel that satisfy {@code select}. */
+    /** Subscribe to events from the current channel that satisfy {@code select}. */
     @Override
     public SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener) {
         return this.subscribe(select, SubscribeMode.ASYNC, listener);
     }
 
+    /**
+     * Subscribe to filtered events from the current channel using the specified delivery mode.
+     * @param select event filter predicate; {@code null} means no additional filtering
+     * @param mode subscription delivery mode
+     * @param listener event listener
+     * @return subscription handle
+     */
     @Override
     public SubscribeHolder subscribe(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener) {
         Predicate<PlayLoad> baseSelect = select == null ? new Predicate<PlayLoad>() {

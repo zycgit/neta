@@ -17,8 +17,8 @@ package net.hasor.neta.channel.quic;
 import java.net.SocketAddress;
 
 /**
- * Holds QUIC transport parameters negotiated during the handshake (RFC 9000 §18).
- * Used internally to pass peer configuration from handshake to the post-handshake channel.
+ * Stores the QUIC transport parameters negotiated during the handshake phase.
+ * <p>Corresponds to RFC 9000 Section 18 and is used internally to pass peer configuration from the handshake phase to the post-handshake connection channel.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicInitConfigData {
@@ -32,92 +32,128 @@ class QuicInitConfigData {
     private long          peerStreamMaxDataUni;
     private long          datagramMaxDataSize;
 
-    /** Returns the peer's remote address. */
+    /**
+     * Returns the peer remote address.
+     */
     public SocketAddress getRemoteAddr() {
         return this.remoteAddr;
     }
 
-    /** Sets the peer's remote address. */
+    /**
+     * Sets the peer remote address.
+     */
     public void setRemoteAddr(SocketAddress remoteAddr) {
         this.remoteAddr = remoteAddr;
     }
 
-    /** Returns the peer's local address. */
+    /**
+     * Returns the local address.
+     */
     public SocketAddress getLocalAddr() {
         return this.localAddr;
     }
 
-    /** Sets the peer's local address. */
+    /**
+     * Sets the local address.
+     */
     public void setLocalAddr(SocketAddress localAddr) {
         this.localAddr = localAddr;
     }
 
-    /** Returns the peer's initial_max_data transport parameter. */
+    /**
+     * Returns the initial_max_data parameter advertised by the peer.
+     */
     public long getPeerMaxData() {
         return this.peerMaxData;
     }
 
-    /** Sets the peer's initial_max_data transport parameter. */
+    /**
+     * Sets the initial_max_data parameter advertised by the peer.
+     */
     public void setPeerMaxData(long peerMaxData) {
         this.peerMaxData = peerMaxData;
     }
 
-    /** Returns the peer's initial_max_streams_bidi transport parameter. */
+    /**
+     * Returns the initial_max_streams_bidi parameter advertised by the peer.
+     */
     public long getPeerMaxStreamsBidi() {
         return this.peerMaxStreamsBidi;
     }
 
-    /** Sets the peer's initial_max_streams_bidi transport parameter. */
+    /**
+     * Sets the initial_max_streams_bidi parameter advertised by the peer.
+     */
     public void setPeerMaxStreamsBidi(long peerMaxStreamsBidi) {
         this.peerMaxStreamsBidi = peerMaxStreamsBidi;
     }
 
-    /** Returns the peer's initial_max_streams_uni transport parameter. */
+    /**
+     * Returns the initial_max_streams_uni parameter advertised by the peer.
+     */
     public long getPeerMaxStreamsUni() {
         return this.peerMaxStreamsUni;
     }
 
-    /** Sets the peer's initial_max_streams_uni transport parameter. */
+    /**
+     * Sets the initial_max_streams_uni parameter advertised by the peer.
+     */
     public void setPeerMaxStreamsUni(long peerMaxStreamsUni) {
         this.peerMaxStreamsUni = peerMaxStreamsUni;
     }
 
-    /** Returns the peer's initial_max_stream_data_bidi_local transport parameter. */
+    /**
+     * Returns the initial_max_stream_data_bidi_local parameter advertised by the peer.
+     */
     public long getPeerStreamMaxDataBidiLocal() {
         return this.peerStreamMaxDataBidiLocal;
     }
 
-    /** Sets the peer's initial_max_stream_data_bidi_local transport parameter. */
+    /**
+     * Sets the initial_max_stream_data_bidi_local parameter advertised by the peer.
+     */
     public void setPeerStreamMaxDataBidiLocal(long peerStreamMaxDataBidiLocal) {
         this.peerStreamMaxDataBidiLocal = peerStreamMaxDataBidiLocal;
     }
 
-    /** Returns the peer's initial_max_stream_data_bidi_remote transport parameter. */
+    /**
+     * Returns the initial_max_stream_data_bidi_remote parameter advertised by the peer.
+     */
     public long getPeerStreamMaxDataBidiRemote() {
         return this.peerStreamMaxDataBidiRemote;
     }
 
-    /** Sets the peer's initial_max_stream_data_bidi_remote transport parameter. */
+    /**
+     * Sets the initial_max_stream_data_bidi_remote parameter advertised by the peer.
+     */
     public void setPeerStreamMaxDataBidiRemote(long peerStreamMaxDataBidiRemote) {
         this.peerStreamMaxDataBidiRemote = peerStreamMaxDataBidiRemote;
     }
 
-    /** Returns the peer's initial_max_stream_data_uni transport parameter. */
+    /**
+     * Returns the initial_max_stream_data_uni parameter advertised by the peer.
+     */
     public long getPeerStreamMaxDataUni() {
         return this.peerStreamMaxDataUni;
     }
 
-    /** Sets the peer's initial_max_stream_data_uni transport parameter. */
+    /**
+     * Sets the initial_max_stream_data_uni parameter advertised by the peer.
+     */
     public void setPeerStreamMaxDataUni(long peerStreamMaxDataUni) {
         this.peerStreamMaxDataUni = peerStreamMaxDataUni;
     }
 
-    /** Returns the peer's max_datagram_frame_size transport parameter (RFC 9221). */
+    /**
+     * Returns the max_datagram_frame_size parameter advertised by the peer.
+     */
     public long getDatagramMaxDataSize() {
         return this.datagramMaxDataSize;
     }
 
-    /** Sets the peer's max_datagram_frame_size transport parameter. */
+    /**
+     * Sets the max_datagram_frame_size parameter advertised by the peer.
+     */
     public void setDatagramMaxDataSize(long datagramMaxDataSize) {
         this.datagramMaxDataSize = datagramMaxDataSize;
     }

@@ -17,24 +17,37 @@ package net.hasor.neta.channel;
 import java.util.function.Consumer;
 
 /**
- * Builder for defining routing branches in a protocol pipeline.
- * <p>Use {@link #branchByInitializer(String, ProtoInitializer)} to register named sub-pipelines.</p>
- * <p>This builder is route-definition-focused and does not continue the parent fluent chain.
- * For nested branch-local fluent composition, use {@link #branch(String, Consumer)}.
- * For standalone router creation, start from {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingDataSelector)} or
- * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingDataSelector)}.</p>
+ * Builder for routing branches.
+ * <p>It registers multiple named branches into the same {@link ProtoRoutingDuplexer}. Each branch
+ * forms an independent sub-pipeline. The branches share the same {@link ProtoContext}, and the
+ * routing selector decides at runtime which branch should receive the current data or event.</p>
+ * <p>This builder only handles branch definitions. Any further fluent composition on the parent
+ * protocol stack is still completed by the outer {@link ProtoBuilder}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoRoutingDataSelector
  * @see ProtoRoutingDuplexer
  */
 public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {
-    /** Registers a branch from an existing initializer. */
+    /**
+     * Register a named branch using a {@link ProtoInitializer}.
+     * @param name branch name used to match runtime routing results
+     * @param initializer initializer used to build the branch sub-pipeline
+     * @return current routing builder
+     */
     ProtoRoutingBuilder<RCV_UP, SND_DOWN> branchByInitializer(String name, ProtoInitializer initializer);
 
-    /** Registers a branch using the branch-local {@link ProtoBuilder} DSL. */
+    /**
+     * Register a named branch using a branch-local {@link ProtoBuilder} DSL.
+     * @param name branch name used to match runtime routing results
+     * @param branchBuilder branch-internal sub-pipeline construction logic
+     * @return current routing builder
+     */
     ProtoRoutingBuilder<RCV_UP, SND_DOWN> branch(String name, Consumer<ProtoBuilder<RCV_UP, SND_DOWN>> branchBuilder);
 
-    /** Builds the routing duplexer defined by this builder. */
+    /**
+     * Build the routing duplexer defined by the current builder.
+     * @return {@link ProtoDuplexer} ready to be inserted into the protocol stack
+     */
     ProtoDuplexer<RCV_UP, ?, ?, SND_DOWN> build();
 }

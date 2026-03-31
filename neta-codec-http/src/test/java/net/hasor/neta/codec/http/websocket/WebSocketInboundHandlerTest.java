@@ -19,7 +19,7 @@ import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 import net.hasor.neta.channel.ProtoHandler;
-import net.hasor.neta.channel.SoUserEvent;
+import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
@@ -35,7 +35,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
     private ProtoHandler<HttpObject, HttpObject> recordEvents(List<Object> serverEvents) {
         return new ThroughProtoHandler<HttpObject>() {
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 Object eventData = event.getData();
                 if (eventData instanceof AbstractWebSocketEvent && !(eventData instanceof WebSocketHandshakeEvent)) {
                     serverEvents.add(eventData);

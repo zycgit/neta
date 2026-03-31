@@ -39,8 +39,8 @@ public class ProtoEventTest extends AbstractStackTest {
             }
 
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
-                record.add(tag + "-OnUserEvent-" + (isRcv ? "rcv" : "snd"));
+            public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) {
+                record.add(tag + "-OnEvent-" + (isRcv ? "rcv" : "snd"));
                 return true;
             }
 
@@ -81,8 +81,8 @@ public class ProtoEventTest extends AbstractStackTest {
             }
 
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                record.add(tag + "-OnUserEvent");
+            public boolean onEvent(ProtoContext context, SoEvent event) {
+                record.add(tag + "-OnEvent");
                 return true;
             }
 
@@ -115,7 +115,7 @@ public class ProtoEventTest extends AbstractStackTest {
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
-        channel.fireUserEvent(ProtoEventTest.class, this);
+        channel.fireEvent(ProtoEventTest.class, this);
 
         assert record.size() == 10;
         assert record.get(0).equals("dec1-OnInit");
@@ -127,8 +127,8 @@ public class ProtoEventTest extends AbstractStackTest {
         assert record.get(6).equals("enc1-OnActive");
         assert record.get(7).equals("enc2-OnActive");
         //
-        assert record.get(8).equals("dec1-OnUserEvent");
-        assert record.get(9).equals("dec2-OnUserEvent");
+        assert record.get(8).equals("dec1-OnEvent");
+        assert record.get(9).equals("dec2-OnEvent");
         neta.shutdown();
     }
 
@@ -146,11 +146,11 @@ public class ProtoEventTest extends AbstractStackTest {
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
-        channel.notifyUserEvent(false, null, ProtoEventTest.class, this);
+        channel.notifyEvent(false, null, ProtoEventTest.class, this);
 
         assert record.size() == 10;
-        assert record.get(8).equals("enc2-OnUserEvent");
-        assert record.get(9).equals("enc1-OnUserEvent");
+        assert record.get(8).equals("enc2-OnEvent");
+        assert record.get(9).equals("enc1-OnEvent");
         neta.shutdown();
     }
 
@@ -163,7 +163,7 @@ public class ProtoEventTest extends AbstractStackTest {
             ctx.addLastDecoder(theHandler("dec2", record));
 
             ctx.addLastDecoder("s1", (context, src, dst) -> {
-                context.fireUserEvent(ProtoEventTest.class, this);
+                context.fireEvent(ProtoEventTest.class, this);
                 return ProtoStatus.Next;
             });
 
@@ -175,8 +175,8 @@ public class ProtoEventTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
         channel.receiveData(1);
 
-        // s1 fires fireUserEvent from within RCV — event travels RCV direction only (toward enc1/enc2
-        // wrappers, which are transparent in RCV mode). Encoders receive no UserEvent.
+        // s1 fires fireEvent from within RCV — event travels RCV direction only (toward enc1/enc2
+        // wrappers, which are transparent in RCV mode). Encoders receive no Event.
         // After all decoders complete, doSndLife runs enc2→enc1.
         assert record.size() == 12;
         assert record.get(8).equals("dec1-OnMessage");
@@ -194,7 +194,7 @@ public class ProtoEventTest extends AbstractStackTest {
             ctx.addLastDecoder(theHandler("dec1", record));
             ctx.addLastDecoder("mid", (context, src, dst) -> {
                 record.add("mid-OnMessage");
-                context.fireUserEvent(ProtoEventTest.class, this);
+                context.fireEvent(ProtoEventTest.class, this);
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return ProtoStatus.Next;
             });
@@ -207,10 +207,10 @@ public class ProtoEventTest extends AbstractStackTest {
 
         assert record.contains("dec1-OnMessage");
         assert record.contains("mid-OnMessage");
-        assert record.contains("dec2-OnUserEvent");
-        assert record.stream().filter("dec2-OnUserEvent"::equals).count() == 1;
-        assert !record.contains("dec1-OnUserEvent");
-        assert !record.contains("mid-OnUserEvent");
+        assert record.contains("dec2-OnEvent");
+        assert record.stream().filter("dec2-OnEvent"::equals).count() == 1;
+        assert !record.contains("dec1-OnEvent");
+        assert !record.contains("mid-OnEvent");
         neta.shutdown();
     }
 
@@ -230,15 +230,15 @@ public class ProtoEventTest extends AbstractStackTest {
                 }
 
                 @Override
-                public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
-                    record.add("mid-OnUserEvent-" + (isRcv ? "rcv" : "snd"));
+                public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) {
+                    record.add("mid-OnEvent-" + (isRcv ? "rcv" : "snd"));
                     return true;
                 }
 
                 @Override
                 public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<Integer> rcvUp, ProtoSndQueue<Integer> rcvDown, ProtoRcvQueue<Integer> sndUp, ProtoSndQueue<Integer> sndDown) throws Throwable {
                     if (isRcv) {
-                        context.fireUserEventReverse(String.class, "upstream");
+                        context.fireEventReverse(String.class, "upstream");
                         rcvDown.offerMessage(rcvUp.takeMessage(rcvUp.queueSize()));
                     } else {
                         sndDown.offerMessage(sndUp.takeMessage(sndUp.queueSize()));
@@ -262,9 +262,9 @@ public class ProtoEventTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
         channel.receiveData(1);
 
-        assert record.contains("a-OnUserEvent-snd");
-        assert !record.contains("c-OnUserEvent-rcv");
-        assert !record.contains("mid-OnUserEvent-rcv");
+        assert record.contains("a-OnEvent-snd");
+        assert !record.contains("c-OnEvent-rcv");
+        assert !record.contains("mid-OnEvent-rcv");
         neta.shutdown();
     }
 
@@ -284,8 +284,8 @@ public class ProtoEventTest extends AbstractStackTest {
                 }
 
                 @Override
-                public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
-                    record.add("mid-OnUserEvent-" + (isRcv ? "rcv" : "snd"));
+                public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) {
+                    record.add("mid-OnEvent-" + (isRcv ? "rcv" : "snd"));
                     return true;
                 }
 
@@ -294,7 +294,7 @@ public class ProtoEventTest extends AbstractStackTest {
                     if (isRcv) {
                         rcvDown.offerMessage(rcvUp.takeMessage(rcvUp.queueSize()));
                     } else {
-                        context.fireUserEventRcv(String.class, "force-rcv");
+                        context.fireEventRcv(String.class, "force-rcv");
                         sndDown.offerMessage(sndUp.takeMessage(sndUp.queueSize()));
                     }
                     return ProtoStatus.Next;
@@ -316,9 +316,9 @@ public class ProtoEventTest extends AbstractStackTest {
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
         channel.sendData(1).get();
 
-        assert record.contains("c-OnUserEvent-rcv");
-        assert !record.contains("a-OnUserEvent-snd");
-        assert !record.contains("mid-OnUserEvent-snd");
+        assert record.contains("c-OnEvent-rcv");
+        assert !record.contains("a-OnEvent-snd");
+        assert !record.contains("mid-OnEvent-snd");
         neta.shutdown();
     }
 }

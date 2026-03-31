@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.codec.http;
 /**
- * User event used to switch the HTTP/1.x codec into or out of transparent mode.
+ * Network event used to switch the HTTP/1.x codec into or out of transparent mode.
  * <p>
  * When transparent mode is enabled, inbound {@code ByteBuf} frames are wrapped as
  * {@code HttpByteBuf} and forwarded without HTTP parsing. Outbound {@code HttpByteBuf}

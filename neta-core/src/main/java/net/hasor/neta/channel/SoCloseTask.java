@@ -17,18 +17,19 @@ package net.hasor.neta.channel;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Asynchronous task that gracefully closes a channel.
- * <h3>Safe-close sequence</h3>
+ * Asynchronous task responsible for gracefully closing a channel.
+ * <h3>Safe close flow</h3>
  * <ol>
- *   <li>Wait for the write queue to drain (busy-spin via {@code continueTask()}).</li>
- *   <li>Fire a {@link SoCloseEvent} through the <em>SND</em> pipeline so that handlers
- *       can enqueue final farewell data (e.g. WebSocket Close frame, TLS close_notify) via
- *       {@link ProtoContext#sendData} — no {@code await()} needed, the data enters the queue
+ *   <li>Wait for the send queue to drain by repeatedly re-entering through {@code continueTask()}.</li>
+ *   <li>Fire {@link SoCloseEvent} along the <em>SND</em> pipeline so handlers can send final
+ *       farewell data through {@link ProtoContext#sendData}, such as a WebSocket Close frame or a
+ *       TLS close_notify. No {@code await()} is needed here because data enters the queue
  *       synchronously.</li>
- *   <li>Wait again for the queue to drain (the farewell data written in step 2).</li>
- *   <li>Call {@code notifyChannelClose} to perform the actual teardown.</li>
+ *   <li>Wait for the queue to drain again so the farewell data written in step 2 is sent.</li>
+ *   <li>Call {@code notifyChannelClose} to perform actual resource cleanup and closure.</li>
  * </ol>
- * <p>In force mode, closes immediately without draining or firing the event.</p>
+ * <p>In forced mode, the task neither drains the queue nor fires close events; it closes the
+ * channel immediately.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  */
@@ -78,9 +79,9 @@ class SoCloseTask extends DefaultSoTask {
                 // Phase 2: queue is empty. If we haven't fired the before-close event yet, do so now.
                 if (!this.eventFired) {
                     this.eventFired = true;
-                    SoUserEvent event = SoUserEventObject.of(netChannel, SoCloseEvent.class, SoCloseEvent.INSTANCE);
-                    this.context.notifySndUserEvent(this.channelID, null, event);
-                    // After notifySndUserEvent returns, flush pipline
+                    SoEvent event = SoEventObject.of(netChannel, SoCloseEvent.class, SoCloseEvent.INSTANCE);
+                    this.context.notifySndEvent(this.channelID, null, event);
+                    // After notifySndEvent returns, flush pipline
                     netChannel.flushForClose();
                     continueTask(); // re-enter to drain any farewell data
                     return;

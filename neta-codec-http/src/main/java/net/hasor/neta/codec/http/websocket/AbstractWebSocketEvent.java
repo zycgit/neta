@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.codec.http.HttpEvent;
 
 /**
- * Base type for WebSocket user events.
+ * Base type for WebSocket network events.
  * <p>
  * Provides a common stream id and release lifecycle for handshake, ping/pong, and close events.
  */

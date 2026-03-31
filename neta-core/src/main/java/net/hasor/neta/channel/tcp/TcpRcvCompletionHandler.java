@@ -27,16 +27,34 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * TCP receive-side {@link CompletionHandler} that keeps an asynchronous read
- * loop alive for one {@link TcpAsyncChannel}.
- * <p>Completed reads copy bytes from the reusable swap buffer into a fresh
- * {@link ByteBuf}, forward that payload into the channel pipeline, and then arm
- * the next read operation immediately.
- * <p>The handler also normalises transport-specific edge cases such as EOF,
- * local input shutdown, read timeouts, connection timeouts, and closed-channel
- * failures into Neta's {@link SoException} hierarchy before reporting them to
- * {@link SoContextService}.
- * <p>The swap buffer is allocated once per channel and released when this
+ * TCP receive-side {@link CompletionHandler} that continuously maintains the asynchronous read loop
+ * for a single {@link TcpAsyncChannel}.
+ * <p>After a read completes, it copies the bytes from the reusable swap buffer into a fresh
+ * {@link ByteBuf}, forwards that data into the channel pipeline, and immediately arms the next read
+ * operation.
+ * <p><b>Read flow:</b>
+ * <pre>
+ *   TcpAsyncChannel.read(rcvSwapBuffer, ...)
+ *                  ▼
+ *       completed(bytesRead, ctx)
+ *       ┌──────────┼──────────────┐
+ *       ▼          ▼              ▼
+ *   result > 0   result == 0   result < 0
+ *       │          │              ├── local shutdownInput
+ *       │          │              │      -> SoInputCloseException
+ *       │          │              └── remote close
+ *       │          │                     -> notifyChannelClose(...)
+ *       │          └── emit ByteBuf.EMPTY
+ *       │              -> continue read()
+ *       ├── swapBuffer -> ByteBuf
+ *       ├── update receive metrics
+ *       ├── notifyRcvSingle(...) / notifyRcvChannelData(...)
+ *       └── continue read()
+ * </pre>
+ * <p><b>Error handling:</b> this handler normalizes EOF, local input shutdown, read timeout,
+ * connect timeout, and channel-close edge cases into Neta's {@link SoException} hierarchy before
+ * reporting them to {@link SoContextService}.
+ * <p><b>Buffer management:</b> the swap buffer is allocated once per channel and released when the
  * handler is closed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
@@ -56,8 +74,14 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
     private final        ByteBufAllocator allocator;
     private final        ByteBuffer       rcvSwapBuffer;
     private final        int              connectTimeoutMs;
-    private              NetChannel       netChannel; // direct reference for fast path
+    private              NetChannel       netChannel; // Direct reference used by the fast path.
 
+    /**
+     * Create a TCP read-completion handler.
+     * @param channel the underlying asynchronous channel
+     * @param context the runtime context
+     * @param monitor the channel metrics monitor
+     */
     public TcpRcvCompletionHandler(TcpAsyncChannel channel, SoContext context, NetMonitor monitor) {
         this.channelId = channel.getChannelId();
         this.channel = channel;
@@ -70,12 +94,18 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
         this.rcvSwapBuffer = this.allocator.jvmBuffer(channel.getSoConfig().getSwapRcvBuf());
     }
 
-    /** Set the NetChannel reference for direct RCV notification (bypasses ConcurrentHashMap lookup) */
+    /**
+     * Set the direct {@link NetChannel} reference for the fast receive path.
+     * <p>This bypasses the ConcurrentHashMap lookup.
+     * @param netChannel the framework-level channel
+     */
     void setNetChannel(NetChannel netChannel) {
         this.netChannel = netChannel;
     }
 
-    /** Reads a sequence of bytes from this channel into the given buffer. */
+    /**
+     * Start one read operation and place the bytes from the current channel into the swap buffer.
+     */
     public void read() {
         if (this.channel.isShutdownInput()) {
             return;
@@ -86,6 +116,11 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
         this.channel.read(this.rcvSwapBuffer, this.context, this, timeout, TimeUnit.MILLISECONDS);
     }
 
+    /**
+     * Process the result after data has been read successfully and arm the next read.
+     * @param result the number of bytes read this time
+     * @param context the runtime context
+     */
     @Override
     public void completed(Integer result, SoContextService context) {
         boolean printLog = this.context.getConfig().isPrintLog();
@@ -94,7 +129,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
                 logger.info("rcv(" + this.channelId + ") [TCP-READ] bytes=" + result);
             }
 
-            // copy buffer form swap to rcv
+            // Copy the data from the swap buffer into the receive buffer.
             ((Buffer) this.rcvSwapBuffer).flip();
             ByteBuf byteBuf = this.allocator.buffer(result);
             byteBuf.writeBuffer(this.rcvSwapBuffer);
@@ -102,7 +137,7 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
 
             this.monitor.updateRcvCounter(result);
 
-            // fast path: direct call bypasses ConcurrentHashMap lookup + varargs allocation
+            // Fast path: direct call that bypasses ConcurrentHashMap lookup and varargs allocation.
             if (this.netChannel != null) {
                 try {
                     this.netChannel.notifyRcvSingle(byteBuf);
@@ -124,17 +159,22 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             this.read();
         } else {
             if (this.channel.isShutdownInput()) {
-                // for ShutdownInput local
+                // Local ShutdownInput scenario.
                 logger.info("rcv(" + this.channelId + ") shutdownInput form local.");
                 this.context.notifyRcvChannelException(this.channelId, false, new SoInputCloseException("shutdownInput form local"));
             } else {
-                // for Remote
+                // Remote-close scenario.
                 logger.info("rcv(" + this.channelId + ") close form remote.");
                 context.notifyChannelClose(this.channelId, true);
             }
         }
     }
 
+    /**
+     * Normalize and report exceptions when reading fails.
+     * @param e the failure cause
+     * @param context the runtime context
+     */
     @Override
     public void failed(Throwable e, SoContextService context) {
         if (e instanceof NotYetConnectedException) {
@@ -155,21 +195,25 @@ class TcpRcvCompletionHandler implements CompletionHandler<Integer, SoContextSer
             if (context.isClose(this.channelId)) {
                 return;
             }
-            // rcv Close
+            // Receive-side close exception.
             SoCloseException err = new SoCloseException("channel is closed " + e.getMessage());
             context.notifyRcvChannelException(this.channelId, true, err);
         } else if (e instanceof InterruptedByTimeoutException) {
-            // rcv timeout
+            // Receive timeout.
             SoReadTimeoutException err = new SoReadTimeoutException(e.getMessage(), e);
             context.notifyRcvChannelException(this.channelId, false, err);
             this.read();
         } else {
-            // rcv Exception
+            // Other receive exception.
             SoRcvException err = new SoRcvException(e.getMessage(), e);
             context.notifyRcvChannelException(this.channelId, true, err);
         }
     }
 
+    /**
+     * Close the read handler and release the swap buffer.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         ByteBufUtils.CLEANER.freeDirectBuffer(this.rcvSwapBuffer);

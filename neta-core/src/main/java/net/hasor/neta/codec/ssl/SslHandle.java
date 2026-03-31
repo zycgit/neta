@@ -31,7 +31,7 @@ import net.hasor.neta.channel.*;
  * <p>This class is the operational core behind {@link SslDuplexer}. It owns the temporary packet
  * buffers, drives {@link javax.net.ssl.SSLEngine#wrap(ByteBuffer, ByteBuffer)} and
  * {@link javax.net.ssl.SSLEngine#unwrap(ByteBuffer, ByteBuffer)}, advances the handshake, and emits
- * the SSL-specific user events seen by upper handlers.
+ * the SSL-specific network events seen by upper handlers.
  * <p><b>Data path:</b>
  * <pre>
  *   inbound:  rcvUp ByteBuf -> inNetData -> unwrap() -> inAppData -> rcvDown
@@ -208,7 +208,7 @@ class SslHandle {
                     if (hs == HandshakeStatus.FINISHED) {
                         this.handshake = SslHandshakeStatus.Finish;
                         logger.info("sslHandshake(" + this.channelID + ") finish.");
-                        ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslHandshakeEvent.class, new SslHandshakeEvent(this.sslContext));
+                        ((NetChannel) this.protoCtx.getChannel()).fireEvent(SslHandshakeEvent.class, new SslHandshakeEvent(this.sslContext));
 
                         if (this.outAppData.hasRemaining()) {
                             this.handshakeWrap(sndUp, sndDown);
@@ -424,7 +424,7 @@ class SslHandle {
 
                 if (result.getStatus() == Status.CLOSED) {
                     this.afterClose();
-                    ((NetChannel) this.protoCtx.getChannel()).fireUserEvent(SslCloseNotifyEvent.class, new SslCloseNotifyEvent(this.sslContext));
+                    ((NetChannel) this.protoCtx.getChannel()).fireEvent(SslCloseNotifyEvent.class, new SslCloseNotifyEvent(this.sslContext));
                     return;
                 }
 

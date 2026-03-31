@@ -208,7 +208,7 @@ public class TcpSslCloseNotifyTest extends AbstractSslTest {
             }
 
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getEventType() == SslCloseNotifyEvent.class) {
                     capturedEvent.set((SslCloseNotifyEvent) event.getData());
                     closeNotifyLatch.countDown();
@@ -291,7 +291,7 @@ public class TcpSslCloseNotifyTest extends AbstractSslTest {
             }
 
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getEventType() == SslCloseNotifyEvent.class) {
                     capturedEvent.set((SslCloseNotifyEvent) event.getData());
                     closeNotifyLatch.countDown();

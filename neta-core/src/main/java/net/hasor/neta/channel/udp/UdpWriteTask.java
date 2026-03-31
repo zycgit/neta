@@ -23,18 +23,16 @@ import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.SoSndContext;
 
 /**
- * Concrete datagram sender for plain UDP channels.
- * <p>The transport decision is simple:
+ * Concrete datagram send task used by plain UDP channels.
+ * <p>The transport strategy is straightforward:
  * <ul>
- *   <li>server-side logical channels share one unconnected socket, so sending uses
- *       {@link DatagramChannel#send(ByteBuffer, SocketAddress)} with the logical
- *       channel's remote address;</li>
- *   <li>client-side channels use a socket already connected to one peer, so sending
- *       uses {@link DatagramChannel#write(ByteBuffer)}.</li>
+ *   <li>Server-side logical channels share one unconnected socket, so sending uses
+ *       {@link DatagramChannel#send(ByteBuffer, SocketAddress)} with the logical channel's remote address.</li>
+ *   <li>Client-side channels use a socket already connected to a single peer, so sending uses
+ *       {@link DatagramChannel#write(ByteBuffer)}.</li>
  * </ul>
- * <p>All queue management, retry handling, and error mapping remain in
- * {@link AbstractUdpWriteTask}; this class only supplies the plain UDP transport-specific
- * send primitive.
+ * <p>Queue management, retry handling, and exception mapping remain centralized in
+ * {@link AbstractUdpWriteTask}; this class only supplies the UDP-specific send adaptation.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see AbstractUdpWriteTask
@@ -43,16 +41,33 @@ import net.hasor.neta.channel.SoSndContext;
 public class UdpWriteTask extends AbstractUdpWriteTask {
     private final DatagramChannel udpChannel;
 
+    /**
+     * Create a plain UDP write task.
+     * @param netChannel the framework channel
+     * @param channel the underlying DatagramChannel
+     * @param wContext the send context
+     * @param context the runtime context service
+     */
     public UdpWriteTask(NetChannel netChannel, DatagramChannel channel, SoSndContext wContext, SoContextService context) {
         super(netChannel, wContext, context);
         this.udpChannel = channel;
     }
 
+    /**
+     * Determine whether the underlying UDP channel is still usable.
+     * @return true if it is open
+     */
     @Override
     protected boolean isChannelOpen() {
         return this.udpChannel.isOpen();
     }
 
+    /**
+     * Perform one UDP send.
+     * @param data the payload to send
+     * @return the number of bytes written this time
+     * @throws IOException if an I/O error occurs during sending
+     */
     @Override
     protected int doSend(byte[] data) throws IOException {
         SocketAddress target = this.getNetChannel().isServer() ? this.getNetChannel().getRemoteAddr() : null;

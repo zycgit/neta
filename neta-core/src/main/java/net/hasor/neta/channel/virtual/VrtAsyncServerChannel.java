@@ -8,12 +8,11 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * In-process server-side entry for the virtual transport.
- * <p>This class keeps the listen-side registration in the provider-wide
- * {@code listenPool}, owns the server's {@link VrtTransfer}, and materializes a
- * server-side {@link VrtChannel} whenever a client-side
- * {@link AsyncChannel#connectTo(ProtoInitializer, net.hasor.cobble.concurrent.future.Future)}
- * resolves this listener.
+ * In-process server-side entry point for the virtual transport.
+ * <p>This class maintains listener registration in the provider-shared {@code listenPool}, owns the
+ * server-side {@link VrtTransfer}, and lazily creates a server-side {@link VrtChannel} when a
+ * client resolves this listener through
+ * {@link AsyncChannel#connectTo(ProtoInitializer, net.hasor.cobble.concurrent.future.Future)}.
  * <p><b>Lifecycle:</b>
  * <pre>
  *   AsyncChannelProvider.createServerChannel(...)
@@ -23,15 +22,15 @@ import net.hasor.neta.channel.*;
  *       -> context.initChannel(listen, initializer)
  *   client.connectTo(...)
  *       -> acceptLink(clientSide)
- *       -> create server-side VrtChannel
- *       -> add bidirectional VrtTransfer links
+ *       -> create a server-side VrtChannel
+ *       -> establish bidirectional VrtTransfer links
  *   close()
- *       -> close listen/transfer and remove this port from listenPool
+ *       -> close listen/transfer and remove the port from listenPool
  * </pre>
- * <p><b>Listen pool:</b> the shared map is keyed only by the numeric address in
- * {@link VrtSocketAddress}, so one virtual listener exists per virtual port.
- * <p><b>Bind contract:</b> calling {@link #bind(ProtoInitializer)} more than once
- * fails because a listener can be initialized only once.
+ * <p><b>Listen pool:</b> the shared map is indexed only by the numeric address in
+ * {@link VrtSocketAddress}, so each virtual port can have only one listener.
+ * <p><b>Bind contract:</b> {@link #bind(ProtoInitializer)} can succeed only once because a listener
+ * can be initialized only once, and port reuse is not supported.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see VrtAsyncChannel
@@ -49,6 +48,14 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
     //
     private              VrtListen                           vrtListen;
 
+    /**
+     * Create a virtual server asynchronous channel.
+     * @param channelId the channel ID
+     * @param listenPool the listener pool
+     * @param context the runtime context
+     * @param listenAddr the listen address
+     * @param soConfig the channel configuration
+     */
     public VrtAsyncServerChannel(long channelId, Map<Integer, VrtAsyncServerChannel> listenPool, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
         this.channelId = channelId;
         this.closed = new AtomicBoolean(false);
@@ -59,34 +66,52 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         this.soConfig = (VrtSoConfig) soConfig;
     }
 
+    /**
+     * Return the current server channel ID.
+     * @return the channel ID
+     */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /**
+     * Return the configuration used by the current server.
+     * @return the configuration object
+     */
     @Override
     public SoConfig getSoConfig() {
         return this.soConfig;
     }
 
+    /**
+     * Determine whether the current server channel is still open.
+     * @return true if it is open
+     */
     @Override
     public boolean isOpen() {
         return !this.closed.get();
     }
 
+    /**
+     * Bind the current virtual listen address and initialize the listen channel.
+     * @param initializer the protocol initializer
+     * @return the listen handle
+     * @throws IOException if an I/O error occurs during bind or initialization
+     */
     @Override
     public synchronized NetListen bind(ProtoInitializer initializer) throws IOException {
         if (this.vrtListen != null) {
             throw new IOException("VrtListen(" + this.listenAddr.getAddress() + ") already exists.");
         }
 
-        // create
+        // Create the listen object.
         VrtTransfer transfer = new VrtTransfer(this.context.getNetManager(), this.soConfig.isAsynchronous());
         transfer.setBatchSize(this.soConfig.getBatchSize());
         transfer.setLossRate(this.soConfig.getLossRate());
         VrtListen listen = new VrtListen(this.channelId, this.listenAddr, this, initializer, this.context, this.soConfig, transfer);
 
-        // init
+        // Initialize the listen channel.
         try {
             this.context.initChannel(listen, false);
             this.vrtListen = listen;
@@ -99,6 +124,12 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
+    /**
+     * Accept a connection from a client-side virtual channel and create the corresponding server channel.
+     * @param clientSite the client-side virtual channel
+     * @return the newly created server-side channel
+     * @throws Throwable if an error occurs during setup
+     */
     VrtChannel acceptLink(VrtChannel clientSite) throws Throwable {
         if (this.vrtListen.isSuspend()) {
             throw new SocketException("ERROR: AcceptFailed, listen is suspend.");
@@ -111,7 +142,7 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
             printLog("accept(" + this.vrtListen.getChannelId() + ") R:" + remoteAddr + " -> L:" + this.listenAddr);
         }
 
-        // create
+        // Create the server-side channel.
         VrtChannel serverSite;
         try {
             long channelId = this.context.nextID();
@@ -122,12 +153,12 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
             throw e instanceof SoConnectException ? (SoConnectException) e : new SoConnectException(e.getMessage(), e);
         }
 
-        // connect transfer
+        // Establish transport links.
         try {
             this.vrtListen.getTransfer().linkTo(clientSite, serverSite, ((VrtSoConfig) serverSite.getConfig()).getRcvConvert());
             this.vrtListen.getTransfer().linkTo(serverSite, clientSite, ((VrtSoConfig) clientSite.getConfig()).getRcvConvert());
 
-            // init
+            // Initialize the server-side channel.
             this.context.initChannel(serverSite, true);
             return serverSite;
         } catch (Throwable e) {
@@ -138,6 +169,10 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
+    /**
+     * Print a warning log when logging is enabled.
+     * @param msg the log message
+     */
     private void printLog(String msg) {
         if (this.context.getConfig().isPrintLog()) {
             try {
@@ -147,6 +182,10 @@ public class VrtAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
+    /**
+     * Close the current server channel and remove its registration from the listener pool.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         if (!this.closed.compareAndSet(false, true)) {

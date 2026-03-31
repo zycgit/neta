@@ -22,25 +22,24 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * TCP server transport built on {@link AsynchronousServerSocketChannel}.
- * <p>This class binds the listen socket, creates the framework-facing
- * {@link TcpNetListen}, and keeps the accept loop alive by re-arming
- * {@link TcpAcceptCompletionHandler} after every successful accept.
- * <p><b>Accept pipeline:</b>
+ * TCP server-side transport implementation based on {@link AsynchronousServerSocketChannel}.
+ * <p>This class binds the listening socket, creates the framework-level {@link TcpNetListen}, and
+ * re-arms {@link TcpAcceptCompletionHandler} after each successfully accepted connection in order
+ * to keep the accept loop alive.
+ * <p><b>Accept path:</b>
  * <pre>
  *   AsynchronousServerSocketChannel.accept(...)
- *                 |
  *                 v
  *      TcpAcceptCompletionHandler
  *                 |
  *                 +--> configure accepted socket
  *                 +--> create TcpAsyncChannel
  *                 +--> create TcpChannel
- *                 +--> init pipeline
+ *                 +--> initialize the pipeline
  *                 +--> start TcpRcvCompletionHandler.read()
  * </pre>
- * <p>The server transport itself is only responsible for the listen socket; each
- * accepted peer connection is handed off to its own {@link TcpAsyncChannel}.
+ * <p>The server transport itself is responsible only for the listening socket; each accepted peer
+ * connection is handed off to its own {@link TcpAsyncChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */
@@ -52,6 +51,14 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
     private final        InetSocketAddress               listenAddr;
     private final        TcpSoConfig                     soConfig;
 
+    /**
+     * Create a TCP asynchronous server channel.
+     * @param channelId the channel ID
+     * @param channel the underlying server listen channel
+     * @param context the runtime context
+     * @param listenAddr the listen address
+     * @param soConfig the channel configuration
+     */
     TcpAsyncServerChannel(long channelId, AsynchronousServerSocketChannel channel, SoContext context, SocketAddress listenAddr, SoConfig soConfig) {
         this.channelId = channelId;
         this.channel = channel;
@@ -60,24 +67,42 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
         this.soConfig = (TcpSoConfig) soConfig;
     }
 
+    /**
+     * Return the internal identifier of the listening channel.
+     * @return the channel ID
+     */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /**
+     * Return the configuration used by the current listener.
+     * @return the configuration object
+     */
     @Override
     public SoConfig getSoConfig() {
         return this.soConfig;
     }
 
+    /**
+     * Determine whether the listening channel is still open.
+     * @return true if the channel is open
+     */
     @Override
     public boolean isOpen() {
         return this.channel.isOpen();
     }
 
+    /**
+     * Bind the listening address and start the accept flow.
+     * @param initializer the protocol initializer for new connections
+     * @return the listen handle
+     * @throws IOException if an I/O error occurs during bind or initialization
+     */
     @Override
     public NetListen bind(ProtoInitializer initializer) throws IOException {
-        // create
+        // Create the listen handle.
         TcpSoConfigUtils.configListen(this.soConfig, this.channel);
         NetListen listen = new TcpNetListen( //
                 this.channelId,           //
@@ -88,7 +113,7 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
                 this.context,             //
                 this.soConfig);
 
-        // init and start
+        // Initialize and start the accept flow.
         try {
             this.context.initChannel(listen, false);
             this.channel.bind(this.listenAddr, 0);
@@ -101,6 +126,10 @@ class TcpAsyncServerChannel implements AsyncServerChannel {
         return listen;
     }
 
+    /**
+     * Close the listening channel.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         if (this.context.getConfig().isPrintLog()) {

@@ -24,9 +24,26 @@ import net.hasor.neta.channel.SoConnectException;
 import net.hasor.neta.channel.SoContextService;
 
 /**
- * Completion handler for TCP client connections.
- * On success, initializes the channel, starts reading, and completes the future.
- * On failure, notifies the context and fails the future.
+ * Completion handler for TCP client connection completion.
+ * <p>When the connection succeeds, it initializes the channel, starts the read flow, and completes
+ * the future. When the connection fails, it notifies the context and marks the future as failed.
+ * <p><b>Connect-completion flow:</b>
+ * <pre>
+ *   AsynchronousSocketChannel.connect(...)
+ *                    ▼
+ *          completed(result, ctx)
+ *       ┌────────────┼───────────────────────────────┐
+ *       ▼            ▼                               ▼
+ *   context closed   read local/remote addresses     initChannel(...)
+ *       └── close channel and return                  ├── start getReadHandler().read()
+ *                    ▼                                └── future.completed(channel)
+ *             exception during initialization
+ *                    └── failed(e, ctx)
+ *                           ├── notifyConnectChannelException(...)
+ *                           └── future.failed(e)
+ * </pre>
+ * <p><b>Failure handling:</b> when the connection fails, it is normalized as a connection
+ * exception, reported to the context, and the corresponding future is completed with failure.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -36,15 +53,26 @@ class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextSe
     private final        AsyncChannel       asyncChannel;
     private final        Future<NetChannel> future;
 
+    /**
+     * Create a connect-completion handler.
+     * @param channel the corresponding TCP channel
+     * @param asyncChannel the underlying asynchronous channel
+     * @param future the future used to return the connection result
+     */
     TcpConnectCompletionHandler(TcpChannel channel, AsyncChannel asyncChannel, Future<NetChannel> future) {
         this.channel = channel;
         this.asyncChannel = asyncChannel;
         this.future = future;
     }
 
+    /**
+     * Initialize the channel and start the read loop after the connection succeeds.
+     * @param result the connection result
+     * @param context the runtime context
+     */
     @Override
     public void completed(Void result, SoContextService context) {
-        // when close then exit.
+        // Exit immediately when the context is already closed.
         if (context.isClose()) {
             logger.error("ERROR: Connect Failed, context is closed.");
             this.channel.close();
@@ -56,10 +84,10 @@ class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextSe
             SocketAddress remoteAddress = this.asyncChannel.getRemoteAddress();
             logger.info("connected(" + this.channel.getChannelId() + ") L:" + localAddress + " -> R:" + remoteAddress);
 
-            // init
+            // Initialize the channel.
             ((SoContextService) this.channel.getContext()).initChannel(this.channel, true);
 
-            // start read
+            // Start the read flow.
             if (!this.channel.isShutdownInput()) {
                 this.channel.getReadHandler().read();
             }
@@ -71,6 +99,11 @@ class TcpConnectCompletionHandler implements CompletionHandler<Void, SoContextSe
         }
     }
 
+    /**
+     * Report the exception and finish the future when the connection fails.
+     * @param e the failure cause
+     * @param context the runtime context
+     */
     @Override
     public void failed(Throwable e, SoContextService context) {
         logger.error("ERROR: Connect failed, " + e.getMessage());

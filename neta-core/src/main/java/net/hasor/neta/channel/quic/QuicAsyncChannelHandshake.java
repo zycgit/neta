@@ -30,36 +30,35 @@ import net.hasor.neta.codec.ssl.SslCertConfig;
 import net.hasor.neta.codec.ssl.SslCertHelper;
 
 /**
- * Shared QUIC handshake runtime for both client and server flows.
- * <p>This class owns the pre-establishment state machine: Initial/Handshake/1-RTT
- * packet numbers, version-specific Initial keys, optional TLS 1.3 integration,
- * CRYPTO frame reassembly, transport-parameter exchange, and the transition to
- * the post-handshake {@link QuicChannelAsync} world.
- * <p><b>High-level progression:</b>
+ * Shared QUIC handshake class used by both client and server.
+ * <p>This class holds the pre-connection state machine, including packet number management for
+ * Initial/Handshake/1-RTT, version-aware Initial key derivation, optional TLS 1.3 integration,
+ * CRYPTO frame reassembly, transport parameter exchange, and the transition to post-handshake
+ * {@link QuicChannelAsync} processing.
+ * <p><b>The high-level flow is as follows:</b>
  * <pre>
- *   client/server setup
- *        |
- *        +--> derive Initial keys from DCID
- *        +--> exchange Initial packets
- *        +--> reassemble CRYPTO data
- *        +--> drive QuicTlsEngine if TLS is enabled
- *        +--> derive Handshake keys
- *        +--> derive 1-RTT keys
- *        +--> build QuicInitConfigData
- *        +--> hand off to QuicChannelAsync / QuicChannel
+ *   Initialize the client or server role
+ *        +--> Derive Initial keys from the DCID
+ *        +--> Exchange Initial packets
+ *        +--> Reassemble CRYPTO data
+ *        +--> Drive QuicTlsEngine when TLS is enabled
+ *        +--> Derive Handshake keys
+ *        +--> Derive 1-RTT keys
+ *        +--> Build QuicInitConfigData
+ *        +--> Transition to QuicChannelAsync / QuicChannel
  * </pre>
- * <p>The implementation also supports non-TLS mode, where CRYPTO payloads are
- * still used as the handshake carrier but no TLS engine is created.
+ * <p>The implementation also supports non-TLS mode, where CRYPTO payloads still act as handshake
+ * carriers but no TLS engine is created.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncChannelHandshake {
-    /** Encryption level constants for external callers (maps to internal enum). */
+    /** Encryption level constants exposed to external callers; they map to the internal enum. */
     static final         int             LEVEL_INITIAL                             = 0;
     static final         int             LEVEL_HANDSHAKE                           = 1;
     static final         int             LEVEL_APP                                 = 2;
-    // ── Transport Parameter IDs (RFC 9000 §18.2, RFC 9221) ─────────────
-    /** Transport parameter IDs (RFC 9000 §18.2) used when encoding/decoding QUIC transport params. */
-    static final         int             PARAM_ORIGINAL_DESTINATION_CID            = 0x00; // server MUST include
+    // Transport parameter IDs (RFC 9000 §18.2, RFC 9221).
+    /** Transport parameter IDs used when encoding and decoding QUIC transport parameters, see RFC 9000 §18.2. */
+    static final         int             PARAM_ORIGINAL_DESTINATION_CID            = 0x00; // The server must include this.
     static final         int             PARAM_MAX_IDLE_TIMEOUT                    = 0x01;
     static final         int             PARAM_MAX_UDP_PAYLOAD_SIZE                = 0x03;
     static final         int             PARAM_INITIAL_MAX_DATA                    = 0x04;
@@ -71,70 +70,72 @@ class QuicAsyncChannelHandshake {
     static final         int             PARAM_ACK_DELAY_EXPONENT                  = 0x0a;
     static final         int             PARAM_MAX_ACK_DELAY                       = 0x0b;
     static final         int             PARAM_ACTIVE_CONNECTION_ID_LIMIT          = 0x0e;
-    static final         int             PARAM_INITIAL_SOURCE_CID                  = 0x0f; // both sides MUST include
-    /** RFC 9221: max_datagram_frame_size transport parameter. 0 = DATAGRAM not supported. */
+    static final         int             PARAM_INITIAL_SOURCE_CID                  = 0x0f; // Both peers must include this.
+    /** max_datagram_frame_size transport parameter from RFC 9221; 0 means DATAGRAM is not supported. */
     static final         int             PARAM_MAX_DATAGRAM_FRAME_SIZE             = 0x20;
     private static final Logger          logger                                    = Logger.getLogger(QuicAsyncChannelHandshake.class);
-    // ── Identity ───────────────────────────────────────────────────────
+    // Identity information.
     private final        boolean         clientMode;
     private final        boolean         printLog;
     private final        QuicSoConfig    soConfig;
     private final        DatagramChannel udpChannel;
     private final        SocketAddress   remoteAddress;
 
-    // ── Connection IDs (RFC 9000 §5.1) ─────────────────────────────────
-    private final    byte[]                  localCid;   // our Connection ID
-    // ── QUIC version ───────────────────────────────────────────────────
+    // Connection ID (RFC 9000 §5.1).
+    private final    byte[]                  localCid;   // Local Connection ID.
+    // QUIC version.
     private final    QuicVersion             quicVersion;
-    // ── Packet numbers (monotonic per encryption level) ────────────────
+    // Packet numbers, monotonically increasing within each encryption level.
     private final    AtomicLong              initialPacketNumber      = new AtomicLong(0);
     private final    AtomicLong              handshakePacketNumber    = new AtomicLong(0);
     private final    AtomicLong              appPacketNumber          = new AtomicLong(0);
-    // ── max received packet numbers (for ACK / PN decoding) ────────
+    // Largest received packet numbers, used for ACK generation and packet number reconstruction.
     private final    AtomicLong              maxInitialPacketNumber   = new AtomicLong(-1);
     private final    AtomicLong              maxHandshakePacketNumber = new AtomicLong(-1);
     private final    AtomicLong              maxAppPacketNumber       = new AtomicLong(-1);
-    /** Buffered 0-RTT packets received before handshake completes. */
+    /** 0-RTT packets received and buffered before the handshake completes. */
     private final    List<byte[]>            bufferedRtt0Data         = new ArrayList<byte[]>();
-    /** Seen 0-RTT packet numbers for anti-replay protection (RFC 9001 §8.4). */
+    /** Seen 0-RTT packet numbers, used for anti-replay protection per RFC 9001 §8.4. */
     private final    Set<Long>               seenRtt0PacketNumbers    = new HashSet<>();
-    private          byte[]                  originalDcid; // client's DCID from first Initial (server-side only, for transport params)
-    private          byte[]                  remoteCid;  // peer's Connection ID (DCID when sending)
-    // ── Packet protection keys [key, iv, hp] per level ─────────────────
+    private          byte[]                  originalDcid; // DCID carried in the client's first Initial, used only by the server for transport parameters.
+    private          byte[]                  remoteCid;  // Peer Connection ID, used as the DCID when sending.
+    // Packet protection keys per level [key, iv, hp].
     private          byte[][]                clientInitialKeys;
     private          byte[][]                serverInitialKeys;
     private          byte[][]                clientHandshakeKeys;
     private          byte[][]                serverHandshakeKeys;
     private          byte[][]                clientAppKeys;
     private          byte[][]                serverAppKeys;
-    // ── TLS engine (null if sslEnabled=false) ──────────────────────────
+    // TLS engine, null when sslEnabled=false.
     private          QuicTlsEngine           tlsEngine;
-    // ── Handshake state ────────────────────────────────────────────────
+    // Handshake state.
     private volatile QuicAsyncHandshakeState state                    = QuicAsyncHandshakeState.INITIAL;
-    /** Key generation counter for key updates. Starts at 0 after handshake. */
+    /** Key update generation counter, starting from 0 after the handshake completes. */
     private          int                     keyUpdateGeneration      = 0;
 
-    // ── CRYPTO frame reassembly (Initial level, server-side: receiving ClientHello) ────────────
-    /** Reassembly buffer for fragmented CRYPTO stream data (e.g. ClientHello). */
+    // CRYPTO frame reassembly: Initial level, server receives ClientHello.
+    /** Buffer used to reassemble fragmented CRYPTO stream data such as ClientHello. */
     private byte[]        cryptoReassemblyBuf;
-    /** Tracks which bytes have been received (prevents double-counting on retransmissions). */
+    /** Tracks which bytes have already been received to avoid double counting during retransmission. */
     private boolean[]     cryptoReassemblyBitmap;
-    /** Number of unique bytes received so far into the reassembly buffer. */
+    /** Number of unique bytes currently written into the reassembly buffer. */
     private int           cryptoReassemblyReceived;
-    /** Expected total length of the TLS handshake message (derived from TLS header). -1 = unknown. */
+    /** Expected total length of the TLS handshake message, derived from the TLS header; -1 means unknown. */
     private int           cryptoReassemblyExpected = -1;
-    /** Address of the client that started this handshake (for deferred TLS processing). */
+    /** Client address that initiated this handshake, used for deferred TLS processing. */
     private SocketAddress pendingClientAddr;
 
-    // ── CRYPTO frame reassembly (Handshake level, client-side: receiving server Handshake) ─────
-    /** Reassembly buffer for fragmented server Handshake CRYPTO data (EE+Cert+CertVerify+Finished). */
+    // CRYPTO frame reassembly: Handshake level, client receives server Handshake messages.
+    /** Buffer used to reassemble server Handshake-level CRYPTO data such as EE, Cert, CertVerify, and Finished. */
     private byte[]    hsReassemblyBuf;
-    /** Tracks which bytes of the server Handshake CRYPTO stream have been received. */
+    /** Tracks which bytes in the server Handshake-level CRYPTO stream have been received. */
     private boolean[] hsReassemblyBitmap;
-    /** Unique bytes received into the server Handshake CRYPTO reassembly buffer. */
+    /** Number of unique bytes written into the server Handshake CRYPTO reassembly buffer. */
     private int       hsReassemblyReceived;
 
-    /** Creates a new handshake handler for the given side, config, and UDP transport. */
+    /**
+     * Creates a new handshake handler for the given role, configuration, and UDP transport.
+     */
     QuicAsyncChannelHandshake(boolean clientMode, QuicSoConfig soConfig,//
             DatagramChannel udpChannel, SocketAddress remoteAddress, boolean printLog) {
         this.clientMode = clientMode;
@@ -144,7 +145,7 @@ class QuicAsyncChannelHandshake {
         this.quicVersion = soConfig.getQuicVersion();
         this.printLog = printLog;
 
-        // Generate local Connection ID
+        // Generate the local Connection ID.
         int cidLen = soConfig.getConnectionIdLength();
         this.localCid = new byte[cidLen];
         new SecureRandom().nextBytes(this.localCid);
@@ -152,9 +153,9 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Creates a new handshake handler with an explicit QUIC version override.
-     * Used when the client receives a Version Negotiation packet (RFC 9000 §6) and must
-     * re-initiate the handshake with a version selected from the server's advertised list.
+     * Creates a handshake handler using an explicitly specified QUIC version.
+     * This constructor is used when a client receives a Version Negotiation packet (RFC 9000 §6)
+     * and restarts the handshake using a version declared by the server.
      */
     QuicAsyncChannelHandshake(boolean clientMode, QuicSoConfig soConfig, QuicVersion overrideVersion,//
             DatagramChannel udpChannel, SocketAddress remoteAddress, boolean printLog) {
@@ -165,14 +166,16 @@ class QuicAsyncChannelHandshake {
         this.quicVersion = overrideVersion;
         this.printLog = printLog;
 
-        // Generate a fresh local Connection ID for the new attempt
+        // Generate a new local Connection ID for the new handshake attempt.
         int cidLen = soConfig.getConnectionIdLength();
         this.localCid = new byte[cidLen];
         new SecureRandom().nextBytes(this.localCid);
         this.remoteCid = new byte[0]; // will be set during handshake
     }
 
-    /** Concatenates two byte arrays. */
+    /**
+     * Concatenates two byte arrays.
+     */
     private static byte[] concat(byte[] a, byte[] b) {
         byte[] result = new byte[a.length + b.length];
         System.arraycopy(a, 0, result, 0, a.length);
@@ -180,7 +183,9 @@ class QuicAsyncChannelHandshake {
         return result;
     }
 
-    /** Maps LEVEL_* integer constants to internal enum values. */
+    /**
+     * Maps LEVEL_* integer constants to the internal enum values.
+     */
     private static QuicAsyncHandshakeState levelToState(int level) {
         switch (level) {
             case LEVEL_INITIAL:
@@ -195,7 +200,8 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Scans buf[0..received) for TLS handshake messages and returns total bytes through the Finished message; -1 if not yet received.
+     * Scans TLS handshake messages within buf[0..received) and returns the total length up to the
+     * Finished message; returns -1 if the sequence is not yet fully received.
      */
     private static int calcHandshakeMessagesLength(byte[] buf, int received) {
         int pos = 0;
@@ -203,18 +209,20 @@ class QuicAsyncChannelHandshake {
             int msgType = buf[pos] & 0xFF;
             int msgLen = ((buf[pos + 1] & 0xFF) << 16) | ((buf[pos + 2] & 0xFF) << 8) | (buf[pos + 3] & 0xFF);
             int msgEnd = pos + 4 + msgLen;
-            if (msgType == 0x14) { // Finished
+            if (msgType == 0x14) { // Finished.
                 return msgEnd;
             }
             if (msgEnd > received) {
-                return -1; // current message not yet fully received
+                return -1; // The current message has not been fully received yet.
             }
             pos = msgEnd;
         }
-        return -1; // haven't seen Finished yet
+        return -1; // Finished has not been seen yet.
     }
 
-    /** Returns a human-readable name for common QUIC transport error codes. */
+    /**
+     * Returns a human-readable name for common QUIC transport error codes.
+     */
     private static String quicTransportErrorName(long code) {
         switch ((int) code) {
             case 0x00:
@@ -315,14 +323,19 @@ class QuicAsyncChannelHandshake {
         return this.state == QuicAsyncHandshakeState.ESTABLISHED;
     }
 
-    /** Returns true if the connection was explicitly closed during the handshake; caller should discard this handler. */
+    /**
+     * Returns whether the connection was explicitly closed during the handshake phase; when true,
+     * the caller should discard the current handler.
+     */
     public boolean isAborted() {
         return this.state == QuicAsyncHandshakeState.CLOSED;
     }
 
-    // ── Packet number management ───────────────────────────────────────
+    // Packet number management.
 
-    /** Returns the current handshake phase mapped to the public {@link QuicHandshakeState} API. */
+    /**
+     * Returns the current handshake phase mapped to the public {@link QuicHandshakeState} API.
+     */
     public QuicHandshakeState getHandshakeState() {
         if (this.state == null) {
             return QuicHandshakeState.INITIAL;
@@ -373,7 +386,7 @@ class QuicAsyncChannelHandshake {
         return this.appPacketNumber.getAndIncrement();
     }
 
-    // ── Key accessors ──────────────────────────────────────────────────
+    // Key accessors.
 
     public void updateMaxInitialPacketNumber(long pn) {
         this.maxInitialPacketNumber.updateAndGet(cur -> Math.max(cur, pn));
@@ -383,7 +396,7 @@ class QuicAsyncChannelHandshake {
         this.maxHandshakePacketNumber.updateAndGet(cur -> Math.max(cur, pn));
     }
 
-    // ── Initialization ─────────────────────────────────────────────────
+    // Initialization.
 
     public void updateMaxAppPacketNumber(long pn) {
         this.maxAppPacketNumber.updateAndGet(cur -> Math.max(cur, pn));
@@ -397,19 +410,27 @@ class QuicAsyncChannelHandshake {
         return this.maxHandshakePacketNumber.get();
     }
 
-    // ── Server-side handshake processing ───────────────────────────────
+    // Server-side handshake processing.
 
-    /** Returns the largest 1-RTT packet number <em>received</em> from the peer (for ACK generation and PN decoding). */
+    /**
+     * Returns the largest 1-RTT packet number currently <em>received</em> from the peer, used for
+     * ACK generation and packet number decoding.
+     */
     public long getLastRcvAppPacketNumber() {
         return this.maxAppPacketNumber.get();
     }
 
-    /** Returns the packet number of the most recently <em>sent</em> 1-RTT packet. */
+    /**
+     * Returns the packet number of the most recently <em>sent</em> 1-RTT packet.
+     */
     public long getLastSndAppPacketNumber() {
         return this.appPacketNumber.get() - 1;
     }
 
-    /** Returns the keys we use to SEND at the given level. client mode → client keys; server mode → server keys. */
+    /**
+     * Returns the keys used by the current endpoint for sending at the specified level; client
+     * mode uses client keys, server mode uses server keys.
+     */
     public byte[][] getSendKeys(QuicAsyncHandshakeState level) {
         switch (level) {
             case INITIAL:
@@ -423,7 +444,10 @@ class QuicAsyncChannelHandshake {
         }
     }
 
-    /** Returns the keys we use to RECEIVE at the given level. client mode → server keys; server mode → client keys. */
+    /**
+     * Returns the keys used by the current endpoint for receiving at the specified level; client
+     * mode uses server keys, server mode uses client keys.
+     */
     public byte[][] getRecvKeys(QuicAsyncHandshakeState level) {
         switch (level) {
             case INITIAL:
@@ -437,20 +461,22 @@ class QuicAsyncChannelHandshake {
         }
     }
 
-    // ── Client-side handshake processing ──────────────────────────────
+    // Client-side handshake processing.
 
     /**
-     * Derives Initial encryption keys from the given Destination Connection ID; must be called before any Initial packet.
+     * Derives Initial encryption keys from the given Destination Connection ID; must be called
+     * before sending or processing any Initial packet.
      */
     public void deriveInitialKeys(byte[] originalDcid) throws Exception {
-        this.originalDcid = originalDcid; // store for transport parameters
+        this.originalDcid = originalDcid; // Keep it so it can later be written into transport parameters.
         byte[][] secrets = QuicCrypto.deriveInitialSecrets(originalDcid, this.quicVersion);
         this.clientInitialKeys = QuicCrypto.derivePacketKeys(secrets[0], this.quicVersion);
         this.serverInitialKeys = QuicCrypto.derivePacketKeys(secrets[1], this.quicVersion);
     }
 
     /**
-     * Initializes the TLS engine: server mode creates QuicTlsEngine with cert/key; client mode creates client-side engine.
+     * Initializes the TLS engine: server mode creates a QuicTlsEngine from the certificate and
+     * private key, while client mode creates the client-side engine.
      */
     public void initTlsEngine() throws Exception {
         if (!this.soConfig.isSslEnabled()) {
@@ -479,7 +505,8 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Processes a received Initial packet (server side): extracts CRYPTO frame, feeds it to the TLS engine, and sends ServerHello + server handshake messages.
+     * Processes an Initial packet received by the server: extracts CRYPTO frames, drives the TLS
+     * engine, and sends ServerHello plus server handshake messages.
      */
     public boolean processServerInitial(QuicPacket.ParsedPacket parsed, SocketAddress clientAddr) throws Exception {
         if (this.printLog) {
@@ -579,11 +606,12 @@ class QuicAsyncChannelHandshake {
             return false;
         }
 
-        // Not yet complete?
-        // Non-TLS mode: there is no TLS message header to determine expected length, so any
-        // packet with at least one CRYPTO frame (even 0-byte) is treated as complete immediately.
+        // Determine whether the full message has already been collected.
+        // In non-TLS mode there is no TLS message header to determine the total length, so as long
+        // as at least one CRYPTO frame is received, this Initial data is treated as complete even
+        // when it carries no actual payload.
         if (!this.soConfig.isSslEnabled()) {
-            // Non-TLS: treat whatever we have as the complete payload
+            // In non-TLS mode, the currently collected content is treated as the full payload.
             byte[] cryptoData = new byte[this.cryptoReassemblyReceived];
             if (this.cryptoReassemblyReceived > 0) {
                 System.arraycopy(this.cryptoReassemblyBuf, 0, cryptoData, 0, cryptoData.length);
@@ -594,7 +622,7 @@ class QuicAsyncChannelHandshake {
             return false; // wait for more fragments
         }
 
-        // ── Reassembly complete — extract the full TLS message ─────────
+        // Reassembly complete - extract the full TLS message.
         byte[] cryptoData = new byte[this.cryptoReassemblyExpected];
         System.arraycopy(this.cryptoReassemblyBuf, 0, cryptoData, 0, cryptoData.length);
         if (this.printLog) {
@@ -609,7 +637,7 @@ class QuicAsyncChannelHandshake {
     }
 
     private boolean processServerInitialWithTls(byte[] clientHello, SocketAddress clientAddr) throws Exception {
-        // Dump first bytes for diagnosis
+        // Print the first few bytes for diagnostics.
         StringBuilder sb = new StringBuilder("ClientHello data[" + clientHello.length + "]: ");
         for (int i = 0; i < Math.min(clientHello.length, 16); i++) {
             sb.append(String.format("%02x ", clientHello[i] & 0xFF));
@@ -617,25 +645,25 @@ class QuicAsyncChannelHandshake {
         if (this.printLog) {
             logger.info("[QUIC-HS] ClientHello data[" + clientHello.length + "]: " + sb.toString().trim());
         }
-        // Process ClientHello through TLS engine
-        // RFC 9000 §7.3: server MUST include original_destination_connection_id and
-        // initial_source_connection_id in EncryptedExtensions transport parameters.
+        // Process ClientHello via the TLS engine.
+        // RFC 9000 §7.3 requires the server to include original_destination_connection_id and
+        // initial_source_connection_id inside the EncryptedExtensions transport parameters.
         this.tlsEngine.setConnectionIds(this.localCid, this.originalDcid);
         if (!this.tlsEngine.processClientHello(clientHello)) {
             logger.error("Failed to process ClientHello");
             return false;
         }
 
-        // Install handshake keys from TLS engine
+        // Extract and install Handshake-level keys from the TLS engine.
         this.clientHandshakeKeys = this.tlsEngine.getClientHandshakeKeys();
         this.serverHandshakeKeys = this.tlsEngine.getServerHandshakeKeys();
 
-        // ── Diagnostic: log TLS handshake details for debugging ───────
+        // Diagnostic logging: output key TLS handshake information for troubleshooting.
         if (this.printLog) {
             logger.info("[QUIC-HS] TLS negotiation: ALPN=" + this.tlsEngine.getNegotiatedAlpn() + " SNI=" + this.tlsEngine.getPeerSniHost());
         }
 
-        // ── Send ServerHello in an Initial packet ─────────────────────
+        // Send ServerHello in an Initial packet.
         byte[] serverHello = this.tlsEngine.getServerHelloBytes();
         byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, serverHello);
         byte[] ackFrame = QuicPacket.buildAckFrame(this.maxInitialPacketNumber.get(), 0);
@@ -648,16 +676,16 @@ class QuicAsyncChannelHandshake {
                 sendKeys[0], sendKeys[1], sendKeys[2], 1200);
         sendPacket(packet, clientAddr);
 
-        // ── Send Handshake messages in Handshake packet(s) ────────────
-        // Fragmentation: QUIC packets must fit within PMTU (RFC 9000 §13).
-        // PMTU starts at 1200 bytes; with ~35 bytes QUIC header + 16 bytes AEAD tag,
-        // max CRYPTO payload per packet ≈ 1140 bytes.
+        // Send subsequent TLS handshake messages in one or more Handshake packets.
+        // Fragmentation is needed because QUIC packets must fit within the PMTU, see RFC 9000 §13.
+        // The initial PMTU is 1200 bytes; after subtracting roughly 35 bytes of QUIC header and a
+        // 16-byte AEAD tag, each packet can safely carry about 1140 bytes of CRYPTO payload.
         byte[] hsBytes = this.tlsEngine.getHandshakeBytes();
         if (this.printLog) {
             logger.info("[QUIC-HS] sending Handshake " + hsBytes.length + " bytes to " + clientAddr);
         }
         byte[][] hsSendKeys = getSendKeys(QuicAsyncHandshakeState.HANDSHAKE);
-        final int MAX_CRYPTO_CHUNK = 1140; // safe max CRYPTO data per QUIC packet
+        final int MAX_CRYPTO_CHUNK = 1140; // Conservative maximum CRYPTO data length inside a single QUIC packet.
         int hsOffset = 0;
         while (hsOffset < hsBytes.length) {
             int chunkLen = Math.min(MAX_CRYPTO_CHUNK, hsBytes.length - hsOffset);
@@ -676,10 +704,10 @@ class QuicAsyncChannelHandshake {
         return true;
     }
 
-    // ── 1-RTT packet building ──────────────────────────────────────────
+    // 1-RTT packet building.
 
     private boolean processServerInitialNoTls(byte[] cryptoData, SocketAddress clientAddr, QuicPacket.ParsedPacket parsed) throws Exception {
-        // Non-TLS mode: echo back a simple ServerHello-like Initial + transition to ESTABLISHED
+        // In non-TLS mode, send back a minimal ServerHello-like Initial and then switch directly to ESTABLISHED.
         byte[] ackFrame = QuicPacket.buildAckFrame(this.maxInitialPacketNumber.get(), 0);
         byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, new byte[0]);
         byte[] payload = concat(ackFrame, cryptoFrame);
@@ -693,10 +721,11 @@ class QuicAsyncChannelHandshake {
         return true;
     }
 
-    // ── Packet sending ─────────────────────────────────────────────────
+    // Packet sending.
 
     /**
-     * Processes a received Handshake packet (server side): verifies client Finished and transitions to ESTABLISHED.
+     * Processes a Handshake packet received by the server: verifies the client's Finished and
+     * switches to ESTABLISHED.
      */
     public boolean processServerHandshake(QuicPacket.ParsedPacket parsed, SocketAddress clientAddr) throws Exception {
         if (this.state != QuicAsyncHandshakeState.HANDSHAKE) {
@@ -705,16 +734,16 @@ class QuicAsyncChannelHandshake {
 
         updateMaxHandshakePacketNumber(parsed.packetNumber);
 
-        // Extract CRYPTO frame (client Finished) — parseCryptoFrame already skips ACK/PADDING/CONNECTION_CLOSE
+        // Extract client Finished from the CRYPTO frame; parseCryptoFrame already skips ACK/PADDING/CONNECTION_CLOSE.
         long[] cryptoInfo = QuicPacket.parseCryptoFrame(parsed.payload, 0);
         if (cryptoInfo == null) {
             long closeCode = logHandshakeFrameTypes(parsed.payload);
             if (closeCode >= 0) {
-                // Client explicitly closed the connection: mark this handshake as aborted
+                // The client explicitly closed the connection, so mark the handshake as aborted.
                 this.state = QuicAsyncHandshakeState.CLOSED;
                 logger.warn("Client sent CONNECTION_CLOSE (0x" + Long.toHexString(closeCode) + ") during handshake — aborting");
             }
-            // ACK-only or CONNECTION_CLOSE: nothing to process, caller will clean up if aborted
+            // ACK-only or CONNECTION_CLOSE packets require no further processing; if aborted, cleanup is left to the caller.
             return false;
         }
         int dataOffset = (int) cryptoInfo[1];
@@ -727,13 +756,13 @@ class QuicAsyncChannelHandshake {
                 logger.error("Client Finished verification failed");
                 return false;
             }
-            // Install 1-RTT application keys
+            // Install 1-RTT application keys.
             this.clientAppKeys = this.tlsEngine.getClientAppKeys();
             this.serverAppKeys = this.tlsEngine.getServerAppKeys();
         }
 
-        // ── Send ACK for Handshake + HANDSHAKE_DONE in 1-RTT ─────────
-        // ACK the client's Handshake packet
+        // Send a Handshake ACK back and then send HANDSHAKE_DONE in 1-RTT.
+        // First acknowledge the client's Handshake packet.
         byte[] hsAck = QuicPacket.buildAckFrame(this.maxHandshakePacketNumber.get(), 0);
         byte[][] hsSendKeys = getSendKeys(QuicAsyncHandshakeState.HANDSHAKE);
         long hsAckPn = nextHandshakePacketNumber();
@@ -742,7 +771,7 @@ class QuicAsyncChannelHandshake {
                 hsSendKeys[0], hsSendKeys[1], hsSendKeys[2], 0);
         sendPacket(hsAckPacket, clientAddr);
 
-        // Send HANDSHAKE_DONE in a 1-RTT Short Header packet
+        // Then send HANDSHAKE_DONE in a 1-RTT Short Header packet.
         byte[] handshakeDone = QuicPacket.buildHandshakeDoneFrame();
         if (this.soConfig.isSslEnabled()) {
             byte[][] appSendKeys = getSendKeys(QuicAsyncHandshakeState.ESTABLISHED);
@@ -751,7 +780,7 @@ class QuicAsyncChannelHandshake {
                     appSendKeys[0], appSendKeys[1], appSendKeys[2]);
             sendPacket(appPacket, clientAddr);
         } else {
-            // Non-TLS: send raw short header (no encryption)
+            // In non-TLS mode, send an unencrypted raw short header directly.
             sendRaw1RttPacket(handshakeDone, clientAddr);
         }
 
@@ -763,31 +792,32 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Initiates a client-side QUIC handshake by sending an Initial packet with a TLS ClientHello CRYPTO frame.
+     * Initiates the client-side QUIC handshake by sending an Initial packet carrying a TLS
+     * ClientHello CRYPTO frame.
      */
     public void initiateClientHandshake(SocketAddress serverAddr) throws Exception {
-        // Client generates DCID for the server
+        // The client first generates a DCID for the server.
         int cidLen = this.soConfig.getConnectionIdLength();
         this.remoteCid = new byte[cidLen];
         new SecureRandom().nextBytes(this.remoteCid);
 
-        // Derive Initial keys from the client-chosen DCID
+        // Derive Initial keys from the DCID chosen by the client.
         deriveInitialKeys(this.remoteCid);
 
         if (this.soConfig.isSslEnabled()) {
-            // Generate ClientHello via TLS engine
+            // Generate ClientHello via the TLS engine.
             byte[] clientHello = this.tlsEngine.generateClientHello();
             byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, clientHello);
             long pn = nextInitialPacketNumber();
 
-            // Encrypt and send Initial packet (padded to 1200 bytes)
+            // Encrypt and send the Initial packet, padding it to 1200 bytes as required by the specification.
             byte[][] sendKeys = getSendKeys(QuicAsyncHandshakeState.INITIAL);
             byte[] packet = QuicPacket.buildLongHeaderPacket(this.quicVersion, QuicPacket.TYPE_INITIAL,//
                     this.remoteCid, this.localCid, new byte[0], pn, cryptoFrame,//
                     sendKeys[0], sendKeys[1], sendKeys[2], 1200);
             sendPacket(packet, serverAddr);
         } else {
-            // Non-TLS mode: send a minimal Initial packet with empty CRYPTO
+            // In non-TLS mode, send a minimal Initial packet with an empty CRYPTO payload.
             byte[] cryptoFrame = QuicPacket.buildCryptoFrame(0, new byte[0]);
             long pn = nextInitialPacketNumber();
             byte[] packet = QuicPacket.buildRawLongHeaderPacket(this.quicVersion, QuicPacket.TYPE_INITIAL,//
@@ -799,19 +829,20 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Processes the server's Initial response (client side): extracts ServerHello and derives handshake keys.
+     * Processes the server's Initial response received by the client: extracts ServerHello and
+     * derives Handshake-level keys.
      */
     public boolean processClientInitialResponse(QuicPacket.ParsedPacket parsed) throws Exception {
         if (this.state != QuicAsyncHandshakeState.HANDSHAKE || !this.clientMode) {
             return false;
         }
 
-        // Update our remoteCid to server's SCID (now used as DCID in all our outgoing packets)
+        // Update remoteCid with the server's SCID; it will be used as the DCID in later sends.
         this.remoteCid = parsed.scid != null ? parsed.scid : new byte[0];
         updateMaxInitialPacketNumber(parsed.packetNumber);
 
         if (!this.soConfig.isSslEnabled()) {
-            // Non-TLS: server goes directly to ESTABLISHED after Initial
+            // In non-TLS mode, the server enters ESTABLISHED immediately after Initial.
             this.state = QuicAsyncHandshakeState.ESTABLISHED;
             if (this.printLog) {
                 logger.info("[QUIC-HS] complete (client mode, non-TLS)");
@@ -819,7 +850,7 @@ class QuicAsyncChannelHandshake {
             return true;
         }
 
-        // TLS mode: extract CRYPTO frame (ServerHello) and process
+        // In TLS mode, extract and process the CRYPTO frame containing ServerHello.
         long[] cryptoInfo = QuicPacket.parseCryptoFrame(parsed.payload, 0);
         if (cryptoInfo == null) {
             logger.error("No CRYPTO frame in server Initial packet");
@@ -835,7 +866,7 @@ class QuicAsyncChannelHandshake {
             return false;
         }
 
-        // Install handshake keys from TLS engine
+        // Install Handshake-level keys from the TLS engine.
         this.clientHandshakeKeys = this.tlsEngine.getClientHandshakeKeys();
         this.serverHandshakeKeys = this.tlsEngine.getServerHandshakeKeys();
         if (this.printLog) {
@@ -844,10 +875,11 @@ class QuicAsyncChannelHandshake {
         return true;
     }
 
-    // ── Packet receiving helpers ───────────────────────────────────────
+    // Packet receiving helpers.
 
     /**
-     * Processes the server's Handshake packet (client side): extracts server messages and sends client Finished.
+     * Processes a server Handshake packet received by the client: extracts the server messages
+     * and sends the client's Finished.
      */
     public boolean processClientHandshakeResponse(QuicPacket.ParsedPacket parsed) throws Exception {
         if (this.state != QuicAsyncHandshakeState.HANDSHAKE || !this.clientMode) {
@@ -857,13 +889,13 @@ class QuicAsyncChannelHandshake {
         updateMaxHandshakePacketNumber(parsed.packetNumber);
 
         if (!this.soConfig.isSslEnabled()) {
-            // Non-TLS: shouldn't receive Handshake packet — ignore
+            // In non-TLS mode, Handshake packets should not be received in theory, so ignore them.
             return false;
         }
 
-        // ── CRYPTO frame reassembly for server Handshake messages (RFC 9000 §19.6) ──
-        // The server sends EE+Cert+CertVerify+Finished in Handshake packets which may be
-        // fragmented across multiple QUIC packets with consecutive CRYPTO frame offsets.
+        // Reassemble CRYPTO frames from the server Handshake messages, see RFC 9000 §19.6.
+        // The server sends EE, Cert, CertVerify, and Finished in Handshake packets, and they may
+        // be split across multiple QUIC packets and chained together by contiguous CRYPTO offsets.
         int scanOffset = 0;
         boolean hasCrypto = false;
         while (true) {
@@ -918,10 +950,10 @@ class QuicAsyncChannelHandshake {
             return false;
         }
 
-        // Check if we have a complete sequence of TLS handshake messages ending with Finished (0x14)
+        // Check whether a complete TLS handshake message sequence ending with Finished (0x14) has been collected.
         int expectedTotal = calcHandshakeMessagesLength(this.hsReassemblyBuf, this.hsReassemblyReceived);
         if (expectedTotal < 0 || this.hsReassemblyReceived < expectedTotal) {
-            return false; // wait for more fragments
+            return false; // Continue waiting for later fragments.
         }
 
         byte[] hsData = new byte[expectedTotal];
@@ -935,11 +967,11 @@ class QuicAsyncChannelHandshake {
             return false;
         }
 
-        // Install 1-RTT application keys
+        // Install 1-RTT application keys.
         this.clientAppKeys = this.tlsEngine.getClientAppKeys();
         this.serverAppKeys = this.tlsEngine.getServerAppKeys();
 
-        // ── Send ACK for server Handshake + client Finished ───────────
+        // Send a Handshake ACK back to the server and then send the client's Finished.
         byte[] hsAck = QuicPacket.buildAckFrame(this.maxHandshakePacketNumber.get(), 0);
         byte[] clientFinished = this.tlsEngine.getClientFinishedBytes();
         byte[] clientFinCrypto = QuicPacket.buildCryptoFrame(0, clientFinished);
@@ -959,7 +991,8 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Processes a HANDSHAKE_DONE frame in a 1-RTT packet (client side); transitions handshake to ESTABLISHED.
+     * Processes a HANDSHAKE_DONE frame received by the client in a 1-RTT packet and switches the
+     * handshake to ESTABLISHED.
      */
     public boolean processHandshakeDone() {
         if (this.state != QuicAsyncHandshakeState.HANDSHAKE || !this.clientMode) {
@@ -972,10 +1005,11 @@ class QuicAsyncChannelHandshake {
         return true;
     }
 
-    // ── Internal helpers ───────────────────────────────────────────────
+    // Internal helpers.
 
     /**
-     * Builds a 1-RTT Short Header QUIC packet: encrypted with application keys if TLS is enabled, raw otherwise.
+     * Builds a 1-RTT Short Header QUIC packet; when TLS is enabled it uses application keys for
+     * encryption, otherwise it builds a raw packet directly.
      */
     public byte[] build1RttPacket(byte[] payload) throws Exception {
         if (this.soConfig.isSslEnabled()) {
@@ -992,7 +1026,8 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Sends a raw QUIC packet over UDP to the specified address; returns bytes sent.
+     * Sends a raw QUIC packet to the specified address over UDP and returns the number of bytes
+     * actually sent.
      */
     int sendPacket(byte[] packet, SocketAddress target) throws Exception {
         ByteBuffer buf = ByteBuffer.wrap(packet);
@@ -1004,23 +1039,24 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Sends a raw QUIC packet over UDP to the configured remote address; returns bytes sent.
+     * Sends a raw QUIC packet to the configured remote address over UDP and returns the number of
+     * bytes actually sent.
      */
     int sendPacket(byte[] packet) throws Exception {
         return sendPacket(packet, this.remoteAddress);
     }
 
     /**
-     * Decrypts a received Long Header packet using the appropriate keys for the given level.
-     * @param data the raw packet data
-     * @param offset offset into the data array
-     * @param parsed the pre-parsed packet header
-     * @param level the encryption level ({@link #LEVEL_INITIAL} or {@link #LEVEL_HANDSHAKE})
-     * @return {@code true} if decryption succeeded
+     * Decrypts a received Long Header packet using the keys for the given level.
+     * @param data the raw packet byte array
+     * @param offset the start offset within the data array
+     * @param parsed the pre-parsed packet header structure
+     * @param level the encryption level, either {@link #LEVEL_INITIAL} or {@link #LEVEL_HANDSHAKE}
+     * @return {@code true} if decryption succeeds
      */
     public boolean decryptLongHeaderPacket(byte[] data, int offset, QuicPacket.ParsedPacket parsed, int level) {
         if (!this.soConfig.isSslEnabled()) {
-            return true; // no encryption
+            return true; // Encryption is not enabled.
         }
         QuicAsyncHandshakeState hsLevel = levelToState(level);
         byte[][] recvKeys = getRecvKeys(hsLevel);
@@ -1038,10 +1074,10 @@ class QuicAsyncChannelHandshake {
 
     /**
      * Decrypts a received Short Header (1-RTT) packet.
-     * @param data the raw packet data
-     * @param offset offset into the data array
-     * @param length length of the packet data
-     * @return the decrypted parsed packet, or {@code null} if decryption fails
+     * @param data the raw packet byte array
+     * @param offset the start offset within the data array
+     * @param length the packet length
+     * @return the decrypted parse result, or {@code null} if decryption fails
      */
     public QuicPacket.ParsedPacket decrypt1RttPacket(byte[] data, int offset, int length) {
         if (!this.soConfig.isSslEnabled()) {
@@ -1055,7 +1091,9 @@ class QuicAsyncChannelHandshake {
                 recvKeys[0], recvKeys[1], recvKeys[2], Math.max(this.maxAppPacketNumber.get(), 0));
     }
 
-    /** Builds a raw (unencrypted) 1-RTT short header packet for non-TLS mode. */
+    /**
+     * Builds a raw unencrypted 1-RTT short-header packet for non-TLS mode.
+     */
     private byte[] buildRaw1RttPacket(byte[] payload) {
         int pnLength = 1;
         long pn = nextAppPacketNumber();
@@ -1073,16 +1111,19 @@ class QuicAsyncChannelHandshake {
         return packet;
     }
 
-    // ── 0-RTT data buffering and draining ────────────────────────────
+    // 0-RTT data buffering and draining.
 
-    /** Sends a raw 1-RTT packet with the given payload to the specified address. */
+    /**
+     * Wraps the given payload into a raw 1-RTT packet and sends it to the specified address.
+     */
     private void sendRaw1RttPacket(byte[] payload, SocketAddress target) throws Exception {
         byte[] packet = buildRaw1RttPacket(payload);
         sendPacket(packet, target);
     }
 
     /**
-     * Builds a {@link QuicInitConfigData} from peer transport parameters extracted during TLS handshake; falls back to local soConfig defaults.
+     * Builds {@link QuicInitConfigData} from peer transport parameters extracted during the TLS
+     * handshake; falls back to local soConfig defaults when no negotiated result is available.
      */
     public QuicInitConfigData buildInitConfigData(SocketAddress localAddr, SocketAddress remoteAddr) {
         QuicInitConfigData data = new QuicInitConfigData();
@@ -1092,7 +1133,7 @@ class QuicAsyncChannelHandshake {
         if (this.tlsEngine != null) {
             byte[] peerParams = this.tlsEngine.getPeerTransportParams();
             if (peerParams != null && peerParams.length > 0) {
-                // Parse QUIC transport parameters (RFC 9000 §18): each param is varint(id) + varint(len) + value
+                // Parse QUIC transport parameters, see RFC 9000 §18: each item is varint(id) + varint(len) + value.
                 int pos = 0;
                 while (pos < peerParams.length) {
                     long[] idResult = QuicVarInt.decode(peerParams, pos);
@@ -1103,7 +1144,7 @@ class QuicAsyncChannelHandshake {
                     int paramLen = (int) lenResult[0];
                     pos += (int) lenResult[1];
 
-                    // Decode the value as a varint (most transport params are varint-encoded integers)
+                    // Decode the parameter value as varint; most transport parameters are varint integers.
                     long paramValue = 0;
                     if (paramLen > 0 && pos < peerParams.length) {
                         long[] valResult = QuicVarInt.decode(peerParams, pos);
@@ -1122,11 +1163,11 @@ class QuicAsyncChannelHandshake {
                             data.setPeerMaxStreamsUni(paramValue);
                             break;
                         case PARAM_INITIAL_MAX_STREAM_DATA_BIDI_LOCAL:
-                            // Peer's bidi local = limits our sends on peer-initiated bidi streams
+                            // The peer's bidi local value limits our send quota on peer-initiated bidirectional streams.
                             data.setPeerStreamMaxDataBidiLocal(paramValue);
                             break;
                         case PARAM_INITIAL_MAX_STREAM_DATA_BIDI_REMOTE:
-                            // Peer's bidi remote = limits our sends on our-initiated bidi streams
+                            // The peer's bidi remote value limits our send quota on locally initiated bidirectional streams.
                             data.setPeerStreamMaxDataBidiRemote(paramValue);
                             break;
                         case PARAM_INITIAL_MAX_STREAM_DATA_UNI:
@@ -1136,7 +1177,7 @@ class QuicAsyncChannelHandshake {
                             data.setDatagramMaxDataSize(paramValue);
                             break;
                         default:
-                            // Unknown or unsupported transport parameter — skip
+                            // Unknown or currently unsupported transport parameters are skipped directly.
                             break;
                     }
                 }
@@ -1144,7 +1185,7 @@ class QuicAsyncChannelHandshake {
             }
         }
 
-        // Fallback: use local soConfig defaults when no peer params available
+        // Fall back to local soConfig defaults if no peer transport parameters were obtained.
         data.setPeerMaxData(this.soConfig.getTpInitialFrameMaxData());
         data.setPeerMaxStreamsBidi(this.soConfig.getTpInitialMaxStreamsBidi());
         data.setPeerMaxStreamsUni(this.soConfig.getTpInitialMaxStreamsUni());
@@ -1156,11 +1197,12 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Buffers a raw 0-RTT packet (max 64) received before handshake completes, to be delivered post-handshake.
+     * Buffers one raw 0-RTT packet received before the handshake completes, keeping at most 64
+     * packets until delivery after the handshake finishes.
      */
     public void buffer0RttData(byte[] rawData) {
         synchronized (this.bufferedRtt0Data) {
-            if (this.bufferedRtt0Data.size() < 64) { // limit buffer to prevent memory issues
+            if (this.bufferedRtt0Data.size() < 64) { // Limit the number of buffered packets to avoid extra memory pressure.
                 this.bufferedRtt0Data.add(rawData);
             } else {
                 if (this.printLog) {
@@ -1171,7 +1213,8 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Drains any buffered 0-RTT data. Returns the list of buffered packets and clears the buffer.
+     * Drains the currently buffered 0-RTT data and returns the packet list; the buffer is cleared
+     * after the call.
      */
     public List<byte[]> drain0RttData() {
         synchronized (this.bufferedRtt0Data) {
@@ -1184,21 +1227,27 @@ class QuicAsyncChannelHandshake {
         }
     }
 
-    /** Returns true if there are buffered 0-RTT packets. */
+    /**
+     * Returns whether there are still buffered 0-RTT packets.
+     */
     public boolean has0RttData() {
         return !this.bufferedRtt0Data.isEmpty();
     }
 
-    // ── Key Update (RFC 9001 §6, RFC 8446 §7.2) ───────────────────────
+    // Key Update (RFC 9001 §6, RFC 8446 §7.2).
 
-    /** Returns the number of currently buffered 0-RTT packets (non-destructive). */
+    /**
+     * Returns the number of currently buffered 0-RTT packets without clearing the buffer.
+     */
     public int getBuffered0RttCount() {
         synchronized (this.bufferedRtt0Data) {
             return this.bufferedRtt0Data.size();
         }
     }
 
-    /** Anti-replay check for 0-RTT packet numbers (RFC 9001 §8.4). */
+    /**
+     * Performs anti-replay checking for a 0-RTT packet number, see RFC 9001 §8.4.
+     */
     public boolean checkAndMarkRtt0Pn(long pn) {
         synchronized (this.seenRtt0PacketNumbers) {
             return this.seenRtt0PacketNumbers.add(pn);
@@ -1206,7 +1255,8 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Rotates the READ keys (for decrypting incoming packets) per RFC 9001 §6 using HKDF-Expand-Label with "quic ku" label.
+     * Rotates read keys using HKDF-Expand-Label with the quic ku label according to RFC 9001 §6,
+     * for decrypting inbound packets.
      */
     public void rotateReadKeys() throws Exception {
         // Determine which keys are our read keys
@@ -1234,7 +1284,8 @@ class QuicAsyncChannelHandshake {
     }
 
     /**
-     * Rotates the WRITE keys (for encrypting outgoing packets) when initiating or responding to a key update (RFC 9001 §6).
+     * Rotates write keys when proactively initiating or responding to a key update, for encrypting
+     * outbound packets, see RFC 9001 §6.
      */
     public void rotateWriteKeys() throws Exception {
         byte[][] currentSendKeys = getSendKeys(QuicAsyncHandshakeState.ESTABLISHED);
@@ -1257,13 +1308,16 @@ class QuicAsyncChannelHandshake {
         }
     }
 
-    /** Returns the current key update generation number. */
+    /**
+     * Returns the current key update generation number.
+     */
     public int getKeyUpdateGeneration() {
         return this.keyUpdateGeneration;
     }
 
     /**
-     * Scans Handshake payload frames for diagnostic purposes; returns CONNECTION_CLOSE error code or -1 if none.
+     * Scans frame types in a Handshake payload for diagnostics; returns the corresponding error
+     * code if CONNECTION_CLOSE is found, otherwise returns -1.
      */
     private long logHandshakeFrameTypes(byte[] payload) {
         StringBuilder sb = new StringBuilder("Handshake packet has no CRYPTO frame. Frame types:");
@@ -1336,7 +1390,7 @@ class QuicAsyncChannelHandshake {
             }
         }
         if (hasConnectionClose) {
-            // QUIC CRYPTO_ERROR codes are 0x100-0x1ff; lower codes are QUIC transport errors
+            // QUIC CRYPTO_ERROR codes are 0x100-0x1ff; lower codes are QUIC transport errors.
             if (closeErrorCode >= 0x100L && closeErrorCode <= 0x1ffL) {
                 long tlsAlertCode = closeErrorCode - 0x100L;
                 String alertName = tlsAlertName(tlsAlertCode);
@@ -1347,13 +1401,13 @@ class QuicAsyncChannelHandshake {
             }
             return closeErrorCode;
         } else {
-            // ACK-only Handshake packets are perfectly normal (RFC 9000); log at DEBUG only
+            // ACK-only Handshake packets are perfectly normal (RFC 9000); log at DEBUG only.
             logger.debug(sb.toString());
             return -1;
         }
     }
 
-    /** Handshake state machine */
+    /** Handshake state machine. */
     private enum QuicAsyncHandshakeState {
         INITIAL,
         HANDSHAKE,

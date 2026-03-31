@@ -16,20 +16,20 @@
 package net.hasor.neta.channel;
 
 /**
- * Per-layer capacity configuration for a protocol stack layer.
+ * Per-layer capacity configuration for the protocol stack.
  * <ul>
- *  <li>{@code rcvSlotSize} — max items in the RCV endpoint queue</li>
- *  <li>{@code sndSlotSize} — max items in the SND endpoint queue</li>
- *  <li>Default {@code -1} means unlimited capacity</li>
+ *  <li>{@code rcvSlotSize} - maximum number of elements in the RCV endpoint queue</li>
+ *  <li>{@code sndSlotSize} - maximum number of elements in the SND endpoint queue</li>
+ *  <li>the default value {@code -1} means unbounded capacity</li>
  * </ul>
- * <p>Each {@link ProtoDuplexer} layer can have its own {@code ProtoConfig}.
- * Use {@link #DEFAULT} for the immutable unlimited-capacity singleton.</p>
+ * <p>Each {@link ProtoDuplexer} layer may have its own {@code ProtoConfig}. Use {@link #DEFAULT}
+ * when an immutable unbounded singleton is needed.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see ProtoDuplexer
  */
 public class ProtoConfig {
-    /** Immutable default config with unlimited capacity. */
+    /** Immutable default configuration with unbounded capacity. */
     public static final ProtoConfig DEFAULT = new ProtoConfig() {
         @Override
         public void setRcvSlotSize(int rcvSlotSize) {
@@ -45,22 +45,22 @@ public class ProtoConfig {
     private int rcvSlotSize = -1;
     private int sndSlotSize = -1;
 
-    /** Returns the receive-side queue capacity ({@code -1} for unlimited). */
+    /** Return the inbound queue capacity, where {@code -1} means unbounded. */
     public int getRcvSlotSize() {
         return this.rcvSlotSize;
     }
 
-    /** Set the receive-side queue capacity ({@code -1} for unlimited). */
+    /** Set the inbound queue capacity, where {@code -1} means unbounded. */
     public void setRcvSlotSize(int rcvSlotSize) {
         this.rcvSlotSize = rcvSlotSize;
     }
 
-    /** Returns the send-side queue capacity ({@code -1} for unlimited). */
+    /** Return the outbound queue capacity, where {@code -1} means unbounded. */
     public int getSndSlotSize() {
         return this.sndSlotSize;
     }
 
-    /** Set the send-side queue capacity ({@code -1} for unlimited). */
+    /** Set the outbound queue capacity, where {@code -1} means unbounded. */
     public void setSndSlotSize(int sndSlotSize) {
         this.sndSlotSize = sndSlotSize;
     }

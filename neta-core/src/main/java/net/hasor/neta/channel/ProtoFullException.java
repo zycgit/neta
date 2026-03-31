@@ -17,18 +17,19 @@ package net.hasor.neta.channel;
 import java.net.SocketException;
 
 /**
- * Thrown when a pipeline queue cannot accept more items.
- * <p>This exception is the channel layer's backpressure signal. It can be raised while feeding
- * either the receive path or the send path whenever the target {@link ProtoQueue} has no free
- * slots left. The caller decides how to react:
+ * Thrown when pipeline scheduling can no longer write data into the target queue.
+ * <p>This exception acts as a channel-layer backpressure signal. {@link ProtoQueue} and
+ * {@link ProtoSndQueue} themselves only report write failure through return values. Outer pipeline
+ * scheduling logic can convert that failure into this exception when it discovers that the target
+ * queue has no free slots.</p>
+ * <p>Callers must decide how to react:</p>
  * <ul>
- *   <li><b>Wait and retry</b> – if the overflow is transient, back off briefly and re-deliver.</li>
- *   <li><b>Discard</b> – for lossy protocols (e.g., UDP) where dropping is acceptable.</li>
- *   <li><b>Close</b> – for protocols that cannot tolerate data loss, close the channel cleanly
- *       and report the error to the application.</li>
+ *   <li><b>Wait and retry</b> if the overflow is temporary and the send can be retried after backoff.</li>
+ *   <li><b>Drop</b> for protocols that tolerate loss, such as UDP.</li>
+ *   <li><b>Close</b> for protocols that cannot tolerate data loss, by gracefully closing the channel and reporting the error.</li>
  * </ul>
- * <p>The singleton {@link #INSTANCE} can be used for allocation-free throws when the exception
- * message is not needed.
+ * <p>When no exception message is required, the singleton {@link #INSTANCE} can be used for
+ * zero-allocation throwing.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see ProtoRcvQueue

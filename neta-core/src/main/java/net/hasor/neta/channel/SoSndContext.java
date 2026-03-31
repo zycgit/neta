@@ -18,17 +18,17 @@ import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Per-channel outbound queue that stages {@link SoSndData} items awaiting transmission.
- * <h3>Threading model: multi-producer, single-consumer</h3>
- * Application threads (any thread) enqueue items via {@link #offer(SoSndData)}. The single
- * I/O / completion-handler thread drains items via {@link #peekData()} and
- * {@link #popData()}.  The backing {@link ConcurrentLinkedQueue} provides all necessary
- * memory-visibility guarantees without an explicit lock.
+ * Per-channel outbound queue that temporarily stores {@link SoSndData} waiting to be sent.
+ * <h3>Thread model: multiple producers, single consumer</h3>
+ * Application threads, any thread, enqueue through {@link #offer(SoSndData)}.
+ * One I/O or completion-handler thread dequeues through {@link #peekData()} and {@link #popData()}.
+ * The underlying {@link ConcurrentLinkedQueue} already provides the required memory-visibility guarantees,
+ * so no explicit locking is needed.
  * <h3>Channel close</h3>
- * If the channel is torn down while items remain in the queue, {@link #purge(Throwable)}
- * is called to complete each item’s {@link net.hasor.cobble.concurrent.future.Future}
- * exceptionally with a {@link SoUnfinishedSndException}, so callers are notified rather
- * than silently abandoned.
+ * If data still remains in the queue when the channel is torn down, the framework calls
+ * {@link #purge(Throwable)} to complete each entry's
+ * {@link net.hasor.cobble.concurrent.future.Future} exceptionally, typically with
+ * {@link SoUnfinishedSndException}, so callers do not lose send results silently.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoSndData
@@ -38,13 +38,13 @@ public class SoSndContext {
     private final Queue<SoSndData> wQueue = new ConcurrentLinkedQueue<>();
 
     /**
-     * poll data form wQueue
+     * Pop one data item from the send queue.
      */
     public SoSndData popData() {
         return this.wQueue.poll();
     }
 
-    /** purge hasn't sent data */
+    /** Purge data that has not been sent yet. */
     public void purge(Throwable e) {
         SoSndData data;
         do {
@@ -59,17 +59,17 @@ public class SoSndContext {
         } while (data != null);
     }
 
-    /** peek data form wQueue */
+    /** Peek at the head element of the send queue without removing it. */
     public SoSndData peekData() {
         return this.wQueue.peek();
     }
 
-    /** offer data to send */
+    /** Add pending data to the send queue. */
     public void offer(SoSndData sndData) {
         this.wQueue.offer(sndData);
     }
 
-    /** test wQueue is empty */
+    /** Return whether the send queue is empty. */
     public boolean isEmpty() {
         return this.wQueue.isEmpty();
     }

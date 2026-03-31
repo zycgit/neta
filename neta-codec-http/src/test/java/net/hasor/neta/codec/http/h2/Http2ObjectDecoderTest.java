@@ -80,7 +80,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
 
             List<HttpObject> out = receiveAndIntBound(pipe, Http2Frame.settings(Http2Flags.NONE, new byte[] { 0x00, 0x01, 0x00, 0x00, 0x10, 0x00 }));
             assertTrue(out.isEmpty());
-            assertTrue(pipe.channelUserEvents().isEmpty());
+            assertTrue(pipe.channelEvents().isEmpty());
         });
     }
 
@@ -94,7 +94,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
             List<HttpObject> out = receiveAndIntBound(pipe, priorityFrame(3, 1, 16, true));
             assertTrue(out.isEmpty());
 
-            Http2PriorityEvent priorityEvent = findHttp2Event(pipe.channelUserEvents(), Http2PriorityEvent.class);
+            Http2PriorityEvent priorityEvent = findHttp2Event(pipe.channelEvents(), Http2PriorityEvent.class);
             assertNotNull(priorityEvent);
             assertEquals(3, priorityEvent.streamId());
             assertEquals(1, priorityEvent.streamDependency());
@@ -117,7 +117,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
             List<HttpObject> out = receiveAndIntBound(pipe, pushFrames.toArray());
             assertTrue(out.isEmpty());
 
-            Http2PushPromiseEvent pushPromiseEvent = findHttp2Event(pipe.channelUserEvents(), Http2PushPromiseEvent.class);
+            Http2PushPromiseEvent pushPromiseEvent = findHttp2Event(pipe.channelEvents(), Http2PushPromiseEvent.class);
             assertNotNull(pushPromiseEvent);
             assertEquals(1, pushPromiseEvent.streamId());
             assertEquals(2, pushPromiseEvent.promisedStreamId());
@@ -186,7 +186,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
 
             List<HttpObject> out = receiveAndIntBound(pipe, Http2Frame.windowUpdate(3, new byte[] { 0x00, 0x00, (byte) 0xFF, (byte) 0xFF }));
             assertTrue(out.isEmpty());
-            assertTrue(pipe.channelUserEvents().isEmpty());
+            assertTrue(pipe.channelEvents().isEmpty());
         });
     }
 
@@ -213,6 +213,68 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
             List<HttpObject> out = receiveAndIntBound(pipe, Http2Frame.rstStream(1, new byte[] { 0x01, 0x02 }));
             assertTrue(out.isEmpty());
             assertGoAway(pipe, 0, Http2ErrorCode.FRAME_SIZE_ERROR, "4 bytes");
+        });
+    }
+
+    @Test
+    public void testDecoderEmitsBadLastContentWhenResetTerminatesOpenObjectStream() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("h2-message-decoder", new Http2ObjectDecoder(true));
+            }, VrtSoConfig.asServer());
+
+            List<HttpObject> headersOut = receiveAndIntBound(pipe,
+                    Http2Frame.headers(3, Http2Flags.END_HEADERS, encodeHeaders(headers(HttpHeaderNames.PSEUDO_METHOD, "POST", HttpHeaderNames.PSEUDO_PATH, "/reset", HttpHeaderNames.PSEUDO_AUTHORITY, "example.com"))));
+            try {
+                assertEquals(2, headersOut.size());
+                assertTrue(headersOut.get(0) instanceof HttpRequest);
+                assertTrue(headersOut.get(1) instanceof LastHttpHeaders);
+            } finally {
+                free(headersOut);
+            }
+
+            List<HttpObject> resetOut = receiveAndIntBound(pipe, Http2Frame.rstStream(3, new byte[] { 0x00, 0x00, 0x00, 0x08 }));
+            try {
+                assertEquals(1, resetOut.size());
+                assertTrue(resetOut.get(0) instanceof LastHttpContent);
+                assertTrue(resetOut.get(0).isBad());
+                assertEquals("HTTP/2 stream reset: CANCEL", resetOut.get(0).badReason());
+                assertEquals(3, resetOut.get(0).streamId());
+            } finally {
+                free(resetOut);
+            }
+
+            Http2ResetEvent resetEvent = findHttp2Event(pipe.channelEvents(), Http2ResetEvent.class);
+            assertNotNull(resetEvent);
+            assertEquals(3, resetEvent.streamId());
+            assertEquals(Http2ErrorCode.CANCEL, resetEvent.errorCode());
+        });
+    }
+
+    @Test
+    public void testDecoderDoesNotEmitSecondLastContentWhenResetArrivesAfterNormalEnd() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
+                ctx.addLastDecoder("h2-message-decoder", new Http2ObjectDecoder(true));
+            }, VrtSoConfig.asServer());
+
+            List<HttpObject> endedOut = receiveAndIntBound(pipe,
+                    Http2Frame.headers(3, Http2Flags.END_HEADERS | Http2Flags.END_STREAM, encodeHeaders(headers(HttpHeaderNames.PSEUDO_METHOD, "GET", HttpHeaderNames.PSEUDO_PATH, "/done", HttpHeaderNames.PSEUDO_AUTHORITY, "example.com"))));
+            try {
+                assertEquals(3, endedOut.size());
+                assertTrue(endedOut.get(2) instanceof LastHttpContent);
+                assertFalse(endedOut.get(2).isBad());
+            } finally {
+                free(endedOut);
+            }
+
+            List<HttpObject> resetOut = receiveAndIntBound(pipe, Http2Frame.rstStream(3, new byte[] { 0x00, 0x00, 0x00, 0x08 }));
+            assertTrue(resetOut.isEmpty());
+
+            Http2ResetEvent resetEvent = findHttp2Event(pipe.channelEvents(), Http2ResetEvent.class);
+            assertNotNull(resetEvent);
+            assertEquals(3, resetEvent.streamId());
+            assertEquals(Http2ErrorCode.CANCEL, resetEvent.errorCode());
         });
     }
 

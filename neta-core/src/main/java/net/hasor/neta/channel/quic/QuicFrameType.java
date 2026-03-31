@@ -16,48 +16,47 @@
 package net.hasor.neta.channel.quic;
 
 /**
- * Integer constants for every QUIC frame type defined in
- * <a href="https://www.rfc-editor.org/rfc/rfc9000#section-19">RFC 9000, Section 19</a>
- * and the DATAGRAM extension
- * <a href="https://www.rfc-editor.org/rfc/rfc9221">RFC 9221</a>.
- * <p><b>Frame categories and their usage:</b>
+ * Integer constant definitions for the various QUIC frame types.
+ * <p>Covers the frame types defined in <a href="https://www.rfc-editor.org/rfc/rfc9000#section-19">RFC 9000 Section 19</a>
+ * and the DATAGRAM extension in <a href="https://www.rfc-editor.org/rfc/rfc9221">RFC 9221</a>.
+ * <p><b>Frame categories and usage:</b>
  * <pre>
  *   Connection control
- *     PADDING (0x00)            — pad packets to a minimum size or fill space
- *     PING (0x01)               — elicit an ACK from the peer
- *     ACK / ACK_ECN (0x02-0x03) — selective acknowledgement
- *     CONNECTION_CLOSE (0x1c)   — graceful close with a transport error code
- *     CONNECTION_CLOSE_APP(0x1d)— graceful application-level close
- *     HANDSHAKE_DONE (0x1e)     — signals completion of the TLS handshake (server → client)
+ *     PADDING (0x00)            — pads packets to satisfy minimum length or fill space
+ *     PING (0x01)               — triggers an ACK from the peer
+ *     ACK / ACK_ECN (0x02-0x03) — selective acknowledgment
+ *     CONNECTION_CLOSE (0x1c)   — gracefully closes the connection with a transport error code
+ *     CONNECTION_CLOSE_APP(0x1d)— gracefully closes the connection with an application error code
+ *     HANDSHAKE_DONE (0x1e)     — indicates TLS handshake completion (server to client)
  *   Stream data
- *     STREAM (0x08–0x0F)        — carry application bytes; flags embedded in low 3 bits:
- *                                   FIN_BIT (0x01): final segment of the stream
- *                                   LEN_BIT (0x02): Length field present
- *                                   OFF_BIT (0x04): Offset field present
- *     RESET_STREAM (0x04)       — abruptly terminate a stream
- *     STOP_SENDING (0x05)       — request the peer stop sending on a stream
- *     CRYPTO (0x06)             — carry TLS handshake data during QUIC handshake
- *     NEW_TOKEN (0x07)          — provide a new address-validation token
- *   Flow-control
- *     MAX_DATA (0x10)           — increase the stream-data limit at connection level
- *     MAX_STREAM_DATA (0x11)    — increase the per-stream data limit
- *     MAX_STREAMS_BIDI (0x12)   — increase the max number of bidirectional streams
- *     MAX_STREAMS_UNI (0x13)    — increase the max number of unidirectional streams
- *     DATA_BLOCKED (0x14)       — signal connection-level flow-control blockage
- *     STREAM_DATA_BLOCKED (0x15)— signal stream-level flow-control blockage
- *     STREAMS_BLOCKED_*(0x16-17)— signal stream-count limit
+ *     STREAM (0x08–0x0F)        — carries application data; the low 3 bits are flags:
+ *                                   FIN_BIT (0x01): last segment of the stream
+ *                                   LEN_BIT (0x02): contains a length field
+ *                                   OFF_BIT (0x04): contains an offset field
+ *     RESET_STREAM (0x04)       — immediately terminates a stream
+ *     STOP_SENDING (0x05)       — requests that the peer stop sending on a stream
+ *     CRYPTO (0x06)             — carries TLS handshake data during the QUIC handshake
+ *     NEW_TOKEN (0x07)          — issues a new address validation token
+ *   Flow control
+ *     MAX_DATA (0x10)           — raises the connection-level data limit
+ *     MAX_STREAM_DATA (0x11)    — raises the data limit for a stream
+ *     MAX_STREAMS_BIDI (0x12)   — raises the bidirectional stream count limit
+ *     MAX_STREAMS_UNI (0x13)    — raises the unidirectional stream count limit
+ *     DATA_BLOCKED (0x14)       — indicates connection-level flow-control blocking
+ *     STREAM_DATA_BLOCKED (0x15)— indicates stream-level flow-control blocking
+ *     STREAMS_BLOCKED_*(0x16-17)— indicates blocking due to stream count limits
  *   Connection migration
- *     NEW_CONNECTION_ID (0x18)  — provide alternative connection IDs
- *     RETIRE_CONNECTION_ID (0x19)—retire a previously issued connection ID
- *     PATH_CHALLENGE (0x1a)     — validate an alternate path
- *     PATH_RESPONSE (0x1b)      — respond to PATH_CHALLENGE
- *   Unreliable datagrams (RFC 9221)
- *     DATAGRAM (0x30)           — unreliable datagram without Length field
- *     DATAGRAM_LEN (0x31)       — unreliable datagram with Length field
+ *     NEW_CONNECTION_ID (0x18)  — provides a new spare Connection ID
+ *     RETIRE_CONNECTION_ID (0x19)— retires an old Connection ID
+ *     PATH_CHALLENGE (0x1a)     — validates an alternate path
+ *     PATH_RESPONSE (0x1b)      — responds to PATH_CHALLENGE
+ *   Unreliable DATAGRAM (RFC 9221)
+ *     DATAGRAM (0x30)           — DATAGRAM without a length field
+ *     DATAGRAM_LEN (0x31)       — DATAGRAM with a length field
  * </pre>
- * <p><b>Usage:</b> call the static helpers to inspect a parsed frame type:
+ * <p><b>Usage:</b> parsed frame types can be inspected with the static helper methods:
  * <pre>
- *   int type = readVarint(buf);  // parse VarInt from QUIC packet
+ *   int type = readVarint(buf);  // Parse a VarInt from the QUIC packet.
  *   if (QuicFrameType.isStream(type)) {
  *       boolean fin = QuicFrameType.streamFin(type);
  *       boolean hasLen = QuicFrameType.streamLen(type);
@@ -98,40 +97,52 @@ public final class QuicFrameType {
     public static final int CONNECTION_CLOSE_APP = 0x1d;
     public static final int HANDSHAKE_DONE       = 0x1e;
 
-    /** DATAGRAM frame without Length field (RFC 9221). */
+    /** DATAGRAM frame without a length field. */
     public static final int DATAGRAM     = 0x30;
-    /** DATAGRAM frame with Length field (RFC 9221). */
+    /** DATAGRAM frame with a length field. */
     public static final int DATAGRAM_LEN = 0x31;
 
     private QuicFrameType() {
     }
 
-    /** Returns true if the frame type is a STREAM frame (0x08–0x0F). */
+    /**
+     * Returns whether the given frame type is a STREAM frame.
+     */
     public static boolean isStream(int type) {
         return (type & 0xF8) == STREAM_BASE;
     }
 
-    /** Returns true if the STREAM frame has the FIN bit set. */
+    /**
+     * Returns whether the STREAM frame carries the FIN flag.
+     */
     public static boolean streamFin(int type) {
         return (type & 0x01) != 0;
     }
 
-    /** Returns true if the STREAM frame has the LEN bit set. */
+    /**
+     * Returns whether the STREAM frame carries the LEN flag.
+     */
     public static boolean streamLen(int type) {
         return (type & 0x02) != 0;
     }
 
-    /** Returns true if the STREAM frame has the OFF bit set. */
+    /**
+     * Returns whether the STREAM frame carries the OFF flag.
+     */
     public static boolean streamOff(int type) {
         return (type & 0x04) != 0;
     }
 
-    /** Returns true if the frame type is a DATAGRAM frame (0x30 or 0x31). */
+    /**
+     * Returns whether the given frame type is a DATAGRAM frame.
+     */
     public static boolean isDatagram(int type) {
         return type == DATAGRAM || type == DATAGRAM_LEN;
     }
 
-    /** Returns true if the DATAGRAM frame has a Length field (0x31). */
+    /**
+     * Returns whether the DATAGRAM frame carries a length field.
+     */
     public static boolean datagramHasLen(int type) {
         return (type & 0x01) != 0;
     }

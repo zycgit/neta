@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.quic;
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
@@ -25,7 +24,8 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.udp.AbstractUdpWriteTask;
 
 /**
- * DATAGRAM-level {@link AsyncChannel} that routes writes as unreliable DATAGRAM frames (RFC 9221) through the parent {@link QuicChannel}.
+ * DATAGRAM-level {@link AsyncChannel} implementation.
+ * <p>This type wraps write requests into unreliable DATAGRAM frames defined by RFC 9221 and sends them through the parent {@link QuicChannel}.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicDatagramChannelAsync implements AsyncChannel {
@@ -43,7 +43,9 @@ class QuicDatagramChannelAsync implements AsyncChannel {
         this.context = context;
     }
 
-    /** Builds a QUIC DATAGRAM frame (RFC 9221 §4) as a ready-to-send {@link ByteBuffer}. */
+    /**
+     * Builds QUIC DATAGRAM frame data that can be sent directly.
+     */
     private static byte[] buildDatagramData(byte[] data) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.DATAGRAM_LEN);
         byte[] lengthBytes = QuicVarInt.encode(data.length);
@@ -61,41 +63,65 @@ class QuicDatagramChannelAsync implements AsyncChannel {
         return frame;
     }
 
+    /**
+     * Returns the current async channel ID.
+     */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /**
+     * Returns the associated socket configuration.
+     */
     @Override
     public SoConfig getSoConfig() {
         return this.quicChannel.getConfig();
     }
 
+    /**
+     * Returns the local address.
+     */
     @Override
     public SocketAddress getLocalAddress() {
         return this.quicChannel.getLocalAddr();
     }
 
+    /**
+     * Returns the remote address.
+     */
     @Override
     public SocketAddress getRemoteAddress() {
         return this.quicChannel.getRemoteAddr();
     }
 
+    /**
+     * Returns whether the channel is still open.
+     */
     @Override
     public boolean isOpen() {
         return !this.closed.get() && !this.quicChannel.isClose();
     }
 
+    /**
+     * Closes the DATAGRAM async channel.
+     */
     @Override
     public void close() throws IOException {
         this.closed.compareAndSet(false, true);
     }
 
+    /**
+     * DATAGRAM subchannels do not support additional connectTo operations.
+     */
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
         throw new UnsupportedOperationException("Datagram channels do not support connectTo.");
     }
 
+    /**
+     * Submits DATAGRAM data for sending.
+     */
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
         if (this.closed.get()) {
@@ -110,6 +136,9 @@ class QuicDatagramChannelAsync implements AsyncChannel {
         }
     }
 
+    /**
+     * Executes the write task asynchronously.
+     */
     protected void asyncWrite(NetChannel channel, SoSndContext wContext) {
         QuicDatagramUdpWriteTask task = new QuicDatagramUdpWriteTask(channel, wContext, this.context);
         this.context.submitSoTask(task, this).onFinal(f -> {
@@ -118,21 +147,33 @@ class QuicDatagramChannelAsync implements AsyncChannel {
     }
 
     private class QuicDatagramUdpWriteTask extends AbstractUdpWriteTask {
+        /**
+         * Creates a DATAGRAM write task.
+         */
         public QuicDatagramUdpWriteTask(NetChannel netChannel, SoSndContext wContext, SoContextService context) {
             super(netChannel, wContext, context);
         }
 
+        /**
+         * Returns whether the underlying channel is still writable.
+         */
         @Override
         protected boolean isChannelOpen() {
             return isOpen();
         }
 
+        /**
+         * Sends an already wrapped DATAGRAM frame.
+         */
         @Override
         protected int doSend(byte[] data) throws IOException {
             ByteBuf byteBuf = ByteBuf.wrap(data);
             return quicChannel.asyncChannel().sendDataFrame(byteBuf, null);
         }
 
+        /**
+         * Wraps application data into a DATAGRAM frame.
+         */
         @Override
         protected byte[] wrapSendData(byte[] sendData) {
             return buildDatagramData(sendData);

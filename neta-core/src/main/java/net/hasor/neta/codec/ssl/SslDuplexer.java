@@ -88,7 +88,7 @@ public class SslDuplexer implements ProtoDuplexer<ByteBuf, ByteBuf, ByteBuf, Byt
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         // when safe-close to send close_notify alert
         if (!isRcv && event.getData() instanceof SoCloseEvent) {
             SslContextBasic ref = (SslContextBasic) context.context(SslContext.class);

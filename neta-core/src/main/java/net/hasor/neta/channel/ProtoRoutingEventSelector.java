@@ -16,18 +16,20 @@
 package net.hasor.neta.channel;
 
 /**
- * Routing predicate used by {@link ProtoRoutingDuplexer} to choose a branch from a user event.
+ * Event-routing selector.
+ * <p>When no branch has been selected yet, {@link ProtoRoutingDuplexer} can call this selector to
+ * decide which branch the current network event should enter.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-22
  */
 @FunctionalInterface
 public interface ProtoRoutingEventSelector {
     /**
-     * Evaluate routing condition from a user event and return the selected branch key.
-     * @param context the pipeline context
-     * @param event the user event currently being propagated
-     * @param isRcv {@code true} when the event is moving in RCV direction, {@code false} for SND direction
-     * @return the branch key matching a registered branch name, or {@code null} if the event does not determine routing
+     * Compute the branch name that should receive the current network event.
+     * @param context pipeline context
+     * @param event network event currently being propagated
+     * @param isRcv {@code true} when the event propagates in the RCV direction, {@code false} for SND
+     * @return registered branch name, or {@code null} when the current event is still insufficient to decide routing
      */
-    String route(ProtoContext context, SoUserEvent event, boolean isRcv);
+    String route(ProtoContext context, SoEvent event, boolean isRcv);
 }

@@ -296,10 +296,10 @@ public class AbstractHttpTest {
     }
 
     protected VirtualPipe openVirtualPipe(NetManager neta, ProtoInitializer clientInit, ProtoInitializer serverInit, VrtTransferHandler transferHandler) throws Throwable {
-        Queue<SoUserEvent> clientUserEvents = new ConcurrentLinkedQueue<>();
-        Queue<SoUserEvent> serverUserEvents = new ConcurrentLinkedQueue<>();
-        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), attachUserEventCollector(clientInit, clientUserEvents), VrtSoConfig.asClient());
-        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), attachUserEventCollector(serverInit, serverUserEvents), VrtSoConfig.asServer());
+        Queue<SoEvent> clientEvents = new ConcurrentLinkedQueue<>();
+        Queue<SoEvent> serverEvents = new ConcurrentLinkedQueue<>();
+        VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), attachEventCollector(clientInit, clientEvents), VrtSoConfig.asClient());
+        VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), attachEventCollector(serverInit, serverEvents), VrtSoConfig.asServer());
 
         VrtTransfer transfer = new VrtTransfer(neta);
         VrtTransferHandler handler = transferHandler == null ? VrtTransfer.duplicate() : transferHandler;
@@ -318,12 +318,12 @@ public class AbstractHttpTest {
         client.subscribe(d -> d.isOutbound() && !d.isSuccess(), SubscribeMode.SYNC, d -> clientOutboundErrors.offer(d.getError()));
         server.subscribe(d -> d.isInbound() && !d.isSuccess(), SubscribeMode.SYNC, d -> serverInboundErrors.offer(d.getError()));
         server.subscribe(d -> d.isOutbound() && !d.isSuccess(), SubscribeMode.SYNC, d -> serverOutboundErrors.offer(d.getError()));
-        return new VirtualPipe(client, server, clientInbound, clientInboundErrors, clientOutboundErrors, clientUserEvents, serverInbound, serverInboundErrors, serverOutboundErrors, serverUserEvents);
+        return new VirtualPipe(client, server, clientInbound, clientInboundErrors, clientOutboundErrors, clientEvents, serverInbound, serverInboundErrors, serverOutboundErrors, serverEvents);
     }
 
     protected VirtualPipe openVirtualPipe(NetManager neta, ProtoInitializer initializer, VrtSoConfig config) throws Throwable {
-        Queue<SoUserEvent> channelUserEvents = new ConcurrentLinkedQueue<>();
-        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), attachUserEventCollector(initializer, channelUserEvents), config);
+        Queue<SoEvent> channelEvents = new ConcurrentLinkedQueue<>();
+        VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), attachEventCollector(initializer, channelEvents), config);
         Queue<Object> channelInbound = new ConcurrentLinkedQueue<>();
         Queue<Object> channelOutbound = new ConcurrentLinkedQueue<>();
         Queue<Throwable> channelInboundErrors = new ConcurrentLinkedQueue<>();
@@ -347,7 +347,7 @@ public class AbstractHttpTest {
         });
         channel.subscribe(d -> d.isInbound() && !d.isSuccess(), SubscribeMode.SYNC, d -> channelInboundErrors.offer(d.getError()));
         channel.subscribe(d -> d.isOutbound() && !d.isSuccess(), SubscribeMode.SYNC, d -> channelOutboundErrors.offer(d.getError()));
-        return new VirtualPipe(channel, channelInbound, channelOutbound, channelInboundErrors, channelOutboundErrors, channelUserEvents);
+        return new VirtualPipe(channel, channelInbound, channelOutbound, channelInboundErrors, channelOutboundErrors, channelEvents);
     }
 
     //
@@ -377,26 +377,26 @@ public class AbstractHttpTest {
         private final Queue<Object>      channelOutbound;
         private final Queue<Throwable>   channelInboundErrors;
         private final Queue<Throwable>   channelOutboundErrors;
-        private final Queue<SoUserEvent> channelUserEvents;
+        private final Queue<SoEvent> channelEvents;
         //
         private final VrtChannel         client;
         private final Queue<Object>      clientInbound;
         private final Queue<Throwable>   clientInboundErrors;
         private final Queue<Throwable>   clientOutboundErrors;
-        private final Queue<SoUserEvent> clientUserEvents;
+        private final Queue<SoEvent> clientEvents;
         private final VrtChannel         server;
         private final Queue<Object>      serverInbound;
         private final Queue<Throwable>   serverInboundErrors;
         private final Queue<Throwable>   serverOutboundErrors;
-        private final Queue<SoUserEvent> serverUserEvents;
+        private final Queue<SoEvent> serverEvents;
 
-        private VirtualPipe(VrtChannel channel, Queue<Object> channelInbound, Queue<Object> channelOutbound, Queue<Throwable> channelInboundErrors, Queue<Throwable> channelOutboundErrors, Queue<SoUserEvent> channelUserEvents) {
+        private VirtualPipe(VrtChannel channel, Queue<Object> channelInbound, Queue<Object> channelOutbound, Queue<Throwable> channelInboundErrors, Queue<Throwable> channelOutboundErrors, Queue<SoEvent> channelEvents) {
             this.channel = channel;
             this.channelInbound = channelInbound;
             this.channelOutbound = channelOutbound;
             this.channelInboundErrors = channelInboundErrors;
             this.channelOutboundErrors = channelOutboundErrors;
-            this.channelUserEvents = channelUserEvents;
+            this.channelEvents = channelEvents;
             this.client = null;
             this.server = null;
             this.clientInbound = null;
@@ -405,27 +405,27 @@ public class AbstractHttpTest {
             this.clientOutboundErrors = null;
             this.serverInboundErrors = null;
             this.serverOutboundErrors = null;
-            this.clientUserEvents = null;
-            this.serverUserEvents = null;
+            this.clientEvents = null;
+            this.serverEvents = null;
         }
 
-        private VirtualPipe(VrtChannel client, VrtChannel server, Queue<Object> clientInbound, Queue<Throwable> clientInboundErrors, Queue<Throwable> clientOutboundErrors, Queue<SoUserEvent> clientUserEvents, Queue<Object> serverInbound, Queue<Throwable> serverInboundErrors, Queue<Throwable> serverOutboundErrors, Queue<SoUserEvent> serverUserEvents) {
+        private VirtualPipe(VrtChannel client, VrtChannel server, Queue<Object> clientInbound, Queue<Throwable> clientInboundErrors, Queue<Throwable> clientOutboundErrors, Queue<SoEvent> clientEvents, Queue<Object> serverInbound, Queue<Throwable> serverInboundErrors, Queue<Throwable> serverOutboundErrors, Queue<SoEvent> serverEvents) {
             this.channel = null;
             this.channelInbound = null;
             this.channelOutbound = null;
             this.channelInboundErrors = null;
             this.channelOutboundErrors = null;
-            this.channelUserEvents = null;
+            this.channelEvents = null;
             this.client = client;
             this.server = server;
             this.clientInbound = clientInbound;
             this.clientInboundErrors = clientInboundErrors;
             this.clientOutboundErrors = clientOutboundErrors;
-            this.clientUserEvents = clientUserEvents;
+            this.clientEvents = clientEvents;
             this.serverInbound = serverInbound;
             this.serverInboundErrors = serverInboundErrors;
             this.serverOutboundErrors = serverOutboundErrors;
-            this.serverUserEvents = serverUserEvents;
+            this.serverEvents = serverEvents;
         }
 
         public VrtChannel client() {
@@ -448,8 +448,8 @@ public class AbstractHttpTest {
             return this.clientOutboundErrors;
         }
 
-        public Queue<SoUserEvent> clientUserEvents() {
-            return this.clientUserEvents;
+        public Queue<SoEvent> clientEvents() {
+            return this.clientEvents;
         }
 
         public Queue<Object> serverInbound() {
@@ -464,8 +464,8 @@ public class AbstractHttpTest {
             return this.serverOutboundErrors;
         }
 
-        public Queue<SoUserEvent> serverUserEvents() {
-            return this.serverUserEvents;
+        public Queue<SoEvent> serverEvents() {
+            return this.serverEvents;
         }
 
         //
@@ -490,21 +490,21 @@ public class AbstractHttpTest {
             return this.channelOutboundErrors;
         }
 
-        public Queue<SoUserEvent> channelUserEvents() {
-            return this.channelUserEvents;
+        public Queue<SoEvent> channelEvents() {
+            return this.channelEvents;
         }
     }
 
-    protected static final class UserEventCollectDuplexer implements ProtoDuplexer<Object, Object, Object, Object> {
-        private final Queue<SoUserEvent> userEvents;
+    protected static final class EventCollectDuplexer implements ProtoDuplexer<Object, Object, Object, Object> {
+        private final Queue<SoEvent> events;
 
-        private UserEventCollectDuplexer(Queue<SoUserEvent> userEvents) {
-            this.userEvents = userEvents;
+        private EventCollectDuplexer(Queue<SoEvent> events) {
+            this.events = events;
         }
 
         @Override
-        public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
-            this.userEvents.offer(event);
+        public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) {
+            this.events.offer(event);
             return true;
         }
 
@@ -523,12 +523,12 @@ public class AbstractHttpTest {
         }
     }
 
-    private static ProtoInitializer attachUserEventCollector(ProtoInitializer initializer, Queue<SoUserEvent> userEvents) {
+    private static ProtoInitializer attachEventCollector(ProtoInitializer initializer, Queue<SoEvent> events) {
         return ctx -> {
             if (initializer != null) {
                 initializer.config(ctx);
             }
-            ctx.addLast("__test-user-event-collector__", new UserEventCollectDuplexer(userEvents));
+            ctx.addLast("__test-user-event-collector__", new EventCollectDuplexer(events));
         };
     }
 

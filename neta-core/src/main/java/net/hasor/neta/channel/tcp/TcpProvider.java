@@ -24,13 +24,12 @@ import net.hasor.neta.channel.*;
 
 /**
  * TCP transport provider for Neta.
- * <p>The provider owns one shared {@link AsynchronousChannelGroup} backed by the
- * framework I/O executor and uses it to create both client
- * {@link AsynchronousSocketChannel} instances and server
- * {@link AsynchronousServerSocketChannel} instances.
- * <p>Its job is transport bootstrap only: actual connect, accept, read, and write
- * logic lives in {@link TcpAsyncChannel}, {@link TcpAsyncServerChannel}, and the
- * TCP completion handlers.
+ * <p>This provider owns one shared {@link AsynchronousChannelGroup} driven by the framework I/O
+ * executor and uses it to create both client {@link AsynchronousSocketChannel} instances and
+ * server {@link AsynchronousServerSocketChannel} instances.
+ * <p>It is responsible only for transport bootstrap. The actual connect, accept, read, and write
+ * logic lives in {@link TcpAsyncChannel}, {@link TcpAsyncServerChannel}, and the related TCP
+ * completion handlers.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-07
  */
@@ -39,22 +38,48 @@ public class TcpProvider implements AsyncChannelProvider {
     private static final Logger                   logger = Logger.getLogger(TcpProvider.class);
     private final        AsynchronousChannelGroup channelGroup;
 
+    /**
+     * Create the TCP provider.
+     * @param neta the current NetManager
+     * @throws IOException if an I/O error occurs while initializing the underlying channel group
+     */
     public TcpProvider(NetManager neta) throws IOException {
         this.channelGroup = AsynchronousChannelGroup.withThreadPool(((SoContextService) neta.getContext()).getIoExecutor());
     }
 
+    /**
+     * Create a TCP server channel.
+     * @param channelId the channel ID
+     * @param context the runtime context
+     * @param listenAddr the listen address
+     * @param soConfig the channel configuration
+     * @return the asynchronous server channel
+     * @throws IOException if an I/O error occurs during creation
+     */
     @Override
     public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         AsynchronousServerSocketChannel channel = AsynchronousServerSocketChannel.open(this.channelGroup);
         return new TcpAsyncServerChannel(channelId, channel, context, listenAddr, soConfig);
     }
 
+    /**
+     * Create a TCP client channel.
+     * @param channelId the channel ID
+     * @param context the runtime context
+     * @param remoteAddr the remote address
+     * @param soConfig the channel configuration
+     * @return the asynchronous client channel
+     * @throws IOException if an I/O error occurs during creation
+     */
     @Override
     public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
         AsynchronousSocketChannel channel = AsynchronousSocketChannel.open(this.channelGroup);
         return new TcpAsyncChannel(channelId, channel, context, remoteAddr, soConfig);
     }
 
+    /**
+     * Shut down the provider and the shared channel group.
+     */
     @Override
     public void shutdown() {
         if (this.channelGroup != null) {

@@ -16,15 +16,12 @@
 package net.hasor.neta.channel;
 
 /**
- * User event fired via the <em>SND</em> direction (tail → head) just before a local-initiated
- * channel close is executed. The write queue has already been drained to empty before this event
- * is dispatched, so any {@link ProtoContext#sendData} call inside the handler will safely enter
- * the queue. After the event returns, the framework drains the queue once more and then performs
- * the actual {@code notifyChannelClose}.
+ * Network event fired in the <em>SND</em> direction, tail to head, just before a locally initiated
+ * channel close is actually performed.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-05
  */
-public final class SoCloseEvent implements SoUserEventData {
+public final class SoCloseEvent implements SoEventData {
     /** Singleton instance. */
     public static final SoCloseEvent INSTANCE = new SoCloseEvent();
 

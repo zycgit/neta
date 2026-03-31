@@ -31,18 +31,17 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Default {@link SoContext} implementation and shared runtime container for one
+ * Default implementation of {@link SoContext} and the shared runtime container for a single
  * {@link NetManager}.
- * <p>It owns transport-independent resources such as the byte-buffer allocator,
- * I/O executor, worker executor, timer wheel, active channel registries, and
- * subscriber lists used for {@link PlayLoad} dispatch.
- * <p>It also coordinates channel lifecycle operations, exception reporting, and
- * shutdown ordering so all transports created by the same manager share a
- * consistent runtime environment.
+ * <p>It owns transport-agnostic shared resources such as the byte buffer allocator, I/O executor,
+ * worker executor, timer wheel, active channel registry, and the subscription list used to
+ * dispatch {@link PlayLoad} events.</p>
+ * <p>It is also responsible for coordinating channel lifecycle operations, error reporting, and
+ * shutdown ordering.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoContext
- * @see SoEventExecutor
+ * @see SoTaskExecutor
  * @see NetManager
  */
 public class SoContextService implements SoContext {
@@ -58,7 +57,7 @@ public class SoContextService implements SoContext {
     //
     private final        HashedWheelTimer        globalTimer;
     private final        ExecutorService         ioExecutor;
-    private final        SoEventExecutor         eventExecutor;
+    private final        SoTaskExecutor          eventExecutor;
     private final        ReentrantReadWriteLock  closeSyncLock;
     private final        Map<Long, SoChannel<?>> channelMap;
     private final        Queue<NetChannel>       channelList;
@@ -95,7 +94,7 @@ public class SoContextService implements SoContext {
         if (taskWorkSize < 1) {
             taskWorkSize = Runtime.getRuntime().availableProcessors();
         }
-        this.eventExecutor = new SoEventExecutor(this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer);
+        this.eventExecutor = new SoTaskExecutor(this.useClassLoader, this.useSoThreadFactory, taskWorkSize, this.globalTimer);
 
         //
         this.closeStatus = false;
@@ -113,21 +112,24 @@ public class SoContextService implements SoContext {
         }
     }
 
-    /** Generate a unique channel ID (monotonically increasing). */
+    /** Generate a unique channel ID using a monotonically increasing sequence. */
     public long nextID() {
         return nextID.incrementAndGet();
     }
 
+    /** {@inheritDoc} */
     @Override
     public NetConfig getConfig() {
         return this.config;
     }
 
+    /** {@inheritDoc} */
     @Override
     public ByteBufAllocator getByteBufAllocator() {
         return this.allocator;
     }
 
+    /** {@inheritDoc} */
     @Override
     public SocketAddress getRemoteAddress(long channelId) {
         SoChannel<?> channel = this.channelMap.get(channelId);
@@ -138,34 +140,35 @@ public class SoContextService implements SoContext {
         }
     }
 
-    /** Returns the IO thread pool executor. */
+    /** Return the I/O thread pool executor. */
     public ExecutorService getIoExecutor() {
         return this.ioExecutor;
     }
 
-    /** Whether to accept link socket. */
+    /** Return whether new connection sockets may currently be accepted. */
     public boolean acceptChannel(SocketAddress remoteAddress) {
         return !this.closeStatus;
     }
 
-    /** test the channel has been closed */
+    /** Return whether the specified channel has already closed. */
     @Override
     public boolean isClose(long channelId) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         return channel == null || channel.isClose();
     }
 
-    /** close status. */
+    /** Return whether the context itself has entered the closed state. */
     public boolean isClose() {
         return this.closeStatus;
     }
 
+    /** {@inheritDoc} */
     @Override
     public SoChannel<?> findChannel(long channelId) {
         return this.channelMap.get(channelId);
     }
 
-    /** Register a channel/listener and optionally trigger init/active lifecycle. */
+    /** Register a channel or listener and trigger init/active lifecycle callbacks when needed. */
     public void initChannel(SoChannel<?> channel, boolean init) throws Throwable {
         long channelId = channel.getChannelId();
         if (this.channelMap.containsKey(channelId)) {
@@ -202,7 +205,7 @@ public class SoContextService implements SoContext {
                     protoStack.onActive(protoCtx);
                 }
             } catch (Throwable e) {
-                // rollback: remove channel from maps on init failure
+                // Roll back registration if initialization fails.
                 this.channelMap.remove(channel.getChannelId());
                 if (channel.isListen()) {
                     this.listenList.remove(channel);
@@ -223,16 +226,19 @@ public class SoContextService implements SoContext {
         return this.subscribe(channelId, SubscribeMode.ASYNC, listener);
     }
 
+    /** {@inheritDoc} */
     @Override
     public SubscribeHolder subscribe(long channelId, SubscribeMode mode, PlayLoadListener listener) {
         return this.subscribe(p -> p.getSource().getChannelId() == channelId, mode, listener);
     }
 
+    /** {@inheritDoc} */
     @Override
     public SubscribeHolder subscribe(final Predicate<PlayLoad> select, final PlayLoadListener listener) {
         return this.subscribe(select, SubscribeMode.ASYNC, listener);
     }
 
+    /** {@inheritDoc} */
     @Override
     public SubscribeHolder subscribe(final Predicate<PlayLoad> select, SubscribeMode mode, final PlayLoadListener listener) {
         if (listener == null) {
@@ -245,7 +251,7 @@ public class SoContextService implements SoContext {
         return subscription;
     }
 
-    /** trigger event */
+    /** Trigger an event. */
     @Deprecated
     public void trigger(PlayLoad data) {
         String prefix;
@@ -272,6 +278,7 @@ public class SoContextService implements SoContext {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public NetManager getNetManager() {
         return this.manager;
@@ -281,9 +288,13 @@ public class SoContextService implements SoContext {
         this.listenList.forEach(consumer);
     }
 
-    /** close all socket, The method {@link #initChannel(SoChannel, boolean)} and {@link #closeAll(boolean)} are mutually exclusive */
+    /**
+     * Close all listeners and channels owned by the current context.
+     * <p>This method executes mutually exclusively with {@link #initChannel(SoChannel, boolean)}.</p>
+     * @param now when {@code true}, close immediately; otherwise use the normal asynchronous close flow
+     */
     public void closeAll(boolean now) {
-        // mark close is true.
+        // Mark the context as closed.
         try {
             this.closeSyncLock.writeLock().lock();
             this.closeStatus = true;
@@ -293,7 +304,7 @@ public class SoContextService implements SoContext {
 
         List<Future<?>> waitFinish = new LinkedList<>();
 
-        // close all NetListen
+        // Close all NetListen instances.
         while (!this.listenList.isEmpty()) {
             NetListen listen = this.listenList.poll();
             if (listen != null) {
@@ -305,7 +316,7 @@ public class SoContextService implements SoContext {
             }
         }
 
-        // close all NetChannel
+        // Close all NetChannel instances.
         while (!this.channelList.isEmpty()) {
             NetChannel channel = this.channelList.poll();
             if (channel == null || channel.isClose()) {
@@ -314,25 +325,25 @@ public class SoContextService implements SoContext {
             if (channel instanceof SoSubChannel) {
                 SoChannel<?> parent = ((SoSubChannel) channel).getParent();
                 if (parent != null && !parent.isClose()) {
-                    doCloseChannel(now, parent, waitFinish);//close parent first
+                    doCloseChannel(now, parent, waitFinish);// close parent first
                 }
             }
             doCloseChannel(now, channel, waitFinish);
         }
 
-        // wait all finish
+        // Wait for all close operations to finish.
         for (Future<?> future : waitFinish) {
             try {
                 future.get(3, java.util.concurrent.TimeUnit.SECONDS);
             } catch (Exception e) {
-                // timeout or other error, continue to next
+                // Timeout or other error; continue with the next future.
             }
         }
     }
 
     /**
-     * Shuts down all thread pools and the global timer.
-     * Safe to call multiple times; subsequent calls are no-ops for each resource.
+     * Shut down all thread pools and the global timer wheel.
+     * <p>This method may be called repeatedly. Resources that are already closed are skipped.</p>
      */
     public void shutdown() {
         if (this.ioExecutor != null) {
@@ -364,35 +375,48 @@ public class SoContextService implements SoContext {
         }
     }
 
-    /** asynchronously copy data from swap to rcv/snd */
+    /**
+     * Submit an event-loop task to the shared executor for asynchronous execution.
+     * @param task task to execute
+     * @param result value returned by the Future when the task completes successfully
+     * @param <T> Future result type
+     * @return the corresponding asynchronous result
+     */
     public <T> Future<T> submitSoTask(DefaultSoTask task, T result) {
         return this.eventExecutor.submitSoTask(task, result);
     }
 
-    /** Set up a timer */
+    /**
+     * Register a timed task on the shared timer wheel.
+     * @param task timer task
+     * @param delay delay duration
+     * @param unit time unit of the delay
+     */
     protected void newTimeout(TimerTask task, long delay, TimeUnit unit) {
         this.globalTimer.newTimeout(task, delay, unit);
     }
 
     /**
-     * Routes a user-defined event into the <em>inbound</em> pipeline of the given channel,
-     * starting from {@code stackName} (or head if {@code null}).
+     * Deliver a network event into the inbound pipeline of the specified channel.
+     * @param channelId target channel ID
+     * @param stackName starting handler name; when {@code null}, delivery starts from the chain head
+     * @param event network event to deliver
      */
-    public void notifyRcvUserEvent(long channelId, String stackName, SoUserEvent event) {
+    public void notifyRcvEvent(long channelId, String stackName, SoEvent event) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("notifyRcvUserEvent, channel not found. channelId : " + channelId);
+            logger.error("notifyRcvEvent, channel not found. channelId : " + channelId);
             return;
         }
 
         if (!(channel instanceof NetChannel)) {
-            logger.error("only NetChannel can notifyRcvUserEvent. channelId : " + channelId);
+            logger.error("only NetChannel can notifyRcvEvent. channelId : " + channelId);
             return;
         }
 
         try {
             NetChannel netChannel = (NetChannel) channel;
-            netChannel.protoStack.onRcvUserEvent(netChannel.protoCtx, stackName, event);
+            netChannel.protoStack.onRcvEvent(netChannel.protoCtx, stackName, event);
         } catch (Throwable e) {
             SoException ee = e instanceof SoException ? (SoException) e : new SoRcvException(e.getMessage(), e);
             this.notifyRcvChannelException(channelId, false, ee);
@@ -400,31 +424,37 @@ public class SoContextService implements SoContext {
     }
 
     /**
-     * Routes a user-defined event into the <em>outbound</em> pipeline of the given channel,
-     * starting from {@code stackName} (or tail if {@code null}).
+     * Deliver a network event into the outbound pipeline of the specified channel.
+     * @param channelId target channel ID
+     * @param stackName starting handler name; when {@code null}, delivery starts from the chain tail
+     * @param event network event to deliver
      */
-    public void notifySndUserEvent(long channelId, String stackName, SoUserEvent event) {
+    public void notifySndEvent(long channelId, String stackName, SoEvent event) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
-            logger.error("notifySndUserEvent, channel not found. channelId : " + channelId);
+            logger.error("notifySndEvent, channel not found. channelId : " + channelId);
             return;
         }
 
         if (!(channel instanceof NetChannel)) {
-            logger.error("only NetChannel can notifySndUserEvent. channelId : " + channelId);
+            logger.error("only NetChannel can notifySndEvent. channelId : " + channelId);
             return;
         }
 
         try {
             NetChannel netChannel = (NetChannel) channel;
-            netChannel.protoStack.onSndUserEvent(netChannel.protoCtx, stackName, event);
+            netChannel.protoStack.onSndEvent(netChannel.protoCtx, stackName, event);
         } catch (Throwable e) {
             SoException ee = e instanceof SoException ? (SoException) e : new SoSndException(e.getMessage(), e);
             this.notifySndChannelException(channelId, false, ee);
         }
     }
 
-    /** Called when a listener fails to bind; logs the error and closes the listen channel. */
+    /**
+     * Handle a listener bind failure and close the corresponding listening channel.
+     * @param channelId listening channel ID
+     * @param e bind exception
+     */
     public void notifyBindChannelException(long channelId, SoBindException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -441,8 +471,10 @@ public class SoContextService implements SoContext {
     }
 
     /**
-     * Called when an outbound connection attempt fails.
-     * @param doClose if {@code true}, the channel is closed after the error is delivered
+     * Handle a failure while establishing an outbound connection.
+     * @param channelId target channel ID
+     * @param doClose when {@code true}, close the channel after delivering the error
+     * @param e connection exception
      */
     public void notifyConnectChannelException(long channelId, boolean doClose, SoConnectException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
@@ -458,7 +490,11 @@ public class SoContextService implements SoContext {
         }
     }
 
-    /** Notify that new data has been received on a channel. */
+    /**
+     * Notify the specified channel that new inbound data has arrived.
+     * @param channelId target channel ID
+     * @param rcvData received data
+     */
     public void notifyRcvChannelData(long channelId, Object... rcvData) {
         SoChannel<?> channel = this.channelMap.get(channelId);
         if (channel == null) {
@@ -480,8 +516,10 @@ public class SoContextService implements SoContext {
     }
 
     /**
-     * Called when an inbound pipeline error occurs.
-     * @param doClose if {@code true}, the channel is closed after the error is delivered
+     * Handle an exception raised by the inbound pipeline.
+     * @param channelId target channel ID
+     * @param doClose when {@code true}, close the channel after delivering the error
+     * @param e pipeline exception
      */
     public void notifyRcvChannelException(long channelId, boolean doClose, SoException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
@@ -498,8 +536,10 @@ public class SoContextService implements SoContext {
     }
 
     /**
-     * Called when an outbound pipeline error occurs.
-     * @param doClose if {@code true}, the channel is closed after the error is delivered
+     * Handle an exception raised by the outbound pipeline.
+     * @param channelId target channel ID
+     * @param doClose when {@code true}, close the channel after delivering the error
+     * @param e pipeline exception
      */
     public void notifySndChannelException(long channelId, boolean doClose, SoException e) {
         SoChannel<?> channel = this.channelMap.get(channelId);
@@ -529,8 +569,9 @@ public class SoContextService implements SoContext {
     }
 
     /**
-     * Called when a channel is closed by the remote peer or locally.
-     * @param remote {@code true} if closed by the remote side
+     * Handle a channel close event.
+     * @param channelId target channel ID
+     * @param remote when {@code true}, the close was initiated by the remote side
      */
     public void notifyChannelClose(long channelId, boolean remote) {
         SoChannel<?> channel = this.channelMap.get(channelId);
@@ -546,16 +587,16 @@ public class SoContextService implements SoContext {
             logger.error(message, e);
         }
 
-        // clean wQueue
+        // Clean the write queue.
         if (channel instanceof NetChannel) {
             NetChannel netChannel = (NetChannel) channel;
             IOUtils.closeQuietly(netChannel.asyncChannel);
             netChannel.closeStatus.set(true);
 
-            // purge data
+            // Purge pending data.
             netChannel.wContext.purge(e);
 
-            // on close event
+            // Trigger close callbacks.
             try {
                 netChannel.protoStack.onClose(netChannel.protoCtx);
             } catch (Exception ignore) {
@@ -603,11 +644,13 @@ public class SoContextService implements SoContext {
             this.active = new AtomicBoolean(true);
         }
 
+        /** {@inheritDoc} */
         @Override
         public SubscribeMode getSubscribeMode() {
             return this.mode;
         }
 
+        /** {@inheritDoc} */
         @Override
         public void unSubscribe() {
             this.active.set(false);

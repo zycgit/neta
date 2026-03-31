@@ -20,29 +20,41 @@ import java.nio.channels.DatagramChannel;
 import net.hasor.neta.channel.*;
 
 /**
- * QUIC transport provider that creates server and client channels built on top of UDP (DatagramChannel).
+ * QUIC transport provider for creating server and client channels on top of UDP DatagramChannel.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicProvider implements AsyncChannelProvider {
     public static final String NAME = "QUIC";
 
+    /**
+     * Creates a QUIC provider.
+     * @param neta the owning NetManager
+     */
     public QuicProvider(NetManager neta) {
     }
 
-    /** {@inheritDoc} Creates a QUIC server channel over a new DatagramChannel. */
+    /**
+     * Creates a QUIC server channel backed by a new DatagramChannel.
+     */
     @Override
     public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
         return new QuicAsyncServerChannel(channelId, channel, context, listenAddr, (QuicSoConfig) soConfig);
     }
 
-    /** {@inheritDoc} Creates a QUIC client channel over a new DatagramChannel. */
+    /**
+     * Creates a QUIC client channel backed by a new DatagramChannel.
+     */
     @Override
     public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
         return new QuicAsyncClientChannel(channelId, channel, context, remoteAddr, (QuicSoConfig) soConfig);
     }
 
+    /**
+     * Shuts down the provider.
+     * <p>The current implementation has no additional resources to release.
+     */
     @Override
     public void shutdown() {
 

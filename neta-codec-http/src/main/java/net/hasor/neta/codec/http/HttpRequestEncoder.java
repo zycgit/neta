@@ -59,7 +59,7 @@ public class HttpRequestEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+    public boolean onEvent(ProtoContext context, SoEvent event) {
         if (event.getEventType() != HttpThroughEvent.class) {
             return true;
         }

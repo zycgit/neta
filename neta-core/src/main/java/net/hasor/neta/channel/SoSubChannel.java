@@ -15,19 +15,17 @@
  */
 package net.hasor.neta.channel;
 /**
- * Marks a channel as a sub-channel of a parent channel.
- * <p>
- * Sub-channels have their lifecycle tied to their parent: when the parent
- * is closed, all sub-channels are closed as well. During shutdown, the
- * framework closes parent channels first so that sub-channels are cleaned
- * up in the correct order.
+ * Marks a channel as a child of some parent channel.
+ * <p>The lifecycle of a child channel is bound to its parent: when the parent closes, all child
+ * channels close as well. During shutdown, the framework closes the parent first so child channels
+ * are cleaned up in the correct order.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @see NetChannel
  */
 public interface SoSubChannel {
     /**
-     * Returns the parent channel that owns this sub-channel.
-     * @return the parent channel, never {@code null}
+     * Return the parent channel that owns the current child channel.
+     * @return parent channel, never {@code null}
      */
     SoChannel<?> getParent();
 }

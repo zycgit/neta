@@ -642,7 +642,7 @@ public class SslRoutingTest extends AbstractSslTest {
     }
 
     // =====================================================================
-    // Test 9: ALPN negotiation via SslEvent user event
+    // Test 9: ALPN negotiation via SslEvent network event
     //
     // Verify that SslEvent (handshake completion) is propagated through
     // the routing pipeline to sub-pipeline branches
@@ -657,7 +657,7 @@ public class SslRoutingTest extends AbstractSslTest {
             sslConf.setAppProtocol(new String[] { "http/2", "http/1.1" });
             sslConf.setAppProtocolSelector((channel, protocols) -> "http/2");
 
-            // Server stack: SSL → String, with user event listener
+            // Server stack: SSL → String, with network event listener
             ProtoInitializer serverStack = ctx -> {
                 ctx.addLast("SSL", new SslDuplexer(sslConf));
                 // String codec with SslEvent listener
@@ -671,7 +671,7 @@ public class SslRoutingTest extends AbstractSslTest {
                     }
 
                     @Override
-                    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
+                    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) {
                         if (event.getEventType() == SslHandshakeEvent.class) {
                             capturedEvent.set((SslHandshakeEvent) event.getData());
                             eventLatch.countDown();

@@ -22,7 +22,7 @@ import net.hasor.neta.codec.http.HttpObject;
  * <p>
  * Pairs {@link Http2ObjectDecoder} and {@link Http2ObjectEncoder} so higher layers
  * can work with downstream HTTP/2 payload messages instead of raw frames, while
- * control frames stay internal or surface as user events.
+ * control frames stay internal or surface as network events.
  * <p>
  * The message layer is the main protocol boundary in Neta's HTTP/2 stack. It owns
  * header-block reassembly, control-frame interpretation, automatic ACK and window
@@ -60,14 +60,14 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (event.getEventType() == Http2PingEvent.class || event.getEventType() == Http2GoawayEvent.class || event.getEventType() == Http2ResetEvent.class || event.getEventType() == Http2PriorityEvent.class || event.getEventType() == Http2PushPromiseEvent.class) {
-            return this.encoder.onUserEvent(context, event);
+            return this.encoder.onEvent(context, event);
         }
         if (isRcv) {
-            return this.decoder.onUserEvent(context, event);
+            return this.decoder.onEvent(context, event);
         } else {
-            return this.encoder.onUserEvent(context, event);
+            return this.encoder.onEvent(context, event);
         }
     }
 

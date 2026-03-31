@@ -70,7 +70,7 @@ public class Http2ObjectDuplexeTest extends AbstractHttp2Test {
 
             List<HttpObject> inbound = receiveAndIntBound(pipe, Http2Frame.settings(Http2Flags.NONE, new byte[] { 0x00, 0x01, 0x00, 0x00, 0x10, 0x00 }));
             assertTrue(inbound.isEmpty());
-            assertTrue(pipe.channelUserEvents().isEmpty());
+            assertTrue(pipe.channelEvents().isEmpty());
             List<Http2Frame> autoFrames = drainQueue(pipe.channelOutbound());
             assertEquals(2, autoFrames.size());
             assertEquals(Http2FrameType.SETTINGS, autoFrames.get(0).type());

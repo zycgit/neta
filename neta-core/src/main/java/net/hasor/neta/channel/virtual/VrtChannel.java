@@ -18,24 +18,34 @@ import java.io.IOException;
 import net.hasor.neta.channel.*;
 
 /**
- * Application-facing virtual channel facade.
- * <p>This is the channel instance exposed to protocol handlers after a virtual
- * client connect or server-side accept completes. It extends the common channel
- * base but also exposes manual receive/send error injection methods so that the
- * virtual transport can drive the protocol pipeline without any real socket I/O.
+ * Application-facing virtual channel object.
+ * <p>This type is the channel instance exposed to protocol handlers after a virtual client connect
+ * or server-side accept completes. It extends the common channel base and also provides manual
+ * entry points for injecting receive data and send/receive errors, so that the virtual transport
+ * can drive the pipeline without real socket I/O.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public class VrtChannel extends AbstractVrtChannel {
+    /**
+     * Create a virtual channel.
+     * @param channelId the channel ID
+     * @param monitor the monitor
+     * @param forListen the source listener
+     * @param vrtMode the virtual channel mode
+     * @param initializer the protocol initializer
+     * @param asyncChannel the underlying asynchronous channel
+     * @param context the runtime context service
+     * @throws IOException if an I/O error occurs during creation
+     */
     protected VrtChannel(long channelId, NetMonitor monitor, NetListen forListen, VrtMode vrtMode, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService context) throws IOException {
         super(channelId, monitor, forListen, vrtMode, initializer, asyncChannel, context);
     }
 
-    // trigger Input/Output
-
     /**
-     * Write messages to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
-     * @param object the messages to be written
+     * Write messages into the RCV_UP direction of the current {@link SoChannel}.
+     * <p>The messages are delivered only to the targeted protocol layer.
+     * @param object the messages to write
      */
     public void receiveData(Object... object) {
         if (object != null) {
@@ -44,8 +54,9 @@ public class VrtChannel extends AbstractVrtChannel {
     }
 
     /**
-     * Write error to the RCV_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
-     * @param e the messages to be written
+     * Write an exception into the RCV_UP direction of the current {@link SoChannel}.
+     * <p>The exception is delivered only to the targeted protocol layer.
+     * @param e the exception to write
      */
     public void receiveError(SoException e) {
         if (e != null) {
@@ -54,9 +65,11 @@ public class VrtChannel extends AbstractVrtChannel {
     }
 
     /**
-     * Write error to the SND_UP of this {@link SoChannel}, the message will only be sent to the specific protocol layer
-     * @param e the messages to be written
+     * Write an exception into the SND_UP direction of the current {@link SoChannel}.
+     * <p>The exception is delivered only to the targeted protocol layer.
+     * @param e the exception to write
      */
+    @Deprecated
     public void sendError(SoException e) {
         if (e != null) {
             this.soContext.notifySndChannelException(this.getChannelId(), true, e);

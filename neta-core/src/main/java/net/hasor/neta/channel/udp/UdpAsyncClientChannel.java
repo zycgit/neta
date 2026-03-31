@@ -26,12 +26,38 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 
 /**
- * Connected-UDP client transport built on top of {@link UdpTransport}.
- * <p>After {@link #connectTo(ProtoInitializer, Future)} it creates one
- * application-facing {@link UdpChannel}, starts a receive loop on the shared
- * transport, and forwards each datagram from the connected peer into the pipeline.
- * <p>If {@link UdpSoConfig#isRcvRemoteOnly()} is enabled, datagrams from any source
- * address other than the configured remote peer are discarded in the client receive path.
+ * Connected UDP client transport built on top of {@link UdpTransport}.
+ * <p>After {@link #connectTo(ProtoInitializer, Future)} is called, it creates an
+ * application-facing {@link UdpChannel}, starts the receive loop on the shared transport layer,
+ * and forwards every datagram from the connected peer into the pipeline.
+ * <p>When {@link UdpSoConfig#isRcvRemoteOnly()} is enabled, the client receive path discards any
+ * datagram that does not come from the configured remote address.
+ * <p><b>Client flow:</b>
+ * <pre>
+ *   connectTo(initializer, future)
+ *                 ▼
+ *      transport.connect(remoteAddress)
+ *                 ▼
+ *      create UdpAsyncChannel + UdpChannel
+ *                 ▼
+ *         context.initChannel(channel)
+ *                 ▼
+ *         future.completed(channel)
+ *                 ▼
+ *      transport.startReceiveLoop(...)
+ *                 ▼
+ *      onDatagram(channel, remoteAddr, data)
+ *       ┌─────────┴─────────────────────────────┐
+ *       ▼                                       ▼
+ *   rcvRemoteOnly=true and                   allowed to receive
+ *   remoteAddr != configured remote             │
+ *       └── discard and return                  ▼
+ *                                   ByteBuffer -> ByteBuf
+ *                                               ▼
+ *                                  notifyRcvChannelData(...)
+ * </pre>
+ * <p><b>Failure handling:</b> if an exception occurs during connect, channel creation, or
+ * initialization, the future is failed and the context is notified about the connection error.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  * @see DatagramChannel
@@ -41,6 +67,15 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
     protected final      UdpTransport     transport;
     protected final      ByteBufAllocator bufAllocator;
 
+    /**
+     * Create a UDP client asynchronous channel.
+     * @param channelId the channel ID
+     * @param channel the underlying DatagramChannel
+     * @param context the runtime context
+     * @param remoteAddress the remote address
+     * @param soConfig the channel configuration
+     * @throws IOException if an I/O error occurs during initialization
+     */
     protected UdpAsyncClientChannel(long channelId, DatagramChannel channel, SoContext context, SocketAddress remoteAddress, SoConfig soConfig) throws IOException {
         super(channelId, channel, context, remoteAddress, soConfig);
 
@@ -49,6 +84,10 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
         this.transport = UdpTransport.wrap(channelId, channel, this.context, rcvPacketSize, this);
     }
 
+    /**
+     * Close the client transport and its internal receive loop.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         if (this.context.getConfig().isPrintLog()) {
@@ -59,9 +98,14 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
 
     //
 
+    /**
+     * Establish the UDP client connection, create the framework channel, and start the receive loop.
+     * @param initializer the protocol initializer
+     * @param future the future used to return the connection result
+     */
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
-        // connect to
+        // Perform the underlying connect.
         try {
             this.transport.connect(this.remoteAddress);
         } catch (Throwable e) {
@@ -70,7 +114,7 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
             return;
         }
 
-        // create channel
+        // Create the framework channel.
         UdpChannel channel;
         try {
             String remoteID = this.remoteAddress.getAddress().getHostAddress() + ":" + this.remoteAddress.getPort();
@@ -82,12 +126,12 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
             return;
         }
 
-        // init & start read loop
+        // Initialize the channel and start the receive loop.
         try {
             this.context.initChannel(channel, true);
             future.completed(channel);
 
-            // start read loop via transport
+            // Start the receive loop through the transport.
             this.transport.startReceiveLoop((remoteAddr, data) -> this.onDatagram(channel, remoteAddr, data), channel::isClose, () -> {
                 logger.info("rcv(" + this.channelId + ") close form local.");
                 this.context.notifyChannelClose(channel.getChannelId(), false);
@@ -103,6 +147,13 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
         }
     }
 
+    /**
+     * Handle one received UDP datagram.
+     * @param channel the target framework channel
+     * @param remoteAddr the actual remote address
+     * @param data the data received this time
+     * @throws IOException if an I/O error occurs during processing
+     */
     protected void onDatagram(UdpChannel channel, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
         InetSocketAddress inetRemoteAddr = (InetSocketAddress) remoteAddr;
         if (this.soConfig.isRcvRemoteOnly() && !inetRemoteAddr.equals(this.remoteAddress)) {
@@ -122,6 +173,14 @@ public class UdpAsyncClientChannel extends UdpAsyncChannel {
         this.context.notifyRcvChannelData(channel.getChannelId(), byteBuf);
     }
 
+    /**
+     * Create the framework-level {@link UdpChannel} for a connected client.
+     * @param remoteID the remote identifier
+     * @param realChannel the underlying asynchronous channel
+     * @param initializer the protocol initializer
+     * @return the newly created UdpChannel
+     * @throws IOException if an I/O error occurs during creation
+     */
     protected UdpChannel newChannel(String remoteID, UdpAsyncChannel realChannel, ProtoInitializer initializer) throws IOException {
         NetMonitor monitor = new NetMonitor();
         UdpChannel channel = new UdpChannel(//

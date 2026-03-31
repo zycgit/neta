@@ -75,7 +75,7 @@ public class HttpRequestAggregationTest extends AbstractHttpTest {
                 ctx.addLastDecoder("req-agg", new HttpRequestAggregator());
             }, VrtSoConfig.asServer());
 
-            pipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            pipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
             HttpContext httpContext = pipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(httpContext);
             assertTrue(httpContext.isTransparentMode());
@@ -95,8 +95,8 @@ public class HttpRequestAggregationTest extends AbstractHttpTest {
                 ctx.addLastDecoder("req-agg", new HttpRequestAggregator());
             }, VrtSoConfig.asServer());
 
-            pipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            pipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            pipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            pipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
             HttpContext httpContext = pipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(httpContext);
             assertFalse(httpContext.isTransparentMode());

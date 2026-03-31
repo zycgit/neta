@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.List;
@@ -23,36 +22,39 @@ import java.util.concurrent.atomic.AtomicLong;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Manages Connection ID rotation and lifecycle per RFC 9000 §5.1 (NEW_CONNECTION_ID, RETIRE_CONNECTION_ID).
+ * Manages Connection ID rotation and lifecycle.
+ * <p>This corresponds to RFC 9000 Section 5.1 and covers NEW_CONNECTION_ID and RETIRE_CONNECTION_ID handling.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicConnectionIdManager {
     private static final Logger       logger = Logger.getLogger(QuicConnectionIdManager.class);
     private static final SecureRandom RANDOM = new SecureRandom();
 
-    /** Local CIDs we have issued, keyed by sequence number. */
+    /** Locally issued CIDs indexed by sequence number. */
     private final    ConcurrentHashMap<Long, CidEntry> localCids           = new ConcurrentHashMap<>();
-    /** Remote CIDs the peer has issued, keyed by sequence number. */
+    /** Peer-issued CIDs indexed by sequence number. */
     private final    ConcurrentHashMap<Long, CidEntry> remoteCids          = new ConcurrentHashMap<>();
-    /** Next sequence number for locally-issued CIDs. */
+    /** Next local CID sequence number. */
     private final    AtomicLong                        nextLocalSeq        = new AtomicLong(1); // 0 is the initial CID
-    /** Next sequence number for remotely-issued CIDs. */
+    /** Next peer CID sequence number. */
     private final    AtomicLong                        nextRemoteSeq       = new AtomicLong(1);
-    /** Connection ID length (bytes). */
+    /** Connection ID length in bytes. */
     private final    int                               cidLength;
-    /** Highest "Retire Prior To" value we have sent. */
+    /** Largest Retire Prior To value sent locally. */
     private final    long                              localRetirePriorTo  = 0;
-    /** Highest "Retire Prior To" value received from the peer. */
+    /** Largest Retire Prior To value received from the peer. */
     private volatile long                              remoteRetirePriorTo = 0;
     /** Active Connection ID Limit advertised by the peer. */
     private volatile int                               peerActiveLimit     = 2;
-    /** Current active remote CID sequence number being used to send. */
+    /** Sequence number of the active peer CID currently used on the sending path. */
     private volatile long                              activeRemoteCidSeq  = 0;
 
-    /** Creates a CID manager with initial local and remote connection IDs (both at sequence 0). */
+    /**
+     * Creates the manager from the initial local and peer CIDs.
+     */
     QuicConnectionIdManager(byte[] localCid, byte[] remoteCid, int cidLength) {
         this.cidLength = cidLength;
-        // Register initial CIDs as sequence 0
+        // Register the initial CID under sequence number 0.
         CidEntry localEntry = new CidEntry(0, localCid, generateResetToken());
         this.localCids.put(0L, localEntry);
         if (remoteCid != null && remoteCid.length > 0) {
@@ -61,12 +63,14 @@ class QuicConnectionIdManager {
         }
     }
 
-    /** Builds a NEW_CONNECTION_ID frame (RFC 9000 §19.15). */
+    /**
+     * Builds a NEW_CONNECTION_ID frame.
+     */
     static byte[] buildNewConnectionIdFrame(long seqNum, long retirePriorTo, byte[] cid, byte[] resetToken) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.NEW_CONNECTION_ID);
         byte[] seqBytes = QuicVarInt.encode(seqNum);
         byte[] retireBytes = QuicVarInt.encode(retirePriorTo);
-        // cidLen is encoded as a single byte
+        // cidLen is encoded in a single byte.
         int totalLen = typeBytes.length + seqBytes.length + retireBytes.length + 1 + cid.length + 16;
         byte[] frame = new byte[totalLen];
         int pos = 0;
@@ -85,7 +89,9 @@ class QuicConnectionIdManager {
         return frame;
     }
 
-    /** Builds a RETIRE_CONNECTION_ID frame (RFC 9000 §19.16). */
+    /**
+     * Builds a RETIRE_CONNECTION_ID frame.
+     */
     static byte[] buildRetireConnectionIdFrame(long seqNum) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.RETIRE_CONNECTION_ID);
         byte[] seqBytes = QuicVarInt.encode(seqNum);
@@ -95,22 +101,30 @@ class QuicConnectionIdManager {
         return frame;
     }
 
+    /**
+     * Generates a stateless reset token.
+     */
     private static byte[] generateResetToken() {
         byte[] token = new byte[16];
         RANDOM.nextBytes(token);
         return token;
     }
 
-    /** Sets the active Connection ID limit advertised by the peer. */
+    /**
+     * Sets the Active Connection ID Limit advertised by the peer.
+     */
     void setPeerActiveLimit(int limit) {
         this.peerActiveLimit = Math.max(limit, 2);
     }
 
-    /** Issues a new local Connection ID and returns the NEW_CONNECTION_ID frame, or null if the peer's limit is reached. */
+    /**
+     * Issues a new local Connection ID.
+     * @return returns null if doing so would exceed the peer limit; otherwise returns the matching NEW_CONNECTION_ID frame
+     */
     byte[] issueNewConnectionId() {
         long activeCount = countActiveLocalCids();
         if (activeCount >= this.peerActiveLimit) {
-            return null; // would exceed peer's limit
+            return null; // This would exceed the peer limit.
         }
 
         long seq = this.nextLocalSeq.getAndIncrement();
@@ -125,24 +139,27 @@ class QuicConnectionIdManager {
         return buildNewConnectionIdFrame(seq, this.localRetirePriorTo, newCid, resetToken);
     }
 
-    /** Processes a received NEW_CONNECTION_ID frame and returns any RETIRE_CONNECTION_ID frames to send. */
+    /**
+     * Processes a received NEW_CONNECTION_ID frame.
+     * @return list of RETIRE_CONNECTION_ID frames that should be sent back
+     */
     List<byte[]> onNewConnectionId(long sequenceNumber, long retirePriorTo, byte[] connectionId, byte[] resetToken) {
         List<byte[]> retireFrames = new ArrayList<>();
 
-        // Store the new CID
+        // Store the new peer CID.
         CidEntry entry = new CidEntry(sequenceNumber, connectionId, resetToken);
         this.remoteCids.put(sequenceNumber, entry);
 
-        // Update retire prior to
+        // Update retirePriorTo.
         if (retirePriorTo > this.remoteRetirePriorTo) {
             this.remoteRetirePriorTo = retirePriorTo;
-            // Retire all CIDs with sequence < retirePriorTo
+            // Retire all CIDs with sequence numbers lower than retirePriorTo.
             for (Long seq : new ArrayList<>(this.remoteCids.keySet())) {
                 if (seq < retirePriorTo) {
                     this.remoteCids.remove(seq);
                     retireFrames.add(buildRetireConnectionIdFrame(seq));
                     logger.info("Retiring remote CID seq=" + seq);
-                    // If active CID was retired, switch to a new one
+                    // If the current active CID was retired, switch to a new one.
                     if (seq == this.activeRemoteCidSeq) {
                         switchToNextRemoteCid();
                     }
@@ -153,32 +170,42 @@ class QuicConnectionIdManager {
         return retireFrames;
     }
 
-    /** Processes a received RETIRE_CONNECTION_ID frame and returns a NEW_CONNECTION_ID replacement frame if needed. */
+    /**
+     * Processes a received RETIRE_CONNECTION_ID frame.
+     * @return returns a replacement NEW_CONNECTION_ID frame if a new CID should be issued
+     */
     byte[] onRetireConnectionId(long sequenceNumber) {
         CidEntry removed = this.localCids.remove(sequenceNumber);
         if (removed != null) {
             logger.info("Local CID seq=" + sequenceNumber + " retired by peer");
-            // Issue a replacement CID
+            // Issue a replacement CID.
             return issueNewConnectionId();
         }
         return null;
     }
 
-    /** Returns the currently active remote CID used as DCID in outgoing packets. */
+    /**
+     * Returns the active peer CID currently used when sending packets.
+     */
     byte[] getActiveRemoteCid() {
         CidEntry entry = this.remoteCids.get(this.activeRemoteCidSeq);
         return (entry != null) ? entry.cid : null;
     }
 
-    /** Rotates to the next available remote CID for NAT rebinding or migration; returns the new CID or null. */
+    /**
+     * Rotates to the next available peer CID.
+     * @return returns the new CID, or null if none is available
+     */
     byte[] rotateRemoteCid() {
         switchToNextRemoteCid();
         return getActiveRemoteCid();
     }
 
-    // ── Frame builders ─────────────────────────────────────────────────
+    // ── Frame-related helpers ─────────────────────────────────────────
 
-    /** Finds the stateless reset token for a given remote CID, or null if not found. */
+    /**
+     * Finds the matching stateless reset token for a peer CID.
+     */
     byte[] findResetToken(byte[] cid) {
         for (CidEntry entry : this.remoteCids.values()) {
             if (java.util.Arrays.equals(entry.cid, cid)) {
@@ -188,7 +215,9 @@ class QuicConnectionIdManager {
         return null;
     }
 
-    /** Returns true if the given 16-byte token matches any known remote CID's stateless reset token. */
+    /**
+     * Returns whether the given 16-byte token matches any known peer CID stateless reset token.
+     */
     boolean isStatelessReset(byte[] resetToken) {
         if (resetToken == null || resetToken.length != 16) {
             return false;
@@ -201,9 +230,11 @@ class QuicConnectionIdManager {
         return false;
     }
 
-    // ── Internal helpers ───────────────────────────────────────────────
+    // ── Internal helpers ──────────────────────────────────────────────
 
-    /** Returns all active local CIDs for connection lookup. */
+    /**
+     * Returns all currently active local CIDs for connection lookup.
+     */
     List<byte[]> getActiveLocalCids() {
         List<byte[]> result = new ArrayList<>();
         for (CidEntry entry : this.localCids.values()) {
@@ -212,6 +243,9 @@ class QuicConnectionIdManager {
         return result;
     }
 
+    /**
+     * Counts the number of local CIDs that are still active.
+     */
     private long countActiveLocalCids() {
         long count = 0;
         for (Long seq : this.localCids.keySet()) {
@@ -222,6 +256,9 @@ class QuicConnectionIdManager {
         return count;
     }
 
+    /**
+     * Switches to the next available peer CID.
+     */
     private void switchToNextRemoteCid() {
         long current = this.activeRemoteCidSeq;
         for (Long seq : this.remoteCids.keySet()) {
@@ -230,7 +267,7 @@ class QuicConnectionIdManager {
                 return;
             }
         }
-        // If no higher seq, try any valid one
+        // If no higher sequence number exists, try any other CID that is still valid.
         for (Long seq : this.remoteCids.keySet()) {
             if (seq >= this.remoteRetirePriorTo && seq != current) {
                 this.activeRemoteCidSeq = seq;
@@ -239,7 +276,9 @@ class QuicConnectionIdManager {
         }
     }
 
-    /** Internal CID entry. */
+    /**
+     * CID entry.
+     */
     static class CidEntry {
         final long   sequenceNumber;
         final byte[] cid;

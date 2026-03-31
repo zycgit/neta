@@ -74,7 +74,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event) throws Throwable {
         Object eventData = event.getData();
         if (eventData instanceof WebSocketCloseEvent) {
             this.closeReceived = true;
@@ -334,7 +334,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private <T> void fireEvent(ProtoContext context, Class<T> eventType, T event) {
         try {
-            context.fireUserEvent(eventType, event);
+            context.fireEvent(eventType, event);
         } catch (Throwable e) {
             logger.error("Error occurred while publishing websocket event: " + eventType.getSimpleName(), e);
         }

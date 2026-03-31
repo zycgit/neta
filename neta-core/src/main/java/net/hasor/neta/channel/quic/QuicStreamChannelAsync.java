@@ -16,7 +16,6 @@
 package net.hasor.neta.channel.quic;
 import java.io.IOException;
 import java.net.SocketAddress;
-import java.nio.ByteBuffer;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import net.hasor.cobble.concurrent.future.Future;
@@ -26,7 +25,9 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.udp.AbstractUdpWriteTask;
 
 /**
- * Stream-level {@link AsyncChannel} that routes writes to the parent {@link QuicChannel} as STREAM frames for the correct stream ID.
+ * Stream-level {@link AsyncChannel} implementation.
+ * <p>This type wraps write requests into STREAM frames for the corresponding stream ID and delegates
+ * transmission to the parent {@link QuicChannel}.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicStreamChannelAsync implements AsyncChannel {
@@ -47,7 +48,9 @@ class QuicStreamChannelAsync implements AsyncChannel {
         this.context = context;
     }
 
-    /** Builds a QUIC STREAM frame (RFC 9000 §19.8) as a ready-to-send {@link ByteBuffer}. */
+    /**
+     * Builds QUIC STREAM frame data that can be sent directly.
+     */
     private static byte[] buildStreamData(long streamId, long offset, byte[] data, boolean fin) {
         int type = QuicFrameType.STREAM_BASE | QuicFrameType.STREAM_LEN_BIT;
         if (fin) {
@@ -81,31 +84,49 @@ class QuicStreamChannelAsync implements AsyncChannel {
         return frame;
     }
 
+    /**
+     * Returns the current async channel ID.
+     */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /**
+     * Returns the associated configuration object.
+     */
     @Override
     public SoConfig getSoConfig() {
         return this.quicChannel.getConfig();
     }
 
+    /**
+     * Returns the local address.
+     */
     @Override
     public SocketAddress getLocalAddress() {
         return this.quicChannel.getLocalAddr();
     }
 
+    /**
+     * Returns the remote address.
+     */
     @Override
     public SocketAddress getRemoteAddress() {
         return this.quicChannel.getRemoteAddr();
     }
 
+    /**
+     * Returns whether the channel is still open.
+     */
     @Override
     public boolean isOpen() {
         return !this.closed.get() && !this.quicChannel.isClose();
     }
 
+    /**
+     * Closes the current async stream channel and attempts to send FIN.
+     */
     @Override
     public void close() throws IOException {
         if (this.closed.compareAndSet(false, true)) {
@@ -122,11 +143,17 @@ class QuicStreamChannelAsync implements AsyncChannel {
         }
     }
 
+    /**
+     * Stream subchannels do not support additional connectTo operations.
+     */
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
         throw new UnsupportedOperationException("Stream channels do not support connectTo.");
     }
 
+    /**
+     * Submits stream data for sending.
+     */
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
         if (this.closed.get()) {
@@ -139,7 +166,7 @@ class QuicStreamChannelAsync implements AsyncChannel {
             return;
         }
 
-        // Touch stream activity timestamp for idle timeout tracking
+        // Update stream activity time for idle-timeout tracking.
         QuicStreamChannel streamChannel = this.quicChannel.findStream(this.streamId);
         if (streamChannel != null) {
             streamChannel.touchActivity();
@@ -150,10 +177,13 @@ class QuicStreamChannelAsync implements AsyncChannel {
         }
     }
 
+    /**
+     * Executes the write task asynchronously.
+     */
     protected void asyncWrite(NetChannel channel, SoSndContext wContext) {
         QuicStreamUdpWriteTask task = new QuicStreamUdpWriteTask(channel, wContext, this.context, this.streamId, this.sendOffset);
         this.context.submitSoTask(task, this).onFinal(f -> {
-            // Advance offset for the last chunk sent by this task batch.
+            // Advance the send offset for the last chunk in this batch.
             task.flushOffset();
             this.writing.set(false);
         });
@@ -161,11 +191,14 @@ class QuicStreamChannelAsync implements AsyncChannel {
 
     private class QuicStreamUdpWriteTask extends AbstractUdpWriteTask {
         private final long       streamId;
-        /** Shared reference to the stream-level cumulative send offset. */
+        /** Shared reference to the cumulative send offset for the stream. */
         private final AtomicLong sendOffsetRef;
-        /** Snapshot of the last {@code sendData} array passed to {@link #wrapSendData}. */
+        /** Most recent sendData snapshot passed to {@link #wrapSendData(byte[])}. */
         private       byte[]     prevSendData;
 
+        /**
+         * Creates a stream write task.
+         */
         public QuicStreamUdpWriteTask(NetChannel netChannel, SoSndContext wContext, SoContextService context,//
                 long streamId, AtomicLong sendOffsetRef) {
             super(netChannel, wContext, context);
@@ -173,11 +206,17 @@ class QuicStreamChannelAsync implements AsyncChannel {
             this.sendOffsetRef = sendOffsetRef;
         }
 
+        /**
+         * Returns whether the underlying channel is still writable.
+         */
         @Override
         protected boolean isChannelOpen() {
             return isOpen();
         }
 
+        /**
+         * Sends an already wrapped STREAM frame.
+         */
         @Override
         protected int doSend(byte[] data) {
             ByteBuf byteBuf = ByteBuf.wrap(data);
@@ -188,10 +227,12 @@ class QuicStreamChannelAsync implements AsyncChannel {
             return sent;
         }
 
-        /** Converts raw application bytes into a QUIC STREAM frame. */
+        /**
+         * Wraps raw application data into a QUIC STREAM frame.
+         */
         @Override
         protected byte[] wrapSendData(byte[] sendData) {
-            // Detect data rotation: prevSendData was fully transmitted, advance offset.
+            // Detect data rollover: advance the offset after the previous chunk has been sent.
             if (this.prevSendData != null && this.prevSendData != sendData) {
                 this.sendOffsetRef.addAndGet(this.prevSendData.length);
             }
@@ -200,7 +241,9 @@ class QuicStreamChannelAsync implements AsyncChannel {
             return buildStreamData(this.streamId, offset, sendData, false);
         }
 
-        /** Advances the shared offset for the final chunk that was sent by this task batch. */
+        /**
+         * Advances the shared offset for the last chunk in the current batch.
+         */
         void flushOffset() {
             if (this.prevSendData != null) {
                 this.sendOffsetRef.addAndGet(this.prevSendData.length);

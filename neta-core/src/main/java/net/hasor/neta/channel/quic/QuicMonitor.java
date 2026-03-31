@@ -17,7 +17,7 @@ package net.hasor.neta.channel.quic;
 import net.hasor.neta.channel.NetMonitor;
 
 /**
- * QUIC-specific extension of {@link NetMonitor} that exposes live QUIC connection state for debugging.
+ * QUIC-specific extension view of {@link NetMonitor}, exposing runtime state and debugging metrics.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicMonitor extends NetMonitor {
@@ -27,174 +27,232 @@ public class QuicMonitor extends NetMonitor {
         this.connCh = connCh;
     }
 
-    // ── Handshake ──────────────────────────────────────────────────────
+    // ── Handshake state ───────────────────────────────────────────────
 
-    /** Returns true if the TLS handshake has fully completed (ESTABLISHED state). */
+    /**
+     * Returns whether the TLS handshake has completed fully.
+     */
     public boolean isHandshake() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null && hs.isEstablished();
     }
 
-    /** Returns the current handshake phase, or null if no handshake handler is present. */
+    /**
+     * Returns the current handshake phase.
+     * @return returns null if no handshake handler is currently present
+     */
     public QuicHandshakeState getHandshakeState() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null ? hs.getHandshakeState() : null;
     }
 
-    // ── Connection lifecycle ───────────────────────────────────────────
+    // ── Connection lifecycle ──────────────────────────────────────────
 
-    /** Returns whether this connection has been closed. */
+    /**
+     * Returns whether the connection has already been closed.
+     */
     public boolean isClosed() {
         return this.connCh.isClosed();
     }
 
-    /** Returns whether this is a client-initiated connection ({@code false} = server side). */
+    /**
+     * Returns whether this connection was initiated by the client.
+     * @return true for client mode, false for a server-side connection
+     */
     public boolean isClientMode() {
         return this.connCh.isClientMode();
     }
 
-    // ── 0-RTT Buffering ────────────────────────────────────────────────
+    // ── 0-RTT buffering ───────────────────────────────────────────────
 
-    /** Returns true if there are 0-RTT packets currently buffered waiting for handshake completion. */
+    /**
+     * Returns whether any 0-RTT packets are currently waiting to be processed after handshake completion.
+     */
     public boolean has0RttData() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null && hs.has0RttData();
     }
 
-    /** Returns the number of 0-RTT packets currently buffered (non-destructive; max 64). */
+    /**
+     * Returns the number of 0-RTT packets currently buffered.
+     */
     public int getBuffered0RttPacketCount() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null ? hs.getBuffered0RttCount() : 0;
     }
 
-    // ── Packet Numbers ─────────────────────────────────────────────────
+    // ── Packet number statistics ──────────────────────────────────────
 
-    /** Returns the packet number of the most recently sent 1-RTT packet, or -1 if none sent. */
+    /**
+     * Returns the packet number of the most recently sent 1-RTT packet.
+     * @return returns -1 if nothing has been sent yet
+     */
     public long getLastSndAppPacketNumber() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null ? hs.getLastSndAppPacketNumber() : -1;
     }
 
-    /** Returns the largest received 1-RTT packet number, or -1 if none received. */
+    /**
+     * Returns the largest 1-RTT packet number received so far.
+     * @return returns -1 if nothing has been received yet
+     */
     public long getMaxRcvAppPacketNumber() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null ? hs.getLastRcvAppPacketNumber() : -1;
     }
 
-    /** Returns the largest received Initial-level packet number, or -1 if none received. */
+    /**
+     * Returns the largest Initial-level packet number received so far.
+     * @return returns -1 if nothing has been received yet
+     */
     public long getMaxRcvInitialPacketNumber() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null ? hs.getMaxInitialPacketNumber() : -1;
     }
 
-    /** Returns the largest received Handshake-level packet number, or -1 if none received. */
+    /**
+     * Returns the largest Handshake-level packet number received so far.
+     * @return returns -1 if nothing has been received yet
+     */
     public long getMaxRcvHandshakePacketNumber() {
         QuicAsyncChannelHandshake hs = this.connCh.getHandshake();
         return hs != null ? hs.getMaxHandshakePacketNumber() : -1;
     }
 
-    // ── Streams ────────────────────────────────────────────────────────
+    // ── Stream state ──────────────────────────────────────────────────
 
     /**
-     * Returns the number of currently active (open) streams on this connection.
+     * Returns the number of streams currently active on the connection.
      */
     public int getActiveStreamCount() {
         return this.connCh.getActiveStreamCount();
     }
 
-    // ── Flow Control / Negotiation ─────────────────────────────────────
+    // ── Flow control and negotiated results ───────────────────────────
 
-    /** Returns the currently negotiated connection-level max data reflecting the latest MAX_DATA frame from the peer. */
+    /**
+     * Returns the currently negotiated connection-level maximum data limit.
+     * <p>This value reflects the latest MAX_DATA update from the peer.
+     */
     public long getNegotiationMaxData() {
         return this.connCh.getConnectionMaxData();
     }
 
-    /** Returns the peer's advertised maximum number of simultaneous bidirectional streams. */
+    /**
+     * Returns the maximum number of concurrent bidirectional streams advertised by the peer.
+     */
     public long getPeerMaxStreamsBidi() {
         return this.connCh.getPeerMaxStreamsBidi();
     }
 
-    /** Returns the peer's advertised maximum number of simultaneous unidirectional streams. */
+    /**
+     * Returns the maximum number of concurrent unidirectional streams advertised by the peer.
+     */
     public long getPeerMaxStreamsUni() {
         return this.connCh.getPeerMaxStreamsUni();
     }
 
-    // ── Activity ───────────────────────────────────────────────────────
+    // ── Activity time ─────────────────────────────────────────────────
 
-    /** Returns the epoch-ms timestamp of the last connection-level activity (any packet sent or received). */
+    /**
+     * Returns the timestamp of the most recent connection-level activity.
+     * <p>The value is in milliseconds and includes any packet send or receive activity.
+     */
     public long getLastConnectionActivityTime() {
         return this.connCh.getLastActivityTime();
     }
 
-    // ── PING ───────────────────────────────────────────────────────────
+    // ── PING ──────────────────────────────────────────────────────────
 
-    /** Returns the number of in-flight PING requests sent but not yet ACKed. */
+    /**
+     * Returns the number of in-flight PING requests that have not yet been acknowledged.
+     */
     public int getPendingPingCount() {
         return this.connCh.getPendingPingCount();
     }
-    // ── ACK Tracker ─────────────────────────────────────────
 
-    /** Returns the largest 1-RTT packet number received from the peer, or -1 if none received. */
+    // ── ACK tracking ──────────────────────────────────────────────────
+
+    /**
+     * Returns the largest 1-RTT packet number received from the peer.
+     * @return returns -1 if nothing has been received yet
+     */
     public long getAckLargestReceivedPn() {
         return this.connCh.getAckTracker().getLargestReceivedPn();
     }
 
-    /** Returns the number of ack-eliciting packets received but not yet acknowledged. */
+    /**
+     * Returns the number of ack-eliciting packets that have been received but not yet acknowledged.
+     */
     public int getAckPendingCount() {
         return this.connCh.getAckTracker().getPendingAckEliciting();
     }
 
-    // ── RTT / Loss Detection ───────────────────────────────
+    // ── RTT and loss detection ────────────────────────────────────────
 
-    /** Returns the smoothed RTT (SRTT) in milliseconds (RFC 9002 §5.3); initial value is 333ms. */
+    /**
+     * Returns the smoothed RTT, that is, SRTT.
+     * <p>The value is in milliseconds and starts at 333 ms.
+     */
     public long getSmoothedRttMs() {
         return this.connCh.getSentPacketTracker().getSmoothedRtt();
     }
 
-    /** Returns the minimum RTT observed in milliseconds; falls back to smoothed RTT if no sample yet. */
+    /**
+     * Returns the minimum RTT observed so far.
+     * <p>If no sample is available yet, the value falls back to the smoothed RTT.
+     */
     public long getMinRttMs() {
         return this.connCh.getSentPacketTracker().getMinRtt();
     }
 
     /**
-     * Returns the RTT variation (RTTVAR) in milliseconds per RFC 9002 §5.3.
+     * Returns the RTT variation value, that is, RTTVAR.
+     * <p>The value is in milliseconds as defined by RFC 9002 Section 5.3.
      */
     public long getRttVarMs() {
         return this.connCh.getSentPacketTracker().getRttVar();
     }
 
-    /** Returns the total bytes currently in flight (sent but not yet acked or declared lost) per RFC 9002 §5. */
+    /**
+     * Returns the total number of bytes currently in flight.
+     * <p>This is the amount of data sent but not yet acknowledged or declared lost.
+     */
     public long getBytesInFlight() {
         return this.connCh.getSentPacketTracker().getBytesInFlight();
     }
 
     /**
-     * Returns the number of unacknowledged sent packets currently in flight.
+     * Returns the number of sent packets currently in flight and still unacknowledged.
      */
     public int getPacketsInFlight() {
         return this.connCh.getSentPacketTracker().getUnackedCount();
     }
 
-    // ── Congestion Control ─────────────────────────────────
+    // ── Congestion control ────────────────────────────────────────────
 
-    /** Returns the current congestion window in bytes; initial value is 14720 (RFC 9002 §7.2). */
+    /**
+     * Returns the current congestion window size.
+     * <p>The value is in bytes and starts at 14720.
+     */
     public long getCongestionWindow() {
         return this.connCh.getCongestionControl().getCwnd();
     }
 
-    /** Returns the slow-start threshold in bytes; Long.MAX_VALUE before any congestion event (RFC 9002 §7.3). */
+    /**
+     * Returns the slow-start threshold.
+     * <p>Before the first congestion event, this is usually Long.MAX_VALUE.
+     */
     public long getSsthresh() {
         return this.connCh.getCongestionControl().getSsthresh();
     }
 
-    /** Returns the congestion control state: SLOW_START, CONGESTION_AVOIDANCE, or RECOVERY (RFC 9002 §7.3). */
-    public QuicCongestionControl.State getCongestionState() {
-        return this.connCh.getCongestionControl().getState();
-    }
+    // ── Flow control ──────────────────────────────────────────────────
 
-    // ── Flow Control ───────────────────────────────────────
-
-    /** Returns the total bytes received at connection level, counted against the MAX_DATA limit. */
+    /**
+     * Returns the total number of bytes received at the connection level.
+     * <p>This value counts toward the MAX_DATA limit.
+     */
     public long getConnectionBytesReceived() {
         return this.connCh.getFlowControl().getConnectionBytesReceived();
     }

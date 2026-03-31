@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * User event that represents an inbound HTTP/2 PING ACK.
+ * Network event that represents an inbound HTTP/2 PING ACK.
  */
 public class Http2PongEvent extends AbstractHttp2Event {
     private final ByteBuf data;

@@ -17,37 +17,47 @@ package net.hasor.neta.channel;
 import java.io.IOException;
 
 /**
- * Root checked exception for all Neta channel-layer I/O errors.
- * <p>All Neta socket exceptions extend this class. The full hierarchy is:
+ * Root checked exception for all I/O failures in the Neta channel layer.
+ * <p>Within {@code neta-core}, all channel I/O faults that need to be propagated as checked
+ * exceptions derive from this type. The current hierarchy is:</p>
  * <pre>
  * IOException
  *   └── SoException
- *         ├── SoBindException        – server channel failed to bind to a local address
- *         ├── SoCloseException       – channel closed or in the process of closing
- *         │   └── SoInputCloseException – remote peer half-closed the inbound stream
- *         ├── SoConnectException     – outbound connection refused or otherwise failed
- *         ├── SoRcvException         – low-level I/O error during data reception
- *         ├── SoSndException         – base for all outbound send failures
- *         │   └── SoUnfinishedSndException – channel closed with data still in the send queue
- *         └── SoTimeoutException     – base for all timeout variants
- *               ├── SoConnectTimeoutException – connect deadline exceeded
- *               ├── SoReadTimeoutException    – read-idle period exceeded
- *               └── SoWriteTimeoutException   – write-idle period exceeded
+ *         ├── SoBindException                  – server channel failed to bind the local address
+ *         ├── SoCloseException                 – channel is closed or closing
+ *         │   └── SoInputCloseException        – peer half-closed the inbound stream
+ *         ├── SoConnectException               – outbound connection was refused or failed
+ *         ├── QuicException                    – base exception for QUIC protocol-level errors
+ *         │   ├── QuicConnectionCloseException – received or sent CONNECTION_CLOSE
+ *         │   ├── QuicStreamResetException     – received RESET_STREAM
+ *         │   └── QuicStopSendingException     – received STOP_SENDING
+ *         ├── SoRcvException                   – low-level I/O failure while receiving data
+ *         ├── SoSndException                   – base exception for outbound send failures
+ *         │   └── SoUnfinishedSndException     – send queue still contained pending data on close
+ *         └── SoTimeoutException               – base exception for all timeout variants
+ *               ├── SoConnectTimeoutException  – connection was not established before the deadline
+ *               ├── QuicIdleTimeoutException   – QUIC connection or stream idle timeout
+ *               ├── SoReadTimeoutException     – read idle time exceeded the configured limit
+ *               └── SoWriteTimeoutException    – write idle time exceeded the configured limit
  * </pre>
- * <p>Catch {@code SoException} to handle any Neta transport error in one place,
- * or catch a specific subclass for targeted recovery — for example, close and
- * retry on {@link SoConnectException}, or send a heartbeat on {@link SoReadTimeoutException}.
+ * <p>This diagram only covers checked exceptions in {@code neta-core} that extend
+ * {@code SoException}. {@link ProtoFullException}, {@code net.hasor.neta.codec.CodecException},
+ * and {@code net.hasor.neta.bytebuf.OutOfMemoryPoolException} belong to separate exception
+ * hierarchies and are not part of this inheritance tree.</p>
+ * <p>Catching {@code SoException} allows uniform handling of Neta transport failures. If more
+ * specific recovery is needed, catch concrete subtypes, for example closing and retrying on
+ * {@link SoConnectException}, or sending a heartbeat on {@link SoReadTimeoutException}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoBindException
  * @see SoCloseException
  * @see SoConnectException
+ * @see net.hasor.neta.channel.quic.QuicException
  * @see SoRcvException
  * @see SoSndException
  * @see SoTimeoutException
  */
 public class SoException extends IOException {
-
     public SoException(String s) {
         super(s);
     }

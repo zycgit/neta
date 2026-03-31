@@ -16,10 +16,9 @@
 package net.hasor.neta.channel.virtual;
 /**
  * Role marker used by virtual channels.
- * <p>{@link #Client} and {@link #Server} are applied to the concrete
- * {@link VrtChannel} views exposed after a virtual link is established. The
- * {@link #Default} value is the neutral preset used by configuration and by
- * connect-mode client creation before either side-specific channel is materialized.
+ * <p>{@link #Client} and {@link #Server} are applied to the concrete {@link VrtChannel} views
+ * exposed after a virtual link is established, while {@link #Default} is the neutral preset used
+ * during configuration and connect-mode client creation.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

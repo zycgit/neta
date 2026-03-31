@@ -21,11 +21,11 @@ import java.util.TreeMap;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Reassembles out-of-order STREAM or CRYPTO fragments into contiguous bytes.
+ * Reassembles out-of-order STREAM or CRYPTO fragments into a contiguous byte sequence.
  * <p>
- * QUIC frame payloads can arrive with offsets, overlap because of retransmission,
- * and complete out of order. This helper buffers fragments by offset and releases
- * only the prefix that has become contiguous from the current read cursor.
+ * QUIC frame payloads can arrive with offsets, may overlap due to retransmission, and do not have to complete in
+ * order. This helper buffers fragments by offset and only releases data upward when a contiguous prefix exists from
+ * the current read cursor.
  * <pre>
  *   receive:  offset 6 -> [ghi]
  *             offset 0 -> [abcdef]
@@ -34,37 +34,41 @@ import net.hasor.cobble.logging.Logger;
  *   next    : offset 9
  * </pre>
  * <p>
- * It is used for both stream data and CRYPTO data, so the logic is purely about
- * ordered byte reconstruction and does not interpret frame semantics by itself.
+ * It is used for both stream data and CRYPTO data, so the logic only focuses on ordered byte reconstruction and does
+ * not interpret specific frame semantics directly.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicStreamReassembler {
     private static final Logger logger = Logger.getLogger(QuicStreamReassembler.class);
 
-    /** Buffered out-of-order fragments: offset → data. Sorted by offset. */
+    /** Out-of-order fragments buffered by offset, structured as offset → data and sorted by offset. */
     private final TreeMap<Long, byte[]> fragments           = new TreeMap<>();
-    /** The next expected byte offset for in-order delivery. */
+    /** Byte offset expected next for in-order delivery. */
     private       long                  nextExpectedOffset  = 0;
-    /** Total bytes delivered so far (= nextExpectedOffset). */
+    /** Total number of bytes already delivered upstream, equal to nextExpectedOffset. */
     private       long                  totalBytesDelivered = 0;
-    /** Maximum buffer size to prevent unbounded memory growth (default 4MB). */
+    /** Maximum buffer size used to prevent unbounded memory growth; defaults to 4 MB. */
     private       long                  maxBufferSize       = 4 * 1024 * 1024;
-    /** Current buffered data size in bytes. */
+    /** Total number of bytes currently buffered. */
     private       long                  currentBufferSize   = 0;
-    /** Whether a FIN has been received. */
+    /** Whether FIN has already been received. */
     private       boolean               finReceived         = false;
-    /** The final byte offset (set when FIN is received). */
+    /** Final byte offset, determined when FIN is received. */
     private       long                  finalOffset         = -1;
 
-    /** Sets the maximum buffer size for out-of-order data. */
+    /**
+     * Sets the maximum buffer size for out-of-order data.
+     */
     void setMaxBufferSize(long maxBufferSize) {
         this.maxBufferSize = maxBufferSize;
     }
 
-    /** Adds a data fragment at the given offset; returns false if the buffer limit is exceeded or the offset is invalid. */
+    /**
+     * Adds a data fragment at the given offset; returns false if the buffer limit is exceeded or the offset is invalid.
+     */
     synchronized boolean addFragment(long offset, byte[] data, boolean fin) {
         if (data == null || data.length == 0) {
-            // FIN-only frame
+            // FIN-only frame.
             if (fin) {
                 this.finReceived = true;
                 this.finalOffset = offset;
@@ -72,9 +76,9 @@ class QuicStreamReassembler {
             return true;
         }
 
-        // Skip data already delivered
+        // Skip data that has already been delivered.
         if (offset + data.length <= this.nextExpectedOffset) {
-            // Entirely duplicate — skip
+            // Fully duplicated data, skip it directly.
             if (fin) {
                 this.finReceived = true;
                 this.finalOffset = offset + data.length;
@@ -82,7 +86,7 @@ class QuicStreamReassembler {
             return true;
         }
 
-        // Trim partial overlap with already-delivered data
+        // Trim the part overlapping with already delivered data.
         if (offset < this.nextExpectedOffset) {
             int skip = (int) (this.nextExpectedOffset - offset);
             byte[] trimmed = new byte[data.length - skip];
@@ -91,14 +95,14 @@ class QuicStreamReassembler {
             data = trimmed;
         }
 
-        // Buffer size check
+        // Check buffer size.
         if (this.currentBufferSize + data.length > this.maxBufferSize) {
             logger.error("Stream reassembly buffer overflow: buffered=" + this.currentBufferSize + ", incoming=" + data.length + ", max=" + this.maxBufferSize);
             return false;
         }
 
-        // Handle overlapping with existing fragments
-        // Simple approach: just insert (last write wins for overlapping regions)
+        // Handle overlap with existing fragments.
+        // The simple strategy here is overwrite-on-insert: later data wins in overlapping regions.
         this.fragments.put(offset, data);
         this.currentBufferSize += data.length;
 
@@ -110,21 +114,21 @@ class QuicStreamReassembler {
     }
 
     /**
-     * Reads and removes all contiguous data starting from {@link #nextExpectedOffset}.
-     * @return the contiguous data bytes, or {@code null} if no contiguous data is available
+     * Reads and removes all contiguous data starting at {@link #nextExpectedOffset}.
+     * @return returns the corresponding byte array when contiguous data exists, otherwise {@code null}
      */
     synchronized byte[] readContiguous() {
         if (this.fragments.isEmpty()) {
             return null;
         }
 
-        // Check if the next expected offset is available
+        // Check whether the current expected offset is available.
         Map.Entry<Long, byte[]> first = this.fragments.firstEntry();
         if (first == null || first.getKey() > this.nextExpectedOffset) {
-            return null; // gap — can't deliver yet
+            return null; // A gap exists, so delivery is not possible yet.
         }
 
-        // Collect contiguous fragments
+        // Collect contiguous fragments.
         int totalLen = 0;
         List<Map.Entry<Long, byte[]>> contiguous = new ArrayList<>();
         long expected = this.nextExpectedOffset;
@@ -138,12 +142,12 @@ class QuicStreamReassembler {
             byte[] fragData = entry.getValue();
 
             if (fragOffset > expected) {
-                break; // gap found
+                break; // Gap found.
             }
 
-            // Fragment starts at or before expected offset
+            // The fragment starts before expected or exactly at it.
             if (fragOffset + fragData.length > expected) {
-                // Fragment contributes new bytes
+                // This fragment provides new deliverable bytes.
                 contiguous.add(entry);
                 totalLen += (int) (fragOffset + fragData.length - expected);
                 expected = fragOffset + fragData.length;
@@ -156,7 +160,7 @@ class QuicStreamReassembler {
             return null;
         }
 
-        // Assemble contiguous data
+        // Assemble contiguous data.
         byte[] result = new byte[totalLen];
         int pos = 0;
         long deliverOffset = this.nextExpectedOffset;
@@ -180,32 +184,44 @@ class QuicStreamReassembler {
         return result;
     }
 
-    /** Returns the next expected offset (i.e., total bytes delivered so far). */
+    /**
+     * Returns the next expected offset, which equals the total bytes delivered so far.
+     */
     synchronized long getNextExpectedOffset() {
         return this.nextExpectedOffset;
     }
 
-    /** Returns the total bytes delivered to the application. */
+    /**
+     * Returns the total number of bytes already delivered to the application layer.
+     */
     synchronized long getTotalBytesDelivered() {
         return this.totalBytesDelivered;
     }
 
-    /** Returns {@code true} if FIN has been received. */
+    /**
+     * Returns whether FIN has been received.
+     */
     synchronized boolean isFinReceived() {
         return this.finReceived;
     }
 
-    /** Returns {@code true} if all data up to FIN has been delivered. */
+    /**
+     * Returns whether all data through FIN has already been fully delivered.
+     */
     synchronized boolean isComplete() {
         return this.finReceived && this.nextExpectedOffset >= this.finalOffset && this.fragments.isEmpty();
     }
 
-    /** Returns the current number of buffered bytes. */
+    /**
+     * Returns the number of bytes currently buffered.
+     */
     synchronized long getBufferedSize() {
         return this.currentBufferSize;
     }
 
-    /** Returns {@code true} if there are buffered out-of-order fragments. */
+    /**
+     * Returns whether any buffered out-of-order fragments remain.
+     */
     synchronized boolean hasBufferedFragments() {
         return !this.fragments.isEmpty();
     }

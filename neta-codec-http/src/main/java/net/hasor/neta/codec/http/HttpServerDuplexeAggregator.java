@@ -55,11 +55,11 @@ public class HttpServerDuplexeAggregator implements ProtoDuplexer<HttpObject, Ht
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (isRcv) {
-            return this.requestAggregator.onUserEvent(context, event);
+            return this.requestAggregator.onEvent(context, event);
         }
-        return this.responseAggregator.onUserEvent(context, event);
+        return this.responseAggregator.onEvent(context, event);
     }
 
     @Override

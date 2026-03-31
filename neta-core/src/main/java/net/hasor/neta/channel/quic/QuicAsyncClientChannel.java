@@ -28,16 +28,14 @@ import net.hasor.neta.channel.SoRcvException;
 import net.hasor.neta.channel.udp.UdpAsyncClientChannel;
 
 /**
- * Client-side QUIC bootstrap channel layered on top of the UDP client transport.
+ * Client-side QUIC channel built on top of UDP client transport.
  * <p>
- * This type owns the pre-connection client flow: it opens the underlying UDP
- * socket, drives {@link QuicAsyncChannelHandshake}, processes Version Negotiation,
- * Initial, Handshake, and early 1-RTT responses, and only promotes the transport
- * to {@link QuicChannelAsync}/{@link QuicChannel} after the handshake has reached
- * the point where the public connection can be initialised.
+ * It is responsible for the client flow before connection establishment: opening the underlying UDP socket, driving
+ * {@link QuicAsyncChannelHandshake}, processing Version Negotiation, Initial, Handshake, and early 1-RTT responses,
+ * and promoting the transport layer to {@link QuicChannelAsync}/{@link QuicChannel} only after the handshake reaches
+ * the stage where the public connection object can be initialized.
  * <pre>
  *   UDP connect
- *      |
  *      +--> create QuicAsyncChannelHandshake
  *      +--> send client Initial
  *      +--> process server Initial / Handshake / HANDSHAKE_DONE
@@ -46,8 +44,7 @@ import net.hasor.neta.channel.udp.UdpAsyncClientChannel;
  *      +--> complete user future
  * </pre>
  * <p>
- * It is a temporary bootstrap object rather than the long-lived application API.
- * User code normally receives the resulting {@link QuicChannel}, not this class.
+ * It is a temporary bootstrap object rather than a long-lived API exposed to the application layer. User code usually obtains the final {@link QuicChannel}, not this class itself.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncClientChannel extends UdpAsyncClientChannel {
@@ -61,7 +58,9 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         super(channelId, channel, context, remoteAddress, soConfig);
     }
 
-    /** Scans the payload for a HANDSHAKE_DONE frame (type 0x1e), skipping other frame bodies. */
+    /**
+     * Scans the payload for a HANDSHAKE_DONE frame (type 0x1e) while skipping other frame bodies.
+     */
     private static boolean containsHandshakeDone(byte[] payload) {
         int pos = 0;
         while (pos < payload.length) {
@@ -187,7 +186,9 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
                 });
     }
 
-    /** Processes incoming datagrams during handshake and after connection establishment. */
+    /**
+     * Handles inbound datagrams during the handshake phase and after connection establishment.
+     */
     private void onQuicDatagram(SocketAddress remoteAddr, ByteBuffer data) throws IOException {
         if (data.remaining() < 1) {
             return;
@@ -211,7 +212,9 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
     }
 
-    /** Processes a Long Header response from the server during handshake (Initial, Handshake, or Version Negotiation). */
+    /**
+     * Handles Long Header responses from the server during the handshake phase, such as Initial, Handshake, or Version Negotiation.
+     */
     private void processLongHeaderResponse(byte[] rawData, SocketAddress remoteAddr) {
         // ── Version Negotiation (RFC 9000 §6) ─────────────────────────────────
         if (QuicPacket.isVersionNegotiation(rawData)) {
@@ -242,7 +245,7 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
                     parsed.pnLength = rawParsed.pnLength;
                 }
 
-                // Process server's Initial response
+                // Process the server Initial response.
                 if (this.handshake.processClientInitialResponse(parsed)) {
                     if (this.handshake.isEstablished()) {
                         completeHandshake();
@@ -264,7 +267,7 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
                     parsed.packetNumber = rawParsed.packetNumber;
                 }
 
-                // Process server's Handshake response
+                // Process the server Handshake response.
                 if (this.handshake.processClientHandshakeResponse(parsed)) {
                     if (this.handshake.isEstablished()) {
                         completeHandshake();
@@ -278,9 +281,9 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
     }
 
     /**
-     * Handles a Version Negotiation packet received from the server during handshake (RFC 9000 §6).
-     * Validates the packet, selects the first mutually supported QUIC version, and re-initiates
-     * the handshake with that version. A VN packet received after connection establishment is silently ignored.
+     * Handles Version Negotiation packets received from the server during the handshake phase (RFC 9000 §6).
+     * This method validates the packet, selects the first QUIC version supported by both sides, and re-initiates the handshake with that version.
+     * If a VN packet is received after the connection has already been established, it is ignored silently.
      */
     private void processVersionNegotiation(byte[] rawData) {
         // RFC 9000 §6.2: MUST ignore if the connection is already established
@@ -340,7 +343,9 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
     }
 
-    /** Processes a Short Header (1-RTT) packet during handshake. The server sends HANDSHAKE_DONE as a 1-RTT frame. */
+    /**
+     * Handles Short Header (1-RTT) packets during the handshake phase, where the server sends HANDSHAKE_DONE over 1-RTT frames.
+     */
     private void processShortHeaderResponse(byte[] rawData) {
         try {
             QuicPacket.ParsedPacket parsed;
@@ -379,7 +384,9 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
     }
 
-    /** Completes the QUIC handshake by creating the {@link QuicChannelAsync} and {@link QuicChannel}, then fulfills the pending future. */
+    /**
+     * Completes the QUIC handshake by creating {@link QuicChannelAsync} and {@link QuicChannel}, then resolves the pending future.
+     */
     private void completeHandshake() {
         if (this.connAsync != null) {
             return; // already completed
@@ -415,7 +422,9 @@ class QuicAsyncClientChannel extends UdpAsyncClientChannel {
         }
     }
 
-    /** Dispatches decrypted 1-RTT data to the established connection's protocol pipeline. */
+    /**
+     * Dispatches decrypted 1-RTT data to the protocol-processing pipeline of the established connection.
+     */
     private void dispatchAppData(byte[] rawData) {
         this.connAsync.checkIdleTimeouts();
         try {

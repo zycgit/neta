@@ -16,16 +16,25 @@
 package net.hasor.neta.channel;
 
 /**
- * Marker selector used by {@link ProtoPartitionDuplexer} to isolate keyed message streams into independent serial partitions.
- * <p>
- * Partition selection reuses the existing routing-selector contracts directly. The returned route key is the
- * partition identity observed by {@link ProtoPartitionDuplexer}; implementations should therefore keep the route
- * value stable for all messages/events that belong to the same partition.
- * </p>
+ * Selector that decides which partition the current data should enter.
+ * <p>When a message or event reaches {@link ProtoPartitionDuplexer}, the framework calls this
+ * interface to compute a {@link PartitionKey}. Data with the same partition key enters the same
+ * partition sub-pipeline, reusing the same partition context and handler state, while data with
+ * different keys is isolated into different partition sub-pipelines.</p>
+ * <p>The core responsibility of this interface is to provide a stable bucketing rule. For messages
+ * or events that belong to the same logical partition, implementations should always return the
+ * same {@link PartitionKey}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-29
  */
 @FunctionalInterface
 public interface ProtoPartitionSelector {
+    /**
+     * Select a partition key from the current context and trigger data.
+     * @param context current protocol context
+     * @param kind trigger data kind
+     * @param data current message or event object
+     * @return matching partition key
+     */
     PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data);
 }

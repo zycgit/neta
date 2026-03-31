@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * User event that requests an outbound HTTP/2 PING frame.
+ * Network event that requests an outbound HTTP/2 PING frame.
  */
 public class Http2PingEvent extends AbstractHttp2Event {
     private final ByteBuf data;

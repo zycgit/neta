@@ -17,11 +17,11 @@ package net.hasor.neta.channel;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Result of a {@link ProtoStackChain} chain execution, carrying data, final status, and any
- * unhandled error from the chain.
- * <p>Replaces the bare {@code Object[]} return value of
- * {@link ProtoStackChain#onRcv}/{@link ProtoStackChain#onSnd} etc., enabling
- * sub-pipeline (branch) errors and status to propagate back to the parent pipeline.</p>
+ * Result of a chained {@link ProtoStackChain} execution, carrying data, final status, and any
+ * unhandled error left on the chain.
+ * <p>It replaces the raw {@code Object[]} return values previously used by methods such as
+ * {@link ProtoStackChain#onRcv} and {@link ProtoStackChain#onSnd}, allowing child pipelines
+ * (branches) to propagate errors and status back to the parent pipeline.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-06
  */

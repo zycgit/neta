@@ -32,22 +32,22 @@ import net.hasor.neta.channel.udp.UdpProvider;
 import net.hasor.neta.channel.virtual.VrtProvider;
 
 /**
- * Entry point for Neta's AIO network layer.
- * Manages server listeners and client connections over TCP, UDP, QUIC, SCTP and virtual transports.
+ * Entry point to the Neta AIO networking layer.
+ * Manages server listeners and client connections for TCP, UDP, QUIC, SCTP, and virtual transports.
  * <pre>
- *  ┌─────────────────────────────────────────────────────────────┐
- *  │                        NetManager                           │
- *  │   bind(addr, initializer)          connect(addr, init)      │
- *  │          │                                 │                │
- *  │    ┌─────▼──────┐                  ┌───────▼───────┐        │
- *  │    │  NetListen │  ──onAccept──►   │   NetChannel  │        │
- *  │    └────────────┘                  └───────┬───────┘        │
- *  │                                            │                │
- *  │                              ┌─────────────▼────────────┐   │
- *  │                              │     Protocol Stack       │   │
- *  │                              │  [codec] → [handler] → … │   │
- *  │                              └──────────────────────────┘   │
- *  └─────────────────────────────────────────────────────────────┘
+ *  ┌─────────────────────────────────────────────────────────┐
+ *  │                      NetManager                         │
+ *  │ bind(addr, initializer)          connect(addr, init)    │
+ *  │        │                                 │              │
+ *  │  ┌─────▼──────┐                  ┌───────▼───────┐      │
+ *  │  │  NetListen │  ──onAccept──►   │   NetChannel  │      │
+ *  │  └────────────┘                  └───────┬───────┘      │
+ *  │                                          │              │
+ *  │                            ┌─────────────▼────────────┐ │
+ *  │                            │      Protocol Stack      │ │
+ *  │                            │  [codec] → [handler] → … │ │
+ *  │                            └──────────────────────────┘ │
+ *  └─────────────────────────────────────────────────────────┘
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
@@ -56,15 +56,26 @@ public class NetManager extends AbstractNetManager {
     private static final Logger                            logger = Logger.getLogger(NetManager.class);
     protected final      Map<String, AsyncChannelProvider> providerMap;
 
+    /** Create a network manager with the default configuration. */
     public NetManager() {
         this(new NetConfig());
     }
 
+    /**
+     * Create a network manager with the specified configuration.
+     * @param config global network configuration
+     */
     public NetManager(NetConfig config) {
         super(config);
         this.providerMap = new ConcurrentHashMap<>();
     }
 
+    /**
+     * Locate or lazily create the transport provider for the given protocol name.
+     * @param protocol protocol name, such as {@code tcp}, {@code udp}, or {@code quic}
+     * @return transport provider for that protocol
+     * @throws IOException thrown when an I/O error occurs while creating the provider
+     */
     protected AsyncChannelProvider findProvider(String protocol) throws IOException {
         AsyncChannelProvider existing = this.providerMap.get(protocol);
         if (existing != null) {
@@ -94,10 +105,13 @@ public class NetManager extends AbstractNetManager {
     }
 
     /**
-     * using TCP/IP Listen on the port and bind Application layer network protocol to the accepted channels.
-     * @param listenAddr local address:port for listenAddr
-     * @param initializer Application layer network protocol
-     * @return A listener channel for accept incoming sockets
+     * Start listening on the specified address and bind the application protocol to channels
+     * accepted afterward.
+     * @param listenAddr local address and port to listen on
+     * @param initializer application-layer protocol initializer
+     * @param soConfig low-level socket and protocol configuration
+     * @return listening channel that accepts inbound sockets
+     * @throws IOException thrown when listener creation or bind fails
      */
     public synchronized NetListen bind(SocketAddress listenAddr, ProtoInitializer initializer, SoConfig soConfig) throws IOException {
         long channelID = this.context.nextID();
@@ -109,9 +123,12 @@ public class NetManager extends AbstractNetManager {
     }
 
     /**
-     * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
-     * @param remoteAddr remoteAddr
-     * @param initializer Application layer network protocol
+     * Connect to the remote endpoint synchronously and bind the application protocol to the channel.
+     * @param remoteAddr remote address
+     * @param initializer application-layer protocol initializer
+     * @param soConfig low-level socket and protocol configuration
+     * @return established and initialized channel
+     * @throws IOException thrown when connect or initialization fails
      */
     public NetChannel connectSync(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) throws IOException {
         try {
@@ -130,9 +147,11 @@ public class NetManager extends AbstractNetManager {
     }
 
     /**
-     * using TCP/IP connect to remote, and bind Application layer network protocol on this channel.
-     * @param remoteAddr remoteAddr
-     * @param initializer Application layer network protocol
+     * Connect to the remote endpoint asynchronously and bind the application protocol to the channel.
+     * @param remoteAddr remote address
+     * @param initializer application-layer protocol initializer
+     * @param soConfig low-level socket and protocol configuration
+     * @return Future representing the connect and initialization result
      */
     public Future<NetChannel> connectAsync(SocketAddress remoteAddr, ProtoInitializer initializer, SoConfig soConfig) {
         Future<NetChannel> future = new BasicFuture<>();
@@ -151,12 +170,12 @@ public class NetManager extends AbstractNetManager {
         }
     }
 
-    /** Returns the channel identified by {@code channelId}, or {@code null} if not found. */
+    /** Return the channel identified by {@code channelId}, or {@code null} if none exists. */
     public SoChannel<?> findChannel(long channelId) {
         return this.context.findChannel(channelId);
     }
 
-    /** Returns the first active {@link NetListen} bound to {@code port}, or {@code null} if none. */
+    /** Return the first active {@link NetListen} bound to {@code port}, or {@code null} if none exists. */
     public NetListen findListen(int port) {
         AtomicReference<NetListen> found = new AtomicReference<>();
         this.context.foreachListen(netListen -> {
@@ -168,9 +187,13 @@ public class NetManager extends AbstractNetManager {
         return found.get();
     }
 
+    /**
+     * Close all channels, transport providers, and the shared context.
+     * @param now when {@code true}, use immediate-close semantics
+     */
     @Override
     protected void shutdown0(boolean now) {
-        // close all channel
+        // Close all channels.
         if (now) {
             logger.info("close all channel for now.");
         } else {
@@ -178,7 +201,7 @@ public class NetManager extends AbstractNetManager {
         }
         this.context.closeAll(now);
 
-        // waiting close
+        // Shut down providers and shared resources.
         for (AsyncChannelProvider provider : this.providerMap.values()) {
             provider.shutdown();
         }

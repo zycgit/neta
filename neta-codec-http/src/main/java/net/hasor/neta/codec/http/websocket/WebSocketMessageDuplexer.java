@@ -64,11 +64,11 @@ public class WebSocketMessageDuplexer implements ProtoDuplexer<WebSocketFrame, W
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (isRcv) {
-            return this.inbound.onUserEvent(context, event);
+            return this.inbound.onEvent(context, event);
         } else {
-            return this.outbound.onUserEvent(context, event);
+            return this.outbound.onEvent(context, event);
         }
     }
 

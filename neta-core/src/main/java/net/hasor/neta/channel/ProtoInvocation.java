@@ -18,9 +18,9 @@ import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * A single node in the {@link ProtoStackChain} doubly-linked handler chain.
- * <p>Wraps one {@link ProtoDuplexer} together with its RCV_UP / SND_UP queues,
- * and links to the previous/next nodes for bidirectional event propagation.</p>
+ * Single node in the doubly linked handler chain of {@link ProtoStackChain}.
+ * <p>It wraps one {@link ProtoDuplexer} together with its RCV_UP and SND_UP queues and implements
+ * bidirectional event propagation through links to previous and next nodes.</p>
  * <pre>
  *              Protocol Layer(0)               Protocol Layer(1)
  *         ┏━━━━━━━━━━━━━━━━━━━━━━━━┓       ┏━━━━━━━━━━━━━━━━━━━━━━━━┓
@@ -57,41 +57,71 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         this.chainRoot = chainRoot;
     }
 
+    /**
+     * Bind an on-writable-recovered callback for this node's inbound upstream queue.
+     * @param callback callback triggered when the queue recovers from full to writable
+     */
     public void bindRcvUpWritable(Runnable callback) {
         this.rcvUp.onRecoveredWritable(callback);
     }
 
+    /**
+     * Bind an on-writable-recovered callback for this node's outbound upstream queue.
+     * @param callback callback triggered when the queue recovers from full to writable
+     */
     public void bindSndUpWritable(Runnable callback) {
         this.sndUp.onRecoveredWritable(callback);
     }
 
-    public int offerRcvUp(Object[] offerData) {
+    /**
+     * Offer a batch of data into this node's inbound upstream queue.
+     * @param offerData data array to offer
+     * @return whether the whole batch was accepted successfully
+     */
+    public boolean offerRcvUp(Object[] offerData) {
         return this.rcvUp.offerMessage(offerData);
     }
 
-    public int offerSndUp(Object[] offerData) {
+    /**
+     * Offer a batch of data into this node's outbound upstream queue.
+     * @param offerData data array to offer
+     * @return whether the whole batch was accepted successfully
+     */
+    public boolean offerSndUp(Object[] offerData) {
         return this.sndUp.offerMessage(offerData);
     }
 
+    /**
+     * Return the current remaining slot count of the inbound upstream queue.
+     * @return remaining writable slot count
+     */
     public int rcvUpSlotSize() {
         return this.rcvUp.slotSize();
     }
 
+    /**
+     * Return the current remaining slot count of the outbound upstream queue.
+     * @return remaining writable slot count
+     */
     public int sndUpSlotSize() {
         return this.sndUp.slotSize();
     }
 
-    /** return this {@link ProtoDuplexer} name. */
+    /** Return the name of the current {@link ProtoDuplexer}. */
     public String getName() {
         return this.name;
     }
 
+    /**
+     * Return the compact monitor string for the current node.
+     * @return string containing the name and queue-capacity information
+     */
     @Override
     public String toString() {
         return "Handler [name=" + this.name + ", queue=" + this.rcvUp.queueSize() + ", slot=" + this.sndUp.slotSize() + "]";
     }
 
-    /** RCV queue occupancy as {@code "current/capacity"}, or {@code "n/500+"} for unbounded queues. */
+    /** Return RCV queue occupancy as {@code "current/capacity"}; for unbounded queues, return {@code "n/500+"}. */
     public String toMonitorRcvString() {
         int capacity = this.rcvUp.getCapacity();
         if (capacity > 500) {
@@ -101,7 +131,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    /** SND queue occupancy as {@code "current/capacity"}, or {@code "n/500+"} for unbounded queues. */
+    /** Return SND queue occupancy as {@code "current/capacity"}; for unbounded queues, return {@code "n/500+"}. */
     public String toMonitorSndString() {
         int capacity = this.sndUp.getCapacity();
         if (capacity > 500) {
@@ -113,7 +143,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
 
     //
 
-    /** Calls {@link ProtoDuplexer#onInit} on the wrapped handler, with {@code stackName} set in context. */
+    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplexer#onInit} on the wrapped handler. */
     public void onInit(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -132,7 +162,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    /** Calls {@link ProtoDuplexer#onActive} on the wrapped handler, with {@code stackName} set in context. */
+    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplexer#onActive} on the wrapped handler. */
     public void onActive(ProtoContext protoCtx) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -151,7 +181,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    /** Calls {@link ProtoDuplexer#onClose} on the wrapped handler, with {@code stackName} set in context. */
+    /** Set {@code stackName} in the context, then invoke {@link ProtoDuplexer#onClose} on the wrapped handler. */
     public void onClose(ProtoContext protoCtx) {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
@@ -170,22 +200,22 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
     }
 
     /**
-     * Final queue cleanup after {@link #onClose(ProtoContext)} has returned.
-     * <p>This method releases any queue-owned messages still buffered in this invocation.
-     * It is intentionally separated from {@code onClose} so handler shutdown logic runs first,
-     * followed by unconditional queue reclamation in the stack close path.</p>
+     * Perform final queue cleanup after {@link #onClose(ProtoContext)} returns.
+     * <p>This method releases messages still left in the current handler node and still owned by
+     * its queues. It is separated from {@code onClose} so handler close logic runs first, and queue
+     * leftovers are reclaimed unconditionally afterward in the protocol-stack close path.</p>
      */
     public void afterClose() {
         this.rcvUp.clearAndClose();
         this.sndUp.clearAndClose();
     }
 
-    /** Delivers a user-defined event to the wrapped handler. return {@code true} to continue propagation, {@code false} to consume the event */
-    public boolean onEvent(ProtoContext protoCtx, SoUserEvent event, boolean isRcv) throws Throwable {
+    /** Deliver a network event to the wrapped handler. Return {@code true} to continue propagation, or {@code false} to consume the event. */
+    public boolean onEvent(ProtoContext protoCtx, SoEvent event, boolean isRcv) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         try {
             ctx.setStackName(this.name);
-            return this.handler.onUserEvent(protoCtx, event, isRcv);
+            return this.handler.onEvent(protoCtx, event, isRcv);
         } catch (Throwable e) {
             long channelID = protoCtx.getChannel().getChannelId();
             if (protoCtx.getConfig().isPrintLog()) {
@@ -199,7 +229,7 @@ class ProtoInvocation<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
         }
     }
 
-    /** Executes one pass of this handler node. */
+    /** Execute one processing pass for the current handler node. */
     public ProtoStatus doLayer(ProtoContext protoCtx, boolean isRcv) throws Throwable {
         ProtoContextService ctx = (ProtoContextService) protoCtx;
         ProtoRcvQueue<RCV_UP> rcvUp = (ProtoRcvQueue<RCV_UP>) this.rcvUp;

@@ -15,15 +15,15 @@
  */
 package net.hasor.neta.channel;
 /**
- * Thrown when a channel is closed while it still holds unsent data in the outbound queue.
- * <p>This exception is raised for each pending write that could not be flushed before the
- * channel was torn down, preventing the application from silently losing data. Any
- * {@link net.hasor.cobble.concurrent.future.Future} for an in-flight write will be completed
- * with this exception rather than succeeding with a partial send.
- * <p>This is a normal shutdown signal when the caller uses {@link SoChannel#closeNow()},
- * which discards the send queue immediately. It can also be triggered when the remote peer
- * forcibly resets the connection (TCP RST). By contrast, a graceful {@link SoChannel#close()}
- * flushes all queued data before closing, so this exception is not raised in the normal path.
+ * Thrown when unsent data still remains in the send queue while the channel is closing.
+ * <p>Each write request that has not finished flushing receives this exception so the application
+ * does not lose data silently. For in-flight writes, the associated
+ * {@link net.hasor.cobble.concurrent.future.Future} completes exceptionally with this type instead
+ * of ending as a partial success.</p>
+ * <p>When the caller uses {@link SoChannel#closeNow()}, this is a normal close signal because that
+ * method immediately discards the send queue. It may also be triggered when the remote peer forces
+ * a connection reset, such as TCP RST. In contrast, graceful {@link SoChannel#close()} flushes all
+ * queued data before closing, so this exception does not normally appear on the regular path.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoSndException

@@ -14,19 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 /**
- * Thrown when the remote peer has shut down the write side of its socket (TCP FIN), causing
- * the local channel's input stream to report EOF.
- * <p>This exception represents a TCP <em>half-close</em>: the peer will send no more data,
- * but the local side may still flush any buffered outbound data before closing the connection.
- * Typical handling:
+ * Thrown when the peer closes the write side of its socket (TCP FIN) and the local channel input
+ * stream reports EOF.
+ * <p>This exception represents the TCP <em>half-close</em> state: the peer will not send any more
+ * data, but the local side may still flush remaining outbound data before the connection is fully
+ * closed. A common handling pattern is:</p>
  * <ol>
- *   <li>Flush any remaining application-level outbound data.</li>
- *   <li>Call {@link SoChannel#close()} to complete a graceful four-way close.</li>
+ *   <li>Send or flush any remaining application outbound data.</li>
+ *   <li>Call {@link SoChannel#close()} to complete the normal four-way shutdown sequence.</li>
  * </ol>
- * <p>Note: SCTP and UDP do not support half-close semantics; this exception is only
- * meaningful for TCP (and TLS-over-TCP) channels.
+ * <p>Note that SCTP and UDP do not support half-close semantics, so this exception only applies to
+ * TCP channels, including TLS streams built on top of TCP.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoCloseException

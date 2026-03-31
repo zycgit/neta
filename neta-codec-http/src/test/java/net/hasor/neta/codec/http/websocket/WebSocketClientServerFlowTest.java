@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.websocket;
 
 import java.util.List;
 import net.hasor.neta.channel.SoChannel;
-import net.hasor.neta.channel.SoUserEvent;
+import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.HttpObject;
 import org.junit.Test;
@@ -26,11 +26,11 @@ import static org.junit.Assert.*;
 public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     private static final String WS_PATH = "/chat";
 
-    private static PongWebSocketEvent pongEvent(Iterable<SoUserEvent> events) {
+    private static PongWebSocketEvent pongEvent(Iterable<SoEvent> events) {
         if (events == null) {
             return null;
         }
-        for (SoUserEvent event : events) {
+        for (SoEvent event : events) {
             if (event != null && event.getData() instanceof PongWebSocketEvent) {
                 return (PongWebSocketEvent) event.getData();
             }
@@ -149,14 +149,14 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             }, VrtTransfer.direct());
             completeHandshake(pipe, WebSocketVersion.V13);
 
-            pipe.client().fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-body")));
-            assertTrue(waitUntil(() -> pongEvent(pipe.clientUserEvents()) != null, 1000L));
+            pipe.client().fireEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("ping-body")));
+            assertTrue(waitUntil(() -> pongEvent(pipe.clientEvents()) != null, 1000L));
 
             List<HttpObject> serverBatch = drainQueue(pipe.serverInbound());
             List<HttpObject> clientBatch = drainQueue(pipe.clientInbound());
             assertTrue(serverBatch.isEmpty());
             assertTrue(clientBatch.isEmpty());
-            PongWebSocketEvent clientEvent = pongEvent(pipe.clientUserEvents());
+            PongWebSocketEvent clientEvent = pongEvent(pipe.clientEvents());
             assertNotNull(clientEvent);
             assertEquals("ping-body", clientEvent.content().readString(clientEvent.content().readableBytes(), java.nio.charset.StandardCharsets.US_ASCII));
             clientEvent.release();

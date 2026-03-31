@@ -18,292 +18,274 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
- * Protocol runtime context for one channel and its branch sub-pipelines.
- * <p>A connection has one root {@code ProtoContext} attached to the public channel and may create
- * additional branch contexts under routing nodes. Runtime handlers use this API for context access,
- * event propagation, and downstream send/flush operations.
- * <p><b>Design principle:</b> structure is determined during initialization. Runtime code may switch
- * state, route, or partition, but should not arbitrarily mutate pipeline structure.
- * Build-phase structural registration is exposed separately through {@link ProtoBuildContext}.
- * <p><b>Structure:</b>
- * <pre>
- *   NetChannel / QuicStreamChannel
- *       -> root ProtoContext
- *       -> branch ProtoContext(s) created by ProtoRoutingDuplexer
- * </pre>
+ * Protocol runtime context for a single channel and its branch sub-pipelines.
+ * <p>A connection has one root {@code ProtoContext} attached to the public channel, and may also
+ * create additional branch contexts under routing nodes. Runtime handlers use this API to access
+ * context state, propagate events, and perform downstream send or flush operations.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
 public interface ProtoContext {
-    /** global config */
+    /** Return the global configuration. */
     NetConfig getConfig();
 
-    /** the channel */
+    /** Return the owning channel. */
     SoChannel<?> getChannel();
 
-    /** the SoContext */
+    /** Return the SoContext. */
     SoContext getSoContext();
 
     /**
-     * Returns the name of the current protocol stack name.
-     * <p><b>Note:</b> This method will only return a valid result when called within the processing flow
-     * of {@link ProtoDuplexer} or {@link ProtoHandler}.</p>
-     * @return the name of the current protocol stack
+     * Return the name of the current protocol stack node.
+     * <p><b>Note:</b> this method only returns a meaningful result when called from inside the
+     * processing flow of a {@link ProtoDuplexer} or {@link ProtoHandler}.</p>
+     * @return current protocol stack name
      */
     String getStackName();
 
     /**
-     * Retrieves an attachment from this ctx's local store by type, searching upward through
-     * parent ctx instances if not found at the current level (<em>proximate-first</em> lookup).
-     * <p>
-     * Each ctx in the pipeline tree has its own independent store.  Writes via
-     * {@link #context(Class, Object)} go to the current ctx only; reads propagate up through
-     * parent ctxs (branch → parent branch → root) until a match is found, or {@code null}
-     * is returned if no ctx in the ancestry has stored a value for that type.
-     * </p>
-     * <p>To access or write directly to the root (connection-level) store use
-     * {@link #rootContext(Class)} and {@link #rootContext(Class, Object)}.</p>
-     * @param attachment the type key
-     * @return the nearest stored value in this ctx's ancestor chain, or {@code null} if none
+     * Look up an attachment by type from the local storage of the current context; if it is not
+     * found locally, parent contexts are searched upward with nearest scope first.
+     * <p>Each context in the pipeline tree has its own storage. Data written through
+     * {@link #context(Class, Object)} is stored only in the current context. Reads walk upward
+     * through the parent chain, branch to parent branch to root, until a match is found. If no
+     * ancestor stores a value for the requested type, {@code null} is returned.</p>
+     * <p>Use {@link #rootContext(Class)} and {@link #rootContext(Class, Object)} to read or write
+     * directly to root, connection-level storage.</p>
+     * @param attachment type key
+     * @return nearest stored value visible from the current context, or {@code null} if none exists
      */
     <T> T context(Class<T> attachment);
 
     /**
-     * Stores an attachment in <b>this ctx's local store</b> by type.
-     * <p>
-     * The value is written only to the current ctx and is immediately visible to
-     * {@link #context(Class)} calls made from this ctx or any descendant ctx via upward
-     * traversal.  It is <em>not</em> automatically visible in sibling or parent ctxs.
-     * </p>
-     * <p>To write directly to the root (connection-level) store use
-     * {@link #rootContext(Class, Object)}.</p>
-     * @param attachmentType the type key
-     * @param attachment the value to store; {@code null} is allowed
-     * @return the stored value
+     * Store an attachment by type in the <b>local storage of the current context</b>.
+     * <p>The value is written only to the current context and is immediately visible to that
+     * context and any of its child contexts when they search upward through {@link #context(Class)}.
+     * It is <em>not</em> automatically visible to sibling or parent contexts.</p>
+     * <p>Use {@link #rootContext(Class, Object)} to write directly to root, connection-level storage.</p>
+     * @param attachmentType type key
+     * @param attachment value to store; {@code null} is allowed
+     * @return stored value
      */
     <T> T context(Class<T> attachmentType, T attachment);
 
     /**
-     * Retrieves an attachment from the <b>root (connection-level) ctx</b> by type.
-     * <p>
-     * The root ctx is the outermost main-pipeline ctx created for the connection.
-     * Values stored here are shared across the entire pipeline tree and persist for
-     * the connection's lifetime.  Use this when you need true connection-global state
-     * that is readable from any branch regardless of nesting depth.
-     * </p>
-     * @param type the type key
-     * @return the stored value, or {@code null} if nothing has been stored under that type
+     * Look up an attachment by type from the <b>root, connection-level, context</b>.
+     * <p>The root context is the outermost main-pipeline context created for the connection. Values
+     * stored there are shared across the whole pipeline tree and remain for the lifetime of the
+     * connection. Use this method when you need truly connection-level global state that should be
+     * readable from any branch regardless of nesting depth.</p>
+     * @param type type key
+     * @return stored value, or {@code null} if nothing has been stored under that type yet
      */
     <T> T rootContext(Class<T> type);
 
     /**
-     * Stores an attachment in the <b>root (connection-level) ctx</b> by type.
-     * <p>
-     * The value is written to the outermost main-pipeline ctx and is therefore
-     * visible to every handler in every branch via {@link #context(Class)} upward
-     * traversal (provided no inner ctx has shadowed the key) for the rest of the
-     * connection's lifetime.
-     * </p>
-     * @param type the type key
-     * @param value the value to store; {@code null} is allowed
-     * @return the stored value
+     * Store an attachment by type into the <b>root, connection-level, context</b>.
+     * <p>The value is written into the outermost main-pipeline context, so for the rest of the
+     * connection lifetime every handler in every branch can see it through upward lookup with
+     * {@link #context(Class)}, as long as no inner context shadows the same key.</p>
+     * @param type type key
+     * @param value value to store; {@code null} is allowed
+     * @return stored value
      */
     <T> T rootContext(Class<T> type, T value);
 
     /**
-     * Retrieves a flash value by key from the active event frame.
-     * <p>
-     * Flash storage is ephemeral per event pass, but in the current implementation it is shared by
-     * the root ctx and any branch ctxs participating in that same pass. Values are automatically
-     * discarded when the outermost event processing completes.
-     * </p>
-     * @param key the flash key
-     * @return the stored value, or {@code null} if not present in the current frame
+     * Look up a flash value by key from the current active event frame.
+     * <p>Flash storage is short-lived for each event propagation. In the current implementation,
+     * the root context and branch contexts participating in the same propagation round share it.
+     * These values are discarded automatically when the outermost event handling completes.</p>
+     * @param key flash key
+     * @return stored value, or {@code null} if it is absent in the current frame
      */
     <T> T flash(String key);
 
     /**
-     * Stores a flash value in the active event frame.
-     * <p>
-     * The value is visible to the root ctx and branch ctxs participating in the same active pass,
-     * but it is still short-lived: once that outermost pass ends the flash map is cleared.
-     * For state that must survive beyond one event, use {@link #context(Class, Object)}.
-     * </p>
-     * @param key the flash key
-     * @param flash the value to store; passing {@code null} removes the key
-     * @return the stored value
+     * Store a flash value into the current active event frame.
+     * <p>The value is visible to the root context and branch contexts participating in the same
+     * active propagation round, but it is still short-lived: once the outermost round finishes,
+     * the flash map is cleared. If state needs to survive beyond one event, use
+     * {@link #context(Class, Object)} instead.</p>
+     * @param key flash key
+     * @param flash value to store; passing {@code null} removes the key
+     * @return stored value
      */
     <T> T flash(String key, T flash);
 
     /**
-     * Send data through the SND pipeline, starting from the <b>current handler's position</b>
-     * and traveling <em>backward</em> (tail → head, the encoding direction).
+     * Send data downstream in the SND direction from the <b>current handler position</b>,
+     * propagating in the <em>reverse</em> direction (tail → head, which is the encoding path).
      * <h3>Main pipeline</h3>
-     * The data is passed to the handler immediately before the caller in the SND chain,
-     * then continues toward the head and finally reaches the network.
+     * The data is first delivered to the handler immediately before the caller in the SND chain,
+     * then continues flowing toward the head until it reaches the network layer.
      * <pre>
      *   [A] ◀── [B*] ◀── [C]
      *            │
      *         sendData() starts here; data flows left: B → A → wire
      * </pre>
-     * <h3>Branch pipeline (bottom-up encoding)</h3>
-     * In a branch context the data is encoded <em>bottom-up</em>, one layer at a time:
-     * <ol>
-     *   <li>Run the current branch's full SND chain (all handlers from tail to head).</li>
-     *   <li>Pass the encoded result to the parent pipeline, running only the handlers
-     *       that lie <em>before</em> our Router in the parent's SND chain.</li>
-     *   <li>Repeat step 2 for every ancestor branch until the outermost pipeline is reached.</li>
-     *   <li>Submit the final bytes directly to the network task queue, skipping the Router
-     *       entirely to prevent double-encoding.</li>
-     * </ol>
+     * <h3>Branch pipeline</h3>
+     * In a branch context, the data first traverses the current branch SND chain, then returns to
+     * the parent pipeline and continues outward through the main-pipeline segment before the current
+     * routing duplexer.
      * <pre>
      *   Main:   [A] ◀── [Router] ◀── [Z]
      *                      │
-     *           Branch: [B] ◀── [C*]
-     *   Path (bottom-up):
-     *     1. branch SND chain: C → B  (encoded)
-     *     2. main segment before Router: A  (if present)
-     *     3. wire  (Router skipped)
+     *             Branch: [B] ◀── [C*]
+     *   sendData() path: C → B → A → wire
      * </pre>
-     * @param writeData the application-level object to send; must be compatible with the
-     * first SND handler's expected input type
-    * <p>If the returned {@link Future} fails because a SND handler throws during the current
-    * send pass, that failure describes only the current attempt. Queue-owned outbound messages
-    * that are still buffered inside pipeline stages are retained while the channel stays open,
-    * so a later send/recovery pass may continue processing them. Those queued messages are only
-    * released automatically when the channel close path runs.</p>
-    * @return a {@link Future} that completes when the encoded bytes have been handed off
-    * to the network task queue; failure is reported via {@link Future#getCause()}
+     * <h3>Partition pipeline</h3>
+     * In a partition context, the data first traverses the current partition-instance SND chain,
+     * then returns to the parent pipeline and continues outward through the main-pipeline segment
+     * before the current partition duplexer.
+     * <pre>
+     *   Main:      [A] ◀── [Partition] ◀── [Z]
+     *                          │
+     *                  Part-1: [B] ◀── [C*]
+     *   sendData() path: C → B → A → wire
+     * </pre>
+     * @param writeData application-level object to send; it must be compatible with the input type
+     * expected by the first SND handler
+     * <p>If the returned {@link Future} fails because an SND handler throws during this send
+     * attempt, that failure describes only this attempt. As long as the channel remains open,
+     * outbound messages still buffered in internal queues across the pipeline are retained, so
+     * later send or recovery flows may still continue processing them. These queued messages are
+     * automatically released only when the channel-close path runs.</p>
+     * @return a {@link Future} that completes when the encoded bytes have been handed off to the
+     * network task queue; if it fails, the cause can be retrieved through {@link Future#getCause()}
      */
     Future<?> sendData(Object writeData);
 
     /**
-     * Fire a typed user event that propagates <b>along the current data-flow direction</b>,
-     * crossing branch boundaries if necessary until the head/tail of the outermost pipeline
-     * is reached.
-     * <p>When called from inside a handler, propagation resumes from the <em>next</em> handler in
-     * the current direction rather than re-entering the caller itself.</p>
-     * <h3>Propagation direction</h3>
-     * <ul>
-     *   <li>In a <b>RCV</b> context ({@link #isRcv()} == true): events travel
-     *       <em>forward</em> (head → tail, same direction as decoded data).</li>
-     *   <li>In a <b>SND</b> context ({@link #isRcv()} == false): events travel
-     *       <em>backward</em> (tail → head, same direction as encoded data).</li>
-     * </ul>
-     * <h3>Branch boundary crossing</h3>
-     * When the event reaches the end of the current branch pipeline (no more handlers
-     * in the propagation direction), it automatically <em>crosses the branch boundary</em>
-     * and enters the parent pipeline — entering after the Router (RCV) or before the
-     * Router (SND) — and continues propagating from that point.
-     * <p>Nested branches are traversed recursively until the outermost pipeline is reached.</p>
-     * <h3>Example — RCV direction (handler C fires event)</h3>
+     * Fire a typed network event along the current data-flow direction in the current pipeline,
+     * starting from the <b>next handler after the current handler position</b>.
+     * <h3>Main pipeline</h3>
+     * On the main pipeline, events in an RCV context propagate head → tail, while events in an
+     * SND context propagate tail → head.
      * <pre>
-     *  Main: [A] ──▶ [Router] ──▶ [Z]
-     *                   │
-     *         Branch: [B] ──▶ [C*] · · ·?· · ·▶ (boundary crossed) ──▶ [Z]
-     *  Path: (after C) → (end of branch) → Z → ...
+     *   RCV: [A] ──▶ [B*] ──▶ [C]   fireEvent() path: B → C
+     *   SND: [A] ◀── [B*] ◀── [C]   fireEvent() path: B → A
      * </pre>
-     * <h3>Example — SND direction (handler B fires event)</h3>
+     * <h3>Branch pipeline</h3>
+     * In a branch context, the event first continues through the current branch. After the branch
+     * reaches its boundary, propagation resumes in the parent pipeline segment after the current
+     * routing duplexer for RCV, or before it for SND.
      * <pre>
-     *  Main: [A] ◀── [Router] ◀── [Z]
-     *                   │
-     *         Branch: [B*] ◀── [C]
-     *                  ·
-     *                  · (boundary crossed)
-     *                  ·
-     *                 [A] ◀── ...
-     *  Path: (before B) → (start of branch) → A → ...
+     *   RCV: Main [A] ──▶ [Router] ──▶ [Z]
+     *                         │
+     *               Branch   [B] ──▶ [C*]
+     *        fireEvent() path: C → Z
+     *   SND: Main [A] ◀── [Router] ◀── [Z]
+     *                         │
+     *               Branch   [B*] ◀── [C]
+     *        fireEvent() path: B → A
      * </pre>
-     * @param eventType the runtime type token used to route the event to interested handlers
-     * @param event the event payload
+     * <h3>Partition pipeline</h3>
+     * In a partition context, the event first continues through the current partition sub-pipeline.
+     * After the sub-pipeline reaches its boundary, propagation resumes in the parent pipeline
+     * segment after the current partition duplexer for RCV, or before it for SND.
+     * <pre>
+     *   RCV: Main [A] ──▶ [Partition] ──▶ [Z]
+     *                            │
+     *                    Part-1  [B] ──▶ [C*]
+     *        fireEvent() path: C → Z
+     *   SND: Main [A] ◀── [Partition] ◀── [Z]
+     *                            │
+     *                    Part-1  [B*] ◀── [C]
+     *        fireEvent() path: B → A
+     * </pre>
+     * @param eventType runtime type token used to route the event to interested handlers
+     * @param event event payload
      */
-    <T> void fireUserEvent(Class<T> eventType, T event) throws Throwable;
+    <T> void fireEvent(Class<T> eventType, T event) throws Throwable;
 
     /**
-     * Fire a typed user event in the <b>opposite direction of the current data-flow</b>,
-     * starting from the next handler in that reverse direction and
-     * crossing branch boundaries upward when necessary.
-     * <p>
-     * This is useful when a downstream protocol needs to request a state change from an earlier
-     * protocol layer that sits before it in the pipeline, such as a websocket handshake asking
-     * the preceding HTTP codec to switch transport mode.
-     * </p>
-     * <ul>
-     *   <li>In a <b>RCV</b> context, the event travels backward (tail → head).</li>
-     *   <li>In a <b>SND</b> context, the event travels forward (head → tail).</li>
-     * </ul>
-     * <h3>Branch boundary crossing</h3>
-     * When the reverse-direction walk reaches the edge of the current branch pipeline,
-     * the event does not stop inside the branch. Instead it <em>crosses upward</em> into
-     * the parent pipeline and continues from the router boundary:
-     * <ul>
-     *   <li><b>RCV context</b>: crosses to the handler <em>before</em> the Router in the parent pipeline.</li>
-     *   <li><b>SND context</b>: crosses to the handler <em>after</em> the Router in the parent pipeline.</li>
-     * </ul>
-     * <p>Nested branches are traversed recursively until the outermost pipeline is reached.</p>
-     * <h3>Example — RCV context (handler C requests an upstream change)</h3>
+     * Fire a typed network event along the direction opposite to the current data flow in the
+     * current pipeline, starting from the <b>next handler in the reverse direction</b>.
+     * <p>This is useful when the current protocol layer needs to request a state change from the
+     * previous or next protocol layer, for example to make an upstream codec switch modes.</p>
+     * <h3>Main pipeline</h3>
+     * On the main pipeline, events in an RCV context propagate tail → head, while events in an
+     * SND context propagate head → tail.
      * <pre>
-     *  Main: [A] ──▶ [Router] ──▶ [Z]
-     *                   │
-     *         Branch: [B] ──▶ [C*]
-     *  fireUserEventReverse path: (before C) → B → (cross boundary) → A → ...
+     *   RCV: [A] ──▶ [B*] ──▶ [C]   fireEventReverse() path: B → A
+     *   SND: [A] ◀── [B*] ◀── [C]   fireEventReverse() path: B → C
      * </pre>
-     * <h3>Example — SND context (handler B requests an upstream change)</h3>
+     * <h3>Branch pipeline</h3>
+     * In a branch context, the event first propagates in reverse through the current branch. After
+     * the branch reaches its boundary, propagation resumes in the parent pipeline segment before
+     * the current routing duplexer for RCV, or after it for SND.
      * <pre>
-     *  Main: [A] ◀── [Router] ◀── [Z]
-     *                   │
-     *         Branch: [B*] ◀── [C]
-     *  fireUserEventReverse path: (after B) → C → (cross boundary) → Z → ...
+     *   RCV: Main [A] ──▶ [Router] ──▶ [Z]
+     *                         │
+     *               Branch   [B] ──▶ [C*]
+     *        fireEventReverse() path: C → B → A
+     *   SND: Main [A] ◀── [Router] ◀── [Z]
+     *                         │
+     *               Branch   [B*] ◀── [C]
+     *        fireEventReverse() path: B → C → Z
      * </pre>
-     * @param eventType the runtime type token used to route the event to interested handlers
-     * @param event the event payload
+     * <h3>Partition pipeline</h3>
+     * In a partition context, the event first propagates in reverse through the current partition
+     * sub-pipeline. After the sub-pipeline reaches its boundary, propagation resumes in the parent
+     * pipeline segment before the current partition duplexer for RCV, or after it for SND.
+     * <pre>
+     *   RCV: Main [A] ──▶ [Partition] ──▶ [Z]
+     *                            │
+     *                    Part-1  [B] ──▶ [C*]
+     *        fireEventReverse() path: C → B → A
+     *   SND: Main [A] ◀── [Partition] ◀── [Z]
+     *                            │
+     *                    Part-1  [B*] ◀── [C]
+     *        fireEventReverse() path: B → C → Z
+     * </pre>
+     * @param eventType runtime type token used to route the event to interested handlers
+     * @param event event payload
      */
-    <T> void fireUserEventReverse(Class<T> eventType, T event) throws Throwable;
+    <T> void fireEventReverse(Class<T> eventType, T event) throws Throwable;
 
     /**
-     * Fire a typed user event explicitly in the <b>RCV direction</b> (head → tail),
-     * regardless of whether the current callback is running in RCV or SND mode.
-     * <p>
-     * In a branch pipeline, when the event reaches the branch tail it automatically crosses
-     * into the parent pipeline after the Router and continues in RCV direction.
-     * </p>
-     * @param eventType the runtime type token used to route the event to interested handlers
-     * @param event the event payload
+     * Fire a typed network event explicitly in the <b>RCV direction</b> (head → tail), regardless
+     * of whether the current callback is running in RCV or SND mode.
+     * <p>For the propagation path, see the RCV-direction behavior described in
+     * {@link #fireEvent(Class, Object)}. If you want propagation to follow the current direction
+     * automatically, use {@link #fireEvent(Class, Object)}. If you want propagation to follow the
+     * reverse of the current direction, use {@link #fireEventReverse(Class, Object)}.</p>
+     * @param eventType runtime type token used to route the event to interested handlers
+     * @param event event payload
      */
-    <T> void fireUserEventRcv(Class<T> eventType, T event) throws Throwable;
+    <T> void fireEventRcv(Class<T> eventType, T event) throws Throwable;
 
     /**
-     * Fire a typed user event explicitly in the <b>SND direction</b> (tail → head),
-     * regardless of whether the current callback is running in RCV or SND mode.
-     * <p>
-     * In a branch pipeline, when the event reaches the branch head it automatically crosses
-     * into the parent pipeline before the Router and continues in SND direction.
-     * </p>
-     * @param eventType the runtime type token used to route the event to interested handlers
-     * @param event the event payload
+     * Fire a typed network event explicitly in the <b>SND direction</b> (tail → head), regardless
+     * of whether the current callback is running in RCV or SND mode.
+     * <p>For the propagation path, see the SND-direction behavior described in
+     * {@link #fireEvent(Class, Object)}. If you want propagation to follow the current direction
+     * automatically, use {@link #fireEvent(Class, Object)}. If you want propagation to follow the
+     * reverse of the current direction, use {@link #fireEventReverse(Class, Object)}.</p>
+     * @param eventType runtime type token used to route the event to interested handlers
+     * @param event event payload
      */
-    <T> void fireUserEventSnd(Class<T> eventType, T event) throws Throwable;
+    <T> void fireEventSnd(Class<T> eventType, T event) throws Throwable;
 
     /**
-     * Flush the SND pipeline without sending new data, giving every SND handler an opportunity
-     * to drain internal write buffers (e.g. compressors, chunked encoders).
-     * <p>
-     * The propagation rules are identical to {@link #sendData}: the flush signal travels
-     * <em>backward</em> (tail → head) starting from the current handler's position, and in a
-     * branch context the bottom-up encoding path is followed so that each layer's handlers
-     * flush exactly once and the Router is never re-entered.
-     * </p>
-     * @return a {@link Future} that completes when the flush has been submitted to the
-     * network task queue; failure is reported via {@link Future#getCause()} not null.
+     * Flush the SND pipeline without sending new data, giving each SND handler a chance to drain
+     * its internal write buffer, such as a compressor or chunked encoder.
+     * <p>The propagation rules are the same as {@link #sendData}: the flush signal starts from the
+     * current handler position and propagates in the <em>reverse</em> direction (tail → head). In
+     * branch contexts it follows the bottom-up encoding path, so each handler is flushed only once
+     * and the Router is not re-entered.</p>
+     * @return a {@link Future} that completes when the flush has been submitted to the network task
+     * queue; on failure, the cause is available from a non-null {@link Future#getCause()}
      */
     Future<?> flush();
 
-    /** return ByteBufAllocator from SoContext. */
+    /** Return the ByteBufAllocator provided by SoContext. */
     ByteBufAllocator byteBufAllocator();
 
-    /** Returns the pipeline mode is receive */
+    /** Return whether the current pipeline mode is receive. */
     boolean isRcv();
 
-    /** Returns the pipeline mode is sent */
+    /** Return whether the current pipeline mode is send. */
     boolean isSnd();
 }

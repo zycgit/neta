@@ -30,6 +30,8 @@ public class DefaultHttpResponse implements HttpResponse {
     private String      reasonText;
     private String      versionText;
     private String      statusText;
+    private boolean     bad;
+    private String      badReason;
 
     /**
      * Creates a response status-line object.
@@ -119,6 +121,23 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     @Override
+    public boolean isBad() {
+        return this.bad;
+    }
+
+    @Override
+    public String badReason() {
+        return this.badReason;
+    }
+
+    @Override
+    public HttpResponse markBad(String reason) {
+        this.bad = true;
+        this.badReason = reason;
+        return this;
+    }
+
+    @Override
     public HttpVersion protocolVersion() {
         if (this.version == null) {
             this.version = HttpVersion.valueOf(this.versionText);
@@ -190,5 +209,7 @@ public class DefaultHttpResponse implements HttpResponse {
         this.versionText = null;
         this.statusText = null;
         this.reasonText = null;
+        this.bad = false;
+        this.badReason = null;
     }
 }

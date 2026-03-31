@@ -55,7 +55,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event) throws Throwable {
         Object eventData = event.getData();
         if (eventData instanceof PingWebSocketEvent) {
             sendControlEventFrame(context, (PingWebSocketEvent) eventData, true);

@@ -15,19 +15,20 @@
  */
 package net.hasor.neta.channel;
 /**
- * Fluent API for building a bidirectional protocol pipeline.
- * <p>Chain {@link ProtoDuplexer}, {@link ProtoHandler} (decoder/encoder),
- * or routing branches via {@code nextDuplex}/{@code nextDecoder}/{@code nextEncoder}/{@code nextRouteAsStatic}/{@code nextRouteAsRealtime},
- * then call {@link #build()} to produce a {@link ProtoInitializer}.</p>
- * <p>Routing nodes are added as one-shot fluent steps. For standalone router definitions,
- * use {@link ProtoHelper#typedRoutingAsStatic(ProtoRoutingDataSelector)} or
- * {@link ProtoHelper#typedRoutingAsRealtime(ProtoRoutingDataSelector)}.</p>
+ * Base entry point for protocol pipeline construction.
+ * <p>This interface abstracts the final step of organizing a set of protocol handlers into an
+ * executable pipeline.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  * @see ProtoHelper
  */
 public interface ProtoBuild {
-
-    /** build {@link ProtoStackChain} */
+    /**
+     * Build a reusable protocol initializer from the steps declared so far.
+     * <p>The result can be used to install a {@link ProtoStackChain} and apply the previously
+     * defined duplexers, unidirectional handlers, routing, and partition structures to concrete
+     * connections.</p>
+     * @return built protocol initializer
+     */
     ProtoInitializer build();
 }

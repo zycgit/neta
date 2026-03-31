@@ -17,33 +17,33 @@ package net.hasor.neta.channel.virtual;
 import net.hasor.neta.channel.SoConfig;
 
 /**
- * Configuration holder for the virtual in-process transport.
- * <p>Virtual channels simulate a transport entirely inside one JVM. This config
- * controls how the link is created and how {@link VrtTransfer} delivers data.
- * <p><b>Fields overview:</b>
+ * Configuration object for the in-process virtual transport.
+ * <p>Virtual channels simulate the full transport process inside one JVM. This configuration
+ * controls how links are created and how {@link VrtTransfer} delivers data.
+ * <p><b>Field overview:</b>
  * <table border="1" cellpadding="4">
- *   <tr><th>Field</th><th>Default</th><th>Notes</th></tr>
+ *   <tr><th>Field</th><th>Default</th><th>Description</th></tr>
  *   <tr><td>vrtMode</td><td>{@link VrtMode#Default}</td>
- *       <td>Requested role hint for the channel objects created around the transport.
- *           Connect-mode clients must start with {@code Default}; accepted server-side
- *           channels are materialized later as {@code Server}.</td></tr>
+ *       <td>Indicates which role should be applied to channel objects created around this transport.
+ *           Connect-mode clients must start with {@code Default}; accepted server-side channels
+ *           are materialized later as {@code Server}.</td></tr>
  *   <tr><td>rcvConvert</td><td>{@link VrtTransfer#duplicate()}</td>
- *       <td>Receive-side converter used by each {@link VrtTransferLink}. The default
- *           strategy duplicates {@link net.hasor.neta.bytebuf.ByteBuf} payloads so peers
- *           do not share mutable buffer state.</td></tr>
+ *       <td>The receive-side converter used by each {@link VrtTransferLink}.
+ *           The default strategy duplicates {@link net.hasor.neta.bytebuf.ByteBuf} payloads so
+ *           multiple peers do not share mutable buffer state.</td></tr>
  *   <tr><td>asynchronous</td><td>true</td>
- *       <td>Controls whether {@link VrtTransfer} dispatches each target delivery through
- *           the manager executor or runs inline on the publisher thread.</td></tr>
+ *       <td>Controls whether {@link VrtTransfer} dispatches deliveries asynchronously through the
+ *           manager executor or inline on the publisher thread.</td></tr>
  *   <tr><td>batchSize</td><td>1</td>
- *       <td>Minimum queued payload count required before a link flushes data into the
- *           target channel.</td></tr>
+ *       <td>The minimum number of queued messages a link must accumulate before flushing data into
+ *           the target channel.</td></tr>
  *   <tr><td>lossRate</td><td>0</td>
- *       <td>Threshold value forwarded to {@link VrtTransfer#setLossRate(int)}. In the
- *           current implementation {@code 0} disables dropping and larger values reduce
- *           the chance that a payload is skipped.</td></tr>
+ *       <td>The threshold passed to {@link VrtTransfer#setLossRate(int)}.
+ *           In the current implementation, {@code 0} means no packet loss, and larger values make
+ *           payloads less likely to be skipped.</td></tr>
  * </table>
- * <p>Static factories {@link #asDefault()}, {@link #asClient()}, and
- * {@link #asServer()} provide common presets without changing any other field.
+ * <p>The static factories {@link #asDefault()}, {@link #asClient()}, and {@link #asServer()} offer
+ * common presets without changing any other field.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see VrtMode
@@ -56,6 +56,9 @@ public class VrtSoConfig extends SoConfig {
     private int                batchSize;
     private int                lossRate;
 
+    /**
+     * Create a default virtual transport configuration object.
+     */
     public VrtSoConfig() {
         super(VrtProvider.NAME);
         this.vrtMode = VrtMode.Default;
@@ -65,73 +68,112 @@ public class VrtSoConfig extends SoConfig {
         this.lossRate = 0;
     }
 
-    /** Creates a config with {@link VrtMode#Default} mode. */
+    /**
+     * Create a configuration object using {@link VrtMode#Default} mode.
+     * @return the configuration object
+     */
     public static VrtSoConfig asDefault() {
         VrtSoConfig config = new VrtSoConfig();
         config.vrtMode = VrtMode.Default;
         return config;
     }
 
-    /** Creates a config with {@link VrtMode#Client} mode. */
+    /**
+     * Create a configuration object using {@link VrtMode#Client} mode.
+     * @return the configuration object
+     */
     public static VrtSoConfig asClient() {
         VrtSoConfig config = new VrtSoConfig();
         config.vrtMode = VrtMode.Client;
         return config;
     }
 
-    /** Creates a config with {@link VrtMode#Server} mode. */
+    /**
+     * Create a configuration object using {@link VrtMode#Server} mode.
+     * @return the configuration object
+     */
     public static VrtSoConfig asServer() {
         VrtSoConfig config = new VrtSoConfig();
         config.vrtMode = VrtMode.Server;
         return config;
     }
 
-    /** Returns the virtual channel mode (Default, Client, or Server). */
+    /**
+     * Return the virtual channel mode.
+     * @return the virtual channel mode
+     */
     public VrtMode getVrtMode() {
         return this.vrtMode;
     }
 
-    /** Sets the virtual channel mode. */
+    /**
+     * Set the virtual channel mode.
+     * @param vrtMode the virtual channel mode
+     */
     public void setVrtMode(VrtMode vrtMode) {
         this.vrtMode = vrtMode;
     }
 
-    /** Returns the handler that converts data on receive side of a virtual link. */
+    /**
+     * Return the data conversion handler used on the receive side of a virtual link.
+     * @return the receive-side conversion handler
+     */
     public VrtTransferHandler getRcvConvert() {
         return this.rcvConvert;
     }
 
-    /** Sets the receive-side data conversion handler. */
+    /**
+     * Set the receive-side data conversion handler.
+     * @param rcvConvert the receive-side conversion handler
+     */
     public void setRcvConvert(VrtTransferHandler rcvConvert) {
         this.rcvConvert = rcvConvert;
     }
 
-    /** Returns true if virtual data transfer uses async task submission. */
+    /**
+     * Determine whether virtual data transfer uses asynchronous task submission.
+     * @return true if asynchronous delivery is enabled
+     */
     public boolean isAsynchronous() {
         return asynchronous;
     }
 
-    /** Sets whether virtual data transfer is asynchronous. */
+    /**
+     * Set whether virtual data transfer should use asynchronous delivery.
+     * @param asynchronous whether delivery is asynchronous
+     */
     public void setAsynchronous(boolean asynchronous) {
         this.asynchronous = asynchronous;
     }
 
-    /** Returns the batch size for virtual transfer (messages accumulated before delivery). */
+    /**
+     * Return the batch size used by virtual transfer.
+     * @return the batch size
+     */
     public int getBatchSize() {
         return batchSize;
     }
 
-    /** Sets the batch size for virtual transfer. */
+    /**
+     * Set the batch size used by virtual transfer.
+     * @param batchSize the batch size
+     */
     public void setBatchSize(int batchSize) {
         this.batchSize = batchSize;
     }
 
-    /** Returns the simulated packet loss rate (0–100 percent). */
+    /**
+     * Return the simulated packet loss rate, in the range 0 to 100.
+     * @return the packet loss rate
+     */
     public int getLossRate() {
         return lossRate;
     }
 
-    /** Sets the simulated packet loss rate (0–100 percent). */
+    /**
+     * Set the simulated packet loss rate, in the range 0 to 100.
+     * @param lossRate the packet loss rate
+     */
     public void setLossRate(int lossRate) {
         this.lossRate = lossRate;
     }

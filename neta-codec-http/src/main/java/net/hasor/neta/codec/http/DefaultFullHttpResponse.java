@@ -34,6 +34,8 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
     private final HttpResponse     responseLine;
     private final HttpHeaders      headers;
     private final CompositeByteBuf contentBuffer;
+    private       boolean          bad;
+    private       String           badReason;
 
     /**
      * Creates an aggregated response with an empty payload and empty merged headers.
@@ -88,6 +90,16 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
         this.headers = headers;
         this.contentBuffer = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
         this.contentBuffer.addComponent(content.content());
+        if (responseLine.isBad()) {
+            this.bad = true;
+            this.badReason = responseLine.badReason();
+        } else if (headers.isBad()) {
+            this.bad = true;
+            this.badReason = headers.badReason();
+        } else if (content.isBad()) {
+            this.bad = true;
+            this.badReason = content.badReason();
+        }
     }
 
     @Override
@@ -99,6 +111,24 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
     public FullHttpResponse streamId(int streamId) {
         this.responseLine.streamId(streamId);
         this.headers.streamId(streamId);
+        return this;
+    }
+
+    @Override
+    public boolean isBad() {
+        return this.bad;
+    }
+
+    @Override
+    public String badReason() {
+        return this.badReason;
+    }
+
+    @Override
+    public FullHttpResponse markBad(String reason) {
+        this.bad = true;
+        this.badReason = reason;
+        this.responseLine.markBad(reason);
         return this;
     }
 
@@ -250,5 +280,7 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
         this.responseLine.release();
         this.headers.release();
         this.contentBuffer.release();
+        this.bad = false;
+        this.badReason = null;
     }
 }

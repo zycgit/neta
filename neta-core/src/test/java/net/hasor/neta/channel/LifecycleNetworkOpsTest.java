@@ -220,7 +220,7 @@ public class LifecycleNetworkOpsTest {
 
         ProtoHandler<Integer, Integer> handler = new ProtoHandler<Integer, Integer>() {
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+            public boolean onEvent(ProtoContext context, SoEvent event) throws Throwable {
                 if (event.getData() instanceof SoCloseEvent) {
                     eventReceived.set(true);
                     try {
@@ -275,7 +275,7 @@ public class LifecycleNetworkOpsTest {
 
         ProtoHandler<Integer, Integer> handler = new ProtoHandler<Integer, Integer>() {
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getData() instanceof SoCloseEvent) {
                     eventReceived.set(true);
                 }

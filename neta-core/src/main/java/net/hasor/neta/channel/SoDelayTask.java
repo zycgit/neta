@@ -17,26 +17,24 @@ package net.hasor.neta.channel;
 import java.util.concurrent.TimeUnit;
 
 /**
- * {@link DefaultSoTask} that re-schedules itself once after a delay, then finishes.
- * <p>On the first {@link DefaultSoTask#doWork(int)} call the task records a delay through
- * {@link DefaultSoTask#delayTask(int, TimeUnit)}. When the executor runs it again after that delay,
- * the task completes immediately. This makes it a lightweight building block for retry and backoff
- * loops submitted through {@link SoContextService#submitSoTask(DefaultSoTask, Object)}.
- * <p>The interval can be specified directly (milliseconds) or derived from
- * {@link NetConfig#getRetryIntervalMs()} via the context constructor.
+ * {@link DefaultSoTask} that delays itself once and then finishes.
+ * <p>During the first execution of {@link DefaultSoTask#doWork(int)}, the task records a delay
+ * through {@link DefaultSoTask#delayTask(int, TimeUnit)}. When the executor schedules it again
+ * after that delay, the task finishes immediately.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see DefaultSoTask#delayTask
  */
+@Deprecated
 public class SoDelayTask extends DefaultSoTask {
     private final int intervalMillis;
 
-    /** Creates a delay task with a fixed interval in milliseconds. */
+    /** Create a delayed task with a fixed interval in milliseconds. */
     public SoDelayTask(int intervalMillis) {
         this.intervalMillis = intervalMillis;
     }
 
-    /** Creates a delay task whose interval is derived from {@link NetConfig#getRetryIntervalMs()}. */
+    /** Create a delayed task whose interval is taken from {@link NetConfig#getRetryIntervalMs()}. */
     public SoDelayTask(SoContext context) {
         this.intervalMillis = Math.max(10, context.getConfig().getRetryIntervalMs());
     }

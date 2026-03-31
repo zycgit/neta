@@ -14,40 +14,40 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Connection-level receive-window tracker plus helpers for stream-level flow-control decisions.
- * <p>This class keeps the authoritative connection-level byte counters used for
- * {@code MAX_DATA} handling and provides utility methods for validating stream
- * offsets and building {@code MAX_DATA}/{@code MAX_STREAM_DATA} frames.
- * <p>Per-stream counters are not stored here; they remain on the stream-side
- * objects and call back into these helper methods when needed.
+ * Tracks the connection-level receive window and provides helper capabilities required for stream-level flow-control checks.
+ * <p>This class maintains the connection-level byte counters required to process {@code MAX_DATA} and provides helper methods for validating stream offsets and building {@code MAX_DATA}/{@code MAX_STREAM_DATA} frames.
+ * <p>Per-stream counters are not stored here; they are maintained by the stream objects and call these helper methods when needed.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicFlowControl {
     private static final Logger logger = Logger.getLogger(QuicFlowControl.class);
 
-    /** When consumed exceeds this fraction of the current window, auto-expand. */
+    /** Automatically expands when usage exceeds this ratio of the current window. */
     private static final double AUTO_TUNE_THRESHOLD = 0.5;
 
-    // ── Connection-level flow control ──────────────────────────────────
-    /** Maximum data the peer is allowed to send at connection level (our receive limit). */
+    // ── Connection-level flow control ─────────────────────────────────
+    /** Maximum amount of data the peer is allowed to send at the connection level, that is, the local receive limit. */
     private long connectionMaxData;
-    /** Total bytes received at connection level. */
+    /** Total bytes received at the connection level. */
     private long connectionBytesReceived;
 
-    // ── Per-stream flow control state is maintained externally (in QuicStreamChannel).
-    // This class provides helper methods for validation.
+    // ── Per-stream flow-control state is maintained externally, for example by QuicStreamChannel.
+    // This class only provides validation and frame-building helpers.
 
-    /** Creates a flow control tracker with the given initial connection-level max data. */
+    /**
+     * Creates a flow-control tracker using the given initial connection-level window.
+     */
     QuicFlowControl(long initialMaxData) {
         this.connectionMaxData = initialMaxData;
         this.connectionBytesReceived = 0;
     }
 
-    /** Builds a MAX_DATA frame (RFC 9000 §19.9) for the given connection-level limit. */
+    /**
+     * Builds a MAX_DATA frame for the specified connection-level limit.
+     */
     static byte[] buildMaxDataFrame(long maxData) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_DATA);
         byte[] valBytes = QuicVarInt.encode(maxData);
@@ -57,7 +57,9 @@ class QuicFlowControl {
         return frame;
     }
 
-    /** Builds a MAX_STREAM_DATA frame (RFC 9000 §19.10) for the given stream and limit. */
+    /**
+     * Builds a MAX_STREAM_DATA frame for the specified stream and limit value.
+     */
     static byte[] buildMaxStreamDataFrame(long streamId, long maxStreamData) {
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.MAX_STREAM_DATA);
         byte[] sidBytes = QuicVarInt.encode(streamId);
@@ -72,7 +74,10 @@ class QuicFlowControl {
         return frame;
     }
 
-    /** Records received bytes at connection level; returns false if the MAX_DATA limit is violated. */
+    /**
+     * Records newly received bytes at the connection level.
+     * @return returns false if the MAX_DATA limit is violated
+     */
     synchronized boolean onConnectionDataReceived(long bytes) {
         this.connectionBytesReceived += bytes;
         if (this.connectionBytesReceived > this.connectionMaxData) {
@@ -82,7 +87,10 @@ class QuicFlowControl {
         return true;
     }
 
-    /** Validates stream data does not exceed MAX_STREAM_DATA; returns false on violation. */
+    /**
+     * Validates whether stream data exceeds the MAX_STREAM_DATA limit.
+     * @return returns false if the limit is violated
+     */
     boolean validateStreamData(long streamOffset, long length, long streamMaxData) {
         long totalStreamBytes = streamOffset + length;
         if (totalStreamBytes > streamMaxData) {
@@ -92,11 +100,14 @@ class QuicFlowControl {
         return true;
     }
 
-    /** Returns the new doubled MAX_DATA if usage exceeds the auto-tune threshold, or -1 if not needed. */
+    /**
+     * Determines whether the connection-level window needs to be expanded.
+     * @return returns the expanded value if needed, otherwise -1
+     */
     synchronized long shouldExpandConnectionWindow() {
         double usageRatio = (double) this.connectionBytesReceived / this.connectionMaxData;
         if (usageRatio >= AUTO_TUNE_THRESHOLD) {
-            // Double the window
+            // Expand the window to twice its current size.
             long newMaxData = this.connectionMaxData * 2;
             this.connectionMaxData = newMaxData;
             return newMaxData;
@@ -104,7 +115,10 @@ class QuicFlowControl {
         return -1;
     }
 
-    /** Returns the new doubled MAX_STREAM_DATA if usage exceeds the auto-tune threshold, or -1 if not needed. */
+    /**
+     * Determines whether the stream-level window needs to be expanded.
+     * @return returns the expanded value if needed, otherwise -1
+     */
     long shouldExpandStreamWindow(long streamBytesReceived, long streamMaxData) {
         if (streamMaxData <= 0) {
             return -1;
@@ -116,17 +130,23 @@ class QuicFlowControl {
         return -1;
     }
 
-    /** Returns the current connection-level max data (our receive limit). */
+    /**
+     * Returns the current maximum connection-level receive amount.
+     */
     synchronized long getConnectionMaxData() {
         return this.connectionMaxData;
     }
 
-    /** Returns the total bytes received at the connection level. */
+    /**
+     * Returns the total bytes currently received at the connection level.
+     */
     synchronized long getConnectionBytesReceived() {
         return this.connectionBytesReceived;
     }
 
-    /** Updates the connection max data (e.g., from MAX_DATA sent by us). */
+    /**
+     * Updates the maximum connection-level data limit.
+     */
     synchronized void updateConnectionMaxData(long newMaxData) {
         this.connectionMaxData = Math.max(this.connectionMaxData, newMaxData);
     }

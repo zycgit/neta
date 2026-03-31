@@ -15,24 +15,23 @@
  */
 package net.hasor.neta.channel;
 /**
- * Thrown when a low-level I/O error occurs while reading data from a {@link SoChannel}.
- * <p>This exception wraps OS-level socket errors that are not already covered by the more
- * specific subclasses (such as {@link SoReadTimeoutException} for timeouts or
- * {@link SoInputCloseException} for half-close). Typical triggers include:
+ * Thrown when a low-level I/O error occurs while reading from a {@link SoChannel}.
+ * <p>It wraps operating-system-level socket errors that are not already covered by more specific
+ * subclasses, for example read timeout is represented by {@link SoReadTimeoutException} and
+ * half-close by {@link SoInputCloseException}. Common trigger scenarios include:</p>
  * <ul>
- *   <li>An unexpected TCP RST received from the remote peer during an active read.</li>
- *   <li>A NIC or network stack failure resulting in an unrecoverable I/O error.</li>
+ *   <li>Receiving an unexpected TCP RST from the remote peer during an active read.</li>
+ *   <li>A NIC or network stack failure causing an unrecoverable I/O error.</li>
  *   <li>A previously valid file descriptor being closed by another thread.</li>
  * </ul>
- * <p>After this exception is raised the channel is considered unusable and subsequent reads
- * will fail immediately. Callers should close the channel and release any associated resources.
+ * <p>Once this exception is thrown, the channel should be considered unusable and subsequent reads
+ * will usually fail immediately. Callers should close the channel and release associated resources.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoReadTimeoutException
  * @see SoCloseException
  */
 public class SoRcvException extends SoException {
-
     public SoRcvException(String s) {
         super(s);
     }

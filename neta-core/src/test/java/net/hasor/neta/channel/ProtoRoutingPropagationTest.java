@@ -58,13 +58,13 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         };
     }
 
-    /** Handler that fires a user event in onMessage after passing data through. */
+    /** Handler that fires a network event in onMessage after passing data through. */
     private static ProtoHandler<Integer, Integer> eventFireHandler(String tag, List<String> log) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) throws Throwable {
                 log.add(tag + "Msg");
-                context.fireUserEvent(String.class, "test-event");
+                context.fireEvent(String.class, "test-event");
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return ProtoStatus.Next;
             }
@@ -81,7 +81,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
             @Override
             public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) throws Throwable {
                 log.add(tag + "Msg");
-                context.fireUserEventReverse(String.class, "test-reverse-event");
+                context.fireEventReverse(String.class, "test-reverse-event");
                 dst.offerMessage(src.takeMessage(src.queueSize()));
                 return ProtoStatus.Next;
             }
@@ -93,7 +93,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         };
     }
 
-    /** Handler that records received user events via onUserEvent. */
+    /** Handler that records received network events via onEvent. */
     private static ProtoHandler<Integer, Integer> eventRecordHandler(String tag, List<String> log) {
         return new ProtoHandler<Integer, Integer>() {
             @Override
@@ -103,7 +103,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
             }
 
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 log.add(tag + "Evt");
                 return true;
             }
@@ -415,12 +415,12 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
     }
 
     // -----------------------------------------------------------------
-    // USER EVENT PROPAGATION
+    // EVENT PROPAGATION
     // -----------------------------------------------------------------
 
     /**
-     * User event fired from inside a branch (RCV context: branch decoder onMessage).
-     * Since the event reaches the end of the branch's RCV chain, fireUserEventUpward
+     * Network event fired from inside a branch (RCV context: branch decoder onMessage).
+     * Since the event reaches the end of the branch's RCV chain, fireEventUpward
      * crosses into the parent pipeline starting at parentNextStackName (the handler
      * immediately after the Router in the main pipeline).
      * Pipeline: Router(branch: [branchFireEvt dec]) → [post(eventRecord dec / plain enc)]
@@ -437,14 +437,14 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         // Branch decoder ran and fired the event
         Assert.assertTrue("branch decoder should have run and fired event", evtLog.contains("BrMsg"));
         // post handler (after Router in main pipeline) must receive the event exactly once
-        Assert.assertEquals("post should receive user event exactly once", 1, evtLog.stream().filter("PostEvt"::equals).count());
+        Assert.assertEquals("post should receive network event exactly once", 1, evtLog.stream().filter("PostEvt"::equals).count());
     }
 
     /**
-     * User event fired from the MIDDLE of a branch chain (not the last handler).
+     * Network event fired from the MIDDLE of a branch chain (not the last handler).
      * The event propagates forward within the branch to the next handler (branchRecord),
      * but does NOT cross the branch boundary — because the chain end was not reached
-     * by the originating call to context.fireUserEvent().
+     * by the originating call to context.fireEvent().
      * Crossing only occurs when the event reaches the end of the branch chain, which only
      * happens when the firing handler IS the last handler (or is reached from the last).
      * Pipeline: Router(branch: [branchFire dec, branchRecord dec]) → [postRecord dec]
@@ -465,7 +465,7 @@ public class ProtoRoutingPropagationTest extends AbstractStackTest {
         // Event fired by brFire
         Assert.assertTrue("brFire should have run", evtLog.contains("BrFireMsg"));
         // brRecord (next in branch) should receive the event (within-branch delivery)
-        Assert.assertTrue("brRecord should receive user event within branch", evtLog.contains("BrRecordEvt"));
+        Assert.assertTrue("brRecord should receive network event within branch", evtLog.contains("BrRecordEvt"));
         // post (after Router in main pipeline) must NOT receive the event —
         // crossing only occurs when the event is fired from the last handler in the branch chain
         Assert.assertFalse("post must NOT receive event when fired from middle of branch", evtLog.contains("PostEvt"));

@@ -15,20 +15,19 @@
  */
 package net.hasor.neta.channel;
 /**
- * Control handle passed to {@code onError(...)} callbacks so a handler can clear the
- * current exception state.
- * <p>When an unhandled exception escapes a {@link ProtoHandler} or {@link ProtoDuplexer}
- * during message processing, the framework sets an <em>exception flag</em> on the current
- * pipeline invocation and switches subsequent handlers from {@code onMessage} to
- * {@code onError}.  The exception propagates to the end of the pipeline; if nothing clears
- * it the channel is closed.
- * <p>For outbound {@link ProtoContext#sendData(Object)} calls, a failed send attempt does not
- * automatically discard queue-owned messages that are still buffered in the current pipeline
- * stage. If the channel remains open, those messages stay queued and may be processed again on
- * a later send/recovery pass. Final reclamation of such queued data happens in the stack close
- * path only.
- * <p>A handler can intercept the exception and resume normal processing by calling
- * {@link #clear()} from its {@code onError} implementation:
+ * Control handle passed into {@code onError(...)} callbacks so a handler can clear the current
+ * exception state.
+ * <p>When an unhandled exception escapes from {@link ProtoHandler} or {@link ProtoDuplexer} during
+ * message processing, the framework marks the current pipeline invocation as exceptional and
+ * switches subsequent handlers from {@code onMessage} to {@code onError}. The exception continues
+ * to propagate until the end of the pipeline. If nothing clears it, the channel is closed on the
+ * receive side.</p>
+ * <p>For outbound {@link ProtoContext#sendData(Object)} calls, a failed send does not automatically
+ * discard messages still owned by the queue at the current pipeline stage. If the channel remains
+ * open, those messages stay queued and may be processed again by later send or recovery flows. Such
+ * queued data is reclaimed only when the protocol stack close path runs.</p>
+ * <p>A handler may call {@link #clear()} in its own {@code onError} implementation to intercept the
+ * exception and restore normal processing:</p>
  * <pre>
  * ... → onMessage → [exception] → onError → onError (calls clear()) → onMessage → ...
  * </pre>
@@ -39,8 +38,10 @@ package net.hasor.neta.channel;
  */
 public interface ProtoExceptionHolder {
     /**
-        * clear the exception state and continue piple execution
-        * <p>You can clear the exception flag with the {@link ProtoExceptionHolder#clear()} method, and piple execution will continue normally</p>
+     * Clear the exception state and continue executing the pipeline.
+     * <p>After calling {@link ProtoExceptionHolder#clear()}, the current invocation chain leaves
+     * exception-propagation mode and subsequent handlers return to the normal {@code onMessage}
+     * path.</p>
      * <pre>
      *  ... -> onMessage -> onError -> onError(invoker clear) -> onMessage -> ...
      * </pre>

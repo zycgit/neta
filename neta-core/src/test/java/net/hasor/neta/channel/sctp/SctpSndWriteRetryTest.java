@@ -16,6 +16,7 @@
 package net.hasor.neta.channel.sctp;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
+import java.nio.ByteBuffer;
 import java.nio.channels.InterruptedByTimeoutException;
 import net.hasor.neta.channel.NetChannel;
 import net.hasor.neta.channel.SoContextService;
@@ -89,6 +90,12 @@ public class SctpSndWriteRetryTest {
         return (int) f.get(task);
     }
 
+    private static ByteBuffer getSndSwapBuf(SctpWriteTask task) throws Exception {
+        Field f = SctpWriteTask.class.getDeclaredField("sndSwapBuf");
+        f.setAccessible(true);
+        return (ByteBuffer) f.get(task);
+    }
+
     // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
@@ -113,11 +120,22 @@ public class SctpSndWriteRetryTest {
     public void config_setterPreservesOtherFields() {
         SctpSoConfig cfg = new SctpSoConfig();
         cfg.setSwapRcvBuf(32768);
+        cfg.setSwapSndBuf(16384);
         cfg.setSndWriteRetryCount(2);
         cfg.setSndWriteRetryIntervalMs(75);
         assert cfg.getSwapRcvBuf() == 32768;
+        assert cfg.getSwapSndBuf() == 16384;
         assert cfg.getSndWriteRetryCount() == 2;
         assert cfg.getSndWriteRetryIntervalMs() == 75;
+    }
+
+    @Test
+    public void writeTask_usesConfiguredSwapSndBuf() throws Exception {
+        SctpSoConfig cfg = new SctpSoConfig();
+        cfg.setSwapSndBuf(8192);
+
+        SctpWriteTask task = buildTask(cfg);
+        assert getSndSwapBuf(task).capacity() == 8192 : "sndSwapBuf should honor swapSndBuf";
     }
 
     /**

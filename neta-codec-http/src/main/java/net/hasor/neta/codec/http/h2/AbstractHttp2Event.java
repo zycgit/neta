@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.codec.http.HttpEvent;
 
 /**
- * Base type for HTTP2 user events.
+ * Base type for HTTP2 network events.
  */
 public abstract class AbstractHttp2Event implements HttpEvent {
     private int     streamId;

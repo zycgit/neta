@@ -14,37 +14,38 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel.quic;
-
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.TreeSet;
 
 /**
- * Tracks received packet numbers and generates ACK frames per RFC 9000 §13.2 / §19.3.
+ * Tracks received packet numbers and generates ACK frames according to RFC 9000 Sections 13.2 and 19.3.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAckTracker {
-    /** Received packet numbers (sorted set for efficient range computation). */
+    /** Received packet-number set, kept ordered for easy range computation. */
     private final TreeSet<Long> receivedPns           = new TreeSet<>();
-    /** Number of ack-eliciting packets to receive before generating an ACK. RFC recommends 2. */
+    /** Threshold of accumulated ack-eliciting packets before generating an ACK; RFC recommends 2. */
     private final int           ackElicitingThreshold = 2;
-    /** The largest packet number received so far (-1 means none). */
+    /** Largest packet number received so far; -1 means nothing has been received yet. */
     private       long          largestReceivedPn     = -1;
-    /** Timestamp (epoch ms) when the largest packet number was received. */
+    /** Timestamp in milliseconds when the largest packet number was received. */
     private       long          largestReceivedTime   = 0;
-    /** Number of ack-eliciting packets received since last ACK was sent. */
+    /** Number of ack-eliciting packets received since the last ACK was sent. */
     private       int           pendingAckEliciting   = 0;
-    /** Whether we have received any out-of-order packets since last ACK. */
+    /** Whether any out-of-order packet has been received since the last ACK was sent. */
     private       boolean       hasGap                = false;
-    /** ACK delay exponent for encoding the ack_delay field (RFC 9000 §19.3). Default 3 (= divide by 8). */
+    /** ACK delay exponent used to encode the ack_delay field; defaults to 3. */
     private       int           ackDelayExponent      = 3;
-    /** Maximum ACK delay in milliseconds (RFC 9000 §18.2: max_ack_delay, default 25 ms). */
+    /** Maximum ACK delay in milliseconds; defaults to 25 ms. */
     private       long          maxAckDelay           = 25;
-    /** Timestamp when the last ACK frame was sent (epoch ms). */
+    /** Timestamp in milliseconds when the last ACK frame was sent. */
     private       long          lastAckSentTime       = 0;
 
-    /** Parses ACK ranges from a received ACK frame body (after the frame type). Returns acknowledged packet numbers. */
+    /**
+     * Parses ACK ranges from the contents of a received ACK frame.
+     */
     static List<long[]> parseAckRanges(byte[] data, int pos) {
         List<long[]> ackedRanges = new ArrayList<>();
         long[] tmp = QuicVarInt.decode(data, pos);
@@ -52,7 +53,7 @@ class QuicAckTracker {
         pos += (int) tmp[1];
 
         tmp = QuicVarInt.decode(data, pos);
-        // long ackDelay = tmp[0]; // not used for loss detection directly here
+        // ackDelay is not used directly for loss detection here.
         pos += (int) tmp[1];
 
         tmp = QuicVarInt.decode(data, pos);
@@ -86,19 +87,19 @@ class QuicAckTracker {
         return ackedRanges;
     }
 
-    /** Sets the ACK delay exponent (RFC 9000 §18.2, default 3). */
+    /** Sets the ACK delay exponent. */
     void setAckDelayExponent(int exponent) {
         this.ackDelayExponent = exponent;
     }
 
-    /** Sets the maximum ACK delay in milliseconds (RFC 9000 §18.2, default 25 ms). */
+    /** Sets the maximum ACK delay in milliseconds. */
     void setMaxAckDelay(long maxAckDelayMs) {
         this.maxAckDelay = maxAckDelayMs;
     }
 
-    /** Records a received packet number and updates out-of-order and ack-eliciting counters. */
+    /** Records a received packet number and updates out-of-order state and ack-eliciting counters. */
     synchronized void onPacketReceived(long pn, boolean ackEliciting) {
-        // Detect gap (out-of-order)
+        // Detect whether an out-of-order gap exists.
         if (this.largestReceivedPn >= 0 && pn != this.largestReceivedPn + 1) {
             this.hasGap = true;
         }
@@ -115,35 +116,37 @@ class QuicAckTracker {
         }
     }
 
-    /** Returns true if an ACK frame should be sent now based on threshold, gaps, and max delay. */
+    /** Returns whether an ACK should be sent immediately. */
     synchronized boolean shouldSendAck() {
         if (this.pendingAckEliciting <= 0) {
             return false;
         }
-        // Immediate ACK on gaps (out-of-order)
+        // Acknowledge immediately when reordering is observed.
         if (this.hasGap) {
             return true;
         }
-        // Threshold reached
+        // Threshold reached.
         if (this.pendingAckEliciting >= this.ackElicitingThreshold) {
             return true;
         }
-        // Max ACK delay elapsed
+        // Maximum ACK delay exceeded.
         if (this.lastAckSentTime > 0 && (System.currentTimeMillis() - this.lastAckSentTime) >= this.maxAckDelay) {
             return true;
         }
-        // First ACK ever (no previous ACK sent)
+        // First ACK transmission.
         return this.lastAckSentTime == 0 && this.pendingAckEliciting > 0;
     }
 
-    /** Generates an ACK frame (RFC 9000 §19.3) for all received packet numbers, or null if none. */
+    /**
+     * Generates an ACK frame for all packet numbers received so far.
+     * @return returns null if there is currently nothing to acknowledge
+     */
     synchronized byte[] generateAckFrame() {
         if (this.receivedPns.isEmpty()) {
             return null;
         }
 
-        // Compute contiguous ranges from the set of received packet numbers.
-        // Ranges are in descending order: [largest..end], gap, [next..end], ...
+        // Compute contiguous ranges from the received packet set, sorted from high to low.
         List<long[]> ranges = computeRanges();
         if (ranges.isEmpty()) {
             return null;
@@ -156,23 +159,23 @@ class QuicAckTracker {
             ackDelay = ackDelay >> this.ackDelayExponent; // encode per RFC 9000 §19.3
         }
 
-        // First ACK Range = largest - ranges[0][1] (the range that includes largestAcked)
+        // The first ACK range length equals the distance from largestAcked to the low end of the range.
         long firstAckRange = ranges.get(0)[0] - ranges.get(0)[1];
         int ackRangeCount = ranges.size() - 1;
 
-        // Build frame bytes
+        // Build the frame bytes.
         byte[] typeBytes = QuicVarInt.encode(QuicFrameType.ACK);
         byte[] largestBytes = QuicVarInt.encode(largestAcked);
         byte[] delayBytes = QuicVarInt.encode(ackDelay);
         byte[] countBytes = QuicVarInt.encode(ackRangeCount);
         byte[] firstRangeBytes = QuicVarInt.encode(firstAckRange);
 
-        // Calculate additional ranges size
+        // Compute fields for additional ranges.
         List<byte[]> additionalRangeBytes = new ArrayList<>();
         for (int i = 1; i < ranges.size(); i++) {
-            long prevLow = ranges.get(i - 1)[1]; // low end of previous range
-            long currHigh = ranges.get(i)[0];     // high end of current range
-            long gap = prevLow - currHigh - 2;    // RFC 9000 §19.3: gap = # missing PNs - 1
+            long prevLow = ranges.get(i - 1)[1]; // Low end of the previous range
+            long currHigh = ranges.get(i)[0];     // High end of the current range
+            long gap = prevLow - currHigh - 2;    // gap = number of missing packet numbers - 1
             long ackRange = ranges.get(i)[0] - ranges.get(i)[1]; // range length - 1
             byte[] gapBytes = QuicVarInt.encode(Math.max(gap, 0));
             byte[] rangeBytes = QuicVarInt.encode(ackRange);
@@ -180,7 +183,7 @@ class QuicAckTracker {
             additionalRangeBytes.add(rangeBytes);
         }
 
-        // Compute total length
+        // Compute total length.
         int totalLen = typeBytes.length + largestBytes.length + delayBytes.length + countBytes.length + firstRangeBytes.length;
         for (byte[] b : additionalRangeBytes) {
             totalLen += b.length;
@@ -203,7 +206,7 @@ class QuicAckTracker {
             pos += b.length;
         }
 
-        // Reset counters
+        // Reset state counters.
         this.pendingAckEliciting = 0;
         this.hasGap = false;
         this.lastAckSentTime = System.currentTimeMillis();
@@ -211,7 +214,7 @@ class QuicAckTracker {
         return frame;
     }
 
-    /** Computes contiguous packet number ranges from the sorted received set, in descending order. */
+    /** Computes contiguous ranges from the sorted set of received packet numbers. */
     private List<long[]> computeRanges() {
         if (this.receivedPns.isEmpty()) {
             return Collections.emptyList();
@@ -221,33 +224,33 @@ class QuicAckTracker {
         long rangeHigh = -1;
         long rangeLow = -1;
 
-        // Iterate in descending order
+        // Iterate in descending order.
         for (Long pn : this.receivedPns.descendingSet()) {
             if (rangeHigh < 0) {
                 rangeHigh = pn;
                 rangeLow = pn;
             } else if (pn == rangeLow - 1) {
-                rangeLow = pn; // extend current range
+                rangeLow = pn; // Extend the current range.
             } else {
-                // Save current range and start a new one
+                // Save the current range and start a new one.
                 ranges.add(new long[] { rangeHigh, rangeLow });
                 rangeHigh = pn;
                 rangeLow = pn;
             }
         }
-        // Don't forget the last range
+        // Do not miss the last range.
         if (rangeHigh >= 0) {
             ranges.add(new long[] { rangeHigh, rangeLow });
         }
         return ranges;
     }
 
-    /** Returns the largest packet number received, or -1 if no packets have been received. */
+    /** Returns the largest packet number received so far. */
     synchronized long getLargestReceivedPn() {
         return this.largestReceivedPn;
     }
 
-    /** Returns the number of pending ack-eliciting packets. */
+    /** Returns the number of ack-eliciting packets currently pending acknowledgment. */
     synchronized int getPendingAckEliciting() {
         return this.pendingAckEliciting;
     }

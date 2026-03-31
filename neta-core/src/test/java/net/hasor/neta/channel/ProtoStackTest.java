@@ -39,8 +39,8 @@ public class ProtoStackTest extends AbstractStackTest {
             }
 
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                record.add(tag + "-OnUserEvent");
+            public boolean onEvent(ProtoContext context, SoEvent event) {
+                record.add(tag + "-OnEvent");
                 return true;
             }
 
@@ -207,8 +207,8 @@ public class ProtoStackTest extends AbstractStackTest {
                 }
 
                 @Override
-                public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
-                    record.add("s1-OnUserEvent");
+                public boolean onEvent(ProtoContext context, SoEvent event) {
+                    record.add("s1-OnEvent");
                     ProtoHandler<Integer, Integer> decode = recordHandler("s2", record);
                     asBuildContext(context).addLastDecoder("s2", decode);
                     return true;
@@ -226,15 +226,15 @@ public class ProtoStackTest extends AbstractStackTest {
 
         NetManager neta = new NetManager();
         VrtChannel channel = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), initializer, VrtSoConfig.asServer());
-        channel.fireUserEvent(ProtoStackTest.class, this);
+        channel.fireEvent(ProtoStackTest.class, this);
 
         channel.receiveData(1);
 
         assert record.size() == 6;
         assert record.get(0).equals("s1-OnInit");
         assert record.get(1).equals("s1-OnActive");
-        assert record.get(2).equals("s1-OnUserEvent");
-        assert record.get(3).equals("s2-OnUserEvent");
+        assert record.get(2).equals("s1-OnEvent");
+        assert record.get(3).equals("s2-OnEvent");
         assert record.get(4).equals("s1-OnMessage");
         assert record.get(5).equals("s2-OnMessage");
         neta.shutdown();

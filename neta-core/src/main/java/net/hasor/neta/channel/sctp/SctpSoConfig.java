@@ -17,23 +17,9 @@ package net.hasor.neta.channel.sctp;
 import net.hasor.neta.channel.SoConfig;
 
 /**
- * Configuration object for Neta's SCTP transport.
- * <p>This type currently contributes three groups of settings to the SCTP code path:
- * <ul>
- *   <li>message swap-buffer sizes used by the framework-side receive/send staging buffers;</li>
- *   <li>retry policy for {@link SctpWriteTask} when {@code send()} cannot make progress;</li>
- *   <li>additional keepalive-related values carried as configuration fields for future
- *       or platform-specific socket-option application.</li>
- * </ul>
- * <p>In the current implementation only a subset of these fields is actively consumed:
- * {@code swapRcvBuf} determines the size of the receive staging buffer,
- * {@code sndWriteRetryCount} and {@code sndWriteRetryIntervalMs} are used by
- * {@link SctpWriteTask}, while the keepalive fields are stored here but are not
- * applied by {@link SctpSoConfigUtils#configListen(SctpSoConfig, com.sun.nio.sctp.SctpServerChannel)} yet.
+ * Configuration object used by the SCTP transport layer in Neta.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
- * @see SctpSoConfigUtils
- * @see net.hasor.neta.channel.SoConfig
  */
 public class SctpSoConfig extends SoConfig {
     // Swap buffer sizes.
@@ -48,87 +34,137 @@ public class SctpSoConfig extends SoConfig {
     private Integer soKeepIntervalSec = null; // TCP_KEEPINTERVAL in seconds.
     private Integer soKeepCount       = null; // TCP_KEEPCOUNT.
 
-    /** Creates an SCTP socket config with SCTP provider defaults. */
+    /**
+     * Create a configuration object initialized with the SCTP provider defaults.
+     */
     public SctpSoConfig() {
         super(SctpProvider.NAME);
     }
 
-    /** Returns the swap buffer size for receiving data (bytes). */
+    /**
+     * Return the size of the receive-side swap buffer, in bytes.
+     * @return the receive swap buffer size
+     */
     public int getSwapRcvBuf() {
         return this.swapRcvBuf;
     }
 
-    /** Sets the swap buffer size for receiving data (bytes). */
+    /**
+     * Set the size of the receive-side swap buffer, in bytes.
+     * @param swapRcvBuf the receive swap buffer size
+     */
     public void setSwapRcvBuf(int swapRcvBuf) {
         this.swapRcvBuf = swapRcvBuf;
     }
 
-    /** Returns the swap buffer size for sending data (bytes). */
+    /**
+     * Return the size of the send-side swap buffer, in bytes.
+     * @return the send swap buffer size
+     */
     public int getSwapSndBuf() {
         return this.swapSndBuf;
     }
 
-    /** Sets the swap buffer size for sending data (bytes). */
+    /**
+     * Set the size of the send-side swap buffer, in bytes.
+     * @param swapSndBuf the send swap buffer size
+     */
     public void setSwapSndBuf(int swapSndBuf) {
         this.swapSndBuf = swapSndBuf;
     }
 
-    /** Returns the SO_KEEPALIVE setting, or null if unset. */
+    /**
+     * Return the configured SO_KEEPALIVE value.
+     * @return the SO_KEEPALIVE setting, or null if it has not been configured
+     */
     public Boolean getSoKeepAlive() {
         return this.soKeepAlive;
     }
 
-    /** Enables or disables SO_KEEPALIVE. */
+    /**
+     * Set whether SO_KEEPALIVE should be enabled.
+     * @param soKeepAlive whether keepalive should be enabled
+     */
     public void setSoKeepAlive(Boolean soKeepAlive) {
         this.soKeepAlive = soKeepAlive;
     }
 
-    /** Returns TCP_KEEPIDLE in seconds, or null if unset. */
+    /**
+     * Return the configured TCP_KEEPIDLE value, in seconds.
+     * @return the TCP_KEEPIDLE setting, or null if it has not been configured
+     */
     public Integer getSoKeepIdleSec() {
         return this.soKeepIdleSec;
     }
 
-    /** Sets TCP_KEEPIDLE in seconds. */
+    /**
+     * Set TCP_KEEPIDLE, in seconds.
+     * @param soKeepIdleSec the idle probe delay
+     */
     public void setSoKeepIdleSec(Integer soKeepIdleSec) {
         this.soKeepIdleSec = soKeepIdleSec;
     }
 
-    /** Returns TCP_KEEPINTERVAL in seconds, or null if unset. */
+    /**
+     * Return the configured TCP_KEEPINTERVAL value, in seconds.
+     * @return the TCP_KEEPINTERVAL setting, or null if it has not been configured
+     */
     public Integer getSoKeepIntervalSec() {
         return this.soKeepIntervalSec;
     }
 
-    /** Sets TCP_KEEPINTERVAL in seconds. */
+    /**
+     * Set TCP_KEEPINTERVAL, in seconds.
+     * @param soKeepIntervalSec the probe interval
+     */
     public void setSoKeepIntervalSec(Integer soKeepIntervalSec) {
         this.soKeepIntervalSec = soKeepIntervalSec;
     }
 
-    /** Returns TCP_KEEPCOUNT, or null if unset. */
+    /**
+     * Return the configured TCP_KEEPCOUNT value.
+     * @return the TCP_KEEPCOUNT setting, or null if it has not been configured
+     */
     public Integer getSoKeepCount() {
         return this.soKeepCount;
     }
 
-    /** Sets TCP_KEEPCOUNT. */
+    /**
+     * Set TCP_KEEPCOUNT.
+     * @param soKeepCount the probe count
+     */
     public void setSoKeepCount(Integer soKeepCount) {
         this.soKeepCount = soKeepCount;
     }
 
-    /** Returns the number of write-timeout retries (0 = no retry). */
+    /**
+     * Return the retry count used after a send timeout.
+     * @return the retry count; 0 means no retry
+     */
     public int getSndWriteRetryCount() {
         return this.sndWriteRetryCount;
     }
 
-    /** Sets the number of write-timeout retries. */
+    /**
+     * Set the retry count used after a send timeout.
+     * @param sndWriteRetryCount the retry count
+     */
     public void setSndWriteRetryCount(int sndWriteRetryCount) {
         this.sndWriteRetryCount = sndWriteRetryCount;
     }
 
-    /** Returns the delay between write retries in milliseconds. */
+    /**
+     * Return the wait time between two send retries, in milliseconds.
+     * @return the retry interval
+     */
     public int getSndWriteRetryIntervalMs() {
         return this.sndWriteRetryIntervalMs;
     }
 
-    /** Sets the delay between write retries in milliseconds. */
+    /**
+     * Set the wait time between two send retries, in milliseconds.
+     * @param sndWriteRetryIntervalMs the retry interval
+     */
     public void setSndWriteRetryIntervalMs(int sndWriteRetryIntervalMs) {
         this.sndWriteRetryIntervalMs = sndWriteRetryIntervalMs;
     }

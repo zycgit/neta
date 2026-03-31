@@ -48,17 +48,17 @@ class ProtoQueueView implements ProtoRcvQueue<Object>, ProtoSndQueue<Object> {
     }
 
     @Override
-    public int offerMessage(Object[] offerList) {
+    public boolean offerMessage(Object[] offerList) {
         return this.queue.offerMessage(offerList);
     }
 
     @Override
-    public int offerMessage(List<Object> offerList) {
+    public boolean offerMessage(List<Object> offerList) {
         return this.queue.offerMessage(offerList);
     }
 
     @Override
-    public int offerMessage(ProtoRcvQueue<Object> offerList) {
+    public boolean offerMessage(ProtoRcvQueue<Object> offerList) {
         return this.queue.offerMessage(offerList);
     }
 

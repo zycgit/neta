@@ -14,7 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
+/**
+ * Identifies the kind of data currently being processed by a partition selector.
+ * <p>{@link ProtoPartitionSelector} and {@link ProtoPartitionPolicy} use this enum to distinguish
+ * protocol messages from events so they can apply different partition-routing or creation
+ * strategies for each kind.</p>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-31
+ */
 public enum PartitionDataKind {
+    /** Protocol message data. */
     Message,
+
+    /** Event data. */
     Event
 }

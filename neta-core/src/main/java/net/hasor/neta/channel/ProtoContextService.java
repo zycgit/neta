@@ -23,14 +23,9 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 
 /**
  * Default {@link ProtoContext} implementation for one logical channel pipeline.
- * <p>It holds the channel-facing {@link ProtoStackChain}, typed attachments
- * exposed through {@link ProtoContext#context(Class)}, per-pass flash data, and
- * the re-entrant status stack used while the pipeline invokes nested receive or
- * send operations.
- * <p>Branch pipelines created by routing or multiplexing build child
- * {@code ProtoContextService} instances. A child keeps its own attachments and
- * stack state, shares the parent's flash map, and knows where encoded data must
- * re-enter the parent pipeline when it is sent upward.
+ * <p>It holds the channel-oriented {@link ProtoStackChain}, the typed attachments exposed through
+ * {@link ProtoContext#context(Class)}, per-pass flash data, and the reentrant status stack used
+ * while nested receive or send operations execute inside the pipeline.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see ProtoContext
@@ -69,7 +64,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.namedHandlerMap = new HashMap<>();
     }
 
-    /** Creates a branch-mode ProtoContextService with its own independent contextData. */
+    /** Create a branch-mode ProtoContextService with independent contextData. */
     ProtoContextService(ProtoContextService parent, int rcvSlotSize, int sndSlotSize, String parentPrevStackName, String parentNextStackName) {
         this.channel = parent.channel;
         this.soContext = parent.soContext;
@@ -127,27 +122,30 @@ class ProtoContextService implements ProtoBuildContext {
     }
     //
 
-    /** Returns the registered handler instance by name and type, or {@code null} if not found. */
-    <T> T getHandler(String name, Class<T> type) {
-        Object handler = this.namedHandlerMap.get(name);
-        return type.isInstance(handler) ? type.cast(handler) : null;
+    /** Return the registered handler instance by name; return {@code null} if not found. */
+    Object getHandler(String name) {
+        return this.namedHandlerMap.get(name);
     }
 
+    /** {@inheritDoc} */
     @Override
     public NetConfig getConfig() {
         return this.soContext.getConfig();
     }
 
+    /** {@inheritDoc} */
     @Override
     public SoChannel<?> getChannel() {
         return this.channel;
     }
 
+    /** {@inheritDoc} */
     @Override
     public SoContext getSoContext() {
         return this.soContext;
     }
 
+    /** {@inheritDoc} */
     @Override
     public String getStackName() {
         return this.statusCurrent.stackName;
@@ -157,6 +155,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.statusCurrent.stackName = name;
     }
 
+    /** {@inheritDoc} */
     @Override
     public <T> T context(Class<T> attachment) {
         T val = (T) this.contextData.get(attachment);
@@ -167,17 +166,20 @@ class ProtoContextService implements ProtoBuildContext {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public <T> T context(Class<T> attachmentType, T attachment) {
         this.contextData.put(attachmentType, attachment);
         return attachment;
     }
 
+    /** {@inheritDoc} */
     @Override
     public <T> T rootContext(Class<T> type) {
         return this.parentCtx != null ? this.parentCtx.rootContext(type) : context(type);
     }
 
+    /** {@inheritDoc} */
     @Override
     public <T> T rootContext(Class<T> type, T value) {
         if (this.parentCtx != null) {
@@ -187,7 +189,7 @@ class ProtoContextService implements ProtoBuildContext {
         }
     }
 
-    /** Enter a new re-entrant pipeline frame. */
+    /** Enter a new reentrant pipeline frame. */
     void pushStatus() {
         this.statusStack.push(new ProtoStatus());
         this.statusCurrent = this.statusStack.peek();
@@ -228,7 +230,7 @@ class ProtoContextService implements ProtoBuildContext {
         }
     }
 
-    /** Paired with {@code beginRcv}/{@code beginSnd}: pops the current frame; if already at base, just clears it. */
+    /** Paired with {@code beginRcv}/{@code beginSnd}: pop the current frame, or just clear it when already on the base frame. */
     void end() {
         this.statusCurrent.clear();
         this.popStatus();
@@ -254,11 +256,13 @@ class ProtoContextService implements ProtoBuildContext {
         this.statusCurrent.sndError = t;
     }
 
+    /** {@inheritDoc} */
     @Override
     public <T> T flash(String key) {
         return (T) this.flashMap.get(key);
     }
 
+    /** {@inheritDoc} */
     @Override
     public <T> T flash(String key, T flash) {
         if (flash == null) {
@@ -270,10 +274,10 @@ class ProtoContextService implements ProtoBuildContext {
     }
 
     /**
-     * Branch ctx only. Propagates already-encoded data upward through ancestor branches until the main pipeline is reached.
-     * At each level, only the handlers that lie between the inner Router and the head of that branch's SND chain are executed
-     * (i.e. the handlers BEFORE the Router that owns this branch, in SND direction). The Router itself is skipped
-     * since the data is already encoded by the branch below.
+     * For branch contexts only. Propagate already encoded data upward through ancestor branches
+     * until it reaches the main pipeline. At each level, only handlers between the inner router and
+     * that branch's SND-chain head are executed, namely handlers before the owning router in SND
+     * direction. The router itself is skipped because the lower branch has already finished encoding.
      */
     private Future<?> sendOrFlushUpward(Object[] encoded) throws Throwable {
         NetChannel netChannel = (NetChannel) this.channel;
@@ -289,6 +293,7 @@ class ProtoContextService implements ProtoBuildContext {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public Future<?> sendData(Object writeData) {
         if (!(this.channel instanceof NetChannel)) {
@@ -310,6 +315,7 @@ class ProtoContextService implements ProtoBuildContext {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public Future<?> flush() {
         if (!(this.channel instanceof NetChannel)) {
@@ -350,92 +356,97 @@ class ProtoContextService implements ProtoBuildContext {
         }
     }
 
+    /** {@inheritDoc} */
     @Override
-    public <T> void fireUserEvent(Class<T> eventType, T event) throws Throwable {
-        this.fireUserEvent0(eventType, event, this.isRcv());
+    public <T> void fireEvent(Class<T> eventType, T event) throws Throwable {
+        this.fireEvent0(eventType, event, this.isRcv());
     }
 
     /** {@inheritDoc} */
     @Override
-    public <T> void fireUserEventReverse(Class<T> eventType, T event) throws Throwable {
-        this.fireUserEvent0(eventType, event, !this.isRcv());
+    public <T> void fireEventReverse(Class<T> eventType, T event) throws Throwable {
+        this.fireEvent0(eventType, event, !this.isRcv());
     }
 
     /** {@inheritDoc} */
     @Override
-    public <T> void fireUserEventRcv(Class<T> eventType, T event) throws Throwable {
-        this.fireUserEvent0(eventType, event, true);
+    public <T> void fireEventRcv(Class<T> eventType, T event) throws Throwable {
+        this.fireEvent0(eventType, event, true);
     }
 
     /** {@inheritDoc} */
     @Override
-    public <T> void fireUserEventSnd(Class<T> eventType, T event) throws Throwable {
-        this.fireUserEvent0(eventType, event, false);
+    public <T> void fireEventSnd(Class<T> eventType, T event) throws Throwable {
+        this.fireEvent0(eventType, event, false);
     }
 
-    private <T> void fireUserEvent0(Class<T> eventType, T event, boolean rcvDirection) throws Throwable {
+    private <T> void fireEvent0(Class<T> eventType, T event, boolean rcvDirection) throws Throwable {
         if (!(this.channel instanceof NetChannel)) {
-            throw new UnsupportedOperationException("only NetChannel support fireUserEvent.");
+            throw new UnsupportedOperationException("only NetChannel support fireEvent.");
         }
 
         String current = this.statusCurrent.stackName;
         current = StringUtils.isBlank(current) ? null : current;
 
         if (this.parentCtx != null) {
-            SoUserEvent soEvent = SoUserEventObject.of(this.channel, eventType, event);
+            SoEvent soEvent = SoEventObject.of(this.channel, eventType, event);
             String found = rcvDirection ?//
                     this.chainRoot.findNextStack(current) ://
                     this.chainRoot.findPreviousStack(current);
 
             if (found != null) {
                 if (rcvDirection) {
-                    this.chainRoot.onRcvUserEvent(this, found, soEvent);
+                    this.chainRoot.onRcvEvent(this, found, soEvent);
                 } else {
-                    this.chainRoot.onSndUserEvent(this, found, soEvent);
+                    this.chainRoot.onSndEvent(this, found, soEvent);
                 }
             } else {
-                this.fireUserEventUpward(rcvDirection, soEvent);
+                this.fireEventUpward(rcvDirection, soEvent);
             }
         } else {
             String found = rcvDirection ? this.chainRoot.findNextStack(current) : this.chainRoot.findPreviousStack(current);
-            ((NetChannel) this.channel).notifyUserEvent(rcvDirection, found, eventType, event);
+            ((NetChannel) this.channel).notifyEvent(rcvDirection, found, eventType, event);
         }
     }
 
-    private void fireUserEventUpward(boolean isRcv, SoUserEvent soEvent) throws Throwable {
+    private void fireEventUpward(boolean isRcv, SoEvent soEvent) throws Throwable {
         if (isRcv) {
             // Cross from end of current branch into parent pipeline after the Router
             if (this.parentNextStackName != null) {
-                this.parentCtx.chainRoot.onRcvUserEvent(this.parentCtx, this.parentNextStackName, soEvent);
+                this.parentCtx.chainRoot.onRcvEvent(this.parentCtx, this.parentNextStackName, soEvent);
             }
         } else {
             // Cross from start of current branch into parent pipeline before the Router
             if (this.parentPrevStackName != null) {
-                this.parentCtx.chainRoot.onSndUserEvent(this.parentCtx, this.parentPrevStackName, soEvent);
+                this.parentCtx.chainRoot.onSndEvent(this.parentCtx, this.parentPrevStackName, soEvent);
             }
         }
 
         // If the parent is itself a nested branch, continue crossing upward.
         if (this.parentCtx.parentCtx != null) {
-            this.parentCtx.fireUserEventUpward(isRcv, soEvent);
+            this.parentCtx.fireEventUpward(isRcv, soEvent);
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public ByteBufAllocator byteBufAllocator() {
         return this.soContext.getByteBufAllocator();
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean isRcv() {
         return this.statusCurrent.inRcv;
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean isSnd() {
         return this.statusCurrent.inSnd;
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirst(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
@@ -443,6 +454,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.addFirst(SoUtils.generateName(decoder, encoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirst(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
@@ -450,17 +462,20 @@ class ProtoContextService implements ProtoBuildContext {
         this.addFirst(name, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirst(ProtoDuplexer<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(duplexer, "duplexer is null.");
         this.addFirst(SoUtils.generateName(duplexer), duplexer);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirst(String name, ProtoDuplexer<?, ?, ?, ?> duplexer) {
         this.addFirst(name, ProtoConfig.DEFAULT, duplexer);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirst(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(name, "name is null.");
@@ -476,6 +491,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.namedHandlerMap.put(name, duplexer);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLast(ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
@@ -483,6 +499,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.addLast(SoUtils.generateName(decoder, encoder), new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLast(String name, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
@@ -490,17 +507,20 @@ class ProtoContextService implements ProtoBuildContext {
         this.addLast(name, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLast(ProtoDuplexer<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(duplexer, "duplexer is null.");
         this.addLast(SoUtils.generateName(duplexer), duplexer);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLast(String name, ProtoDuplexer<?, ?, ?, ?> duplexer) {
         this.addLast(name, ProtoConfig.DEFAULT, duplexer);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLast(String name, ProtoConfig protoConf, ProtoDuplexer<?, ?, ?, ?> duplexer) {
         Objects.requireNonNull(name, "name is null.");
@@ -516,6 +536,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.namedHandlerMap.put(name, duplexer);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLast(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
@@ -523,6 +544,7 @@ class ProtoContextService implements ProtoBuildContext {
         this.addLast(name, protoConf, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirst(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
@@ -530,17 +552,20 @@ class ProtoContextService implements ProtoBuildContext {
         this.addFirst(name, protoConf, new ProtoDuplexerHandlerWrap<>(decoder, encoder));
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirstEncoder(ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(encoder, "encoder is null.");
         this.addFirstEncoder(SoUtils.generateName(encoder), encoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirstEncoder(String name, ProtoHandler<?, ?> encoder) {
         this.addFirstEncoder(name, ProtoConfig.DEFAULT, encoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirstEncoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(name, "name is null.");
@@ -557,17 +582,20 @@ class ProtoContextService implements ProtoBuildContext {
         this.namedHandlerMap.put(name, encoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLastEncoder(ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(encoder, "encoder is null.");
         this.addLastEncoder(SoUtils.generateName(encoder), encoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLastEncoder(String name, ProtoHandler<?, ?> encoder) {
         this.addLastEncoder(name, ProtoConfig.DEFAULT, encoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLastEncoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> encoder) {
         Objects.requireNonNull(name, "name is null.");
@@ -584,17 +612,20 @@ class ProtoContextService implements ProtoBuildContext {
         this.namedHandlerMap.put(name, encoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirstDecoder(ProtoHandler<?, ?> decoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         this.addFirstDecoder(SoUtils.generateName(decoder), decoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirstDecoder(String name, ProtoHandler<?, ?> decoder) {
         this.addFirstDecoder(name, ProtoConfig.DEFAULT, decoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addFirstDecoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
         Objects.requireNonNull(name, "name is null.");
@@ -611,17 +642,20 @@ class ProtoContextService implements ProtoBuildContext {
         this.namedHandlerMap.put(name, decoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLastDecoder(ProtoHandler<?, ?> decoder) {
         Objects.requireNonNull(decoder, "decoder is null.");
         this.addLastDecoder(SoUtils.generateName(decoder), decoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLastDecoder(String name, ProtoHandler<?, ?> decoder) {
         this.addLastDecoder(name, ProtoConfig.DEFAULT, decoder);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void addLastDecoder(String name, ProtoConfig protoConf, ProtoHandler<?, ?> decoder) {
         Objects.requireNonNull(name, "name is null.");

@@ -21,30 +21,53 @@ import net.hasor.neta.channel.*;
 
 /**
  * UDP transport provider for Neta.
- * <p>It opens raw {@link DatagramChannel} instances and wraps them as
- * {@link UdpAsyncClientChannel} or {@link UdpAsyncServerChannel}. Beyond transport
- * bootstrap, it has no extra lifecycle logic.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-07
  */
 public class UdpProvider implements AsyncChannelProvider {
     public static final String NAME = "UDP";
 
+    /**
+     * Create the UDP provider.
+     * @param neta the current NetManager
+     */
     public UdpProvider(NetManager neta) {
     }
 
+    /**
+     * Create a UDP server channel.
+     * @param channelId the channel ID
+     * @param context the runtime context
+     * @param listenAddr the listen address
+     * @param soConfig the channel configuration
+     * @return the UDP server channel
+     * @throws IOException if an I/O error occurs during creation
+     */
     @Override
     public AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
         return new UdpAsyncServerChannel(channelId, channel, context, listenAddr, soConfig);
     }
 
+    /**
+     * Create a UDP client channel.
+     * @param channelId the channel ID
+     * @param context the runtime context
+     * @param remoteAddr the remote address
+     * @param soConfig the channel configuration
+     * @return the UDP client channel
+     * @throws IOException if an I/O error occurs during creation
+     */
     @Override
     public AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException {
         DatagramChannel channel = DatagramChannel.open();
         return new UdpAsyncClientChannel(channelId, channel, context, remoteAddr, soConfig);
     }
 
+    /**
+     * Shut down the provider.
+     * <p>The current implementation has no extra shared resources to release.
+     */
     @Override
     public void shutdown() {
 

@@ -25,13 +25,13 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
 
 /**
- * Task that drains the per-channel {@link SoSndContext} queue by sending SCTP messages
- * synchronously on the framework's task thread.
- * <p>Unlike TCP, SCTP messages carry per-message metadata via
- * {@link com.sun.nio.sctp.MessageInfo}: stream ID, sequence number, payload-protocol
- * identifier (PPID), and an unordered delivery flag.  The framework wraps this metadata
- * together with the payload in a {@link SctpMessage}.
- * <p><b>Send loop ({@link #doWork(int)} contract inherited from {@link DefaultSoTask}):</b>
+ * Task that synchronously sends SCTP messages on a framework task thread and drains the
+ * {@link SoSndContext} queue for a single channel.
+ * <p>Unlike TCP, every SCTP message carries its own {@link com.sun.nio.sctp.MessageInfo} metadata,
+ * including stream ID, sequence information, PPID, and unordered-delivery flags. The framework
+ * packages that metadata together with the payload as an {@link SctpMessage}.
+ * <p><b>Send loop (following the {@link #doWork(int)} contract inherited from
+ * {@link DefaultSoTask}):</b>
  * <pre>
  *   SoSndContext (queue)
  *       │  peekData()
@@ -39,22 +39,21 @@ import net.hasor.neta.channel.*;
  *   SoSndData.transferTake() ──▶ SctpMessage (MessageInfo + ByteBuf)
  *       │
  *       ▼
- *   ByteBuf → sndSwapBuf (heap ByteBuffer, resized as needed)
+ *   ByteBuf → sndSwapBuf (heap ByteBuffer that expands when needed)
  *       │
  *       ▼
  *   SctpChannel.send(sndSwapBuf, messageInfo)
- *       ├──▶ write > 0: advance queue, retry if more data
- *       ├──▶ write == 0: send buffer full → delayTask(50ms) then retry
- *       └──▶ exception: handleException() → purge or retry
+ *       ├──▶ write > 0: advance the queue and continue if more data exists
+ *       ├──▶ write == 0: send buffer is full, retry after delayTask(50ms)
+ *       └──▶ exception: handleException() performs retry or cleanup
  * </pre>
- * <p><b>Type handling:</b> If the application writes a raw
- * {@link net.hasor.neta.bytebuf.ByteBuf} instead of a {@link SctpMessage}, it is
- * automatically wrapped in a {@code SctpMessage} with a default outgoing
- * {@code MessageInfo} on stream 0.
- * <p><b>Exception policy:</b> write-timeout ({@link java.nio.channels.InterruptedByTimeoutException})
- * triggers a retry if {@code sndWriteRetryCount > 0}; closed channel
- * ({@link java.nio.channels.ClosedChannelException}) drains the queue with
- * {@link net.hasor.neta.channel.SoUnfinishedSndException}.
+ * <p><b>Type handling:</b> when the application writes a raw
+ * {@link net.hasor.neta.bytebuf.ByteBuf} instead of an {@link SctpMessage}, the framework wraps it
+ * automatically as an {@code SctpMessage} that uses the default outgoing {@code MessageInfo}
+ * (stream 0).
+ * <p><b>Exception strategy:</b>
+ * a send timeout ({@link java.nio.channels.InterruptedByTimeoutException}) triggers retries when {@code sndWriteRetryCount > 0};
+ * a closed channel ({@link java.nio.channels.ClosedChannelException}) clears the remaining send queue through {@link net.hasor.neta.channel.SoUnfinishedSndException}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SctpMessage
@@ -72,14 +71,28 @@ class SctpWriteTask extends DefaultSoTask {
     private         ByteBuffer       sndSwapBuf;
     private         int              timeoutRetryCnt = 0;
 
+    /**
+     * Create an SCTP send task.
+     * @param netChannel the framework channel
+     * @param channel the underlying SCTP channel
+     * @param wContext the send context
+     * @param context the runtime context service
+     */
     public SctpWriteTask(NetChannel netChannel, SctpChannel channel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;
         this.monitor = netChannel.getMonitor();
         this.channel = channel;
         this.wContext = wContext;
         this.context = context;
+        this.sndSwapBuf = ByteBuffer.allocate(SctpSoConfigUtils.getSndPacketSize((SctpSoConfig) netChannel.getConfig()));
     }
 
+    /**
+     * Execute one send step.
+     * <p>This method prepares the current outbound message, writes it to the underlying channel,
+     * and finishes or reschedules the task when appropriate.
+     * @param retryCnt the current retry counter of this task
+     */
     @Override
     protected void doWork(int retryCnt) {
         // test exit
@@ -150,9 +163,11 @@ class SctpWriteTask extends DefaultSoTask {
     }
 
     /**
-     * Handle send exception.
-     * @return true if doWork should return immediately (retry scheduled or fatal),
-     * false to fall through to try-finish and continueTask.
+     * Handle an exception thrown during the send phase.
+     * @param e the captured exception
+     * @param wContext the send context
+     * @return true if the current doWork call should stop immediately, or false to continue with
+     * the remaining cleanup logic
      */
     private boolean handleException(Throwable e, SoSndContext wContext) {
         long channelId = this.netChannel.getChannelId();

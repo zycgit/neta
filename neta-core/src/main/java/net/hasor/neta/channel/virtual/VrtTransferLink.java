@@ -5,11 +5,11 @@ import net.hasor.neta.channel.*;
 
 /**
  * Per-target delivery state owned by {@link VrtTransfer}.
- * <p>Each link binds one source-side channel id to one target {@link VrtChannel}.
- * Incoming {@link PlayLoad} objects are first staged in {@link #cacheQueue}, then
- * converted into delivery objects through {@link VrtTransferHandler}, and finally
- * emitted to the target when {@link #onReceive(int)} sees enough queued items.
- * This is where batch delivery and receive-side object conversion actually happen.
+ * <p>Each link binds one source channel ID to one target {@link VrtChannel}. Incoming
+ * {@link PlayLoad} objects are first staged in {@link #cacheQueue}, then converted into
+ * deliverable objects through {@link VrtTransferHandler}, and finally emitted to the target when
+ * {@link #onReceive(int)} sees that the batch condition is met. This is where batch delivery and
+ * receive-side object conversion actually happen.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -21,6 +21,12 @@ class VrtTransferLink {
     public final         ProtoQueue<Object>   tempQueue;
     protected final      SoContextService     context;
 
+    /**
+     * Create a virtual transport link targeting one destination channel.
+     * @param context the runtime context service
+     * @param target the target channel
+     * @param convert the receive-side converter
+     */
     VrtTransferLink(SoContextService context, VrtChannel target, VrtTransferHandler convert) {
         this.context = context;
         this.target = target;
@@ -29,6 +35,10 @@ class VrtTransferLink {
         this.tempQueue = new ProtoQueue<>(-1);
     }
 
+    /**
+     * Convert cached data and deliver it to the target channel when the batch condition is met.
+     * @param batchSize the batch threshold
+     */
     public void onReceive(int batchSize) {
         if (this.cacheQueue.queueSize() >= batchSize) {
             this.convert.doTransfer(this.cacheQueue, this.tempQueue);

@@ -20,66 +20,51 @@ import java.net.SocketAddress;
 import net.hasor.cobble.concurrent.future.Future;
 
 /**
- * Transport-specific outbound endpoint used behind {@link NetChannel}.
- * <p>This interface abstracts the actual carrier used by Neta transports: an OS socket
- * for TCP/SCTP, a datagram endpoint for UDP/QUIC, or an in-memory transport endpoint for
- * the virtual channel family. Application code does not use it directly; it is created by
- * {@link AsyncChannelProvider} and driven through {@link NetChannel}.
- * <p><b>Lifecycle:</b>
- * <ol>
- *   <li>Created by {@link AsyncChannelProvider#createClientChannel(long, SoContext, SocketAddress, SoConfig)}.</li>
- *   <li>{@link #connectTo(ProtoInitializer, Future)} materializes the public-facing
- *       {@link NetChannel} and completes the connect future when that channel is ready.</li>
- *   <li>{@link #write(NetChannel, SoSndContext)} drains encoded outbound data from the
- *       channel's send queue using the transport's own execution model.</li>
- *   <li>{@link #close()} releases the underlying transport resources.</li>
- * </ol>
+ * Transport-layer abstraction behind a client-side {@link NetChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
- * @see AsyncChannelProvider
- * @see NetChannel
  */
 public interface AsyncChannel extends Closeable {
 
     /**
-     * Gets the unique identifier of this channel.
-     * @return The channel ID as a long value
+     * Return the unique identifier of this channel.
+     * @return channel ID as a long value
      */
     long getChannelId();
 
-    /** Returns the socket configuration. */
+    /** Return the socket configuration. */
     SoConfig getSoConfig();
 
     /**
-     * Gets the local address to which this channel is bound.
-     * @return The local SocketAddress
+     * Return the local address bound to this channel.
+     * @return local SocketAddress
      */
     SocketAddress getLocalAddress();
 
     /**
-     * Gets the remote address to which this channel is connected.
-     * @return The remote SocketAddress
+     * Return the remote address connected by this channel.
+     * @return remote SocketAddress
      */
     SocketAddress getRemoteAddress();
 
     /**
-     * Checks if this channel is open.
-     * @return true if the channel is open, false otherwise
+     * Return whether this channel is currently open.
+     * @return {@code true} if the channel is open, otherwise {@code false}
      */
     boolean isOpen();
 
     /**
-     * Closes this channel.
-     * @throws IOException If an I/O error occurs
+     * Close this channel.
+     * @throws IOException thrown when an I/O error occurs
      */
     @Override
     void close() throws IOException;
 
-    /** Writes pending outbound data for the given NetChannel. */
+    /** Write the pending outbound data for the given NetChannel. */
     void write(NetChannel channel, SoSndContext wContext);
 
     /**
-     * Starts the connection flow using the given initializer.
+     * Start the connection flow using the given initializer.
      */
     void connectTo(ProtoInitializer initializer, Future<NetChannel> future) throws Throwable;
 }

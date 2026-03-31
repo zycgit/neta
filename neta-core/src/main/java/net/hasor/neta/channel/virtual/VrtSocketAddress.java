@@ -18,11 +18,8 @@ import java.net.SocketAddress;
 import net.hasor.cobble.ObjectUtils;
 
 /**
- * Socket address used by the virtual transport.
- * <p>The address is a simple integer endpoint id rather than an IP/port tuple.
- * The additional {@code connectMode} flag distinguishes "connect to this virtual
- * listener" from "bind/listen on this virtual endpoint" in provider logic, while
- * equality and hash code remain based on the numeric address alone.
+ * Address object used by the virtual transport.
+ * <p>This address is not an IP/port tuple. It is a simple integer endpoint identifier.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -30,28 +27,54 @@ public class VrtSocketAddress extends SocketAddress {
     private final int     address;
     private final boolean connectMode;
 
+    /**
+     * Create a virtual address in bind mode.
+     * @param address the numeric address
+     */
     public VrtSocketAddress(int address) {
         this(address, false);
     }
 
+    /**
+     * Create a virtual address.
+     * @param address the numeric address
+     * @param connectMode whether it is used in connect mode
+     */
     public VrtSocketAddress(int address, boolean connectMode) {
         this.address = ObjectUtils.checkPositiveOrZero(address, "address");
         this.connectMode = connectMode;
     }
 
+    /**
+     * Return the numeric endpoint carried by this virtual address.
+     * @return the numeric address
+     */
     public int getAddress() {
         return this.address;
     }
 
+    /**
+     * Determine whether the current address is used in connect mode.
+     * @return true if this is a connect-mode address
+     */
     public boolean isConnectMode() {
         return this.connectMode;
     }
 
+    /**
+     * Compute the hash code of the current address.
+     * @return the hash code
+     */
     @Override
     public int hashCode() {
         return Long.hashCode(this.address);
     }
 
+    /**
+     * Determine whether another object is equal to this virtual address.
+     * @param obj the object to compare
+     * @return true if the two objects are equal
+     */
     @Override
     public boolean equals(Object obj) {
         if (obj == this) {
@@ -64,6 +87,10 @@ public class VrtSocketAddress extends SocketAddress {
         return false;
     }
 
+    /**
+     * Return the string form of the current virtual address.
+     * @return the address string
+     */
     @Override
     public String toString() {
         return "vrt:" + (this.connectMode ? "connect" : "bind") + ":" + this.address;

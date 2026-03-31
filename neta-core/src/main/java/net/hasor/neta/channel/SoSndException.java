@@ -15,22 +15,29 @@
  */
 package net.hasor.neta.channel;
 /**
- * Thrown when an I/O error occurs while sending data on a {@link SoChannel}.
- * <p>This is the base class for all outbound send failures. More specific subclasses cover
- * common scenarios:
+ * Generic failure exception for the outbound send path.
+ * <p>When a low-level I/O error occurs during a {@link SoChannel} send action, send scheduling, or
+ * outbound pipeline processing, and the failure is neither a close-state issue nor a timeout-state
+ * issue, it is typically normalized to this exception.</p>
+ * <p>This is the base type for send-side exceptions. At present, the only more specific subtype is
+ * {@link SoUnfinishedSndException}, which indicates that pending data still remained in the send
+ * queue when the channel closed.</p>
+ * <p>Two details are worth noting:</p>
  * <ul>
- *   <li>{@link SoWriteTimeoutException} – the write did not complete within the configured
- *       write-idle timeout.</li>
- *   <li>{@link SoUnfinishedSndException} – the channel was closed before all queued data
- *       could be flushed.</li>
+ *   <li>{@link SoWriteTimeoutException} also happens on the send side, but it belongs to the
+ *   timeout exception family rather than extending this type.</li>
+ *   <li>{@link SoSndException} only indicates that the current send flow failed. It does not by
+ *   itself imply that the channel has already closed or that the entire send queue has been
+ *   cleared.</li>
  * </ul>
- * <p>When a {@code SoSndException} is thrown, the outbound queue is cleared and the channel
- * is typically closed. Any pending write {@link net.hasor.cobble.concurrent.future.Future}
- * will be completed exceptionally with this exception.
+ * <p>Therefore, when application code catches this exception, it should combine the current channel
+ * state with the concrete transport behavior to decide whether only the current send should fail,
+ * or whether the connection should be closed and remaining queued data discarded.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
- * @see SoWriteTimeoutException
  * @see SoUnfinishedSndException
+ * @see SoWriteTimeoutException
+ * @see SoCloseException
  */
 public class SoSndException extends SoException {
     public SoSndException(String s) {

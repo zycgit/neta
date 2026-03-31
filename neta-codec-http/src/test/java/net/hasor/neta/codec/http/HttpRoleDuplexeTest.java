@@ -64,7 +64,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
                 ctx.addLast("server-http", new HttpServerDuplexe());
             }, VrtSoConfig.asServer());
 
-            serverPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
             HttpContext serverContext = serverPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(serverContext);
             assertTrue(serverContext.isTransparentMode());
@@ -88,8 +88,8 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
                 ctx.addLast("server-http", new HttpServerDuplexe());
             }, VrtSoConfig.asServer());
 
-            serverPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            serverPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
             HttpContext serverContext = serverPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(serverContext);
             assertFalse(serverContext.isTransparentMode());
@@ -111,8 +111,8 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
                 ctx.addLast("server-http", new HttpServerDuplexe());
             }, VrtSoConfig.asServer());
 
-            serverPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            serverPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            serverPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
             HttpContext serverContext = serverPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(serverContext);
             assertFalse(serverContext.isTransparentMode());
@@ -167,7 +167,7 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
                 ctx.addLast("client-http", new HttpClientDuplexe());
             }, VrtSoConfig.asClient());
 
-            clientPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
             HttpContext clientContext = clientPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(clientContext);
             assertTrue(clientContext.isTransparentMode());
@@ -192,8 +192,8 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
                 ctx.addLast("client-http", new HttpClientDuplexe());
             }, VrtSoConfig.asClient());
 
-            clientPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            clientPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
             HttpContext clientContext = clientPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(clientContext);
             assertFalse(clientContext.isTransparentMode());
@@ -214,8 +214,8 @@ public class HttpRoleDuplexeTest extends AbstractHttpTest {
                 ctx.addLast("client-http", new HttpClientDuplexe());
             }, VrtSoConfig.asClient());
 
-            clientPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
-            clientPipe.channel().fireUserEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.enable());
+            clientPipe.channel().fireEvent(HttpThroughEvent.class, HttpThroughEvent.disable());
             HttpContext clientContext = clientPipe.channel().findProtoContext(HttpContext.class);
             assertNotNull(clientContext);
             assertFalse(clientContext.isTransparentMode());

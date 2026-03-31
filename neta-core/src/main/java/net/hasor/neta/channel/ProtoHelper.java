@@ -22,20 +22,12 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Factory class for building type-safe protocol pipeline builders and routing builders.
+ * Factory for building type-safe protocol pipeline builders and routing builders.
  * <h3>Pipeline builders</h3>
  * <ul>
- *   <li>{@link #standard()} – chain whose RCV and SND endpoints are both {@code ByteBuf}
- *       (most common for binary protocols).</li>
- *   <li>{@link #object()} – chain with {@code Object} endpoints (useful for testing or
- *       when the outer type is unknown at compile time).</li>
- *   <li>{@link #typed(Class, Class)} – fully typed chain with explicit endpoint types.</li>
- * </ul>
- * <h3>Routing builders</h3>
- * <ul>
- *   <li>{@link #typedRoutingAsStatic} – route is resolved lazily on activation and/or first inbound
- *       data, then kept until switched explicitly.</li>
- *   <li>{@link #typedRoutingAsRealtime} – selector is re-evaluated on each inbound receive pass.</li>
+ *   <li>{@link #standard()} - a chain whose RCV and SND endpoints are both {@code ByteBuf}, most common for binary protocols.</li>
+ *   <li>{@link #object()} - a chain whose endpoints are {@code Object}, suitable for tests or scenarios where outer types are unknown at compile time.</li>
+ *   <li>{@link #typed(Class, Class)} - a fully typed chain with explicitly declared endpoint types.</li>
  * </ul>
  * <h3>Example</h3>
  * <pre>
@@ -68,7 +60,7 @@ public final class ProtoHelper {
         context.addLastEncoder(name, protoConf, encoder);
     }
 
-    /** Create a standalone routing builder using static route selection. */
+    /** Create an independent routing builder with a static default route selection. */
     public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsDefault(String defaultRouting, ProtoInitializer initializer) {
         if (StringUtils.isBlank(defaultRouting) || initializer == null) {
             throw new IllegalArgumentException("routingName is blank or routing is null.");
@@ -78,44 +70,44 @@ public final class ProtoHelper {
         return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, duplexer).branchByInitializer(defaultRouting, initializer);
     }
 
-    /** Create a standalone routing builder using static route selection. */
+    /** Create an independent routing builder with static route selection. */
     public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsStatic(ProtoRoutingDataSelector<RCV_UP, SND_DOWN> routing) {
         Objects.requireNonNull(routing, "routing is null.");
         return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.STATIC, routing));
     }
 
-    /** Create a standalone routing builder using realtime route selection. */
+    /** Create an independent routing builder with realtime route selection. */
     public static <RCV_UP, SND_DOWN> ProtoRoutingBuilder<RCV_UP, SND_DOWN> typedRoutingAsRealtime(ProtoRoutingDataSelector<RCV_UP, SND_DOWN> routing) {
         Objects.requireNonNull(routing, "routing is null.");
         return new ProtoRoutingBuilderImpl<>(ProtoConfig.DEFAULT, new ProtoRoutingDuplexer<>(ProtoRoutingMode.REALTIME, routing));
     }
 
-    /** Create a {@link ProtoBuilder} with {@code ByteBuf} endpoints and default config. */
+    /** Create a {@link ProtoBuilder} whose endpoints are {@code ByteBuf} and which uses the default config. */
     public static ProtoBuilder<ByteBuf, ByteBuf> standard() {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
-    /** Create a {@link ProtoBuilder} with {@code ByteBuf} endpoints and custom config. */
+    /** Create a {@link ProtoBuilder} whose endpoints are {@code ByteBuf} and which uses a custom config. */
     public static ProtoBuilder<ByteBuf, ByteBuf> standard(ProtoConfig protoConf) {
         return new ProtoHelper().nextTo(protoConf);
     }
 
-    /** Create a {@link ProtoBuilder} with generic {@code Object} endpoints and default config. */
+    /** Create a {@link ProtoBuilder} whose endpoints are generic {@code Object} and which uses the default config. */
     public static ProtoBuilder<Object, Object> object() {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
-    /** Create a {@link ProtoBuilder} with generic {@code Object} endpoints and custom config. */
+    /** Create a {@link ProtoBuilder} whose endpoints are generic {@code Object} and which uses a custom config. */
     public static ProtoBuilder<Object, Object> object(ProtoConfig protoConf) {
         return new ProtoHelper().nextTo(protoConf);
     }
 
-    /** Create a typed {@link ProtoBuilder} with specified RCV/SND endpoint types and default config. */
+    /** Create a typed {@link ProtoBuilder} with explicitly specified RCV/SND endpoint types and the default config. */
     public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown) {
         return new ProtoHelper().nextTo(ProtoConfig.DEFAULT);
     }
 
-    /** Create a typed {@link ProtoBuilder} with specified RCV/SND endpoint types and custom config. */
+    /** Create a typed {@link ProtoBuilder} with explicitly specified RCV/SND endpoint types and a custom config. */
     public static <RCV_UP, SND_DOWN> ProtoBuilder<RCV_UP, SND_DOWN> typed(Class<RCV_UP> rcvUp, Class<SND_DOWN> sndDown, ProtoConfig protoConf) {
         return new ProtoHelper().nextTo(protoConf);
     }

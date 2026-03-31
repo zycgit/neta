@@ -16,28 +16,27 @@
 package net.hasor.neta.channel.quic;
 
 /**
- * Public view of the handshake lifecycle reported by the QUIC stack.
+ * Handshake lifecycle states exposed by the QUIC stack.
  * <p><b>State machine:</b>
  * <pre>
  *   INITIAL  -->  HANDSHAKE  -->  ESTABLISHED
  *      \                           /
  *       +---------> CLOSED <-------+
  * </pre>
- * <p>The enum is a simplified projection of the internal
- * {@link QuicAsyncChannelHandshake} state. It indicates which key phase the
- * connection has reached and whether application traffic can already flow; it
- * is not a full description of every frame type that may appear on the wire.
+ * <p>This enum is a simplified projection of the internal {@link QuicAsyncChannelHandshake} state, used to describe
+ * the current key phase of the connection and whether application data can already be sent and received; it does not
+ * cover every packet-level detail of the wire protocol.
  * @author 赵永春 (zyc@hasor.net)
  * @see QuicFrameType
- * @see <a href="https://www.rfc-editor.org/rfc/rfc9001">RFC 9001 — Using TLS to Secure QUIC</a>
+ * @see <a href="https://www.rfc-editor.org/rfc/rfc9001">RFC 9001 — Using TLS to Protect QUIC</a>
  */
 public enum QuicHandshakeState {
-    /** Initial state; no handshake messages exchanged yet. */
+    /** Initial state before any handshake messages have been exchanged. */
     INITIAL,
-    /** Handshake is in progress (Initial + Handshake packets exchanged). */
+    /** Handshake in progress, with Initial or Handshake level packets already being exchanged. */
     HANDSHAKE,
-    /** Handshake fully completed; 1-RTT application data may flow. */
+    /** Handshake completed, so 1-RTT application data can be sent. */
     ESTABLISHED,
-    /** Connection has been closed. */
+    /** Connection is closed. */
     CLOSED
 }

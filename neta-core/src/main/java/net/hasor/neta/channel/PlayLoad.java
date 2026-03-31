@@ -15,18 +15,23 @@
  */
 package net.hasor.neta.channel;
 /**
- * A single message event published on the {@link SoChannel} event bus.
- * <p>Every data item travelling through the protocol pipeline — in either direction — is
- * wrapped in a {@code PlayLoad} before being dispatched to registered
- * {@link PlayLoadListener}s.  A payload is either successful (carrying decoded/encoded
- * {@code data}) or erroneous (carrying a pipeline {@code error}), never both.
+ * Single message event published on the {@link SoChannel} event bus.
+ * <p>Every piece of data flowing through the protocol pipeline, regardless of direction, is first
+ * wrapped as a {@code PlayLoad} and then dispatched to registered {@link PlayLoadListener}
+ * instances. Real network-backed {@link SoChannel} implementations usually expose only inbound
+ * data to listeners; outbound data sent to the remote peer normally does not loop back as a local
+ * event.</p>
+ * <p>For virtual pipelines or in-memory interconnect scenarios, data from both directions may be
+ * wrapped and published as {@code PlayLoad} instances.</p>
+ * <p>A payload represents either success, carrying decoded or encoded {@code data}, or failure,
+ * carrying a pipeline {@code error}, but never both at the same time.</p>
  * <h3>Direction</h3>
  * <ul>
- *   <li>{@link #isInbound()} – the data or error arrived from the remote peer (received).</li>
- *   <li>{@link #isOutbound()} – the data or error was produced by the local application (sent).</li>
+ *   <li>{@link #isInbound()} - data or errors coming from the remote peer (receive direction).</li>
+ *   <li>{@link #isOutbound()} - data or errors produced by the local application (send direction).</li>
  * </ul>
- * <p>Construct instances via {@link PlayLoadObject#of} (success) or
- * {@link PlayLoadObject#ofError} (failure).
+ * <p>Instances are created through {@link PlayLoadObject#of} for success or
+ * {@link PlayLoadObject#ofError} for failure.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  * @see PlayLoadListener
@@ -34,41 +39,42 @@ package net.hasor.neta.channel;
  */
 public interface PlayLoad {
     /**
-     * Gets the source channel from which this payload originated.
-     * @return the source SoChannel instance
+     * Return the source channel that owns this payload.
+     * @return source SoChannel instance
      */
     SoChannel<?> getSource();
 
     /**
-     * Gets the data contained in this payload.
-     * <p>The returned object is usually still owned by the pipeline/transport that emitted this
-     * event. Listeners that need to use reference-counted values such as {@code ByteBuf} after the
-     * callback returns should retain or copy them inside the callback.
-     * @return the payload data object, or null if an error occurred
+     * Return the data carried by this payload.
+     * <p>Objects received through message notifications are still owned by the pipeline, which
+     * usually means listeners do not need to release them.</p>
+     * <p>If a listener needs to keep using a reference-counted object such as {@code ByteBuf} after
+     * the callback returns, it should retain or copy the object inside the callback first.</p>
+     * @return data object carried by the payload, or {@code null} when an error occurred
      */
     Object getData();
 
     /**
-     * Gets the error associated with this payload, if any.
-     * @return the Throwable error, or null if the operation was successful
+     * Return the error associated with this payload, if any.
+     * @return the Throwable error object, or {@code null} when the operation succeeded
      */
     Throwable getError();
 
     /**
-     * Indicates whether the payload represents a successful operation.
-     * @return true if no error is present, false otherwise
+     * Return whether this payload represents a successful operation.
+     * @return {@code true} when no error is present, otherwise {@code false}
      */
     boolean isSuccess();
 
     /**
-     * Indicates whether the payload is inbound (received).
-     * @return true if the payload is inbound, false otherwise
+     * Return whether this payload belongs to the inbound, receive direction.
+     * @return {@code true} for inbound payloads, otherwise {@code false}
      */
     boolean isInbound();
 
     /**
-     * Indicates whether the payload is outbound (sent).
-     * @return true if the payload is outbound, false otherwise
+     * Return whether this payload belongs to the outbound, send direction.
+     * @return {@code true} for outbound payloads, otherwise {@code false}
      */
     boolean isOutbound();
 }

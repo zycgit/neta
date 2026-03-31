@@ -14,16 +14,40 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+
+/**
+ * Builder used to define which handlers should be installed inside a single partition.
+ * <p>When a partition duplexer is declared through
+ * {@link ProtoBuilder#nextPartition(String, ProtoPartitionSelector, java.util.function.Consumer)},
+ * the callback receives this interface. It describes how each partition instance should initialize
+ * its own internal sub-pipeline after creation.</p>
+ * <p>You can use it to configure partition policies, obtain the partition control handle, or supply
+ * an existing {@link ProtoInitializer} as the template for the partition sub-pipeline.</p>
+ */
 public interface ProtoPartitionBuilder<RCV_UP, SND_DOWN> {
-    /** Returns the control handle bound to the partition node being configured. */
+    /**
+     * Return the control handle bound to the current partition duplexer.
+     * <p>It can be used to configure external control logic related to partition creation and shutdown during build time.</p>
+     */
     ProtoPartitionControl control();
 
-    /** Registers a partition policy that can consume messages or events before default routing. */
+    /**
+     * Register a partition policy.
+     * <p>The policy runs before a new partition is created or before new traffic first enters a
+     * partition, deciding whether the trigger should be accepted, dropped, or rejected.</p>
+     */
     ProtoPartitionBuilder<RCV_UP, SND_DOWN> policy(ProtoPartitionPolicy policy);
 
-    /** Registers a branch from an existing initializer. */
+    /**
+     * Use an existing initializer as the template for partition sub-pipelines.
+     * <p>Whenever a partition key appears for the first time and a partition instance is created,
+     * this initializer is used to build the internal handler chain of that partition.</p>
+     */
     ProtoPartitionBuilder<RCV_UP, SND_DOWN> byInitializer(ProtoInitializer initializer);
 
-    /** Builds the routing duplexer defined by this builder. */
+    /**
+     * Build the partition duplexer defined by the current builder.
+     * @return built partition duplexer
+     */
     ProtoDuplexer<RCV_UP, RCV_UP, SND_DOWN, SND_DOWN> build();
 }

@@ -21,7 +21,7 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * Stream-level QUIC channel with its own pipeline, created and managed by the parent {@link QuicChannel}.
+ * QUIC stream-level channel with an independent pipeline, created and managed by its parent {@link QuicChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @see QuicChannel
  */
@@ -29,10 +29,13 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
     private final    long        streamId;
     private final    QuicChannel parent;
     private volatile long        maxDataSize;
-    /** Last time (in milliseconds) data was sent or received on this stream. Used for stream-level idle timeout. */
+    /** Timestamp of the most recent send or receive activity on this stream, in milliseconds, used for stream-level idle timeout checks. */
     private volatile long        lastActivityTime;
 
-    /** Creates a stream-level channel from an already-constructed async stream channel; called exclusively by {@link QuicChannel}. */
+    /**
+     * Constructs a stream-level channel from an already created async stream channel.
+     * <p>Only invoked internally by {@link QuicChannel}.
+     */
     QuicStreamChannel(long channelId, long streamId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer,//
             QuicStreamChannelAsync asyncChannel, SoContextService soContext, QuicChannel parent, long initMaxDataSize) {
         super(channelId, monitor, forListen, initializer, asyncChannel, soContext);
@@ -42,62 +45,75 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
         this.lastActivityTime = System.currentTimeMillis();
     }
 
-    /** Returns the QUIC stream ID bound to this channel. */
+    /**
+     * Returns the QUIC stream ID bound to this channel.
+     */
     public long getStreamId() {
         return this.streamId;
     }
 
     /**
-     * Returns the effective per-stream data limit; can only increase via {@link #sendMaxDataSize(long)} or peer's MAX_STREAM_DATA.
+     * Returns the effective data limit for the current stream.
+     * <p>This value only increases through {@link #sendMaxDataSize(long)} or MAX_STREAM_DATA received from the peer.
      */
     public long getMaxDataSize() {
         return this.maxDataSize;
     }
 
     /**
-     * Updates the per-stream flow-control limit when the peer sends a MAX_STREAM_DATA frame; smaller values are silently ignored.
+     * Updates the stream data limit when the peer sends a MAX_STREAM_DATA frame.
+     * <p>Smaller values are ignored silently.
      */
     void updateMaxDataSize(long newMaxDataSize) {
         this.maxDataSize = Math.max(this.maxDataSize, newMaxDataSize);
     }
 
-    /** Returns the last activity time (epoch ms) for idle timeout checking. Package-private. */
+    /**
+     * Returns the most recent activity timestamp.
+     */
     long getLastActivityTime() {
         return this.lastActivityTime;
     }
 
-    /** Updates the last activity timestamp. Called when data is sent or received on this stream. Package-private. */
+    /**
+     * Updates the most recent activity timestamp.
+     */
     void touchActivity() {
         this.lastActivityTime = System.currentTimeMillis();
     }
 
-    /** Returns the parent connection-level {@link QuicChannel} that owns this stream. */
+    /**
+     * Returns the parent connection channel that owns this stream.
+     */
     @Override
     public QuicChannel getParent() {
         return this.parent;
     }
 
-    /** Returns the {@link SslContext} from the parent QUIC connection, or null if SSL is disabled. */
+    /**
+     * Returns the SSL context from the parent QUIC connection.
+     * @return returns null when SSL is not enabled
+     */
     public SslContext getSslContext() {
         return this.parent.getSslContext();
     }
 
     /**
-     * Returns true if this is a bidirectional stream (bit 1 of stream ID == 0, per RFC 9000 §2.1).
+     * Returns whether this stream is bidirectional.
      */
     public boolean isBidi() {
         return (this.streamId & 0x02) == 0;
     }
 
     /**
-     * Returns true if this is a unidirectional stream (bit 1 of stream ID == 1, per RFC 9000 §2.1).
+     * Returns whether this stream is unidirectional.
      */
     public boolean isUni() {
         return (this.streamId & 0x02) != 0;
     }
 
     /**
-     * Sends a RESET_STREAM frame (RFC 9000 §19.4) to abruptly terminate this stream with the given error code and final size.
+     * Sends a RESET_STREAM frame to terminate the current stream immediately with the given error code and final size.
      */
     public Future<QuicChannel> sendReset(long errorCode, long finalSize) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
@@ -124,7 +140,7 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
     }
 
     /**
-     * Sends a STOP_SENDING frame (RFC 9000 §19.5) asking the peer to stop sending data on this stream.
+     * Sends a STOP_SENDING frame to request that the peer stop sending more data on this stream.
      */
     public Future<QuicChannel> sendStop(long errorCode) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
@@ -148,7 +164,8 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
     }
 
     /**
-     * Sends raw bytes on this QUIC stream as a STREAM frame (RFC 9000 §19.8), bypassing the protocol pipeline.
+     * Sends raw bytes directly to this QUIC stream as a STREAM frame.
+     * <p>This method bypasses the upper-layer protocol pipeline.
      */
     public Future<QuicChannel> sendRawData(byte[] data) {
         BasicFuture<QuicChannel> future = new BasicFuture<>();
@@ -175,7 +192,8 @@ public class QuicStreamChannel extends NetChannel implements SoSubChannel {
     }
 
     /**
-     * Sends a MAX_STREAM_DATA frame (RFC 9000 §19.10) increasing this stream's receive-side flow-control limit; new value must be ≥ current.
+     * Sends a MAX_STREAM_DATA frame to raise the receive-side flow-control limit for this stream.
+     * <p>The new value must be greater than or equal to the current value.
      */
     public Future<QuicChannel> sendMaxDataSize(long newMaxDataSize) {
         if (newMaxDataSize < this.maxDataSize) {

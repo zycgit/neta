@@ -16,7 +16,7 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * User event published when a close control frame is observed or generated.
+ * Network event published when a close control frame is observed or generated.
  * <p>
  * Exposes the close status code and optional reason text at the message/event layer.
  */

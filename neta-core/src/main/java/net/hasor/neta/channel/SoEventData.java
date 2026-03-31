@@ -15,19 +15,12 @@
  */
 package net.hasor.neta.channel;
 /**
- * Marker interface for the payload carried inside a {@link SoUserEvent}.
- * <p>Implement this interface to define a custom event payload type.  The framework
- * wraps the payload in a {@link SoUserEventObject} and propagates it through the
- * inbound pipeline via {@link ProtoContext#fireUserEvent}.
- * <p>Built-in implementations:
- * <ul>
- *   <li>{@code SslHandshakeEvent} – TLS handshake result (success or failure).</li>
- *   <li>{@code SslCloseNotifyEvent} – TLS layer received a {@code close_notify} alert.</li>
- *   <li>{@code SctpNotificationEvent} – SCTP association-state change notification.</li>
- * </ul>
+ * Marker interface for objects used as {@link SoEvent} payloads.
+ * <p>Event payloads are not required to implement this interface, but doing so makes it easier for
+ * Neta to classify and manage event objects.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
- * @see SoUserEvent
+ * @see SoEvent
  */
-public interface SoUserEventData {
+public interface SoEventData {
 }

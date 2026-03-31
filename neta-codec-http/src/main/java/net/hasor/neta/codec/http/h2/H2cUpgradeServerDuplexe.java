@@ -94,11 +94,12 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, net.hasor.neta.channel.SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (this.upgraded) {
-            return this.http2FrameCodec.onUserEvent(context, event, isRcv) && this.http2ObjectCodec.onUserEvent(context, event, isRcv);
+            return this.http2FrameCodec.onEvent(context, event, isRcv) && this.http2ObjectCodec.onEvent(context, event, isRcv);
+        } else {
+            return true;
         }
-        return true;
     }
 
     @Override

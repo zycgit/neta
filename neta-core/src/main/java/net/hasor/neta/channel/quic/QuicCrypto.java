@@ -21,7 +21,8 @@ import javax.crypto.spec.GCMParameterSpec;
 import javax.crypto.spec.SecretKeySpec;
 
 /**
- * Cryptographic utilities for QUIC packet protection (RFC 9001): HKDF, AES-128-GCM AEAD, and header protection.
+ * Cryptographic utility set related to QUIC packet protection.
+ * <p>Covers the HKDF, AES-128-GCM AEAD, and header-protection algorithms required by RFC 9001.
  * @author 赵永春 (zyc@hasor.net)
  */
 final class QuicCrypto {
@@ -31,16 +32,22 @@ final class QuicCrypto {
     private QuicCrypto() {
     }
 
-    // ── HKDF (RFC 5869) ────────────────────────────────────────────────
+    // ── HKDF (RFC 5869) ───────────────────────────────────────────────
 
-    /** HKDF-Extract (RFC 5869 §2.2): derives a PRK from salt and input keying material. */
+    /**
+     * Performs HKDF-Extract.
+     * <p>Derives the PRK from the salt and input keying material.
+     */
     public static byte[] hkdfExtract(byte[] salt, byte[] ikm) throws Exception {
         Mac hmac = Mac.getInstance("HmacSHA256");
         hmac.init(new SecretKeySpec(salt, "HmacSHA256"));
         return hmac.doFinal(ikm);
     }
 
-    /** HKDF-Expand (RFC 5869 §2.3): expands a PRK to the desired output length using the info parameter. */
+    /**
+     * Performs HKDF-Expand.
+     * <p>Expands the PRK to the target length using the info parameter.
+     */
     public static byte[] hkdfExpand(byte[] prk, byte[] info, int length) throws Exception {
         Mac hmac = Mac.getInstance("HmacSHA256");
         hmac.init(new SecretKeySpec(prk, "HmacSHA256"));
@@ -61,7 +68,9 @@ final class QuicCrypto {
         return result;
     }
 
-    /** HKDF-Expand-Label with a configurable label prefix ("tls13 " or "quic "). */
+    /**
+     * Performs HKDF-Expand-Label with a configurable label prefix.
+     */
     public static byte[] hkdfExpandLabel(byte[] secret, String label, byte[] context, int length, String labelPrefix) throws Exception {
         byte[] fullLabel = toAscii(labelPrefix + label);
         byte[] ctx = (context != null) ? context : new byte[0];
@@ -77,24 +86,33 @@ final class QuicCrypto {
         return hkdfExpand(secret, hkdfLabel, length);
     }
 
-    /** HKDF-Expand-Label with TLS 1.3 prefix ("tls13 "). */
+    /**
+     * Performs HKDF-Expand-Label using the TLS 1.3 label prefix.
+     */
     public static byte[] tlsExpandLabel(byte[] secret, String label, byte[] context, int length) throws Exception {
         return hkdfExpandLabel(secret, label, context, length, "tls13 ");
     }
 
-    /** HKDF-Expand-Label with QUIC prefix ("quic "). */
+    /**
+     * Performs HKDF-Expand-Label using the QUIC label prefix.
+     */
     public static byte[] quicExpandLabel(byte[] secret, String label, byte[] context, int length) throws Exception {
         return hkdfExpandLabel(secret, label, context, length, "quic ");
     }
 
-    // ── Initial Keys (RFC 9001 §5.2) ───────────────────────────────────
+    // ── Initial keys (RFC 9001 §5.2) ──────────────────────────────────
 
-    /** Derives Initial secrets for QUIC v1 using the default Initial Salt. */
+    /**
+     * Derives Initial secrets for QUIC v1 using the default Initial Salt.
+     */
     public static byte[][] deriveInitialSecrets(byte[] dcid) throws Exception {
         return deriveInitialSecrets(dcid, QuicVersion.V1);
     }
 
-    /** Derives Initial secrets using the version-specific Initial Salt, returning [clientSecret, serverSecret]. */
+    /**
+     * Derives Initial secrets using the Initial Salt for the specified version.
+     * @return returns clientSecret and serverSecret
+     */
     public static byte[][] deriveInitialSecrets(byte[] dcid, QuicVersion version) throws Exception {
         byte[] initialSecret = hkdfExtract(version.getInitialSalt(), dcid);
         byte[] clientSecret = tlsExpandLabel(initialSecret, "client in", new byte[0], 32);
@@ -102,14 +120,19 @@ final class QuicCrypto {
         return new byte[][] { clientSecret, serverSecret };
     }
 
-    // ── Packet Protection Keys (RFC 9001 §5.1) ────────────────────────
+    // ── Packet protection keys (RFC 9001 §5.1) ───────────────────────
 
-    /** Derives packet protection keys for QUIC v1 using default HKDF labels. */
+    /**
+     * Derives packet-protection keys for QUIC v1 using the default HKDF labels.
+     */
     public static byte[][] derivePacketKeys(byte[] secret) throws Exception {
         return derivePacketKeys(secret, QuicVersion.V1);
     }
 
-    /** Derives QUIC packet protection keys [key(16), iv(12), hp(16)] using version-specific HKDF label prefix. */
+    /**
+     * Derives QUIC packet-protection keys using the version-specific HKDF label prefix.
+     * @return returns the key, iv, and hp results
+     */
     public static byte[][] derivePacketKeys(byte[] secret, QuicVersion version) throws Exception {
         String prefix = version.getKeyLabelPrefix();
         byte[] key = tlsExpandLabel(secret, prefix + " key", new byte[0], 16);
@@ -120,7 +143,9 @@ final class QuicCrypto {
 
     // ── AEAD (AES-128-GCM) ────────────────────────────────────────────
 
-    /** Encrypts plaintext using AES-128-GCM with the given key, nonce, and AAD. */
+    /**
+     * Encrypts data with AES-128-GCM.
+     */
     public static byte[] aesGcmEncrypt(byte[] key, byte[] nonce, byte[] plaintext, byte[] aad) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, nonce));
@@ -130,7 +155,9 @@ final class QuicCrypto {
         return cipher.doFinal(plaintext);
     }
 
-    /** Decrypts ciphertext using AES-128-GCM with the given key, nonce, and AAD. */
+    /**
+     * Decrypts data with AES-128-GCM.
+     */
     public static byte[] aesGcmDecrypt(byte[] key, byte[] nonce, byte[] ciphertext, byte[] aad) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
         cipher.init(Cipher.DECRYPT_MODE, new SecretKeySpec(key, "AES"), new GCMParameterSpec(GCM_TAG_LENGTH_BITS, nonce));
@@ -140,9 +167,11 @@ final class QuicCrypto {
         return cipher.doFinal(ciphertext);
     }
 
-    // ── Nonce construction ─────────────────────────────────────────────
+    // ── Nonce construction ────────────────────────────────────────────
 
-    /** Constructs an AEAD nonce by XOR-ing the IV with the packet number (RFC 9001 §5.3). */
+    /**
+     * Builds the AEAD nonce by XORing the IV with the packet number.
+     */
     public static byte[] createNonce(byte[] iv, long packetNumber) {
         byte[] nonce = new byte[iv.length];
         System.arraycopy(iv, 0, nonce, 0, iv.length);
@@ -152,9 +181,11 @@ final class QuicCrypto {
         return nonce;
     }
 
-    // ── Header Protection (RFC 9001 §5.4) ──────────────────────────────
+    // ── Header protection (RFC 9001 §5.4) ────────────────────────────
 
-    /** Generates a 5-byte header protection mask using AES-ECB on the 16-byte sample. */
+    /**
+     * Generates a 5-byte header-protection mask from a 16-byte sample.
+     */
     public static byte[] headerProtectionMask(byte[] hpKey, byte[] sample) throws Exception {
         Cipher cipher = Cipher.getInstance("AES/ECB/NoPadding");
         cipher.init(Cipher.ENCRYPT_MODE, new SecretKeySpec(hpKey, "AES"));
@@ -164,7 +195,9 @@ final class QuicCrypto {
         return mask;
     }
 
-    /** Removes header protection in-place and returns the decoded packet number length. */
+    /**
+     * Removes header protection in place and returns the parsed packet number length.
+     */
     public static int removeHeaderProtection(byte[] packet, int pnOffset, byte[] hpKey, boolean isLongHeader) throws Exception {
         int sampleOffset = pnOffset + 4;
         if (sampleOffset + 16 > packet.length) {
@@ -185,7 +218,9 @@ final class QuicCrypto {
         return pnLength;
     }
 
-    /** Applies header protection in-place to the packet (RFC 9001 §5.4). */
+    /**
+     * Apply header protection to the packet in place.
+     */
     public static void applyHeaderProtection(byte[] packet, int pnOffset, int pnLength, byte[] hpKey, boolean isLongHeader) throws Exception {
         int sampleOffset = pnOffset + 4;
         byte[] sample = new byte[16];
@@ -201,20 +236,26 @@ final class QuicCrypto {
         }
     }
 
-    // ── TLS Key Schedule helpers (RFC 8446 §7.1) ──────────────────────
+    // ── TLS key-schedule helper methods (RFC 8446 §7.1) ──────────────────────
 
-    /** Derives a TLS 1.3 secret from a base secret, label, and transcript hash (RFC 8446 §7.1). */
+    /**
+     * Derive a TLS 1.3 secret from the base secret, label, and transcript hash.
+     */
     public static byte[] deriveSecret(byte[] secret, String label, byte[] transcriptHash) throws Exception {
         return tlsExpandLabel(secret, label, transcriptHash, 32);
     }
 
-    /** Computes the SHA-256 digest of the given data. */
+    /**
+     * Compute the SHA-256 digest of the given data.
+     */
     public static byte[] sha256(byte[] data) throws Exception {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
         return md.digest(data);
     }
 
-    /** Computes the SHA-256 digest of multiple concatenated data arrays. */
+    /**
+     * Compute the SHA-256 digest of multiple concatenated data segments.
+     */
     public static byte[] sha256(byte[]... dataArrays) throws Exception {
         MessageDigest md = MessageDigest.getInstance("SHA-256");
         for (byte[] data : dataArrays) {
@@ -225,7 +266,7 @@ final class QuicCrypto {
         return md.digest();
     }
 
-    // ── Utility ────────────────────────────────────────────────────────
+    // ── Utility methods ───────────────────────────────────────────────────────
 
     private static byte[] toAscii(String s) {
         byte[] result = new byte[s.length()];
@@ -235,7 +276,9 @@ final class QuicCrypto {
         return result;
     }
 
-    /** Converts a hex string to a byte array. */
+    /**
+     * Convert a hexadecimal string into a byte array.
+     */
     public static byte[] hexToBytes(String hex) {
         int len = hex.length();
         byte[] data = new byte[len / 2];
@@ -245,7 +288,9 @@ final class QuicCrypto {
         return data;
     }
 
-    /** Converts a byte array to a lowercase hex string. */
+    /**
+     * Convert a byte array into a lowercase hexadecimal string.
+     */
     public static String bytesToHex(byte[] bytes) {
         StringBuilder sb = new StringBuilder(bytes.length * 2);
         for (byte b : bytes) {

@@ -35,27 +35,26 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * Selector-driven SCTP server transport built on the JDK SCTP API.
- * <p>The server owns one listening {@link SctpServerChannel}, accepts native SCTP
- * sockets, registers them for read readiness, and lazily creates one framework
- * {@link SctpChannel} wrapper per accepted native channel.
+ * Selector-driven server-side transport implementation built on the JDK SCTP API.
+ * <p>The server owns a listening {@link SctpServerChannel}, accepts native SCTP sockets,
+ * registers them for read events, and lazily creates the corresponding framework-level
+ * {@link SctpChannel} wrapper when data is first received.
  * <p><b>Runtime structure:</b>
  * <pre>
- *   SctpServerChannel (listen socket)
+ *   SctpServerChannel (listening socket)
  *          |
  *          +--> accept native SctpChannel
  *                    |
  *                    +--> channelMap[native channel] = framework SctpChannel
- *                    +--> receive MessageInfo + payload
+ *                    +--> receive MessageInfo and payload
  *                    +--> wrap as SctpMessage
  *                    +--> notifyRcvChannelData(...)
  * </pre>
- * <p>The internal map is keyed by the accepted native SCTP channel object, not
- * by remote address text or association ID. A single reusable receive buffer is
- * shared by the selector loop and copied into fresh {@link ByteBuf} instances
- * before data enters the pipeline.
- * <p>This transport depends on {@code com.sun.nio.sctp} and is therefore only
- * available on JDK and OS combinations that actually provide SCTP support.
+ * <p>The internal mapping uses the accepted native SCTP channel object as the key rather than a
+ * remote address string or association ID. The selector loop reuses a single receive buffer and
+ * copies data into a new {@link ByteBuf} before it enters the protocol pipeline.
+ * <p>This transport depends on {@code com.sun.nio.sctp} and is therefore available only when both
+ * the JDK and the operating system provide SCTP support.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  * @see SctpAsyncChannel
@@ -84,21 +83,37 @@ class SctpAsyncServerChannel implements AsyncServerChannel {
         this.receiveBuffer = this.bufAllocator.jvmBuffer(SctpSoConfigUtils.getRcvPacketSize(this.soConfig));
     }
 
+    /**
+     * Return the internal identifier of the listening channel.
+     * @return the channel ID
+     */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /**
+     * Return the SCTP configuration used by the current listener.
+     * @return the SCTP configuration object
+     */
     @Override
     public SoConfig getSoConfig() {
         return this.soConfig;
     }
 
+    /**
+     * Determine whether the listening channel is still open.
+     * @return true if the channel is open
+     */
     @Override
     public boolean isOpen() {
         return this.channel.isOpen();
     }
 
+    /**
+     * Close the listening channel, selector, and the reused receive buffer.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         if (this.context.getConfig().isPrintLog()) {
@@ -111,6 +126,14 @@ class SctpAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
+    /**
+     * Bind the listening address and start the receive loop.
+     * <p>This method first applies the listen-side configuration, then creates the framework-level
+     * {@link NetListen} descriptor, and finally starts the accept and read loop.
+     * @param initializer the protocol initializer for newly accepted connections
+     * @return the corresponding listen handle
+     * @throws IOException if an I/O error occurs during bind or initialization
+     */
     @Override
     public NetListen bind(ProtoInitializer initializer) throws IOException {
         // create
@@ -303,6 +326,13 @@ class SctpAsyncServerChannel implements AsyncServerChannel {
         }
     }
 
+    /**
+     * Create the framework-level channel object for an accepted native SCTP channel.
+     * @param forListen the source listener
+     * @param realChannel the underlying asynchronous channel adapter
+     * @return the newly created framework channel
+     * @throws IOException if an I/O error occurs during creation
+     */
     protected SctpChannel newChannel(NetListen forListen, SctpAsyncChannel realChannel) throws IOException {
         return new SctpChannel(             //
                 realChannel.getChannelId(), //

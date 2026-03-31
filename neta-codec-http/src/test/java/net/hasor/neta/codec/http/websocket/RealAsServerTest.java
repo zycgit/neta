@@ -47,7 +47,7 @@ public class RealAsServerTest extends AbstractWebSocketTest {
     private ProtoHandler<WebSocketMessage, WebSocketMessage> serverEventTap(Queue<Object> serverEvents) {
         return new ProtoHandler<WebSocketMessage, WebSocketMessage>() {
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getData() instanceof WebSocketHandshakeEvent || event.getData() instanceof PongWebSocketEvent) {
                     serverEvents.offer(event.getData());
                 }
@@ -67,7 +67,7 @@ public class RealAsServerTest extends AbstractWebSocketTest {
     private ThroughProtoHandler<HttpObject> handshakeEventTap(Queue<Object> serverEvents) {
         return new ThroughProtoHandler<HttpObject>() {
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+            public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getData() instanceof WebSocketHandshakeEvent) {
                     serverEvents.offer(event.getData());
                 }

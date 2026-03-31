@@ -25,14 +25,14 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
     private ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> relayOutboundEvents() {
         return new ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject>() {
             @Override
-            public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+            public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
                 Object eventData = event.getData();
                 if (eventData instanceof PingWebSocketEvent) {
-                    context.fireUserEventSnd(PingWebSocketEvent.class, (PingWebSocketEvent) eventData);
+                    context.fireEventSnd(PingWebSocketEvent.class, (PingWebSocketEvent) eventData);
                     return false;
                 }
                 if (eventData instanceof PongWebSocketEvent) {
-                    context.fireUserEventSnd(PongWebSocketEvent.class, (PongWebSocketEvent) eventData);
+                    context.fireEventSnd(PongWebSocketEvent.class, (PongWebSocketEvent) eventData);
                     return false;
                 }
                 return true;
@@ -193,7 +193,7 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
 
             completeHandshake(pipe, WebSocketVersion.V13);
 
-            pipe.server().fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("hello")));
+            pipe.server().fireEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("hello")));
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
             List<HttpObject> result = drainQueue(pipe.clientInbound());
             assertEquals(1, result.size());
@@ -220,7 +220,7 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
 
             completeHandshake(pipe, WebSocketVersion.V13);
 
-            pipe.server().fireUserEvent(PongWebSocketEvent.class, WebSocketUtils.pongEvent(ascii("hello")));
+            pipe.server().fireEvent(PongWebSocketEvent.class, WebSocketUtils.pongEvent(ascii("hello")));
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty(), 1000L));
             List<HttpObject> result = drainQueue(pipe.clientInbound());
             assertEquals(1, result.size());
@@ -248,7 +248,7 @@ public class WebSocketOutboundHandlerTest extends AbstractWebSocketTest {
             completeHandshake(pipe, WebSocketVersion.V13);
 
             pipe.server().sendData(WebSocketUtils.textMessage(0, ascii("A"))).get();
-            pipe.server().fireUserEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("!")));
+            pipe.server().fireEvent(PingWebSocketEvent.class, WebSocketUtils.pingEvent(ascii("!")));
             pipe.server().sendData(WebSocketUtils.textMessage(-1, ascii("B"))).get();
             assertTrue(waitUntil(() -> pipe.clientInbound().size() >= 3, 1000L));
 

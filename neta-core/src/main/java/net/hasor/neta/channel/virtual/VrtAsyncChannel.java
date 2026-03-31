@@ -22,33 +22,32 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * In-process implementation of the raw virtual transport channel.
- * <p>This type is the low-level adapter used by {@link VrtProvider} to back
- * both connect-mode clients and standalone virtual channels. It never opens an
- * OS socket. Instead it creates a {@link VrtChannel} facade and forwards
- * outbound payloads into the shared {@link SoContext} so that
- * {@link VrtTransfer} can fan them out to linked peers.
+ * In-process implementation of the low-level virtual transport channel.
+ * <p>This type is the low-level adapter used by {@link VrtProvider} for connect-mode clients and
+ * standalone virtual channels. It never opens an operating-system socket. Instead, it creates an
+ * application-facing {@link VrtChannel}, publishes outbound data into the shared {@link SoContext},
+ * and lets {@link VrtTransfer} fan that data out to linked peers.
  * <p><b>Lifecycle:</b>
  * <pre>
  *   connectTo(initializer)
- *       -> create client-side VrtChannel
+ *       -> create a client-side VrtChannel
  *       -> if a target server exists: target.acceptLink(clientSide)
- *       -> server creates its own VrtChannel and links both sides through VrtTransfer
+ *       -> the server creates its own VrtChannel and links both sides through VrtTransfer
  *   write(...)
  *       -> pull SoSndData from the send queue
  *       -> wrap it as PlayLoadObject(channel, data, ...)
  *       -> context.trigger(playLoad)
- *       -> VrtTransfer delivers it to every linked VrtTransferLink
+ *       -> VrtTransfer delivers the data to each linked VrtTransferLink
  * </pre>
  * <ul>
- *   <li><b>Addresses:</b> local and remote addresses are {@link VrtSocketAddress}
- *       instances. The local address reuses the target numeric address and marks it
- *       as a connect-side endpoint when a server target is present.</li>
+ *   <li><b>Addresses:</b> both local and remote addresses are represented by {@link VrtSocketAddress}.
+ *       When a target server exists, the local address reuses the target numeric address and marks
+ *       itself as a connect-side endpoint.</li>
  *   <li><b>Role selection:</b> {@link AsyncChannel#connectTo(ProtoInitializer, net.hasor.cobble.concurrent.future.Future)}
- *       upgrades the exposed {@link VrtChannel} to {@link VrtMode#Client} only when a
- *       target server is found. Otherwise the configured mode is kept.</li>
- *   <li><b>Close semantics:</b> {@link #close()} is a hard local close. It only flips the
- *       open flag and notifies the context; there is no half-close handshake.</li>
+ *       promotes the exposed {@link VrtChannel} to {@link VrtMode#Client} only when a target server
+ *       is resolved; otherwise the configured mode is kept.</li>
+ *   <li><b>Close semantics:</b> {@link #close()} is a hard local close. It only flips the open state
+ *       and notifies the context; there is no half-close handshake.</li>
  * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
@@ -66,6 +65,14 @@ class VrtAsyncChannel implements AsyncChannel {
     private final        VrtSoConfig           soConfig;
     private final        AtomicBoolean         closeFlag;
 
+    /**
+     * Create a virtual asynchronous channel.
+     * @param channelId the channel ID
+     * @param target the target server channel; null means a standalone virtual channel
+     * @param context the runtime context
+     * @param targetAddr the target address
+     * @param soConfig the channel configuration
+     */
     VrtAsyncChannel(long channelId, VrtAsyncServerChannel target, SoContext context, SocketAddress targetAddr, SoConfig soConfig) {
         this.channelId = channelId;
         this.bindAddr = new VrtSocketAddress(((VrtSocketAddress) targetAddr).getAddress(), target != null);
@@ -76,31 +83,55 @@ class VrtAsyncChannel implements AsyncChannel {
         this.closeFlag = new AtomicBoolean(false);
     }
 
+    /**
+     * Return the virtual transport configuration used by the current channel.
+     * @return the virtual transport configuration
+     */
     @Override
     public VrtSoConfig getSoConfig() {
         return this.soConfig;
     }
 
+    /**
+     * Return the current channel ID.
+     * @return the channel ID
+     */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /**
+     * Return the local address of the current channel.
+     * @return the local virtual address
+     */
     @Override
     public VrtSocketAddress getLocalAddress() {
         return this.bindAddr;
     }
 
+    /**
+     * Return the remote address of the current channel.
+     * @return the remote virtual address
+     */
     @Override
     public VrtSocketAddress getRemoteAddress() {
         return this.targetAddr;
     }
 
+    /**
+     * Determine whether the current channel is still open.
+     * @return true if the channel is open
+     */
     @Override
     public boolean isOpen() {
         return !this.closeFlag.get();
     }
 
+    /**
+     * Close the current virtual asynchronous channel.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         if (this.context.getConfig().isPrintLog()) {
@@ -109,9 +140,14 @@ class VrtAsyncChannel implements AsyncChannel {
         this.closeFlag.set(true);
     }
 
+    /**
+     * Establish a virtual connection and create the exposed {@link VrtChannel}.
+     * @param initializer the protocol initializer
+     * @param future the future used to receive the connection result
+     */
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
-        // create channel
+        // Create the channel.
         VrtChannel channel;
         try {
             if (this.target != null) {
@@ -128,7 +164,7 @@ class VrtAsyncChannel implements AsyncChannel {
             return;
         }
 
-        // init
+        // Initialize the channel.
         try {
             this.context.initChannel(channel, true);
             future.completed(channel);
@@ -140,6 +176,11 @@ class VrtAsyncChannel implements AsyncChannel {
         }
     }
 
+    /**
+     * Write queued data from the send context into the virtual transport bus.
+     * @param channel the framework channel
+     * @param wContext the send context
+     */
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
         VrtChannel vrtChannel = (VrtChannel) channel;
@@ -164,6 +205,11 @@ class VrtAsyncChannel implements AsyncChannel {
         }
     }
 
+    /**
+     * Purge remaining queued send data and fail each pending item.
+     * @param e the failure cause
+     * @param context the send context
+     */
     private void purgeSndData(Throwable e, SoSndContext context) {
         while (!context.isEmpty()) {
             SoSndData sndData = context.popData();
@@ -173,6 +219,11 @@ class VrtAsyncChannel implements AsyncChannel {
         }
     }
 
+    /**
+     * Submit an internal task to the SoTask scheduler.
+     * @param task the task to submit
+     * @return the task future
+     */
     private Future<?> submitTask(DefaultSoTask task) {
         return this.context.submitSoTask(task, this);
     }

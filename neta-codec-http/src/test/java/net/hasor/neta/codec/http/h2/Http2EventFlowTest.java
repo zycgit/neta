@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.SoUserEvent;
+import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
@@ -27,8 +27,8 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class Http2EventFlowTest extends AbstractHttp2Test {
-    private static <T> T findEvent(Iterable<SoUserEvent> events, Class<T> eventType) {
-        for (SoUserEvent event : events) {
+    private static <T> T findEvent(Iterable<SoEvent> events, Class<T> eventType) {
+        for (SoEvent event : events) {
             if (event != null && eventType.isInstance(event.getData())) {
                 return eventType.cast(event.getData());
             }
@@ -57,10 +57,10 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             }, VrtTransfer.direct());
 
             byte[] payload = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
-            pipe.client().fireUserEvent(Http2PingEvent.class, new Http2PingEvent(1, ByteBuf.wrap(payload)));
+            pipe.client().fireEvent(Http2PingEvent.class, new Http2PingEvent(1, ByteBuf.wrap(payload)));
 
-            assertTrue("clientEvents=" + pipe.clientUserEvents() + ", serverEvents=" + pipe.serverUserEvents() + ", clientInboundErrors=" + pipe.clientInboundErrors() + ", clientOutboundErrors=" + pipe.clientOutboundErrors() + ", serverInboundErrors=" + pipe.serverInboundErrors() + ", serverOutboundErrors=" + pipe.serverOutboundErrors(), waitUntil(() -> findEvent(pipe.clientUserEvents(), Http2PongEvent.class) != null, 1000L));
-            Http2PongEvent pongEvent = findEvent(pipe.clientUserEvents(), Http2PongEvent.class);
+            assertTrue("clientEvents=" + pipe.clientEvents() + ", serverEvents=" + pipe.serverEvents() + ", clientInboundErrors=" + pipe.clientInboundErrors() + ", clientOutboundErrors=" + pipe.clientOutboundErrors() + ", serverInboundErrors=" + pipe.serverInboundErrors() + ", serverOutboundErrors=" + pipe.serverOutboundErrors(), waitUntil(() -> findEvent(pipe.clientEvents(), Http2PongEvent.class) != null, 1000L));
+            Http2PongEvent pongEvent = findEvent(pipe.clientEvents(), Http2PongEvent.class);
             assertNotNull(pongEvent);
             assertTrue(pongEvent.isRemote());
             try {
@@ -71,7 +71,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
                 pongEvent.release();
             }
 
-            assertNull(findEvent(pipe.serverUserEvents(), Http2PongEvent.class));
+            assertNull(findEvent(pipe.serverEvents(), Http2PongEvent.class));
             assertTrue(pipe.clientInboundErrors().isEmpty());
             assertTrue(pipe.clientOutboundErrors().isEmpty());
             assertTrue(pipe.serverInboundErrors().isEmpty());
@@ -89,7 +89,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(true));
             });
 
-            pipe.client().fireUserEvent(Http2PingEvent.class, new Http2PingEvent(1, wrapPingPayload()));
+            pipe.client().fireEvent(Http2PingEvent.class, new Http2PingEvent(1, wrapPingPayload()));
 
             assertTrue("serverInbound=" + pipe.serverInbound() + ", serverInboundErrors=" + pipe.serverInboundErrors() + ", clientOutboundErrors=" + pipe.clientOutboundErrors(), waitUntil(() -> !pipe.serverInbound().isEmpty() || !pipe.serverInboundErrors().isEmpty() || !pipe.clientOutboundErrors().isEmpty(), 1000L));
             assertTrue(pipe.serverInboundErrors().isEmpty());
@@ -113,9 +113,9 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             byte[] payload = new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 };
             List<HttpObject> out = receiveAndIntBound(pipe, Http2Frame.ping(Http2Flags.ACK, payload));
             assertTrue(out.isEmpty());
-            assertEquals(1, pipe.channelUserEvents().size());
+            assertEquals(1, pipe.channelEvents().size());
 
-            Http2PongEvent pongEvent = findEvent(pipe.channelUserEvents(), Http2PongEvent.class);
+            Http2PongEvent pongEvent = findEvent(pipe.channelEvents(), Http2PongEvent.class);
             assertNotNull(pongEvent);
             assertTrue(pongEvent.isRemote());
             try {
@@ -137,7 +137,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
 
             List<HttpObject> out = receiveAndIntBound(pipe, Http2Frame.ping(Http2Flags.NONE, new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 }));
             assertTrue(out.isEmpty());
-            assertTrue(pipe.channelUserEvents().isEmpty());
+            assertTrue(pipe.channelEvents().isEmpty());
         });
     }
 
@@ -151,7 +151,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(true));
             });
 
-            pipe.client().fireUserEvent(Http2PriorityEvent.class, new Http2PriorityEvent(3, 1, 16, false));
+            pipe.client().fireEvent(Http2PriorityEvent.class, new Http2PriorityEvent(3, 1, 16, false));
 
             assertTrue(waitUntil(() -> !pipe.serverInbound().isEmpty() || !pipe.serverInboundErrors().isEmpty() || !pipe.clientOutboundErrors().isEmpty(), 1000L));
             assertTrue(pipe.serverInboundErrors().isEmpty());
@@ -178,7 +178,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             headers.addHeader(HttpHeaderNames.PSEUDO_METHOD, "GET");
             headers.addHeader(HttpHeaderNames.PSEUDO_PATH, "/asset.css");
             headers.addHeader(HttpHeaderNames.PSEUDO_AUTHORITY, "example.com");
-            pipe.server().fireUserEvent(Http2PushPromiseEvent.class, new Http2PushPromiseEvent(1, 2, headers));
+            pipe.server().fireEvent(Http2PushPromiseEvent.class, new Http2PushPromiseEvent(1, 2, headers));
 
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty() || !pipe.clientInboundErrors().isEmpty() || !pipe.serverOutboundErrors().isEmpty(), 1000L));
             assertTrue(pipe.clientInboundErrors().isEmpty());
@@ -202,9 +202,9 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             byte[] payload = new byte[] { 0x00, 0x00, 0x00, 0x03, 0x00, 0x00, 0x00, 0x02, 'b', 'y', 'e' };
             List<HttpObject> out = receiveAndIntBound(pipe, Http2Frame.goaway(payload));
             assertTrue(out.isEmpty());
-            assertEquals(1, pipe.channelUserEvents().size());
+            assertEquals(1, pipe.channelEvents().size());
 
-            Http2GoawayEvent goawayEvent = findEvent(pipe.channelUserEvents(), Http2GoawayEvent.class);
+            Http2GoawayEvent goawayEvent = findEvent(pipe.channelEvents(), Http2GoawayEvent.class);
             assertNotNull(goawayEvent);
             assertEquals(3L, goawayEvent.lastAcceptedId());
             assertEquals(2L, goawayEvent.errorCode());
@@ -222,9 +222,9 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
 
             List<HttpObject> out = receiveAndIntBound(pipe, Http2Frame.rstStream(7, new byte[] { 0x00, 0x00, 0x00, 0x08 }));
             assertTrue(out.isEmpty());
-            assertEquals(1, pipe.channelUserEvents().size());
+            assertEquals(1, pipe.channelEvents().size());
 
-            Http2ResetEvent resetEvent = findEvent(pipe.channelUserEvents(), Http2ResetEvent.class);
+            Http2ResetEvent resetEvent = findEvent(pipe.channelEvents(), Http2ResetEvent.class);
             assertNotNull(resetEvent);
             assertEquals(7L, resetEvent.streamId());
             assertEquals(8L, resetEvent.errorCode());
@@ -242,7 +242,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
                 ctx.addLast("h2-message", new Http2ObjectDuplexe(true));
             });
 
-            pipe.server().fireUserEvent(Http2ResetEvent.class, new Http2ResetEvent(7, Http2ResetEvent.CANCEL));
+            pipe.server().fireEvent(Http2ResetEvent.class, new Http2ResetEvent(7, Http2ResetEvent.CANCEL));
 
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty() || !pipe.clientInboundErrors().isEmpty() || !pipe.serverOutboundErrors().isEmpty(), 1000L));
             assertTrue(pipe.clientInboundErrors().isEmpty());
@@ -265,7 +265,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
                 ctx.addLast("h2-message", new Http2ObjectDuplexe(true));
             });
 
-            pipe.server().fireUserEvent(Http2GoawayEvent.class, new Http2GoawayEvent(0, 3, Http2ErrorCode.PROTOCOL_ERROR, "bye".getBytes(StandardCharsets.US_ASCII)));
+            pipe.server().fireEvent(Http2GoawayEvent.class, new Http2GoawayEvent(0, 3, Http2ErrorCode.PROTOCOL_ERROR, "bye".getBytes(StandardCharsets.US_ASCII)));
 
             assertTrue(waitUntil(() -> !pipe.clientInbound().isEmpty() || !pipe.clientInboundErrors().isEmpty() || !pipe.serverOutboundErrors().isEmpty(), 1000L));
             assertTrue(pipe.clientInboundErrors().isEmpty());
@@ -287,7 +287,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
                 ctx.addLastDecoder("h2-frame-decoder", new Http2FrameDecoder(true));
             });
 
-            pipe.client().fireUserEvent(Http2PriorityEvent.class, new Http2PriorityEvent(3, 3, 16, false));
+            pipe.client().fireEvent(Http2PriorityEvent.class, new Http2PriorityEvent(3, 3, 16, false));
 
             assertTrue(waitUntil(() -> !pipe.serverInbound().isEmpty() || !pipe.serverInboundErrors().isEmpty() || !pipe.clientOutboundErrors().isEmpty(), 1000L));
             assertTrue(pipe.serverInboundErrors().isEmpty());
@@ -299,7 +299,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             assertEquals(3, rstStreamFrame.streamId());
             assertArrayEquals(new byte[] { 0x00, 0x00, 0x00, 0x01 }, rstStreamFrame.payload());
 
-            Http2ResetEvent resetEvent = findEvent(pipe.clientUserEvents(), Http2ResetEvent.class);
+            Http2ResetEvent resetEvent = findEvent(pipe.clientEvents(), Http2ResetEvent.class);
             assertNotNull(resetEvent);
             assertFalse(resetEvent.isRemote());
             assertEquals(3L, resetEvent.streamId());
@@ -322,7 +322,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             headers.addHeader(HttpHeaderNames.PSEUDO_METHOD, "GET");
             headers.addHeader(HttpHeaderNames.PSEUDO_PATH, "/invalid-push");
             headers.addHeader(HttpHeaderNames.PSEUDO_AUTHORITY, "example.com");
-            pipe.client().fireUserEvent(Http2PushPromiseEvent.class, new Http2PushPromiseEvent(1, 2, headers));
+            pipe.client().fireEvent(Http2PushPromiseEvent.class, new Http2PushPromiseEvent(1, 2, headers));
 
             assertTrue(waitUntil(() -> !pipe.serverInbound().isEmpty() || pipe.client().isClose() || !pipe.serverInboundErrors().isEmpty() || !pipe.clientOutboundErrors().isEmpty(), 1000L));
             assertTrue(pipe.serverInboundErrors().isEmpty());
@@ -333,7 +333,7 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             Http2Frame goAwayFrame = findFrame(outbound, Http2FrameType.GOAWAY);
             assertNotNull(goAwayFrame);
 
-            Http2GoawayEvent goawayEvent = findEvent(pipe.clientUserEvents(), Http2GoawayEvent.class);
+            Http2GoawayEvent goawayEvent = findEvent(pipe.clientEvents(), Http2GoawayEvent.class);
             assertNotNull(goawayEvent);
             assertFalse(goawayEvent.isRemote());
             assertEquals(Http2ErrorCode.PROTOCOL_ERROR, goawayEvent.errorCode());

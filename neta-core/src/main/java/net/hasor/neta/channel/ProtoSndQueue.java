@@ -18,21 +18,28 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Outbound (send-side) data queue for one endpoint of a protocol pipeline stage.
- * <p>Each pipeline stage boundary has exactly one {@code ProtoSndQueue}: the downstream
- * handler (encoder / transformer) offers encoded messages into it; the upstream consumer
- * (or the transport layer) reads them for transmission.
- * <p>This interface now follows immediate-visibility semantics. There is no submit/reset phase:
- * once an {@link #offerMessage} call succeeds, the offered data is already part of the queue.</p>
- * <h3>Slot mechanism</h3>
- * Unlike an unbounded queue, outbound capacity is expressed as <em>slots</em>.  Before
- * offering a message call {@link #hasSlot()} / {@link #slotSize()} to confirm space is
- * available.  If the queue is full (no slots remaining) the pipeline raises
- * {@link ProtoFullException} as a backpressure signal to the sender.
- * <h3>Offer semantics</h3>
- * <p>{@link #offerMessage} is atomic for multi-item writes: the whole batch is accepted or
- * the call returns {@code 0} without changing queue state.</p>
- * @param <T> the type of outbound message
+ * Outbound data queue at one stage boundary of the protocol pipeline.
+ * <p>It stores outbound messages already produced by the current stage. Downstream handlers offer
+ * messages here, and the upstream boundary or transport layer takes them away and continues sending.</p>
+ * <h3>Offer methods</h3>
+ * <ul>
+ *   <li>{@link #offerMessage(Object[])}, {@link #offerMessage(List)}, and {@link #offerMessage(ProtoRcvQueue)} are used for bulk message offers.</li>
+ *   <li>{@link #offerMessage(Object)} is used to offer a single message.</li>
+ *   <li>Bulk offers use all-or-nothing semantics. If there are not enough slots, the method returns {@code false} and the queue remains unchanged.</li>
+ * </ul>
+ * <h3>Slots</h3>
+ * <ul>
+ *   <li>{@link #slotSize()} reports the current number of remaining writable slots.</li>
+ *   <li>{@link #hasSlot()} reports whether more writes are currently possible.</li>
+ *   <li>When the queue becomes full, {@link #offerMessage} returns {@code false}.</li>
+ * </ul>
+ * <h3>Ownership</h3>
+ * <ul>
+ *   <li>After a successful offer, message ownership transfers to the queue.</li>
+ *   <li>When an offer fails, ownership remains with the caller.</li>
+ *   <li>When messages are transferred successfully from another {@link ProtoRcvQueue}, ownership of the source queue's messages moves to the current queue in one step.</li>
+ * </ul>
+ * @param <T> outbound message type
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-17
  * @see ProtoRcvQueue
@@ -40,53 +47,52 @@ import java.util.List;
  */
 public interface ProtoSndQueue<T> {
     /**
-     * Returns queue capacity.
+     * Return the queue capacity.
      */
     int getCapacity();
 
-    /** Returns the number of writable slots remaining. */
+    /** Return the number of remaining writable slots. */
     int slotSize();
 
     default boolean wasFull() {
         return this.slotSize() == 0;
     }
 
-    /** Returns {@code true} when at least one message can be written immediately. */
+    /** Return {@code true} when at least one more message can still be written immediately. */
     default boolean hasSlot() {
         return slotSize() > 0;
     }
 
     /**
-     * Offers an array of messages.
-     * <p>The operation is atomic: if there is not enough remaining slot capacity for the
-     * whole array then nothing is accepted and {@code 0} is returned.</p>
-     * <p>On success, ownership of all offered messages moves to the queue.</p>
+     * Offer an array of messages.
+     * <p>This operation is atomic: if remaining slots are insufficient for the entire array, no
+     * element is accepted and {@code false} is returned.</p>
+     * <p>On success, ownership of all offered messages transfers to the queue.</p>
      */
-    int offerMessage(T[] offerList);
+    boolean offerMessage(T[] offerList);
 
     /**
-     * Offers a list of messages.
-     * <p>The operation is atomic: if there is not enough remaining slot capacity for the
-     * whole list then nothing is accepted and {@code 0} is returned.</p>
-     * <p>On success, ownership of all offered messages moves to the queue.</p>
-     */
-    int offerMessage(List<T> offerList);
-
-    /**
-     * Transfers messages from another receive queue.
-     * <p>The operation is atomic: if there is not enough remaining slot capacity for all
-     * readable items in {@code offerList}, nothing is taken from the source queue and
-     * {@code 0} is returned.</p>
-     * <p>On success, this method drains the source queue by calling {@link ProtoRcvQueue#takeMessage(int)},
-     * so ownership moves from the source queue to this queue in one step.</p>
-     */
-    int offerMessage(ProtoRcvQueue<T> offerList);
-
-    /**
-     * Offers one message and returns whether it was accepted.
-     * <p>On success, ownership moves to the queue immediately.</p>
+     * Offer one message and return whether it was accepted.
+     * <p>On success, ownership transfers to the queue immediately.</p>
      */
     default boolean offerMessage(T offerMessage) {
-        return this.offerMessage(Collections.singletonList(offerMessage)) != 0;
+        return this.offerMessage(Collections.singletonList(offerMessage));
     }
+
+    /**
+     * Offer a list of messages.
+     * <p>This operation is atomic: if remaining slots are insufficient for the entire list, no
+     * element is accepted and {@code false} is returned.</p>
+     * <p>On success, ownership of all offered messages transfers to the queue.</p>
+     */
+    boolean offerMessage(List<T> offerList);
+
+    /**
+     * Transfer messages from another receive queue.
+     * <p>This operation is atomic: if remaining slots are insufficient for all readable elements in
+     * {@code offerList}, nothing is taken from the source queue and {@code false} is returned.</p>
+     * <p>On success, the method drains the source queue by calling {@link ProtoRcvQueue#takeMessage(int)},
+     * so ownership transfers from the source queue to the current queue in one step.</p>
+     */
+    boolean offerMessage(ProtoRcvQueue<T> offerList);
 }

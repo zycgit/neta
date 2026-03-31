@@ -16,24 +16,34 @@
 package net.hasor.neta.channel;
 
 /**
- * Imperative control handle exposed by {@link ProtoRoutingDuplexer} to its branch handlers.
- * <p>
- * Obtain it from {@link ProtoContext#context(Class)} inside a branch pipeline:
- * </p>
+ * Control handle exposed by the current routing duplexer to branch handlers.
+ * <p>When a handler runs inside a routing branch, it can obtain this object through the current
+ * {@link ProtoContext} using {@link ProtoContext#context(Class)}:</p>
  * <pre>
  * ProtoRoutingControl routing = context.context(ProtoRoutingControl.class);
  * routing.switchRoute("websocket");
  * </pre>
+ * <p>The object is inserted into context storage by the corresponding
+ * {@link ProtoRoutingDuplexer} when it creates the branch context. Handlers in the current branch
+ * and any nested child branches can read it.</p>
+ * <p>Calling {@link #switchRoute(String)} only affects the current routing duplexer instance on the
+ * current connection. The new route takes effect after the current processing round finishes and
+ * pending output and recovery state have been cleared.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-08
  */
 public interface ProtoRoutingControl {
-    /** Returns the router mode. */
+    /** Return the working mode of the current routing duplexer. */
     ProtoRoutingMode getMode();
 
-    /** Returns the currently selected route, or {@code null} if routing is not yet decided. */
-    String currentRoute();
+    /** Return the currently selected branch name, or {@code null} if routing has not been decided yet. */
+    String current();
 
-    /** Schedule a route switch to the given branch. */
-    void switchRoute(String newBranchName);
+    /**
+     * Request a switch to the specified branch.
+     * <p>The request is recorded as a pending switch and applied by the routing duplexer after the
+     * current processing round completes.</p>
+     * @param target target branch name
+     */
+    void switchRoute(String target);
 }

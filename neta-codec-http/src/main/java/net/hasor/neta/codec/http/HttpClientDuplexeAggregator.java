@@ -55,27 +55,30 @@ public class HttpClientDuplexeAggregator implements ProtoDuplexer<HttpObject, Ht
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (isRcv) {
-            return this.responseAggregator.onUserEvent(context, event);
+            return this.responseAggregator.onEvent(context, event);
+        } else {
+            return this.requestAggregator.onEvent(context, event);
         }
-        return this.requestAggregator.onUserEvent(context, event);
     }
 
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         if (isRcv) {
             return this.responseAggregator.onMessage(context, rcvUp, rcvDown);
+        } else {
+            return this.requestAggregator.onMessage(context, sndUp, sndDown);
         }
-        return this.requestAggregator.onMessage(context, sndUp, sndDown);
     }
 
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
             return this.responseAggregator.onError(context, e, eh);
+        } else {
+            return this.requestAggregator.onError(context, e, eh);
         }
-        return this.requestAggregator.onError(context, e, eh);
     }
 
     @Override

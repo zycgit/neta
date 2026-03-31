@@ -19,13 +19,20 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.ProtoPartitionPolicy.ReceivePolicy;
 
 /**
- * Receive-side partition duplexer.
- * <p>
- * Unlike {@link ProtoRoutingDuplexer}, which selects a single branch for the whole connection,
- * this duplexer maintains one independent serial handler chain per resolved partition key.
- * Partition-local chains are created from a single {@link ProtoInitializer} and currently only
- * support decoder-style handlers.
- * </p>
+ * Partition duplexer that splits one connection's message stream into multiple partition sub-pipelines by partition key.
+ * <p>Unlike {@link ProtoRoutingDuplexer}, which selects one branch for the entire connection, this
+ * duplexer uses the {@link PartitionKey} returned by {@link ProtoPartitionSelector} to maintain an
+ * independent partition sub-pipeline for each key. That lets different logical partitions on the
+ * same connection keep their own context, buffers, and processing state.</p>
+ * <p>Its core responsibility is to centralize the lifecycle details of partition selection,
+ * partition creation, partition reuse, and partition closure inside one protocol node. After a
+ * message or event enters, it first determines the partition key, then decides whether the
+ * corresponding partition sub-pipeline should be created, and finally hands the data to that
+ * partition instance.</p>
+ * <p>Partition sub-pipelines are created by the initializer logic supplied through
+ * {@link ProtoPartitionBuilder}. Whether creation should be allowed or blocked is decided by
+ * {@link ProtoPartitionPolicy}, while the number of active partitions and their close behavior are
+ * managed through {@link ProtoPartitionControl}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-29
  */
@@ -129,7 +136,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         PartitionKey partitionKey = this.selector.route(context, PartitionDataKind.Event, event);
         if (partitionKey == null) {
             return true;
@@ -152,7 +159,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             this.partitions.put(partitionKey, state);
         }
 
-        return state.onUserEvent(event, isRcv);
+        return state.onEvent(event, isRcv);
     }
 
     @Override
@@ -355,7 +362,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             }
 
             Object[] flushArray = branchTailRcvDown.takeMessageToArray(flushCount);
-            if (finalOutput.offerMessage((List<IN>) Arrays.asList(flushArray)) != flushArray.length) {
+            if (!finalOutput.offerMessage((List<IN>) Arrays.asList(flushArray))) {
                 throw new IllegalStateException("ProtoPartitionDuplexer failed to flush partition output.");
             }
 
@@ -366,11 +373,11 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             return branchTailRcvDown.queueSize() == 0;
         }
 
-        private boolean onUserEvent(SoUserEvent event, boolean isRcv) throws Throwable {
+        private boolean onEvent(SoEvent event, boolean isRcv) throws Throwable {
             if (isRcv) {
-                return this.chainRoot.onRcvUserEvent(this.context, null, event);
+                return this.chainRoot.onRcvEvent(this.context, null, event);
             } else {
-                return this.chainRoot.onSndUserEvent(this.context, null, event);
+                return this.chainRoot.onSndEvent(this.context, null, event);
             }
         }
 

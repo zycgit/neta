@@ -16,13 +16,15 @@
 package net.hasor.neta.channel;
 
 /**
- * Routing decision mode used by {@link ProtoRoutingDuplexer}.
+ * Routing mode of {@link ProtoRoutingDuplexer}.
+ * <p>It decides whether a route selection is reused after the first match or recalculated for each
+ * inbound message.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-08
  */
 public enum ProtoRoutingMode {
-    /** Infer once, then keep the selected branch until the user switches it explicitly. */
+    /** Cache the first successfully selected branch and keep reusing it until explicitly switched through {@link ProtoRoutingControl#switchRoute(String)}. */
     STATIC,
-    /** Re-run the selector on every inbound message. */
+    /** Re-run the data selector whenever a new inbound message arrives. */
     REALTIME
 }

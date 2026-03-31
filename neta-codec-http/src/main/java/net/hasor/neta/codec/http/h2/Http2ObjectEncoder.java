@@ -51,7 +51,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event) throws Throwable {
         try {
             Object eventData = event.getData();
             if (eventData instanceof Http2PingEvent) {
@@ -508,6 +508,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     private void sendGoaway(ProtoContext context, Http2GoawayEvent event) {
         Http2Frame frame = goawayFrame((int) event.lastAcceptedId(), event.errorCode(), event.debugData());
         this.queueControlFrame(context, frame);
+        this.fireEventRcv(context, Http2GoawayEvent.class, event);
     }
 
     private void sendResetStream(ProtoContext context, Http2ResetEvent resetEvent) {
@@ -519,6 +520,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         long code = normalizeResetErrorCode(resetEvent.errorCode());
         Http2Frame frame = resetStreamFrame((int) streamId, code);
         this.queueControlFrame(context, frame);
+        this.fireEventRcv(context, Http2ResetEvent.class, resetEvent);
     }
 
     private void sendPriority(ProtoContext context, Http2PriorityEvent event) {
@@ -603,9 +605,17 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     private <T> void fireEvent(ProtoContext context, Class<T> eventType, T event) {
         try {
-            context.fireUserEvent(eventType, event);
+            context.fireEvent(eventType, event);
         } catch (Throwable e) {
             logger.error("Error occurred while publishing HTTP/2 event: " + eventType.getSimpleName(), e);
+        }
+    }
+
+    private <T> void fireEventRcv(ProtoContext context, Class<T> eventType, T event) {
+        try {
+            context.fireEventRcv(eventType, event);
+        } catch (Throwable e) {
+            logger.error("Error occurred while publishing downstream HTTP/2 event: " + eventType.getSimpleName(), e);
         }
     }
 

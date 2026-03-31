@@ -18,13 +18,7 @@ import java.io.IOException;
 import java.net.SocketAddress;
 
 /**
- * Transport provider SPI used to create low-level client and server channels.
- * <p>Each implementation encapsulates one transport family, such as TCP, UDP,
- * SCTP, or the in-memory virtual transport. The owning {@link NetManager}
- * selects a provider according to the supplied {@link SoConfig} and delegates
- * actual socket or selector creation to it.
- * <p>A provider may keep transport-wide resources, so {@link #shutdown()} is
- * the matching lifecycle hook for releasing them when the manager closes.
+ * Transport-provider SPI used to create underlying client and server channels.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2025-08-07
  * @see AsyncChannel
@@ -33,23 +27,23 @@ import java.net.SocketAddress;
 public interface AsyncChannelProvider {
 
     /**
-     * Creates an asynchronous server channel
-     * @param channelId Unique identifier for the channel
-     * @param context Socket configuration context
-     * @return The created server channel
-     * @throws IOException If an I/O error occurs during channel creation
+     * Create an asynchronous server channel.
+     * @param channelId unique channel identifier
+     * @param context socket configuration context
+     * @return created server channel
+     * @throws IOException thrown when an I/O error occurs during channel creation
      */
     AsyncServerChannel createServerChannel(long channelId, SoContext context, SocketAddress listenAddr, SoConfig soConfig) throws IOException;
 
     /**
-     * Creates an asynchronous client channel
-     * @param channelId Unique identifier for the channel
-     * @param context Socket configuration context
-     * @return The created client channel
-     * @throws IOException If an I/O error occurs during channel creation
+     * Create an asynchronous client channel.
+     * @param channelId unique channel identifier
+     * @param context socket configuration context
+     * @return created client channel
+     * @throws IOException thrown when an I/O error occurs during channel creation
      */
     AsyncChannel createClientChannel(long channelId, SoContext context, SocketAddress remoteAddr, SoConfig soConfig) throws IOException;
 
-    /** Gracefully releases all provider resources and stops accepting new channels. */
+    /** Release all provider resources and stop accepting new channels. */
     void shutdown();
 }

@@ -15,7 +15,8 @@
  */
 package net.hasor.neta.channel.quic;
 /**
- * QUIC variable-length integer encoding/decoding as defined in RFC 9000, Section 16.
+ * Encoding and decoding utilities for QUIC variable-length integers.
+ * <p>The implementation follows RFC 9000 Section 16 and handles the 1, 2, 4, and 8 byte variable-length integer format widely used by QUIC frames and transport parameters.
  * @author 赵永春 (zyc@hasor.net)
  */
 public final class QuicVarInt {
@@ -23,8 +24,10 @@ public final class QuicVarInt {
     }
 
     /**
-     * Decodes a variable-length integer from the given byte array at the specified offset.
-     * @return a two-element array: [decoded value, number of bytes consumed]
+     * Decodes one QUIC variable-length integer starting at the specified offset.
+     * @param data raw byte array
+     * @param offset starting decode offset
+     * @return a length-2 array containing the decoded value and the number of bytes consumed
      */
     public static long[] decode(byte[] data, int offset) {
         if (offset >= data.length) {
@@ -43,8 +46,11 @@ public final class QuicVarInt {
     }
 
     /**
-     * Encodes a variable-length integer into the destination array at the given offset.
-     * @return the number of bytes written (1, 2, 4, or 8)
+     * Encodes a QUIC variable-length integer into the target array at the specified offset.
+     * @param dst target array
+     * @param dstOffset starting write offset
+     * @param value value to encode
+     * @return the number of bytes written, which can only be 1, 2, 4, or 8
      */
     public static int encodeTo(byte[] dst, int dstOffset, long value) {
         if (value <= 63) {
@@ -75,7 +81,9 @@ public final class QuicVarInt {
         }
     }
 
-    /** Encodes a variable-length integer and returns the result as a new byte array. */
+    /**
+     * Encodes a QUIC variable-length integer and returns a newly allocated byte array.
+     */
     public static byte[] encode(long value) {
         if (value < 0) {
             throw new IllegalArgumentException("Negative varint value: " + value);
@@ -93,7 +101,10 @@ public final class QuicVarInt {
         }
     }
 
-    /** Returns the number of bytes needed to encode the given value (1, 2, 4, or 8). */
+    /**
+     * Returns the number of bytes required to encode the specified value.
+     * @return the result can only be 1, 2, 4, or 8
+     */
     public static int encodedLength(long value) {
         if (value < 0) {
             throw new IllegalArgumentException("Negative varint value: " + value);

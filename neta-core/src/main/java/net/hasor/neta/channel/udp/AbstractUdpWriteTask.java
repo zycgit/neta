@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.channel.udp;
 import java.io.IOException;
-import java.nio.ByteBuffer;
 import java.nio.channels.ClosedChannelException;
 import java.nio.channels.InterruptedByTimeoutException;
 import java.nio.channels.ShutdownChannelGroupException;
@@ -24,16 +23,57 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.neta.channel.*;
 
 /**
- * Abstract base class for UDP-style write tasks that provides the complete
- * doWork loop (prepare → send → finish → continue), retry on timeout, and
- * exception handling. Subclasses only need to implement:
+ * Abstract skeletal implementation of a UDP send task.
+ * <p>This class breaks one send attempt into a consistent sequence of stages: fetch pending data
+ * from {@link SoSndContext}, optionally wrap it before transmission, invoke the underlying
+ * transport send operation, advance the queue after success, and apply unified failure handling
+ * when timeout, channel close, or other transport errors occur.
+ * <p>It is not tied to one specific UDP variant. The transport-specific write details are left to
+ * subclasses, so plain UDP, UDP-based extension protocols, and send models that require extra
+ * framing can all reuse the same scheduling skeleton.
+ * <p><b>Send flow:</b>
+ * <pre>
+ *   doWork(retryCnt)
+ *        ▼
+ *   wContext.isEmpty() ?
+ *    ┌───┴───────────────┐
+ *    ▼                   ▼
+ *  yes, finishTask()   no, continue
+ *                        ▼
+ *                 isChannelOpen() ?
+ *                  ┌────┴──────────────┐
+ *                  ▼                   ▼
+ *     no, notify close exception   yes, prepare send data
+ *         purge + finishTask()              │
+ *                                           ▼
+ *                                sendData == null ?
+ *                                           ▼
+ *                         peekData() -> transferPull() -> wrapSendData(...)
+ *                                           ▼
+ *                                    doSend(sendData)
+ *                    ┌──────────────┼───────────────────────────┐
+ *                    ▼              ▼                           ▼
+ *                write == 0     write > 0                exception thrown
+ *                    │              │                           ▼
+ *          delayTask(...) and return update metrics       handleException(...)
+ *                                    and clear sendData   ┌────────┴────────┐
+ *                                                         ▼                 ▼
+ *                                                  return true        return false
+ *                                                         │                 │
+ *                                                  return immediately       │
+ *                                      ┌────────────────────────────────────┘
+ *                                      ▼
+ *                  has the current send item finished fully?
+ *                                      ▼
+ *                        popData() + sndData.completed()
+ *                                      ▼
+ *                                 continueTask()
+ * </pre>
+ * <p><b>Responsibility boundary:</b>
  * <ul>
- *   <li>{@link #isChannelOpen()} — whether the underlying transport is still usable</li>
- *   <li>{@link #doSend(byte[])} — the actual send operation, returning bytes written</li>
- * </ul>
- * And may optionally override:
- * <ul>
- *   <li>{@link #wrapSendData(byte[])} — to transform raw bytes before sending (e.g. framing)</li>
+ *   <li>The base class owns the main send loop, exception normalization, queue finalization, and delayed retry scheduling.</li>
+ *   <li>Subclasses decide whether the underlying channel is still usable and how prepared bytes are actually written to the transport.</li>
+ *   <li>Subclasses can override {@link #wrapSendData(byte[])} when raw payload bytes need extra protocol wrapping.</li>
  * </ul>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
@@ -46,6 +86,12 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
     private         byte[]           sendData;
     private         int              timeoutRetryCnt = 0;
 
+    /**
+     * Create a UDP write task.
+     * @param netChannel the associated framework channel
+     * @param wContext the send context
+     * @param context the runtime context service
+     */
     public AbstractUdpWriteTask(NetChannel netChannel, SoSndContext wContext, SoContextService context) {
         this.netChannel = netChannel;
         this.monitor = netChannel.getMonitor();
@@ -53,29 +99,36 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
         this.context = context;
     }
 
-    /** Returns the {@link NetChannel} associated with this write task. */
+    /**
+     * Return the {@link NetChannel} associated with the current write task.
+     * @return the associated framework channel
+     */
     protected NetChannel getNetChannel() {
         return this.netChannel;
     }
 
-    /** Subclass must report whether the underlying transport channel is open. */
+    /**
+     * Let subclasses decide whether the underlying transport channel is still open.
+     * @return true when the channel is still usable
+     */
     protected abstract boolean isChannelOpen();
 
     /**
-     * Performs the actual send. The data has already been processed by {@link #wrapSendData}.
-     * @param data the ready-to-send buffer
-     * @return number of bytes written; 0 means the channel was not ready (will retry after delay)
-     * @throws IOException on transport-level errors
+     * Perform the actual send operation.
+     * <p>The input data has already been processed by {@link #wrapSendData(byte[])}.
+     * @param data the prepared byte array ready to send
+     * @return the number of bytes written; returning 0 means the channel is temporarily not ready
+     * and a delayed retry will follow
+     * @throws IOException when a transport-level I/O error occurs
      */
     protected abstract int doSend(byte[] data) throws IOException;
 
     /**
-     * Hook to transform raw application bytes before sending. Default implementation
-     * wraps them into a {@link ByteBuffer} with no transformation.
-     * <p>
-     * Subclasses can override this to add framing (e.g. QUIC STREAM / DATAGRAM frames).
-     * @param sendData the raw application bytes
-     * @return a {@link ByteBuffer} ready for {@link #doSend}
+     * Transform raw application bytes before sending.
+     * <p>The default implementation performs no transformation and returns the original bytes.
+     * Subclasses can override this method to add protocol-specific framing.
+     * @param sendData the raw application payload
+     * @return the byte array that can be sent directly by {@link #doSend(byte[])}
      */
     protected byte[] wrapSendData(byte[] sendData) {
         return sendData;
@@ -83,7 +136,7 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
 
     @Override
     protected void doWork(int retryCnt) {
-        // test exit
+        // Check whether the task can terminate immediately.
         if (this.wContext.isEmpty()) {
             this.finishTask();
             return;
@@ -96,7 +149,7 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
             return;
         }
 
-        // prepare
+        // Prepare the current pending send data.
         if (this.sendData == null) {
             SoSndData sndData = this.wContext.peekData();
             byte[] bytes = sndData.transferPull();
@@ -105,7 +158,7 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
             }
         }
 
-        // send
+        // Perform the send.
         if (this.sendData != null) {
             try {
                 int write = this.doSend(this.sendData);
@@ -123,7 +176,7 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
             }
         }
 
-        // try finish
+        // Try to finalize the current send item after its payload has been drained.
         if (this.sendData == null) {
             SoSndData sndData = this.wContext.peekData();
             if (!sndData.hasReadable()) {
@@ -134,14 +187,16 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
             }
         }
 
-        // loop
+        // Continue processing the remaining queue items.
         this.continueTask();
     }
 
     /**
-     * Handle send exception.
-     * @return true if doWork should return immediately (retry scheduled or fatal),
-     * false to fall through to try-finish and continueTask.
+     * Handle an exception raised during sending.
+     * @param e the failure cause
+     * @param wContext the send context
+     * @return true if doWork should return immediately; false if cleanup and continuation should
+     * still run
      */
     private boolean handleException(Throwable e, SoSndContext wContext) {
         long channelId = this.netChannel.getChannelId();
@@ -152,15 +207,15 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
             if (maxRetry > 0 && this.timeoutRetryCnt < maxRetry) {
                 this.timeoutRetryCnt++;
                 this.delayTask(cfg.getSndWriteRetryIntervalMs(), TimeUnit.MILLISECONDS);
-                return true; // retry after delay
+                return true; // Retry later after a delay.
             }
-            // retries exhausted (or maxRetry = 0): notify and discard this packet
+            // Retries are exhausted, or retry is disabled. Notify the timeout and discard the current packet.
             String retryInfo = maxRetry > 0 ? ", tried " + this.timeoutRetryCnt + " time(s)" : "";
             this.timeoutRetryCnt = 0;
             this.sendData = null;
             String errorMsg = "send data timeout with " + this.netChannel.getConfig().getSoWriteTimeoutMs() + " milliseconds" + retryInfo + ".";
             this.context.notifySndChannelException(channelId, false, new SoWriteTimeoutException(errorMsg));
-            return false; // fall through: try-finish will pop the discarded item
+            return false; // Fall through so try-finish can pop the discarded item.
         }
 
         SoException finalErr;
@@ -175,6 +230,11 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
         return false;
     }
 
+    /**
+     * Purge remaining queued send data and fail each item.
+     * @param e the failure cause
+     * @param wContext the send context
+     */
     private void purgeSndData(Throwable e, SoSndContext wContext) {
         while (!wContext.isEmpty()) {
             SoSndData sndData = wContext.popData();
@@ -184,6 +244,11 @@ public abstract class AbstractUdpWriteTask extends DefaultSoTask {
         }
     }
 
+    /**
+     * Submit an internal task to the SoTask scheduler.
+     * @param task the task to submit
+     * @return the task future
+     */
     private Future<?> submitTask(DefaultSoTask task) {
         return this.context.submitSoTask(task, this);
     }

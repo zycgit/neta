@@ -14,10 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.ssl;
-import net.hasor.neta.channel.SoUserEventData;
+import net.hasor.neta.channel.SoEventData;
 
 /**
- * User event fired on the <em>RCV</em> pipeline when a TLS {@code close_notify}
+ * Network event fired on the <em>RCV</em> pipeline when a TLS {@code close_notify}
  * alert is received from the remote peer — the "goodbye handshake", symmetric
  * counterpart of {@link SslHandshakeEvent}.
  * <p>
@@ -31,7 +31,7 @@ import net.hasor.neta.channel.SoUserEventData;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-06
  */
-public class SslCloseNotifyEvent implements SoUserEventData {
+public class SslCloseNotifyEvent implements SoEventData {
     private final SslContext context;
 
     public SslCloseNotifyEvent(SslContext context) {

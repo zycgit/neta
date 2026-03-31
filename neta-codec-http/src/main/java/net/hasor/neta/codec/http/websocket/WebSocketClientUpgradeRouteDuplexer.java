@@ -85,8 +85,8 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
-        return this.delegate.onUserEvent(context, event, isRcv);
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
+        return this.delegate.onEvent(context, event, isRcv);
     }
 
     @Override

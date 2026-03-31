@@ -19,8 +19,10 @@ import net.hasor.neta.channel.tcp.TcpSoConfig;
 import net.hasor.neta.channel.udp.UdpSoConfig;
 
 /**
- * Per-channel socket options: protocol type, buffer sizes, slot counts, suspend flag and timeouts.
- * Use the static factories {@link #TCP()}, {@link #UDP()}, or {@link #QUIC()} to create instances.
+ * Per-channel socket option configuration, including protocol type, buffer sizes, slot counts,
+ * suspend flag, and timeout settings.
+ * Instances can be created through the static factory methods {@link #TCP()}, {@link #UDP()},
+ * and {@link #QUIC()}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */
@@ -39,112 +41,116 @@ public class SoConfig {
     private Integer soWriteTimeoutMs = -1;   // Write-idle timeout in milliseconds.
     private int     connectTimeoutMs = 10 * 1000; // Connect timeout in milliseconds.
 
+    /**
+     * Create the base socket configuration for the specified protocol.
+     * @param protocol protocol name
+     */
     protected SoConfig(String protocol) {
         this.protocol = protocol;
     }
 
-    /** Creates a TCP-specific config. */
+    /** Create a TCP-specific configuration. */
     public static TcpSoConfig TCP() {
         return new TcpSoConfig();
     }
 
-    /** Creates a UDP-specific config. */
+    /** Create a UDP-specific configuration. */
     public static UdpSoConfig UDP() {
         return new UdpSoConfig();
     }
 
-    /** Creates a QUIC-specific config. */
+    /** Create a QUIC-specific configuration. */
     public static QuicSoConfig QUIC() {
         return new QuicSoConfig();
     }
 
-    /** Returns the receive-side slot count (-1 = default). */
+    /** Return the inbound slot count, where -1 means use the default value. */
     public int getRcvSlotSize() {
         return this.rcvSlotSize;
     }
 
-    /** Sets the number of receive buffer slots. */
+    /** Set the number of receive buffer slots. */
     public void setRcvSlotSize(int rcvSlotSize) {
         this.rcvSlotSize = rcvSlotSize;
     }
 
-    /** Returns the send-side slot count (-1 = default). */
+    /** Return the outbound slot count, where -1 means use the default value. */
     public int getSndSlotSize() {
         return this.sndSlotSize;
     }
 
-    /** Sets the number of send buffer slots. */
+    /** Set the number of send buffer slots. */
     public void setSndSlotSize(int sndSlotSize) {
         this.sndSlotSize = sndSlotSize;
     }
 
-    /** Returns the transport protocol name (e.g. "TCP", "UDP", "QUIC"). */
+    /** Return the transport protocol name, for example TCP, UDP, or QUIC. */
     public String getProtocol() {
         return this.protocol;
     }
 
-    /** Returns {@code true} if new accept operations are suspended (paused). */
+    /** Return {@code true} if new accept operations are currently suspended. */
     public boolean isSuspend() {
         return this.suspend;
     }
 
-    /** Suspends or resumes the listener from accepting new connections. */
+    /** Suspend or resume the listener from accepting new connections. */
     public void setSuspend(boolean suspend) {
         this.suspend = suspend;
     }
 
-    /** Convenience method to set both SO_RCVBUF and SO_SNDBUF to the same values. */
+    /** Convenience method that sets both SO_RCVBUF and SO_SNDBUF. */
     public void setSoBufSize(int soRcvBuf, int soSndBuf) {
         this.soRcvBuf = soRcvBuf;
         this.soSndBuf = soSndBuf;
     }
 
-    /** Returns the SO_RCVBUF hint, or {@code null} to use the OS default. */
+    /** Return the SO_RCVBUF hint, or {@code null} to use the operating system default. */
     public Integer getSoRcvBuf() {
         return this.soRcvBuf;
     }
 
-    /** Sets the SO_RCVBUF socket option (bytes). */
+    /** Set the SO_RCVBUF socket option in bytes. */
     public void setSoRcvBuf(Integer soRcvBuf) {
         this.soRcvBuf = soRcvBuf;
     }
 
-    /** Returns the SO_SNDBUF hint, or {@code null} to use the OS default. */
+    /** Return the SO_SNDBUF hint, or {@code null} to use the operating system default. */
     public Integer getSoSndBuf() {
         return this.soSndBuf;
     }
 
-    /** Sets the SO_SNDBUF socket option (bytes). */
+    /** Set the SO_SNDBUF socket option in bytes. */
     public void setSoSndBuf(Integer soSndBuf) {
         this.soSndBuf = soSndBuf;
     }
 
-    /** Returns the read-idle timeout in milliseconds (-1 = disabled). */
+    /** Return the read-idle timeout in milliseconds, where -1 disables it. */
     public Integer getSoReadTimeoutMs() {
         return this.soReadTimeoutMs;
     }
 
-    /** Sets the read-idle timeout; -1 disables the timeout. */
+    /** Set the read-idle timeout; use -1 to disable it. */
     public void setSoReadTimeoutMs(Integer soReadTimeoutMs) {
         this.soReadTimeoutMs = soReadTimeoutMs;
     }
 
-    /** Returns the write-idle timeout in milliseconds (-1 = disabled). */
+    /** Return the write-idle timeout in milliseconds, where -1 disables it. */
     public Integer getSoWriteTimeoutMs() {
         return this.soWriteTimeoutMs;
     }
 
-    /** Sets the write-idle timeout; -1 disables the timeout. */
+    /** Set the write-idle timeout; use -1 to disable it. */
     public void setSoWriteTimeoutMs(Integer soWriteTimeoutMs) {
         this.soWriteTimeoutMs = soWriteTimeoutMs;
     }
 
-    /** Returns the connection establishment timeout in milliseconds. */
+    /** Return the connection establishment timeout in milliseconds. */
     public int getConnectTimeoutMs() {
         return this.connectTimeoutMs;
     }
 
-    /** Sets the maximum time to wait for a connection to be established. */
+    /** Set the maximum time to wait for a connection to be established. */
     public void setConnectTimeoutMs(int connectTimeoutMs) {
         this.connectTimeoutMs = connectTimeoutMs;
     }

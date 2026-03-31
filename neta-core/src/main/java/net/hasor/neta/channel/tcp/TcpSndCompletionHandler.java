@@ -29,10 +29,10 @@ import net.hasor.neta.channel.*;
 
 /**
  * AIO {@link java.nio.channels.CompletionHandler} that drives the TCP send loop.
- * <p>An instance is created once per channel.  The send model is
- * <em>single-writer</em>: the {@code writing} {@link java.util.concurrent.atomic.AtomicBoolean}
- * ensures that at most one outstanding {@code channel.write()} call exists at any time.
- * <p><b>Write pipeline:</b>
+ * <p>Only one instance is created per channel. The send model is single-writer: the
+ * {@code writing} {@link java.util.concurrent.atomic.AtomicBoolean} guarantees that at most one
+ * outstanding {@code channel.write()} call exists at any time.
+ * <p><b>Write flow:</b>
  * <pre>
  *   SoSndContext (queue)
  *       │  peekData()
@@ -43,35 +43,36 @@ import net.hasor.neta.channel.*;
  *       │                          │
  *       │                 completed(bytesWritten, ctx)
  *       │                          │
- *       │        ┌─────────────────┴───────────────┐
- *       │        │ swapBuf still has remaining?     │ queue has more data?
+ *       │        ┌─────────────────┴────────────────┐
+ *       │        │ swap buffer still has remaining? │ queue still has more data?
  *       │        ▼ yes → writeData()                ▼ yes → copyData() + writeData()
- *       │                                          else → set writing=false, re-check
+ *       │                                             no  → set writing=false and re-check
  *       ▼
- *   sndData.completed()  (when all bytes of one SoSndData are flushed)
+ *   sndData.completed()  (called after one SoSndData is fully flushed)
  * </pre>
- * <p><b>Partial writes:</b> TCP may write fewer bytes than requested.  When {@code sndSwapBuf}
- * still has remaining bytes after {@code completed()}, {@code writeData()} is called again
- * without re-fetching from the queue (no re-copy needed).
- * <p><b>Re-check after idle:</b> When the queue appears empty and {@code writing} is set back
- * to {@code false}, a second CAS is performed to handle the race where a producer enqueued
- * data between the {@code isEmpty()} check and the {@code set(false)} call.
- * <p><b>Error cases:</b>
+ * <p><b>Partial writes:</b> TCP may write fewer bytes than requested. When {@code sndSwapBuf}
+ * still has remaining bytes after {@code completed()}, {@code writeData()} is invoked again
+ * without re-reading from the queue.
+ * <p><b>Re-check after idle:</b> when the queue appears empty and {@code writing} is reset to
+ * {@code false}, a second CAS is executed to handle the race where a producer enqueues data
+ * between the {@code isEmpty()} check and the {@code set(false)} call.
+ * <p><b>Error handling:</b>
  * <ul>
- *   <li>{@link java.nio.channels.NotYetConnectedException}: retried with a delay if within
- *       {@code connectTimeoutMs}; otherwise a {@link SoConnectTimeoutException} is raised
- *       and all pending {@link SoSndData} are failed.</li>
+ *   <li>{@link java.nio.channels.NotYetConnectedException}: retry after a delay if still within
+ *       the {@code connectTimeoutMs} window; otherwise raise {@link SoConnectTimeoutException}
+ *       and fail all pending {@link SoSndData}.</li>
  *   <li>{@link java.nio.channels.InterruptedByTimeoutException}: write timeout
- *       ({@code soWriteTimeoutMs}) expired — a {@link SoWriteTimeoutException} is
- *       raised but the write is retried after a short {@link SoDelayTask}.</li>
+ *       ({@code soWriteTimeoutMs}) expired, so a {@link SoWriteTimeoutException} is raised and
+ *       sending is retried after a short {@link SoDelayTask}.</li>
  *   <li>{@link java.nio.channels.ClosedChannelException} /
- *       {@link java.nio.channels.ShutdownChannelGroupException}: all queued
- *       {@link SoSndData} are drained and completed with a {@link SoCloseException}.</li>
- *   <li>Any other {@link Throwable}: wrapped in {@link SoSndException}; same drain.
+ *       {@link java.nio.channels.ShutdownChannelGroupException}: drain all queued
+ *       {@link SoSndData} and fail them with {@link SoCloseException}.</li>
+ *   <li>Any other {@link Throwable}: wrap it as {@link SoSndException} and apply the same drain
+ *       strategy.</li>
  * </ul>
- * <p><b>Buffer management:</b> {@code sndSwapBuf} is a JVM direct {@link java.nio.ByteBuffer}
- * allocated once at construction. It is released via
- * {@link net.hasor.neta.bytebuf.ByteBufUtils#CLEANER} on {@link #close()}.
+ * <p><b>Buffer management:</b> {@code sndSwapBuf} is a JVM direct
+ * {@link java.nio.ByteBuffer} allocated once at construction time and released through
+ * {@link net.hasor.neta.bytebuf.ByteBufUtils#CLEANER} in {@link #close()}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see TcpAsyncChannel
@@ -93,6 +94,12 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
     private final        ByteBuffer       sndSwapBuf;
     private final        int              connectTimeoutMs;
 
+    /**
+     * Create a TCP write-completion handler.
+     * @param channel the underlying asynchronous channel
+     * @param context the runtime context
+     * @param monitor the channel metrics monitor
+     */
     public TcpSndCompletionHandler(TcpAsyncChannel channel, SoContext context, NetMonitor monitor) {
         this.channelId = channel.getChannelId();
         this.channel = channel;
@@ -106,6 +113,10 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         this.connectTimeoutMs = Math.max(10, channel.getSoConfig().getConnectTimeoutMs());
     }
 
+    /**
+     * Trigger one send flow.
+     * @param wContext the send context
+     */
     public void doWrite(SoSndContext wContext) {
         if (wContext.isEmpty()) {
             return;
@@ -118,7 +129,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
     }
 
     private void copyData(SoSndContext wContext) {
-        // copy data from sndBuf to swapBuf
+        // Copy the data from the send buffer into the swap buffer.
         SoSndData sndData = wContext.peekData();
         ((Buffer) this.sndSwapBuf).clear();
         sndData.transferTo(this.sndSwapBuf);
@@ -134,13 +145,18 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         }
     }
 
+    /**
+     * Continue the write flow after the underlying write succeeds.
+     * @param result the number of bytes actually written this time
+     * @param wContext the send context
+     */
     @Override
     public void completed(Integer result, SoSndContext wContext) {
         if (this.context.getConfig().isPrintLog()) {
             logger.info("snd(" + this.channelId + ") [TCP-WRITE] bytes=" + result);
         }
 
-        // when sndData finish, complete inline (no thread dispatch needed)
+        // Complete the current sndData inline after it has been fully sent.
         SoSndData sndData = wContext.peekData();
         if (!sndData.hasReadable()) {
             wContext.popData();
@@ -156,7 +172,7 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
             this.writeData(wContext);
         } else {
             this.writing.set(false);
-            // re-check: data may have arrived between isEmpty() and set(false)
+            // Re-check: data may have arrived between isEmpty() and set(false).
             if (!wContext.isEmpty() && this.writing.compareAndSet(false, true)) {
                 this.copyData(wContext);
                 this.writeData(wContext);
@@ -164,6 +180,11 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         }
     }
 
+    /**
+     * Enter the exception-handling flow when the underlying write fails.
+     * @param e the failure cause
+     * @param context the send context
+     */
     @Override
     public void failed(Throwable e, SoSndContext context) {
         this.handleException(e, context);
@@ -227,6 +248,10 @@ class TcpSndCompletionHandler implements CompletionHandler<Integer, SoSndContext
         return this.context.submitSoTask(task, this);
     }
 
+    /**
+     * Close the write handler and release the swap buffer.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         ByteBufUtils.CLEANER.freeDirectBuffer(this.sndSwapBuf);

@@ -25,6 +25,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
 public class DefaultHttpContent implements HttpContent {
     private int     streamId;
     private ByteBuf content;
+    private boolean bad;
+    private String  badReason;
 
     /**
      * Creates a body chunk with the specified payload.
@@ -51,6 +53,23 @@ public class DefaultHttpContent implements HttpContent {
     }
 
     @Override
+    public boolean isBad() {
+        return this.bad;
+    }
+
+    @Override
+    public String badReason() {
+        return this.badReason;
+    }
+
+    @Override
+    public HttpContent markBad(String reason) {
+        this.bad = true;
+        this.badReason = reason;
+        return this;
+    }
+
+    @Override
     public String toString() {
         if (this.content != null) {
             return getClass().getSimpleName() + "(data: " + content.readableBytes() + " bytes)";
@@ -65,5 +84,8 @@ public class DefaultHttpContent implements HttpContent {
             this.content.release();
             this.content = null;
         }
+        this.streamId = 0;
+        this.bad = false;
+        this.badReason = null;
     }
 }

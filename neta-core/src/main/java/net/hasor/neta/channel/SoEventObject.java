@@ -15,24 +15,24 @@
  */
 package net.hasor.neta.channel;
 /**
- * Default {@link SoUserEvent} implementation carrying a typed user event.
+ * Default {@link SoEvent} implementation that carries a typed network event.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  */
-final class SoUserEventObject implements SoUserEvent {
+final class SoEventObject implements SoEvent {
     private final Class<?>     eventType;
     private final Object       data;
     private final SoChannel<?> source;
 
-    SoUserEventObject(Class<?> eventType, Object data, SoChannel<?> source) {
+    SoEventObject(Class<?> eventType, Object data, SoChannel<?> source) {
         this.eventType = eventType;
         this.data = data;
         this.source = source;
     }
 
-    /** Creates a user event with the specified source channel, event type, and data. */
-    public static SoUserEvent of(SoChannel<?> source, Class<?> eventType, Object event) {
-        return new SoUserEventObject(eventType, event, source);
+    /** Create a network event from the given source channel, event type, and event data. */
+    public static SoEvent of(SoChannel<?> source, Class<?> eventType, Object event) {
+        return new SoEventObject(eventType, event, source);
     }
 
     @Override

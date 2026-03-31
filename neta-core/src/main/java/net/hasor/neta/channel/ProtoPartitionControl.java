@@ -16,34 +16,33 @@
 package net.hasor.neta.channel;
 
 /**
- * Imperative control handle exposed by {@link ProtoPartitionBuilder} and backed by
+ * Partition control interface exposed by {@link ProtoPartitionBuilder} and backed by
  * {@link ProtoPartitionDuplexer}.
- * <p>
- * The control handle is intentionally obtained during builder assembly instead of
- * {@link ProtoContext#context(Class)} lookup, so nested partition pipelines do not
- * introduce ambiguous runtime control lookup.
- * </p>
+ * <p>This API is intentionally obtained during builder assembly rather than looked up at runtime
+ * through {@link ProtoContext#context(Class)}, avoiding ambiguous runtime control lookup when
+ * partition pipelines are nested.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-30
  */
 public interface ProtoPartitionControl {
-    /** Freezes creation of new partitions. Existing partitions continue to work. */
+    /** Freeze the creation of new partitions. Existing partitions continue to work. */
     void lockCreation();
 
-    /** Resumes creation of new partitions after a previous freeze. */
+    /** Resume new-partition creation after it was previously frozen. */
     void unlockCreation();
 
+    /** Return whether new-partition creation is currently blocked. */
     boolean isLockCreation();
 
-    /** Returns {@code true} when the specified partition already exists. */
+    /** Return {@code true} when the specified partition already exists. */
     boolean hasPartition(PartitionKey key);
 
-    /** Closes and removes the specified partition if it exists. */
+    /** Close and remove the specified partition if it exists. */
     boolean closePartition(PartitionKey key);
 
-    /** Closes all active partitions immediately. */
+    /** Close all active partitions immediately. */
     void closeAllPartitions();
 
-    /** Returns the current number of active partitions. */
+    /** Return the number of currently active partitions. */
     int partitionSize();
 }

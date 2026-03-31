@@ -17,15 +17,8 @@ package net.hasor.neta.channel;
 import java.util.EventListener;
 
 /**
- * Callback for channel lifecycle events, most commonly "channel closed".
- * <p>Register an instance via {@link SoChannel#onClose} to be notified when the specified
- * channel transitions to the closed state.  The callback is invoked at most once per
- * registration, on the I/O or task thread that performs the actual close operation.
- * <p>This is a {@link FunctionalInterface} compatible with lambda expressions:
- * <pre>
- * channel.onClose(ch -&gt; log.info("channel closed: " + ch.getChannelId()));
- * </pre>
- * @param <T> the concrete channel type that this listener handles
+ * Callback interface for channel lifecycle events, for example channel-close notifications.
+ * @param <T> concrete channel type handled by this listener
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SoChannel#onClose
@@ -33,8 +26,8 @@ import java.util.EventListener;
 @FunctionalInterface
 public interface SoChannelListener<T extends SoChannel<?>> extends EventListener {
     /**
-     * the channel.
-     * @param channel the channel
+     * Handle a channel event.
+     * @param channel channel that triggered the event
      */
     void onEvent(T channel);
 }

@@ -18,18 +18,18 @@ import net.hasor.neta.channel.SoConfig;
 
 /**
  * Configuration object for UDP and UDP-based transports.
- * <p>The settings here control three things in the current implementation:
+ * <p>In the current implementation, these settings mainly control three aspects:
  * <ul>
- *   <li>the size of the per-transport receive packet buffer via {@code rcvPacketSize};</li>
- *   <li>whether {@link UdpAsyncClientChannel} should ignore datagrams from senders other
- *       than the configured remote peer via {@code rcvRemoteOnly};</li>
- *   <li>retry policy used by {@link AbstractUdpWriteTask} when a datagram send cannot
- *       make progress immediately.</li>
+ *   <li>the size of the receive packet buffer per transport instance via {@code rcvPacketSize}</li>
+ *   <li>whether {@link UdpAsyncClientChannel} ignores datagrams that do not come from the
+ *       configured remote peer via {@code rcvRemoteOnly}</li>
+ *   <li>the retry policy used by {@link AbstractUdpWriteTask} when one datagram send cannot make
+ *       progress immediately</li>
  * </ul>
- * <p>The base {@link SoConfig} buffer fields still map to OS socket options through
- * {@link UdpSoConfigUtils}. The logical receive-packet size resolved by
- * {@link UdpSoConfigUtils#getRcvPacketSize(UdpSoConfig)} determines the capacity of the
- * shared receive buffer used by {@link UdpTransport}.
+ * <p>The buffer fields inherited from {@link SoConfig} are still mapped to operating-system socket
+ * options through {@link UdpSoConfigUtils}. The logical receive-packet size resolved by
+ * {@link UdpSoConfigUtils#getRcvPacketSize(UdpSoConfig)} determines the capacity of the shared
+ * receive buffer used by {@link UdpTransport}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see UdpSoConfigUtils
@@ -38,56 +38,85 @@ import net.hasor.neta.channel.SoConfig;
 public class UdpSoConfig extends SoConfig {
     private Integer rcvPacketSize;
     private boolean rcvRemoteOnly           = true;
-    // Channel-level write timeout retry settings.
-    private int     sndWriteRetryCount      = 0;   // 0 = disabled.
+    // Channel-level write-timeout retry configuration.
+    private int     sndWriteRetryCount      = 0;   // 0 means disabled.
     private int     sndWriteRetryIntervalMs = 50;  // Delay between retries in milliseconds.
 
-    /** Creates a UDP socket config with UDP provider defaults. */
+    /**
+     * Create a configuration object with the UDP provider defaults.
+     */
     public UdpSoConfig() {
         super(UdpProvider.NAME);
     }
 
-    /** Protected constructor for subclasses that use a different provider name. */
+    /**
+     * Protected constructor for subclasses.
+     * @param providerName the provider name
+     */
     protected UdpSoConfig(String providerName) {
         super(providerName);
     }
 
-    /** Returns the maximum receive packet size in bytes, or null to use the socket buffer size. */
+    /**
+     * Return the maximum receive packet size in bytes.
+     * @return the receive packet size, or null to fall back to the socket receive buffer size
+     */
     public Integer getRcvPacketSize() {
         return this.rcvPacketSize;
     }
 
-    /** Sets the maximum receive packet size in bytes. */
+    /**
+     * Set the maximum receive packet size in bytes.
+     * @param rcvPacketSize the receive packet size
+     */
     public void setRcvPacketSize(Integer rcvPacketSize) {
         this.rcvPacketSize = rcvPacketSize;
     }
 
-    /** Returns true if receive is restricted to the connected remote address only. */
+    /**
+     * Return whether the receive side accepts datagrams only from the connected remote address.
+     * @return true when only datagrams from the configured remote address are accepted
+     */
     public boolean isRcvRemoteOnly() {
         return this.rcvRemoteOnly;
     }
 
-    /** Sets whether receive is restricted to the connected remote address only. */
+    /**
+     * Set whether the receive side accepts datagrams only from the connected remote address.
+     * @param rcvRemoteOnly whether only datagrams from the configured remote address are accepted
+     */
     public void setRcvRemoteOnly(boolean rcvRemoteOnly) {
         this.rcvRemoteOnly = rcvRemoteOnly;
     }
 
-    /** Returns the number of write-timeout retries (0 = no retry). */
+    /**
+     * Return the retry count after a write timeout.
+     * @return the retry count, where 0 means no retry
+     */
     public int getSndWriteRetryCount() {
         return this.sndWriteRetryCount;
     }
 
-    /** Sets the number of write-timeout retries. */
+    /**
+     * Set the retry count after a write timeout.
+     * @param sndWriteRetryCount the retry count
+     */
     public void setSndWriteRetryCount(int sndWriteRetryCount) {
         this.sndWriteRetryCount = sndWriteRetryCount;
     }
 
-    /** Returns the delay between write retries in milliseconds. */
+    /**
+     * Return the interval between two write retries in milliseconds.
+     * @return the retry interval
+     */
     public int getSndWriteRetryIntervalMs() {
         return this.sndWriteRetryIntervalMs;
     }
 
-    /** Sets the delay between write retries in milliseconds. */
+    /**
+     * Set the interval between two write retries in milliseconds.
+     * @param sndWriteRetryIntervalMs the retry interval
+     */
     public void setSndWriteRetryIntervalMs(int sndWriteRetryIntervalMs) {
         this.sndWriteRetryIntervalMs = sndWriteRetryIntervalMs;
     }

@@ -15,22 +15,22 @@
  */
 package net.hasor.neta.channel;
 /**
- * Callback invoked whenever a {@link PlayLoad} event is published on the channel event bus.
- * <p>Register an instance via {@link SoChannel#subscribe} (returns a
- * {@link SubscribeHolder} for later cancellation).  The delivery threading model
- * depends on the {@link SubscribeMode} chosen at registration time:
+ * Callback invoked when a {@link PlayLoad} event is published on the channel event bus.
+ * <p>Instances can be registered through {@link SoChannel#subscribe}, which returns a
+ * {@link SubscribeHolder} that can later be used to unsubscribe. The delivery thread model depends
+ * on the selected {@link SubscribeMode}:</p>
  * <ul>
- *   <li>{@link SubscribeMode#SYNC} – {@link #onEvent} is called inline on the same thread
- *       (I/O or task worker) that triggered the event.  The callback must return quickly;
- *       blocking will stall that thread.</li>
- *   <li>{@link SubscribeMode#ASYNC} – the event is queued and dispatched on a
- *       {@link SoEventExecutor} worker thread.  Events for the same subscriber are always
- *       delivered in order.  Choose this for callbacks that may block or touch external
- *       systems.</li>
+ *   <li>{@link SubscribeMode#SYNC} invokes the callback inline on the same thread that triggers the
+ *       event, usually an I/O thread. The callback must return quickly because blocking will slow
+ *       that thread down.</li>
+ *   <li>{@link SubscribeMode#ASYNC} schedules a separate task for execution. Events for the same
+ *       subscriber are always delivered in order. This is the preferred mode when the listener may
+ *       send data through NetChannel from inside the callback.</li>
  * </ul>
- * <p>The callback observes pipeline-owned payloads. When a listener needs to use a
- * reference-counted object after {@link #onEvent(PlayLoad)} returns, it must retain or copy the
- * object during the callback.
+ * <p>Listeners attached to real network channels usually only observe inbound {@link PlayLoad}
+ * events because outbound data has already been sent to the remote peer and is not fed back as a
+ * local event.</p>
+ * <p>For virtual pipelines, the listener may receive both inbound and outbound payloads.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-20
  * @see PlayLoad

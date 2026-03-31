@@ -21,36 +21,38 @@ import java.util.List;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Tracks sent packets and implements loss detection per RFC 9002 §6 (packet threshold and time threshold).
+ * Tracks sent packets and implements loss detection according to RFC 9002 Section 6.
+ * <p>Both packet-threshold and time-threshold loss detection are used.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicSentPacketTracker {
-    /** RFC 9002 §6.1.1: packet reordering threshold before treating a packet as lost. */
-    static final         int    PACKET_THRESHOLD      = 3;
-    private static final Logger logger                = Logger.getLogger(QuicSentPacketTracker.class);
-    /** RFC 9002 §6.1.2: time reorder threshold factor (9/8 of the largest RTT). */
-    private static final double TIME_THRESHOLD_FACTOR = 9.0 / 8.0;
-
-    /** List of sent but not-yet-acknowledged packets, in send order. */
-    private final LinkedList<SentPacketInfo> sentPackets    = new LinkedList<>();
-    /** Largest acknowledged packet number (-1 if nothing acknowledged yet). */
-    private       long                       largestAckedPn = -1;
-    /** Smoothed RTT in milliseconds (SRTT, RFC 9002 §5.3). */
-    private       long                       smoothedRtt    = 333; // initial estimate 333ms (RFC 9002 §6.2.2)
-    /** RTT variation in milliseconds (RTTVAR). */
-    private       long                       rttVar         = 166; // initial RTTVAR = SRTT / 2
-    /** Minimum RTT observed in milliseconds. */
-    private       long                       minRtt         = Long.MAX_VALUE;
+    /** RFC 9002 §6.1.1: packet reordering threshold allowed before declaring loss. */
+    static final         int                        PACKET_THRESHOLD      = 3;
+    private static final Logger                     logger                = Logger.getLogger(QuicSentPacketTracker.class);
+    /** RFC 9002 §6.1.2: time reordering threshold factor, set to 9/8 of the maximum RTT. */
+    private static final double                     TIME_THRESHOLD_FACTOR = 9.0 / 8.0;
+    /** Sent but unacknowledged packet list kept in send order. */
+    private final        LinkedList<SentPacketInfo> sentPackets           = new LinkedList<>();
+    /** Largest packet number acknowledged so far, or -1 if nothing has been acknowledged yet. */
+    private              long                       largestAckedPn        = -1;
+    /** Smoothed RTT in milliseconds. */
+    private              long                       smoothedRtt           = 333; // Initial estimate is 333 ms (RFC 9002 §6.2.2)
+    /** RTT variation in milliseconds. */
+    private              long                       rttVar                = 166; // Initial RTTVAR = SRTT / 2
+    /** Minimum RTT observed so far, in milliseconds. */
+    private              long                       minRtt                = Long.MAX_VALUE;
     /** Latest RTT sample in milliseconds. */
-    private       long                       latestRtt      = 0;
-    /** Number of bytes currently in flight (sent but not yet acked or declared lost). */
-    private       long                       bytesInFlight  = 0;
-    /** Probe Timeout (PTO) timer expiration (epoch ms), 0 if not set. */
-    private       long                       ptoExpiry      = 0;
-    /** Number of PTO probes sent without receiving an ACK. */
-    private       int                        ptoCount       = 0;
+    private              long                       latestRtt             = 0;
+    /** Bytes currently in flight, that is, sent but neither acknowledged nor declared lost. */
+    private              long                       bytesInFlight         = 0;
+    /** Expiration timestamp of the PTO timer in milliseconds; 0 means unset. */
+    private              long                       ptoExpiry             = 0;
+    /** Number of PTO probes sent while ACKs have not been received consecutively. */
+    private              int                        ptoCount              = 0;
 
-    /** Returns true if the given PN falls within any of the acknowledged ranges. */
+    /**
+     * Returns whether the given packet number falls inside any acknowledged range.
+     */
     private static boolean isAcked(long pn, List<long[]> ackedRanges) {
         for (long[] range : ackedRanges) {
             if (pn >= range[0] && pn <= range[1]) {
@@ -60,7 +62,9 @@ class QuicSentPacketTracker {
         return false;
     }
 
-    /** Records a sent packet for loss detection and congestion control tracking. */
+    /**
+     * Records a sent packet for later loss detection and congestion control.
+     */
     synchronized void onPacketSent(long packetNumber, byte[] payload, int size, boolean ackEliciting) {
         SentPacketInfo info = new SentPacketInfo();
         info.packetNumber = packetNumber;
@@ -72,13 +76,16 @@ class QuicSentPacketTracker {
         if (ackEliciting) {
             this.bytesInFlight += size;
         }
-        // Reset PTO timer
+        // Reset the PTO timer.
         if (ackEliciting) {
             setPtoTimer();
         }
     }
 
-    /** Processes received ACK ranges, updates RTT, removes acked packets, and returns lost packet payloads. */
+    /**
+     * Processes received ACK ranges.
+     * <p>This updates RTT, removes acknowledged packets, and returns payloads declared lost.
+     */
     synchronized List<byte[]> onAckReceived(List<long[]> ackedRanges) {
         if (ackedRanges == null || ackedRanges.isEmpty()) {
             return new ArrayList<>();
@@ -86,7 +93,7 @@ class QuicSentPacketTracker {
 
         long now = System.currentTimeMillis();
 
-        // Find the largest acknowledged PN from the ranges
+        // Find the largest packet number acknowledged by this ACK.
         long newLargestAcked = -1;
         for (long[] range : ackedRanges) {
             if (range[1] > newLargestAcked) {
@@ -94,18 +101,18 @@ class QuicSentPacketTracker {
             }
         }
 
-        // Update largest acked
+        // Update the largest acknowledged packet number.
         boolean isNewlyAcked = newLargestAcked > this.largestAckedPn;
         if (isNewlyAcked) {
             this.largestAckedPn = newLargestAcked;
         }
 
-        // Remove acknowledged packets from sent list and update RTT
+        // Remove acknowledged packets from the sent list and update RTT.
         Iterator<SentPacketInfo> it = this.sentPackets.iterator();
         while (it.hasNext()) {
             SentPacketInfo info = it.next();
             if (isAcked(info.packetNumber, ackedRanges)) {
-                // Update RTT from the largest newly acknowledged packet
+                // Update RTT using the packet corresponding to the newest largest acknowledged number.
                 if (info.packetNumber == newLargestAcked && isNewlyAcked) {
                     long rttSample = now - info.sentTime;
                     updateRtt(rttSample);
@@ -117,10 +124,10 @@ class QuicSentPacketTracker {
             }
         }
 
-        // Detect lost packets
+        // Detect lost packets.
         List<byte[]> lostPayloads = detectLoss(now);
 
-        // Reset PTO
+        // Reset PTO state.
         this.ptoCount = 0;
         if (!this.sentPackets.isEmpty()) {
             setPtoTimer();
@@ -131,7 +138,9 @@ class QuicSentPacketTracker {
         return lostPayloads;
     }
 
-    /** Returns true if the PTO timer has expired and a probe should be sent (RFC 9002 §6.2). */
+    /**
+     * Returns whether the PTO timer has expired.
+     */
     synchronized boolean isPtoExpired() {
         if (this.ptoExpiry == 0 || this.sentPackets.isEmpty()) {
             return false;
@@ -140,48 +149,61 @@ class QuicSentPacketTracker {
     }
 
     /**
-     * Called when a PTO probe is sent. Increments the PTO count and resets the timer.
+     * Invoked when sending a PTO probe packet.
+     * <p>This increments the PTO counter and resets the timer.
      */
     synchronized void onPtoSent() {
         this.ptoCount++;
         setPtoTimer();
     }
 
-    /** Returns the number of bytes currently in flight. */
+    /**
+     * Returns the number of bytes currently in flight.
+     */
     synchronized long getBytesInFlight() {
         return this.bytesInFlight;
     }
 
-    /** Returns the smoothed RTT in milliseconds. */
+    /**
+     * Returns the smoothed RTT.
+     */
     synchronized long getSmoothedRtt() {
         return this.smoothedRtt;
     }
 
-    /** Returns the minimum RTT observed. */
+    /**
+     * Returns the minimum RTT observed so far.
+     */
     synchronized long getMinRtt() {
         return this.minRtt == Long.MAX_VALUE ? this.smoothedRtt : this.minRtt;
     }
 
-    /** Returns the RTT variation. */
+    /**
+     * Returns the RTT variation value.
+     */
     synchronized long getRttVar() {
         return this.rttVar;
     }
 
-    // ── Internal helpers ───────────────────────────────────────────────
+    // ── Internal helpers ──────────────────────────────────────────────
 
-    /** Returns the number of unacknowledged sent packets. */
+    /**
+     * Returns the number of sent packets that remain unacknowledged.
+     */
     synchronized int getUnackedCount() {
         return this.sentPackets.size();
     }
 
-    /** Updates smoothed RTT and RTT variance per RFC 9002 §5.3. */
+    /**
+     * Updates the smoothed RTT and RTT variation according to RFC 9002 Section 5.3.
+     */
     private void updateRtt(long rttSample) {
         this.latestRtt = rttSample;
         if (rttSample < this.minRtt) {
             this.minRtt = rttSample;
         }
 
-        // RFC 9002 §5.3: first sample initializes directly
+        // RFC 9002 §5.3: initialize directly on the first sample.
         if (this.smoothedRtt == 333 && this.rttVar == 166) {
             this.smoothedRtt = rttSample;
             this.rttVar = rttSample / 2;
@@ -192,17 +214,19 @@ class QuicSentPacketTracker {
         }
     }
 
-    /** Detects lost packets using both packet threshold and time threshold (RFC 9002 §6.1). */
+    /**
+     * Detects loss using both packet-threshold and time-threshold rules.
+     */
     private List<byte[]> detectLoss(long now) {
         List<byte[]> lostPayloads = new ArrayList<>();
         long lossDelay = (long) (Math.max(this.latestRtt, this.smoothedRtt) * TIME_THRESHOLD_FACTOR);
-        lossDelay = Math.max(lossDelay, 1); // at least 1ms
+        lossDelay = Math.max(lossDelay, 1); // At least 1 ms.
 
         Iterator<SentPacketInfo> it = this.sentPackets.iterator();
         while (it.hasNext()) {
             SentPacketInfo info = it.next();
             if (info.packetNumber > this.largestAckedPn) {
-                continue; // can't be declared lost; not yet a newer ack
+                continue; // No newer ACK is available yet, so loss cannot be declared.
             }
 
             boolean packetThresholdLost = (this.largestAckedPn - info.packetNumber) >= PACKET_THRESHOLD;
@@ -222,15 +246,19 @@ class QuicSentPacketTracker {
         return lostPayloads;
     }
 
-    /** Sets the PTO timer based on current RTT estimates per RFC 9002 §6.2.1. */
+    /**
+     * Sets the PTO timer based on the current RTT estimate.
+     */
     private void setPtoTimer() {
         long pto = this.smoothedRtt + Math.max(4 * this.rttVar, 1);
-        // Apply exponential backoff
+        // Apply exponential backoff.
         pto = pto * (1L << this.ptoCount);
         this.ptoExpiry = System.currentTimeMillis() + pto;
     }
 
-    /** Information about a sent packet. */
+    /**
+     * Tracking information for a sent packet.
+     */
     static class SentPacketInfo {
         long    packetNumber;
         byte[]  payload;

@@ -14,10 +14,19 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Key object used to identify a logical partition.
+ * <p>Partitioned pipelines use this key to route messages or events into the corresponding
+ * partition sub-pipeline. Identical key values try to reuse the same {@code PartitionKey}
+ * instance to reduce object allocation overhead in high-frequency partitioning scenarios.</p>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-31
+ * @see ProtoPartitionSelector
+ * @see ProtoPartitionControl
+ */
 public final class PartitionKey {
     private static final int                       CACHE_LIMIT = 8192;
     private static final Map<String, PartitionKey> KEY_CACHE   = new ConcurrentHashMap<>();
@@ -30,6 +39,10 @@ public final class PartitionKey {
         this.hashCode = partitionKey.hashCode();
     }
 
+    /**
+     * Return the string form of the partition key.
+     * @return partition key text
+     */
     public String getKey() {
         return this.partitionKey;
     }
@@ -57,34 +70,78 @@ public final class PartitionKey {
         return this.partitionKey.equals(that.partitionKey);
     }
 
+    /**
+     * Find the partition key currently bound in the protocol context.
+     * <p>Once data has entered a partition path, this method can be used to retrieve the current
+     * partition identity.</p>
+     * @param context protocol context
+     * @return partition key associated with the current context, or null if the flow has not entered a partition yet
+     */
     public static PartitionKey findKey(ProtoContext context) {
         return context.context(PartitionKey.class);
     }
 
+    /**
+     * Create a partition key from a string value.
+     * @param key key content
+     * @return corresponding partition key instance
+     */
     public static PartitionKey newKey(String key) {
         return cacheKey(String.valueOf(key));
     }
 
+    /**
+     * Create a partition key from a byte value.
+     * @param key key content
+     * @return corresponding partition key instance
+     */
     public static PartitionKey newKey(byte key) {
         return cacheKey(String.valueOf(key));
     }
 
+    /**
+     * Create a partition key from a short value.
+     * @param key key content
+     * @return corresponding partition key instance
+     */
     public static PartitionKey newKey(short key) {
         return cacheKey(String.valueOf(key));
     }
 
+    /**
+     * Create a partition key from an int value.
+     * @param key key content
+     * @return corresponding partition key instance
+     */
     public static PartitionKey newKey(int key) {
         return cacheKey(String.valueOf(key));
     }
 
+    /**
+     * Create a partition key from a long value.
+     * @param key key content
+     * @return corresponding partition key instance
+     */
     public static PartitionKey newKey(long key) {
         return cacheKey(String.valueOf(key));
     }
 
+    /**
+     * Create a partition key from a float value.
+     * <p>The bit pattern is used instead of decimal text so NaN values and sign bits map stably.</p>
+     * @param key key content
+     * @return corresponding partition key instance
+     */
     public static PartitionKey newKey(float key) {
         return cacheKey(String.valueOf(Float.floatToIntBits(key)));
     }
 
+    /**
+     * Create a partition key from a double value.
+     * <p>The bit pattern is used instead of decimal text so the key mapping stays stable and reproducible.</p>
+     * @param key key content
+     * @return corresponding partition key instance
+     */
     public static PartitionKey newKey(double key) {
         return cacheKey(String.valueOf(Double.doubleToLongBits(key)));
     }

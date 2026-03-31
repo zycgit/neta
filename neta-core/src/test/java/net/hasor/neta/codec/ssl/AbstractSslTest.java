@@ -46,7 +46,7 @@ public class AbstractSslTest {
      * Creates a protocol stack whose String codec layer listens for {@link SslHandshakeEvent} and counts
      * down {@code handshakeLatch} as soon as TLS negotiation succeeds on that side.
      * <p>
-     * {@link SslDuplexer} already calls {@code fireUserEvent(SslEvent.class, …)} the moment the
+     * {@link SslDuplexer} already calls {@code fireEvent(SslEvent.class, …)} the moment the
      * handshake finishes. That event propagates to every downstream handler in the pipeline, so
      * the String codec — which sits directly after the SSL layer — can intercept it without any
      * extra passthrough handler.
@@ -73,7 +73,7 @@ public class AbstractSslTest {
                 }
 
                 @Override
-                public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) {
+                public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) {
                     if (event.getEventType() == SslHandshakeEvent.class) {
                         handshakeLatch.countDown();
                     }

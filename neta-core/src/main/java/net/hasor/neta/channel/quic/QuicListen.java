@@ -22,7 +22,8 @@ import net.hasor.neta.channel.SoContextService;
 import net.hasor.neta.channel.udp.UdpNetListen;
 
 /**
- * QUIC listen endpoint. Extends {@link UdpNetListen} since QUIC is built on UDP.
+ * QUIC listening endpoint.
+ * <p>Because QUIC is built on top of UDP, this type extends {@link UdpNetListen} and carries listening-phase state such as the listen address, initializer, and context.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicListen extends UdpNetListen {

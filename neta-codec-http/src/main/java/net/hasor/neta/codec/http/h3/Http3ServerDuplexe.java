@@ -152,7 +152,7 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (event.getEventType() == Http3ResetEvent.class) {
             Http3ResetEvent reset = (Http3ResetEvent) event.getData();
             long streamId = reset.streamId();
@@ -167,7 +167,7 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
                 ((QuicStreamChannel) channel).sendReset(errorCode, 0L);
             }
             if (context.getConfig().isPrintLog()) {
-                logger.info("[H3-SND] ch=" + channel.getChannelId() + " RESET_STREAM errorCode=0x" + Long.toHexString(errorCode) + " (via UserEvent)");
+                logger.info("[H3-SND] ch=" + channel.getChannelId() + " RESET_STREAM errorCode=0x" + Long.toHexString(errorCode) + " (via Event)");
             }
             return false; // event consumed
         }

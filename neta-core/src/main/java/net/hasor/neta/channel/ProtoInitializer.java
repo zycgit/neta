@@ -15,17 +15,13 @@
  */
 package net.hasor.neta.channel;
 /**
- * Callback used to populate a {@link ProtoBuildContext} with handlers.
- * <p>The framework invokes {@link #config(ProtoBuildContext)} whenever it needs to build a protocol chain:
- * for a freshly created channel's root pipeline, and also for branch pipelines owned by
- * {@link ProtoRoutingDuplexer}. The callback therefore configures a context; it is not limited to
- * a single top-level connect or accept event.
- * <p><b>Design principle:</b> this callback is the structural boundary of a pipeline. Handlers,
- * routes, and partitions should be declared here so the connection structure is fixed before data
- * processing starts. Runtime processing may switch state, route, or partition, but should not rely
- * on arbitrary structural mutation.
- * <p>Implementations add decoders, encoders, and business-logic handlers to the
- * {@link ProtoBuildContext} pipeline:
+ * Callback used to populate handlers into a {@link ProtoBuildContext}.
+ * <p>Whenever the framework needs to build a protocol chain, it calls
+ * {@link #config(ProtoBuildContext)}. That includes not only the root pipeline for a newly created
+ * channel, but also branch pipelines and partition pipelines. In other words, this callback
+ * configures a context, not just a single top-level connect or accept event.</p>
+ * <p>Implementations typically add decoders, encoders, and application handlers to the
+ * {@link ProtoBuildContext} pipeline:</p>
  * <pre>
  * manager.bind(address, ctx -&gt; {               // &lt;-- ProtoInitializer
  *     ctx.addLastDecoder("frame",  new LineBasedFrameHandler(4096, false));
@@ -33,8 +29,12 @@ package net.hasor.neta.channel;
  *     ctx.addLast("app",   new MyAppHandler());
  * }, SoConfig.TCP());
  * </pre>
- * <p>The callback runs synchronously on whichever thread is constructing the pipeline, so it should
- * stay deterministic and non-blocking.
+ * <p><b>Design principle:</b> this callback is the boundary where pipeline structure is declared.
+ * Handlers, routing, and partitions should all be defined here so the connection structure is fixed
+ * before data processing begins. Runtime logic may switch state, route, or partition, but should
+ * not depend on arbitrary structural mutation.</p>
+ * <p>The callback executes synchronously on the pipeline-construction thread, so it should remain
+ * deterministic and non-blocking.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see ProtoBuildContext
@@ -42,6 +42,6 @@ package net.hasor.neta.channel;
  */
 @FunctionalInterface
 public interface ProtoInitializer {
-    /** Called once per new channel or branch context; determine pipeline structure on {@code ctx}. */
+    /** Called once for each new channel or branch context to define the pipeline structure on {@code ctx}. */
     void config(ProtoBuildContext ctx);
 }

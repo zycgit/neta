@@ -17,19 +17,27 @@ package net.hasor.neta.channel.quic;
 import net.hasor.neta.channel.SoTimeoutException;
 
 /**
- * Thrown when a QUIC connection or stream is closed due to idle timeout (RFC 9000 §10.1).
+ * Exception thrown when a QUIC connection or stream is closed due to idle timeout.
+ * <p>Corresponds to RFC 9000 Section 10.1 and can be used to distinguish connection-level and stream-level timeout closures.
  * @author 赵永春 (zyc@hasor.net)
  */
 public class QuicIdleTimeoutException extends SoTimeoutException {
     private final boolean connectionLevel;
 
-    /** Creates a QuicIdleTimeoutException with a message and a flag indicating connection vs stream level. */
+    /**
+     * Creates an idle-timeout exception.
+     * @param message exception message
+     * @param connectionLevel whether this is a connection-level timeout; false indicates a stream-level timeout
+     */
     public QuicIdleTimeoutException(String message, boolean connectionLevel) {
         super(message);
         this.connectionLevel = connectionLevel;
     }
 
-    /** Returns {@code true} if this is a connection-level timeout, {@code false} for stream-level. */
+    /**
+     * Returns whether this is a connection-level timeout.
+     * @return true for a connection-level timeout, false for a stream-level timeout
+     */
     public boolean isConnectionLevel() {
         return this.connectionLevel;
     }

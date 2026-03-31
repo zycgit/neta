@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import net.hasor.neta.channel.SoUserEvent;
+import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.codec.http.AbstractHttpTest;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaders;
@@ -105,8 +105,8 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         return ((long) (payload[offset] & 0xFF) << 24) | ((long) (payload[offset + 1] & 0xFF) << 16) | ((long) (payload[offset + 2] & 0xFF) << 8) | (payload[offset + 3] & 0xFF);
     }
 
-    protected static <T> T findHttp2Event(Iterable<SoUserEvent> events, Class<T> eventType) {
-        for (SoUserEvent event : events) {
+    protected static <T> T findHttp2Event(Iterable<SoEvent> events, Class<T> eventType) {
+        for (SoEvent event : events) {
             if (event != null && eventType.isInstance(event.getData())) {
                 return eventType.cast(event.getData());
             }
@@ -124,7 +124,7 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         assertEquals(expectedStreamId, rstStreamFrame.streamId());
         assertEquals(expectedErrorCode, readHttp2UnsignedInt(rstStreamFrame.payload(), 0));
 
-        Http2ResetEvent resetEvent = findHttp2Event(pipe.channelUserEvents(), Http2ResetEvent.class);
+        Http2ResetEvent resetEvent = findHttp2Event(pipe.channelEvents(), Http2ResetEvent.class);
         assertNotNull(resetEvent);
         assertEquals(expectedStreamId, resetEvent.streamId());
         assertEquals(expectedErrorCode, resetEvent.errorCode());
@@ -142,7 +142,7 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         assertEquals(expectedLastAccepted, readHttp2Int31(goAwayFrame.payload(), 0));
         assertEquals(expectedErrorCode, readHttp2UnsignedInt(goAwayFrame.payload(), 4));
 
-        Http2GoawayEvent goawayEvent = findHttp2Event(pipe.channelUserEvents(), Http2GoawayEvent.class);
+        Http2GoawayEvent goawayEvent = findHttp2Event(pipe.channelEvents(), Http2GoawayEvent.class);
         assertNotNull(goawayEvent);
         assertEquals(expectedLastAccepted, goawayEvent.lastAcceptedId());
         assertEquals(expectedErrorCode, goawayEvent.errorCode());

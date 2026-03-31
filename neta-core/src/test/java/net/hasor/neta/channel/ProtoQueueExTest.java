@@ -17,6 +17,7 @@ package net.hasor.neta.channel;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import net.hasor.cobble.function.Release;
 import net.hasor.neta.bytebuf.ReferenceHolder;
 import org.junit.Test;
 
@@ -42,7 +43,7 @@ public class ProtoQueueExTest {
         assert q.slotSize() == 0;
         // offer should accept 0 items
         assert !q.offerMessage(1);
-        assert q.offerMessage(Arrays.asList(1, 2, 3)) == 0;
+        assert !q.offerMessage(Arrays.asList(1, 2, 3));
     }
 
     @Test
@@ -207,8 +208,8 @@ public class ProtoQueueExTest {
     public void offerMessage_array() {
         ProtoQueue<Integer> q = new ProtoQueue<>(5);
         Integer[] data = { 10, 20, 30 };
-        int accepted = q.offerMessage(data);
-        assert accepted == 3;
+        boolean accepted = q.offerMessage(data);
+        assert accepted;
         assert q.queueSize() == 3;
 
         List<Integer> items = q.takeMessage(-1);
@@ -221,8 +222,8 @@ public class ProtoQueueExTest {
     public void offerMessage_array_partialAccept() {
         ProtoQueue<Integer> q = new ProtoQueue<>(2);
         Integer[] data = { 1, 2, 3, 4, 5 };
-        int accepted = q.offerMessage(data);
-        assert accepted == 0;
+        boolean accepted = q.offerMessage(data);
+        assert !accepted;
         assert q.slotSize() == 2;
     }
 
@@ -234,8 +235,8 @@ public class ProtoQueueExTest {
         src.offerMessage(3);
 
         ProtoQueue<Integer> dst = new ProtoQueue<>(2);
-        int accepted = dst.offerMessage(src);
-        assert accepted == 0;
+        boolean accepted = dst.offerMessage(src);
+        assert !accepted;
         assert dst.queueSize() == 0;
         assert dst.slotSize() == 2;
         assert src.queueSize() == 3;
@@ -251,8 +252,8 @@ public class ProtoQueueExTest {
         src.offerMessage(3);
 
         ProtoQueue<Integer> dst = new ProtoQueue<>(10);
-        int accepted = dst.offerMessage(src);
-        assert accepted == 3;
+        boolean accepted = dst.offerMessage(src);
+        assert accepted;
         assert src.queueSize() == 0; // all taken
         assert dst.queueSize() == 3;
     }
@@ -308,6 +309,32 @@ public class ProtoQueueExTest {
         assert holder.refCnt() == 0;
     }
 
+    @Test
+    public void skip_swallowsReleaseExceptionAndContinuesCleanup() {
+        ProtoQueue<Object> q = new ProtoQueue<>(10);
+        ThrowingRelease release = new ThrowingRelease();
+        q.offerMessage(release);
+
+        q.skipMessage(1);
+
+        assert release.releaseCount == 1;
+        assert q.queueSize() == 0;
+        assert q.slotSize() == 10;
+    }
+
+    @Test
+    public void clearAndClose_swallowsReleaseExceptionAndClearsQueue() {
+        ProtoQueue<Object> q = new ProtoQueue<>(10);
+        ThrowingRelease release = new ThrowingRelease();
+        q.offerMessage(release);
+
+        q.clearAndClose();
+
+        assert release.releaseCount == 1;
+        assert q.queueSize() == 0;
+        assert q.slotSize() == 10;
+    }
+
     // --- toString ---
 
     @Test
@@ -332,8 +359,8 @@ public class ProtoQueueExTest {
     @Test
     public void offerMessage_emptyList() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
-        int cnt = q.offerMessage(Collections.emptyList());
-        assert cnt == 0;
+        boolean cnt = q.offerMessage(Collections.emptyList());
+        assert !cnt;
         assert q.queueSize() == 0;
         assert q.slotSize() == 10;
     }
@@ -341,8 +368,8 @@ public class ProtoQueueExTest {
     @Test
     public void offerMessage_emptyArray() {
         ProtoQueue<Integer> q = new ProtoQueue<>(10);
-        int cnt = q.offerMessage(new Integer[0]);
-        assert cnt == 0;
+        boolean cnt = q.offerMessage(new Integer[0]);
+        assert !cnt;
     }
 
     // --- interleaved offer/take cycles ---
@@ -402,6 +429,16 @@ public class ProtoQueueExTest {
             this.releaseCount++;
             this.refCnt -= decrement;
             return this.refCnt == 0;
+        }
+    }
+
+    private static class ThrowingRelease implements Release {
+        private int releaseCount;
+
+        @Override
+        public void release() {
+            this.releaseCount++;
+            throw new IllegalStateException("release failed");
         }
     }
 }

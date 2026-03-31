@@ -25,8 +25,32 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.channel.*;
 
 /**
- * Completion handler for accepting incoming TCP connections.
- * Creates a new {@link TcpChannel} for each accepted socket, configures it, and starts reading.
+ * Completion handler for accepting inbound TCP connections.
+ * <p>This handler creates a new {@link TcpChannel} for each accepted socket, applies configuration,
+ * and then starts the read flow.
+ * <p><b>Accept flow:</b>
+ * <pre>
+ *   AsynchronousServerSocketChannel.accept(...)
+ *                    ▼
+ *      completed(acceptedSocket, ctx)
+ *       ┌────────────┼──────────────────────┐
+ *       ▼            ▼                      ▼
+ *   listen closed   re-arm next accept    listen suspended
+ *       │                                   │
+ *       └── close socket and return         └── close socket and return
+ *           acceptChannel(...) validation
+ *          ┌─────────┴─────────┐
+ *          ▼                   ▼
+ *        reject              allow
+ *          │                   ├── configure socket options
+ *          │                   ├── create TcpAsyncChannel
+ *          │                   ├── create TcpChannel
+ *          │                   ├── initChannel(...)
+ *          │                   └── start getReadHandler().read()
+ *          └── close socket and return
+ * </pre>
+ * <p><b>Failure handling:</b> if accept fails or channel initialization throws an exception, the
+ * handler logs the error and closes either the socket or the listener depending on the scenario.
  * @author 赵永春 (zyc@hasor.net)
  * @version 2025-08-06
  */
@@ -36,12 +60,23 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
     private final        AsynchronousServerSocketChannel channel;
     private final        TcpSoConfig                     soConfig;
 
+    /**
+     * Create an accept-completion handler.
+     * @param forListen the source listener
+     * @param channel the server listen channel
+     * @param soConfig the TCP configuration
+     */
     TcpAcceptCompletionHandler(NetListen forListen, AsynchronousServerSocketChannel channel, TcpSoConfig soConfig) {
         this.forListen = forListen;
         this.channel = channel;
         this.soConfig = soConfig;
     }
 
+    /**
+     * Finish channel initialization and start the read flow after a connection is accepted.
+     * @param result the accepted client channel
+     * @param attachment the runtime context
+     */
     @Override
     public void completed(AsynchronousSocketChannel result, SoContext attachment) {
         if (this.forListen.isClose()) {
@@ -50,7 +85,7 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
             return;
         }
 
-        // accept the next connection
+        // Re-arm the next accept in advance.
         this.channel.accept(attachment, this);
 
         if (this.forListen.isSuspend()) {
@@ -64,7 +99,7 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
             return;
         }
 
-        // create channel
+        // Create the framework-level channel.
         TcpChannel channel;
         try {
             long channelId = ((SoContextService) attachment).nextID();
@@ -77,7 +112,7 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
             return;
         }
 
-        // init and start read
+        // Initialize the channel and start reading.
         try {
             ((SoContextService) attachment).initChannel(channel, true);
             if (!channel.isShutdownInput()) {
@@ -91,6 +126,11 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
         }
     }
 
+    /**
+     * Log the error and close the listener when accepting a connection fails.
+     * @param e the failure cause
+     * @param context the runtime context
+     */
     @Override
     public void failed(Throwable e, SoContext context) {
         if (e instanceof AsynchronousCloseException && this.forListen.isClose()) {
@@ -135,6 +175,13 @@ class TcpAcceptCompletionHandler implements CompletionHandler<AsynchronousSocket
         }
     }
 
+    /**
+     * Create the framework-level channel object for an accepted underlying channel.
+     * @param forListen the source listener
+     * @param realChannel the underlying asynchronous channel
+     * @return the newly created framework channel
+     * @throws IOException if an I/O error occurs during creation
+     */
     protected TcpChannel newChannel(NetListen forListen, TcpAsyncChannel realChannel) throws IOException {
         SoContext context = forListen.getContext();
         NetMonitor monitor = new NetMonitor();

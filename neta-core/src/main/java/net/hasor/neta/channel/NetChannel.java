@@ -33,8 +33,9 @@ import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * A connected socket channel with a bound application-layer protocol stack.
- * Supports async {@link #sendData}/{@link #flush} and read-timeout waiting.
+ * Connected socket channel bound to an application-layer protocol stack.
+ * Supports asynchronous {@link #sendData} and {@link #flush} operations, as well as waiting for
+ * read timeouts.
  * <pre>
  *  Remote ──► [ByteBuf] ──► Decoder(n) ──► … ──► Decoder(0) ──► Application
  *  Remote ◄── [ByteBuf] ◄── Encoder(n) ◄── … ◄── Encoder(0) ◄── Application
@@ -61,6 +62,15 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     private final        Object[]                       singleRcvBuf        = new Object[1]; // reusable 1-element array for single RCV
     protected volatile   int                            readWaiters;
 
+    /**
+     * Create a logical channel bound to the underlying asynchronous transport channel and protocol stack.
+     * @param channelId unique channel identifier
+     * @param monitor channel monitor
+     * @param forListen owning listener, or {@code null} for client channels
+     * @param initializer protocol stack initializer
+     * @param asyncChannel underlying asynchronous channel
+     * @param soContext owning network context
+     */
     protected NetChannel(long channelId, NetMonitor monitor, NetListen forListen, ProtoInitializer initializer, AsyncChannel asyncChannel, SoContextService soContext) {
         this.channelId = channelId;
         this.asyncChannel = asyncChannel;
@@ -77,13 +87,13 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         this.closeFuture = new BasicFuture<>();
     }
 
-    /** Returns true when the current thread is executing inside any NetChannel pipeline call chain. */
+    /** Return true when the current thread is executing inside the pipeline call chain of any NetChannel. */
     public static boolean isCurrentThreadInPipeline() {
         Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(Thread.currentThread());
         return callChain != null && !callChain.isEmpty();
     }
 
-    /** Returns true when the current thread is executing inside the target channel's pipeline call chain. */
+    /** Return true when the current thread is executing inside the pipeline call chain of the target channel. */
     public static boolean isCurrentThreadInPipeline(NetChannel channel) {
         Objects.requireNonNull(channel, "channel is null.");
         Deque<NetChannel> callChain = PIPELINE_CALL_CHAIN.get(Thread.currentThread());
@@ -114,103 +124,112 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean isListen() {
         return false;
     }
 
+    /** {@inheritDoc} */
     @Override
     public long getCreatedTime() {
         return this.monitor.getCreatedTime();
     }
 
+    /** {@inheritDoc} */
     @Override
     public long getLastActiveTime() {
         return this.monitor.getLastActiveTime();
     }
 
-    /** last sent data time */
+    /** Return the time when data was last sent. */
     public long getLastSndTime() {
         return this.monitor.getLastSndTime();
     }
 
-    /** last received data time */
+    /** Return the time when data was last received. */
     public long getLastRcvTime() {
         return this.monitor.getLastRcvTime();
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean isServer() {
         return this.forListen != null;
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean isClient() {
         return this.forListen == null;
     }
 
+    /** {@inheritDoc} */
     @Override
     public SocketAddress getLocalAddr() {
         return this.asyncChannel.getLocalAddress();
     }
 
+    /** {@inheritDoc} */
     @Override
     public SocketAddress getRemoteAddr() {
         return this.asyncChannel.getRemoteAddress();
     }
 
+    /** {@inheritDoc} */
     @Override
     public SoContext getContext() {
         return this.soContext;
     }
 
+    /** Return the underlying asynchronous socket channel implementation. */
     protected AsyncChannel getAsyncChannel() {
         return this.asyncChannel;
     }
 
-    /** Returns the traffic and timing monitor attached to this channel. */
+    /** Return the traffic and timing monitor attached to this channel. */
     public NetMonitor getMonitor() {
         return this.monitor;
     }
 
+    /** {@inheritDoc} */
     @Override
     public SoConfig getConfig() {
         return this.asyncChannel.getSoConfig();
     }
 
+    /** {@inheritDoc} */
     @Override
     public <T> T findProtoContext(Class<T> serviceType) {
         return this.protoCtx.context(serviceType);
     }
 
     /**
-     * Navigate the routing tree by path and retrieve an attachment from the target branch ctx.
-     * <p>
-     * The {@code path} is a sequence of {@code (routerStackName, branchName)} pairs.
-     * Each pair identifies which Router node to descend into and which branch to follow.
-     * Since a single pipeline may contain multiple Router nodes in series (or nested),
-     * the caller must specify each step explicitly.
-     * </p>
+     * Navigate the routing tree by path and retrieve an attachment from the target branch context.
+     * <p>{@code path} is a sequence of {@code (routerStackName, branchName)} pairs. Each pair
+     * identifies which router node to enter and which branch to follow. Because a pipeline may
+     * contain multiple router nodes chained or nested together, the caller must provide the full
+     * path explicitly.</p>
      * <pre>
      *   Main: [A] → [router1] → [Z]
-     *                    │
-     *          Branch "tls": [SslDuplexer] → [router2]
-     *                                              │
-     *                                     Branch "http2": [Http2Handler]
-     *   // Read SslContext stored in the "tls" branch ctx:
+     *                   │
+     *         Branch "tls": [SslDuplexer] → [router2]
+     *                                           │
+     *                                  Branch "http2": [Http2Handler]
+     *   // Read the SslContext stored in the "tls" branch context:
      *   findProtoContextByPath(SslContext.class, "router1", "tls")
-     *   // Read Http2Context stored in the nested "http2" branch ctx:
+     *   // Read the Http2Context stored in the nested "http2" branch context:
      *   findProtoContextByPath(Http2Context.class, "router1", "tls", "router2", "http2")
      * </pre>
-     * @param type the attachment type to retrieve from the target ctx
-     * @param path alternating (routerStackName, branchName) pairs; must be non-empty and even-length
-     * @return the attachment value, or {@code null} if the path cannot be resolved or
-     * the target ctx has no value for {@code type}
+     * @param type attachment type to retrieve from the target context
+     * @param path alternating {@code (routerStackName, branchName)} pairs; must be non-empty and even-length
+     * @return attachment value, or {@code null} if the path cannot be resolved or the target context has no matching value
      * @throws IllegalArgumentException if {@code path} is null, empty, or has odd length
      */
     public <T> T findProtoContextByPath(Class<T> type, String... path) {
@@ -221,11 +240,12 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         for (int i = 0; i < path.length; i += 2) {
             String routerName = path[i];
             String branchName = path[i + 1];
-            ProtoRoutingDuplexer<?, ?> router = ctx.getHandler(routerName, ProtoRoutingDuplexer.class);
-            if (router == null) {
+            Object router = ctx.getHandler(routerName);
+            if (!(router instanceof ProtoRoutingDuplexer)) {
                 return null;
             }
-            ctx = router.getBranchCtx(branchName);
+
+            ctx = ((ProtoRoutingDuplexer<?, ?>) router).getBranchCtx(branchName);
             if (ctx == null) {
                 return null;
             }
@@ -233,16 +253,18 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return ctx.context(type);
     }
 
-    /** Returns the {@link NetListen} that accepts this channel */
+    /** Return the {@link NetListen} that accepted this channel. */
     public NetListen getListen() {
         return this.forListen;
     }
 
+    /** {@inheritDoc} */
     @Override
     public boolean isClose() {
         return !this.asyncChannel.isOpen() || this.closeStatus.get();
     }
 
+    /** {@inheritDoc} */
     @Override
     public Future<NetChannel> close() {
         if (this.closeStatus.compareAndSet(false, true)) {
@@ -263,6 +285,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         return this.closeFuture;
     }
 
+    /** {@inheritDoc} */
     @Override
     public void closeNow() {
         if (this.asyncChannel.isOpen() && this.closeStatus.compareAndSet(false, true)) {
@@ -272,22 +295,23 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         this.closeFuture.completed(this);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onClose(SoChannelListener<SoChannel<?>> listener) {
         this.closeFuture.onCompleted(f -> listener.onEvent(this));
     }
 
-    /** Number of bytes received */
+    /** Return the number of bytes received. */
     public long getRcvBytes() {
         return this.monitor.getRcvCounterBytes();
     }
 
-    /** Number of bytes send */
+    /** Return the number of bytes sent. */
     public long getSndBytes() {
         return this.monitor.getSndCounterBytes();
     }
 
-    /** Feeds raw received data through the protocol stack; must be called from a single thread. */
+    /** Feed raw received data into the protocol stack; must be called from a single thread. */
     protected void notifyRcv(Object[] rcvBytes) throws Throwable {
         if (this.readWaiters > 0) {
             synchronized (this.readTimeoutSyncObj) {
@@ -316,11 +340,16 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
                 appendSoSndTask(toSoSndData(Futures.buildNoop(), cr.data));
             }
         } finally {
-            this.singleRcvBuf[0] = null; // avoid retaining reference
+            this.singleRcvBuf[0] = null; // Avoid retaining the reference.
         }
     }
 
-    /* Receive error */
+    /**
+     * Route an inbound or outbound exception into the error handling flow of the matching pipeline direction.
+     * @param isRcv when {@code true}, handle it on the receive side; otherwise on the send side
+     * @param e exception to handle
+     * @throws Throwable thrown when pipeline error handling itself fails
+     */
     protected void notifyError(boolean isRcv, Throwable e) throws Throwable {
         ChainResult cr = isRcv ?//
                 this.protoStack.onRcv(this.protoCtx, null, null, e) ://
@@ -330,22 +359,30 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
         }
     }
 
-    /** Fires a user-defined event into the inbound pipeline from this channel. */
-    public <T> void fireUserEvent(Class<T> eventType, T event) {
-        this.notifyUserEvent(true, null, eventType, event);
+    /** Fire a network event from the current channel into the inbound pipeline. */
+    public <T> void fireEvent(Class<T> eventType, T event) {
+        this.notifyEvent(true, null, eventType, event);
     }
 
-    protected <T> void notifyUserEvent(boolean isRcv, String stackName, Class<T> eventType, T event) {
+    /**
+     * Deliver a network event toward the specified direction and starting handler.
+     * @param isRcv when {@code true}, propagate from the receive side; otherwise from the send side
+     * @param stackName starting handler name; when {@code null}, use the default entry for the current direction
+     * @param eventType event type
+     * @param event event object
+     * @param <T> event type
+     */
+    protected <T> void notifyEvent(boolean isRcv, String stackName, Class<T> eventType, T event) {
         if (isRcv) {
-            this.soContext.notifyRcvUserEvent(this.channelId, stackName, SoUserEventObject.of(this, eventType, event));
+            this.soContext.notifyRcvEvent(this.channelId, stackName, SoEventObject.of(this, eventType, event));
         } else {
-            this.soContext.notifySndUserEvent(this.channelId, stackName, SoUserEventObject.of(this, eventType, event));
+            this.soContext.notifySndEvent(this.channelId, stackName, SoEventObject.of(this, eventType, event));
         }
     }
 
     /**
-     * sent data to remote, The network IO transfer operation is performed asynchronously.
-     * <p>data goes through the application layer network protocol stack</p>
+     * Send data to the remote peer. Network I/O transmission runs asynchronously.
+     * <p>The data passes through the application-layer protocol stack.</p>
      */
     public Future<?> sendData(Object writeData) {
         Objects.requireNonNull(writeData, "the send data is null.");
@@ -353,8 +390,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * sent data to remote, The network IO transfer operation is performed asynchronously.
-     * <p>data goes through the application layer network protocol stack</p>
+     * Send data to the remote peer. Network I/O transmission runs asynchronously.
+     * <p>The data passes through the application-layer protocol stack.</p>
      */
     public Future<NetChannel> sendData(Object writeData, String stackName) {
         Objects.requireNonNull(writeData, "the send data is null.");
@@ -362,8 +399,8 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * sent data to remote, The network IO transfer operation is performed asynchronously.
-     * <p>data goes through the application layer network protocol stack</p>
+     * Send data to the remote peer. Network I/O transmission runs asynchronously.
+     * <p>The data passes through the application-layer protocol stack.</p>
      */
     public Future<?> sendData(Object[] writeData) {
         Objects.requireNonNull(writeData, "the send data is null.");
@@ -371,28 +408,28 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * sent data to remote, The network IO transfer operation is performed asynchronously.
-     * <p>data goes through the application layer network protocol stack</p>
+     * Send data to the remote peer. Network I/O transmission runs asynchronously.
+     * <p>The data passes through the application-layer protocol stack.</p>
      */
     public Future<NetChannel> sendData(Object[] writeData, String stackName) {
         Objects.requireNonNull(writeData, "the send data is null.");
         return this.sendOrFlush(writeData, stackName);
     }
 
-    /** Flushes any pending outbound data through the full protocol stack. */
+    /** Flush all pending outbound data through the full protocol stack. */
     public Future<NetChannel> flush() {
         return this.sendOrFlush(null, null);
     }
 
     /**
-     * sent data to remote, The network IO transfer operation is performed asynchronously.
-     * <p>data goes through the application layer network protocol stack</p>
+     * Flush outbound data toward the remote peer. Network I/O transmission runs asynchronously.
+     * <p>The data passes through the application-layer protocol stack.</p>
      */
     public Future<?> flush(String stackName) {
         return this.sendOrFlush(null, stackName);
     }
 
-    /** passing the SND pipeline direct send data */
+    /** Bypass the normal entry point and send data directly through the SND pipeline. */
     Future<NetChannel> sendEncoded(Object[] writeData) {
         Future<NetChannel> future = newFutureForSend();
         if (future.isDone()) {
@@ -440,7 +477,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             return new SoSndData(0, EMPTY_BYTEBUF_ARRAY, future, this);
         }
 
-        // Fast path: when all elements are ByteBuf (common echo path), reuse dataArray directly
+        // Fast path: when all elements are ByteBuf, reuse dataArray directly.
         boolean allByteBuf = true;
         int sendSize = 0;
         for (int i = 0; i < dataArray.length; i++) {
@@ -458,7 +495,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
             return new SoSndData(sendSize, dataArray, future, this);
         }
 
-        // Slow path: wrap non-ByteBuf elements
+        // Slow path: wrap non-ByteBuf elements.
         sendSize = 0;
         Object[] wrap = new Object[dataArray.length];
         for (int i = 0; i < dataArray.length; i++) {
@@ -508,10 +545,9 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * Runs the full SND pipeline and enqueues the resulting bytes for sending,
-     * bypassing the {@code closeStatus} guard.  Used by {@link SoCloseTask} to
-     * flush farewell bytes (e.g. TLS {@code close_notify}) after close has been
-     * initiated.
+     * Run the full SND pipeline and enqueue the resulting bytes for sending while bypassing the
+     * {@code closeStatus} guard. This method is used by {@link SoCloseTask}, mainly so farewell
+     * frames such as TLS {@code close_notify} can still be flushed after the close flow has started.
      */
     void flushForClose() {
         try {
@@ -526,7 +562,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * Sets a timer that will fire readTimeout if no network data is received within a specified amount of time.
+     * Install a timer that triggers a read timeout if no network data is received within the configured period.
      * @see SoConfig#getSoReadTimeoutMs()
      */
     public void setReadTimeout() {
@@ -540,7 +576,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * Sets a timer that will fire readTimeout if no network data is received within a specified amount of time.
+     * Install a timer that triggers a read timeout if no network data is received within the specified period.
      */
     public void setReadTimeout(int timeout, TimeUnit unit) {
         final class CheckTimeout implements TimerTask {
@@ -566,7 +602,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * expect new data to be received within SoReadTimeoutMs
+     * Wait for new data to arrive within the configured SoReadTimeoutMs interval.
      * @see SoConfig#getSoReadTimeoutMs()
      */
     public void waitReceive() throws InterruptedException, SoReadTimeoutException {
@@ -580,7 +616,7 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * expect new data to be received within timeout.
+     * Wait for new data to arrive within the specified timeout.
      * @see SoConfig#getSoReadTimeoutMs()
      */
     public void waitReceive(int timeout, TimeUnit unit) throws InterruptedException, SoReadTimeoutException {
@@ -603,15 +639,15 @@ public class NetChannel extends SoAttrChannel<NetChannel> implements SoChannel<N
     }
 
     /**
-     * Prints this pipline status and its backtrace to the System.out.
+     * Print the current pipeline state and its backtrace to System.out.
      */
     public void printStackTrace() {
         printStackTrace(System.out);
     }
 
     /**
-     * Prints this pipline status and its backtrace to the specified print stream.
-     * @param s {@code PrintStream} to use for output
+     * Print the current pipeline state and its backtrace to the specified stream.
+     * @param s {@code PrintStream} used for output
      */
     public void printStackTrace(PrintStream s) {
         SoUtils.printStackTrace(s, this, this.protoStack);

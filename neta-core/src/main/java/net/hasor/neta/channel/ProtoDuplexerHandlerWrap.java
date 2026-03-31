@@ -15,10 +15,13 @@
  */
 package net.hasor.neta.channel;
 /**
- * Adapter that combines two {@link ProtoHandler}s (decoder + encoder) into a single {@link ProtoDuplexer}.
- * <p>Delegates RCV calls to the decoder and SND calls to the encoder.</p>
+ * Internal wrapper that combines one decoder and one encoder into a single duplexer.
+ * <p>When the upper-level API declares a protocol step as an encoder/decoder pair, this wrapper
+ * merges the two unidirectional handlers into one duplexer that can be inserted into the pipeline.</p>
+ * <p>Inbound calls are delegated to the decoder and outbound calls are delegated to the encoder,
+ * so the wrapper behaves externally as one complete bidirectional protocol step.</p>
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2023-10-17
+ * @version : 2024-01-27
  * @see ProtoDuplexer
  */
 class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements ProtoDuplexer<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> {
@@ -30,27 +33,31 @@ class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pr
         this.encoder = encoder;
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.decoder.onInit(name, rcvSize, context);
         this.encoder.onInit(name, sndSize, context);
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         this.decoder.onActive(context);
         this.encoder.onActive(context);
     }
 
+    /** {@inheritDoc} */
     @Override
-    public boolean onUserEvent(ProtoContext context, SoUserEvent event, boolean isRcv) throws Throwable {
+    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (isRcv) {
-            return this.decoder.onUserEvent(context, event);
+            return this.decoder.onEvent(context, event);
         } else {
-            return this.encoder.onUserEvent(context, event);
+            return this.encoder.onEvent(context, event);
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<RCV_UP> rcvUp, ProtoSndQueue<RCV_DOWN> rcvDown, ProtoRcvQueue<SND_UP> sndUp, ProtoSndQueue<SND_DOWN> sndDown) throws Throwable {
         if (isRcv) {
@@ -60,6 +67,7 @@ class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pr
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
@@ -69,6 +77,7 @@ class ProtoDuplexerHandlerWrap<RCV_UP, RCV_DOWN, SND_UP, SND_DOWN> implements Pr
         }
     }
 
+    /** {@inheritDoc} */
     @Override
     public void onClose(ProtoContext context) {
         this.decoder.onClose(context);

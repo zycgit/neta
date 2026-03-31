@@ -33,11 +33,11 @@ import static org.junit.Assert.*;
 public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
     private static final String OUTBOUND_SIZE_FLASH_KEY = "test.outbound.size";
 
-    private static WebSocketHandshakeEvent handshakeEvent(Iterable<SoUserEvent> events) {
+    private static WebSocketHandshakeEvent handshakeEvent(Iterable<SoEvent> events) {
         if (events == null) {
             return null;
         }
-        for (SoUserEvent event : events) {
+        for (SoEvent event : events) {
             if (event != null && event.getData() instanceof WebSocketHandshakeEvent) {
                 return (WebSocketHandshakeEvent) event.getData();
             }
@@ -141,7 +141,7 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
             HttpHeaders headers = (HttpHeaders) outbound.get(1);
             HttpContent content = (HttpContent) outbound.get(2);
             WebSocketContext webSocketContext = webSocketContext(pipe.channel());
-            WebSocketHandshakeEvent handshakeEvent = handshakeEvent(pipe.channelUserEvents());
+            WebSocketHandshakeEvent handshakeEvent = handshakeEvent(pipe.channelEvents());
 
             assertTrue(inbound.isEmpty());
             assertEquals(7, requestStreamId.get());
@@ -479,7 +479,7 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
 
             DefaultFullHttpResponse response = newUpgradeResponse(wsKey);
             List<HttpObject> inbound = receiveAndIntBound(pipe, response);
-            WebSocketHandshakeEvent handshakeEvent = handshakeEvent(pipe.channelUserEvents());
+            WebSocketHandshakeEvent handshakeEvent = handshakeEvent(pipe.channelEvents());
 
             assertTrue(inbound.isEmpty());
             assertTrue(waitUntil(() -> WebSocketUtils.isReady(pipe.channel()), 1000L));

@@ -15,14 +15,13 @@
  */
 package net.hasor.neta.channel;
 /**
- * One-shot adapter that wraps a plain {@link Runnable} as a {@link DefaultSoTask}.
- * <p>The wrapped runnable is invoked exactly once on the first {@link #doWork(int)} call.
- * If it completes normally the task signals {@link DefaultSoTask#finishTask()}; if it throws
- * an {@link Exception} the task signals {@link DefaultSoTask#failedTask(Exception)}. The task
- * never retries regardless of the outcome.
- * <p>This is a convenience class for submitting a one-off action through
- * {@link SoContextService#submitSoTask(DefaultSoTask, Object)} without writing a dedicated
- * {@link DefaultSoTask} subclass.
+ * Adapter that wraps a plain {@link Runnable} as a {@link DefaultSoTask}.
+ * <p>The wrapped runnable is invoked once and only once during the first call to
+ * {@link #doWork(int)}. If it completes normally, the task reports
+ * {@link DefaultSoTask#finishTask()}; if it throws an {@link Exception}, the task reports
+ * {@link DefaultSoTask#failedTask(Exception)}. The task is never retried in either case.</p>
+ * <p>This is a convenience class for submitting one-shot actions through
+ * {@link SoContextService#submitSoTask(DefaultSoTask, Object)}.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-09
  * @see DefaultSoTask
@@ -30,7 +29,7 @@ package net.hasor.neta.channel;
 public class SimpleTask extends DefaultSoTask {
     private final Runnable runnable;
 
-    /** Wraps {@code runnable} as a one-shot event-loop task. */
+    /** Wrap {@code runnable} as a one-shot event-loop task. */
     public SimpleTask(Runnable runnable) {
         this.runnable = runnable;
     }

@@ -19,39 +19,38 @@ import java.util.function.Predicate;
 import net.hasor.cobble.concurrent.future.Future;
 
 /**
- * Common abstraction for all Neta channel types: listening ports ({@link NetListen})
- * and active socket connections ({@link NetChannel}).
- * <p>A channel passes through two phases:
+ * Common abstraction for all Neta channel types, including listening endpoints ({@link NetListen})
+ * and active connections ({@link NetChannel}).
+ * <p>Channels move through two stages:</p>
  * <pre>
  * [Created] ──bind/connect──► [Active] ──close/closeNow──► [Closed]
  * </pre>
- * Query the current phase with {@link #isClose()}.  Listening channels respond to
- * {@link #isListen()}; active connections respond to {@link #isServer()} (server-side
- * accepted) and {@link #isClient()} (client-side initiated).
+ * <p>The current stage can be checked through {@link #isClose()}. Listening channels are
+ * identified by {@link #isListen()}, while active connections are distinguished by
+ * {@link #isServer()} for server-accepted channels and {@link #isClient()} for client-initiated
+ * ones.</p>
  * <h3>Attributes</h3>
- * Every channel carries a thread-safe key-value map (see {@link #setAttribute} /
- * {@link #getAttribute}) for attaching arbitrary application data that persists
- * for the lifetime of the channel.
- * <h3>Message bus</h3>
- * The {@code subscribe} family of methods lets callers observe decoded pipeline events
- * ({@link PlayLoad}) without modifying the handler chain. Subscriptions are scoped to
- * this channel and are automatically removed when the channel closes.
- * <p>Payload objects remain owned by the pipeline/transport that emitted them. Listeners
- * should therefore treat {@link PlayLoad#getData()} as a transient observation unless the
- * concrete payload type states otherwise. In particular, virtual-channel outbound events may
- * expose the same {@code ByteBuf} instance that is still owned by the current send operation;
- * if a listener needs to access that buffer after the callback returns, it must retain or copy
- * the buffer inside the callback.
- * <h3>Closing</h3>
+ * Each channel carries a thread-safe key/value map, see {@link #setAttribute} and
+ * {@link #getAttribute}, for arbitrary application data that remains valid for the lifetime of the
+ * channel.
+ * <h3>Event Bus</h3>
+ * The {@code subscribe} methods let callers observe decoded pipeline events ({@link PlayLoad})
+ * without modifying the handler chain. The subscription scope is limited to the current channel and
+ * is removed automatically when the channel closes.
+ * <p>Payload objects remain owned by the pipeline or transport that produced them. Unless the
+ * concrete payload type states otherwise, listeners should treat {@link PlayLoad#getData()} as a
+ * one-shot observation. In particular, outbound events from virtual channels may expose the same
+ * {@code ByteBuf} instance still owned by the current send operation. If a listener needs to keep
+ * using that buffer after the callback returns, it must retain or copy it inside the callback.</p>
+ * <h3>Close</h3>
  * <ul>
- *   <li>{@link #close()} – graceful: flushes the outbound queue, then closes.</li>
- *   <li>{@link #closeNow()} – immediate: discards the outbound queue and closes at once.</li>
+ *   <li>{@link #close()}: graceful close, flush the send queue first and then close.</li>
+ *   <li>{@link #closeNow()}: immediate close, discard the send queue and close right away.</li>
  * </ul>
- * <h3>Thread safety</h3>
- * Implementations guarantee that all methods on this interface are safe to call from
- * any thread. Individual operations may still have ordering caveats; see the specific
- * implementation Javadoc for details.
- * @param <T> the result type of the {@link #close()} future
+ * <h3>Thread Safety</h3>
+ * Implementations guarantee that all methods on this interface are safe to call from any thread.
+ * Specific operations may still have ordering constraints; see the Javadoc of concrete implementations.
+ * @param <T> result type of the Future returned by {@link #close()}
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see NetChannel
@@ -59,99 +58,99 @@ import net.hasor.cobble.concurrent.future.Future;
  * @see PlayLoad
  */
 public interface SoChannel<T> {
-    /** Returns the unique channel ID. */
+    /** Return the globally unique channel ID. */
     long getChannelId();
 
-    /** Returns the creation or accept time. */
+    /** Return the creation time or the time when the channel was accepted. */
     long getCreatedTime();
 
-    /** Returns the last send or receive time. */
+    /** Return the time of the most recent send or receive activity. */
     long getLastActiveTime();
 
-    /** Returns true if this channel is a {@link NetListen} channel. */
+    /** Return true if this channel is a {@link NetListen}. */
     boolean isListen();
 
-    /** Returns true if this channel is a server-side accepted {@link NetChannel}. */
+    /** Return true when this channel plays the server-side role. */
     boolean isServer();
 
-    /** Returns true if this channel is a client-side accepted {@link NetChannel}. */
+    /** Return true when this channel plays the client-side role. */
     boolean isClient();
 
-    /** Returns the local address. */
+    /** Return the local address. */
     SocketAddress getLocalAddr();
 
-    /** Returns the remote address. */
+    /** Return the remote address. */
     SocketAddress getRemoteAddr();
 
-    /** Returns the channel context. */
+    /** Return the channel context. */
     SoContext getContext();
 
-    /** Returns the channel configuration. */
+    /** Return the channel configuration. */
     SoConfig getConfig();
 
     /**
-     * close this channel.
+     * Gracefully close the current channel.
      * <ul>
-     *   <li>If the channel is a listening channel, it will stop listening.</li>
-     *   <li>If the channel is a socket channel, it will close after all data is written.</li>
+     *   <li>If this is a listening channel, stop listening.</li>
+     *   <li>If this is a socket channel, close it only after all pending data has been written.</li>
      * </ul>
-     * The {@link #closeNow()} and {@link #close()} methods are only effective if called first.
-     * @return a Future representing the close operation
+     * Only the first call to either {@link #closeNow()} or {@link #close()} takes effect.
+     * @return Future representing the close operation
      */
     Future<T> close();
 
-    /** Closes this channel immediately. */
+    /** Close the current channel immediately. */
     void closeNow();
 
-    /** Registers a listener to be notified when this channel is closed. */
+    /** Register a listener to be notified when the channel closes. */
     void onClose(SoChannelListener<SoChannel<?>> listener);
 
-    /** Returns true when this channel is closed. */
+    /** Return true if the current channel is already closed. */
     boolean isClose();
 
-    /** Sets a channel attribute. */
+    /** Set a channel attribute. */
     void setAttribute(String key, Object value);
 
-    /** Returns a channel attribute by key. */
+    /** Return a channel attribute by key. */
     Object getAttribute(String key);
 
-    /** Finds a context attachment by type. */
+    /** Find a context attachment by type. */
     <V> V findProtoContext(Class<V> serviceType);
 
     /**
-     * Subscribes to events emitted by this channel.
-     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
-     * need to hold a reference-counted payload after the callback returns should retain or copy it
-     * before returning.
+     * Subscribe to events emitted by the current channel.
+     * <p>Ownership of emitted {@link PlayLoad} data remains with the channel pipeline. If a
+     * listener needs to keep a reference-counted payload after the callback returns, it should
+     * retain or copy it before returning.</p>
      */
     SubscribeHolder subscribe(PlayLoadListener listener);
 
     /**
-     * Subscribes to channel events with the given delivery mode.
-     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
-     * need to hold a reference-counted payload after the callback returns should retain or copy it
-     * before returning.
+     * Subscribe to current-channel events using the specified delivery mode.
+     * <p>Ownership of emitted {@link PlayLoad} data remains with the channel pipeline. If a
+     * listener needs to keep a reference-counted payload after the callback returns, it should
+     * retain or copy it before returning.</p>
      */
     SubscribeHolder subscribe(SubscribeMode mode, PlayLoadListener listener);
 
     /**
-     * Subscribes to messages belonging to this channel and filters events using the provided predicate.
-     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
-     * need to hold a reference-counted payload after the callback returns should retain or copy it
-     * before returning.
-     * @param select predicate to filter events
-     * @param listener listener to handle filtered events
+     * Subscribe to messages belonging to the current channel using the given predicate to filter events.
+     * <p>Ownership of emitted {@link PlayLoad} data remains with the channel pipeline. If a
+     * listener needs to keep a reference-counted payload after the callback returns, it should
+     * retain or copy it before returning.</p>
+     * @param select event filter predicate
+     * @param listener listener that handles filtered events
      */
     SubscribeHolder subscribe(Predicate<PlayLoad> select, PlayLoadListener listener);
 
     /**
-     * Subscribes to messages belonging to this channel with the specified filter and delivery mode.
-     * <p>The emitted {@link PlayLoad} data remains owned by the channel pipeline. Listeners that
-     * need to hold a reference-counted payload after the callback returns should retain or copy it
-     * before returning.
-     * @param select predicate to filter events
+     * Subscribe to messages belonging to the current channel using both a filter and a delivery mode.
+     * <p>Ownership of emitted {@link PlayLoad} data remains with the channel pipeline. If a
+     * listener needs to keep a reference-counted payload after the callback returns, it should
+     * retain or copy it before returning.</p>
+     * @param select event filter predicate
      * @param mode delivery mode
-     * @param listener listener to handle filtered events
+     * @param listener listener that handles filtered events
      */
     SubscribeHolder subscribe(Predicate<PlayLoad> select, SubscribeMode mode, PlayLoadListener listener);
 }

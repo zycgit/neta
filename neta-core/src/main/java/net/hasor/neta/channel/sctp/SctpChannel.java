@@ -18,8 +18,9 @@ import java.io.IOException;
 import net.hasor.neta.channel.*;
 
 /**
- * SCTP channel implementation that binds to the application-layer protocol stack.
- * Wraps a {@link SctpAsyncChannel} and manages the SCTP notification handler.
+ * SCTP channel implementation bound to the application-level protocol pipeline.
+ * <p>This class wraps {@link SctpAsyncChannel} and manages the handler used for SCTP protocol
+ * notifications.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  */

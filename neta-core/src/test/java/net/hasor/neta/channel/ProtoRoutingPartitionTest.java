@@ -27,13 +27,10 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test
     public void partitionPipelineShouldIsolateStateAndExposeLifecycleControl() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
-        ManagedPartitionChannel managed = openChannel(1, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                })
-                .nextEncoder("pass-through", new PassThroughEncoder())
-                .build());
+        ManagedPartitionChannel managed = openChannel(1, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
 
         try {
             List<PartitionMessage> outbound = subscribeOutbound(managed.channel);
@@ -68,13 +65,10 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test
     public void partitionPipelineShouldFreezeNewCreationAndResumeLater() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
-        ManagedPartitionChannel managed = openChannel(2, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                })
-                .nextEncoder("pass-through", new PassThroughEncoder())
-                .build());
+        ManagedPartitionChannel managed = openChannel(2, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
 
         try {
             List<PartitionMessage> outbound = subscribeOutbound(managed.channel);
@@ -105,15 +99,13 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     public void partitionPipelineShouldIgnoreUnmatchedMessagesAndOnlyCallPolicyOnFirstCreation() throws Throwable {
         final int[] policyCalls = { 0 };
         final int[] branchCalls = { 0 };
-        ManagedPartitionChannel managed = openChannel(3, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
-                    partition.policy((context, control, triggerKind, partitionKey, trigger) -> {
-                        policyCalls[0]++;
-                        return ProtoPartitionPolicy.ReceivePolicy.Accept;
-                    });
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("counter", new CountingHandler(branchCalls)));
-                })
-                .build());
+        ManagedPartitionChannel managed = openChannel(3, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            partition.policy((context, control, triggerKind, partitionKey, trigger) -> {
+                policyCalls[0]++;
+                return ProtoPartitionPolicy.ReceivePolicy.Accept;
+            });
+            partition.byInitializer(ctx -> ctx.addLastDecoder("counter", new CountingHandler(branchCalls)));
+        }).build());
 
         try {
             managed.channel.receiveData(new PartitionMessage(0, "IGNORED", false));
@@ -142,7 +134,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         duplexer.onInit("partition", 1, 1, context);
         duplexer.onMessage(context, true, rcvUp, new ProtoQueue<PartitionMessage>(1), ProtoQueue.emptyRcv(), new ProtoQueue<PartitionMessage>(1));
 
-        boolean result = duplexer.onUserEvent(context, SoUserEventObject.of(null, Integer.class, 1), true);
+        boolean result = duplexer.onEvent(context, SoEventObject.of(null, Integer.class, 1), true);
         Assert.assertFalse(result);
     }
 
@@ -196,19 +188,16 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test
     public void partitionPipelineShouldRouteEventsAndAllowEventDrivenClose() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
-        ManagedPartitionChannel managed = openChannel(6, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new EventClosingCollectHandler(controlRef)));
-                })
-                .nextEncoder("pass-through", new PassThroughEncoder())
-                .build());
+        ManagedPartitionChannel managed = openChannel(6, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new EventClosingCollectHandler(controlRef)));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
 
         try {
             List<PartitionMessage> outbound = subscribeOutbound(managed.channel);
 
             managed.channel.receiveData(new PartitionMessage(1, "A", false));
-            managed.channel.fireUserEvent(Integer.class, 1);
+            managed.channel.fireEvent(Integer.class, 1);
             managed.channel.receiveData(new PartitionMessage(1, "B", true));
 
             Assert.assertEquals(1, outbound.size());
@@ -257,17 +246,14 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test
     public void partitionPipelineShouldIgnoreNewPartitionEventWhileCreationFrozen() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
-        ManagedPartitionChannel managed = openChannel(9, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                })
-                .nextEncoder("pass-through", new PassThroughEncoder())
-                .build());
+        ManagedPartitionChannel managed = openChannel(9, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
 
         try {
             controlRef[0].lockCreation();
-            managed.channel.fireUserEvent(Integer.class, 3);
+            managed.channel.fireEvent(Integer.class, 3);
             Assert.assertEquals(0, controlRef[0].partitionSize());
         } finally {
             managed.close();
@@ -294,7 +280,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
     private static class ManagedPartitionChannel {
         private final NetManager manager;
-        private final VrtChannel  channel;
+        private final VrtChannel channel;
 
         private ManagedPartitionChannel(NetManager manager, VrtChannel channel) {
             this.manager = manager;
@@ -311,7 +297,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         public PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data) {
             switch (kind) {
                 case Event:
-                    Object eventData = ((SoUserEvent) data).getData();
+                    Object eventData = ((SoEvent) data).getData();
                     if (!(eventData instanceof Number)) {
                         return null;
                     }
@@ -353,7 +339,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         }
 
         @Override
-        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        public boolean onEvent(ProtoContext context, SoEvent event) {
             Object eventData = event.getData();
             if (!(eventData instanceof Integer) || this.controlRef[0] == null) {
                 return true;
@@ -380,7 +366,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         }
 
         @Override
-        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        public boolean onEvent(ProtoContext context, SoEvent event) {
             return false;
         }
     }

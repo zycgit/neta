@@ -32,30 +32,29 @@ import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.channel.*;
 
 /**
- * Async-channel adapter around one JDK {@link com.sun.nio.sctp.SctpChannel}.
- * <p>This class is used in two modes:
+ * Asynchronous channel adapter built on top of JDK {@link com.sun.nio.sctp.SctpChannel}.
+ * <p>This class has two operating modes:
  * <ul>
- *   <li><b>client mode</b>: created by {@link SctpProvider} with
- *       {@code localAddress == null}; it owns a private {@link Selector} and runs
- *       its own connect/read loop;</li>
- *   <li><b>accepted-server mode</b>: created by {@link SctpAsyncServerChannel}; it
- *       wraps the accepted SCTP socket but relies on the server's selector loop
- *       for inbound reads.</li>
+ *   <li><b>Client mode</b>: created by {@link SctpProvider} with {@code localAddress == null}.
+ *       In this mode the instance owns a dedicated {@link Selector} and drives its own
+ *       connect and receive loop.</li>
+ *   <li><b>Accepted server mode</b>: created by {@link SctpAsyncServerChannel} to wrap an
+ *       accepted SCTP socket. Inbound reads are driven by the server-side selector loop.</li>
  * </ul>
  * <p><b>Execution model:</b>
  * <pre>
- *   client mode:
+ *   Client mode:
  *     connectTo()
  *        --> selector(OP_CONNECT / OP_READ)
- *        --> receive MessageInfo + payload
+ *        --> receive MessageInfo and payload
  *        --> wrap as SctpMessage
  *        --> notifyRcvChannelData(...)
- *   outbound path (both modes):
+ *   Outbound path (shared by both modes):
  *     SoSndContext --> SctpWriteTask --> SctpChannel.send(...)
  * </pre>
- * <p>The implementation preserves SCTP's message-oriented semantics by reading
- * each received message together with its {@link MessageInfo} metadata and by
- * forwarding writes through {@link SctpWriteTask} instead of exposing a byte-stream API.
+ * <p>The implementation preserves SCTP message semantics: every receive operation carries
+ * {@link MessageInfo} metadata together with the payload, and all sends are performed through
+ * {@link SctpWriteTask} instead of exposing a stream-style API.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SctpAsyncServerChannel
@@ -86,6 +85,8 @@ class SctpAsyncChannel implements AsyncChannel {
         this.soConfig = soConfig;
         this.writing = new AtomicBoolean(false);
 
+        SctpSoConfigUtils.configSocket(this.soConfig, this.channel);
+
         if (this.localAddress == null) {
             this.selector = Selector.open();
             this.bufAllocator = this.context.getByteBufAllocator();
@@ -97,33 +98,57 @@ class SctpAsyncChannel implements AsyncChannel {
         }
     }
 
+    /**
+     * Return the SCTP configuration used by the current channel.
+     * @return the SCTP configuration object
+     */
     @Override
     public SctpSoConfig getSoConfig() {
         return this.soConfig;
     }
 
+    /**
+     * Return the internal channel identifier assigned by the framework.
+     * @return the channel ID
+     */
     @Override
     public long getChannelId() {
         return this.channelId;
     }
 
+    /**
+     * Return the local bound address.
+     * <p>In client mode this value is usually null until the underlying connection has been
+     * established and the actual local address is managed by the JDK.
+     * @return the local address
+     */
     @Override
     public SocketAddress getLocalAddress() {
         return this.localAddress;
     }
 
+    /**
+     * Return the remote address.
+     * @return the remote address
+     */
     @Override
     public SocketAddress getRemoteAddress() {
         return this.remoteAddress;
     }
 
-    //
-
+    /**
+     * Determine whether the underlying SCTP channel is still open.
+     * @return true if the channel is open
+     */
     @Override
     public boolean isOpen() {
         return this.channel.isOpen();
     }
 
+    /**
+     * Close the underlying channel together with its selector and receive-buffer resources.
+     * @throws IOException if an I/O error occurs while closing
+     */
     @Override
     public void close() throws IOException {
         this.channel.close();
@@ -135,6 +160,14 @@ class SctpAsyncChannel implements AsyncChannel {
         }
     }
 
+    /**
+     * Initiate a connection to the remote endpoint and create the framework-level {@link NetChannel}
+     * after the connection succeeds.
+     * <p>This method is only valid in client mode. It throws an exception if the current instance
+     * wraps a server-accepted channel.
+     * @param initializer the protocol initializer
+     * @param future the future that receives the connection result
+     */
     @Override
     public void connectTo(ProtoInitializer initializer, Future<NetChannel> future) {
         if (this.selector == null) {
@@ -212,6 +245,7 @@ class SctpAsyncChannel implements AsyncChannel {
                     }
                 }
             }
+
             startReceiveLoop();
         } catch (Throwable e) {
             SoRcvException ee;
@@ -269,6 +303,13 @@ class SctpAsyncChannel implements AsyncChannel {
         this.context.notifyRcvChannelData(socket.getChannelId(), message);
     }
 
+    /**
+     * Trigger an asynchronous send cycle.
+     * <p>When the send context is not empty and no write task is currently running, a new
+     * {@link SctpWriteTask} is submitted.
+     * @param channel the associated framework channel
+     * @param wContext the send context
+     */
     @Override
     public void write(NetChannel channel, SoSndContext wContext) {
         if (wContext.isEmpty()) {

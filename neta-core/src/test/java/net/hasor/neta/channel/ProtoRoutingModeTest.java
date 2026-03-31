@@ -285,7 +285,7 @@ public class ProtoRoutingModeTest {
         }
 
         @Override
-        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        public boolean onEvent(ProtoContext context, SoEvent event) {
             if (event.getEventType() == ProtoRouteEvent.class) {
                 ProtoRouteEvent changedEvent = (ProtoRouteEvent) event.getData();
                 this.routeEvents.add(changedEvent.getFromRoute() + "->" + changedEvent.getToRoute());
@@ -316,7 +316,7 @@ public class ProtoRoutingModeTest {
         }
 
         @Override
-        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        public boolean onEvent(ProtoContext context, SoEvent event) {
             if (event.getEventType() == ProtoRouteEvent.class) {
                 ProtoRouteEvent changedEvent = (ProtoRouteEvent) event.getData();
                 this.routeEvents.add(changedEvent.getFromRoute() + "->" + changedEvent.getToRoute());
@@ -347,7 +347,7 @@ public class ProtoRoutingModeTest {
         }
 
         @Override
-        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        public boolean onEvent(ProtoContext context, SoEvent event) {
             if (event.getEventType() == ProtoRouteEvent.class) {
                 ProtoRouteEvent changedEvent = (ProtoRouteEvent) event.getData();
                 this.routeEvents.add(changedEvent.getFromRoute() + "->" + changedEvent.getToRoute());
@@ -389,7 +389,7 @@ public class ProtoRoutingModeTest {
         }
 
         @Override
-        public boolean onUserEvent(ProtoContext context, SoUserEvent event) {
+        public boolean onEvent(ProtoContext context, SoEvent event) {
             if (event.getEventType() == ProtoRouteEvent.class) {
                 ProtoRouteEvent changedEvent = (ProtoRouteEvent) event.getData();
                 this.routeEvents.add(changedEvent.getFromRoute() + "->" + changedEvent.getToRoute());

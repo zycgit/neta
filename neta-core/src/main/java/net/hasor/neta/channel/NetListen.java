@@ -24,12 +24,13 @@ import net.hasor.cobble.concurrent.future.Future;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * A listening socket that accepts incoming connections and binds each to a new protocol stack.
- * Supports suspend/resume to temporarily stop accepting, and wait APIs for accept/idle events.
+ * Listening socket that accepts inbound connections and binds a new protocol stack to each one.
+ * Supports suspend/resume to temporarily stop accepting new connections and provides APIs for
+ * waiting on accept and idle events.
  * <pre>
- *  bind(addr) ──► NetListen ──onAccept──► NetChannel(1)
- *                          └──onAccept──► NetChannel(2)
- *                          └──onAccept──► NetChannel(n)
+ *  bind(addr) ──► NetListen ── onAccept ──► NetChannel(1)
+ *                           └──onAccept ──► NetChannel(2)
+ *                           └──onAccept ──► NetChannel(n)
  * </pre>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
@@ -92,12 +93,12 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
         return this.lastActiveTime;
     }
 
-    /** The last time for accepted channel. */
+    /** Return the time when the most recent channel was accepted. */
     public long getLastAcceptTime() {
         return this.lastAcceptTime;
     }
 
-    /** get channel Count */
+    /** Return the current number of accepted channels. */
     public long getChannelCount() {
         return this.acceptCount.get();
     }
@@ -138,8 +139,8 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     }
 
     /**
-     * Search for NetChannel by id,
-     * return null if NetChannel is not from this NetListen
+     * Find a NetChannel by ID.
+     * Returns null if the channel does not belong to the current NetListen.
      */
     public NetChannel findChannel(long channelID) {
         SoChannel<?> channel = this.context.findChannel(channelID);
@@ -156,16 +157,16 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     }
 
     /**
-     * Returns the listener current suspend status.
-     * <p>all new accept socket will be closed when suspend = true.</p>
+     * Return whether the listener is currently suspended.
+     * <p>When suspend is true, all newly accepted sockets are closed immediately.</p>
      */
     public boolean isSuspend() {
         return this.suspend;
     }
 
     /**
-     * set suspend is true
-     * <p>all new accept socket will be closed when suspend = true.</p>
+     * Set suspend to true.
+     * <p>When suspend is true, all newly accepted sockets are closed immediately.</p>
      */
     public NetListen suspend() {
         this.suspend = true;
@@ -173,8 +174,8 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     }
 
     /**
-     * set suspend is false
-     * <p>all new accept socket will be closed when suspend = true.</p>
+     * Set suspend to false.
+     * <p>When suspend is true, all newly accepted sockets are closed immediately.</p>
      */
     public NetListen resume() {
         this.suspend = false;
@@ -182,13 +183,13 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
     }
 
     /**
-     * return this listener bind socket port.
+     * Return the port bound by this listener.
      */
     public int getListenPort() {
         return this.listenPort;
     }
 
-    /** return Application layer network protocol stack to use */
+    /** Return the application-layer protocol stack used by this listener. */
     public ProtoInitializer getInitializer() {
         return this.initializer;
     }
@@ -230,16 +231,14 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
         this.closeFuture.onCompleted(f -> listener.onEvent(this));
     }
 
-    /** Registers a listener to be notified when a new channel is accepted. */
+    /** Register a listener to be notified when a new channel is accepted. */
     public void onAccept(SoChannelListener<SoChannel<?>> listener) {
         if (listener != null) {
             this.onAcceptListeners.add(listener);
         }
     }
 
-    /**
-     * a new accept socket
-     */
+    /** Handle a newly accepted socket. */
     protected final void notifyAccept(NetChannel channel) {
         if (channel.getListen() == this) {
             this.lastActiveTime = System.currentTimeMillis();
@@ -260,9 +259,7 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
         }
     }
 
-    /**
-     * socket closed
-     */
+    /** Handle a channel close event. */
     final void notifyClose(NetChannel channel) {
         if (channel.getListen() == this) {
             this.lastActiveTime = System.currentTimeMillis();
@@ -280,7 +277,7 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
         }
     }
 
-    /** Wait for an incoming. */
+    /** Wait until at least one connection has been accepted. */
     public void waitAnyAccept() throws InterruptedException {
         synchronized (this.acceptLock) {
             if (this.acceptCount.get() > 0) {
@@ -290,14 +287,14 @@ public abstract class NetListen extends SoAttrChannel<NetListen> {
         }
     }
 
-    /** Wait for an new incoming. */
+    /** Wait until the next new connection is accepted. */
     public void waitAnyNewAccept() throws InterruptedException {
         synchronized (this.acceptLock) {
             this.acceptLock.wait();
         }
     }
 
-    /** Wait for all disconnection. */
+    /** Wait until all accepted connections have closed. */
     public void waitIdle() throws InterruptedException {
         while (true) {
             if (this.acceptCount.get() <= 0) {

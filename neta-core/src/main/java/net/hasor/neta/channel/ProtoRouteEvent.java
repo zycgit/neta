@@ -17,8 +17,9 @@ package net.hasor.neta.channel;
 import java.util.Objects;
 
 /**
- * User event fired instead of re-triggering {@link ProtoDuplexer#onActive(ProtoContext)}
- * when a route switches back to a branch that has already been activated before.
+ * Route-switch event fired when {@link ProtoRoutingDuplexer} changes the active route.
+ * <p>This event only describes the route-switch result. It does not carry branch activation
+ * lifecycle responsibilities.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-08
  */
@@ -26,15 +27,22 @@ public class ProtoRouteEvent {
     private final String fromRoute;
     private final String toRoute;
 
+    /**
+     * Create a route-switch event.
+     * @param fromRoute branch name before the switch; may be {@code null} when a branch is selected for the first time
+     * @param toRoute branch name after the switch
+     */
     public ProtoRouteEvent(String fromRoute, String toRoute) {
         this.fromRoute = fromRoute;
         this.toRoute = Objects.requireNonNull(toRoute, "toRoute is null.");
     }
 
+    /** Return the branch name before the switch. */
     public String getFromRoute() {
         return fromRoute;
     }
 
+    /** Return the branch name after the switch. */
     public String getToRoute() {
         return toRoute;
     }

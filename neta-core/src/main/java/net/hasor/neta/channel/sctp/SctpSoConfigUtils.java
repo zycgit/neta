@@ -21,36 +21,22 @@ import java.util.Set;
 import com.sun.nio.sctp.SctpChannel;
 import com.sun.nio.sctp.SctpServerChannel;
 import com.sun.nio.sctp.SctpSocketOption;
+import com.sun.nio.sctp.SctpStandardSocketOptions;
 import com.sun.nio.sctp.SctpStandardSocketOptions.InitMaxStreams;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Package-local SCTP utility methods and option discovery cache.
- * <p>At class-load time this helper probes which JDK SCTP socket options are
- * available on the current platform and stores references to them. In the current
- * codebase, the only behavior actively used at runtime is
- * {@link #getRcvPacketSize(SctpSoConfig)} plus a placeholder
- * {@link #configListen(SctpSoConfig, SctpServerChannel)} entry point.
- * <p>That means this class is primarily an environment-capability cache today,
- * not a full socket-option applicator yet.
+ * Helper utilities for SCTP configuration.
+ * <p>Responsible for detecting the SCTP socket options supported by the current platform and for
+ * applying the usable settings from {@link SctpSoConfig} to the underlying channels.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see SctpSoConfig
  */
 class SctpSoConfigUtils {
-    private static final Logger logger = Logger.getLogger(SctpSoConfigUtils.class);
-
-    //SCTP_DISABLE_FRAGMENTS        Enables or disables message fragmentation
-    //SCTP_EXPLICIT_COMPLETE        Enables or disables explicit message completion
-    //SCTP_FRAGMENT_INTERLEAVE      Controls how the presentation of messages occur for the message receiver
-    //SCTP_INIT_MAXSTREAMS          The maximum number of streams requested by the local endpoint during association initialization
-    //SCTP_NODELAY                  Enables or disable a Nagle-like algorithm
-    //SCTP_PRIMARY_ADDR             Requests that the local SCTP stack use the given peer address as the association primary
-    //SCTP_SET_PEER_PRIMARY_ADDR    Requests that the peer mark the enclosed address as the association primary
-    //SO_SNDBUF                     The size of the socket send buffer
-    //SO_RCVBUF                     The size of the socket receive buffer
-    //SO_LINGER                     Linger on close if data is present (when configured in blocking mode only)
-
+    private static final Logger                           logger    = Logger.getLogger(SctpSoConfigUtils.class);
+    private static final SctpSocketOption<Integer>        SO_SNDBUF = SctpStandardSocketOptions.SO_SNDBUF;
+    private static final SctpSocketOption<Integer>        SO_RCVBUF = SctpStandardSocketOptions.SO_RCVBUF;
     private static final SctpSocketOption<Boolean>        SCTP_DISABLE_FRAGMENTS;
     private static final SctpSocketOption<Boolean>        SCTP_EXPLICIT_COMPLETE;
     private static final SctpSocketOption<Integer>        SCTP_FRAGMENT_INTERLEAVE;
@@ -58,6 +44,10 @@ class SctpSoConfigUtils {
     private static final SctpSocketOption<Boolean>        SCTP_NODELAY;
     private static final SctpSocketOption<SocketAddress>  SCTP_PRIMARY_ADDR;
     private static final SctpSocketOption<SocketAddress>  SCTP_SET_PEER_PRIMARY_ADDR;
+    private static final SctpSocketOption<Boolean>        SO_KEEPALIVE;
+    private static final SctpSocketOption<Integer>        TCP_KEEPIDLE;
+    private static final SctpSocketOption<Integer>        TCP_KEEPINTERVAL;
+    private static final SctpSocketOption<Integer>        TCP_KEEPCOUNT;
 
     static {
         SctpSocketOption<Boolean> sctpDisableFragments = null;
@@ -67,6 +57,10 @@ class SctpSoConfigUtils {
         SctpSocketOption<Boolean> sctpNoDelay = null;
         SctpSocketOption<SocketAddress> sctpPrimaryAddr = null;
         SctpSocketOption<SocketAddress> sctpSetPeerPrimaryAddr = null;
+        SctpSocketOption<Boolean> soKeepAlive = null;
+        SctpSocketOption<Integer> tcpKeepIdle = null;
+        SctpSocketOption<Integer> tcpKeepInterval = null;
+        SctpSocketOption<Integer> tcpKeepCount = null;
 
         try (SctpChannel c = SctpChannel.open()) {
             Set<SctpSocketOption<?>> options = c.supportedOptions();
@@ -85,9 +79,17 @@ class SctpSoConfigUtils {
                     sctpPrimaryAddr = (SctpSocketOption<SocketAddress>) opt;
                 } else if (opt.name().equals("SCTP_SET_PEER_PRIMARY_ADDR")) {
                     sctpSetPeerPrimaryAddr = (SctpSocketOption<SocketAddress>) opt;
+                } else if (opt.name().equals("SO_KEEPALIVE")) {
+                    soKeepAlive = (SctpSocketOption<Boolean>) opt;
+                } else if (opt.name().equals("TCP_KEEPIDLE")) {
+                    tcpKeepIdle = (SctpSocketOption<Integer>) opt;
+                } else if (opt.name().equals("TCP_KEEPINTERVAL")) {
+                    tcpKeepInterval = (SctpSocketOption<Integer>) opt;
+                } else if (opt.name().equals("TCP_KEEPCOUNT")) {
+                    tcpKeepCount = (SctpSocketOption<Integer>) opt;
                 }
             }
-        } catch (IOException e) {
+        } catch (Throwable e) {
             logger.warn("your jdk does not support SCTP options, " + e.getMessage());
         } finally {
             SCTP_DISABLE_FRAGMENTS = sctpDisableFragments;
@@ -97,12 +99,82 @@ class SctpSoConfigUtils {
             SCTP_NODELAY = sctpNoDelay;
             SCTP_PRIMARY_ADDR = sctpPrimaryAddr;
             SCTP_SET_PEER_PRIMARY_ADDR = sctpSetPeerPrimaryAddr;
+            SO_KEEPALIVE = soKeepAlive;
+            TCP_KEEPIDLE = tcpKeepIdle;
+            TCP_KEEPINTERVAL = tcpKeepInterval;
+            TCP_KEEPCOUNT = tcpKeepCount;
         }
     }
 
-    public static void configListen(SctpSoConfig config, SctpServerChannel channel) throws IOException {
+    private static <T> void setOption(SctpServerChannel channel, SctpSocketOption<T> option, T value, String optionName) throws IOException {
+        if (option == null || value == null) {
+            return;
+        }
+        try {
+            channel.setOption(option, value);
+        } catch (UnsupportedOperationException e) {
+            logger.warn("the platform does not support " + optionName);
+        }
     }
 
+    private static <T> void setOption(SctpChannel channel, SctpSocketOption<T> option, T value, String optionName) throws IOException {
+        if (option == null || value == null) {
+            return;
+        }
+        try {
+            channel.setOption(option, value);
+        } catch (UnsupportedOperationException e) {
+            logger.warn("the platform does not support " + optionName);
+        }
+    }
+
+    private static void configRcvSnd(SctpSoConfig config, SctpServerChannel channel) throws IOException {
+        setOption(channel, SO_RCVBUF, config.getSoRcvBuf(), "SO_RCVBUF");
+        setOption(channel, SO_SNDBUF, config.getSoSndBuf(), "SO_SNDBUF");
+    }
+
+    private static void configRcvSnd(SctpSoConfig config, SctpChannel channel) throws IOException {
+        setOption(channel, SO_RCVBUF, config.getSoRcvBuf(), "SO_RCVBUF");
+        setOption(channel, SO_SNDBUF, config.getSoSndBuf(), "SO_SNDBUF");
+    }
+
+    /**
+     * Apply SCTP-related configuration to a listening channel.
+     * <p>The listen phase applies the common send and receive buffer settings.
+     * @param config the SCTP configuration
+     * @param channel the SCTP server channel
+     * @throws IOException if an I/O error occurs while applying the configuration
+     */
+    public static void configListen(SctpSoConfig config, SctpServerChannel channel) throws IOException {
+        configRcvSnd(config, channel);
+    }
+
+    /**
+     * Apply configuration to a connected or accepted SCTP socket.
+     * @param config the SCTP configuration
+     * @param channel the SCTP channel
+     * @throws IOException if an I/O error occurs while applying the configuration
+     */
+    public static void configSocket(SctpSoConfig config, SctpChannel channel) throws IOException {
+        configRcvSnd(config, channel);
+
+        if (config.getSoKeepAlive() != null) {
+            setOption(channel, SO_KEEPALIVE, config.getSoKeepAlive(), "SO_KEEPALIVE");
+        }
+        if (Boolean.TRUE.equals(config.getSoKeepAlive())) {
+            setOption(channel, TCP_KEEPIDLE, config.getSoKeepIdleSec(), "TCP_KEEPIDLE");
+            setOption(channel, TCP_KEEPINTERVAL, config.getSoKeepIntervalSec(), "TCP_KEEPINTERVAL");
+            setOption(channel, TCP_KEEPCOUNT, config.getSoKeepCount(), "TCP_KEEPCOUNT");
+        }
+    }
+
+    /**
+     * Calculate the buffer size used for receiving a single packet.
+     * <p>When both the underlying receive buffer and the swap buffer are configured, the smaller
+     * value is used. When only one of them is configured, that value is used directly.
+     * @param config the SCTP configuration
+     * @return the receive buffer size for a single packet
+     */
     public static int getRcvPacketSize(SctpSoConfig config) {
         // rcv buffer size
         Integer rcvBufSize = config.getSoRcvBuf();
@@ -114,5 +186,14 @@ class SctpSoConfigUtils {
         }
 
         return Objects.requireNonNull(rcvPacketSize, "Both rcvPacketSize and rcvBufSize are missing. At least one of them must be set.");
+    }
+
+    /**
+     * Return the initial size of the send swap buffer.
+     * @param config the SCTP configuration
+     * @return the send swap buffer size
+     */
+    public static int getSndPacketSize(SctpSoConfig config) {
+        return Math.max(1, config.getSwapSndBuf());
     }
 }

@@ -22,27 +22,7 @@ import java.util.Objects;
 import net.hasor.cobble.logging.Logger;
 
 /**
- * Applies {@link UdpSoConfig} options to {@link java.nio.channels.DatagramChannel}
- * instances and resolves the effective receive packet size.
- * <p><b>Socket options configured:</b>
- * <ul>
- *   <li>{@code SO_RCVBUF} / {@code SO_SNDBUF}: set when the corresponding field in
- *       {@link UdpSoConfig} is non-null.  Silently skipped on platforms that reject
- *       the option ({@code UnsupportedOperationException}).</li>
- *   <li>{@code SO_REUSEADDR}: always set to {@code true} on the server socket to
- *       allow the same port to be reused after restart or unclean shutdown.</li>
- * </ul>
- * <p><b>Receive packet size resolution ({@link #getRcvPacketSize}):</b>
- * The method returns the effective maximum datagram size as:
- * <ol>
- *   <li>If both {@code soRcvBuf} and {@code rcvPacketSize} are set: {@code min} of both.</li>
- *   <li>If only {@code rcvPacketSize} is set: use it directly.</li>
- *   <li>If only {@code soRcvBuf} is set: use it as a fallback.</li>
- *   <li>If neither is set: throws {@link NullPointerException} to force the
- *       caller to provide at least one of them.</li>
- * </ol>
- * This value is used as the capacity of the per-channel receive {@link java.nio.ByteBuffer}.
- * Any incoming datagram larger than this size will be silently truncated by the OS.
+ * Apply settings from {@link UdpSoConfig} to {@link java.nio.channels.DatagramChannel}.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-09-24
  * @see UdpSoConfig
@@ -53,6 +33,12 @@ public class UdpSoConfigUtils {
     private static final SocketOption<Integer> SO_RCVBUF    = StandardSocketOptions.SO_RCVBUF;
     private static final SocketOption<Boolean> SO_REUSEADDR = StandardSocketOptions.SO_REUSEADDR;
 
+    /**
+     * Apply receive/send buffer-related settings in one place.
+     * @param config the UDP configuration
+     * @param channel the underlying network channel
+     * @throws IOException if an I/O error occurs while applying the configuration
+     */
     private static void configRcvSnd(UdpSoConfig config, NetworkChannel channel) throws IOException {
         Integer soRcvBuf = config.getSoRcvBuf();
         Integer soSndBuf = config.getSoSndBuf();
@@ -73,17 +59,34 @@ public class UdpSoConfigUtils {
         }
     }
 
+    /**
+     * Apply UDP configuration to a listening channel.
+     * @param config the UDP configuration
+     * @param channel the network channel
+     * @throws IOException if an I/O error occurs while applying the configuration
+     */
     public static void configListen(UdpSoConfig config, NetworkChannel channel) throws IOException {
         configRcvSnd(config, channel);
         channel.setOption(SO_REUSEADDR, true);
     }
 
+    /**
+     * Apply UDP configuration to a connected or ordinary socket channel.
+     * @param config the UDP configuration
+     * @param channel the network channel
+     * @throws IOException if an I/O error occurs while applying the configuration
+     */
     public static void configSocket(UdpSoConfig config, NetworkChannel channel) throws IOException {
         configRcvSnd(config, channel);
     }
 
+    /**
+     * Resolve the effective receive packet size.
+     * @param config the UDP configuration
+     * @return the effective receive packet size
+     */
     public static int getRcvPacketSize(UdpSoConfig config) {
-        // rcv buffer size
+        // Resolve the effective receive buffer size.
         Integer rcvBufSize = config.getSoRcvBuf();
         Integer rcvPacketSize = config.getRcvPacketSize();
         if (rcvBufSize != null && rcvPacketSize != null) {
@@ -94,5 +97,4 @@ public class UdpSoConfigUtils {
 
         return Objects.requireNonNull(rcvPacketSize, "Both rcvPacketSize and rcvBufSize are missing. At least one of them must be set.");
     }
-
 }

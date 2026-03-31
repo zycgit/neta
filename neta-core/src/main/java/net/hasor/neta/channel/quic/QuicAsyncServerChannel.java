@@ -32,39 +32,36 @@ import net.hasor.neta.channel.udp.UdpAsyncServerChannel;
 import net.hasor.neta.channel.udp.UdpSoConfigUtils;
 
 /**
- * Server-side QUIC dispatcher built on top of the UDP listen channel.
+ * Server-side QUIC dispatcher built on top of a UDP listening channel; it is not a single QUIC
+ * connection by itself.
  * <p>
- * It replaces the normal UDP receive loop with QUIC-aware processing: parsing
- * coalesced datagrams, validating tokens, managing in-progress handshakes,
- * looking up established connections by CID, and promoting a finished handshake
- * into {@link QuicChannelAsync} plus the public {@link QuicChannel} facade.
+ * It replaces the ordinary UDP receive loop with QUIC-aware processing, including parsing
+ * coalesced packets, validating tokens, managing in-progress handshakes, looking up established
+ * connections by CID, and promoting them to {@link QuicChannelAsync} plus the public
+ * {@link QuicChannel} facade once the handshake completes.
  * <pre>
- *   inbound UDP datagram
- *      |
- *      +--> parse QUIC packet(s)
- *      +--> route by DCID
- *             |
- *             +--> existing connection   -> QuicChannelAsync
- *             +--> handshake in progress -> QuicAsyncChannelHandshake
- *             +--> new Initial           -> token/retry + new handshake
+ *   Inbound UDP datagram
+ *      +--> Parse one or more QUIC packets
+ *      +--> Route by DCID
+ *         +--> Established connection -> QuicChannelAsync
+ *         +--> Handshake in progress  -> QuicAsyncChannelHandshake
+ *         +--> New Initial            -> token/retry + new handshake
  * </pre>
  * <p>
- * This class is the server's QUIC demultiplexer; it is not itself a single QUIC
- * connection.
  * @author 赵永春 (zyc@hasor.net)
  */
 class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     private static final Logger logger    = Logger.getLogger(QuicAsyncServerChannel.class);
-    /** Server-wide static key for token generation/validation (simplified). */
+    /** Server-wide static key used to generate and validate tokens; the current implementation is simplified. */
     private static final byte[] TOKEN_KEY = new byte[16];
 
     static {
         new SecureRandom().nextBytes(TOKEN_KEY);
     }
 
-    /** Active QUIC connections keyed by our local Connection ID. */
+    /** Active QUIC connections keyed by the local Connection ID chosen by this endpoint. */
     private final Map<CidKey, QuicChannelAsync>          connectionMap = new ConcurrentHashMap<>();
-    /** In-progress handshakes keyed by Connection ID (both our local CID and client's original DCID). */
+    /** In-progress handshakes keyed by Connection ID, including the local CID and the client's original DCID. */
     private final Map<CidKey, QuicAsyncChannelHandshake> handshakeMap  = new ConcurrentHashMap<>();
 
     // ── Bind override ──────────────────────────────────────────────────
@@ -76,8 +73,8 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     // ── QUIC datagram processing ───────────────────────────────────────
 
     /**
-     * Parses a raw (unencrypted) Short Header packet for non-TLS mode.
-     * Delegates to {@link QuicPacket#parseRawShortHeader} so the logic is maintained in one place.
+     * Parses a raw unencrypted Short Header packet for non-TLS mode.
+     * This method delegates to {@link QuicPacket#parseRawShortHeader} so the parsing logic stays centralized.
      */
     static QuicPacket.ParsedPacket parseRawShortHeader(byte[] data, int dcidLen) {
         return QuicPacket.parseRawShortHeader(data, dcidLen);
@@ -88,7 +85,8 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Derives a deterministic 16-byte Stateless Reset Token from TOKEN_KEY and the given CID using HMAC-SHA256 (RFC 9000 §10.3.1).
+     * Generates a deterministic 16-byte Stateless Reset Token (RFC 9000 §10.3.1) using
+     * HMAC-SHA256 with TOKEN_KEY and the given CID.
      */
     private static byte[] computeStatelessResetToken(byte[] cid) {
         try {
@@ -99,7 +97,7 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             System.arraycopy(hmac, 0, token, 0, 16);
             return token;
         } catch (Exception e) {
-            // Should never happen with HmacSHA256 on any JDK
+            // HmacSHA256 should be available on any JDK; this path should not be reached in practice.
             byte[] token = new byte[16];
             new SecureRandom().nextBytes(token);
             return token;
@@ -112,20 +110,20 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
 
     @Override
     public NetListen bind(ProtoInitializer initializer) throws IOException {
-        // Configure socket options
+        // Configure socket options.
         UdpSoConfigUtils.configListen(this.soConfig, this.transport.getChannel());
 
-        // Create a QuicListen instead of UdpNetListen
+        // Create a QuicListen instead of the default UdpNetListen.
         QuicListen listen = new QuicListen(//
-                this.channelId,           //
-                this.listenAddr,          //
-                this.listenAddr.getPort(),//
-                this,                     //
-                initializer,              //
-                this.context,             //
+                this.channelId,            //
+                this.listenAddr,           //
+                this.listenAddr.getPort(), //
+                this,                      //
+                initializer,               //
+                this.context,              //
                 quicSoConfig());
 
-        // Initialize the listen channel
+        // Initialize the listening channel.
         SocketAddress localAddr;
         try {
             this.context.initChannel(listen, false);
@@ -137,11 +135,11 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             throw ee;
         }
 
-        // Start receive loop with QUIC-aware datagram handler
+        // Start the receive loop with a QUIC-aware datagram handler.
         final SocketAddress finalLocalAddr = localAddr;
         this.transport.startReceiveLoop(//
                 (remoteAddr, data) -> this.onQuicDatagram(listen, finalLocalAddr, remoteAddr, data), //
-                listen::isClose,//  exit when the listen handle is closed (consistent with UdpAsyncServerChannel)
+                listen::isClose,// Exit when the listen handle closes, consistent with UdpAsyncServerChannel.
                 () -> {
                     if (this.context.getConfig().isPrintLog()) {
                         logger.info("[QUIC] ch=" + this.channelId + " receive loop closed");
@@ -154,7 +152,9 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         return listen;
     }
 
-    /** Handles an incoming UDP datagram. */
+    /**
+     * Processes an inbound UDP datagram.
+     */
     private void onQuicDatagram(QuicListen listen, SocketAddress localAddr, SocketAddress remoteAddr, ByteBuffer data) throws IOException {
         if (data.remaining() < 1) {
             return;
@@ -171,32 +171,35 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         }
     }
 
-    /** Processes a Long Header packet (Initial or Handshake). Handles coalesced packets (RFC 9000 §12.2). */
+    /**
+     * Processes a Long Header packet such as Initial or Handshake; also supports coalesced packets
+     * defined by RFC 9000 §12.2.
+     */
     private void processLongHeaderPacket(QuicListen listen, SocketAddress localAddr, SocketAddress remoteAddr, byte[] rawData) throws IOException {
         int datagramOffset = 0;
         int datagramLength = rawData.length;
 
-        // ── Loop through coalesced QUIC packets in the same UDP datagram ──
+        // Iterate over coalesced QUIC packets inside the same UDP datagram.
         while (datagramOffset < datagramLength) {
-            // Check if remaining data is still a Long Header (coalesced Short Header packets end the loop)
+            // Check whether the remaining data is still a Long Header; stop once a coalesced Short Header packet is reached.
             if (datagramOffset > 0 && !QuicPacket.isLongHeader(rawData[datagramOffset])) {
                 break;
             }
 
             QuicPacket.ParsedPacket parsed = QuicPacket.parseLongHeader(rawData, datagramOffset, datagramLength - datagramOffset);
             if (parsed == null) {
-                break; // unparseable remainder — stop
+                break; // The remaining data cannot be parsed; stop processing.
             }
 
-            // ── Advance offset past this QUIC packet for the next iteration ────────────────────────
-            // NOTE: parsed.headerLength is an ABSOLUTE position in rawData (includes datagramOffset).
-            // So nextOffset = parsed.headerLength + parsed.payloadLength (do NOT add datagramOffset again).
+            // Advance the offset past the current QUIC packet for the next iteration.
+            // Note: parsed.headerLength is an absolute position within rawData and already includes datagramOffset.
+            // Therefore nextOffset = parsed.headerLength + parsed.payloadLength; do not add datagramOffset again.
             int nextOffset = parsed.headerLength + parsed.payloadLength;
             if (this.context.getConfig().isPrintLog()) {
                 logger.info("[QUIC] rcv type=" + parsed.packetType + " hdrLen=" + parsed.headerLength + " payLen=" + parsed.payloadLength + " from " + remoteAddr);
             }
 
-            // ── Version Negotiation (RFC 9000 §6) ───────────────────────
+            // Version negotiation (RFC 9000 §6).
             if (parsed.version != 0 && QuicVersion.fromVersion(parsed.version) == null) {
                 sendVersionNegotiationPacket(remoteAddr, parsed.dcid, parsed.scid);
                 datagramOffset = nextOffset;
@@ -205,7 +208,7 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
 
             CidKey dcidKey = new CidKey(parsed.dcid);
 
-            // ── 1. Check if DCID matches an established connection ───────
+            // 1. Check whether the DCID matches an established connection.
             QuicChannelAsync conn = this.connectionMap.get(dcidKey);
             if (conn != null) {
                 if (parsed.packetType == QuicPacket.TYPE_0RTT) {
@@ -215,10 +218,10 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
                 continue;
             }
 
-            // ── 2. Check if DCID matches an in-progress handshake ────────
+            // 2. Check whether the DCID matches an in-progress handshake.
             QuicAsyncChannelHandshake handshake = this.handshakeMap.get(dcidKey);
 
-            // ── 3. New connection (Initial packet with unknown DCID) ─────
+            // 3. New connection, represented by an Initial packet carrying an unknown DCID.
             if (handshake == null) {
                 if (parsed.packetType != QuicPacket.TYPE_INITIAL) {
                     if (parsed.packetType == QuicPacket.TYPE_0RTT) {
@@ -233,12 +236,12 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
                     return;
                 }
 
-                // ── Token validation (RFC 9000 §8.1) ────────────────────
-                // NOTE: Retry Integrity Tag (RFC 9001 §5.8) uses a random tag here (not the full AEAD).
-                // Standard QUIC clients (e.g. Firefox) will silently discard Retry packets with an
-                // invalid Integrity Tag. However, for address-validation purposes the logic is sound.
+                // Token validation (RFC 9000 §8.1).
+                // Note: the Retry Integrity Tag (RFC 9001 §5.8) here uses a random tag rather than full AEAD.
+                // Standards-compliant QUIC clients such as Firefox will silently drop Retry packets with an invalid integrity tag.
+                // For address-validation purposes, however, the control flow here is still meaningful.
                 if (parsed.token != null && parsed.token.length > 0) {
-                    // Client provided a token — validate it
+                    // The client already carried a token, so validate it first.
                     if (!validateToken(parsed.token, remoteAddr, parsed.dcid)) {
                         if (this.context.getConfig().isPrintLog()) {
                             logger.info("[QUIC] Initial with invalid token len=" + parsed.token.length + " from " + remoteAddr + ", sending Retry");
@@ -247,7 +250,7 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
                         datagramOffset = nextOffset;
                         continue;
                     }
-                    // Valid token: proceed to establish connection normally
+                    // The token is valid, so continue with normal connection establishment.
                     if (this.context.getConfig().isPrintLog()) {
                         logger.info("[QUIC] Initial with valid token len=" + parsed.token.length + " from " + remoteAddr);
                     }
@@ -263,12 +266,12 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
                     return;
                 }
 
-                // Register under both our local CID and the client's original DCID
+                // Register under both our local CID and the client's original DCID.
                 this.handshakeMap.put(new CidKey(handshake.getLocalCid()), handshake);
                 this.handshakeMap.put(dcidKey, handshake);
             }
 
-            // ── 4. Dispatch to handshake processing ──────────────────────
+            // 4. Dispatch to handshake processing.
             try {
                 if (parsed.packetType == QuicPacket.TYPE_INITIAL) {
                     processInitial(handshake, rawData, datagramOffset, parsed, remoteAddr, localAddr, listen);
@@ -285,7 +288,7 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         }
     }
 
-    /* Decrypts and processes an Initial packet. The datagramOffset indicates where this packet starts in rawData (for AAD calculation in coalesced datagrams). */
+    /* Decrypts and processes an Initial packet. datagramOffset indicates the start position of this packet within rawData and is used for AAD computation in coalesced-packet scenarios. */
     private void processInitial(QuicAsyncChannelHandshake handshake, byte[] rawData, int datagramOffset, QuicPacket.ParsedPacket parsed,//
             SocketAddress remoteAddr, SocketAddress localAddr, QuicListen listen) throws Exception {
 
@@ -307,12 +310,12 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             parsed.pnLength = rawParsed.pnLength;
         }
 
-        // Process
+        // Process.
         if (!handshake.processServerInitial(parsed, remoteAddr)) {
             return;
         }
 
-        // Check if handshake completed (non-TLS mode goes directly to ESTABLISHED)
+        // Check whether the handshake has completed; in non-TLS mode it enters ESTABLISHED immediately after Initial.
         if (handshake.isEstablished()) {
             promoteToConnection(handshake, localAddr, remoteAddr, listen);
         }
@@ -321,11 +324,12 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     // ── Helpers ─────────────────────────────────────────────────────────
 
     /**
-     * Decrypts and processes a Handshake packet (client Finished), then promotes to a full connection if ESTABLISHED.
+     * Decrypts and processes a Handshake packet, such as the client's Finished; if ESTABLISHED has
+     * been reached, continue promoting it to a full connection.
      */
     private void processHandshake(QuicAsyncChannelHandshake handshake, byte[] rawData, int datagramOffset, QuicPacket.ParsedPacket parsed,//
             SocketAddress remoteAddr, SocketAddress localAddr, QuicListen listen) throws Exception {
-        // Decrypt
+        // Decrypt.
         if (quicSoConfig().isSslEnabled()) {
             if (this.context.getConfig().isPrintLog()) {
                 logger.info("[QUIC] decrypt Handshake: hdrLen=" + parsed.headerLength + " payLen=" + parsed.payloadLength + " from " + remoteAddr);
@@ -343,10 +347,10 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             parsed.packetNumber = rawParsed.packetNumber;
         }
 
-        // Process
+        // Process.
         if (!handshake.processServerHandshake(parsed, remoteAddr)) {
             if (handshake.isAborted()) {
-                // Client sent CONNECTION_CLOSE \u2014 clean up zombie handshake entry immediately
+                // The client actively sent CONNECTION_CLOSE, so stale handshake entries must be removed immediately.
                 this.handshakeMap.values().removeIf(hs -> hs == handshake);
                 if (this.context.getConfig().isPrintLog()) {
                     logger.info("[QUIC] handshake aborted (CONNECTION_CLOSE), remote=" + remoteAddr);
@@ -355,18 +359,19 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             return;
         }
 
-        // Promote to connection
+        // Promote to a full connection.
         if (handshake.isEstablished()) {
             promoteToConnection(handshake, localAddr, remoteAddr, listen);
         }
     }
 
     /**
-     * Processes a 0-RTT (Early Data) packet from a resuming client (RFC 9001 §4.9.1); buffers data until handshake completes.
+     * Processes a 0-RTT (Early Data) packet from a session-resuming client, see RFC 9001 §4.9.1;
+     * data is buffered first and handled after the handshake completes.
      */
     private void process0RttPacket(QuicAsyncChannelHandshake handshake, byte[] rawData,//
             QuicPacket.ParsedPacket parsed, SocketAddress remoteAddr) {
-        // 0-RTT requires TLS with session ticket support
+        // 0-RTT depends on TLS session ticket support.
         if (!quicSoConfig().isSslEnabled()) {
             if (this.context.getConfig().isPrintLog()) {
                 logger.info("[QUIC] 0-RTT rcv but TLS disabled, ignoring");
@@ -374,14 +379,14 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             return;
         }
 
-        // For now, log the 0-RTT attempt. Full 0-RTT support requires:
-        // 1. Session ticket storage from previous connections
-        // 2. Early data key derivation from pre-shared key
-        // 3. Decryption with 0-RTT keys
-        // 4. Buffering until handshake completes
-        // 5. Replay protection
+        // For now, only record the 0-RTT attempt. Full 0-RTT support still requires:
+        // 1. Persisting session tickets issued by prior connections.
+        // 2. Deriving Early Data keys from the pre-shared key.
+        // 3. Decrypting with 0-RTT keys.
+        // 4. Buffering data until the handshake completes.
+        // 5. Providing replay protection.
         if (handshake == null) {
-            // Established connection: 0-RTT arrived after promotion; no handshake context.
+            // The connection has already been promoted to established state, so arriving 0-RTT data no longer has handshake context.
             if (this.context.getConfig().isPrintLog()) {
                 logger.info("[QUIC] 0-RTT rcv on established connection (no handshake context), ignoring");
             }
@@ -392,27 +397,29 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             logger.info("[QUIC] 0-RTT rcv from " + remoteAddr + " len=" + rawData.length + ", deferred to handshake completion");
         }
 
-        // Buffer the raw 0-RTT data for later processing
+        // Temporarily buffer the raw 0-RTT data for later processing.
         handshake.buffer0RttData(rawData);
     }
 
-    /** Processes a single buffered 0-RTT packet after the handshake has completed. */
+    /**
+     * Processes one buffered 0-RTT packet after the handshake completes.
+     */
     private void processBuffered0RttPacket(QuicChannelAsync conn, QuicAsyncChannelHandshake handshake, byte[] rawData) {
         try {
-            // Parse as raw long-header (no AEAD — currently only plaintext 0-RTT is drainable)
+            // Parse it as a raw long-header packet; for now only draining plaintext 0-RTT is supported.
             QuicPacket.ParsedPacket parsed = QuicPacket.parseRawLongHeaderPacket(rawData, 0, rawData.length);
             if (parsed == null || parsed.payload == null) {
                 logger.debug("Drained 0-RTT packet cannot be parsed as raw long header, skipping");
                 return;
             }
-            // Anti-replay: discard if this packet number was already processed (RFC 9001 §8.4)
+            // Anti-replay protection: discard immediately if this packet number has already been processed, see RFC 9001 §8.4.
             if (!handshake.checkAndMarkRtt0Pn(parsed.packetNumber)) {
                 if (this.context.getConfig().isPrintLog()) {
                     logger.info("[QUIC] 0-RTT anti-replay: discarding duplicate PN=" + parsed.packetNumber);
                 }
                 return;
             }
-            // Deliver payload frames to the established connection
+            // Hand the payload frames to the established connection for processing.
             conn.dispatchReceivedFrames(parsed.payload);
             logger.debug("Delivered drained 0-RTT frame PN=" + parsed.packetNumber);
         } catch (Exception e) {
@@ -421,30 +428,31 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Creates a {@link QuicChannelAsync} + {@link QuicChannel} from a completed handshake and moves it from the handshake map to the connection map.
+     * Creates {@link QuicChannelAsync} and {@link QuicChannel} from a completed handshake and
+     * migrates it from the handshake map to the connection map.
      */
     private void promoteToConnection(QuicAsyncChannelHandshake handshake, SocketAddress localAddr,//
             SocketAddress remoteAddr, QuicListen listen) {
-        // Build negotiated config data
+        // Build negotiated configuration data.
         QuicInitConfigData initData = handshake.buildInitConfigData(localAddr, remoteAddr);
         QuicSoConfig quicConfig = quicSoConfig();
 
         try {
-            // Create QuicChannelAsync
+            // Create QuicChannelAsync.
             QuicChannelAsync connAsync = new QuicChannelAsync(//
                     initData, this.transport.getChannel(), quicConfig,//
                     this.context, listen.getInitializer(), listen,//
                     handshake);
 
-            // Create QuicChannel (sets back-reference) and initialize pipeline
+            // Create QuicChannel (which sets the back-reference) and initialize the pipeline.
             QuicChannel quicChannel = new QuicChannel(connAsync);
             connAsync.getContext().initChannel(quicChannel, true);
 
-            // Register in connection map under our local CID
+            // Register in the connection map under our local CID.
             CidKey localCidKey = new CidKey(handshake.getLocalCid());
             this.connectionMap.put(localCidKey, connAsync);
 
-            // Drain and deliver any buffered 0-RTT early data (RFC 9001 §4.9.1)
+            // Drain and deliver any buffered 0-RTT early data (RFC 9001 §4.9.1).
             List<byte[]> buffered0Rtt = handshake.drain0RttData();
             if (!buffered0Rtt.isEmpty()) {
                 if (this.context.getConfig().isPrintLog()) {
@@ -455,13 +463,13 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
                 }
             }
 
-            // Clean up handshake entries (remove all entries pointing to this handshake)
+            // Clean up handshake entries by removing all entries pointing to this handshake.
             this.handshakeMap.values().removeIf(hs -> hs == handshake);
 
             logger.info("[QUIC] connection established, cid=" + bytesToHex(handshake.getLocalCid()) //
                     + " remote=" + remoteAddr);
 
-            // Notify connection-established listener (e.g. HTTP/3 server control stream setup)
+            // Notify the connection-established listener, for example to set up HTTP/3 server control streams.
             QuicConnectionListener listener = quicConfig.getConnectionListener();
             if (listener != null) {
                 try {
@@ -477,7 +485,8 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Processes an incoming Short Header (1-RTT) packet; looks up the connection by DCID and dispatches decrypted payload.
+     * Processes an inbound Short Header (1-RTT) packet by first looking up the connection by DCID
+     * and then dispatching the decrypted payload.
      */
     private void processShortHeaderPacket(SocketAddress remoteAddr, byte[] rawData) {
         QuicSoConfig quicConfig = quicSoConfig();
@@ -486,14 +495,14 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             return;
         }
 
-        // Extract DCID from Short Header
+        // Extract the DCID from the Short Header.
         byte[] dcid = new byte[dcidLen];
         System.arraycopy(rawData, 1, dcid, 0, dcidLen);
         CidKey dcidKey = new CidKey(dcid);
 
         QuicChannelAsync conn = this.connectionMap.get(dcidKey);
         if (conn == null) {
-            // ── Stateless Reset (RFC 9000 §10.3) ────────────────────
+            // Stateless Reset (RFC 9000 §10.3).
             // Unknown DCID — could be Firefox's 1-RTT CONNECTION_CLOSE during a failed handshake
             // Log first two bytes to help identify frame type (CONNECTION_CLOSE = 0x1c)
             if (rawData.length > 1 + dcidLen) {
@@ -504,7 +513,7 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             return;
         }
 
-        // ── Connection Migration Detection (RFC 9000 §9) ───────────
+        // Connection migration detection (RFC 9000 §9).
         SocketAddress currentRemote = conn.getRemoteAddress();
         if (currentRemote != null && !currentRemote.equals(remoteAddr)) {
             handleConnectionMigration(conn, remoteAddr);
@@ -514,7 +523,8 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Sends a Stateless Reset packet (RFC 9000 §10.3) ending with a 16-byte token to a peer with unknown Connection ID.
+     * Sends a Stateless Reset packet (RFC 9000 §10.3) to a peer carrying an unknown Connection ID,
+     * with a 16-byte token at the end of the packet.
      */
     private void sendStatelessReset(SocketAddress remoteAddr, byte[] triggerPacket) {
         // Minimum Stateless Reset size: at least 21 bytes (RFC 9000 §10.3.1)
@@ -555,20 +565,21 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         }
     }
 
-    // ── Token Validation and Retry (RFC 9000 §8.1) ──────────────────
+    // Token validation and Retry (RFC 9000 §8.1).
 
     /**
-     * Detects and handles connection migration (RFC 9000 §9) by updating remote address, issuing a new CID, and initiating PATH_CHALLENGE.
+     * Detects and handles connection migration by updating the remote address, issuing a new CID,
+     * and initiating PATH_CHALLENGE, see RFC 9000 §9.
      */
     private void handleConnectionMigration(QuicChannelAsync conn, SocketAddress newRemoteAddr) {
         if (this.context.getConfig().isPrintLog()) {
             logger.info("[QUIC] migration detected cid=" + bytesToHex(conn.getHandshake().getLocalCid()) + " from " + conn.getRemoteAddress() + " to " + newRemoteAddr);
         }
 
-        // Update remote address
+        // Update the remote address.
         conn.updateRemoteAddress(newRemoteAddr);
 
-        // Activate anti-amplification limit and register a timeout callback that closes the
+        // Activate the anti-amplification limit and register a timeout callback that closes the
         // connection if PATH_CHALLENGE is not answered in time (RFC 9000 §9.3.1).
         conn.getPathValidator().onMigrationStart(() -> {
             logger.warn("PATH_CHALLENGE timed out during migration; closing connection cid=" //
@@ -576,23 +587,23 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             conn.closeWithError(QuicErrorCode.NO_VIABLE_PATH, "PATH_CHALLENGE timeout after migration", null);
         });
 
-        // Issue a new local CID and send NEW_CONNECTION_ID frame so the peer can use the
-        // new CID on the new path (RFC 9000 §9.5).
+        // Issue a new local CID and send a NEW_CONNECTION_ID frame so the peer can use the new
+        // CID on the new path (RFC 9000 §9.5).
         byte[] newCidFrame = conn.getCidManager().issueNewConnectionId();
         if (newCidFrame != null) {
             conn.sendDataFrame(ByteBuf.wrap(newCidFrame), null);
         }
 
-        // Register all active local CIDs in connectionMap so incoming packets using
-        // any of the new CIDs are dispatched to this connection (RFC 9000 §9.5).
+        // Register all active local CIDs in connectionMap so incoming packets using any of the new
+        // CIDs are dispatched to this connection (RFC 9000 §9.5).
         for (byte[] cid : conn.getCidManager().getActiveLocalCids()) {
             this.connectionMap.putIfAbsent(new CidKey(cid), conn);
         }
 
-        // Reset congestion control for the new path (RFC 9000 §9.4)
+        // Reset congestion control for the new path (RFC 9000 §9.4).
         conn.getCongestionControl().reset();
 
-        // Initiate path validation via PATH_CHALLENGE (RFC 9000 §8.2.1)
+        // Initiate path validation via PATH_CHALLENGE (RFC 9000 §8.2.1).
         byte[] challengeFrame = conn.getPathValidator().initiateChallenge();
         if (challengeFrame != null) {
             conn.sendDataFrame(ByteBuf.wrap(challengeFrame), null);
@@ -600,11 +611,12 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Decrypts a 1-RTT packet and dispatches the payload frames to the connection's handlers via {@link QuicChannelAsync#dispatchReceivedFrames}.
+     * Decrypts a 1-RTT packet and dispatches its payload frames to the connection handler through
+     * {@link QuicChannelAsync#dispatchReceivedFrames}.
      */
     private void dispatchAppData(QuicChannelAsync conn, byte[] rawData) {
         conn.checkIdleTimeouts();
-        // Account for incoming bytes for anti-amplification (RFC 9000 §9.3.1)
+        // Account for incoming bytes for anti-amplification (RFC 9000 §9.3.1).
         conn.getPathValidator().recordIncoming(rawData.length);
         try {
             QuicAsyncChannelHandshake handshake = conn.getHandshake();
@@ -622,7 +634,7 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
 
             handshake.updateMaxAppPacketNumber(parsed.packetNumber);
 
-            // Dispatch individual QUIC frames to streams, datagrams, and control handlers
+            // Dispatch individual QUIC frames to streams, datagrams, and control handlers.
             conn.dispatchReceivedFrames(parsed.payload);
         } catch (Exception e) {
             logger.error("Failed to dispatch 1-RTT data: " + e.getMessage(), e);
@@ -633,20 +645,21 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Validates an Initial packet token: checks timestamp freshness (≤60s) and source address hash match.
+     * Validates the token carried in an Initial packet, including timestamp freshness
+     * (no more than 60 seconds old) and source-address hash matching.
      */
     private boolean validateToken(byte[] token, SocketAddress remoteAddr, byte[] dcid) {
         if (token.length < 8) {
             return false;
         }
-        // Extract timestamp (first 4 bytes, big-endian)
+        // Extract the timestamp (first 4 bytes, big-endian).
         long timestamp = ((long) (token[0] & 0xFF) << 24) | ((token[1] & 0xFF) << 16) //
                 | ((token[2] & 0xFF) << 8) | (token[3] & 0xFF);
         long ageSeconds = System.currentTimeMillis() / 1000 - timestamp;
         if (ageSeconds < 0 || ageSeconds > 60) {
-            return false; // Token expired
+            return false; // Token expired.
         }
-        // Validate address hash (next 4 bytes)
+        // Validate the address hash (next 4 bytes).
         int expectedHash = remoteAddr.hashCode();
         int tokenHash = ((token[4] & 0xFF) << 24) | ((token[5] & 0xFF) << 16) //
                 | ((token[6] & 0xFF) << 8) | (token[7] & 0xFF);
@@ -654,10 +667,10 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Generates an address-validation token containing timestamp, address hash, and original DCID.
+     * Generates an address-validation token containing the timestamp, address hash, and original DCID.
      */
     private byte[] generateToken(SocketAddress remoteAddr, byte[] originalDcid) {
-        // Token format: [4 bytes: timestamp] [4 bytes: addr hash] [N bytes: original DCID]
+        // Token format: [4 bytes: timestamp] [4 bytes: addr hash] [N bytes: original DCID].
         byte[] token = new byte[8 + originalDcid.length];
         long nowSec = System.currentTimeMillis() / 1000;
         token[0] = (byte) (nowSec >> 24);
@@ -674,7 +687,8 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Sends a Version Negotiation packet (RFC 9000 §17.2.1) advertising supported QUIC versions to the remote address.
+     * Sends a Version Negotiation packet (RFC 9000 §17.2.1) to the remote address, advertising
+     * the QUIC versions currently supported.
      */
     private void sendVersionNegotiationPacket(SocketAddress remoteAddr, byte[] clientDcid, byte[] clientScid) {
         int[] supportedVersions = new int[] { QuicVersion.VERSION_1, QuicVersion.VERSION_2 };
@@ -691,18 +705,19 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
     }
 
     /**
-     * Sends a Retry packet (RFC 9000 §17.2.5) to the client with a server-chosen CID and address-validation token.
+     * Sends a Retry packet (RFC 9000 §17.2.5) to the client, containing a new CID chosen by the
+     * server and an address-validation token.
      */
     private void sendRetryPacket(SocketAddress remoteAddr, byte[] clientDcid, byte[] clientScid) {
-        // Generate new server CID
+        // Generate a new server CID.
         int cidLen = quicSoConfig().getConnectionIdLength();
         byte[] newServerCid = new byte[cidLen];
         new SecureRandom().nextBytes(newServerCid);
 
-        // Generate retry token
+        // Generate the Retry token.
         byte[] retryToken = generateToken(remoteAddr, clientDcid);
 
-        // Build Retry packet (RFC 9000 §17.2.5)
+        // Build the Retry packet (RFC 9000 §17.2.5).
         // First byte: 1 (long header) | 1 (fixed bit) | 11 (type=Retry) | 0000 (unused)
         QuicVersion version = quicSoConfig().getQuicVersion();
         int versionInt = version == QuicVersion.V1 ? 0x00000001 : 0x6b3343cf;
@@ -714,13 +729,13 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         // First byte: Long Header form (0x80) | Fixed Bit (0x40) | Type (0x30 for Retry) | unused (0x00)
         packet[pos++] = (byte) 0xF0; // 11110000
 
-        // Version (4 bytes)
+        // Version (4 bytes).
         packet[pos++] = (byte) (versionInt >> 24);
         packet[pos++] = (byte) (versionInt >> 16);
         packet[pos++] = (byte) (versionInt >> 8);
         packet[pos++] = (byte) versionInt;
 
-        // DCID Length + DCID (set to client's SCID)
+        // DCID Length + DCID (set to the client's SCID).
         int dcidLen = clientScid != null ? clientScid.length : 0;
         packet[pos++] = (byte) dcidLen;
         if (dcidLen > 0) {
@@ -728,17 +743,17 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
             pos += dcidLen;
         }
 
-        // SCID Length + SCID (our new CID)
+        // SCID Length + SCID (our new CID).
         packet[pos++] = (byte) newServerCid.length;
         System.arraycopy(newServerCid, 0, packet, pos, newServerCid.length);
         pos += newServerCid.length;
 
-        // Retry Token
+        // Retry token.
         System.arraycopy(retryToken, 0, packet, pos, retryToken.length);
         pos += retryToken.length;
 
-        // Retry Integrity Tag (16 bytes — simplified pseudo-tag)
-        // In a full implementation, this would be an AEAD computation
+        // Retry Integrity Tag (16 bytes - simplified pseudo-tag).
+        // In a full implementation, this would be an AEAD computation.
         byte[] integrityTag = new byte[16];
         new SecureRandom().nextBytes(integrityTag);
         System.arraycopy(integrityTag, 0, packet, pos, 16);
@@ -755,7 +770,9 @@ class QuicAsyncServerChannel extends UdpAsyncServerChannel {
         }
     }
 
-    /** Wrapper for byte[] to use as ConcurrentHashMap key. */
+    /**
+     * Helper type used to wrap byte[] values as ConcurrentHashMap keys.
+     */
     static final class CidKey {
         final         byte[] cid;
         private final int    hash;
