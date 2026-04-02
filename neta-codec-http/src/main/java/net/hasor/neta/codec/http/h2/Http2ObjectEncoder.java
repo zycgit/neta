@@ -263,6 +263,8 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         this.encodeHeaders(state, this.buildResponseHeaders(response, response), streamId, !hasBody, dst);
         if (hasBody) {
             this.encodeData(context, streamId, body, true, dst);
+        } else {
+            this.recordOutboundHalfClosed(context, streamId);
         }
         state.clearPendingStartLine();
         state.trailingHeadersSent(false);
@@ -276,6 +278,8 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         this.encodeHeaders(state, this.buildRequestHeaders(request, request), streamId, !hasBody, dst);
         if (hasBody) {
             this.encodeData(context, streamId, body, true, dst);
+        } else {
+            this.recordOutboundHalfClosed(context, streamId);
         }
         state.clearPendingStartLine();
         state.trailingHeadersSent(false);
@@ -303,6 +307,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     private void encodeTrailerHeaders(Http2EncoderContent state, ProtoContext context, TrailerHttpHeaders headers, ProtoSndQueue<Http2Frame> dst) {
         int streamId = this.resolveActiveStreamId(state, headers);
         this.encodeHeaders(state, this.buildTrailerHeaders(headers), streamId, true, dst);
+        this.recordOutboundHalfClosed(context, streamId);
         state.trailingHeadersSent(true);
         state.clearPendingStartLine();
     }
@@ -340,8 +345,13 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             return;
         }
         this.encodeData(context, streamId, body != null ? body : context.byteBufAllocator().buffer(0), true, dst);
+        this.recordOutboundHalfClosed(context, streamId);
         state.clearPendingStartLine();
         state.trailingHeadersSent(false);
+    }
+
+    private void recordOutboundHalfClosed(ProtoContext context, int streamId) {
+        this.fireEventRcv(context, Http2StreamCloseEvent.class, new Http2StreamCloseEvent(streamId, false).remote(false));
     }
 
     private int ensureHeaderBlock(Http2EncoderContent state, ProtoContext context, HttpObject content, ProtoSndQueue<Http2Frame> dst) {
@@ -479,6 +489,9 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
         int bodyLen = body != null ? body.readableBytes() : 0;
         if (bodyLen == 0) {
             dst.offerMessage(Http2Frame.data(streamId, endStream ? Http2Flags.END_STREAM : Http2Flags.NONE, new byte[0]));
+            if (endStream) {
+                this.recordOutboundHalfClosed(context, streamId);
+            }
             return;
         }
 
@@ -491,6 +504,9 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             int flags = (offset + chunkLength) == bodyLen && endStream ? Http2Flags.END_STREAM : Http2Flags.NONE;
             dst.offerMessage(Http2Frame.data(streamId, flags, bodyBytes));
             offset += chunkLength;
+        }
+        if (endStream) {
+            this.recordOutboundHalfClosed(context, streamId);
         }
     }
 
@@ -524,18 +540,18 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void sendPriority(ProtoContext context, Http2PriorityEvent event) {
-        Http2Frame frame = priorityFrame(event.streamId(), event.streamDependency(), event.weight(), event.exclusive());
+        Http2Frame frame = priorityFrame(event.streamIdAsInt(), event.streamDependency(), event.weight(), event.exclusive());
         this.queueControlFrame(context, frame);
     }
 
     private void sendPushPromise(ProtoContext context, Http2PushPromiseEvent event) {
         if (!this.serverMode) {
             String msg = "HTTP/2: client endpoint must not send PUSH_PROMISE frames";
-            throw new HttpProtocolConnectionException(event.streamId(), Http2ErrorCode.PROTOCOL_ERROR, msg);
+            throw new HttpProtocolConnectionException(event.streamIdAsInt(), Http2ErrorCode.PROTOCOL_ERROR, msg);
         }
 
         int maxFrameSize = this.resolvePeerMaxFrameSize(context);
-        List<Http2Frame> frames = pushPromiseFrames(event.streamId(), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
+        List<Http2Frame> frames = pushPromiseFrames(event.streamIdAsInt(), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
         this.queueControlFrames(context, frames);
     }
 

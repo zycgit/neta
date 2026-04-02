@@ -61,7 +61,7 @@ import net.hasor.neta.codec.ssl.SslContext;
  *   alpn.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -&gt; {
  *       branch.addLast("h2-frame", new Http2FrameDuplexe(true));
  *       branch.addLast("h2-object", new Http2ObjectDuplexe(true));
- *       branch.addLastDecoder("h2-aggregator", new HttpRequestAggregator(1048576));
+ *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2PartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
  *       branch.addLastDecoder("h2-handler", new HttpDispatchHandler(true));
  *   });
  *   alpn.branchByInitializer(HttpRouteKey.BRANCH_H1, branch -&gt; {

@@ -66,12 +66,12 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  *   routing.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -&gt; {
  *       branch.addLast("h2-frame", new Http2FrameDuplexe(true));
  *       branch.addLast("h2-object", new Http2ObjectDuplexe(true, new Http2Settings().headerTableSize(4096).maxHeaderListSize(8192)));
- *       branch.addLastDecoder("h2-aggregator", new HttpRequestAggregator(1048576));
+ *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2PartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
  *       branch.addLastDecoder("h2-handler", new HttpDispatchHandler(false));
  *   });
  *   routing.branchByInitializer(HttpRouteKey.BRANCH_H2C, branch -&gt; {
  *       branch.addLast("h2c-upgrade-codec", new H2cUpgradeServerDuplexe(4096, 8192, 8192, 1048576));
- *       branch.addLastDecoder("h2c-aggregator", new HttpRequestAggregator(1048576));
+ *       branch.nextPartition("h2c-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2PartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2c-aggregator", new HttpServerDuplexeAggregator(1048576))));
  *       branch.addLastDecoder("h2c-handler", new HttpDispatchHandler(false));
  *   });
  *   routing.branchByInitializer(HttpRouteKey.BRANCH_H1, branch -&gt; {

@@ -31,7 +31,7 @@ import net.hasor.neta.codec.http.*;
  *   ByteBuf -> Http2Frame -> HttpObject
  * </pre>
  * Only HEADERS and DATA continue as {@link HttpObject}. Control frames are
- * consumed internally or translated into HTTP/2 user events. This decoder also
+ * consumed internally or translated into HTTP/2 network events. This decoder also
  * enforces message-layer invariants from RFC 9113 such as header-block
  * reassembly and control-frame payload constraints.
  */
@@ -97,7 +97,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
                     processPriorityFrame(context, frame);
                     break;
                 case Http2FrameType.RST_STREAM:
-                    processRstStream(state, context, frame);
+                    processRstStream(state, context, dst, frame);
                     break;
                 case Http2FrameType.SETTINGS:
                     processSettings(state, context, frame);
@@ -121,6 +121,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
                     break;
             }
         }
+
         return ProtoStatus.Next;
     }
 
@@ -204,6 +205,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
                 DefaultLastHttpContent lastContent = new DefaultLastHttpContent(content);
                 lastContent.streamId(streamId);
                 dst.offerMessage(lastContent);
+                stream.setTerminalObjectEmitted(true);
                 state.offerResponseStreamId(streamId);
             } else {
                 DefaultHttpContent httpContent = new DefaultHttpContent(content);
@@ -218,6 +220,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
         if (endStream) {
             markRemoteHalfClosed(stream);
+            this.recordInboundHalfClosed(context, streamId);
         }
     }
 
@@ -266,7 +269,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         if (Http2Flags.endHeaders(flags)) {
             DefaultHttpHeaders headers = state.decodeHeaders(payload, payloadOffset, headerBlockLength);
             state.setLastEmittedStreamId(streamId);
-            emitHeaders(state, dst, stream, streamId, headers, Http2Flags.endStream(flags));
+            emitHeaders(state, context, dst, stream, streamId, headers, Http2Flags.endStream(flags));
         } else {
             ByteBuf headerBlock = context.byteBufAllocator().buffer(headerBlockLength + 256);
             headerBlock.writeBytes(payload, payloadOffset, headerBlockLength);
@@ -297,7 +300,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         this.fireEvent(context, Http2PriorityEvent.class, new Http2PriorityEvent(streamId, streamDependency, weight, exclusive).remote(true));
     }
 
-    private void processRstStream(Http2DecoderContent state, ProtoContext context, Http2Frame frame) {
+    private void processRstStream(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Frame frame) {
         int streamId = frame.streamId();
         byte[] payload = frame.payload();
         int payloadOffset = frame.payloadOffset();
@@ -313,7 +316,13 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
                          ((long) (payload[payloadOffset + 2] & 0xFF) << 8) |
                          (payload[payloadOffset + 3] & 0xFF);
         // @formatter:on
+        Http2Stream stream = state.getStream(streamId);
+        if (this.shouldEmitResetTerminal(stream)) {
+            dst.offerMessage(this.newResetLastContent(streamId, errorCode));
+            stream.setTerminalObjectEmitted(true);
+        }
         state.closeStream(streamId);
+        state.removeFromResponseQueue(streamId);
 
         this.fireEvent(context, Http2ResetEvent.class, new Http2ResetEvent(streamId, errorCode).remote(true));
     }
@@ -546,12 +555,12 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
                 promisedStream.state(Http2StreamState.RESERVED_LOCAL);
                 this.fireEvent(context, Http2PushPromiseEvent.class, new Http2PushPromiseEvent(streamId, promisedStreamId, headers).remote(true));
             } else {
-                emitHeaders(state, dst, stream, streamId, headers, endStream);
+                emitHeaders(state, context, dst, stream, streamId, headers, endStream);
             }
         }
     }
 
-    private void emitHeaders(Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, Http2Stream stream, int streamId, HttpHeaders headers, boolean endStream) {
+    private void emitHeaders(Http2DecoderContent state, ProtoContext context, ProtoSndQueue<HttpObject> dst, Http2Stream stream, int streamId, HttpHeaders headers, boolean endStream) {
         if (stream != null && stream.isInitialHeadersEmitted()) {
             emitTrailerHeaders(state, dst, streamId, headers, endStream);
         } else {
@@ -561,8 +570,16 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             }
         }
         if (endStream) {
+            if (stream != null) {
+                stream.setTerminalObjectEmitted(true);
+            }
             markRemoteHalfClosed(stream);
+            this.recordInboundHalfClosed(context, streamId);
         }
+    }
+
+    private void recordInboundHalfClosed(ProtoContext context, int streamId) {
+        this.fireEvent(context, Http2StreamCloseEvent.class, new Http2StreamCloseEvent(streamId, true).remote(true));
     }
 
     private void emitInitialHeaders(Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
@@ -614,6 +631,10 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             lastContent.streamId(streamId);
 
             dst.offerMessage(lastContent);
+            Http2Stream stream = state.getStream(streamId);
+            if (stream != null) {
+                stream.setTerminalObjectEmitted(true);
+            }
         }
     }
 
@@ -651,7 +672,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
     private <T> void fireEvent(ProtoContext context, Class<T> eventType, T event) {
         try {
-            context.fireUserEvent(eventType, event);
+            context.fireEvent(eventType, event);
         } catch (Throwable e) {
             logger.error("Error occurred while publishing HTTP/2 event: " + eventType.getSimpleName(), e);
         }
@@ -682,6 +703,17 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         Http2Frame frame = resetStreamFrame(streamId, errorCode);
         context.sendData(frame);
         this.fireEvent(context, Http2ResetEvent.class, new Http2ResetEvent(streamId, errorCode).remote(false));
+    }
+
+    private boolean shouldEmitResetTerminal(Http2Stream stream) {
+        return stream != null && stream.isInitialHeadersEmitted() && !stream.isTerminalObjectEmitted();
+    }
+
+    private LastHttpContent newResetLastContent(int streamId, long errorCode) {
+        LastHttpContent lastContent = new DefaultLastHttpContent(ByteBuf.EMPTY);
+        lastContent.streamId(streamId);
+        lastContent.markBad("HTTP/2 stream reset: " + Http2ErrorCode.name(errorCode));
+        return lastContent;
     }
 
     private static Http2Frame buildWindowUpdateFrame(int streamId, int increment) {

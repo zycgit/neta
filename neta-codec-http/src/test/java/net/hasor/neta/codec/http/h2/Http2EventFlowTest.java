@@ -17,7 +17,6 @@ package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
@@ -27,22 +26,8 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class Http2EventFlowTest extends AbstractHttp2Test {
-    private static <T> T findEvent(Iterable<SoEvent> events, Class<T> eventType) {
-        for (SoEvent event : events) {
-            if (event != null && eventType.isInstance(event.getData())) {
-                return eventType.cast(event.getData());
-            }
-        }
-        return null;
-    }
-
-    private static Http2Frame findFrame(List<Http2Frame> frames, int frameType) {
-        for (Http2Frame frame : frames) {
-            if (frame != null && frame.type() == frameType) {
-                return frame;
-            }
-        }
-        return null;
+    private static ByteBuf wrapPingPayload() {
+        return ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
     }
 
     @Test
@@ -339,9 +324,5 @@ public class Http2EventFlowTest extends AbstractHttp2Test {
             assertEquals(Http2ErrorCode.PROTOCOL_ERROR, goawayEvent.errorCode());
             assertTrue(new String(goawayEvent.debugData(), StandardCharsets.UTF_8).contains("must not send PUSH_PROMISE"));
         });
-    }
-
-    private static ByteBuf wrapPingPayload() {
-        return ByteBuf.wrap(new byte[] { 1, 2, 3, 4, 5, 6, 7, 8 });
     }
 }

@@ -17,10 +17,8 @@ package net.hasor.neta.codec.http.h2;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import net.hasor.neta.channel.SoEvent;
-import net.hasor.neta.codec.http.AbstractHttpTest;
-import net.hasor.neta.codec.http.DefaultHttpHeaders;
-import net.hasor.neta.codec.http.HttpHeaders;
+import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.*;
 import static org.junit.Assert.*;
 
 public class AbstractHttp2Test extends AbstractHttpTest {
@@ -33,6 +31,8 @@ public class AbstractHttp2Test extends AbstractHttpTest {
     protected static Http2Settings h2Settings(int maxHeaderListSize) {
         return h2Settings().headerTableSize(4096).maxHeaderListSize(maxHeaderListSize);
     }
+
+    //
 
     protected static byte[] frame(int length, int type, int flags, int streamId) {
         return frame(length, type, flags, streamId, new byte[0]);
@@ -56,31 +56,35 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         return header;
     }
 
-    protected static byte[] concat(byte[]... parts) {
-        int total = 0;
-        for (byte[] part : parts) {
-            total += part.length;
-        }
-        byte[] result = new byte[total];
-        int offset = 0;
-        for (byte[] part : parts) {
-            System.arraycopy(part, 0, result, offset, part.length);
-            offset += part.length;
-        }
-        return result;
-    }
+    //
 
-    protected static DefaultHttpHeaders headers(String... pairs) {
-        DefaultHttpHeaders headers = new DefaultHttpHeaders();
-        for (int i = 0; i < pairs.length; i += 2) {
-            headers.addHeader(pairs[i], pairs[i + 1]);
-        }
-        return headers;
-    }
-
-    protected static byte[] encodeHeaders(DefaultHttpHeaders headers) {
+    protected static byte[] encodeHeaders(HttpHeaders headers) {
         HpackEncoder encoder = new HpackEncoder(4096);
         return encoder.encode(headers);
+    }
+
+    protected static void sendResponse(ProtoContext context, int streamId, String uri, String body, String prefix) throws Throwable {
+        context.sendData(textResponse(streamId, prefix + uri + ":" + body)).get();
+    }
+
+    protected ProtoHandler<HttpObject, Object> echoRequestHandler() {
+        return (context, src, dst) -> {
+            while (src.hasMore()) {
+                HttpObject item = src.takeMessage();
+                if (!(item instanceof FullHttpRequest)) {
+                    continue;
+                }
+
+                FullHttpRequest request = (FullHttpRequest) item;
+                try {
+                    sendResponse(context, request.streamId(), request.uri(), utf8(request.content()), "echo:");
+                } finally {
+                    request.release();
+                }
+            }
+
+            return ProtoStatus.Next;
+        };
     }
 
     protected static HttpHeaders decodeHeaderBlock(Http2Frame headersFrame) {
@@ -88,14 +92,7 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         return decoder.decode(headersFrame.payload(), headersFrame.payloadOffset(), headersFrame.payloadLength());
     }
 
-    protected static Http2Frame findHttp2Frame(List<Http2Frame> frames, int frameType) {
-        for (Http2Frame frame : frames) {
-            if (frame != null && frame.type() == frameType) {
-                return frame;
-            }
-        }
-        return null;
-    }
+    //
 
     protected static int readHttp2Int31(byte[] payload, int offset) {
         return ((payload[offset] & 0x7F) << 24) | ((payload[offset + 1] & 0xFF) << 16) | ((payload[offset + 2] & 0xFF) << 8) | (payload[offset + 3] & 0xFF);
@@ -105,7 +102,9 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         return ((long) (payload[offset] & 0xFF) << 24) | ((long) (payload[offset + 1] & 0xFF) << 16) | ((long) (payload[offset + 2] & 0xFF) << 8) | (payload[offset + 3] & 0xFF);
     }
 
-    protected static <T> T findHttp2Event(Iterable<SoEvent> events, Class<T> eventType) {
+    //
+
+    protected static <T> T findEvent(Iterable<SoEvent> events, Class<T> eventType) {
         for (SoEvent event : events) {
             if (event != null && eventType.isInstance(event.getData())) {
                 return eventType.cast(event.getData());
@@ -114,19 +113,30 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         return null;
     }
 
+    protected static Http2Frame findFrame(List<Http2Frame> frames, int frameType) {
+        for (Http2Frame frame : frames) {
+            if (frame != null && frame.type() == frameType) {
+                return frame;
+            }
+        }
+        return null;
+    }
+
+    //
+
     protected void assertStreamReset(VirtualPipe pipe, int expectedStreamId, long expectedErrorCode) throws InterruptedException {
         assertTrue(waitUntil(() -> !pipe.channelOutbound().isEmpty() || !pipe.channelInboundErrors().isEmpty(), 1000L));
         assertTrue(pipe.channelInboundErrors().isEmpty());
 
         List<Http2Frame> outbound = drainQueue(pipe.channelOutbound());
-        Http2Frame rstStreamFrame = findHttp2Frame(outbound, Http2FrameType.RST_STREAM);
+        Http2Frame rstStreamFrame = findFrame(outbound, Http2FrameType.RST_STREAM);
         assertNotNull(rstStreamFrame);
         assertEquals(expectedStreamId, rstStreamFrame.streamId());
         assertEquals(expectedErrorCode, readHttp2UnsignedInt(rstStreamFrame.payload(), 0));
 
-        Http2ResetEvent resetEvent = findHttp2Event(pipe.channelEvents(), Http2ResetEvent.class);
+        Http2ResetEvent resetEvent = findEvent(pipe.channelEvents(), Http2ResetEvent.class);
         assertNotNull(resetEvent);
-        assertEquals((long) expectedStreamId, resetEvent.streamId());
+        assertEquals(expectedStreamId, resetEvent.streamId());
         assertEquals(expectedErrorCode, resetEvent.errorCode());
         assertFalse(resetEvent.isRemote());
     }
@@ -137,12 +147,12 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         assertTrue(pipe.channel().isClose());
 
         List<Http2Frame> outbound = drainQueue(pipe.channelOutbound());
-        Http2Frame goAwayFrame = findHttp2Frame(outbound, Http2FrameType.GOAWAY);
+        Http2Frame goAwayFrame = findFrame(outbound, Http2FrameType.GOAWAY);
         assertNotNull(goAwayFrame);
         assertEquals(expectedLastAccepted, readHttp2Int31(goAwayFrame.payload(), 0));
         assertEquals(expectedErrorCode, readHttp2UnsignedInt(goAwayFrame.payload(), 4));
 
-        Http2GoawayEvent goawayEvent = findHttp2Event(pipe.channelEvents(), Http2GoawayEvent.class);
+        Http2GoawayEvent goawayEvent = findEvent(pipe.channelEvents(), Http2GoawayEvent.class);
         assertNotNull(goawayEvent);
         assertEquals(expectedLastAccepted, goawayEvent.lastAcceptedId());
         assertEquals(expectedErrorCode, goawayEvent.errorCode());
@@ -166,7 +176,7 @@ public class AbstractHttp2Test extends AbstractHttpTest {
         return Http2Frame.priority(streamId, payload);
     }
 
-    protected static List<Http2Frame> pushPromiseFrames(int streamId, int promisedStreamId, DefaultHttpHeaders headers, int maxHeaderTableSize, int maxFrameSize) {
+    protected static List<Http2Frame> pushPromiseFrames(int streamId, int promisedStreamId, HttpHeaders headers, int maxHeaderTableSize, int maxFrameSize) {
         HpackEncoder encoder = new HpackEncoder(maxHeaderTableSize);
         encoder.beginEncode();
         for (String headerName : headers.headerNames()) {
@@ -199,5 +209,33 @@ public class AbstractHttp2Test extends AbstractHttpTest {
             offset += chunkLength;
         }
         return frames;
+    }
+
+    //
+
+    protected VirtualPipe openHttpServer(NetManager neta, ProtoHandler<HttpObject, Object> handler, ProtoPartitionControl[] ref) throws Throwable {
+        int MAX_CONTENT_LENGTH = 1048576;
+        return openVirtualPipe(neta, clientCtx -> {
+            ProtoHelper.standard()//
+                    .nextDuplex("h2-frame", new Http2FrameDuplexe(false))   //
+                    .nextDuplex("h2-message", new Http2ObjectDuplexe(false))//
+                    .nextDuplex("h2-client-aggregator", new HttpClientDuplexeAggregator(MAX_CONTENT_LENGTH))//
+                    .build().config(clientCtx);
+        }, serverCtx -> {
+            ProtoHelper.standard()//
+                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))    //
+                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true)) //
+                    .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), pb -> {
+                        ref[0] = pb.control();
+
+                        Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                        pb.policy(policy).byDefault(pbc -> {
+                            pbc.addLast("h2-control-events", new Http2ObjectStreamManager(pb.control(), policy));
+                        }).byInitializer(pbc -> {
+                            pbc.addLast("h2-server-aggregator", new HttpServerDuplexeAggregator(MAX_CONTENT_LENGTH));
+                            pbc.addLastDecoder("h2-handler", handler);
+                        });
+                    }).build().config(serverCtx);
+        });
     }
 }

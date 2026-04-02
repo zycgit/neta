@@ -41,7 +41,7 @@ public class HttpHeadersAppendTest extends AbstractHttpTest {
         autoCloseNeta(neta -> {
             DefaultHttpHeaders source = new DefaultHttpHeaders();
             source.addHeader("X-Test", "value-1");
-            DefaultFullHttpRequest request = emptyFullRequestGet(HttpMethod.GET, "/append/default");
+            FullHttpRequest request = emptyFullRequestGet(HttpMethod.GET, "/append/default");
             request.appendHeaders(source);
 
             FullHttpRequest target = roundTripRequestOnSingleEndedPipes(neta, request);
@@ -53,7 +53,7 @@ public class HttpHeadersAppendTest extends AbstractHttpTest {
     @Test
     public void testAppendDefaultHttpHeadersPreservesRepeatedValues() throws Throwable {
         autoCloseNeta(neta -> {
-            DefaultFullHttpRequest request = emptyFullRequestGet(HttpMethod.GET, "/append/generic");
+            FullHttpRequest request = emptyFullRequestGet(HttpMethod.GET, "/append/generic");
             DefaultHttpHeaders source = new DefaultHttpHeaders();
             source.addHeader("X-Test", "value-1");
             source.addHeader("X-Test", "value-2");
@@ -70,7 +70,7 @@ public class HttpHeadersAppendTest extends AbstractHttpTest {
     @Test
     public void testAppendHeadersPreservesDistinctHeaderNames() throws Throwable {
         autoCloseNeta(neta -> {
-            DefaultFullHttpRequest request = emptyFullRequestGet(HttpMethod.GET, "/append/names");
+            FullHttpRequest request = emptyFullRequestGet(HttpMethod.GET, "/append/names");
             request.addHeader("Host", "example.com");
             DefaultHttpHeaders source = new DefaultHttpHeaders();
             source.addHeader("Host", "example.org");

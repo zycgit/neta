@@ -71,6 +71,10 @@ public class AbstractHttpTest {
         }
     }
 
+    protected static String utf8(ByteBuf buffer) {
+        return new String(bytes(buffer.retain()), StandardCharsets.UTF_8);
+    }
+
     protected static byte[] bytes(ByteBuf... buffer) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer();
         try {
@@ -91,6 +95,20 @@ public class AbstractHttpTest {
         }
     }
 
+    protected static byte[] concat(byte[]... parts) {
+        int total = 0;
+        for (byte[] part : parts) {
+            total += part.length;
+        }
+        byte[] result = new byte[total];
+        int offset = 0;
+        for (byte[] part : parts) {
+            System.arraycopy(part, 0, result, offset, part.length);
+            offset += part.length;
+        }
+        return result;
+    }
+
     protected static void free(Iterable<?> messages) {
         if (messages == null) {
             return;
@@ -106,12 +124,36 @@ public class AbstractHttpTest {
         }
     }
 
-    protected static HttpByteBuf httpByteBuf(byte[] data) {
-        return new DefaultHttpByteBuf(ByteBuf.wrap(data));
+    protected static boolean containsEvent(Iterable<Class<?>> eventTypes, Class<?> targetType) {
+        for (Class<?> eventType : eventTypes) {
+            if (targetType.equals(eventType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
-    protected static DefaultFullHttpRequest emptyFullRequestGet(HttpMethod method, String uri) {
+    //
+
+    protected static FullHttpRequest emptyFullRequestGet(HttpMethod method, String uri) {
         return new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, method, uri);
+    }
+
+    protected static FullHttpRequest postRequest(String uri, String bodyText) {
+        byte[] data = bodyText.getBytes(StandardCharsets.UTF_8);
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_2_0, HttpMethod.POST, uri, ByteBuf.wrap(data));
+        request.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(data.length));
+        request.setHeader(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=utf-8");
+        return request;
+    }
+
+    protected static FullHttpResponse textResponse(int streamId, String bodyText) {
+        byte[] data = bodyText.getBytes(StandardCharsets.UTF_8);
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_2_0, HttpStatus.OK, ByteBuf.wrap(data));
+        response.streamId(streamId);
+        response.setHeader(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(data.length));
+        response.setHeader(HttpHeaderNames.CONTENT_TYPE, "text/plain; charset=utf-8");
+        return response;
     }
 
     protected static HttpHeaders joinHeaders(Class<?> type, Tuple... header) {
@@ -130,6 +172,26 @@ public class AbstractHttpTest {
             headers.addHeader(part.getArg0(), part.getArg1());
         }
         return headers;
+    }
+
+    protected static HttpHeaders headers(String... pairs) {
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        for (int i = 0; i < pairs.length; i += 2) {
+            headers.addHeader(pairs[i], pairs[i + 1]);
+        }
+        return headers;
+    }
+
+    protected static List<HttpObject> castHttpObjects(List<?> messages) {
+        List<HttpObject> result = new ArrayList<HttpObject>(messages.size());
+        for (Object item : messages) {
+            result.add((HttpObject) item);
+        }
+        return result;
+    }
+
+    protected static HttpByteBuf httpByteBuf(byte[] data) {
+        return new DefaultHttpByteBuf(ByteBuf.wrap(data));
     }
 
     //
@@ -372,23 +434,23 @@ public class AbstractHttpTest {
     }
 
     protected static final class VirtualPipe {
-        private final VrtChannel         channel;
-        private final Queue<Object>      channelInbound;
-        private final Queue<Object>      channelOutbound;
-        private final Queue<Throwable>   channelInboundErrors;
-        private final Queue<Throwable>   channelOutboundErrors;
-        private final Queue<SoEvent> channelEvents;
+        private final VrtChannel       channel;
+        private final Queue<Object>    channelInbound;
+        private final Queue<Object>    channelOutbound;
+        private final Queue<Throwable> channelInboundErrors;
+        private final Queue<Throwable> channelOutboundErrors;
+        private final Queue<SoEvent>   channelEvents;
         //
-        private final VrtChannel         client;
-        private final Queue<Object>      clientInbound;
-        private final Queue<Throwable>   clientInboundErrors;
-        private final Queue<Throwable>   clientOutboundErrors;
-        private final Queue<SoEvent> clientEvents;
-        private final VrtChannel         server;
-        private final Queue<Object>      serverInbound;
-        private final Queue<Throwable>   serverInboundErrors;
-        private final Queue<Throwable>   serverOutboundErrors;
-        private final Queue<SoEvent> serverEvents;
+        private final VrtChannel       client;
+        private final Queue<Object>    clientInbound;
+        private final Queue<Throwable> clientInboundErrors;
+        private final Queue<Throwable> clientOutboundErrors;
+        private final Queue<SoEvent>   clientEvents;
+        private final VrtChannel       server;
+        private final Queue<Object>    serverInbound;
+        private final Queue<Throwable> serverInboundErrors;
+        private final Queue<Throwable> serverOutboundErrors;
+        private final Queue<SoEvent>   serverEvents;
 
         private VirtualPipe(VrtChannel channel, Queue<Object> channelInbound, Queue<Object> channelOutbound, Queue<Throwable> channelInboundErrors, Queue<Throwable> channelOutboundErrors, Queue<SoEvent> channelEvents) {
             this.channel = channel;

@@ -169,9 +169,8 @@ public class Http2UpgradeRoutingIntegrationTest extends AbstractHttpTest {
                                 Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                                 ProtoPartitionControl control = partition.control();
                                 partition.policy(policy).byInitializer(partitionCtx -> {
-                                    partitionCtx.addLast("h2-stream-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy));
                                     partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576));
-                                }).byDefault(partitionCtx -> partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy)));
+                                }).byDefault(partitionCtx -> partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectStreamManager(control, policy)));
                             })//
                             .nextDecoder("h2-handler", new InlineDispatchHandler()));
                     //
@@ -181,9 +180,8 @@ public class Http2UpgradeRoutingIntegrationTest extends AbstractHttpTest {
                                 Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
                                 ProtoPartitionControl control = partition.control();
                                 partition.policy(policy).byInitializer(partitionCtx -> {
-                                    partitionCtx.addLast("h2c-stream-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy));
                                     partitionCtx.addLast("h2c-aggregator", new HttpServerDuplexeAggregator(1048576));
-                                }).byDefault(partitionCtx -> partitionCtx.addLast("h2c-control-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy)));
+                                }).byDefault(partitionCtx -> partitionCtx.addLast("h2c-control-lifecycle", new Http2ObjectStreamManager(control, policy)));
                             })//
                             .nextDecoder("h2c-handler", new InlineDispatchHandler()));
                     //

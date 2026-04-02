@@ -47,25 +47,23 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
     }
 
     @Override
-    public int offerMessage(Http3Frame[] offerList) {
+    public boolean offerMessage(Http3Frame[] offerList) {
         Collections.addAll(list, offerList);
-        return offerList.length;
+        return true;
     }
 
     @Override
-    public int offerMessage(List<Http3Frame> offerList) {
+    public boolean offerMessage(List<Http3Frame> offerList) {
         list.addAll(offerList);
-        return offerList.size();
+        return true;
     }
 
     @Override
-    public int offerMessage(ProtoRcvQueue<Http3Frame> offerList) {
-        int count = 0;
+    public boolean offerMessage(ProtoRcvQueue<Http3Frame> offerList) {
         while (offerList.hasMore()) {
             list.add(offerList.takeMessage());
-            count++;
         }
-        return count;
+        return true;
     }
 
     @Override

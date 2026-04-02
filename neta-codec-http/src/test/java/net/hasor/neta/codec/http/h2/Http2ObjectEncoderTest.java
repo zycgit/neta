@@ -26,18 +26,6 @@ import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class Http2ObjectEncoderTest extends AbstractHttp2Test {
-
-    @Test
-    public void testEncoderDoesNotHandleGenericHttpProtocolException() {
-        Http2ObjectEncoder encoder = new Http2ObjectEncoder(false);
-        ClearFlagExceptionHolder holder = new ClearFlagExceptionHolder();
-
-        ProtoStatus status = encoder.onError(null, new HttpProtocolStateException("generic-http-error"), holder);
-
-        assertEquals(ProtoStatus.Next, status);
-        assertFalse(holder.cleared);
-    }
-
     private static String buildLargeHeaderValue(int size) {
         StringBuilder builder = new StringBuilder(size);
         for (int i = 0; i < size; i++) {
@@ -53,6 +41,17 @@ public class Http2ObjectEncoderTest extends AbstractHttp2Test {
         public void clear() {
             this.cleared = true;
         }
+    }
+
+    @Test
+    public void testEncoderDoesNotHandleGenericHttpProtocolException() {
+        Http2ObjectEncoder encoder = new Http2ObjectEncoder(false);
+        ClearFlagExceptionHolder holder = new ClearFlagExceptionHolder();
+
+        ProtoStatus status = encoder.onError(null, new HttpProtocolStateException("generic-http-error"), holder);
+
+        assertEquals(ProtoStatus.Next, status);
+        assertFalse(holder.cleared);
     }
 
     //

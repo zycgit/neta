@@ -166,8 +166,8 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
             List<ByteBuf> parts = sendAndOutBound(pipe,//
                     new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/resume"),//
                     joinHeaders(DefaultLastHttpHeaders.class,//
-                        Tuple.of(HttpHeaderNames.HOST, "example.com"),//
-                        Tuple.of(HttpHeaderNames.CONTENT_LENGTH, "4")),//
+                            Tuple.of(HttpHeaderNames.HOST, "example.com"),//
+                            Tuple.of(HttpHeaderNames.CONTENT_LENGTH, "4")),//
                     new DefaultLastHttpContent(ascii("Wiki")));
 
             assertEquals(3, parts.size());

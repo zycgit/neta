@@ -75,10 +75,10 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
             if (this.upgraded) {
                 ProtoQueue<Http2Frame> inboundFrames = new ProtoQueue<>(-1);
                 ProtoQueue<Http2Frame> outboundFrames = new ProtoQueue<>(-1);
-                ProtoStatus status = this.http2FrameCodec.onMessage(context, true, rcvUp, inboundFrames, new ProtoQueue<Http2Frame>(-1), sndDown);
-                this.http2ObjectCodec.onMessage(context, true, inboundFrames, rcvDown, new ProtoQueue<HttpObject>(-1), outboundFrames);
+                ProtoStatus status = this.http2FrameCodec.onMessage(context, true, rcvUp, inboundFrames, new ProtoQueue<>(-1), sndDown);
+                this.http2ObjectCodec.onMessage(context, true, inboundFrames, rcvDown, new ProtoQueue<>(-1), outboundFrames);
                 if (outboundFrames.hasMore()) {
-                    this.http2FrameCodec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Frame>(-1), outboundFrames, sndDown);
+                    this.http2FrameCodec.onMessage(context, false, new ProtoQueue<>(-1), new ProtoQueue<>(-1), outboundFrames, sndDown);
                 }
                 return status;
             }
@@ -87,8 +87,8 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
 
         if (this.upgraded) {
             ProtoQueue<Http2Frame> outboundFrames = new ProtoQueue<>(-1);
-            this.http2ObjectCodec.onMessage(context, false, new ProtoQueue<Http2Frame>(-1), new ProtoQueue<HttpObject>(-1), sndUp, outboundFrames);
-            return this.http2FrameCodec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Frame>(-1), outboundFrames, sndDown);
+            this.http2ObjectCodec.onMessage(context, false, new ProtoQueue<>(-1), new ProtoQueue<>(-1), sndUp, outboundFrames);
+            return this.http2FrameCodec.onMessage(context, false, new ProtoQueue<>(-1), new ProtoQueue<>(-1), outboundFrames, sndDown);
         }
         return this.http1Codec.onMessage(context, false, rcvUp, rcvDown, sndUp, sndDown);
     }
@@ -123,7 +123,7 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
 
     private ProtoStatus handleUpgradeRequest(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         ProtoQueue<HttpObject> decodedQueue = new ProtoQueue<>(-1);
-        this.http1Codec.onMessage(context, true, rcvUp, decodedQueue, new ProtoQueue<HttpObject>(-1), sndDown);
+        this.http1Codec.onMessage(context, true, rcvUp, decodedQueue, new ProtoQueue<>(-1), sndDown);
 
         if (decodedQueue.queueSize() == 0) {
             return ProtoStatus.Next;
@@ -212,14 +212,14 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
 
         ProtoQueue<HttpObject> responseQueue = new ProtoQueue<>(-1);
         responseQueue.offerMessage(response);
-        this.http1Codec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<HttpObject>(-1), responseQueue, sndDown);
+        this.http1Codec.onMessage(context, false, new ProtoQueue<>(-1), new ProtoQueue<>(-1), responseQueue, sndDown);
     }
 
     private void sendServerPreface(ProtoContext context, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         ProtoQueue<Http2Frame> outboundFrames = new ProtoQueue<>(-1);
-        this.http2ObjectCodec.onMessage(context, true, new ProtoQueue<Http2Frame>(-1), new ProtoQueue<HttpObject>(-1), new ProtoQueue<HttpObject>(-1), outboundFrames);
+        this.http2ObjectCodec.onMessage(context, true, new ProtoQueue<>(-1), new ProtoQueue<>(-1), new ProtoQueue<HttpObject>(-1), outboundFrames);
         if (outboundFrames.hasMore()) {
-            this.http2FrameCodec.onMessage(context, false, new ProtoQueue<ByteBuf>(-1), new ProtoQueue<Http2Frame>(-1), outboundFrames, sndDown);
+            this.http2FrameCodec.onMessage(context, false, new ProtoQueue<>(-1), new ProtoQueue<>(-1), outboundFrames, sndDown);
         }
     }
 
@@ -244,6 +244,7 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObjec
         if (headerValue == null || token == null) {
             return false;
         }
+
         String[] tokens = headerValue.split(",");
         for (String item : tokens) {
             if (token.equalsIgnoreCase(item.trim())) {
