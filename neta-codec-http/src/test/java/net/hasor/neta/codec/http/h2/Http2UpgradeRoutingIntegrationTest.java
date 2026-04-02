@@ -24,6 +24,8 @@ import java.net.Socket;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.util.Base64;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
@@ -107,18 +109,82 @@ public class Http2UpgradeRoutingIntegrationTest extends AbstractHttpTest {
         }
     }
 
+    @Test
+    public void testH2cUpgradeInterleavedRequestStreams() throws Exception {
+        int port = findFreePort();
+        NetManager neta = new NetManager();
+        try {
+            startServer(neta, port);
+            Thread.sleep(300);
+
+            try (Socket socket = new Socket("127.0.0.1", port)) {
+                socket.setSoTimeout(5000);
+                InputStream in = socket.getInputStream();
+                OutputStream out = socket.getOutputStream();
+
+                out.write(buildUpgradeRequest(port).getBytes(StandardCharsets.US_ASCII));
+                out.flush();
+
+                String responseHead = readHttp1Head(in);
+                assertTrue(responseHead.startsWith("HTTP/1.1 101"));
+
+                out.write(CLIENT_PREFACE);
+                out.write(buildFrame(Http2FrameType.SETTINGS, Http2Flags.NONE, 0, new byte[0]));
+                out.flush();
+
+                Frame serverSettings = readFrame(in);
+                assertEquals(Http2FrameType.SETTINGS, serverSettings.type);
+                out.write(buildFrame(Http2FrameType.SETTINGS, Http2Flags.ACK, 0, new byte[0]));
+                out.flush();
+
+                H2Response upgradeResponse = readResponse(in, 1);
+                assertEquals("200", upgradeResponse.status);
+                assertEquals("upgraded:/upgrade", upgradeResponse.body);
+
+                out.write(buildHeadersFrame(port, 3, HttpMethod.POST, "/alpha", false, 4));
+                out.write(buildHeadersFrame(port, 5, HttpMethod.POST, "/beta", false, 2));
+                out.write(buildDataFrame(3, false, "AB"));
+                out.write(buildDataFrame(5, true, "12"));
+                out.write(buildDataFrame(3, true, "CD"));
+                out.flush();
+
+                Map<Integer, H2Response> responses = readResponses(in, 2);
+                assertEquals("200", responses.get(3).status);
+                assertEquals("200", responses.get(5).status);
+                assertEquals("upgraded:/alpha:ABCD", responses.get(3).body);
+                assertEquals("upgraded:/beta:12", responses.get(5).body);
+            }
+        } finally {
+            neta.shutdown();
+        }
+    }
+
     private void startServer(NetManager neta, int port) throws Exception {
         ProtoInitializer serverProto = ProtoHelper.standard()//
                 .nextRouteAsStatic("protocol-detect", new HttpAggregatorRoute(), routing -> {//
                     routing.branch(HttpRouteKey.BRANCH_H2, (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch//
                             .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
                             .nextDuplex("h2-message", new Http2ObjectDuplexe(true))//
-                            .nextDecoder("h2-aggregator", new HttpRequestAggregator(1048576))//
-                            .nextDecoder("h2-handler", new InlineDispatchHandler()));//
+                            .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
+                                Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                                ProtoPartitionControl control = partition.control();
+                                partition.policy(policy).byInitializer(partitionCtx -> {
+                                    partitionCtx.addLast("h2-stream-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy));
+                                    partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576));
+                                }).byDefault(partitionCtx -> partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy)));
+                            })//
+                            .nextDecoder("h2-handler", new InlineDispatchHandler()));
                     //
                     routing.branch(HttpRouteKey.BRANCH_H2C, (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch//
                             .nextDuplex("h2c-upgrade", new H2cUpgradeServerDuplexe())//
-                            .nextDecoder("h2c-aggregator", new HttpRequestAggregator(1048576))//
+                            .nextPartition("h2c-stream", new Http2ObjectPartitionSelector(), partition -> {
+                                Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                                ProtoPartitionControl control = partition.control();
+                                partition.policy(policy).byInitializer(partitionCtx -> {
+                                    partitionCtx.addLast("h2c-stream-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy));
+                                    partitionCtx.addLast("h2c-aggregator", new HttpServerDuplexeAggregator(1048576));
+                                }).byDefault(partitionCtx -> partitionCtx.addLast("h2c-control-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy)));
+                            })//
                             .nextDecoder("h2c-handler", new InlineDispatchHandler()));
                     //
                     routing.branch(HttpRouteKey.BRANCH_H1, (ProtoBuilder<ByteBuf, ByteBuf> branch) -> branch//
@@ -142,27 +208,52 @@ public class Http2UpgradeRoutingIntegrationTest extends AbstractHttpTest {
     }
 
     private byte[] buildHeadersFrame(int port, int streamId, String path) {
+        return buildHeadersFrame(port, streamId, HttpMethod.GET, path, true, -1);
+    }
+
+    private byte[] buildHeadersFrame(int port, int streamId, HttpMethod method, String path, boolean endStream, int contentLength) {
         HpackEncoder encoder = new HpackEncoder(4096);
         encoder.beginEncode();
-        encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_METHOD, HttpMethod.GET.name());
+        encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_METHOD, method.name());
         encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_PATH, path);
         encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_SCHEME, "http");
         encoder.encodeHeaderDirect(HttpHeaderNames.PSEUDO_AUTHORITY, "127.0.0.1:" + port);
+        if (contentLength >= 0) {
+            encoder.encodeHeaderDirect(HttpHeaderNames.CONTENT_LENGTH, String.valueOf(contentLength));
+        }
         byte[] headerBlock = new byte[encoder.encodedLength()];
         System.arraycopy(encoder.encodedBuffer(), 0, headerBlock, 0, headerBlock.length);
-        return buildFrame(Http2FrameType.HEADERS, Http2Flags.END_HEADERS | Http2Flags.END_STREAM, streamId, headerBlock);
+        int flags = Http2Flags.END_HEADERS | (endStream ? Http2Flags.END_STREAM : Http2Flags.NONE);
+        return buildFrame(Http2FrameType.HEADERS, flags, streamId, headerBlock);
+    }
+
+    private byte[] buildDataFrame(int streamId, boolean endStream, String body) {
+        return buildFrame(Http2FrameType.DATA, endStream ? Http2Flags.END_STREAM : Http2Flags.NONE, streamId, body.getBytes(StandardCharsets.UTF_8));
     }
 
     private H2Response readResponse(InputStream in, int streamId) throws IOException {
+        return readResponses(in, 1, streamId).get(streamId);
+    }
+
+    private Map<Integer, H2Response> readResponses(InputStream in, int expectedCount) throws IOException {
+        return readResponses(in, expectedCount, null);
+    }
+
+    private Map<Integer, H2Response> readResponses(InputStream in, int expectedCount, Integer targetStreamId) throws IOException {
         HpackDecoder decoder = new HpackDecoder(4096, 8192);
-        H2Response response = new H2Response();
-        while (!response.endStream) {
+        Map<Integer, H2Response> responses = new LinkedHashMap<>();
+        while (countCompleted(responses) < expectedCount) {
             Frame frame = readFrame(in);
             if (frame.streamId == 0) {
                 continue;
             }
-            if (frame.streamId != streamId) {
+            if (targetStreamId != null && frame.streamId != targetStreamId.intValue()) {
                 continue;
+            }
+            H2Response response = responses.get(frame.streamId);
+            if (response == null) {
+                response = new H2Response();
+                responses.put(frame.streamId, response);
             }
             if (frame.type == Http2FrameType.HEADERS) {
                 response.status = decoder.decode(frame.payload, 0, frame.payload.length).getString(HttpHeaderNames.PSEUDO_STATUS);
@@ -172,7 +263,17 @@ public class Http2UpgradeRoutingIntegrationTest extends AbstractHttpTest {
                 response.endStream = Http2Flags.endStream(frame.flags);
             }
         }
-        return response;
+        return responses;
+    }
+
+    private int countCompleted(Map<Integer, H2Response> responses) {
+        int count = 0;
+        for (H2Response response : responses.values()) {
+            if (response.endStream) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private Frame readFrame(InputStream in) throws IOException {
@@ -281,6 +382,10 @@ public class Http2UpgradeRoutingIntegrationTest extends AbstractHttpTest {
                 String bodyText = request.protocolVersion().text().toLowerCase() + ":" + request.uri();
                 if (HttpVersion.HTTP_2_0.equals(request.protocolVersion())) {
                     bodyText = "upgraded:" + request.uri();
+                }
+                String requestBody = request.content() == null ? "" : Http2UpgradeRoutingIntegrationTest.text(request.content().retain());
+                if (!requestBody.isEmpty()) {
+                    bodyText = bodyText + ":" + requestBody;
                 }
                 ByteBuf body = toBody(bodyText);
                 DefaultFullHttpResponse response = new DefaultFullHttpResponse(request.protocolVersion(), HttpStatus.OK, body);

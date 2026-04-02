@@ -15,7 +15,7 @@
  */
 package net.hasor.neta.codec.http.h3;
 import java.util.Arrays;
-import net.hasor.neta.codec.http.HttpEvent;
+import net.hasor.neta.codec.http.AbstractHttpEvent;
 
 /**
  * Connection-level graceful-shutdown signal published when the remote peer sends GOAWAY.
@@ -27,7 +27,7 @@ import net.hasor.neta.codec.http.HttpEvent;
  *   <li>HTTP/3: last accepted request or push identifier encoded by GOAWAY</li>
  * </ul>
  */
-public class HttpConnectionGoAwayEvent implements HttpEvent {
+public class HttpConnectionGoAwayEvent extends AbstractHttpEvent {
     private final long   lastAcceptedId;
     private final long   errorCode;
     private final byte[] debugData;

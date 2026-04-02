@@ -22,6 +22,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.HttpEvent;
 
 /**
  * Converts inbound {@link WebSocketFrame} flow into message chunks and control events.
@@ -81,10 +82,12 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             WebSocketUtils.markCloseReceived(context);
             resetFragmentState();
         } else if (eventData instanceof PingWebSocketEvent) {
-            sendControlEventFrame(context, (PingWebSocketEvent) eventData, true);
+            PingWebSocketEvent pingEvent = (PingWebSocketEvent) eventData;
+            sendControlEventFrame(context, pingEvent, pingEvent.content(), true);
             return false;
         } else if (eventData instanceof PongWebSocketEvent) {
-            sendControlEventFrame(context, (PongWebSocketEvent) eventData, false);
+            PongWebSocketEvent pongEvent = (PongWebSocketEvent) eventData;
+            sendControlEventFrame(context, pongEvent, pongEvent.content(), false);
             return false;
         }
         return true;
@@ -318,10 +321,9 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         WebSocketUtils.closeChannelAfterSend(context, context.sendData(closeReply));
     }
 
-    private void sendControlEventFrame(ProtoContext context, AbstractWebSocketEvent event, boolean ping) {
+    private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
         try {
-            ByteBuf content = event instanceof PingWebSocketEvent ? ((PingWebSocketEvent) event).content() : ((PongWebSocketEvent) event).content();
-            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(event.streamId());
+            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(event.streamIdAsInt());
             context.sendData(controlMessage);
         } finally {
             event.release();

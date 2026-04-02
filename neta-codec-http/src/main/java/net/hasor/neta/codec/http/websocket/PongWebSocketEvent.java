@@ -15,13 +15,14 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.codec.http.AbstractHttpEvent;
 
 /**
  * Network event that requests or represents a WebSocket pong.
  * <p>
  * Carries the optional pong payload and is commonly emitted by inbound control-frame handling.
  */
-public class PongWebSocketEvent extends AbstractWebSocketEvent {
+public class PongWebSocketEvent extends AbstractHttpEvent {
     private final ByteBuf content;
 
     public PongWebSocketEvent() {

@@ -96,7 +96,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
 
             Http2PriorityEvent priorityEvent = findHttp2Event(pipe.channelEvents(), Http2PriorityEvent.class);
             assertNotNull(priorityEvent);
-            assertEquals(3, priorityEvent.streamId());
+            assertEquals(3L, priorityEvent.streamId());
             assertEquals(1, priorityEvent.streamDependency());
             assertEquals(16, priorityEvent.weight());
             assertTrue(priorityEvent.exclusive());
@@ -119,7 +119,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
 
             Http2PushPromiseEvent pushPromiseEvent = findHttp2Event(pipe.channelEvents(), Http2PushPromiseEvent.class);
             assertNotNull(pushPromiseEvent);
-            assertEquals(1, pushPromiseEvent.streamId());
+            assertEquals(1L, pushPromiseEvent.streamId());
             assertEquals(2, pushPromiseEvent.promisedStreamId());
             assertEquals("GET", pushPromiseEvent.headers().getString(HttpHeaderNames.PSEUDO_METHOD));
             assertEquals("/asset.js", pushPromiseEvent.headers().getString(HttpHeaderNames.PSEUDO_PATH));
@@ -246,7 +246,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
 
             Http2ResetEvent resetEvent = findHttp2Event(pipe.channelEvents(), Http2ResetEvent.class);
             assertNotNull(resetEvent);
-            assertEquals(3, resetEvent.streamId());
+            assertEquals(3L, resetEvent.streamId());
             assertEquals(Http2ErrorCode.CANCEL, resetEvent.errorCode());
         });
     }
@@ -273,7 +273,7 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
 
             Http2ResetEvent resetEvent = findHttp2Event(pipe.channelEvents(), Http2ResetEvent.class);
             assertNotNull(resetEvent);
-            assertEquals(3, resetEvent.streamId());
+            assertEquals(3L, resetEvent.streamId());
             assertEquals(Http2ErrorCode.CANCEL, resetEvent.errorCode());
         });
     }

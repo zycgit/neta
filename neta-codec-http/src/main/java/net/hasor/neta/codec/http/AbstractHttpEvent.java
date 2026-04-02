@@ -13,33 +13,37 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.websocket;
-import net.hasor.neta.codec.http.HttpEvent;
+package net.hasor.neta.codec.http;
 
 /**
- * Base type for WebSocket network events.
+ * Shared base type for HTTP-related event objects.
  * <p>
- * Provides a common stream id and release lifecycle for handshake, ping/pong, and close events.
+ * Provides a protocol-neutral stream identifier and a one-shot release lifecycle so protocol
+ * families such as HTTP/2, HTTP/3, and WebSocket do not each need to reimplement the same event
+ * bookkeeping.
  */
-public abstract class AbstractWebSocketEvent implements HttpEvent {
-    private int     streamId;
+public abstract class AbstractHttpEvent implements HttpEvent {
+    private long    streamId;
     private boolean released;
 
-    public final int streamId() {
+    @Override
+    public final long streamId() {
         return this.streamId;
     }
 
-    public AbstractWebSocketEvent streamId(int streamId) {
+    @Override
+    public AbstractHttpEvent streamId(long streamId) {
         this.streamId = streamId;
         return this;
     }
 
+    @Override
     public final void release() {
         if (this.released) {
             return;
         }
         this.released = true;
-        this.streamId = 0;
+        this.streamId = 0L;
         this.doRelease();
     }
 

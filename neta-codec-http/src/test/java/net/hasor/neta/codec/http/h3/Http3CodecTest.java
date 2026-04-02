@@ -1268,25 +1268,23 @@ public class Http3CodecTest {
         }
 
         @Override
-        public int offerMessage(T[] offerList) {
+        public boolean offerMessage(T[] offerList) {
             Collections.addAll(list, offerList);
-            return offerList.length;
+            return true;
         }
 
         @Override
-        public int offerMessage(List<T> offerList) {
+        public boolean offerMessage(List<T> offerList) {
             list.addAll(offerList);
-            return offerList.size();
+            return true;
         }
 
         @Override
-        public int offerMessage(ProtoRcvQueue<T> offerList) {
-            int count = 0;
+        public boolean offerMessage(ProtoRcvQueue<T> offerList) {
             while (offerList.hasMore()) {
                 list.add(offerList.takeMessage());
-                count++;
             }
-            return count;
+            return true;
         }
 
         public int size() {

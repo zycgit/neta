@@ -80,12 +80,19 @@ public class Http2OkHttpIntegrationTest extends AbstractHttpTest {
                 return null;
             });
 
-            detect.addBranch("h2", h2cBranch -> {
-                h2cBranch.addLast("h2-frame", new Http2FrameDuplexe(true));
-                h2cBranch.addLast("h2-message", new Http2ObjectDuplexe(true, new Http2Settings().headerTableSize(4096).maxHeaderListSize(8192).initialWindowSize(Math.max(initialWindowSize, 65535)).enablePush(false).maxConcurrentStreams(100L)));
-                h2cBranch.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576));
-                h2cBranch.addLastDecoder("h2-handler", new InlineDispatchHandler(requestHandler));
-            });
+                detect.addBranch("h2", branchCtx -> ProtoHelper.standard()//
+                    .nextDuplex("h2-frame", new Http2FrameDuplexe(true))//
+                    .nextDuplex("h2-message", new Http2ObjectDuplexe(true, new Http2Settings().headerTableSize(4096).maxHeaderListSize(8192).initialWindowSize(Math.max(initialWindowSize, 65535)).enablePush(false).maxConcurrentStreams(100L)))//
+                    .nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -> {
+                        Http2ObjectPartitionPolicy policy = new Http2ObjectPartitionPolicy();
+                        ProtoPartitionControl control = partition.control();
+                        partition.policy(policy).byInitializer(partitionCtx -> {
+                            partitionCtx.addLast("h2-stream-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy));
+                            partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576));
+                        }).byDefault(partitionCtx -> partitionCtx.addLast("h2-control-lifecycle", new Http2ObjectLifecycleDuplexer(control, policy)));
+                    })//
+                    .nextDecoder("h2-handler", new InlineDispatchHandler(requestHandler))//
+                    .build().config(branchCtx));
 
             detect.addBranch("http", httpBranch -> {
                 httpBranch.addLast("http-codec", new HttpServerDuplexe());

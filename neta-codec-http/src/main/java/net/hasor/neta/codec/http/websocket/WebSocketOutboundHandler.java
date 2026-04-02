@@ -17,6 +17,7 @@ package net.hasor.neta.codec.http.websocket;
 import java.util.concurrent.ThreadLocalRandom;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
+import net.hasor.neta.codec.http.HttpEvent;
 
 /**
  * Converts outbound message chunks and control events into {@link WebSocketFrame} flow.
@@ -58,10 +59,12 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
     public boolean onEvent(ProtoContext context, SoEvent event) throws Throwable {
         Object eventData = event.getData();
         if (eventData instanceof PingWebSocketEvent) {
-            sendControlEventFrame(context, (PingWebSocketEvent) eventData, true);
+            PingWebSocketEvent pingEvent = (PingWebSocketEvent) eventData;
+            sendControlEventFrame(context, pingEvent, pingEvent.content(), true);
             return false;
         } else if (eventData instanceof PongWebSocketEvent) {
-            sendControlEventFrame(context, (PongWebSocketEvent) eventData, false);
+            PongWebSocketEvent pongEvent = (PongWebSocketEvent) eventData;
+            sendControlEventFrame(context, pongEvent, pongEvent.content(), false);
             return false;
         }
         return true;
@@ -122,10 +125,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         return frame;
     }
 
-    private void sendControlEventFrame(ProtoContext context, AbstractWebSocketEvent event, boolean ping) {
+    private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
         try {
-            ByteBuf content = event instanceof PingWebSocketEvent ? ((PingWebSocketEvent) event).content() : ((PongWebSocketEvent) event).content();
-            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(event.streamId());
+            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(event.streamIdAsInt());
             context.sendData(controlMessage);
         } finally {
             event.release();

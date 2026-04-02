@@ -15,13 +15,14 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.codec.http.AbstractHttpEvent;
 
 /**
  * Network event that requests or represents a WebSocket ping.
  * <p>
  * Carries the optional ping payload and participates in the shared WebSocket event lifecycle.
  */
-public class PingWebSocketEvent extends AbstractWebSocketEvent {
+public class PingWebSocketEvent extends AbstractHttpEvent {
     private final ByteBuf content;
 
     public PingWebSocketEvent() {

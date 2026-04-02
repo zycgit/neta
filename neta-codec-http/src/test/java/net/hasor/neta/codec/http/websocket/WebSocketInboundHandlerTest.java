@@ -22,6 +22,7 @@ import net.hasor.neta.channel.ProtoHandler;
 import net.hasor.neta.channel.SoEvent;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtTransfer;
+import net.hasor.neta.codec.http.HttpEvent;
 import net.hasor.neta.codec.http.HttpObject;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
@@ -37,7 +38,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
             @Override
             public boolean onEvent(ProtoContext context, SoEvent event) {
                 Object eventData = event.getData();
-                if (eventData instanceof AbstractWebSocketEvent && !(eventData instanceof WebSocketHandshakeEvent)) {
+                if (eventData instanceof HttpEvent && !(eventData instanceof WebSocketHandshakeEvent)) {
                     serverEvents.add(eventData);
                 }
                 return true;

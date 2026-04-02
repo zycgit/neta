@@ -17,4 +17,14 @@ package net.hasor.neta.codec.http;
 import net.hasor.neta.channel.SoEventData;
 
 public interface HttpEvent extends SoEventData {
+	long streamId();
+
+	HttpEvent streamId(long streamId);
+
+	default int streamIdAsInt() {
+		return Math.toIntExact(this.streamId());
+	}
+
+	default void release() {
+	}
 }

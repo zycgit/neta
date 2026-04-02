@@ -126,7 +126,7 @@ public class AbstractHttp2Test extends AbstractHttpTest {
 
         Http2ResetEvent resetEvent = findHttp2Event(pipe.channelEvents(), Http2ResetEvent.class);
         assertNotNull(resetEvent);
-        assertEquals(expectedStreamId, resetEvent.streamId());
+        assertEquals((long) expectedStreamId, resetEvent.streamId());
         assertEquals(expectedErrorCode, resetEvent.errorCode());
         assertFalse(resetEvent.isRemote());
     }

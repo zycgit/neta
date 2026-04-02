@@ -14,13 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import net.hasor.neta.codec.http.AbstractHttpEvent;
 
 /**
  * Event published when the WebSocket opening handshake succeeds.
  * <p>
  * Wraps the resolved {@link WebSocketContext} and exposes its key handshake results.
  */
-public class WebSocketHandshakeEvent extends AbstractWebSocketEvent {
+public class WebSocketHandshakeEvent extends AbstractHttpEvent {
     private final WebSocketContext context;
 
     public WebSocketHandshakeEvent(WebSocketContext webSocketContext) {

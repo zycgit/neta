@@ -14,26 +14,21 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
-import net.hasor.neta.codec.http.HttpEvent;
+import net.hasor.neta.codec.http.AbstractHttpEvent;
 
 /**
  * Network event that requests an active reset of a specific HTTP/3 request stream.
  */
-public class Http3ResetEvent implements HttpEvent {
+public class Http3ResetEvent extends AbstractHttpEvent {
     public static final long CANCEL         = -1L;
     public static final long INTERNAL_ERROR = -2L;
     public static final long REFUSED        = -3L;
 
-    private final long streamId;
     private final long errorCode;
 
     public Http3ResetEvent(long streamId, long errorCode) {
-        this.streamId = streamId;
+        this.streamId(streamId);
         this.errorCode = errorCode;
-    }
-
-    public long streamId() {
-        return this.streamId;
     }
 
     public long errorCode() {

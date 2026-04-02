@@ -23,10 +23,7 @@ package net.hasor.neta.codec.http;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-12
  */
-public final class HttpThroughEvent implements HttpEvent {
-    private static final HttpThroughEvent ENABLED  = new HttpThroughEvent(true);
-    private static final HttpThroughEvent DISABLED = new HttpThroughEvent(false);
-
+public final class HttpThroughEvent extends AbstractHttpEvent {
     private final boolean enabled;
 
     public HttpThroughEvent(boolean enabled) {
@@ -34,11 +31,11 @@ public final class HttpThroughEvent implements HttpEvent {
     }
 
     public static HttpThroughEvent enable() {
-        return ENABLED;
+        return new HttpThroughEvent(true);
     }
 
     public static HttpThroughEvent disable() {
-        return DISABLED;
+        return new HttpThroughEvent(false);
     }
 
     public boolean enabled() {
