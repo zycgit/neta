@@ -31,4 +31,14 @@ public interface ProtoBuild {
      * @return built protocol initializer
      */
     ProtoInitializer build();
+
+    /**
+     * Apply the built protocol initializer to the provided build context.
+     * <p>This is a convenience entry point for directly materializing the current build result
+     * into the target {@link ProtoBuildContext}.</p>
+     * @param ctx target build context
+     */
+    default void config(ProtoBuildContext ctx) {
+        this.build().config(ctx);
+    }
 }

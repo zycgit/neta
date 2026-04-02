@@ -60,7 +60,7 @@ public class FixedLengthFrameHandlerTest {
     public void asEncoder_1() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             FixedLengthFrameHandler handler = new FixedLengthFrameHandler(10);
@@ -84,7 +84,7 @@ public class FixedLengthFrameHandlerTest {
     public void asEncoder_2() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             FixedLengthFrameHandler handler = new FixedLengthFrameHandler(10);
@@ -109,7 +109,7 @@ public class FixedLengthFrameHandlerTest {
     public void asEncoder_3() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             FixedLengthFrameHandler handler = new FixedLengthFrameHandler(10);
@@ -135,7 +135,7 @@ public class FixedLengthFrameHandlerTest {
     public void asEncoder_4() throws Throwable {
         NetManager neta = new NetManager();
         VrtChannel server = (VrtChannel) neta.connectSync(new VrtSocketAddress(1), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
             FixedLengthFrameHandler handler = new FixedLengthFrameHandler(10);
@@ -167,7 +167,7 @@ public class FixedLengthFrameHandlerTest {
             ctx.addLastDecoder("", handler);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -191,7 +191,7 @@ public class FixedLengthFrameHandlerTest {
             ctx.addLastDecoder("", handler);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -215,7 +215,7 @@ public class FixedLengthFrameHandlerTest {
             ctx.addLastDecoder("", handler);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -241,7 +241,7 @@ public class FixedLengthFrameHandlerTest {
             ctx.addLastDecoder("", handler);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asClient());
 
         // transfer channel
@@ -273,7 +273,7 @@ public class FixedLengthFrameHandlerTest {
             ctx.addLastDecoder("", handler);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asClient());
 
         VrtTransfer transfer = new VrtTransfer(neta);
@@ -299,7 +299,7 @@ public class FixedLengthFrameHandlerTest {
             ctx.addLastDecoder("", handler);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asClient());
 
         VrtTransfer transfer = new VrtTransfer(neta);
@@ -324,7 +324,7 @@ public class FixedLengthFrameHandlerTest {
             ctx.addLastDecoder("", handler);
         }, VrtSoConfig.asServer());
         VrtChannel client = (VrtChannel) neta.connectSync(new VrtSocketAddress(2), (ctx) -> {
-            ProtoHelper.standard().build().config(ctx);
+            ProtoHelper.standard().config(ctx);
         }, VrtSoConfig.asClient());
 
         VrtTransfer transfer = new VrtTransfer(neta);

@@ -24,6 +24,15 @@ package net.hasor.neta.channel;
  * <p>The core responsibility of this interface is to provide a stable bucketing rule. For messages
  * or events that belong to the same logical partition, implementations should always return the
  * same {@link PartitionKey}.</p>
+ * <p>Return value conventions are strict:</p>
+ * <ul>
+ * <li>returning a normal {@link PartitionKey} means the data explicitly enters that partition;</li>
+ * <li>returning {@link PartitionKey#defaultKey()} means the data explicitly enters the default partition;</li>
+ * <li>returning {@code null} means the selector does not match any partition for the current data.</li>
+ * </ul>
+ * <p>{@code null} is not treated as an alias of the default partition. In current partition
+ * semantics, unmatched events continue along the parent pipeline, while unmatched messages are
+ * passed through to the nodes after the partition duplexer.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-29
  */
@@ -34,7 +43,8 @@ public interface ProtoPartitionSelector {
      * @param context current protocol context
      * @param kind trigger data kind
      * @param data current message or event object
-     * @return matching partition key
+     * @return target partition key, {@link PartitionKey#defaultKey()} for the explicit default
+     * partition, or {@code null} when the current data should not enter any partition
      */
     PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data);
 }

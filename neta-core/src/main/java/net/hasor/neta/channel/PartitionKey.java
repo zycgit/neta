@@ -76,6 +76,13 @@ public class PartitionKey {
         return this.partitionKey.equals(that.partitionKey);
     }
 
+    /**
+     * Return the singleton key representing the explicit default partition.
+     * <p>This key is only used when a {@link ProtoPartitionSelector} intentionally routes data into
+     * the default partition. It is not equivalent to {@code null}. A selector returning
+     * {@code null} means "unmatched", while returning this key means "enter the default
+     * partition".</p>
+     */
     public static PartitionKey defaultKey() {
         return defaultPartitionKey;
     }
