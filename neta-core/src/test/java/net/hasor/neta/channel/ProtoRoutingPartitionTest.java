@@ -183,7 +183,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test
     public void partitionPipelineShouldRouteUnmatchedMessagesIntoDefaultPartition() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
-        ManagedPartitionChannel managed = openChannel(10, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+        ManagedPartitionChannel managed = openChannel(10, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
             controlRef[0] = partition.control();
             partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
             partition.byDefault(ctx -> ctx.addLastDecoder("default-collector", new CollectingHandler()));
@@ -209,7 +209,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
     @Test
     public void partitionPipelineShouldRouteUnmatchedEventsIntoDefaultPartition() throws Throwable {
-        ManagedPartitionChannel managed = openChannel(11, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+        ManagedPartitionChannel managed = openChannel(11, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
             partition.byInitializer(ctx -> ctx.addLast("event-echo", new EventEchoHandler()));
             partition.byDefault(ctx -> ctx.addLast("default-event", new EventEchoHandler()));
         }).nextEncoder("pass-through", new PassThroughEncoder()).build());
@@ -413,7 +413,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         limitedConfig.setRcvSlotSize(4);
 
         ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            .nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
                     controlRef[0] = partition.control();
                     partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
                     partition.byDefault(ctx -> {
@@ -437,7 +437,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
         List<Integer> eventTrace = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            .nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
                     controlRef[0] = partition.control();
                     partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
                     partition.byDefault(ctx -> {
@@ -517,7 +517,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
         final List<UnmatchedEventSnapshot> droppedTrace = new ArrayList<>();
         ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+                .nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
                     controlRef[0] = partition.control();
                     partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
                     partition.byDefault(ctx -> ctx.addLastDecoder("default-collector", new CollectingHandler()));
@@ -621,6 +621,30 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
                 case Message:
                     PartitionMessage message = (PartitionMessage) data;
                     return message == null || message.partitionId() <= 0 ? null : PartitionKey.newKey(message.partitionId());
+                default:
+                    return null;
+            }
+        }
+    }
+
+    private static class DefaultAwareMessagePartitionSelector extends MessagePartitionSelector {
+        @Override
+        public PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data) {
+            PartitionKey routeKey = super.route(context, kind, data);
+            if (routeKey != null) {
+                return routeKey;
+            }
+
+            switch (kind) {
+                case Event:
+                    Object eventData = ((SoEvent) data).getData();
+                    if (eventData instanceof Number && ((Number) eventData).intValue() == 0) {
+                        return PartitionKey.defaultKey();
+                    }
+                    return null;
+                case Message:
+                    PartitionMessage message = (PartitionMessage) data;
+                    return message != null && message.partitionId() == 0 ? PartitionKey.defaultKey() : null;
                 default:
                     return null;
             }

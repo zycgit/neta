@@ -160,10 +160,28 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
-        PartitionKey routeKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Event, event), true);
-        PartitionState state = this.isDefaultPartitionKey(routeKey) ?                       //
-                this.ensureDefaultPartitionState(context, PartitionDataKind.Event, event) : //
-                this.ensurePartitionState(context, routeKey, PartitionDataKind.Event, event);
+        PartitionKey routeKey = this.selector.route(context, PartitionDataKind.Event, event);
+        if (routeKey == null) {
+            this.commitRequestedClosures();
+            return true;
+        }
+
+        PartitionState state;
+        if (this.isDefaultPartitionKey(routeKey)) {
+            if (this.partitions.containsKey(routeKey)) {
+                state = this.partitions.get(routeKey);
+            } else if (this.defaultInitializer == null) {
+                this.commitRequestedClosures();
+                return true;
+            } else if (this.creationLock) {
+                this.commitRequestedClosures();
+                return false;
+            } else {
+                state = this.ensureDefaultPartitionState(context, PartitionDataKind.Event, event);
+            }
+        } else {
+            state = this.ensurePartitionState(context, routeKey, PartitionDataKind.Event, event);
+        }
 
         if (state != null) {
             boolean result = state.onEvent(event, isRcv);
@@ -209,7 +227,14 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            PartitionKey routeKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, message), true);
+            PartitionKey routeKey = this.selector.route(context, PartitionDataKind.Message, message);
+            if (routeKey == null) {
+                if (!this.passThroughUnmatchedMessages(context, rcvUp, rcvDown)) {
+                    return ProtoStatus.Next;
+                }
+                continue;
+            }
+
             if (isDefaultPartitionKey(routeKey)) {
                 if (this.shouldDropForLockedDefaultPartition(routeKey)) {
                     this.dropUnmatchedMessages(context, rcvUp, routeKey);
@@ -337,7 +362,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            PartitionKey itemKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, item), false);
+            PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
             if (itemKey != null) {
                 break;
             }
@@ -437,7 +462,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            PartitionKey itemKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, item), true);
+            PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
             if (!Objects.equals(key, itemKey)) {
                 break;
             }
@@ -460,7 +485,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            PartitionKey itemKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, item), true);
+            PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
             if (!Objects.equals(key, itemKey)) {
                 break;
             }
@@ -469,13 +494,6 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             acceptedCount++;
         }
         return acceptedCount;
-    }
-
-    private PartitionKey normalizePartitionKey(PartitionKey key, boolean useDefaultKey) {
-        if (key != null) {
-            return key;
-        }
-        return useDefaultKey ? PartitionKey.defaultKey() : null;
     }
 
     private boolean isDefaultPartitionKey(PartitionKey key) {
