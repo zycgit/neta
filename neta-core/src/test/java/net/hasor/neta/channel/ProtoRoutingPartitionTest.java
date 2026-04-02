@@ -41,11 +41,11 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
             Assert.assertNotNull(controlRef[0]);
             Assert.assertEquals(2, controlRef[0].partitionSize());
-            Assert.assertTrue(controlRef[0].hasPartition(PartitionKey.newKey("1")));
-            Assert.assertTrue(controlRef[0].hasPartition(PartitionKey.newKey("2")));
+            Assert.assertTrue(controlRef[0].contains(PartitionKey.newKey("1")));
+            Assert.assertTrue(controlRef[0].contains(PartitionKey.newKey("2")));
 
             Assert.assertTrue(controlRef[0].closePartition(PartitionKey.newKey("1")));
-            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.newKey("1")));
+            Assert.assertFalse(controlRef[0].contains(PartitionKey.newKey("1")));
             Assert.assertEquals(1, controlRef[0].partitionSize());
 
             managed.channel.receiveData(new PartitionMessage(1, "B", true));
@@ -57,7 +57,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
             controlRef[0].closeAllPartitions();
             Assert.assertEquals(0, controlRef[0].partitionSize());
-            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.newKey("2")));
+            Assert.assertFalse(controlRef[0].contains(PartitionKey.newKey("2")));
         } finally {
             managed.close();
         }
@@ -83,14 +83,73 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
             Assert.assertEquals(1, outbound.size());
             Assert.assertEquals("AB", outbound.get(0).body());
             Assert.assertEquals(1, controlRef[0].partitionSize());
-            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.newKey("2")));
+            Assert.assertFalse(controlRef[0].contains(PartitionKey.newKey("2")));
 
             controlRef[0].unlockCreation();
             managed.channel.receiveData(new PartitionMessage(2, "OK", true));
 
             Assert.assertEquals(2, outbound.size());
             Assert.assertEquals("OK", outbound.get(1).body());
-            Assert.assertTrue(controlRef[0].hasPartition(PartitionKey.newKey("2")));
+            Assert.assertTrue(controlRef[0].contains(PartitionKey.newKey("2")));
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldRequestCloseAndCommitOnNextOwnerRound() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        ManagedPartitionChannel managed = openChannel(20, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
+
+        try {
+            List<PartitionMessage> outbound = subscribeOutbound(managed.channel);
+            PartitionKey key1 = PartitionKey.newKey("1");
+
+            managed.channel.receiveData(new PartitionMessage(1, "A", false));
+
+            Assert.assertTrue(controlRef[0].requestClose(key1));
+            Assert.assertTrue(controlRef[0].contains(key1));
+            Assert.assertTrue(controlRef[0].isClose(key1));
+
+            managed.channel.receiveData(new PartitionMessage(2, "B", true));
+
+            Assert.assertFalse(controlRef[0].contains(key1));
+            Assert.assertFalse(controlRef[0].isClose(key1));
+            Assert.assertEquals(1, outbound.size());
+            Assert.assertEquals(2, outbound.get(0).partitionId());
+            Assert.assertEquals("B", outbound.get(0).body());
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldRequestCloseAllAndCommitOnNextOwnerRound() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        ManagedPartitionChannel managed = openChannel(21, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
+
+        try {
+            managed.channel.receiveData(new PartitionMessage(1, "A", false));
+            managed.channel.receiveData(new PartitionMessage(2, "B", false));
+
+            Assert.assertEquals(2, controlRef[0].partitionSize());
+
+            controlRef[0].requestCloseAll();
+
+            Assert.assertTrue(controlRef[0].isClose(PartitionKey.newKey("1")));
+            Assert.assertTrue(controlRef[0].isClose(PartitionKey.newKey("2")));
+
+            managed.channel.fireEvent(Integer.class, 0);
+
+            Assert.assertEquals(0, controlRef[0].partitionSize());
+            Assert.assertFalse(controlRef[0].isClose(PartitionKey.newKey("1")));
+            Assert.assertFalse(controlRef[0].isClose(PartitionKey.newKey("2")));
         } finally {
             managed.close();
         }
@@ -138,7 +197,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
             Assert.assertEquals(2, outbound.size());
             Assert.assertNotNull(controlRef[0]);
-            Assert.assertTrue(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+            Assert.assertTrue(controlRef[0].contains(PartitionKey.defaultKey()));
             Assert.assertEquals(0, outbound.get(0).partitionId());
             Assert.assertEquals("DEFAULT", outbound.get(0).body());
             Assert.assertEquals(1, outbound.get(1).partitionId());
@@ -370,7 +429,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         Assert.assertEquals("P", downstream.get(0));
         Assert.assertEquals("T", downstream.get(1));
         Assert.assertNotNull(controlRef[0]);
-        Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+        Assert.assertFalse(controlRef[0].contains(PartitionKey.defaultKey()));
     }
 
     @Test
@@ -394,7 +453,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
             Assert.assertEquals(1, eventTrace.size());
             Assert.assertEquals(Integer.valueOf(0), eventTrace.get(0));
             Assert.assertNotNull(controlRef[0]);
-            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+            Assert.assertFalse(controlRef[0].contains(PartitionKey.defaultKey()));
         } finally {
             managed.close();
         }
@@ -447,7 +506,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
             Assert.assertEquals(2, droppedTrace.get(0).getMessages().size());
             Assert.assertEquals("DROP-1", droppedTrace.get(0).getMessages().get(0).body());
             Assert.assertEquals("DROP-2", droppedTrace.get(0).getMessages().get(1).body());
-            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.newKey(2)));
+            Assert.assertFalse(controlRef[0].contains(PartitionKey.newKey(2)));
         } finally {
             managed.close();
         }
@@ -476,7 +535,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
             Assert.assertEquals(2, droppedTrace.get(0).getMessages().size());
             Assert.assertEquals("DEFAULT-1", droppedTrace.get(0).getMessages().get(0).body());
             Assert.assertEquals("DEFAULT-2", droppedTrace.get(0).getMessages().get(1).body());
-            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+            Assert.assertFalse(controlRef[0].contains(PartitionKey.defaultKey()));
         } finally {
             managed.close();
         }
@@ -609,7 +668,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
             }
 
             PartitionKey currentKey = PartitionKey.findKey(context);
-            return currentKey == null || this.controlRef[0].closePartition(currentKey);
+            return currentKey == null || this.controlRef[0].requestClose(currentKey);
         }
     }
 

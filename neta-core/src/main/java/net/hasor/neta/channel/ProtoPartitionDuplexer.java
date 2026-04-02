@@ -41,11 +41,13 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     private final        ProtoPartitionSelector            selector;
     private final        Map<PartitionKey, PartitionState> partitions;
     private final        ProtoPartitionControl             partitionControl;
+    private final        String                            recoveryOwnerId;
     private              ProtoInitializer                  partitionInitializer;
     private              ProtoInitializer                  defaultInitializer;
     private              ProtoPartitionPolicy              partitionPolicy;
     private              PartitionKey                      pendingPartitionKey;
     private              boolean                           pendingPartition;
+    private              boolean                           closeAllRequested;
     private              int                               partitionRcvSize;
     private              int                               partitionSndSize;
     private              String                            parentPrevStackName;
@@ -57,6 +59,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         this.selector = Objects.requireNonNull(selector, "selector is null.");
         this.partitions = new LinkedHashMap<>();
         this.receiveBuffer = new ArrayList<>();
+        this.recoveryOwnerId = "partition@" + Integer.toHexString(System.identityHashCode(this));
         this.partitionPolicy = (a, b, c, d, e) -> ReceivePolicy.Accept;
         this.partitionControl = new ProtoPartitionControl() {
             @Override
@@ -75,18 +78,34 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             }
 
             @Override
-            public boolean hasPartition(PartitionKey key) {
+            public boolean contains(PartitionKey key) {
                 return partitions.containsKey(key);
             }
 
             @Override
+            public boolean requestClose(PartitionKey key) {
+                return requestClosePartitionState(key);
+            }
+
+            @Override
+            public void requestCloseAll() {
+                requestCloseAllPartitionStates();
+            }
+
+            @Override
+            public boolean isClose(PartitionKey key) {
+                PartitionState state = partitions.get(key);
+                return state != null && state.isClose();
+            }
+
+            @Override
             public boolean closePartition(PartitionKey key) {
-                return closePartitionState(key);
+                return forceClosePartitionState(key);
             }
 
             @Override
             public void closeAllPartitions() {
-                closeAllPartitionStates();
+                forceCloseAllPartitionStates();
             }
 
             @Override
@@ -147,8 +166,11 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 this.ensurePartitionState(context, routeKey, PartitionDataKind.Event, event);
 
         if (state != null) {
-            return state.onEvent(event, isRcv);
+            boolean result = state.onEvent(event, isRcv);
+            this.commitRequestedClosures();
+            return result;
         } else {
+            this.commitRequestedClosures();
             return this.isDefaultPartitionKey(routeKey);
         }
     }
@@ -163,12 +185,14 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             if (sendCount > 0) {
                 sndDown.offerMessage(sndUp.takeMessage(sendCount));
             }
+            this.commitRequestedClosures();
             return ProtoStatus.Next;
         }
 
         if (!this.flushPendingOutput(rcvDown)) {
             return ProtoStatus.Next;
         }
+        this.commitRequestedClosures();
 
         if (!rcvUp.hasMore()) {
             return ProtoStatus.Next;
@@ -219,14 +243,16 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 this.pendingPartition = true;
                 return ProtoStatus.Next;
             }
+            this.commitRequestedClosures();
         }
 
+        this.commitRequestedClosures();
         return ProtoStatus.Next;
     }
 
     @Override
     public void onClose(ProtoContext context) {
-        this.closeAllPartitionStates();
+        this.forceCloseAllPartitionStates();
     }
 
     //
@@ -246,6 +272,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         ProtoStackChain chainRoot = branchCtx.getChainRoot();
         if (routeKey != null) {
             branchCtx.context(PartitionKey.class, routeKey);
+            branchCtx.setupRecovery(this.recoveryOwnerId, routeKey.getKey());
         }
 
         initializer.config(branchCtx);
@@ -463,7 +490,24 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         return this.creationLock && this.isDefaultPartitionKey(key) && !this.partitions.containsKey(key) && this.defaultInitializer != null;
     }
 
-    private boolean closePartitionState(PartitionKey key) {
+    private boolean requestClosePartitionState(PartitionKey key) {
+        PartitionState state = this.partitions.get(key);
+        if (state == null) {
+            return false;
+        }
+
+        state.requestClose();
+        return true;
+    }
+
+    private void requestCloseAllPartitionStates() {
+        this.closeAllRequested = true;
+        for (PartitionState state : this.partitions.values()) {
+            state.requestClose();
+        }
+    }
+
+    private boolean forceClosePartitionState(PartitionKey key) {
         PartitionState removed = this.partitions.remove(key);
         if (removed == null) {
             return false;
@@ -477,18 +521,57 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         return true;
     }
 
-    private void closeAllPartitionStates() {
+    private void forceCloseAllPartitionStates() {
         for (PartitionState state : new ArrayList<>(this.partitions.values())) {
             state.close();
         }
         this.partitions.clear();
         this.pendingPartitionKey = null;
         this.pendingPartition = false;
+        this.closeAllRequested = false;
+    }
+
+    private void commitRequestedClosures() {
+        if (this.partitions.isEmpty()) {
+            this.closeAllRequested = false;
+            return;
+        }
+
+        List<PartitionKey> readyToClose = new ArrayList<>();
+        for (Map.Entry<PartitionKey, PartitionState> entry : this.partitions.entrySet()) {
+            if (entry.getValue().canCommitClose()) {
+                readyToClose.add(entry.getKey());
+            }
+        }
+
+        for (PartitionKey key : readyToClose) {
+            this.forceClosePartitionState(key);
+        }
+
+        if (this.partitions.isEmpty()) {
+            this.closeAllRequested = false;
+            return;
+        }
+
+        if (this.closeAllRequested) {
+            boolean allReady = true;
+            for (PartitionState state : this.partitions.values()) {
+                state.requestClose();
+                if (!state.canCommitClose()) {
+                    allReady = false;
+                }
+            }
+
+            if (allReady) {
+                this.forceCloseAllPartitionStates();
+            }
+        }
     }
 
     private final class PartitionState {
         private final ProtoContextService context;
         private final ProtoStackChain     chainRoot;
+        private       boolean             closeRequested;
 
         private PartitionState(ProtoContextService context, ProtoStackChain chainRoot) {
             this.context = context;
@@ -539,6 +622,22 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             }
         }
 
+        private void requestClose() {
+            this.closeRequested = true;
+        }
+
+        private boolean isClose() {
+            return this.closeRequested;
+        }
+
+        private boolean hasPendingOutput() {
+            return this.chainRoot.getTailRcvDown().queueSize() > 0;
+        }
+
+        private boolean canCommitClose() {
+            return this.closeRequested && !this.hasPendingOutput();
+        }
+
         private void close() {
             this.chainRoot.onClose(this.context);
         }
@@ -555,6 +654,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         ProtoContextService branchCtx = new ProtoContextService((ProtoContextService) parentContext, this.partitionRcvSize, this.partitionSndSize, this.parentPrevStackName, this.parentNextStackName);
         ProtoStackChain chainRoot = branchCtx.getChainRoot();
         branchCtx.context(PartitionKey.class, routeKey);
+        branchCtx.setupRecovery(this.recoveryOwnerId, routeKey.getKey());
 
         initializer.config(branchCtx);
         if (chainRoot.isEmpty()) {

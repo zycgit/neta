@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-
 import java.util.Collection;
 
 /**
@@ -37,17 +36,32 @@ public interface ProtoPartitionControl {
     boolean isLockCreation();
 
     /** Return {@code true} when the specified partition already exists. */
-    boolean hasPartition(PartitionKey key);
-
-    /** Close and remove the specified partition if it exists. */
-    boolean closePartition(PartitionKey key);
-
-    /** Close all active partitions immediately. */
-    void closeAllPartitions();
+    boolean contains(PartitionKey key);
 
     /** Return a snapshot of active partition keys. */
     Collection<PartitionKey> partitionKeys();
 
     /** Return the number of currently active partitions. */
     int partitionSize();
+
+    //
+
+    /** Request closing the specified partition after the current owner round drains pending output. */
+    boolean requestClose(PartitionKey key);
+
+    /** Request closing all active partitions after the current owner round drains pending output. */
+    void requestCloseAll();
+
+    /** Close and remove the specified partition immediately if it exists. */
+    boolean closePartition(PartitionKey key);
+
+    /** Close all active partitions immediately. */
+    void closeAllPartitions();
+
+    /**
+     * Return whether the specified partition is currently in a closing state.
+     * <p>As long as the partition has not been fully cleaned up and it has entered close or
+     * request-close flow, this method returns {@code true}.</p>
+     */
+    boolean isClose(PartitionKey key);
 }
