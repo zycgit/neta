@@ -20,6 +20,7 @@ import java.util.List;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
+import net.hasor.neta.bytebuf.ByteBuf;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -121,9 +122,59 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     }
 
     @Test
+    public void partitionPipelineShouldRouteUnmatchedMessagesIntoDefaultPartition() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        ManagedPartitionChannel managed = openChannel(10, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+            partition.byDefault(ctx -> ctx.addLastDecoder("default-collector", new CollectingHandler()));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
+
+        try {
+            List<PartitionMessage> outbound = subscribeOutbound(managed.channel);
+
+            managed.channel.receiveData(new PartitionMessage(0, "DEFAULT", true));
+            managed.channel.receiveData(new PartitionMessage(1, "MATCHED", true));
+
+            Assert.assertEquals(2, outbound.size());
+            Assert.assertNotNull(controlRef[0]);
+            Assert.assertTrue(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+            Assert.assertEquals(0, outbound.get(0).partitionId());
+            Assert.assertEquals("DEFAULT", outbound.get(0).body());
+            Assert.assertEquals(1, outbound.get(1).partitionId());
+            Assert.assertEquals("MATCHED", outbound.get(1).body());
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldRouteUnmatchedEventsIntoDefaultPartition() throws Throwable {
+        ManagedPartitionChannel managed = openChannel(11, ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            partition.byInitializer(ctx -> ctx.addLast("event-echo", new EventEchoHandler()));
+            partition.byDefault(ctx -> ctx.addLast("default-event", new EventEchoHandler()));
+        }).nextEncoder("pass-through", new PassThroughEncoder()).build());
+
+        try {
+            List<PartitionMessage> outbound = subscribeOutbound(managed.channel);
+
+            managed.channel.fireEvent(Integer.class, 0);
+            managed.channel.fireEvent(Integer.class, 2);
+
+            Assert.assertEquals(2, outbound.size());
+            Assert.assertEquals(0, outbound.get(0).partitionId());
+            Assert.assertEquals("EVENT-0", outbound.get(0).body());
+            Assert.assertEquals(2, outbound.get(1).partitionId());
+            Assert.assertEquals("EVENT-2", outbound.get(1).body());
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
     public void partitionPipelineShouldStopMatchedEventWhenBranchReturnsFalse() throws Throwable {
         ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
-        duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("event-stop", new EventStopHandler()));
+        duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("event-stop", new EventStopHandler()), null);
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(2), ctx -> {
         }, new VrtSoConfig());
@@ -139,9 +190,42 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     }
 
     @Test
+    public void partitionPipelineShouldPassThroughUnmatchedEventWhenDefaultPartitionIsAbsent() throws Throwable {
+        ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
+        duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("collector", new CollectingHandler()), null);
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(12), ctx -> {
+        }, new VrtSoConfig());
+        ProtoContextService context = extractProtoContext(channel);
+
+        duplexer.onInit("partition", 1, 1, context);
+        boolean result = duplexer.onEvent(context, SoEventObject.of(null, Integer.class, 0), true);
+        Assert.assertTrue(result);
+    }
+
+    @Test
+    public void partitionPipelineShouldPassThroughUnmatchedMessagesWhenDefaultPartitionIsAbsent() throws Throwable {
+        List<String> downstream = new ArrayList<>();
+        ProtoConfig limitedConfig = new ProtoConfig();
+        limitedConfig.setRcvSlotSize(4);
+
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
+                .nextPartition("partition", new MessagePartitionSelector(), partition -> partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler())))
+                .nextDecoder("downstream", limitedConfig, new DownstreamCollectHandler(downstream))
+                .build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(13), initializer, new VrtSoConfig());
+        channel.receiveData(new PartitionMessage(0, "P", false), new PartitionMessage(0, "T", true));
+
+        Assert.assertEquals(2, downstream.size());
+        Assert.assertEquals("P", downstream.get(0));
+        Assert.assertEquals("T", downstream.get(1));
+    }
+
+    @Test
     public void partitionPipelineShouldFlushPendingOutputAfterDownstreamRecovery() throws Throwable {
         ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
-        duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("splitter", new SplitOutputHandler()));
+        duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("splitter", new SplitOutputHandler()), null);
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(3), ctx -> {
         }, new VrtSoConfig());
@@ -223,7 +307,9 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     @Test
     public void partitionPipelineShouldPassThroughSendDirectionWithoutRouting() throws Throwable {
         ProtoPartitionDuplexer<PartitionMessage, PartitionMessage> duplexer = new ProtoPartitionDuplexer<>(new MessagePartitionSelector());
-        duplexer.configDuplexer(null, ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        duplexer.configDuplexer(null, ctx -> {
+            ctx.addLastDecoder("collector", new CollectingHandler());
+        }, null);
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(8), ctx -> {
         }, new VrtSoConfig());
@@ -255,6 +341,176 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
             controlRef[0].lockCreation();
             managed.channel.fireEvent(Integer.class, 3);
             Assert.assertEquals(0, controlRef[0].partitionSize());
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldPassThroughUnmatchedMessagesWhenDefaultPartitionInitializerIsEmpty() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        List<String> downstream = new ArrayList<>();
+        ProtoConfig limitedConfig = new ProtoConfig();
+        limitedConfig.setRcvSlotSize(4);
+
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
+                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+                    controlRef[0] = partition.control();
+                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+                    partition.byDefault(ctx -> {
+                    });
+                })
+                .nextDecoder("downstream", limitedConfig, new DownstreamCollectHandler(downstream))
+                .build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(14), initializer, new VrtSoConfig());
+        channel.receiveData(new PartitionMessage(0, "P", false), new PartitionMessage(0, "T", true));
+
+        Assert.assertEquals(2, downstream.size());
+        Assert.assertEquals("P", downstream.get(0));
+        Assert.assertEquals("T", downstream.get(1));
+        Assert.assertNotNull(controlRef[0]);
+        Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+    }
+
+    @Test
+    public void partitionPipelineShouldPassThroughUnmatchedEventsWhenDefaultPartitionInitializerIsEmpty() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        List<Integer> eventTrace = new ArrayList<>();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
+                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+                    controlRef[0] = partition.control();
+                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+                    partition.byDefault(ctx -> {
+                    });
+                })
+                .nextDecoder("event-record", new EventRecordHandler(eventTrace))
+                .build();
+
+        ManagedPartitionChannel managed = openChannel(15, initializer);
+        try {
+            managed.channel.fireEvent(Integer.class, 0);
+
+            Assert.assertEquals(1, eventTrace.size());
+            Assert.assertEquals(Integer.valueOf(0), eventTrace.get(0));
+            Assert.assertNotNull(controlRef[0]);
+            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldNotPassMatchedEventThroughWhenPartitionCreationFails() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        List<Integer> eventTrace = new ArrayList<>();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
+                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+                    controlRef[0] = partition.control();
+                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+                })
+                .nextDecoder("event-record", new EventRecordHandler(eventTrace))
+                .build();
+
+        ManagedPartitionChannel managed = openChannel(16, initializer);
+        try {
+            controlRef[0].lockCreation();
+            managed.channel.fireEvent(Integer.class, 3);
+
+            Assert.assertTrue(eventTrace.isEmpty());
+            Assert.assertEquals(0, controlRef[0].partitionSize());
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldEmitUnmatchedMessagesEventWhenNewPartitionIsLocked() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        final List<UnmatchedEventSnapshot> droppedTrace = new ArrayList<>();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
+                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+                    controlRef[0] = partition.control();
+                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+                })
+                .nextDecoder("unmatched-record", new UnmatchedMessagesRecordHandler(droppedTrace))
+                .build();
+
+        ManagedPartitionChannel managed = openChannel(17, initializer);
+        try {
+            managed.channel.receiveData(new PartitionMessage(1, "A", false));
+            controlRef[0].lockCreation();
+            managed.channel.receiveData(new PartitionMessage(2, "DROP-1", false), new PartitionMessage(2, "DROP-2", true));
+
+            Assert.assertEquals(1, droppedTrace.size());
+            Assert.assertEquals(PartitionKey.newKey(2), droppedTrace.get(0).getPartitionKey());
+            Assert.assertEquals(2, droppedTrace.get(0).getMessages().size());
+            Assert.assertEquals("DROP-1", droppedTrace.get(0).getMessages().get(0).body());
+            Assert.assertEquals("DROP-2", droppedTrace.get(0).getMessages().get(1).body());
+            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.newKey(2)));
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldEmitUnmatchedMessagesEventWhenDefaultPartitionIsLocked() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        final List<UnmatchedEventSnapshot> droppedTrace = new ArrayList<>();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
+                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
+                    controlRef[0] = partition.control();
+                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+                    partition.byDefault(ctx -> ctx.addLastDecoder("default-collector", new CollectingHandler()));
+                })
+                .nextDecoder("unmatched-record", new UnmatchedMessagesRecordHandler(droppedTrace))
+                .build();
+
+        ManagedPartitionChannel managed = openChannel(18, initializer);
+        try {
+            controlRef[0].lockCreation();
+            managed.channel.receiveData(new PartitionMessage(0, "DEFAULT-1", false), new PartitionMessage(0, "DEFAULT-2", true));
+
+            Assert.assertEquals(1, droppedTrace.size());
+            Assert.assertEquals(PartitionKey.defaultKey(), droppedTrace.get(0).getPartitionKey());
+            Assert.assertEquals(2, droppedTrace.get(0).getMessages().size());
+            Assert.assertEquals("DEFAULT-1", droppedTrace.get(0).getMessages().get(0).body());
+            Assert.assertEquals("DEFAULT-2", droppedTrace.get(0).getMessages().get(1).body());
+            Assert.assertFalse(controlRef[0].hasPartition(PartitionKey.defaultKey()));
+        } finally {
+            managed.close();
+        }
+    }
+
+    @Test
+    public void partitionPipelineShouldReleaseByteBufAfterUnmatchedEventCallbackReturns() throws Throwable {
+        final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
+        final List<ByteBuf> observedBuffers = new ArrayList<>();
+        ProtoInitializer initializer = ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
+                .nextPartition("partition", new ProtoPartitionSelector() {
+                    @Override
+                    public PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data) {
+                        if (kind != PartitionDataKind.Message || !(data instanceof ByteBuf)) {
+                            return null;
+                        }
+                        return PartitionKey.newKey(1);
+                    }
+                }, partition -> {
+                    controlRef[0] = partition.control();
+                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new ByteBufPassThroughHandler()));
+                })
+                .nextDecoder("unmatched-record", new ByteBufUnmatchedRecordHandler(observedBuffers))
+                .build();
+
+        ManagedPartitionChannel managed = openChannel(19, initializer);
+        ByteBuf buffer = ByteBuf.wrap(new byte[] { 1, 2, 3 });
+        try {
+            controlRef[0].lockCreation();
+            managed.channel.receiveData(buffer);
+
+            Assert.assertEquals(1, observedBuffers.size());
+            Assert.assertSame(buffer, observedBuffers.get(0));
+            Assert.assertEquals(0, buffer.refCnt());
         } finally {
             managed.close();
         }
@@ -322,12 +578,19 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
                 builder.append(item.body());
                 if (item.isTerminal()) {
                     PartitionKey holder = PartitionKey.findKey(context);
-                    Integer partitionId = holder == null || holder.getKey() == null ? null : Integer.valueOf(String.valueOf(holder));
+                    Integer partitionId = this.resolvePartitionId(holder);
                     context.sendData(new PartitionMessage(partitionId == null ? 0 : partitionId, builder.toString(), true)).get();
                     builder.setLength(0);
                 }
             }
             return ProtoStatus.Next;
+        }
+
+        private Integer resolvePartitionId(PartitionKey holder) {
+            if (holder == null || holder.getKey() == null || PartitionKey.defaultKey().equals(holder)) {
+                return null;
+            }
+            return Integer.valueOf(String.valueOf(holder));
         }
     }
 
@@ -347,6 +610,144 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
 
             PartitionKey currentKey = PartitionKey.findKey(context);
             return currentKey == null || this.controlRef[0].closePartition(currentKey);
+        }
+    }
+
+    private static class EventEchoHandler implements ProtoDuplexer<PartitionMessage, PartitionMessage, PartitionMessage, PartitionMessage> {
+        @Override
+        public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
+            Object eventData = event.getData();
+            if (eventData instanceof Number) {
+                int partitionId = ((Number) eventData).intValue();
+                context.sendData(new PartitionMessage(partitionId, "EVENT-" + partitionId, true)).get();
+                return false;
+            }
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<PartitionMessage> rcvUp, ProtoSndQueue<PartitionMessage> rcvDown, ProtoRcvQueue<PartitionMessage> sndUp, ProtoSndQueue<PartitionMessage> sndDown) {
+            if (isRcv) {
+                if (rcvUp.hasMore() && rcvDown.hasSlot()) {
+                    rcvDown.offerMessage(rcvUp.takeMessage(1));
+                }
+            } else {
+                if (sndUp.hasMore() && sndDown.hasSlot()) {
+                    sndDown.offerMessage(sndUp.takeMessage(1));
+                }
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class EventRecordHandler implements ProtoHandler<PartitionMessage, PartitionMessage> {
+        private final List<Integer> eventTrace;
+
+        private EventRecordHandler(List<Integer> eventTrace) {
+            this.eventTrace = eventTrace;
+        }
+
+        @Override
+        public boolean onEvent(ProtoContext context, SoEvent event) {
+            Object eventData = event.getData();
+            if (eventData instanceof Integer) {
+                this.eventTrace.add((Integer) eventData);
+            }
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<PartitionMessage> src, ProtoSndQueue<PartitionMessage> dst) {
+            if (src.hasMore() && dst.hasSlot()) {
+                dst.offerMessage(src.takeMessage(1));
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class UnmatchedMessagesRecordHandler implements ProtoHandler<PartitionMessage, PartitionMessage> {
+        private final List<UnmatchedEventSnapshot> droppedTrace;
+
+        private UnmatchedMessagesRecordHandler(List<UnmatchedEventSnapshot> droppedTrace) {
+            this.droppedTrace = droppedTrace;
+        }
+
+        @Override
+        public boolean onEvent(ProtoContext context, SoEvent event) {
+            Object eventData = event.getData();
+            if (eventData instanceof PartitionUnmatchedEvent) {
+                PartitionUnmatchedEvent unmatchedEvent = (PartitionUnmatchedEvent) eventData;
+                List<PartitionMessage> messages = new ArrayList<PartitionMessage>(unmatchedEvent.getMessages().size());
+                for (Object message : unmatchedEvent.getMessages()) {
+                    messages.add((PartitionMessage) message);
+                }
+                this.droppedTrace.add(new UnmatchedEventSnapshot(unmatchedEvent.getPartitionKey(), messages));
+            }
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<PartitionMessage> src, ProtoSndQueue<PartitionMessage> dst) {
+            if (src.hasMore() && dst.hasSlot()) {
+                dst.offerMessage(src.takeMessage(1));
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class UnmatchedEventSnapshot {
+        private final PartitionKey           partitionKey;
+        private final List<PartitionMessage> messages;
+
+        private UnmatchedEventSnapshot(PartitionKey partitionKey, List<PartitionMessage> messages) {
+            this.partitionKey = partitionKey;
+            this.messages = messages;
+        }
+
+        public PartitionKey getPartitionKey() {
+            return this.partitionKey;
+        }
+
+        public List<PartitionMessage> getMessages() {
+            return this.messages;
+        }
+    }
+
+    private static class ByteBufPassThroughHandler implements ProtoHandler<ByteBuf, ByteBuf> {
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+            if (src.hasMore() && dst.hasSlot()) {
+                dst.offerMessage(src.takeMessage(1));
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class ByteBufUnmatchedRecordHandler implements ProtoHandler<ByteBuf, ByteBuf> {
+        private final List<ByteBuf> observedBuffers;
+
+        private ByteBufUnmatchedRecordHandler(List<ByteBuf> observedBuffers) {
+            this.observedBuffers = observedBuffers;
+        }
+
+        @Override
+        public boolean onEvent(ProtoContext context, SoEvent event) {
+            Object eventData = event.getData();
+            if (eventData instanceof PartitionUnmatchedEvent) {
+                PartitionUnmatchedEvent unmatchedEvent = (PartitionUnmatchedEvent) eventData;
+                for (Object message : unmatchedEvent.getMessages()) {
+                    this.observedBuffers.add((ByteBuf) message);
+                }
+            }
+            return true;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<ByteBuf> dst) {
+            if (src.hasMore() && dst.hasSlot()) {
+                dst.offerMessage(src.takeMessage(1));
+            }
+            return ProtoStatus.Next;
         }
     }
 

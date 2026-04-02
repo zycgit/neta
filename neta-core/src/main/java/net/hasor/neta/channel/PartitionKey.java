@@ -27,12 +27,18 @@ import java.util.concurrent.ConcurrentHashMap;
  * @see ProtoPartitionSelector
  * @see ProtoPartitionControl
  */
-public final class PartitionKey {
+public class PartitionKey {
     private static final int                       CACHE_LIMIT = 8192;
     private static final Map<String, PartitionKey> KEY_CACHE   = new ConcurrentHashMap<>();
+    private static final PartitionKey              defaultPartitionKey;
+    private final        String                    partitionKey;
+    private final        int                       hashCode;
 
-    private final String partitionKey;
-    private final int    hashCode;
+    static {
+        class DefaultPartitionKey {
+        }
+        defaultPartitionKey = newKey(DefaultPartitionKey.class.getName());
+    }
 
     PartitionKey(String partitionKey) {
         this.partitionKey = partitionKey;
@@ -68,6 +74,14 @@ public final class PartitionKey {
 
         PartitionKey that = (PartitionKey) obj;
         return this.partitionKey.equals(that.partitionKey);
+    }
+
+    public static PartitionKey defaultKey() {
+        return defaultPartitionKey;
+    }
+
+    public static PartitionKey newOrDefault(String key) {
+        return key != null ? newKey(key) : defaultPartitionKey;
     }
 
     /**

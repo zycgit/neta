@@ -353,7 +353,8 @@ public final class ProtoHelper {
     private static class ProtoPartitionBuilderImpl<RCV_DOWN, SND_UP> implements ProtoPartitionBuilder<RCV_DOWN, SND_UP> {
         private final ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer;
         private       ProtoPartitionPolicy                     policy;
-        private       ProtoInitializer                         initializer;
+        private       ProtoInitializer                         partitionInitializer;
+        private       ProtoInitializer                         defaultInitializer;
 
         public ProtoPartitionBuilderImpl(ProtoPartitionDuplexer<RCV_DOWN, SND_UP> duplexer) {
             this.duplexer = duplexer;
@@ -367,7 +368,13 @@ public final class ProtoHelper {
 
         @Override
         public ProtoPartitionBuilder<RCV_DOWN, SND_UP> byInitializer(ProtoInitializer initializer) {
-            this.initializer = Objects.requireNonNull(initializer, "initializer is null.");
+            this.partitionInitializer = Objects.requireNonNull(initializer, "initializer is null.");
+            return this;
+        }
+
+        @Override
+        public ProtoPartitionBuilder<RCV_DOWN, SND_UP> byDefault(ProtoInitializer initializer) {
+            this.defaultInitializer = Objects.requireNonNull(initializer, "initializer is null.");
             return this;
         }
 
@@ -378,7 +385,7 @@ public final class ProtoHelper {
 
         @Override
         public ProtoDuplexer<RCV_DOWN, RCV_DOWN, SND_UP, SND_UP> build() {
-            this.duplexer.configDuplexer(this.policy, this.initializer);
+            this.duplexer.configDuplexer(this.policy, this.partitionInitializer, this.defaultInitializer);
             return this.duplexer;
         }
     }

@@ -64,6 +64,10 @@ class ProtoStackChain {
         return this.headSndDown;
     }
 
+    boolean isEmpty() {
+        return this.head == null;
+    }
+
     /**
      * Append {@code invocation} to the tail of the handler chain.
      * <pre>  head → … → [existing tail] → [invocation]  (RCV direction)</pre>

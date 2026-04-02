@@ -46,6 +46,14 @@ public interface ProtoPartitionBuilder<RCV_UP, SND_DOWN> {
     ProtoPartitionBuilder<RCV_UP, SND_DOWN> byInitializer(ProtoInitializer initializer);
 
     /**
+     * Use an existing initializer as the template for the default partition sub-pipeline.
+     * <p>When the selector does not return any {@link PartitionKey}, inbound data can still be
+     * routed into this default sub-pipeline instead of being ignored or continuing in the parent
+     * pipeline with the original unmatched behavior.</p>
+     */
+    ProtoPartitionBuilder<RCV_UP, SND_DOWN> byDefault(ProtoInitializer initializer);
+
+    /**
      * Build the partition duplexer defined by the current builder.
      * @return built partition duplexer
      */

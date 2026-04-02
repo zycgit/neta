@@ -15,6 +15,8 @@
  */
 package net.hasor.neta.channel;
 
+import java.util.Collection;
+
 /**
  * Partition control interface exposed by {@link ProtoPartitionBuilder} and backed by
  * {@link ProtoPartitionDuplexer}.
@@ -42,6 +44,9 @@ public interface ProtoPartitionControl {
 
     /** Close all active partitions immediately. */
     void closeAllPartitions();
+
+    /** Return a snapshot of active partition keys. */
+    Collection<PartitionKey> partitionKeys();
 
     /** Return the number of currently active partitions. */
     int partitionSize();

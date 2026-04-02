@@ -42,8 +42,10 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     private final        Map<PartitionKey, PartitionState> partitions;
     private final        ProtoPartitionControl             partitionControl;
     private              ProtoInitializer                  partitionInitializer;
+    private              ProtoInitializer                  defaultInitializer;
     private              ProtoPartitionPolicy              partitionPolicy;
     private              PartitionKey                      pendingPartitionKey;
+    private              boolean                           pendingPartition;
     private              int                               partitionRcvSize;
     private              int                               partitionSndSize;
     private              String                            parentPrevStackName;
@@ -88,6 +90,11 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             }
 
             @Override
+            public Collection<PartitionKey> partitionKeys() {
+                return new ArrayList<PartitionKey>(partitions.keySet());
+            }
+
+            @Override
             public int partitionSize() {
                 return partitions.size();
             }
@@ -98,13 +105,13 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         return this.partitionControl;
     }
 
-    public void configDuplexer(ProtoPartitionPolicy policy, ProtoInitializer initializer) {
+    public void configDuplexer(ProtoPartitionPolicy policy, ProtoInitializer partitionInitializer, ProtoInitializer defaultInitializer) {
         if (policy != null) {
             this.partitionPolicy = policy;
         }
-        if (initializer != null) {
-            this.partitionInitializer = initializer;
-        }
+
+        this.partitionInitializer = partitionInitializer;
+        this.defaultInitializer = defaultInitializer;
     }
 
     private boolean handlePolicy(ReceivePolicy policy) {
@@ -121,9 +128,6 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) {
-        if (this.partitionInitializer == null) {
-            throw new IllegalStateException("ProtoPartitionDuplexer initializer is null.");
-        }
         if (!(context instanceof ProtoContextService)) {
             throw new IllegalStateException("ProtoPartitionDuplexer requires ProtoContextService.");
         }
@@ -137,29 +141,16 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
-        PartitionKey partitionKey = this.selector.route(context, PartitionDataKind.Event, event);
-        if (partitionKey == null) {
-            return true;
+        PartitionKey routeKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Event, event), true);
+        PartitionState state = this.isDefaultPartitionKey(routeKey) ?                       //
+                this.ensureDefaultPartitionState(context, PartitionDataKind.Event, event) : //
+                this.ensurePartitionState(context, routeKey, PartitionDataKind.Event, event);
+
+        if (state != null) {
+            return state.onEvent(event, isRcv);
+        } else {
+            return this.isDefaultPartitionKey(routeKey);
         }
-
-        PartitionState state = this.partitions.get(partitionKey);
-        if (state == null) {
-            if (this.creationLock) {
-                logger.warn("[PARTITION] channel=" + context.getChannel().getChannelId() + " skip creating new partition " + partitionKey + " for event while partition creation is lock.");
-                return false;
-            }
-
-            ReceivePolicy policy = this.partitionPolicy.newPartition(//
-                    context, this.partitionControl, partitionKey, PartitionDataKind.Event, event);
-            if (!this.handlePolicy(policy)) {
-                return false;
-            }
-
-            state = this.createPartitionState(partitionKey, context);
-            this.partitions.put(partitionKey, state);
-        }
-
-        return state.onEvent(event, isRcv);
     }
 
     @Override
@@ -175,7 +166,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             return ProtoStatus.Next;
         }
 
-        if (!this.flushPendingPartition(rcvDown)) {
+        if (!this.flushPendingOutput(rcvDown)) {
             return ProtoStatus.Next;
         }
 
@@ -194,39 +185,38 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            PartitionKey key = this.selector.route(context, PartitionDataKind.Message, message);
-            if (key == null) {
+            PartitionKey routeKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, message), true);
+            if (isDefaultPartitionKey(routeKey)) {
+                if (this.shouldDropForLockedDefaultPartition(routeKey)) {
+                    this.dropUnmatchedMessages(context, rcvUp, routeKey);
+                    continue;
+                }
+                if (!this.processDefaultMessage(context, rcvUp, rcvDown)) {
+                    return ProtoStatus.Next;
+                }
+                continue;
+            }
+
+            if (this.shouldDropForLockedPartition(routeKey)) {
+                this.dropUnmatchedMessages(context, rcvUp, routeKey);
+                continue;
+            }
+
+            PartitionState state = this.ensurePartitionState(context, routeKey, PartitionDataKind.Message, message);
+            if (state == null) {
                 rcvUp.skipMessage(1);
                 continue;
             }
 
-            PartitionState state = this.partitions.get(key);
-            if (state == null) {
-                if (this.creationLock) {
-                    logger.warn("[PARTITION] channel=" + context.getChannel().getChannelId() + " drop message for new partition " + key + " while partition creation is lock.");
-                    rcvUp.skipMessage(1);
-                    continue;
-                }
-
-                ReceivePolicy policy = this.partitionPolicy.newPartition(//
-                        context, this.partitionControl, key, PartitionDataKind.Message, message);
-                if (!this.handlePolicy(policy)) {
-                    rcvUp.skipMessage(1);
-                    continue;
-                }
-
-                state = this.createPartitionState(key, context);
-                this.partitions.put(key, state);
-            }
-
-            int batchCount = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), key);
+            int batchCount = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), routeKey);
             if (batchCount <= 0) {
                 continue;
             }
 
             state.process(this.receiveBuffer);
             if (!state.flushTo(rcvDown)) {
-                this.pendingPartitionKey = key;
+                this.pendingPartitionKey = routeKey;
+                this.pendingPartition = true;
                 return ProtoStatus.Next;
             }
         }
@@ -241,9 +231,12 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
     //
 
-    private PartitionState createPartitionState(PartitionKey key, ProtoContext parentContext) throws Throwable {
+    private PartitionState createPartitionState(PartitionKey routeKey, ProtoContext parentContext, ProtoInitializer initializer) throws Throwable {
         if (!(parentContext instanceof ProtoContextService)) {
             throw new IllegalStateException("ProtoPartitionDuplexer requires ProtoContextService.");
+        }
+        if (initializer == null) {
+            throw new IllegalStateException("ProtoPartitionDuplexer initializer is null.");
         }
 
         ProtoContextService branchCtx = new ProtoContextService(//
@@ -251,23 +244,26 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 this.partitionRcvSize, this.partitionSndSize,   //
                 this.parentPrevStackName, this.parentNextStackName);
         ProtoStackChain chainRoot = branchCtx.getChainRoot();
-        branchCtx.context(PartitionKey.class, key);
+        if (routeKey != null) {
+            branchCtx.context(PartitionKey.class, routeKey);
+        }
 
-        this.partitionInitializer.config(branchCtx);
+        initializer.config(branchCtx);
         chainRoot.onInit(branchCtx);
         chainRoot.onActive(branchCtx);
 
         return new PartitionState(branchCtx, chainRoot);
     }
 
-    private boolean flushPendingPartition(ProtoSndQueue<IN> rcvDown) {
-        if (this.pendingPartitionKey == null) {
+    private boolean flushPendingOutput(ProtoSndQueue<IN> rcvDown) {
+        if (!this.pendingPartition) {
             return true;
         }
 
         PartitionState state = this.partitions.get(this.pendingPartitionKey);
         if (state == null) {
             this.pendingPartitionKey = null;
+            this.pendingPartition = false;
             return true;
         }
 
@@ -276,7 +272,129 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         }
 
         this.pendingPartitionKey = null;
+        this.pendingPartition = false;
         return true;
+    }
+
+    private boolean processDefaultMessage(ProtoContext context, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<IN> rcvDown) throws Throwable {
+        PartitionKey defaultKey = PartitionKey.defaultKey();
+        PartitionState state = this.ensureDefaultPartitionState(context, PartitionDataKind.Message, rcvUp.peekMessage());
+        if (state == null) {
+            return this.passThroughUnmatchedMessages(context, rcvUp, rcvDown);
+        }
+
+        int batchCount = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), defaultKey);
+        if (batchCount <= 0) {
+            return true;
+        }
+
+        state.process(this.receiveBuffer);
+        if (!state.flushTo(rcvDown)) {
+            this.pendingPartition = true;
+            this.pendingPartitionKey = defaultKey;
+            return false;
+        }
+
+        return true;
+    }
+
+    private boolean passThroughUnmatchedMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<IN> rcvDown) {
+        this.receiveBuffer.clear();
+
+        int batchLimit = Math.min(rcvUp.queueSize(), Math.max(1, rcvDown.slotSize()));
+        int acceptedCount = 0;
+        while (acceptedCount < batchLimit && rcvUp.hasMore()) {
+            IN item = rcvUp.peekMessage();
+            if (item == null) {
+                rcvUp.skipMessage(1);
+                continue;
+            }
+
+            PartitionKey itemKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, item), false);
+            if (itemKey != null) {
+                break;
+            }
+
+            this.receiveBuffer.add(rcvUp.takeMessage());
+            acceptedCount++;
+        }
+
+        if (acceptedCount <= 0) {
+            return true;
+        }
+
+        if (!rcvDown.offerMessage(this.receiveBuffer)) {
+            throw new IllegalStateException("ProtoPartitionDuplexer failed to pass through unmatched messages.");
+        }
+
+        return true;
+    }
+
+    private void dropUnmatchedMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, PartitionKey key) throws Throwable {
+        int batchCount = this.collectDroppedMessages(context, rcvUp, key);
+        if (batchCount <= 0) {
+            return;
+        }
+
+        PartitionUnmatchedEvent unmatchedEvent = new PartitionUnmatchedEvent(key, this.receiveBuffer);
+        try {
+            context.fireEvent(PartitionUnmatchedEvent.class, unmatchedEvent);
+        } finally {
+            unmatchedEvent.release();
+            this.receiveBuffer.clear();
+        }
+    }
+
+    private PartitionState ensurePartitionState(ProtoContext context, PartitionKey key, PartitionDataKind kind, Object trigger) throws Throwable {
+        PartitionState state = this.partitions.get(key);
+        if (state != null) {
+            return state;
+        }
+
+        ProtoInitializer initializer = this.isDefaultPartitionKey(key) ? this.defaultInitializer : this.partitionInitializer;
+        if (initializer == null) {
+            return null;
+        }
+
+        if (this.creationLock) {
+            String keyText = this.isDefaultPartitionKey(key) ? "<default>" : String.valueOf(key);
+            logger.warn("[PARTITION] channel=" + context.getChannel().getChannelId() + " skip creating new partition " + keyText + " while partition creation is lock.");
+            return null;
+        }
+
+        if (!this.isDefaultPartitionKey(key)) {
+            ReceivePolicy policy = this.partitionPolicy.newPartition(context, this.partitionControl, key, kind, trigger);
+            if (!this.handlePolicy(policy)) {
+                return null;
+            }
+        }
+
+        state = this.createPartitionState(key, context, initializer);
+        this.partitions.put(key, state);
+        return state;
+    }
+
+    private PartitionState ensureDefaultPartitionState(ProtoContext context, PartitionDataKind kind, Object trigger) throws Throwable {
+        PartitionKey defaultKey = PartitionKey.defaultKey();
+        PartitionState state = this.partitions.get(defaultKey);
+        if (state != null) {
+            return state;
+        }
+        if (this.defaultInitializer == null) {
+            return null;
+        }
+        if (this.creationLock) {
+            logger.warn("[PARTITION] channel=" + context.getChannel().getChannelId() + " skip creating new partition <default> while partition creation is lock.");
+            return null;
+        }
+
+        state = this.createDefaultPartitionState(defaultKey, context, this.defaultInitializer);
+        if (state == null) {
+            return null;
+        }
+
+        this.partitions.put(defaultKey, state);
+        return state;
     }
 
     private int collectBatchMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, int downstreamSlotSize, PartitionKey key) {
@@ -292,7 +410,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
                 continue;
             }
 
-            PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
+            PartitionKey itemKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, item), true);
             if (!Objects.equals(key, itemKey)) {
                 break;
             }
@@ -303,17 +421,56 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         return acceptedCount;
     }
 
-    private boolean closePartitionState(PartitionKey key) {
-        if (key == null) {
-            return false;
-        }
+    private int collectDroppedMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, PartitionKey key) {
+        this.receiveBuffer.clear();
 
+        int batchLimit = this.partitionRcvSize <= 0 ? 1 : Math.min(rcvUp.queueSize(), this.partitionRcvSize);
+        int acceptedCount = 0;
+        while (acceptedCount < batchLimit && rcvUp.hasMore()) {
+            IN item = rcvUp.peekMessage();
+            if (item == null) {
+                rcvUp.skipMessage(1);
+                continue;
+            }
+
+            PartitionKey itemKey = this.normalizePartitionKey(this.selector.route(context, PartitionDataKind.Message, item), true);
+            if (!Objects.equals(key, itemKey)) {
+                break;
+            }
+
+            this.receiveBuffer.add(rcvUp.takeMessage());
+            acceptedCount++;
+        }
+        return acceptedCount;
+    }
+
+    private PartitionKey normalizePartitionKey(PartitionKey key, boolean useDefaultKey) {
+        if (key != null) {
+            return key;
+        }
+        return useDefaultKey ? PartitionKey.defaultKey() : null;
+    }
+
+    private boolean isDefaultPartitionKey(PartitionKey key) {
+        return Objects.equals(PartitionKey.defaultKey(), key);
+    }
+
+    private boolean shouldDropForLockedPartition(PartitionKey key) {
+        return this.creationLock && key != null && !this.isDefaultPartitionKey(key) && !this.partitions.containsKey(key) && this.partitionInitializer != null;
+    }
+
+    private boolean shouldDropForLockedDefaultPartition(PartitionKey key) {
+        return this.creationLock && this.isDefaultPartitionKey(key) && !this.partitions.containsKey(key) && this.defaultInitializer != null;
+    }
+
+    private boolean closePartitionState(PartitionKey key) {
         PartitionState removed = this.partitions.remove(key);
         if (removed == null) {
             return false;
         }
-        if (key.equals(this.pendingPartitionKey)) {
+        if (Objects.equals(key, this.pendingPartitionKey)) {
             this.pendingPartitionKey = null;
+            this.pendingPartition = false;
         }
 
         removed.close();
@@ -326,6 +483,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         }
         this.partitions.clear();
         this.pendingPartitionKey = null;
+        this.pendingPartition = false;
     }
 
     private final class PartitionState {
@@ -384,5 +542,27 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         private void close() {
             this.chainRoot.onClose(this.context);
         }
+    }
+
+    private PartitionState createDefaultPartitionState(PartitionKey routeKey, ProtoContext parentContext, ProtoInitializer initializer) throws Throwable {
+        if (!(parentContext instanceof ProtoContextService)) {
+            throw new IllegalStateException("ProtoPartitionDuplexer requires ProtoContextService.");
+        }
+        if (initializer == null) {
+            return null;
+        }
+
+        ProtoContextService branchCtx = new ProtoContextService((ProtoContextService) parentContext, this.partitionRcvSize, this.partitionSndSize, this.parentPrevStackName, this.parentNextStackName);
+        ProtoStackChain chainRoot = branchCtx.getChainRoot();
+        branchCtx.context(PartitionKey.class, routeKey);
+
+        initializer.config(branchCtx);
+        if (chainRoot.isEmpty()) {
+            return null;
+        }
+
+        chainRoot.onInit(branchCtx);
+        chainRoot.onActive(branchCtx);
+        return new PartitionState(branchCtx, chainRoot);
     }
 }

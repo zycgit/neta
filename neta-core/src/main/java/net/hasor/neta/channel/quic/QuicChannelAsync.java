@@ -475,12 +475,12 @@ class QuicChannelAsync implements AsyncChannel {
 
         long streamMaxData;
         if (bidi) {
-                // Bidirectional streams allow both endpoints to send data.
-                streamMaxData = localInitiated ? this.peerStreamMaxDataBidiRemote  // Peer-imposed send quota for locally initiated bidirectional streams.
+            // Bidirectional streams allow both endpoints to send data.
+            streamMaxData = localInitiated ? this.peerStreamMaxDataBidiRemote  // Peer-imposed send quota for locally initiated bidirectional streams.
                     : this.quicSoConfig.getTpInitialMaxStreamDataBidiRemote(); // Local receive quota for peer-initiated bidirectional streams.
         } else {
-                // On unidirectional streams only the initiator can send data.
-                streamMaxData = localInitiated ? this.peerStreamMaxDataUni         // Peer-imposed send quota for locally initiated unidirectional streams.
+            // On unidirectional streams only the initiator can send data.
+            streamMaxData = localInitiated ? this.peerStreamMaxDataUni         // Peer-imposed send quota for locally initiated unidirectional streams.
                     : this.quicSoConfig.getTpInitialMaxStreamDataUni();        // Local receive quota for peer-initiated unidirectional streams.
         }
 
