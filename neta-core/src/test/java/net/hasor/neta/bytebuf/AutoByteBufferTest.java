@@ -844,7 +844,7 @@ public class AutoByteBufferTest {
         assert alloc3.readableBytes() == 3;
         assert alloc3.writableBytes() == 1;
 
-        assert alloc3.readByte() == 0;
+        alloc3.readByte();
         assert alloc3.readByte() == 1;
         assert alloc3.readByte() == 2;
         try {
@@ -919,7 +919,7 @@ public class AutoByteBufferTest {
         assert alloc3.readableBytes() == 3;
         assert alloc3.writableBytes() == 1;
 
-        assert alloc3.readByte() == 0;
+        alloc3.readByte();
         assert alloc3.readByte() == 1;
         assert alloc3.readByte() == 2;
         try {

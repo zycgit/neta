@@ -222,6 +222,91 @@ public class ProtoRoutingModeTest {
         Assert.assertTrue(outerRouteEvents.isEmpty());
     }
 
+    @Test
+    public void switchRouteWithNext_shouldFinishCurrentBranchThenApplyRouteChange() throws Throwable {
+        RecordHandler.reset();
+        List<String> stepLog = new ArrayList<>();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha-switch", new SwitchStatusHandler(10, "beta", ProtoStatus.Next, stepLog))
+                    .nextDecoder("alpha-tail", new LogHandler("alpha-tail", stepLog)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new RecordHandler("beta")));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        List<Object> received = new ArrayList<>();
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
+
+        channel.receiveData(10);
+        channel.receiveData(20);
+
+        Assert.assertEquals(2, received.size());
+        Assert.assertEquals(10, received.get(0));
+        Assert.assertEquals(20, received.get(1));
+        Assert.assertEquals(2, stepLog.size());
+        Assert.assertEquals("alpha-switch", stepLog.get(0));
+        Assert.assertEquals("alpha-tail", stepLog.get(1));
+        Assert.assertEquals(1, RecordHandler.activeCount("beta"));
+        Assert.assertEquals(1, RecordHandler.messageCount("beta"));
+    }
+
+    @Test
+    public void switchRouteWithStop_shouldStopCurrentBranchAndApplyRouteChangeInSameRound() throws Throwable {
+        RecordHandler.reset();
+        List<String> stepLog = new ArrayList<>();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha-switch", new SwitchStatusHandler(10, "beta", ProtoStatus.Stop, stepLog))
+                    .nextDecoder("alpha-tail", new LogHandler("alpha-tail", stepLog)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new RecordHandler("beta")));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        List<Object> received = new ArrayList<>();
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
+
+        channel.receiveData(10);
+        Assert.assertEquals(0, received.size());
+        Assert.assertEquals(1, stepLog.size());
+        Assert.assertEquals("alpha-switch", stepLog.get(0));
+        Assert.assertEquals(1, RecordHandler.activeCount("beta"));
+        Assert.assertEquals(0, RecordHandler.messageCount("beta"));
+
+        channel.receiveData(20);
+        Assert.assertEquals(1, received.size());
+        Assert.assertEquals(20, received.get(0));
+        Assert.assertEquals(1, RecordHandler.messageCount("beta"));
+    }
+
+    @Test
+    public void switchRouteWithAbort_shouldNotApplyUntilNextRouterEntry() throws Throwable {
+        RecordHandler.reset();
+        List<String> stepLog = new ArrayList<>();
+
+        ProtoInitializer initializer = ProtoHelper.typed(Integer.class, Integer.class).nextRouteAsStatic("router", (ProtoRoutingDataSelector<Integer, Integer>) (ctx, rcvUp, rcvDown) -> rcvUp.queueSize() == 0 ? null : "alpha", r -> {
+            r.branch("alpha", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("alpha-switch", new SwitchStatusHandler(10, "beta", ProtoStatus.Abort, stepLog)));
+            r.branch("beta", (ProtoBuilder<Integer, Integer> c) -> c.nextDecoder("beta", new RecordHandler("beta")));
+        }).build();
+
+        VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(1), initializer, new VrtSoConfig());
+        List<Object> received = new ArrayList<>();
+        channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, data -> received.add(data.getData()));
+
+        channel.receiveData(10);
+        Assert.assertEquals(1, received.size());
+        Assert.assertEquals(10, received.get(0));
+        Assert.assertEquals(1, stepLog.size());
+        Assert.assertEquals("alpha-switch", stepLog.get(0));
+        Assert.assertEquals(0, RecordHandler.activeCount("beta"));
+        Assert.assertEquals(0, RecordHandler.messageCount("beta"));
+
+        channel.receiveData(20);
+        Assert.assertEquals(2, received.size());
+        Assert.assertEquals(20, received.get(1));
+        Assert.assertEquals(1, RecordHandler.activeCount("beta"));
+        Assert.assertEquals(1, RecordHandler.messageCount("beta"));
+    }
+
     private static class RecordHandler implements ProtoHandler<Integer, Integer> {
         private static final java.util.Map<String, Integer> ACTIVE_COUNTS  = new java.util.HashMap<>();
         private static final java.util.Map<String, Integer> MESSAGE_COUNTS = new java.util.HashMap<>();
@@ -399,6 +484,53 @@ public class ProtoRoutingModeTest {
 
         @Override
         public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            dst.offerMessage(src.takeMessage(src.queueSize()));
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class SwitchStatusHandler implements ProtoHandler<Integer, Integer> {
+        private final int          triggerValue;
+        private final String       targetRoute;
+        private final ProtoStatus  returnStatus;
+        private final List<String> stepLog;
+
+        private SwitchStatusHandler(int triggerValue, String targetRoute, ProtoStatus returnStatus, List<String> stepLog) {
+            this.triggerValue = triggerValue;
+            this.targetRoute = targetRoute;
+            this.returnStatus = returnStatus;
+            this.stepLog = stepLog;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            Integer value = src.takeMessage();
+            if (value != null) {
+                this.stepLog.add("alpha-switch");
+                dst.offerMessage(value);
+                if (value == this.triggerValue) {
+                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
+                    Assert.assertNotNull(routingControl);
+                    routingControl.switchRoute(this.targetRoute);
+                    return this.returnStatus;
+                }
+            }
+            return ProtoStatus.Next;
+        }
+    }
+
+    private static class LogHandler implements ProtoHandler<Integer, Integer> {
+        private final String       name;
+        private final List<String> stepLog;
+
+        private LogHandler(String name, List<String> stepLog) {
+            this.name = name;
+            this.stepLog = stepLog;
+        }
+
+        @Override
+        public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Integer> src, ProtoSndQueue<Integer> dst) {
+            this.stepLog.add(this.name);
             dst.offerMessage(src.takeMessage(src.queueSize()));
             return ProtoStatus.Next;
         }

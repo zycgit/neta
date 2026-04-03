@@ -93,7 +93,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     private ProtoRoutingControl initRoutingControl(ProtoRoutingMode routingMode) {
         return new ProtoRoutingControl() {
             @Override
-            public ProtoRoutingMode getMode() {
+            public ProtoRoutingMode mode() {
                 return routingMode;
             }
 
@@ -181,6 +181,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
      */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
+        this.checkAndExecutePendingUpgrade(context);
+
         if (this.selectedRoute == null && this.routing4Event != null) {
             String resolvedRoute = this.routing4Event.route(context, event, isRcv);
             if (resolvedRoute != null) {
@@ -212,6 +214,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
      */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<Object> rcvDown, ProtoRcvQueue<Object> sndUp, ProtoSndQueue<OUT> sndDown) throws Throwable {
+        this.checkAndExecutePendingUpgrade(context);
+
         if (isRcv) {
             ProtoStatus recoveryStatus = this.tryRecoverRcvBranch((ProtoContextService) context, rcvUp, rcvDown, sndDown);
             if (recoveryStatus != null) {
@@ -259,7 +263,9 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             // Fast path: forward data to the selected branch.
             List<IN> data = rcvUp.takeMessage(rcvUp.queueSize());
             ProtoStatus status = this.doRcvRoute(branch, data, rcvDown, sndDown);
-            this.checkAndExecutePendingUpgrade(context);
+            if (status != ProtoStatus.Abort) {
+                this.checkAndExecutePendingUpgrade(context);
+            }
             return status;
         } else {
             ProtoStatus recoveryStatus = this.tryRecoverSndBranch((ProtoContextService) context, sndUp, sndDown);
@@ -268,7 +274,9 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             }
 
             ProtoStatus status = this.doSndRoute(context, sndUp, sndDown);
-            this.checkAndExecutePendingUpgrade(context);
+            if (status != ProtoStatus.Abort) {
+                this.checkAndExecutePendingUpgrade(context);
+            }
             return status;
         }
     }

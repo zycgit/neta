@@ -26,23 +26,29 @@ package net.hasor.neta.channel;
  * <p>The object is inserted into context storage by the corresponding
  * {@link ProtoRoutingDuplexer} when it creates the branch context. Handlers in the current branch
  * and any nested child branches can read it.</p>
- * <p>Calling {@link #switchRoute(String)} only affects the current routing duplexer instance on the
- * current connection. The new route takes effect after the current processing round finishes and
- * pending output and recovery state have been cleared.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-08
  */
 public interface ProtoRoutingControl {
     /** Return the working mode of the current routing duplexer. */
-    ProtoRoutingMode getMode();
+    ProtoRoutingMode mode();
 
     /** Return the currently selected branch name, or {@code null} if routing has not been decided yet. */
     String current();
 
     /**
      * Request a switch to the specified branch.
-     * <p>The request is recorded as a pending switch and applied by the routing duplexer after the
-     * current processing round completes.</p>
+     * <p>The request is recorded as a pending switch. The routing duplexer decides when the switch
+     * becomes visible according to the current branch return status and the old branch flush/recovery state.</p>
+     * <p>Calling this method only affects the current routing duplexer instance on the current
+     * connection. The actual cut-over is decided by the routing owner when the current branch round
+     * returns:</p>
+     * <ul>
+     *   <li>returning {@link ProtoStatus#Next} keeps running the current branch until the round ends, then applies the pending switch;</li>
+     *   <li>returning {@link ProtoStatus#Stop} ends the current branch immediately and allows the routing owner to switch the selected route in the same outer round; later router entries then run on the new branch;</li>
+     *   <li>returning {@link ProtoStatus#Abort} suppresses route switching for the current round; the pending switch is retried on the next routing entry.</li>
+     * </ul>
+     * <p>The actual cut-over still waits for pending output and recovery state of the old branch to clear.</p>
      * @param target target branch name
      */
     void switchRoute(String target);

@@ -332,7 +332,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
         PartitionKey defaultKey = PartitionKey.defaultKey();
         PartitionState state = this.ensureDefaultPartitionState(context, PartitionDataKind.Message, rcvUp.peekMessage());
         if (state == null) {
-            return this.passThroughUnmatchedMessages(context, rcvUp, rcvDown);
+            return this.passThroughMessages(context, rcvUp, rcvDown, defaultKey);
         }
 
         int batchCount = this.collectBatchMessages(context, rcvUp, rcvDown.slotSize(), defaultKey);
@@ -351,6 +351,10 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
     }
 
     private boolean passThroughUnmatchedMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<IN> rcvDown) {
+        return this.passThroughMessages(context, rcvUp, rcvDown, null);
+    }
+
+    private boolean passThroughMessages(ProtoContext context, ProtoRcvQueue<IN> rcvUp, ProtoSndQueue<IN> rcvDown, PartitionKey expectedKey) {
         this.receiveBuffer.clear();
 
         int batchLimit = Math.min(rcvUp.queueSize(), Math.max(1, rcvDown.slotSize()));
@@ -363,7 +367,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
             }
 
             PartitionKey itemKey = this.selector.route(context, PartitionDataKind.Message, item);
-            if (itemKey != null) {
+            if (!Objects.equals(expectedKey, itemKey)) {
                 break;
             }
 
@@ -442,6 +446,7 @@ public class ProtoPartitionDuplexer<IN, OUT> implements ProtoDuplexer<IN, IN, OU
 
         state = this.createDefaultPartitionState(defaultKey, context, this.defaultInitializer);
         if (state == null) {
+            logger.warn("[PARTITION] channel=" + context.getChannel().getChannelId() + " default partition initializer an empty " + kind + " will pass through.");
             return null;
         }
 
