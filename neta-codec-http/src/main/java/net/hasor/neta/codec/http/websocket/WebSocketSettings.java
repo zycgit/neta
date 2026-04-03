@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.util.Objects;
+import net.hasor.neta.codec.http.websocket.extension.PerMessageDeflateSupport;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketClientExtensionValidator;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSelector;
 
@@ -24,11 +25,11 @@ import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSel
  * This type is the home for WebSocket handshake, extension, and later frame/runtime options.
  */
 public class WebSocketSettings {
-    private final WebSocketVersion               version;
-    private final WebSocketAutoHandshakeConfig   autoHandshakeConfig;
-    private final WebSocketServerExtensionSelector serverExtensionSelector;
+    private final WebSocketVersion                  version;
+    private final WebSocketAutoHandshakeConfig      autoHandshakeConfig;
+    private final WebSocketServerExtensionSelector  serverExtensionSelector;
     private final WebSocketClientExtensionValidator clientExtensionValidator;
-    private final WebSocketHandshakeAuthorizer   handshakeAuthorizer;
+    private final WebSocketHandshakeAuthorizer      handshakeAuthorizer;
 
     public static Builder builder(WebSocketVersion version) {
         return new Builder(version);
@@ -67,11 +68,11 @@ public class WebSocketSettings {
     }
 
     public static class Builder {
-        private final WebSocketVersion               version;
-        private       WebSocketAutoHandshakeConfig   autoHandshakeConfig;
-        private       WebSocketServerExtensionSelector serverExtensionSelector;
+        private final WebSocketVersion                  version;
+        private       WebSocketAutoHandshakeConfig      autoHandshakeConfig;
+        private       WebSocketServerExtensionSelector  serverExtensionSelector;
         private       WebSocketClientExtensionValidator clientExtensionValidator;
-        private       WebSocketHandshakeAuthorizer   handshakeAuthorizer;
+        private       WebSocketHandshakeAuthorizer      handshakeAuthorizer;
 
         private Builder(WebSocketVersion version) {
             this.version = Objects.requireNonNull(version, "version is null");
@@ -90,6 +91,13 @@ public class WebSocketSettings {
 
         public Builder clientExtensionValidator(WebSocketClientExtensionValidator clientExtensionValidator) {
             this.clientExtensionValidator = clientExtensionValidator;
+            return this;
+        }
+
+        public Builder perMessageDeflate() {
+            PerMessageDeflateSupport support = PerMessageDeflateSupport.instance();
+            this.serverExtensionSelector = support;
+            this.clientExtensionValidator = support;
             return this;
         }
 

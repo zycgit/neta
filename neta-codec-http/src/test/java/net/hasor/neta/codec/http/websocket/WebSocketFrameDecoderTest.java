@@ -41,6 +41,9 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
             assertEquals(1, result.size());
             assertEquals(WebSocketOpcode.TEXT, frame.opcode());
             assertTrue(frame.isFinalFragment());
+            assertFalse(frame.isRsv1());
+            assertFalse(frame.isRsv2());
+            assertFalse(frame.isRsv3());
             assertFalse(frame.isMasked());
             assertNull(frame.maskingKey());
             assertEquals("Hello", text(frame));
@@ -130,6 +133,7 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
             WebSocketFrame third = (WebSocketFrame) result.get(2);
             assertEquals(WebSocketOpcode.TEXT, first.opcode());
             assertFalse(first.isFinalFragment());
+            assertFalse(first.isRsv1());
             assertEquals(3, first.payloadLength());
             assertEquals("ABC", text(first));
             assertEquals(WebSocketOpcode.CONTINUATION, second.opcode());
@@ -173,25 +177,6 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
 
             byte[] rfc6455Frame2 = buildRfc6455Frame(0x01, true, false, null, "ok".getBytes(StandardCharsets.UTF_8));
             List<HttpObject> recovered = receiveAndIntBound(pipe, httpByteBuf(rfc6455Frame2));
-            assertEquals(1, recovered.size());
-            assertEquals("ok", text((WebSocketFrame) recovered.get(0)));
-        });
-    }
-
-    @Test
-    public void testFrameDecoderRejectsRsvBitsWithoutNegotiatedExtension() throws Throwable {
-        autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
-                ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
-            }, VrtSoConfig.asServer());
-
-            byte[] broken = buildRfc6455Frame(0x01, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "bad".getBytes(StandardCharsets.UTF_8));
-            broken[0] = (byte) (broken[0] | 0x40);
-            assertTrue(receiveAndIntBound(pipe, httpByteBuf(broken)).isEmpty());
-
-            byte[] ok = buildRfc6455Frame(0x01, true, true, new byte[] { 0x01, 0x02, 0x03, 0x04 }, "ok".getBytes(StandardCharsets.UTF_8));
-            List<HttpObject> recovered = receiveAndIntBound(pipe, httpByteBuf(ok));
             assertEquals(1, recovered.size());
             assertEquals("ok", text((WebSocketFrame) recovered.get(0)));
         });

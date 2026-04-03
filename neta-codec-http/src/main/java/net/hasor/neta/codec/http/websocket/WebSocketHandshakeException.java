@@ -24,7 +24,7 @@ import net.hasor.neta.codec.http.HttpStatus;
  * <p>
  * Carries status, optional headers, optional body, and whether the channel should be closed.
  */
-class WebSocketHandshakeException extends HttpProtocolException {
+public class WebSocketHandshakeException extends HttpProtocolException {
     private final HttpStatus  status;
     private final HttpHeaders headers;
     private final byte[]      body;

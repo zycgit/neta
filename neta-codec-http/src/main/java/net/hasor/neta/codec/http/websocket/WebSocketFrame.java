@@ -46,6 +46,15 @@ public interface WebSocketFrame extends HttpObject {
      */
     boolean isFinalFragment();
 
+    /** Returns {@code true} if the RSV1 bit is set. */
+    boolean isRsv1();
+
+    /** Returns {@code true} if the RSV2 bit is set. */
+    boolean isRsv2();
+
+    /** Returns {@code true} if the RSV3 bit is set. */
+    boolean isRsv3();
+
     /**
      * Returns {@code true} if the MASK bit is set.
      * Client→server frames MUST be masked; server→client frames MUST NOT.
@@ -76,7 +85,7 @@ public interface WebSocketFrame extends HttpObject {
         if (content == null) {
             throw new IllegalArgumentException("content must not be null");
         }
-        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, masked, maskingKey, content, content.readableBytes());
+        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, false, false, false, masked, maskingKey, content, content.readableBytes());
     }
 
     static WebSocketFrame create(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content, int payloadLength) {
@@ -86,6 +95,23 @@ public interface WebSocketFrame extends HttpObject {
         if (payloadLength < 0) {
             throw new IllegalArgumentException("payloadLength must not be negative");
         }
-        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, masked, maskingKey, content, payloadLength);
+        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, false, false, false, masked, maskingKey, content, payloadLength);
+    }
+
+    static WebSocketFrame create(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte[] maskingKey, ByteBuf content) {
+        if (content == null) {
+            throw new IllegalArgumentException("content must not be null");
+        }
+        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, rsv1, rsv2, rsv3, masked, maskingKey, content, content.readableBytes());
+    }
+
+    static WebSocketFrame create(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte[] maskingKey, ByteBuf content, int payloadLength) {
+        if (content == null) {
+            throw new IllegalArgumentException("content must not be null");
+        }
+        if (payloadLength < 0) {
+            throw new IllegalArgumentException("payloadLength must not be negative");
+        }
+        return DefaultWebSocketFrame.newFrame(opcode, finalFragment, rsv1, rsv2, rsv3, masked, maskingKey, content, payloadLength);
     }
 }

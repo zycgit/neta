@@ -189,23 +189,6 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testClientRejectsUnsupportedNegotiatedExtensionWithoutPublishingEvent() throws Throwable {
-        autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());
-
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
-            sendAndOutBound(pipe, request);
-            DefaultFullHttpResponse response = newUpgradeResponse(request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY));
-            response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
-            List<HttpObject> inbound = receiveAndIntBound(pipe, response);
-
-            assertTrue(inbound.isEmpty());
-            assertNull(webSocketContext(pipe.channel()));
-            assertTrue(pipe.channel().isClose());
-        });
-    }
-
-    @Test
     public void testClientRejects101WithoutConnectionUpgradeWithoutPublishingEvent() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asClient());

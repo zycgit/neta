@@ -86,6 +86,9 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
         WebSocketFrame frame = WebSocketUtils.textFrame("Hello");
         assertEquals(WebSocketOpcode.TEXT, frame.opcode());
         assertTrue(frame.isFinalFragment());
+        assertFalse(frame.isRsv1());
+        assertFalse(frame.isRsv2());
+        assertFalse(frame.isRsv3());
         assertFalse(frame.isMasked());
         assertNull(frame.maskingKey());
         assertEquals("Hello", readContent(frame));

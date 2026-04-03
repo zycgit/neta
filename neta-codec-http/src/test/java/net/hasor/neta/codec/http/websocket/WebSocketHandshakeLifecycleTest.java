@@ -27,8 +27,6 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtTransfer;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketClientExtensionValidator;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSelector;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
@@ -262,56 +260,6 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
     }
 
     @Test
-    public void testAuthorizerSelectingUnsupportedExtensionBecomesBadRequest() throws Throwable {
-        autoCloseNeta(neta -> {
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                WebSocketHandshakeAuthorizer authorizer = (request, callback) -> {
-                    DefaultHttpHeaders headers = new DefaultHttpHeaders();
-                    headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
-                    callback.accept(headers);
-                };
-                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13, authorizer));
-            }, VrtSoConfig.asServer());
-
-            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
-            List<Object> outbound = drainQueue(pipe.channelOutbound());
-            HttpResponse response = (HttpResponse) outbound.get(0);
-
-            assertTrue(inbound.isEmpty());
-            assertNull(webSocketContext(pipe.channel()));
-            assertEquals(3, outbound.size());
-            assertEquals(400, response.status().code());
-        });
-    }
-
-    @Test
-    public void testSettingsNegotiatorCanAcceptServerSelectedExtension() throws Throwable {
-        autoCloseNeta(neta -> {
-            WebSocketSettings settings = WebSocketSettings.builder(WebSocketVersion.V13).serverExtensionSelector((request, proposedExtensions) -> proposedExtensions).handshakeAuthorizer((request, callback) -> {
-                DefaultHttpHeaders headers = new DefaultHttpHeaders();
-                headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
-                callback.accept(headers);
-            }).build();
-
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(settings));
-            }, VrtSoConfig.asServer());
-
-            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
-            List<Object> outbound = drainQueue(pipe.channelOutbound());
-            HttpResponse response = (HttpResponse) outbound.get(0);
-            HttpHeaders headers = (HttpHeaders) outbound.get(1);
-            WebSocketContext webSocketContext = webSocketContext(pipe.channel());
-
-            assertTrue(inbound.isEmpty());
-            assertEquals(101, response.status().code());
-            assertEquals("permessage-deflate", headers.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS));
-            assertNotNull(webSocketContext);
-            assertEquals("permessage-deflate", webSocketContext.extensions());
-        });
-    }
-
-    @Test
     public void testAuthorizerSelectingUnsupportedSubProtocolBecomesBadRequest() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
@@ -534,31 +482,6 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
             assertTrue(inbound.isEmpty());
             assertNull(webSocketContext(pipe.channel()));
             assertTrue(pipe.channel().isClose());
-        });
-    }
-
-    @Test
-    public void testClientSettingsNegotiatorCanAcceptNegotiatedExtension() throws Throwable {
-        autoCloseNeta(neta -> {
-            WebSocketSettings settings = WebSocketSettings.builder(WebSocketVersion.V13).clientExtensionValidator((version, requestedExtensions, negotiatedExtensions) -> {
-                assertEquals("permessage-deflate", requestedExtensions);
-                assertEquals("permessage-deflate", negotiatedExtensions);
-            }).build();
-
-            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(settings)), VrtSoConfig.asClient());
-
-            FullHttpRequest request = WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat");
-            request.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
-            sendAndOutBound(pipe, request);
-
-            DefaultFullHttpResponse response = newUpgradeResponse(request.getString(HttpHeaderNames.SEC_WEBSOCKET_KEY));
-            response.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
-            List<HttpObject> inbound = receiveAndIntBound(pipe, response);
-            WebSocketContext context = webSocketContext(pipe.channel());
-
-            assertTrue(inbound.isEmpty());
-            assertNotNull(context);
-            assertEquals("permessage-deflate", context.extensions());
         });
     }
 

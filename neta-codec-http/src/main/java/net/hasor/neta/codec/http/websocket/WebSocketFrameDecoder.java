@@ -58,15 +58,21 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     private static final class Rfc6455PayloadState {
         private final WebSocketOpcode opcode;
         private final boolean         finalFragment;
+        private final boolean         rsv1;
+        private final boolean         rsv2;
+        private final boolean         rsv3;
         private final boolean         masked;
         private final byte[]          maskKey;
         private final long            payloadLength;
         private       long            remainingPayloadLength;
         private       long            emittedPayloadLength;
 
-        private Rfc6455PayloadState(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskKey, long payloadLength) {
+        private Rfc6455PayloadState(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte[] maskKey, long payloadLength) {
             this.opcode = opcode;
             this.finalFragment = finalFragment;
+            this.rsv1 = rsv1;
+            this.rsv2 = rsv2;
+            this.rsv3 = rsv3;
             this.masked = masked;
             this.maskKey = maskKey;
             this.payloadLength = payloadLength;
@@ -263,7 +269,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         }
 
         if (shouldStreamPayload(opcodeVal, payloadLen)) {
-            this.streamingState = new Rfc6455PayloadState(opcode, fin, masked, masked ? new byte[] { this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3] } : null, payloadLen);
+            this.streamingState = new Rfc6455PayloadState(opcode, fin, rsv1, rsv2, rsv3, masked, masked ? new byte[] { this.maskKeyBuf[0], this.maskKeyBuf[1], this.maskKeyBuf[2], this.maskKeyBuf[3] } : null, payloadLen);
             return emitRfc6455PayloadSlice(context, dst);
         }
 
@@ -303,22 +309,22 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         WebSocketFrame frame;
         switch (opcode) {
             case TEXT:
-                frame = WebSocketFrame.create(WebSocketOpcode.TEXT, fin, masked, frameMaskKey, contentBuf, len);
+                frame = WebSocketFrame.create(WebSocketOpcode.TEXT, fin, rsv1, rsv2, rsv3, masked, frameMaskKey, contentBuf, len);
                 break;
             case BINARY:
-                frame = WebSocketFrame.create(WebSocketOpcode.BINARY, fin, masked, frameMaskKey, contentBuf, len);
+                frame = WebSocketFrame.create(WebSocketOpcode.BINARY, fin, rsv1, rsv2, rsv3, masked, frameMaskKey, contentBuf, len);
                 break;
             case CONTINUATION:
-                frame = WebSocketFrame.create(WebSocketOpcode.CONTINUATION, fin, masked, frameMaskKey, contentBuf, len);
+                frame = WebSocketFrame.create(WebSocketOpcode.CONTINUATION, fin, rsv1, rsv2, rsv3, masked, frameMaskKey, contentBuf, len);
                 break;
             case PING:
-                frame = WebSocketFrame.create(WebSocketOpcode.PING, true, masked, frameMaskKey, contentBuf, len);
+                frame = WebSocketFrame.create(WebSocketOpcode.PING, true, rsv1, rsv2, rsv3, masked, frameMaskKey, contentBuf, len);
                 break;
             case PONG:
-                frame = WebSocketFrame.create(WebSocketOpcode.PONG, true, masked, frameMaskKey, contentBuf, len);
+                frame = WebSocketFrame.create(WebSocketOpcode.PONG, true, rsv1, rsv2, rsv3, masked, frameMaskKey, contentBuf, len);
                 break;
             case CLOSE:
-                frame = WebSocketFrame.create(WebSocketOpcode.CLOSE, true, masked, frameMaskKey, contentBuf, len);
+                frame = WebSocketFrame.create(WebSocketOpcode.CLOSE, true, rsv1, rsv2, rsv3, masked, frameMaskKey, contentBuf, len);
                 break;
             default:
                 if (contentBuf != ByteBuf.EMPTY) {
@@ -384,7 +390,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         WebSocketOpcode emittedOpcode = firstSlice ? this.streamingState.opcode : WebSocketOpcode.CONTINUATION;
         boolean finalFragment = lastSlice && this.streamingState.finalFragment;
         byte[] maskKey = this.streamingState.masked ? new byte[] { this.streamingState.maskKey[0], this.streamingState.maskKey[1], this.streamingState.maskKey[2], this.streamingState.maskKey[3] } : null;
-        WebSocketFrame frame = WebSocketFrame.create(emittedOpcode, finalFragment, this.streamingState.masked, maskKey, contentBuf, chunkLength);
+        WebSocketFrame frame = WebSocketFrame.create(emittedOpcode, finalFragment, firstSlice && this.streamingState.rsv1, firstSlice && this.streamingState.rsv2, firstSlice && this.streamingState.rsv3, this.streamingState.masked, maskKey, contentBuf, chunkLength);
         this.streamingState.emittedPayloadLength += chunkLength;
         this.streamingState.remainingPayloadLength -= chunkLength;
         if (this.streamingState.remainingPayloadLength == 0L) {

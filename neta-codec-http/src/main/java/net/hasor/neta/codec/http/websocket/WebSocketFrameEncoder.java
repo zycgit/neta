@@ -158,7 +158,11 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
         ByteBuf out = context.byteBufAllocator().buffer(headerSize + payloadLen, Integer.MAX_VALUE);
 
         // Byte 0: FIN + opcode
-        byte byte0 = (byte) ((frame.isFinalFragment() ? 0x80 : 0x00) | (opcode.code() & 0x0F));
+        byte byte0 = (byte) ((frame.isFinalFragment() ? 0x80 : 0x00) |//
+                (frame.isRsv1() ? 0x40 : 0x00) |                      //
+                (frame.isRsv2() ? 0x20 : 0x00) |                      //
+                (frame.isRsv3() ? 0x10 : 0x00) |                      //
+                (opcode.code() & 0x0F));
         out.writeByte(byte0);
 
         // Byte 1: MASK flag + payload length indicator

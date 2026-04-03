@@ -39,6 +39,9 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
 
     private int             streamId;
     private boolean         finalFragment;
+    private boolean         rsv1;
+    private boolean         rsv2;
+    private boolean         rsv3;
     private boolean         masked;
     private boolean         active;
     private byte[]          maskingKey;
@@ -68,6 +71,21 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
     @Override
     public boolean isFinalFragment() {
         return this.finalFragment;
+    }
+
+    @Override
+    public boolean isRsv1() {
+        return this.rsv1;
+    }
+
+    @Override
+    public boolean isRsv2() {
+        return this.rsv2;
+    }
+
+    @Override
+    public boolean isRsv3() {
+        return this.rsv3;
     }
 
     @Override
@@ -103,6 +121,9 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
         }
         this.streamId = 0;
         this.finalFragment = false;
+        this.rsv1 = false;
+        this.rsv2 = false;
+        this.rsv3 = false;
         this.masked = false;
         this.maskingKey = null;
         this.payloadLength = 0;
@@ -116,10 +137,10 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
 
     @Override
     public String toString() {
-        return "WebSocketFrame{opcode=" + this.opcode + ", fin=" + this.finalFragment + ", masked=" + this.masked + ", payloadLen=" + this.payloadLength + '}';
+        return "WebSocketFrame{opcode=" + this.opcode + ", fin=" + this.finalFragment + ", rsv1=" + this.rsv1 + ", rsv2=" + this.rsv2 + ", rsv3=" + this.rsv3 + ", masked=" + this.masked + ", payloadLen=" + this.payloadLength + '}';
     }
 
-    static WebSocketFrame newFrame(WebSocketOpcode opcode, boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content, int payloadLength) {
+    static WebSocketFrame newFrame(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte[] maskingKey, ByteBuf content, int payloadLength) {
         if (opcode == null) {
             throw new IllegalArgumentException("opcode must not be null");
         }
@@ -130,6 +151,9 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
         DefaultWebSocketFrame frame = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
         frame.streamId = 0;
         frame.finalFragment = finalFragment;
+        frame.rsv1 = rsv1;
+        frame.rsv2 = rsv2;
+        frame.rsv3 = rsv3;
         frame.masked = masked;
         frame.active = true;
         frame.maskingKey = masked ? maskingKey : null;
