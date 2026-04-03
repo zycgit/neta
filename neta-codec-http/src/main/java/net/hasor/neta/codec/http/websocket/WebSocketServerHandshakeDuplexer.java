@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -25,6 +26,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSelector;
 
 /**
  * Server-side WebSocket opening-handshake duplexer.
@@ -52,6 +54,7 @@ import net.hasor.neta.codec.http.*;
  */
 public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake {
     private static final Logger                       logger = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
+    private final        WebSocketSettings            settings;
     private final        WebSocketHandshakeAuthorizer authorizer;
 
     private static final class ServerHandshakeState {
@@ -77,12 +80,17 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
     }
 
     public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion) {
-        this(codecVersion, (event, c) -> c.accept());
+        this(WebSocketSettings.of(codecVersion));
     }
 
     public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketHandshakeAuthorizer authorizer) {
-        super(codecVersion);
-        this.authorizer = Objects.requireNonNull(authorizer, "authorizer is null");
+        this(WebSocketSettings.builder(codecVersion).handshakeAuthorizer(authorizer).build());
+    }
+
+    public WebSocketServerHandshakeDuplexer(WebSocketSettings settings) {
+        super(Objects.requireNonNull(settings, "settings is null").version());
+        this.settings = settings;
+        this.authorizer = Objects.requireNonNull(settings.handshakeAuthorizer(), "handshakeAuthorizer is null");
     }
 
     @Override
@@ -550,23 +558,39 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             }
         }
 
-        List<String> negotiatedExtensions = parseHeaderValues(headers.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS));
-        if (!negotiatedExtensions.isEmpty()) {
-            throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket handshake failed: negotiated extensions are not supported.");
+        String negotiatedExtensions = headers.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
+        WebSocketServerExtensionSelector extensionSelector = this.settings.serverExtensionSelector();
+        String resolvedExtensions;
+        if (extensionSelector == null) {
+            if (StringUtils.isNotBlank(negotiatedExtensions)) {
+                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket handshake failed: negotiated extensions are disabled by current settings.");
+            }
+            resolvedExtensions = null;
+        } else {
+            resolvedExtensions = extensionSelector.selectServerExtensions(state.handshakeRequest, negotiatedExtensions);
+        }
+        if (StringUtils.isBlank(resolvedExtensions)) {
+            headers.removeHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
+        } else {
+            headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, resolvedExtensions);
         }
     }
 
-    private List<String> parseHeaderValues(String headerValue) {
-        ArrayList<String> values = new ArrayList<>();
+    private static List<String> parseHeaderValues(String headerValue) {
         if (StringUtils.isBlank(headerValue)) {
-            return values;
+            return Collections.emptyList();
         }
+
         String[] parts = headerValue.split(",");
+        List<String> values = new ArrayList<>(parts.length);
         for (String part : parts) {
             String value = part != null ? part.trim() : null;
             if (StringUtils.isNotBlank(value)) {
                 values.add(value);
             }
+        }
+        if (values.isEmpty()) {
+            return Collections.emptyList();
         }
         return values;
     }

@@ -15,6 +15,7 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
@@ -22,6 +23,7 @@ import net.hasor.cobble.logging.LoggerFactory;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketClientExtensionValidator;
 
 /**
  * Client-side WebSocket opening-handshake duplexer.
@@ -48,8 +50,8 @@ import net.hasor.neta.codec.http.*;
  * </pre>
  */
 public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake {
-    private static final Logger                       logger = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
-    private final        WebSocketAutoHandshakeConfig autoHandshakeConfig;
+    private static final Logger            logger = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
+    private final        WebSocketSettings settings;
 
     private static final class ClientHandshakeState {
         private final HttpMessageParts      requestParts         = new HttpMessageParts();
@@ -60,6 +62,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         private       WebSocketVersion      version;
         private       String                path;
         private       String                protocols;
+        private       String                extensions;
         private       String                key;
         private       String                key1;
         private       String                key2;
@@ -67,12 +70,16 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     }
 
     public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion) {
-        this(codecVersion, null);
+        this(WebSocketSettings.of(codecVersion));
     }
 
     public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketAutoHandshakeConfig autoHandshakeConfig) {
-        super(codecVersion);
-        this.autoHandshakeConfig = autoHandshakeConfig;
+        this(WebSocketSettings.builder(codecVersion).autoHandshakeConfig(autoHandshakeConfig).build());
+    }
+
+    public WebSocketClientHandshakeDuplexer(WebSocketSettings settings) {
+        super(settings.version());
+        this.settings = settings;
     }
 
     @Override
@@ -83,10 +90,11 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         ClientHandshakeState state = state(context);
-        if (this.autoHandshakeConfig == null || state.ready || state.requestPending) {
+        WebSocketAutoHandshakeConfig autoHandshakeConfig = this.settings.autoHandshakeConfig();
+        if (autoHandshakeConfig == null || state.ready || state.requestPending) {
             return;
         }
-        context.sendData(WebSocketUtils.createHandshake(this.codecVersion, this.autoHandshakeConfig.requestPath(), this.autoHandshakeConfig.headers(), this.autoHandshakeConfig.cookies()));
+        context.sendData(WebSocketUtils.createHandshake(this.codecVersion, autoHandshakeConfig.requestPath(), autoHandshakeConfig.headers(), autoHandshakeConfig.cookies()));
     }
 
     @Override
@@ -216,6 +224,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         state.version = version;
         state.path = request.uri();
         state.protocols = request.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
+        state.extensions = request.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
         state.key = requestKey;
         state.key1 = requestKey1;
         state.key2 = requestKey2;
@@ -272,7 +281,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 // verify handshake
                 String subProtocol;
                 try {
-                    this.verifyUpgrade(state.version, state.key, state.key1, state.key2, state.key3, state.protocols, state.responseParts);
+                    this.verifyUpgrade(state.version, state.key, state.key1, state.key2, state.key3, state.protocols, state.extensions, state.responseParts);
                     subProtocol = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
                 } catch (WebSocketHandshakeException e) {
                     logger.warn("Websocket client handshake protocol violation: " + e.getMessage());
@@ -308,7 +317,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return ProtoStatus.Next;
     }
 
-    private void verifyUpgrade(WebSocketVersion version, String key, String key1, String key2, byte[] key3, String requestedProtocols, HttpMessageParts response) {
+    private void verifyUpgrade(WebSocketVersion version, String key, String key1, String key2, byte[] key3, String requestedProtocols, String requestedExtensions, HttpMessageParts response) {
         if (response.status() == null || response.status().code() != HttpStatus.SWITCHING_PROTOCOLS.code()) {
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: expected HTTP 101 Switching Protocols response.");
         }
@@ -328,7 +337,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             if (!StringUtils.equals(expected, acceptKey)) {
                 throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: Sec-WebSocket-Accept does not match the client handshake key.");
             }
-            validateNegotiatedHeaders(requestedProtocols, response);
+            validateNegotiatedHeaders(requestedProtocols, requestedExtensions, response);
             return;
         }
 
@@ -347,14 +356,19 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
-    private void validateNegotiatedHeaders(String requestedProtocols, HttpMessageParts response) {
+    private void validateNegotiatedHeaders(String requestedProtocols, String requestedExtensions, HttpMessageParts response) {
         String selectedProtocol = response.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
         validateSelectedSubProtocol(requestedProtocols, selectedProtocol);
 
         String extensions = response.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
-        if (!parseHeaderValues(extensions).isEmpty()) {
-            throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: negotiated extensions are not supported.");
+        WebSocketClientExtensionValidator extensionValidator = this.settings.clientExtensionValidator();
+        if (extensionValidator == null) {
+            if (StringUtils.isNotBlank(extensions)) {
+                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: negotiated extensions are disabled by current settings.");
+            }
+            return;
         }
+        extensionValidator.validateClientExtensions(this.codecVersion, requestedExtensions, extensions);
     }
 
     private void validateSelectedSubProtocol(String requestedProtocols, String selectedProtocol) {
@@ -376,17 +390,22 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
-    private List<String> parseHeaderValues(String headerValue) {
-        ArrayList<String> values = new ArrayList<>();
+    private static List<String> parseHeaderValues(String headerValue) {
         if (StringUtils.isBlank(headerValue)) {
-            return values;
+            return Collections.emptyList();
         }
+
         String[] parts = headerValue.split(",");
+        List<String> values = new ArrayList<>(parts.length);
         for (String part : parts) {
             String value = part != null ? part.trim() : null;
             if (StringUtils.isNotBlank(value)) {
                 values.add(value);
             }
+        }
+
+        if (values.isEmpty()) {
+            return Collections.emptyList();
         }
         return values;
     }
@@ -409,6 +428,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         state.version = null;
         state.path = null;
         state.protocols = null;
+        state.extensions = null;
         state.key = null;
         state.key1 = null;
         state.key2 = null;
