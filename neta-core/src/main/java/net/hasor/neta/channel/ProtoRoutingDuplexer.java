@@ -14,12 +14,8 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.io.Closeable;
 import java.util.*;
-import net.hasor.cobble.function.Release;
-import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ReferenceHolder;
 
 /**
  * Routing duplexer.
@@ -171,14 +167,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         if (seed == null) {
             return null;
         }
-
-        if (seed instanceof ReferenceHolder) {
-            ((ReferenceHolder) seed).release();
-        } else if (seed instanceof Release) {
-            ((Release) seed).release();
-        } else if (seed instanceof Closeable) {
-            IOUtils.closeQuietly((Closeable) seed);
-        }
+        SoUtils.release(seed);
         return null;
     }
 

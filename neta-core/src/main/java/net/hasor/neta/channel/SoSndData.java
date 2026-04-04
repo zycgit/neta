@@ -14,11 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.io.Closeable;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import net.hasor.cobble.concurrent.future.Future;
-import net.hasor.cobble.io.IOUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
@@ -143,9 +141,7 @@ public class SoSndData {
             this.future.completed(this.result);
         } finally {
             for (Object buf : this.data) {
-                if (buf instanceof Closeable) {
-                    IOUtils.closeQuietly((Closeable) buf);
-                }
+                SoUtils.release(buf);
             }
         }
     }
@@ -159,9 +155,7 @@ public class SoSndData {
             this.future.failed(e);
         } finally {
             for (Object buf : this.data) {
-                if (buf instanceof Closeable) {
-                    IOUtils.closeQuietly((Closeable) buf);
-                }
+                SoUtils.release(buf);
             }
         }
     }

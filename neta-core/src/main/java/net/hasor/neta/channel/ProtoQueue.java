@@ -14,15 +14,10 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
-import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import net.hasor.cobble.function.Release;
-import net.hasor.cobble.io.IOUtils;
-import net.hasor.cobble.logging.Logger;
-import net.hasor.neta.bytebuf.ReferenceHolder;
 
 /**
  * Queue implementation that simultaneously implements {@link ProtoRcvQueue} and {@link ProtoSndQueue};
@@ -53,7 +48,6 @@ import net.hasor.neta.bytebuf.ReferenceHolder;
  * @see ProtoSndQueue
  */
 public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
-    private static final Logger        logger      = Logger.getLogger(ProtoQueue.class);
     private static final Object[]      EMPTY_ARRAY = new Object[0];
     /** Standard immutable empty {@link ProtoRcvQueue} singleton with no ownership obligations. */
     @SuppressWarnings("rawtypes")
@@ -240,7 +234,7 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
         int fixCnt = Math.min(cnt, this.linkedList.size());
         if (fixCnt > 0) {
             for (int i = 0; i < fixCnt; i++) {
-                releaseOwned(this.linkedList.get(i));
+                SoUtils.release(this.linkedList.get(i));
             }
             this.linkedList.subList(0, fixCnt).clear();
         }
@@ -253,29 +247,8 @@ public class ProtoQueue<T> implements ProtoRcvQueue<T>, ProtoSndQueue<T> {
      * already been transferred away.</p>
      */
     void clearAndClose() {
-        for (Object item : this.linkedList) {
-            releaseOwned(item);
-        }
+        this.linkedList.forEach(SoUtils::release);
         this.linkedList.clear();
-    }
-
-    /**
-     * Release an element when the queue discards something it still owns.
-     * <p>{@link ReferenceHolder} instances are released through reference counting. Ordinary
-     * {@link Closeable} objects are closed quietly. Other object types are left unchanged.</p>
-     */
-    private static void releaseOwned(Object item) {
-        try {
-            if (item instanceof ReferenceHolder) {
-                ((ReferenceHolder) item).release();
-            } else if (item instanceof Release) {
-                ((Release) item).release();
-            } else if (item instanceof Closeable) {
-                IOUtils.closeQuietly((Closeable) item);
-            }
-        } catch (Throwable e) {
-            logger.error("ProtoQueue releaseOwned failed: " + e.getMessage(), e);
-        }
     }
 
     /**

@@ -14,9 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.io.Closeable;
 import java.io.PrintStream;
 import java.net.SocketAddress;
 import net.hasor.cobble.StringUtils;
+import net.hasor.cobble.function.Release;
+import net.hasor.cobble.io.IOUtils;
+import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ReferenceHolder;
 
 /**
  * Internal utility methods for the Neta channel layer.
@@ -24,6 +29,23 @@ import net.hasor.cobble.StringUtils;
  * @version : 2023-09-24
  */
 public class SoUtils {
+    private static final Logger logger = Logger.getLogger(SoUtils.class);
+
+    /** Release an owned object according to Neta ownership conventions. */
+    public static void release(Object item) {
+        try {
+            if (item instanceof ReferenceHolder) {
+                ((ReferenceHolder) item).release();
+            } else if (item instanceof Release) {
+                ((Release) item).release();
+            } else if (item instanceof Closeable) {
+                IOUtils.closeQuietly((Closeable) item);
+            }
+        } catch (Throwable e) {
+            logger.error(e.getMessage(), e);
+        }
+    }
+
     /** Build a {@link SoConnectTimeoutException} for the remote address of the specified channel. */
     public static SoConnectTimeoutException newConnectTimeout(boolean isRcv, long channelId, SoContextService context, Throwable e) {
         SocketAddress address = context.getRemoteAddress(channelId);
