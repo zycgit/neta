@@ -14,8 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.channel;
+import java.io.Closeable;
 import java.util.*;
+import net.hasor.cobble.function.Release;
+import net.hasor.cobble.io.IOUtils;
 import net.hasor.cobble.logging.Logger;
+import net.hasor.neta.bytebuf.ReferenceHolder;
 
 /**
  * Routing duplexer.
@@ -56,6 +60,8 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     private final        String                            recoveryOwnerId;
     private              String                            selectedRoute;
     private              String                            pendingRoute;
+    private              Object                            pendingRouteSeed;
+    private              Object                            deliveredSeed;
 
     /** Create a static data-routing duplexer. */
     public ProtoRoutingDuplexer(ProtoRoutingDataSelector<IN, OUT> routing) {
@@ -103,18 +109,81 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             }
 
             @Override
+            public boolean hasSeed() {
+                return deliveredSeed != null;
+            }
+
+            @Override
+            public Object peekSeed() {
+                return deliveredSeed;
+            }
+
+            @Override
+            public Object takeSeed() {
+                Object currentSeed = deliveredSeed;
+                deliveredSeed = null;
+                return currentSeed;
+            }
+
+            @Override
+            public void removeSeed() {
+                clearSeedState();
+            }
+
+            @Override
             public void switchRoute(String target) {
                 schedulePendingUpgrade(target);
+            }
+
+            @Override
+            public void switchRoute(String target, Object seed) {
+                schedulePendingUpgrade(target, seed);
             }
         };
     }
 
     /** Record a pending branch-switch request to be executed later. */
     private void schedulePendingUpgrade(String newBranchName) {
+        this.schedulePendingUpgrade(newBranchName, null);
+    }
+
+    /** Record a pending branch-switch request with a one-shot seed object. */
+    private void schedulePendingUpgrade(String newBranchName, Object seed) {
         if (!this.branches.containsKey(newBranchName)) {
             throw new IllegalArgumentException("Unknown branch '" + newBranchName + "' for upgrade, available: " + this.branches.keySet());
         }
+
         this.pendingRoute = newBranchName;
+
+        if (seed != null) {
+            this.pendingRouteSeed = this.releaseSeed(this.pendingRouteSeed);
+            this.deliveredSeed = this.releaseSeed(this.deliveredSeed);
+            this.pendingRouteSeed = seed;
+        }
+    }
+
+    private void clearSeedState() {
+        this.pendingRouteSeed = this.releaseSeed(this.pendingRouteSeed);
+        this.deliveredSeed = this.releaseSeed(this.deliveredSeed);
+    }
+
+    private Object releaseSeed(Object seed) {
+        if (seed == null) {
+            return null;
+        }
+
+        if (seed instanceof ReferenceHolder) {
+            ((ReferenceHolder) seed).release();
+        } else if (seed instanceof Release) {
+            ((Release) seed).release();
+        } else if (seed instanceof Closeable) {
+            IOUtils.closeQuietly((Closeable) seed);
+        }
+        return null;
+    }
+
+    public ProtoRoutingControl getControl() {
+        return this.routingControl;
     }
 
     /**
@@ -139,8 +208,6 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             branchCtx.setupRecovery(this.recoveryOwnerId, branchName);
 
             ProtoStackChain chainRoot = branchCtx.getChainRoot();
-            branchCtx.context(ProtoRoutingControl.class, this.routingControl);
-
             // Run the user-supplied initializer to populate the branch handler chain
             entry.branchCtx = branchCtx;
             entry.chainRoot = chainRoot;
@@ -361,6 +428,7 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
     /** Close all branch sub-pipelines. */
     @Override
     public void onClose(ProtoContext context) {
+        this.clearSeedState();
         for (String name : this.branchOrder) {
             BranchEntry branch = this.branches.get(name);
             if (branch.chainRoot == null) {
@@ -572,8 +640,14 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         String newRoute = this.pendingRoute;
         this.pendingRoute = null;
         String oldRoute = this.selectedRoute;
+        Object nextSeed = this.pendingRouteSeed;
+        this.pendingRouteSeed = null;
 
         if (Objects.equals(oldRoute, newRoute)) {
+            if (nextSeed != null) {
+                this.releaseSeed(this.deliveredSeed);
+                this.deliveredSeed = nextSeed;
+            }
             return;
         }
 
@@ -582,7 +656,9 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
         }
 
         // Switch the active route.
+        this.releaseSeed(this.deliveredSeed);
         this.selectedRoute = newRoute;
+        this.deliveredSeed = nextSeed;
         this.activateBranchLifecycle(context, newRoute, oldRoute, true);
     }
 
@@ -612,7 +688,6 @@ public class ProtoRoutingDuplexer<IN, OUT> implements ProtoDuplexer<IN, Object, 
             Collections.addAll(this.pendingSnd, data);
         }
 
-        @SuppressWarnings("unchecked")
         private boolean hasPendingOutput() {
             return !this.pendingSnd.isEmpty() || this.chainRoot.getTailRcvDown().queueSize() > 0;
         }

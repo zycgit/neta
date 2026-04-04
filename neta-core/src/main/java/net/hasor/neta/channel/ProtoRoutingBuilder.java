@@ -29,6 +29,9 @@ import java.util.function.Consumer;
  * @see ProtoRoutingDuplexer
  */
 public interface ProtoRoutingBuilder<RCV_UP, SND_DOWN> {
+    /** Return the control handle owned by the current routing builder. */
+    ProtoRoutingControl control();
+
     /**
      * Register a named branch using a {@link ProtoInitializer}.
      * @param name branch name used to match runtime routing results

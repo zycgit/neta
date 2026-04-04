@@ -16,16 +16,13 @@
 package net.hasor.neta.channel;
 
 /**
- * Control handle exposed by the current routing duplexer to branch handlers.
- * <p>When a handler runs inside a routing branch, it can obtain this object through the current
- * {@link ProtoContext} using {@link ProtoContext#context(Class)}:</p>
- * <pre>
- * ProtoRoutingControl routing = context.context(ProtoRoutingControl.class);
- * routing.switchRoute("websocket");
- * </pre>
- * <p>The object is inserted into context storage by the corresponding
- * {@link ProtoRoutingDuplexer} when it creates the branch context. Handlers in the current branch
- * and any nested child branches can read it.</p>
+ * Control handle owned by the current routing duplexer.
+ * <p>Unlike general-purpose context objects, this control is expected to be obtained from
+ * {@link ProtoRoutingBuilder#control()} during branch assembly and then explicitly passed into the
+ * handlers or duplexers that are allowed to trigger route changes.</p>
+ * <p>The same control instance is shared by all branches of the same routing owner on the current
+ * connection, but route-seed visibility is still scoped to the currently selected branch after the
+ * switch is applied.</p>
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-08
  */
@@ -52,4 +49,27 @@ public interface ProtoRoutingControl {
      * @param target target branch name
      */
     void switchRoute(String target);
+
+    /**
+     * Request a switch to the specified branch and deliver a one-shot seed object to the target branch.
+     * <p>The seed becomes visible only after the routing owner actually applies the pending switch.
+     * It is then exposed through {@link #hasSeed()}, {@link #peekSeed()}, and {@link #takeSeed()} on
+     * the same control handle while the target branch is current.</p>
+     * <p>At most one route seed may be pending or visible at a time for the current routing owner.</p>
+     * @param target target branch name
+     * @param seed one-shot handoff object for the target branch
+     */
+    void switchRoute(String target, Object seed);
+
+    /** Return whether the current selected branch has a pending one-shot seed object to consume. */
+    boolean hasSeed();
+
+    /** Peek the current selected branch seed without consuming it. */
+    Object peekSeed();
+
+    /** Take and clear the current selected branch seed. */
+    Object takeSeed();
+
+    /** Clear any current or pending route seed owned by the routing duplexer. */
+    void removeSeed();
 }

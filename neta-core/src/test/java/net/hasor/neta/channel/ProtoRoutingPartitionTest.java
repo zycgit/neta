@@ -17,10 +17,10 @@ package net.hasor.neta.channel;
 import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.virtual.VrtChannel;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.channel.virtual.VrtSocketAddress;
-import net.hasor.neta.bytebuf.ByteBuf;
 import org.junit.Assert;
 import org.junit.Test;
 
@@ -268,10 +268,7 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         ProtoConfig limitedConfig = new ProtoConfig();
         limitedConfig.setRcvSlotSize(4);
 
-        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler())))
-                .nextDecoder("downstream", limitedConfig, new DownstreamCollectHandler(downstream))
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()))).nextDecoder("downstream", limitedConfig, new DownstreamCollectHandler(downstream)).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(13), initializer, new VrtSoConfig());
         channel.receiveData(new PartitionMessage(0, "P", false), new PartitionMessage(0, "T", true));
@@ -412,15 +409,12 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
         ProtoConfig limitedConfig = new ProtoConfig();
         limitedConfig.setRcvSlotSize(4);
 
-        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-            .nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                    partition.byDefault(ctx -> {
-                    });
-                })
-                .nextDecoder("downstream", limitedConfig, new DownstreamCollectHandler(downstream))
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+            partition.byDefault(ctx -> {
+            });
+        }).nextDecoder("downstream", limitedConfig, new DownstreamCollectHandler(downstream)).build();
 
         VrtChannel channel = (VrtChannel) new NetManager().connectSync(new VrtSocketAddress(14), initializer, new VrtSoConfig());
         channel.receiveData(new PartitionMessage(0, "P", false), new PartitionMessage(0, "T", true));
@@ -436,15 +430,12 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     public void partitionPipelineShouldPassThroughUnmatchedEventsWhenDefaultPartitionInitializerIsEmpty() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
         List<Integer> eventTrace = new ArrayList<>();
-        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-            .nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                    partition.byDefault(ctx -> {
-                    });
-                })
-                .nextDecoder("event-record", new EventRecordHandler(eventTrace))
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+            partition.byDefault(ctx -> {
+            });
+        }).nextDecoder("event-record", new EventRecordHandler(eventTrace)).build();
 
         ManagedPartitionChannel managed = openChannel(15, initializer);
         try {
@@ -463,13 +454,10 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     public void partitionPipelineShouldNotPassMatchedEventThroughWhenPartitionCreationFails() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
         List<Integer> eventTrace = new ArrayList<>();
-        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                })
-                .nextDecoder("event-record", new EventRecordHandler(eventTrace))
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        }).nextDecoder("event-record", new EventRecordHandler(eventTrace)).build();
 
         ManagedPartitionChannel managed = openChannel(16, initializer);
         try {
@@ -487,13 +475,10 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     public void partitionPipelineShouldEmitUnmatchedMessagesEventWhenNewPartitionIsLocked() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
         final List<UnmatchedEventSnapshot> droppedTrace = new ArrayList<>();
-        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new MessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                })
-                .nextDecoder("unmatched-record", new UnmatchedMessagesRecordHandler(droppedTrace))
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new MessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+        }).nextDecoder("unmatched-record", new UnmatchedMessagesRecordHandler(droppedTrace)).build();
 
         ManagedPartitionChannel managed = openChannel(17, initializer);
         try {
@@ -516,14 +501,11 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     public void partitionPipelineShouldEmitUnmatchedMessagesEventWhenDefaultPartitionIsLocked() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
         final List<UnmatchedEventSnapshot> droppedTrace = new ArrayList<>();
-        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class)
-                .nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
-                    partition.byDefault(ctx -> ctx.addLastDecoder("default-collector", new CollectingHandler()));
-                })
-                .nextDecoder("unmatched-record", new UnmatchedMessagesRecordHandler(droppedTrace))
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(PartitionMessage.class, PartitionMessage.class).nextPartition("partition", new DefaultAwareMessagePartitionSelector(), partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new CollectingHandler()));
+            partition.byDefault(ctx -> ctx.addLastDecoder("default-collector", new CollectingHandler()));
+        }).nextDecoder("unmatched-record", new UnmatchedMessagesRecordHandler(droppedTrace)).build();
 
         ManagedPartitionChannel managed = openChannel(18, initializer);
         try {
@@ -545,21 +527,18 @@ public class ProtoRoutingPartitionTest extends AbstractStackTest {
     public void partitionPipelineShouldReleaseByteBufAfterUnmatchedEventCallbackReturns() throws Throwable {
         final ProtoPartitionControl[] controlRef = new ProtoPartitionControl[1];
         final List<ByteBuf> observedBuffers = new ArrayList<>();
-        ProtoInitializer initializer = ProtoHelper.typed(ByteBuf.class, ByteBuf.class)
-                .nextPartition("partition", new ProtoPartitionSelector() {
-                    @Override
-                    public PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data) {
-                        if (kind != PartitionDataKind.Message || !(data instanceof ByteBuf)) {
-                            return null;
-                        }
-                        return PartitionKey.newKey(1);
-                    }
-                }, partition -> {
-                    controlRef[0] = partition.control();
-                    partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new ByteBufPassThroughHandler()));
-                })
-                .nextDecoder("unmatched-record", new ByteBufUnmatchedRecordHandler(observedBuffers))
-                .build();
+        ProtoInitializer initializer = ProtoHelper.typed(ByteBuf.class, ByteBuf.class).nextPartition("partition", new ProtoPartitionSelector() {
+            @Override
+            public PartitionKey route(ProtoContext context, PartitionDataKind kind, Object data) {
+                if (kind != PartitionDataKind.Message || !(data instanceof ByteBuf)) {
+                    return null;
+                }
+                return PartitionKey.newKey(1);
+            }
+        }, partition -> {
+            controlRef[0] = partition.control();
+            partition.byInitializer(ctx -> ctx.addLastDecoder("collector", new ByteBufPassThroughHandler()));
+        }).nextDecoder("unmatched-record", new ByteBufUnmatchedRecordHandler(observedBuffers)).build();
 
         ManagedPartitionChannel managed = openChannel(19, initializer);
         ByteBuf buffer = ByteBuf.wrap(new byte[] { 1, 2, 3 });

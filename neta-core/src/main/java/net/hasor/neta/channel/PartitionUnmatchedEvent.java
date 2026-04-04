@@ -29,7 +29,7 @@ import net.hasor.neta.bytebuf.ReferenceHolder;
  * @version : 2026-04-02
  */
 public class PartitionUnmatchedEvent implements SoEventData, Release {
-    private static final Logger logger = Logger.getLogger(PartitionUnmatchedEvent.class);
+    private static final Logger       logger = Logger.getLogger(PartitionUnmatchedEvent.class);
     private final        PartitionKey partitionKey;
     private final        List<Object> messages;
     private final        List<Object> readOnlyView;

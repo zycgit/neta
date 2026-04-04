@@ -335,6 +335,11 @@ public final class ProtoHelper {
         }
 
         @Override
+        public ProtoRoutingControl control() {
+            return this.duplexer.getControl();
+        }
+
+        @Override
         public ProtoRoutingBuilder<RCV_DOWN, SND_UP> branch(String name, Consumer<ProtoBuilder<RCV_DOWN, SND_UP>> branchBuilder) {
             Objects.requireNonNull(branchBuilder, "branchBuilder is null.");
 
