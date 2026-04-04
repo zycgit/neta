@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.HttpProtocolStateException;
 
 /**
  * Bidirectional semantic message-layer codec for HTTP/2 traffic.
@@ -29,22 +30,38 @@ import net.hasor.neta.codec.http.HttpObject;
  * maintenance, and the split between public payload messages and internal protocol
  * actions.
  * <p>
+ * When a {@link ProtoRoutingControl} is provided, inbound rounds also check whether the
+ * current h2 branch received a promoted route seed. If present, the seed is emitted as an
+ * {@link HttpObject} before normal decoded traffic so h2c-upgraded stream 1 requests can
+ * continue through the standard HTTP/2 branch and stream partition flow.
+ * <p>
  * This is the intended public entry point for the HTTP/2 message layer. The
  * standalone message encoder and decoder remain internal building blocks.
  */
 public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject, HttpObject, Http2Frame> {
-    private final Http2ObjectDecoder decoder;
-    private final Http2ObjectEncoder encoder;
+    private final Http2ObjectDecoder  decoder;
+    private final Http2ObjectEncoder  encoder;
+    private final ProtoRoutingControl routingControl;
 
     /** Creates a message duplexe with default HPACK limits for the specified endpoint role. */
     public Http2ObjectDuplexe(boolean serverMode) {
-        this(serverMode, Http2Settings.defaultLocalSettings(serverMode));
+        this(serverMode, Http2Settings.defaultLocalSettings(serverMode), null);
+    }
+
+    /** Creates a message duplexe with route-seed support for upgraded h2 branches. */
+    public Http2ObjectDuplexe(boolean serverMode, ProtoRoutingControl routingControl) {
+        this(serverMode, Http2Settings.defaultLocalSettings(serverMode), routingControl);
     }
 
     public Http2ObjectDuplexe(boolean serverMode, Http2Settings localSettings) {
+        this(serverMode, localSettings, null);
+    }
+
+    public Http2ObjectDuplexe(boolean serverMode, Http2Settings localSettings, ProtoRoutingControl routingControl) {
         localSettings = localSettings != null ? new Http2Settings(localSettings) : Http2Settings.defaultLocalSettings(serverMode);
         this.decoder = new Http2ObjectDecoder(serverMode, localSettings);
         this.encoder = new Http2ObjectEncoder(serverMode, localSettings);
+        this.routingControl = routingControl;
     }
 
     @Override
@@ -76,6 +93,7 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
             ProtoRcvQueue<Http2Frame> rcvUp, ProtoSndQueue<HttpObject> rcvDown, //
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<Http2Frame> sndDown) throws Throwable {
         if (isRcv) {
+            this.emitRoutingSeed(rcvDown);
             ProtoStatus decodeStatus = this.decoder.onMessage(context, rcvUp, rcvDown);
             ProtoStatus flushStatus = this.encoder.flushPendingFrames(context, sndDown);
             return decodeStatus == ProtoStatus.Next || flushStatus == ProtoStatus.Next ? ProtoStatus.Next : ProtoStatus.Stop;
@@ -97,5 +115,23 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
     public void onClose(ProtoContext context) {
         this.decoder.onClose(context);
         this.encoder.onClose(context);
+    }
+
+    private void emitRoutingSeed(ProtoSndQueue<HttpObject> rcvDown) {
+        if (this.routingControl == null || !this.routingControl.hasSeed()) {
+            return;
+        }
+
+        Object seed = this.routingControl.takeSeed();
+        if (seed == null) {
+            return;
+        }
+
+        if (!(seed instanceof HttpObject)) {
+            SoUtils.release(seed);
+            throw new HttpProtocolStateException("HTTP/2: route seed must be an HttpObject, but was " + seed.getClass().getName());
+        }
+
+        rcvDown.offerMessage((HttpObject) seed);
     }
 }

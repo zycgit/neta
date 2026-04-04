@@ -45,8 +45,17 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
 
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
+        Http2EncoderContent state = context.rootContext(Http2EncoderContent.class);
+        if (state == null) {
+            state = new Http2EncoderContent(this.serverMode, this.localSettings);
+            Http2EncoderContent shared = context.rootContext(Http2EncoderContent.class, state);
+            if (shared != null) {
+                state = shared;
+            }
+        }
+
         if (context.context(Http2EncoderContent.class) == null) {
-            context.context(Http2EncoderContent.class, new Http2EncoderContent(this.serverMode, this.localSettings));
+            context.context(Http2EncoderContent.class, state);
         }
     }
 

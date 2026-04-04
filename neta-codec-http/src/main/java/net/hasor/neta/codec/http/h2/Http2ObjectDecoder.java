@@ -51,13 +51,29 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
 
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
-        Http2DecoderContent state = context.context(Http2DecoderContent.class);
+        Http2DecoderContent state = context.rootContext(Http2DecoderContent.class);
         if (state == null) {
             state = new Http2DecoderContent(this.serverMode, this.localSettings);
+            Http2DecoderContent shared = context.rootContext(Http2DecoderContent.class, state);
+            if (shared != null) {
+                state = shared;
+            }
+        }
+
+        if (context.context(Http2DecoderContent.class) == null) {
             context.context(Http2DecoderContent.class, state);
         }
+
+        Http2Context h2Context = context.rootContext(Http2Context.class);
+        if (h2Context == null) {
+            h2Context = new Http2ContextImpl(this.serverMode, state);
+            Http2Context shared = context.rootContext(Http2Context.class, h2Context);
+            if (shared != null) {
+                h2Context = shared;
+            }
+        }
         if (context.context(Http2Context.class) == null) {
-            context.context(Http2Context.class, new Http2ContextImpl(this.serverMode, state));
+            context.context(Http2Context.class, h2Context);
         }
     }
 
