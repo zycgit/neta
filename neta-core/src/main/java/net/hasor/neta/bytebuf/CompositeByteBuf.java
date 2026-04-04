@@ -72,7 +72,7 @@ public class CompositeByteBuf extends AbstractByteBuf {
      * Create a new empty CompositeByteBuf.
      * @param alloc the allocator to use when creating copies
      */
-    public CompositeByteBuf(ByteBufAllocator alloc) {
+    protected CompositeByteBuf(ByteBufAllocator alloc) {
         this.components = new ArrayList<>();
         this.totalCapacity = 0;
         this.initByteBuf(alloc, Integer.MAX_VALUE);

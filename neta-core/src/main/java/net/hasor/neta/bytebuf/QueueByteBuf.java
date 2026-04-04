@@ -488,7 +488,7 @@ final class QueueByteBuf extends AbstractByteBuf {
             return ByteBuf.EMPTY;
         }
 
-        CompositeByteBuf result = new CompositeByteBuf(alloc());
+        CompositeByteBuf result = ByteBufUtils.compositeBuffer(alloc());
         int startOffset = this.markedReaderIndex;
         int endOffset = absoluteSplit;
 

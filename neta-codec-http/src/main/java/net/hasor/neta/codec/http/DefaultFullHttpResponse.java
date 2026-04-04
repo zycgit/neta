@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http;
 import java.util.List;
 import java.util.Set;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 
 /**
@@ -88,7 +88,7 @@ public class DefaultFullHttpResponse implements FullHttpResponse {
 
         this.responseLine = responseLine;
         this.headers = headers;
-        this.contentBuffer = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
+        this.contentBuffer = ByteBufUtils.compositeBuffer();
         this.contentBuffer.addComponent(content.content());
         if (responseLine.isBad()) {
             this.bad = true;
