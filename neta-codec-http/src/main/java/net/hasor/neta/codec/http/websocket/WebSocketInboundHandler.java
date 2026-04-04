@@ -20,6 +20,7 @@ import java.nio.charset.*;
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpEvent;
@@ -70,6 +71,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         if (maxMessagePayloadLength <= 0) {
             throw new IllegalArgumentException("maxMessagePayloadLength must be greater than 0.");
         }
+
         this.aggregateFragments = aggregateFragments;
         this.maxMessagePayloadLength = maxMessagePayloadLength;
     }
@@ -90,6 +92,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             sendControlEventFrame(context, pongEvent, pongEvent.content(), false);
             return false;
         }
+
         return true;
     }
 
@@ -121,6 +124,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         if (e instanceof WebSocketProtocolViolationException) {
             eh.clear();
         }
+
         return ProtoStatus.Next;
     }
 
@@ -169,6 +173,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             startTextValidation();
             validateTextChunk(frame.content(), frame.isFinalFragment());
         }
+
         if (this.aggregateFragments && !frame.isFinalFragment()) {
             startAggregation(frame);
             return;
@@ -214,18 +219,18 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     private WebSocketMessage createMessage(WebSocketOpcode opcode, int sequence, ByteBuf content, int streamId) {
         if (opcode == WebSocketOpcode.TEXT) {
             return WebSocketUtils.textMessage(sequence, content).streamId(streamId);
-        }
-        if (opcode == WebSocketOpcode.BINARY) {
+        } else if (opcode == WebSocketOpcode.BINARY) {
             return WebSocketUtils.binaryMessage(sequence, content).streamId(streamId);
+        } else {
+            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported websocket data opcode: " + opcode);
         }
-        throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported websocket data opcode: " + opcode);
     }
 
     private void startAggregation(WebSocketFrame frame) {
         this.fragmentType = frame.opcode();
         this.fragmentSequence = 1;
         this.aggregatedStreamId = frame.streamId();
-        this.aggregatedContent = new CompositeByteBuf(frame.content().alloc());
+        this.aggregatedContent = ByteBufUtils.compositeBuffer();
         this.aggregatedContent.addComponent(frame.content());
     }
 

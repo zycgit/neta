@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket.extension;
-
 import net.hasor.neta.codec.http.websocket.WebSocketVersion;
 
 /**

@@ -86,6 +86,7 @@ public class WebSocketHandshakeRequest {
         if (this.released) {
             return;
         }
+
         this.released = true;
         this.streamId = 0;
         this.headers.release();

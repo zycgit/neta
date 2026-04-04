@@ -48,13 +48,16 @@ import net.hasor.neta.codec.http.*;
  * <p>
  * Typical usage:
  * <pre>
- *   ProtoRoutingBuilder&lt;Object, Object&gt; routing = ProtoHelper.typedRoutingAsDefault("http", branchCtx -> {
- *       branchCtx.addLast("ws-upgrade", new WebSocketClientUpgradeRouteDuplexer(WebSocketVersion.V13, "websocket"));
+ *   ProtoRoutingBuilder&lt;Object, Object&gt; routing = ProtoHelper.typedRoutingAsStatic((context, rcvUp, sndDown) -> "http");
+ *   ProtoRoutingControl routingControl = routing.control();
+ *   routing.branchByInitializer("http", branchCtx -> {
+ *       branchCtx.addLast("ws-upgrade", new WebSocketClientUpgradeRouteDuplexer(routingControl, WebSocketVersion.V13, "websocket"));
  *       branchCtx.addLastDecoder("resp-agg", new HttpResponseAggregator());
  *   }).branchByInitializer("websocket", branchCtx -> {
  *       branchCtx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
  *       branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
  *   });
+ *   ctx.addLast("client-route", routing.build());
  * </pre>
  * <p>
  * This duplexer does not replace a full HTTP codec and does not handle server-side upgrade flow.
@@ -63,14 +66,17 @@ import net.hasor.neta.codec.http.*;
  */
 public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private final WebSocketClientHandshakeDuplexer delegate;
+    private final ProtoRoutingControl              control;
     private final String                           targetRoute;
+    //
     private final HttpMessageParts                 requestParts         = new HttpMessageParts();
     private final List<HttpObject>                 bufferedRequestParts = new ArrayList<>();
     private       boolean                          handshakePending;
     private       Boolean                          currentRequestHandshake;
 
-    public WebSocketClientUpgradeRouteDuplexer(WebSocketVersion version, String targetRoute) {
+    public WebSocketClientUpgradeRouteDuplexer(ProtoRoutingControl control, WebSocketVersion version, String targetRoute) {
         this.delegate = new WebSocketClientHandshakeDuplexer(version);
+        this.control = java.util.Objects.requireNonNull(control, "control is null");
         this.targetRoute = targetRoute;
     }
 
@@ -90,7 +96,7 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,//
+    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,          //
             ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         if (isRcv) {
@@ -99,6 +105,22 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
             return this.handleSend(context, sndUp, sndDown);
         }
     }
+
+    @Override
+    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        this.handshakePending = false;
+        this.resetRequestRoutingState(true);
+        return this.delegate.onError(context, isRcv, e, eh);
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        this.handshakePending = false;
+        this.resetRequestRoutingState(true);
+        this.delegate.onClose(context);
+    }
+
+    //
 
     private ProtoStatus handleReceive(ProtoContext context, ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown) throws Throwable {
         while (rcvUp.hasMore()) {
@@ -112,13 +134,14 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
                 this.delegate.onMessage(context, true, rcvUp, rcvDown, ProtoQueue.emptyRcv(), null);
                 if (WebSocketUtils.isReady(context)) {
                     this.handshakePending = false;
-                    switchRoute(context, this.targetRoute);
+                    this.control.switchRoute(this.targetRoute);
                 }
                 continue;
             }
 
             rcvDown.offerMessage(rcvUp.takeMessage());
         }
+
         return ProtoStatus.Next;
     }
 
@@ -133,7 +156,9 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
             if (this.currentRequestHandshake != null) {
                 msg = sndUp.takeMessage();
                 if (Boolean.TRUE.equals(this.currentRequestHandshake)) {
-                    this.forwardToHandshake(context, msg, sndDown);
+                    ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
+                    queue.offerMessage(msg);
+                    this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
                 } else {
                     sndDown.offerMessage(msg);
                 }
@@ -154,7 +179,7 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
 
             if (!isHeaderSectionClosed(msg)) {
                 if (isRequestComplete(msg)) {
-                    this.flushBufferedRequest(sndDown);
+                    sndDown.offerMessage(this.bufferedRequestParts);
                     this.resetRequestRoutingState(false);
                 }
                 continue;
@@ -164,9 +189,11 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
             boolean requestComplete = isRequestComplete(msg);
             if (handshakeRequest) {
                 this.handshakePending = true;
-                this.forwardBufferedToHandshake(context, sndDown);
+                ProtoQueue<HttpObject> queue = new ProtoQueue<>(this.bufferedRequestParts.size());
+                queue.offerMessage(this.bufferedRequestParts);
+                this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
             } else {
-                this.flushBufferedRequest(sndDown);
+                sndDown.offerMessage(this.bufferedRequestParts);
             }
 
             if (requestComplete) {
@@ -178,43 +205,6 @@ public class WebSocketClientUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
             }
         }
         return ProtoStatus.Next;
-    }
-
-    @Override
-    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-        this.handshakePending = false;
-        this.resetRequestRoutingState(true);
-        return this.delegate.onError(context, isRcv, e, eh);
-    }
-
-    @Override
-    public void onClose(ProtoContext context) {
-        this.handshakePending = false;
-        this.resetRequestRoutingState(true);
-        this.delegate.onClose(context);
-    }
-
-    private static void switchRoute(ProtoContext context, String targetRoute) {
-        ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
-        if (routingControl != null) {
-            routingControl.switchRoute(targetRoute);
-        }
-    }
-
-    private void forwardBufferedToHandshake(ProtoContext context, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
-        ProtoQueue<HttpObject> queue = new ProtoQueue<>(this.bufferedRequestParts.size());
-        queue.offerMessage(this.bufferedRequestParts);
-        this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
-    }
-
-    private void forwardToHandshake(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
-        ProtoQueue<HttpObject> queue = new ProtoQueue<>(1);
-        queue.offerMessage(msg);
-        this.delegate.onMessage(context, false, ProtoQueue.emptyRcv(), null, queue, sndDown);
-    }
-
-    private void flushBufferedRequest(ProtoSndQueue<HttpObject> sndDown) {
-        sndDown.offerMessage(this.bufferedRequestParts);
     }
 
     private void resetRequestRoutingState(boolean releaseBuffered) {

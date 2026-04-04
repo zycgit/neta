@@ -14,11 +14,14 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket.extension;
-import net.hasor.neta.codec.http.websocket.WebSocketHandshakeRequest;
 
 /**
- * Server-side selector for negotiated WebSocket extensions.
+ * Extension SPI that spans handshake negotiation and runtime frame handling.
  */
-public interface WebSocketServerExtensionSelector {
-    String selectServerExtensions(WebSocketHandshakeRequest request, String proposedExtensions);
+public interface WebSocketExtensionSupport extends WebSocketServerExtensionSelector, WebSocketClientExtensionValidator {
+    String extensionName();
+
+    WebSocketExtensionResult parseNegotiatedExtension(String headerValue);
+
+    WebSocketRuntimeExtension createRuntimeExtension(WebSocketExtensionResult negotiatedExtension);
 }

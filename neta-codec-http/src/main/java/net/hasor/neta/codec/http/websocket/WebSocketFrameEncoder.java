@@ -19,6 +19,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.DefaultHttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Encodes {@link WebSocketFrame} objects into upgraded HTTP payload.
@@ -68,13 +69,15 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
         if (!this.detectVersion) {
             return this.defaultVersion;
         }
+
         WebSocketContext wsContext = context.context(WebSocketContext.class);
         if (wsContext != null) {
-            WebSocketVersion detectedVersion = WebSocketVersion.of(wsContext.version());
-            if (detectedVersion != null) {
-                return detectedVersion;
+            WebSocketVersion version = WebSocketVersion.of(wsContext.version());
+            if (version != null) {
+                return version;
             }
         }
+
         return this.defaultVersion;
     }
 
@@ -84,35 +87,49 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<WebSocketFrame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         WebSocketVersion version = resolveVersion(context);
         while (src.hasMore()) {
-            WebSocketFrame frame = src.takeMessage();
-            if (frame == null) {
+            WebSocketFrame inputFrame = src.takeMessage();
+            if (inputFrame == null) {
                 continue;
             }
 
+            WebSocketFrame frame = inputFrame;
             try {
+                frame = this.applyOutboundExtensions(context, inputFrame);
                 ByteBuf encoded;
                 if (version.isRfc6455Framing()) {
                     encoded = encodeRfc6455(context, frame);
                 } else {
                     encoded = encodeHixie76(context, frame);
                 }
+
                 dst.offerMessage(new DefaultHttpByteBuf(encoded));
             } finally {
+                if (frame != inputFrame) {
+                    inputFrame.release();
+                }
                 frame.release();
             }
         }
+
         return ProtoStatus.Next;
     }
 
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+        this.resetRuntimeExtensions(context, false);
         long channelID = context.getChannel().getChannelId();
         if (context.getConfig().isPrintLog()) {
             logger.warn("[WS-ENC] channel=" + channelID + " encoder error, stateless reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
         } else {
             logger.warn("[WS-ENC] channel=" + channelID + " encoder error, stateless reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
+
         return ProtoStatus.Next;
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        this.resetRuntimeExtensions(context, true);
     }
 
     // Hixie-76 encoding (V0)
@@ -126,6 +143,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
             groups++;
             tmp >>= 7;
         }
+
         // Write from most-significant group to least-significant
         for (int i = groups - 1; i >= 0; i--) {
             byte b = (byte) ((length >> (i * 7)) & 0x7F);
@@ -243,6 +261,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
                 lengthBytes++;
                 tmpLen >>= 7;
             }
+
             ByteBuf out = context.byteBufAllocator().buffer(1 + lengthBytes + payloadLen, Integer.MAX_VALUE);
             out.writeByte((byte) 0x80);
             // Write variable-length integer (most-significant 7-bit group first, continuation bit on all but last)
@@ -251,6 +270,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
                 content.getBuffer(0, out, payloadLen);
             }
             out.markWriter();
+
             return out;
         }
 
@@ -270,6 +290,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
         if (opcode == null) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "WebSocket frame opcode must not be null.");
         }
+
         return opcode;
     }
 
@@ -288,9 +309,46 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
             }
         }
 
+        this.validateNegotiatedRsv(context, frame);
+
         if (opcode == WebSocketOpcode.PING || opcode == WebSocketOpcode.PONG || opcode == WebSocketOpcode.CLOSE) {
             WebSocketUtils.validateControlFrame(frame, wsContext != null && wsContext.isClient());
         }
+    }
+
+    private WebSocketFrame applyOutboundExtensions(ProtoContext context, WebSocketFrame frame) {
+        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
+        if (wsContext == null) {
+            return frame;
+        }
+
+        WebSocketFrame current = frame;
+        for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
+            WebSocketFrame encoded = runtimeExtension.encodeFrame(context, current);
+            if (encoded != current) {
+                current.release();
+                current = encoded;
+            }
+        }
+
+        return current;
+    }
+
+    private void validateNegotiatedRsv(ProtoContext context, WebSocketFrame frame) {
+        if (!frame.isRsv1() && !frame.isRsv2() && !frame.isRsv3()) {
+            return;
+        }
+
+        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
+        if (wsContext != null) {
+            for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
+                if (runtimeExtension.handlesOutboundFrame(frame)) {
+                    return;
+                }
+            }
+        }
+
+        throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "RSV bits require a negotiated websocket extension.");
     }
 
     private WebSocketContext resolveHandshakeContext(ProtoContext context) {
@@ -298,10 +356,35 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
         if (wsContext != null && wsContext.isReady()) {
             return wsContext;
         }
+
         wsContext = context.rootContext(WebSocketContext.class);
         if (wsContext != null && wsContext.isReady()) {
             return wsContext;
         }
         return null;
+    }
+
+    private WebSocketContextImpl resolveRuntimeContext(ProtoContext context) {
+        WebSocketContext wsContext = resolveHandshakeContext(context);
+        if (wsContext instanceof WebSocketContextImpl) {
+            return (WebSocketContextImpl) wsContext;
+        }
+
+        return null;
+    }
+
+    private void resetRuntimeExtensions(ProtoContext context, boolean close) {
+        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
+        if (wsContext == null) {
+            return;
+        }
+
+        for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
+            if (close) {
+                runtimeExtension.close();
+            } else {
+                runtimeExtension.reset();
+            }
+        }
     }
 }

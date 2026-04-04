@@ -14,9 +14,13 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import java.util.Objects;
 import net.hasor.neta.codec.http.websocket.extension.PerMessageDeflateSupport;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketClientExtensionValidator;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionSupport;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSelector;
 
 /**
@@ -30,6 +34,7 @@ public class WebSocketSettings {
     private final WebSocketServerExtensionSelector  serverExtensionSelector;
     private final WebSocketClientExtensionValidator clientExtensionValidator;
     private final WebSocketHandshakeAuthorizer      handshakeAuthorizer;
+    private final List<WebSocketExtensionSupport>   extensionSupports;
 
     public static Builder builder(WebSocketVersion version) {
         return new Builder(version);
@@ -45,6 +50,7 @@ public class WebSocketSettings {
         this.serverExtensionSelector = builder.serverExtensionSelector;
         this.clientExtensionValidator = builder.clientExtensionValidator;
         this.handshakeAuthorizer = builder.handshakeAuthorizer;
+        this.extensionSupports = Collections.unmodifiableList(new ArrayList<>(builder.extensionSupports));
     }
 
     public WebSocketVersion version() {
@@ -67,12 +73,17 @@ public class WebSocketSettings {
         return this.handshakeAuthorizer;
     }
 
+    public List<WebSocketExtensionSupport> extensionSupports() {
+        return this.extensionSupports;
+    }
+
     public static class Builder {
         private final WebSocketVersion                  version;
         private       WebSocketAutoHandshakeConfig      autoHandshakeConfig;
         private       WebSocketServerExtensionSelector  serverExtensionSelector;
         private       WebSocketClientExtensionValidator clientExtensionValidator;
         private       WebSocketHandshakeAuthorizer      handshakeAuthorizer;
+        private final List<WebSocketExtensionSupport>   extensionSupports = new ArrayList<>(1);
 
         private Builder(WebSocketVersion version) {
             this.version = Objects.requireNonNull(version, "version is null");
@@ -84,26 +95,49 @@ public class WebSocketSettings {
             return this;
         }
 
+        public Builder handshakeAuthorizer(WebSocketHandshakeAuthorizer handshakeAuthorizer) {
+            this.handshakeAuthorizer = handshakeAuthorizer != null ? handshakeAuthorizer : (event, c) -> c.accept();
+            return this;
+        }
+
         public Builder serverExtensionSelector(WebSocketServerExtensionSelector serverExtensionSelector) {
             this.serverExtensionSelector = serverExtensionSelector;
+
+            if (serverExtensionSelector instanceof WebSocketExtensionSupport) {
+                this.registerExtensionSupport((WebSocketExtensionSupport) serverExtensionSelector);
+            }
+
             return this;
         }
 
         public Builder clientExtensionValidator(WebSocketClientExtensionValidator clientExtensionValidator) {
             this.clientExtensionValidator = clientExtensionValidator;
+
+            if (clientExtensionValidator instanceof WebSocketExtensionSupport) {
+                this.registerExtensionSupport((WebSocketExtensionSupport) clientExtensionValidator);
+            }
+
             return this;
         }
 
-        public Builder perMessageDeflate() {
+        public Builder extensionSupport(WebSocketExtensionSupport extensionSupport) {
+            this.registerExtensionSupport(extensionSupport);
+            return this;
+        }
+
+        public Builder usePerMessageDeflateDefaults() {
             PerMessageDeflateSupport support = PerMessageDeflateSupport.instance();
             this.serverExtensionSelector = support;
             this.clientExtensionValidator = support;
+
+            this.registerExtensionSupport(support);
             return this;
         }
 
-        public Builder handshakeAuthorizer(WebSocketHandshakeAuthorizer handshakeAuthorizer) {
-            this.handshakeAuthorizer = handshakeAuthorizer != null ? handshakeAuthorizer : (event, c) -> c.accept();
-            return this;
+        private void registerExtensionSupport(WebSocketExtensionSupport extensionSupport) {
+            if (extensionSupport != null && !this.extensionSupports.contains(extensionSupport)) {
+                this.extensionSupports.add(extensionSupport);
+            }
         }
 
         public WebSocketSettings build() {

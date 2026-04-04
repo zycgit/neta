@@ -123,6 +123,7 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         if (request == null) {
             return null;
         }
+
         String upgrade = request.header(HttpHeaderNames.UPGRADE);
         String connection = request.header(HttpHeaderNames.CONNECTION);
         if (!StringUtils.containsIgnoreCase(connection, HttpHeaderValues.UPGRADE)) {
@@ -131,15 +132,18 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         if (!StringUtils.equalsIgnoreCase(HttpHeaderValues.WEBSOCKET, upgrade) && !StringUtils.equalsIgnoreCase("WebSocket", upgrade)) {
             return null;
         }
+
         String wsVersion = request.header(HttpHeaderNames.SEC_WEBSOCKET_VERSION);
         if (StringUtils.isNotBlank(wsVersion)) {
             return WebSocketVersion.of(wsVersion.trim());
         }
+
         String key1 = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY1);
         String key2 = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY2);
         if (StringUtils.isNotBlank(key1) && StringUtils.isNotBlank(key2)) {
             return WebSocketVersion.V0;
         }
+
         return null;
     }
 

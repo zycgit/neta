@@ -40,13 +40,6 @@ public abstract class AbstractWebSocketMessage implements WebSocketMessage {
         this.content = content.retain();
     }
 
-    protected final void initEmptyMessage(int sequence) {
-        this.streamId = 0;
-        this.sequence = sequence;
-        this.payloadLength = 0;
-        this.content = ByteBuf.EMPTY.retain();
-    }
-
     @Override
     public int streamId() {
         return this.streamId;

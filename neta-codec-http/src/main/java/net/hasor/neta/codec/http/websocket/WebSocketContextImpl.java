@@ -17,6 +17,8 @@ package net.hasor.neta.codec.http.websocket;
 import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Default immutable {@link WebSocketContext} implementation.
@@ -24,11 +26,12 @@ import net.hasor.cobble.StringUtils;
  * Created by handshake duplexers after upgrade succeeds and then attached to the pipeline context.
  */
 class WebSocketContextImpl implements WebSocketContext {
-    private final boolean      server;
-    private final String       subProtocol;
-    private final int          version;
-    private final String       requestPath;
-    private final List<String> extensions;
+    private final boolean                         server;
+    private final String                          subProtocol;
+    private final int                             version;
+    private final String                          requestPath;
+    private final List<WebSocketExtensionResult>  extResults;
+    private final List<WebSocketRuntimeExtension> runExtensions;
 
     /**
      * Creates a new WebSocketContext.
@@ -39,73 +42,17 @@ class WebSocketContextImpl implements WebSocketContext {
      * @param extensions negotiated extensions (or empty list)
      */
     WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath, List<String> extensions) {
+        this(server, subProtocol, version, requestPath, WebSocketUtils.parseExtensions(extensions), Collections.emptyList());
+    }
+
+    WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath,//
+            List<WebSocketExtensionResult> extResults, List<WebSocketRuntimeExtension> runExtensions) {
         this.server = server;
         this.subProtocol = subProtocol;
         this.version = version;
         this.requestPath = requestPath;
-        this.extensions = extensions != null ? Collections.unmodifiableList(extensions) : Collections.emptyList();
-    }
-
-    private static List<String> parseExtensions(String extensions) {
-        if (StringUtils.isBlank(extensions)) {
-            return Collections.emptyList();
-        }
-
-        String[] parts = extensions.split(",");
-        List<String> extList = new java.util.ArrayList<>(parts.length);
-        for (String part : parts) {
-            String trimmed = part.trim();
-            if (StringUtils.isNotBlank(trimmed)) {
-                extList.add(trimmed);
-            }
-        }
-        return extList;
-    }
-
-    /**
-     * Creates a server-side {@link WebSocketContext} from handshake parameters.
-     * <p>
-     * Typically called after a server-side {@link WebSocketServerHandshakeDuplexer}
-     * completes the opening handshake:
-     * <pre>{@code
-     * context.context(WebSocketContext.class,
-     *     WebSocketContextImpl.fromHandshake(version, request.uri(),
-     *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL),
-     *         request.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS)));
-     * }</pre>
-     * @param version the detected WebSocket version
-     * @param requestPath the request URI path
-     * @param subProtocol the negotiated sub-protocol (may be null)
-     * @param extensions comma-separated extensions string (may be null)
-     * @return a new server-side WebSocketContext
-     */
-    public static WebSocketContextImpl fromHandshake(WebSocketVersion version, String requestPath, String subProtocol, String extensions) {
-        int versionCode = version != null ? version.code() : 13;
-        return new WebSocketContextImpl(true, subProtocol, versionCode, requestPath, parseExtensions(extensions));
-    }
-
-    /**
-     * Creates a server-side {@link WebSocketContext} from handshake parameters.
-     * Assumes RFC 6455 (version 13).
-     */
-    public static WebSocketContextImpl fromHandshake(String requestPath, String subProtocol, String extensions) {
-        return fromHandshake(WebSocketVersion.V13, requestPath, subProtocol, extensions);
-    }
-
-    /**
-     * Creates a client-side {@link WebSocketContext} from handshake parameters.
-     * <p>
-     * Typically called after a client-side {@link WebSocketClientHandshakeDuplexer}
-     * validates the server's HTTP 101 upgrade response.
-     * @param version the negotiated WebSocket version
-     * @param requestPath the request URI path originally used by the client
-     * @param subProtocol the negotiated sub-protocol returned by the server (may be null)
-     * @param extensions comma-separated negotiated extensions string (may be null)
-     * @return a new client-side WebSocketContext
-     */
-    public static WebSocketContextImpl fromClientHandshake(WebSocketVersion version, String requestPath, String subProtocol, String extensions) {
-        int versionCode = version != null ? version.code() : 13;
-        return new WebSocketContextImpl(false, subProtocol, versionCode, requestPath, parseExtensions(extensions));
+        this.extResults = extResults != null ? Collections.unmodifiableList(extResults) : Collections.emptyList();
+        this.runExtensions = runExtensions != null ? Collections.unmodifiableList(runExtensions) : Collections.emptyList();
     }
 
     @Override
@@ -140,9 +87,44 @@ class WebSocketContextImpl implements WebSocketContext {
 
     @Override
     public String extensions() {
-        if (this.extensions.isEmpty()) {
+        if (this.extResults.isEmpty()) {
             return null;
         }
-        return String.join(", ", this.extensions);
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < this.extResults.size(); i++) {
+            if (i > 0) {
+                sb.append(", ");
+            }
+            sb.append(this.extResults.get(i).asHeaderValue());
+        }
+
+        return sb.toString();
+    }
+
+    @Override
+    public List<WebSocketExtensionResult> extensionList() {
+        return this.extResults;
+    }
+
+    public List<WebSocketRuntimeExtension> runtimeList() {
+        return this.runExtensions;
+    }
+
+    /**
+     * Returns {@code true} if the named extension has been negotiated.
+     */
+    @Override
+    public boolean hasExtension(String name) {
+        if (StringUtils.isBlank(name)) {
+            return false;
+        }
+
+        for (WebSocketExtensionResult result : this.extensionList()) {
+            if (result != null && StringUtils.equalsIgnoreCase(result.name(), name)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

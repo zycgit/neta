@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.codec.http.*;
 
@@ -35,15 +36,15 @@ final class HttpMessageParts {
     private boolean            active;
     private boolean            complete;
 
-    boolean isActive() {
+    public boolean isActive() {
         return this.active;
     }
 
-    boolean isComplete() {
+    public boolean isComplete() {
         return this.complete;
     }
 
-    void appendRequest(HttpObject msg) {
+    public void appendRequest(HttpObject msg) {
         boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
         if (msg instanceof HttpRequest) {
             HttpRequest request = (HttpRequest) msg;
@@ -64,7 +65,7 @@ final class HttpMessageParts {
         }
     }
 
-    void appendResponse(HttpObject msg) {
+    public void appendResponse(HttpObject msg) {
         boolean aggregateLike = msg instanceof HttpResponse && msg instanceof HttpContent;
         if (msg instanceof HttpResponse) {
             HttpResponse response = (HttpResponse) msg;
@@ -84,31 +85,31 @@ final class HttpMessageParts {
         }
     }
 
-    HttpVersion protocolVersion() {
+    public HttpVersion protocolVersion() {
         return this.protocolVersion;
     }
 
-    HttpMethod method() {
+    public HttpMethod method() {
         return this.method;
     }
 
-    HttpStatus status() {
+    public HttpStatus status() {
         return this.status;
     }
 
-    String uri() {
+    public String uri() {
         return this.uri;
     }
 
-    int streamId() {
+    public int streamId() {
         return this.streamId;
     }
 
-    String header(String name) {
+    public String header(String name) {
         return this.headers == null ? null : this.headers.getString(name);
     }
 
-    HttpHeaders headersSnapshot() {
+    public HttpHeaders headersSnapshot() {
         DefaultHttpHeaders copy = new DefaultHttpHeaders();
         if (this.headers != null) {
             copy.appendHeaders(this.headers);
@@ -116,11 +117,11 @@ final class HttpMessageParts {
         return copy;
     }
 
-    ByteBuf body() {
+    public ByteBuf body() {
         return this.body == null ? ByteBuf.EMPTY : this.body;
     }
 
-    void reset() {
+    public void reset() {
         if (this.body != null) {
             this.body.free();
         }
@@ -147,7 +148,7 @@ final class HttpMessageParts {
             return;
         }
         if (this.body == null) {
-            this.body = new CompositeByteBuf(ByteBufAllocator.DEFAULT);
+            this.body = ByteBufUtils.compositeBuffer();
         }
         this.body.addComponent(cloneContent(content));
     }

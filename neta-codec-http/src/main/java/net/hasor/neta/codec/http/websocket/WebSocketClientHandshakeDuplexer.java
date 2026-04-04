@@ -24,6 +24,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketClientExtensionValidator;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Client-side WebSocket opening-handshake duplexer.
@@ -90,11 +92,11 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         ClientHandshakeState state = state(context);
-        WebSocketAutoHandshakeConfig autoHandshakeConfig = this.settings.autoHandshakeConfig();
-        if (autoHandshakeConfig == null || state.ready || state.requestPending) {
-            return;
+        WebSocketAutoHandshakeConfig config = this.settings.autoHandshakeConfig();
+
+        if (config != null && !state.ready && !state.requestPending) {
+            context.sendData(WebSocketUtils.createHandshake(this.codecVersion, config.requestPath(), config.headers(), config.cookies()));
         }
-        context.sendData(WebSocketUtils.createHandshake(this.codecVersion, autoHandshakeConfig.requestPath(), autoHandshakeConfig.headers(), autoHandshakeConfig.cookies()));
     }
 
     @Override
@@ -120,10 +122,12 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         if (!state.ready && handshakeError != null) {
             this.resetHandshakeSession(state);
             eh.clear();
+
             if (handshakeError.closeConnection()) {
                 context.getChannel().close();
                 return ProtoStatus.Stop;
             }
+
             return ProtoStatus.Next;
         }
 
@@ -138,6 +142,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             if (msg == null) {
                 continue;
             }
+
             if (state.ready) {
                 dst.offerMessage(msg);
                 continue;
@@ -281,7 +286,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 // verify handshake
                 String subProtocol;
                 try {
-                    this.verifyUpgrade(state.version, state.key, state.key1, state.key2, state.key3, state.protocols, state.extensions, state.responseParts);
+                    this.verifyUpgrade(state.version, state.protocols, state.extensions, state.responseParts, state.key, state.key1, state.key2, state.key3);
                     subProtocol = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
                 } catch (WebSocketHandshakeException e) {
                     logger.warn("Websocket client handshake protocol violation: " + e.getMessage());
@@ -289,13 +294,17 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                     context.getChannel().close();
                     return ProtoStatus.Next;
                 }
-                String extensions = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
+                String extStr = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
                 WebSocketVersion acceptedVersion = state.version;
                 String acceptedPath = state.path;
 
                 // finsh handshake
                 try {
-                    this.finishWebSocketUpgrade(context, WebSocketContextImpl.fromClientHandshake(acceptedVersion, acceptedPath, subProtocol, extensions));
+                    int versionCode = acceptedVersion != null ? acceptedVersion.code() : 13;
+                    List<WebSocketExtensionResult> extResults = WebSocketUtils.parseExtensions(extStr);
+                    List<WebSocketRuntimeExtension> runtimeExt = WebSocketUtils.resolveRuntimeExtensions(extResults, this.settings);
+
+                    this.finishWebSocketUpgrade(context, new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt));
                     state.ready = true;
                     discardHandshakeRequestSnapshot(state);
                 } catch (Throwable e) {
@@ -317,7 +326,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         return ProtoStatus.Next;
     }
 
-    private void verifyUpgrade(WebSocketVersion version, String key, String key1, String key2, byte[] key3, String requestedProtocols, String requestedExtensions, HttpMessageParts response) {
+    private void verifyUpgrade(WebSocketVersion version, String reqProtocols, String reqExtensions, HttpMessageParts response,//
+            String key, String key1, String key2, byte[] key3) {
         if (response.status() == null || response.status().code() != HttpStatus.SWITCHING_PROTOCOLS.code()) {
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: expected HTTP 101 Switching Protocols response.");
         }
@@ -337,7 +347,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             if (!StringUtils.equals(expected, acceptKey)) {
                 throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: Sec-WebSocket-Accept does not match the client handshake key.");
             }
-            validateNegotiatedHeaders(requestedProtocols, requestedExtensions, response);
+
+            validateNegotiatedHeaders(reqProtocols, reqExtensions, response);
             return;
         }
 
@@ -356,23 +367,23 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
-    private void validateNegotiatedHeaders(String requestedProtocols, String requestedExtensions, HttpMessageParts response) {
+    private void validateNegotiatedHeaders(String reqProtocols, String reqExtensions, HttpMessageParts response) {
         String selectedProtocol = response.header(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
-        validateSelectedSubProtocol(requestedProtocols, selectedProtocol);
+        validateSelectedSubProtocol(reqProtocols, selectedProtocol);
 
-        String extensions = response.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
-        WebSocketClientExtensionValidator extensionValidator = this.settings.clientExtensionValidator();
-        if (extensionValidator == null) {
-            if (StringUtils.isNotBlank(extensions)) {
+        String extStr = response.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
+        WebSocketClientExtensionValidator extValidator = this.settings.clientExtensionValidator();
+        if (extValidator == null) {
+            if (StringUtils.isNotBlank(extStr)) {
                 throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: negotiated extensions are disabled by current settings.");
             }
-            return;
+        } else {
+            extValidator.validateClientExtensions(this.codecVersion, reqExtensions, extStr);
         }
-        extensionValidator.validateClientExtensions(this.codecVersion, requestedExtensions, extensions);
     }
 
-    private void validateSelectedSubProtocol(String requestedProtocols, String selectedProtocol) {
-        List<String> selectedValues = parseHeaderValues(selectedProtocol);
+    private void validateSelectedSubProtocol(String reqProtocols, String selected) {
+        List<String> selectedValues = parseHeaderValues(selected);
         if (selectedValues.isEmpty()) {
             return;
         }
@@ -380,12 +391,11 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: server selected more than one websocket sub-protocol.");
         }
 
-        String selected = selectedValues.get(0);
-        List<String> requestedValues = parseHeaderValues(requestedProtocols);
+        List<String> requestedValues = parseHeaderValues(reqProtocols);
         if (requestedValues.isEmpty()) {
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: server selected an unsolicited websocket sub-protocol.");
         }
-        if (!requestedValues.contains(selected)) {
+        if (!requestedValues.contains(selectedValues.get(0))) {
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: server selected an unsupported websocket sub-protocol.");
         }
     }

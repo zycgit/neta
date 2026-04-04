@@ -15,6 +15,9 @@
  */
 package net.hasor.neta.codec.http.websocket;
 
+import java.util.List;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
+
 /**
  * Resolved WebSocket session context.
  * <p>
@@ -54,4 +57,14 @@ public interface WebSocketContext {
      * (e.g. {@code "permessage-deflate"}), or {@code null} if none.
      */
     String extensions();
+
+    /**
+     * Returns structured negotiated extension results, or an empty list if none.
+     */
+    List<WebSocketExtensionResult> extensionList();
+
+    /**
+     * Returns {@code true} if the named extension has been negotiated.
+     */
+    boolean hasExtension(String name);
 }

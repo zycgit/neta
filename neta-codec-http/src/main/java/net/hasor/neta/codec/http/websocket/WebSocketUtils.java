@@ -21,6 +21,7 @@ import java.nio.charset.CodingErrorAction;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Base64;
+import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.RandomUtils;
 import net.hasor.cobble.StringUtils;
@@ -33,6 +34,9 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.cookie.CookieDecoder;
 import net.hasor.neta.codec.http.cookie.CookieEncoder;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionSupport;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Utility entry point for WebSocket frames, messages, events, and handshake helpers.
@@ -48,6 +52,56 @@ public final class WebSocketUtils {
     private WebSocketUtils() {
     }
 
+    static List<WebSocketExtensionResult> parseExtensions(String extensions) {
+        if (StringUtils.isBlank(extensions)) {
+            return Collections.emptyList();
+        }
+        return WebSocketExtensionResult.parse(extensions);
+    }
+
+    static List<WebSocketExtensionResult> parseExtensions(List<String> extensions) {
+        if (extensions == null || extensions.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<WebSocketExtensionResult> results = new ArrayList<>(extensions.size());
+        for (String extension : extensions) {
+            if (StringUtils.isBlank(extension)) {
+                continue;
+            }
+            results.addAll(WebSocketExtensionResult.parse(extension));
+        }
+        return results.isEmpty() ? Collections.emptyList() : results;
+    }
+
+    static List<WebSocketRuntimeExtension> resolveRuntimeExtensions(List<WebSocketExtensionResult> extensionResults, WebSocketSettings settings) {
+        if (settings == null || extensionResults == null || extensionResults.isEmpty()) {
+            return Collections.emptyList();
+        }
+
+        List<WebSocketRuntimeExtension> runtimeExtensions = new ArrayList<>(extensionResults.size());
+        for (WebSocketExtensionResult result : extensionResults) {
+            WebSocketRuntimeExtension runtimeExtension = null;
+            for (WebSocketExtensionSupport support : settings.extensionSupports()) {
+                if (support == null || !StringUtils.equalsIgnoreCase(support.extensionName(), result.name())) {
+                    continue;
+                }
+
+                WebSocketExtensionResult negotiated = support.parseNegotiatedExtension(result.asHeaderValue());
+                if (negotiated == null) {
+                    break;
+                }
+
+                runtimeExtension = support.createRuntimeExtension(negotiated);
+                break;
+            }
+            if (runtimeExtension != null) {
+                runtimeExtensions.add(runtimeExtension);
+            }
+        }
+        return runtimeExtensions.isEmpty() ? Collections.emptyList() : runtimeExtensions;
+    }
+
     /** Returns {@code true} when the channel contains a ready WebSocket context. */
     public static boolean isReady(SoChannel<?> channel) {
         return channel != null && isReady(channel.findProtoContext(WebSocketContext.class));
@@ -58,10 +112,12 @@ public final class WebSocketUtils {
         if (context == null) {
             return false;
         }
+
         WebSocketContext webSocketContext = context.context(WebSocketContext.class);
         if (webSocketContext == null) {
             webSocketContext = context.rootContext(WebSocketContext.class);
         }
+
         return isReady(webSocketContext);
     }
 
@@ -80,13 +136,16 @@ public final class WebSocketUtils {
         if (frame == null) {
             throw new IllegalArgumentException("frame must not be null");
         }
+
         WebSocketOpcode opcode = frame.opcode();
         if (opcode == null) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "WebSocket frame opcode must not be null.");
         }
+
         if (!frame.isFinalFragment()) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control frames must not be fragmented.");
         }
+
         validateControlPayload(opcode, frame.content(), senderIsClient);
     }
 
@@ -94,6 +153,7 @@ public final class WebSocketUtils {
         if (content != null && content.readableBytes() > 125) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control frame payload must not exceed 125 bytes.");
         }
+
         if (opcode == WebSocketOpcode.CLOSE) {
             validateClosePayload(content, senderIsClient);
         }
@@ -136,6 +196,7 @@ public final class WebSocketUtils {
         if (statusCode == WebSocketCode.RESERVED || statusCode == 1012 || statusCode == 1013 || statusCode == 1014 || statusCode == WebSocketCode.TLS_HANDSHAKE) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame status code is invalid: " + statusCode);
         }
+
         if (!(statusCode < 1016 || statusCode >= 3000)) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "close frame status code is invalid: " + statusCode);
         }
@@ -145,6 +206,7 @@ public final class WebSocketUtils {
         CharsetDecoder decoder = StandardCharsets.UTF_8.newDecoder();
         decoder.onMalformedInput(CodingErrorAction.REPORT);
         decoder.onUnmappableCharacter(CodingErrorAction.REPORT);
+
         try {
             return decoder.decode(ByteBuffer.wrap(bytes)).toString();
         } catch (CharacterCodingException e) {
@@ -181,6 +243,7 @@ public final class WebSocketUtils {
             context.getChannel().close();
             return;
         }
+
         future.onFinal(f -> context.getChannel().close());
     }
 
@@ -188,6 +251,7 @@ public final class WebSocketUtils {
         if (context == null || context.getChannel() == null) {
             return false;
         }
+
         return Boolean.TRUE.equals(context.getChannel().getAttribute(key));
     }
 
@@ -195,6 +259,7 @@ public final class WebSocketUtils {
         if (context == null || context.getChannel() == null) {
             return;
         }
+
         context.getChannel().setAttribute(key, value ? Boolean.TRUE : null);
     }
 
@@ -284,6 +349,7 @@ public final class WebSocketUtils {
         for (int i = 0; i < noiseCount; i++) {
             builder.insert(randomInsertIndex(builder.length()), randomVisibleNonDigitChar());
         }
+
         for (int i = 0; i < spaces; i++) {
             builder.insert(randomInsertIndex(builder.length()), ' ');
         }
@@ -351,6 +417,7 @@ public final class WebSocketUtils {
         if (!reasonStr.isEmpty()) {
             buf.writeString(reasonStr, StandardCharsets.UTF_8);
         }
+
         buf.markWriter();
         return WebSocketFrame.create(WebSocketOpcode.CLOSE, true, false, null, buf);
     }

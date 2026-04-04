@@ -26,6 +26,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSelector;
 
 /**
@@ -136,8 +138,9 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             if (handshakeError.closeConnection()) {
                 context.getChannel().close();
                 return ProtoStatus.Stop;
+            } else {
+                return ProtoStatus.Next;
             }
-            return ProtoStatus.Next;
         }
 
         return ProtoStatus.Next;
@@ -327,6 +330,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             if (requestKey == null || requestKey.trim().isEmpty()) {
                 return false;
             }
+
             requestKey = requestKey.trim();
         } else {
             requestKey1 = request.header(HttpHeaderNames.SEC_WEBSOCKET_KEY1);
@@ -334,10 +338,12 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             if (requestKey1 == null || requestKey1.trim().isEmpty() || requestKey2 == null || requestKey2.trim().isEmpty()) {
                 return false;
             }
+
             ByteBuf body = request.body();
             if (body == null || body.readableBytes() != 8) {
                 return false;
             }
+
             requestKey3 = new byte[8];
             body.getBytes(0, requestKey3, 0, 8);
         }
@@ -355,6 +361,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         state.key1 = requestKey1;
         state.key2 = requestKey2;
         state.key3 = requestKey3;
+
         WebSocketHandshakeRequest handshakeRequest = new WebSocketHandshakeRequest(state.version, state.path, state.protocols, state.extensions, request.headersSnapshot());
         handshakeRequest.streamId(state.streamId);
         state.handshakeRequest = handshakeRequest;
@@ -486,7 +493,13 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             DefaultLastHttpHeaders responseHeaders = this.finishHandshake(context, state, headers);
             String negotiatedProtocol = responseHeaders.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
             String negotiatedExtensions = responseHeaders.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
-            this.finishWebSocketUpgrade(context, WebSocketContextImpl.fromHandshake(state.version, state.path, negotiatedProtocol, negotiatedExtensions));
+            int versionCode = state.version != null ? state.version.code() : 13;
+            List<WebSocketExtensionResult> extensionResults = WebSocketUtils.parseExtensions(negotiatedExtensions);
+
+            List<WebSocketRuntimeExtension> runtimeExtensions = WebSocketUtils.resolveRuntimeExtensions(extensionResults, this.settings);
+            WebSocketContextImpl socketContext = new WebSocketContextImpl(true, negotiatedProtocol, versionCode, state.path, extensionResults, runtimeExtensions);
+
+            this.finishWebSocketUpgrade(context, socketContext);
             state.ready = true;
         } catch (WebSocketHandshakeException e) {
             logger.warn("Websocket server handshake protocol violation: " + e.getMessage());
@@ -565,10 +578,12 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             if (StringUtils.isNotBlank(negotiatedExtensions)) {
                 throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket handshake failed: negotiated extensions are disabled by current settings.");
             }
+
             resolvedExtensions = null;
         } else {
             resolvedExtensions = extensionSelector.selectServerExtensions(state.handshakeRequest, negotiatedExtensions);
         }
+
         if (StringUtils.isBlank(resolvedExtensions)) {
             headers.removeHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
         } else {
@@ -589,6 +604,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
                 values.add(value);
             }
         }
+
         if (values.isEmpty()) {
             return Collections.emptyList();
         }
@@ -622,6 +638,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             state = new ServerHandshakeState();
             context.context(ServerHandshakeState.class, state);
         }
+
         return state;
     }
 
@@ -653,6 +670,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         state.key1 = null;
         state.key2 = null;
         state.key3 = null;
+
         WebSocketHandshakeRequest handshakeRequest = state.handshakeRequest;
         state.handshakeRequest = null;
         if (handshakeRequest != null) {

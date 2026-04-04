@@ -14,12 +14,15 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
+import net.hasor.neta.bytebuf.ByteBufUtils;
 import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Decodes upgraded HTTP payload into {@link WebSocketFrame} objects.
@@ -110,6 +113,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         if (maxPayloadChunkLength <= 0) {
             throw new IllegalArgumentException("maxPayloadChunkLength must be greater than 0.");
         }
+
         this.defaultVersion = WebSocketVersion.V13;
         this.detectVersion = true;
         this.maxPayloadChunkLength = maxPayloadChunkLength;
@@ -127,6 +131,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                 return detectedVersion;
             }
         }
+
         return this.defaultVersion;
     }
 
@@ -137,11 +142,12 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             if (obj == null) {
                 continue;
             }
+
             try {
                 ByteBuf content = obj.content();
                 if (content != null && content.readableBytes() > 0) {
                     if (this.accumulator == null) {
-                        this.accumulator = new CompositeByteBuf(context.byteBufAllocator());
+                        this.accumulator = ByteBufUtils.compositeBuffer();
                     }
                     this.accumulator.addComponent(content);
                 }
@@ -167,6 +173,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         this.resetAccumulator();
         this.streamingState = null;
+        this.resetRuntimeExtensions(context, false);
 
         long channelID = context.getChannel().getChannelId();
         if (context.getConfig().isPrintLog()) {
@@ -174,7 +181,15 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         } else {
             logger.warn("[WS-DEC] channel=" + channelID + " decoder error, frame state reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage());
         }
+
         return ProtoStatus.Next;
+    }
+
+    @Override
+    public void onClose(ProtoContext context) {
+        this.resetAccumulator();
+        this.streamingState = null;
+        this.resetRuntimeExtensions(context, true);
     }
 
     // =========================================================================
@@ -205,10 +220,6 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         int opcodeVal = byte0 & 0x0F;
         boolean masked = (byte1 & 0x80) != 0;
         long payloadLen = byte1 & 0x7F;
-
-        if (rsv1 || rsv2 || rsv3) {
-            throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "RSV bits require a negotiated websocket extension.");
-        }
 
         this.validateMasking(context, masked);
 
@@ -332,7 +343,8 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                 }
                 throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported WebSocket opcode: " + opcodeVal);
         }
-        dst.offerMessage(frame);
+
+        dst.offerMessage(this.applyInboundExtensions(context, frame));
         return true;
     }
 
@@ -341,9 +353,11 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         if (opcode == null) {
             return false;
         }
+
         if (opcode == WebSocketOpcode.PING || opcode == WebSocketOpcode.PONG || opcode == WebSocketOpcode.CLOSE) {
             return false;
         }
+
         return payloadLen > this.maxPayloadChunkLength || payloadLen > Integer.MAX_VALUE;
     }
 
@@ -391,20 +405,41 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         boolean finalFragment = lastSlice && this.streamingState.finalFragment;
         byte[] maskKey = this.streamingState.masked ? new byte[] { this.streamingState.maskKey[0], this.streamingState.maskKey[1], this.streamingState.maskKey[2], this.streamingState.maskKey[3] } : null;
         WebSocketFrame frame = WebSocketFrame.create(emittedOpcode, finalFragment, firstSlice && this.streamingState.rsv1, firstSlice && this.streamingState.rsv2, firstSlice && this.streamingState.rsv3, this.streamingState.masked, maskKey, contentBuf, chunkLength);
+
         this.streamingState.emittedPayloadLength += chunkLength;
         this.streamingState.remainingPayloadLength -= chunkLength;
         if (this.streamingState.remainingPayloadLength == 0L) {
             this.streamingState = null;
         }
-        dst.offerMessage(frame);
+
+        dst.offerMessage(this.applyInboundExtensions(context, frame));
         return true;
     }
 
-    private void validateMasking(ProtoContext context, boolean masked) {
-        WebSocketContext wsContext = context.context(WebSocketContext.class);
-        if (wsContext == null) {
-            wsContext = context.rootContext(WebSocketContext.class);
+    private WebSocketFrame applyInboundExtensions(ProtoContext context, WebSocketFrame frame) {
+        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
+        if (wsContext != null) {
+            for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
+                if (!runtimeExtension.handlesInboundFrame(frame)) {
+                    continue;
+                }
+                WebSocketFrame decodedFrame = runtimeExtension.decodeFrame(context, frame);
+                if (decodedFrame != frame) {
+                    frame.release();
+                }
+                return decodedFrame;
+            }
         }
+
+        if (!frame.isRsv1() && !frame.isRsv2() && !frame.isRsv3()) {
+            return frame;
+        }
+
+        throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "RSV bits require a negotiated websocket extension.");
+    }
+
+    private void validateMasking(ProtoContext context, boolean masked) {
+        WebSocketContext wsContext = resolveHandshakeContext(context);
         if (wsContext == null || !WebSocketVersion.of(wsContext.version()).isRfc6455Framing()) {
             return;
         }
@@ -413,6 +448,43 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         }
         if (wsContext.isClient() && masked) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "server-to-client websocket frames must not be masked.");
+        }
+    }
+
+    private WebSocketContext resolveHandshakeContext(ProtoContext context) {
+        WebSocketContext wsContext = context.context(WebSocketContext.class);
+        if (wsContext != null && wsContext.isReady()) {
+            return wsContext;
+        }
+
+        wsContext = context.rootContext(WebSocketContext.class);
+        if (wsContext != null && wsContext.isReady()) {
+            return wsContext;
+        }
+        return null;
+    }
+
+    private WebSocketContextImpl resolveRuntimeContext(ProtoContext context) {
+        WebSocketContext wsContext = resolveHandshakeContext(context);
+        if (wsContext instanceof WebSocketContextImpl) {
+            return (WebSocketContextImpl) wsContext;
+        }
+
+        return null;
+    }
+
+    private void resetRuntimeExtensions(ProtoContext context, boolean close) {
+        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
+        if (wsContext == null) {
+            return;
+        }
+
+        for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
+            if (close) {
+                runtimeExtension.close();
+            } else {
+                runtimeExtension.reset();
+            }
         }
     }
 
@@ -427,7 +499,6 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         }
 
         byte frameType = this.accumulator.getByte(0);
-
         if ((frameType & 0x80) != 0) {
             // High bit set: close frame (0xFF 0x00) or length-prefixed binary frame
             if (frameType == (byte) 0xFF) {
@@ -504,12 +575,6 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
 
         dst.offerMessage(WebSocketUtils.textFrame(true, false, null, contentBuf));
         return true;
-    }
-
-    @Override
-    public void onClose(ProtoContext context) {
-        this.resetAccumulator();
-        this.streamingState = null;
     }
 
     private void resetAccumulator() {

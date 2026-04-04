@@ -14,7 +14,9 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+import java.util.List;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
+import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
 
 /**
  * Event published when the WebSocket opening handshake succeeds.
@@ -53,6 +55,14 @@ public class WebSocketHandshakeEvent extends AbstractHttpEvent {
 
     public String extensions() {
         return this.context.extensions();
+    }
+
+    public List<WebSocketExtensionResult> extensionResults() {
+        return this.context.extensionList();
+    }
+
+    public boolean hasExtension(String extensionName) {
+        return this.context.hasExtension(extensionName);
     }
 
     @Override

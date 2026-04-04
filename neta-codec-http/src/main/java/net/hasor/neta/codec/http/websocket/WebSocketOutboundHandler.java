@@ -66,8 +66,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             PongWebSocketEvent pongEvent = (PongWebSocketEvent) eventData;
             sendControlEventFrame(context, pongEvent, pongEvent.content(), false);
             return false;
+        } else {
+            return true;
         }
-        return true;
     }
 
     @Override
@@ -88,15 +89,16 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
                 }
             }
         }
+
         return ProtoStatus.Next;
     }
 
     private void encodeMessage(ProtoContext context, WebSocketMessage msg, ProtoSndQueue<WebSocketFrame> dst) {
         if (shouldAutoFragment(msg)) {
             emitAutoFragmentedMessage(context, msg, dst);
-            return;
+        } else {
+            dst.offerMessage(this.toFrame(context, msg));
         }
-        dst.offerMessage(this.toFrame(context, msg));
     }
 
     private WebSocketFrame toFrame(ProtoContext context, WebSocketMessage msg) {
@@ -121,6 +123,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         } else {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "WebSocket message sequence is invalid: " + sequence);
         }
+
         frame.streamId(msg.streamId());
         return frame;
     }
@@ -137,8 +140,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
     private WebSocketFrame buildControlMessage(ProtoContext context, WebSocketMessage msg, boolean masked) {
         if (msg.sequence() != WebSocketMessage.FINAL_SEQUENCE) {
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage sequence must be FINAL_SEQUENCE.");
+        } else {
+            return buildControlFrame(context, msg.type(), retainContent(msg.content()), masked);
         }
-        return buildControlFrame(context, msg.type(), retainContent(msg.content()), masked);
     }
 
     private WebSocketFrame buildControlFrame(ProtoContext context, WebSocketOpcode opcode, ByteBuf content, boolean masked) {
@@ -146,6 +150,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             content.release();
             throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "control WebSocketMessage payload must not exceed 125 bytes.");
         }
+
         if (opcode == WebSocketOpcode.PING) {
             return WebSocketUtils.pingFrame(masked, maskingKey(masked), content);
         }
@@ -156,6 +161,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             WebSocketUtils.markCloseSent(context);
             return WebSocketUtils.closeFrame(masked, maskingKey(masked), content);
         }
+
         content.release();
         throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported internal control opcode: " + opcode);
     }
@@ -169,8 +175,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         this.expectedSequence = 1;
         if (msg.type() == WebSocketOpcode.TEXT) {
             return WebSocketUtils.textFrame(false, masked, maskingKey(masked), retainContent(msg.content()));
+        } else {
+            return WebSocketUtils.binaryFrame(false, masked, maskingKey(masked), retainContent(msg.content()));
         }
-        return WebSocketUtils.binaryFrame(false, masked, maskingKey(masked), retainContent(msg.content()));
     }
 
     private WebSocketFrame buildMiddleChunk(WebSocketMessage msg, boolean masked) {
@@ -218,6 +225,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         if (msg.type() != WebSocketOpcode.TEXT && msg.type() != WebSocketOpcode.BINARY) {
             return false;
         }
+
         ByteBuf content = msg.content();
         return content != null && content.readableBytes() > this.maxFramePayloadLength;
     }
@@ -233,6 +241,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             int chunkLength = Math.min(this.maxFramePayloadLength, readableBytes - offset);
             boolean finalFragment = offset + chunkLength >= readableBytes;
             ByteBuf chunk = copyChunk(context, content, offset, chunkLength);
+
             WebSocketFrame frame;
             if (first) {
                 if (msg.type() == WebSocketOpcode.TEXT) {
@@ -244,6 +253,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             } else {
                 frame = WebSocketUtils.continuationFrame(finalFragment, masked, maskingKey(masked), chunk);
             }
+
             frame.streamId(msg.streamId());
             dst.offerMessage(frame);
             offset += chunkLength;
@@ -277,10 +287,11 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
 
     private WebSocketVersion resolveVersion(ProtoContext context) {
         WebSocketContext wsContext = requireHandshakeContext(context);
-        WebSocketVersion detectedVersion = WebSocketVersion.of(wsContext.version());
-        if (detectedVersion != null) {
-            return detectedVersion;
+        WebSocketVersion version = WebSocketVersion.of(wsContext.version());
+        if (version != null) {
+            return version;
         }
+
         throw new IllegalStateException("WebSocketContext contains unsupported version: " + wsContext.version());
     }
 
@@ -293,6 +304,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         if (wsContext != null && wsContext.isReady()) {
             return wsContext;
         }
+
         throw new IllegalStateException("WebSocketOutboundHandler requires WebSocketContext from a completed handshake.");
     }
 

@@ -113,12 +113,14 @@ final class DefaultWebSocketFrame implements WebSocketFrame {
         if (!this.active) {
             return;
         }
+
         this.active = false;
         ByteBuf current = this.content;
         if (current != null) {
             current.release();
             this.content = null;
         }
+
         this.streamId = 0;
         this.finalFragment = false;
         this.rsv1 = false;

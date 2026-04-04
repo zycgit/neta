@@ -14,11 +14,27 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket.extension;
-import net.hasor.neta.codec.http.websocket.WebSocketHandshakeRequest;
+import net.hasor.neta.channel.ProtoContext;
+import net.hasor.neta.codec.http.websocket.WebSocketFrame;
 
 /**
- * Server-side selector for negotiated WebSocket extensions.
+ * Runtime view of one negotiated websocket extension on a connection.
  */
-public interface WebSocketServerExtensionSelector {
-    String selectServerExtensions(WebSocketHandshakeRequest request, String proposedExtensions);
+public interface WebSocketRuntimeExtension {
+    WebSocketExtensionResult negotiatedExtension();
+
+    boolean handlesInboundFrame(WebSocketFrame frame);
+
+    boolean handlesOutboundFrame(WebSocketFrame frame);
+
+    WebSocketFrame decodeFrame(ProtoContext context, WebSocketFrame frame);
+
+    WebSocketFrame encodeFrame(ProtoContext context, WebSocketFrame frame);
+
+    default void reset() {
+    }
+
+    default void close() {
+        this.reset();
+    }
 }
