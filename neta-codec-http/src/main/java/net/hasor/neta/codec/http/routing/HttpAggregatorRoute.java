@@ -27,16 +27,14 @@ import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaderValues;
 
 /**
- * Cleartext HTTP protocol routing for HTTP/1.1, HTTP/2 prior knowledge, and h2c upgrade.
+ * Cleartext HTTP aggregate route selector.
  * <p>
- * This selector works on <b>received bytes</b> before any HTTP codec branch is chosen.
- * It can therefore distinguish three cleartext entry modes on the same TCP port:
- * normal HTTP/1.1, direct HTTP/2 preface, and HTTP/1.1 upgrade to h2c.
+ * This selector reads the received cleartext bytes before the flow enters a concrete HTTP codec branch and returns the branch key for HTTP/1.1, HTTP/2 prior knowledge, or h2c upgrade.
+ * This selector can determine these three entry traffic types on the same TCP port.
  * <p>
  * Overall flow:
  * <pre>
  *   inbound TCP bytes
- *         |
  *         v
  *   +------------------------+
  *   | HttpAggregatorRoute    |
@@ -44,35 +42,36 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  *   | inspect request head   |
  *   +------------------------+
  *      |          |          |
- *      |          |          +--> BRANCH_H1  --> HttpServerDuplexe       --> HttpRequestAggregator --> handler
+ *      |          |          +--> BRANCH_H1  --> HttpServerDuplexe --> HttpRequestAggregator --> handler
  *      |          |
- *      |          +-------------> BRANCH_H2C --> H2cUpgradeServerDuplexe --> HttpRequestAggregator --> handler
+ *      |          +-------------> BRANCH_H2C --> HttpServerDuplexe --> H2CUpgradeServerDuplexe --> handler
  *      |
- *      +------------------------> BRANCH_H2  --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpRequestAggregator --> handler
+ *      +------------------------> BRANCH_H2  --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpServerDuplexeAggregator --> handler
  * </pre>
+ * The upgrade request on the h2c path forms a one-time switching seed.
+ * The following preface, SETTINGS, and SETTINGS ACK frames enter the switched HTTP/2 processing path.
  * <p>
  * Decision rules:
  * <ul>
- *   <li>returns {@code null} when there are not enough bytes yet to decide;</li>
+ *   <li>returns {@code null} when the current bytes are still insufficient for a decision;</li>
  *   <li>returns {@value #BRANCH_H2} when the first four bytes are {@code "PRI "};</li>
- *   <li>returns {@value #BRANCH_H2C} when a complete HTTP/1.1 request head contains a valid
- *       {@code Upgrade: h2c} sequence with {@code Connection} and {@code HTTP2-Settings};</li>
+ *   <li>returns {@value #BRANCH_H2C} when the complete HTTP/1.1 request head contains a valid {@code Upgrade: h2c}, the {@code Connection} header declares both {@code Upgrade} and {@code HTTP2-Settings}, and {@code HTTP2-Settings} appears exactly once;</li>
  *   <li>returns {@value #BRANCH_H1} for all other cleartext HTTP traffic.</li>
  * </ul>
  * <p>
- * Typical usage demo:
+ * Typical usage example:
  * <pre>
  *   ProtoRoutingBuilder&lt;ByteBuf, ByteBuf&gt; routing = ProtoHelper.typedRoutingAsStatic(new HttpAggregatorRoute());
+ *   ProtoRoutingControl routingControl = routing.control();
  *   routing.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -&gt; {
  *       branch.addLast("h2-frame", new Http2FrameDuplexe(true));
- *       branch.addLast("h2-object", new Http2ObjectDuplexe(true, new Http2Settings().headerTableSize(4096).maxHeaderListSize(8192)));
- *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2PartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
+ *       branch.addLast("h2-object", new Http2ObjectDuplexe(true, routingControl));
+ *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2ObjectPartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
  *       branch.addLastDecoder("h2-handler", new HttpDispatchHandler(false));
  *   });
  *   routing.branchByInitializer(HttpRouteKey.BRANCH_H2C, branch -&gt; {
- *       branch.addLast("h2c-upgrade-codec", new H2cUpgradeServerDuplexe(4096, 8192, 8192, 1048576));
- *       branch.nextPartition("h2c-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2PartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2c-aggregator", new HttpServerDuplexeAggregator(1048576))));
- *       branch.addLastDecoder("h2c-handler", new HttpDispatchHandler(false));
+ *       branch.addLast("http-codec", new HttpServerDuplexe(4096, 8192, 8192));
+ *       branch.addLast("h2c-upgrade", new H2CUpgradeServerDuplexe(routingControl));
  *   });
  *   routing.branchByInitializer(HttpRouteKey.BRANCH_H1, branch -&gt; {
  *       branch.addLast("http-codec", new HttpServerDuplexe(4096, 8192, 8192));
@@ -82,25 +81,30 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  *   ctx.addLast("http-detect", routing.build());
  * </pre>
  * <p>
- * Use this selector only for cleartext TCP HTTP entry points. For TLS + ALPN based routing,
- * use {@link Http2OverTlsRoute}.
+ * This selector applies to cleartext TCP HTTP entries.
+ * Use {@link HttpAggregatorOverTlsRoute} for aggregate routing on TLS entries.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-15
  */
 public class HttpAggregatorRoute implements ProtoRoutingDataSelector<ByteBuf, ByteBuf>, HttpRouteKey {
     private static final Logger logger           = Logger.getLogger(HttpAggregatorRoute.class);
-    /** Minimum bytes required for protocol detection. */
+    /** Minimum number of bytes required for protocol detection. */
     private static final int    MIN_DETECT_BYTES = 4;
 
+    /**
+     * Returns the HTTP route branch key according to the currently received cleartext bytes.
+     */
     @Override
-    public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
+    public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> sndDown) {
         boolean printLog = context.getConfig().isPrintLog();
-        // h2c detection requires data — defer if queue is empty (onActive phase)
+        // h2c detection depends on incoming data; delay the decision when the queue is still empty, such as during onActive.
         if (rcvUp.queueSize() == 0) {
             return null;
         }
 
         ByteBuf first = rcvUp.peekMessage();
         if (first == null) {
-            return null; // wait for more data
+            return null; // keep waiting for more data
         }
 
         ByteBuf inspectBuf = ByteBufUtils.queueBuffer(rcvUp);
@@ -109,7 +113,7 @@ public class HttpAggregatorRoute implements ProtoRoutingDataSelector<ByteBuf, By
         }
         int b0 = inspectBuf.getByte(0) & 0xFF;
 
-        // "PRI " = 0x50 0x52 0x49 0x20 → HTTP/2 Prior Knowledge (RFC 9113 §3.4)
+        // "PRI " = 0x50 0x52 0x49 0x20, which identifies HTTP/2 prior knowledge (RFC 9113 §3.4).
         String branch;
         if (b0 == 0x50                                      // 'P'
                 && (inspectBuf.getByte(1) & 0xFF) == 0x52 // 'R'
@@ -132,6 +136,9 @@ public class HttpAggregatorRoute implements ProtoRoutingDataSelector<ByteBuf, By
         return branch;
     }
 
+    /**
+     * Determines whether the current first packet is a valid h2c upgrade request according to the complete request head.
+     */
     private boolean isH2cUpgrade(ByteBuf inspectBuf) {
         if (!looksLikeHttpRequest(inspectBuf)) {
             return false;
@@ -180,15 +187,24 @@ public class HttpAggregatorRoute implements ProtoRoutingDataSelector<ByteBuf, By
         return containsConnectionToken(connection, HttpHeaderValues.UPGRADE) && containsConnectionToken(connection, HttpHeaderNames.HTTP2_SETTINGS);
     }
 
+    /**
+     * Determines whether the current bytes already look like an HTTP/1.x request and are still waiting for a complete request head.
+     */
     private boolean shouldWaitForHttpHeaders(ByteBuf inspectBuf) {
         return looksLikeHttpRequest(inspectBuf) && findHeaderEnd(inspectBuf) < 0;
     }
 
+    /**
+     * Determines whether the first byte matches the starting pattern of an uppercase HTTP method name.
+     */
     private boolean looksLikeHttpRequest(ByteBuf inspectBuf) {
         int b0 = inspectBuf.getByte(0) & 0xFF;
         return b0 >= 0x41 && b0 <= 0x5A;
     }
 
+    /**
+     * Finds the end position of the HTTP request head and returns the next index after \r\n\r\n.
+     */
     private int findHeaderEnd(ByteBuf inspectBuf) {
         int readable = inspectBuf.readableBytes();
         for (int i = 0; i <= readable - 4; i++) {
@@ -199,6 +215,9 @@ public class HttpAggregatorRoute implements ProtoRoutingDataSelector<ByteBuf, By
         return -1;
     }
 
+    /**
+     * Determines whether the Connection header contains the target token.
+     */
     private boolean containsConnectionToken(String headerValue, String token) {
         if (headerValue == null || token == null) {
             return false;

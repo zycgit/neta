@@ -76,6 +76,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
     private final        ScratchQueue<Http2Frame> frameScratch;
     private final        ScratchQueue<ByteBuf>    byteScratch;
     private final        List<HttpObject>         bufferedRequestParts = new ArrayList<>();
+    private final        List<HttpObject>         pendingOutbound      = new ArrayList<>();
     private              boolean                  upgraded;
 
     /**
@@ -139,7 +140,20 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         if (isRcv) {
             return this.handleUpgradeRequest(context, rcvUp, rcvDown, sndDown);
         } else {
-            return this.encodePendingFrames(context, sndUp, sndDown);
+            if (!this.flushPendingOutbound(sndDown)) {
+                return ProtoStatus.Next;
+            }
+
+            if (!this.upgraded) {
+                return this.forwardSendPassthrough(sndUp, sndDown);
+            }
+
+            ProtoStatus status = this.encodePendingFrames(context, sndUp);
+            if (status != ProtoStatus.Next) {
+                return status;
+            }
+            this.flushPendingOutbound(sndDown);
+            return ProtoStatus.Next;
         }
     }
 
@@ -173,6 +187,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
     @Override
     public void onClose(ProtoContext context) {
         this.resetRequestState(true);
+        this.releasePendingOutbound();
         this.frameScratch.clear();
         this.byteScratch.clear();
         this.h2ObjectEncoder.onClose(context);
@@ -194,26 +209,39 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
             }
 
             if (this.bufferedRequestParts.isEmpty() && !(message instanceof HttpRequest)) {
-                rcvDown.offerMessage(rcvUp.takeMessage());
+                if (!this.forwardSingle(rcvUp, rcvDown)) {
+                    return ProtoStatus.Next;
+                }
                 continue;
             }
 
             message = rcvUp.takeMessage();
             this.bufferedRequestParts.add(message);
 
+            boolean requestComplete = isRequestComplete(message);
+            boolean upgradeRequest = (requestComplete || isHeaderSectionClosed(message)) && isValidUpgradeRequest(this.bufferedRequestParts);
+
             if (!isHeaderSectionClosed(message)) {
-                if (isRequestComplete(message)) {
-                    this.flushBufferedRequest(rcvDown);
-                    this.resetRequestState(false);
+                if (requestComplete) {
+                    if (upgradeRequest) {
+                        FullHttpRequest request = this.buildFullHttpRequest(context.byteBufAllocator());
+                        this.performUpgrade(context, request, sndDown);
+                        this.resetRequestState(true);
+                    } else {
+                        if (!this.flushBufferedRequest(rcvDown)) {
+                            return ProtoStatus.Next;
+                        }
+                        this.resetRequestState(false);
+                    }
                 }
                 continue;
             }
 
-            boolean upgradeRequest = isValidUpgradeRequest(this.bufferedRequestParts);
-            boolean requestComplete = isRequestComplete(message);
             if (!requestComplete) {
                 if (!upgradeRequest) {
-                    this.flushBufferedRequest(rcvDown);
+                    if (!this.flushBufferedRequest(rcvDown)) {
+                        return ProtoStatus.Next;
+                    }
                     this.resetRequestState(false);
                 }
                 continue;
@@ -223,10 +251,12 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
                 FullHttpRequest request = this.buildFullHttpRequest(context.byteBufAllocator());
                 this.performUpgrade(context, request, sndDown);
                 this.resetRequestState(true);
-                return ProtoStatus.Stop;
+                return ProtoStatus.Next;
             }
 
-            this.flushBufferedRequest(rcvDown);
+            if (!this.flushBufferedRequest(rcvDown)) {
+                return ProtoStatus.Next;
+            }
             this.resetRequestState(false);
         }
 
@@ -283,11 +313,11 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
     private void performUpgrade(ProtoContext context, FullHttpRequest request, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
         byte[] settingsPayload = decodeSettingsPayload(request.getString(HttpHeaderNames.HTTP2_SETTINGS));
         applyRemoteSettings(context, settingsPayload);
-        sendSwitchingProtocols(context, sndDown);
-        sendServerPreface(context, sndDown);
+        sendSwitchingProtocols(context);
+        context.fireEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
+        sendServerPreface(context);
         this.upgraded = true;
 
-        context.fireEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
         promoteRequestToHttp2(context, request);
         switchToHttp2Route(request);
         if (context.getConfig().isPrintLog()) {
@@ -323,20 +353,21 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
             long value = ((settingsPayload[i + 2] & 0xFFL) << 24) | ((settingsPayload[i + 3] & 0xFFL) << 16) | ((settingsPayload[i + 4] & 0xFFL) << 8) | (settingsPayload[i + 5] & 0xFFL);
             decoderState.applyRemoteSetting(id, value);
         }
+
         Http2Stream stream = decoderState.getOrCreateStream(1);
         stream.state(Http2StreamState.HALF_CLOSED_REMOTE);
         decoderState.offerResponseStreamId(1);
     }
 
-    private void sendSwitchingProtocols(ProtoContext context, ProtoSndQueue<HttpObject> sndDown) {
-        ByteBuf responseBytes = context.byteBufAllocator().buffer(128);
-        byte[] payload = ("HTTP/1.1 101 Switching Protocols\r\n" + "Connection: Upgrade\r\n" + "Upgrade: h2c\r\n" + "Content-Length: 0\r\n" + "\r\n").getBytes(java.nio.charset.StandardCharsets.US_ASCII);
-        responseBytes.writeBytes(payload);
-        responseBytes.markWriter();
-        sndDown.offerMessage(new DefaultHttpByteBuf(responseBytes));
+    private void sendSwitchingProtocols(ProtoContext context) throws Throwable {
+        DefaultFullHttpResponse response = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.SWITCHING_PROTOCOLS);
+        response.setHeader(HttpHeaderNames.CONNECTION, HttpHeaderValues.UPGRADE);
+        response.setHeader(HttpHeaderNames.UPGRADE, HttpHeaderValues.H2C);
+        response.setHeader(HttpHeaderNames.CONTENT_LENGTH, HttpHeaderValues.ZERO);
+        context.sendData(response).get();
     }
 
-    private void sendServerPreface(ProtoContext context, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+    private void sendServerPreface(ProtoContext context) throws Throwable {
         this.frameScratch.clear();
         this.byteScratch.clear();
         try {
@@ -349,7 +380,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
             while (this.byteScratch.hasMore()) {
                 ByteBuf payload = this.byteScratch.takeMessage();
                 if (payload != null) {
-                    sndDown.offerMessage(new DefaultHttpByteBuf(payload));
+                    context.sendData(new DefaultHttpByteBuf(payload)).get();
                 }
             }
         } finally {
@@ -373,8 +404,8 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         decoderState.setLastEmittedStreamId(1);
     }
 
-    private void flushBufferedRequest(ProtoSndQueue<HttpObject> rcvDown) {
-        rcvDown.offerMessage(this.bufferedRequestParts);
+    private boolean flushBufferedRequest(ProtoSndQueue<HttpObject> rcvDown) {
+        return rcvDown != null && rcvDown.offerMessage(this.bufferedRequestParts);
     }
 
     private void resetRequestState(boolean releaseBuffered) {
@@ -386,7 +417,57 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
         this.bufferedRequestParts.clear();
     }
 
-    private ProtoStatus encodePendingFrames(ProtoContext context, ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) throws Throwable {
+    private ProtoStatus forwardSendPassthrough(ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<HttpObject> sndDown) {
+        while (sndUp.hasMore()) {
+            if (!sndDown.hasSlot()) {
+                return ProtoStatus.Next;
+            }
+
+            HttpObject message = sndUp.takeMessage();
+            if (message == null) {
+                continue;
+            }
+
+            if (!sndDown.offerMessage(Collections.singletonList(message))) {
+                this.pendingOutbound.add(message);
+                return ProtoStatus.Next;
+            }
+        }
+        return ProtoStatus.Next;
+    }
+
+    private boolean flushPendingOutbound(ProtoSndQueue<HttpObject> sndDown) {
+        while (!this.pendingOutbound.isEmpty()) {
+            if (sndDown == null || !sndDown.hasSlot()) {
+                return false;
+            }
+
+            HttpObject message = this.pendingOutbound.get(0);
+            if (!sndDown.offerMessage(Collections.singletonList(message))) {
+                return false;
+            }
+            this.pendingOutbound.remove(0);
+        }
+        return true;
+    }
+
+    private void releasePendingOutbound() {
+        for (HttpObject msg : this.pendingOutbound) {
+            SoUtils.release(msg);
+        }
+        this.pendingOutbound.clear();
+    }
+
+    private boolean forwardSingle(ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) {
+        if (dst == null || !dst.hasSlot()) {
+            return false;
+        }
+
+        HttpObject message = src.takeMessage();
+        return message == null || dst.offerMessage(Collections.singletonList(message));
+    }
+
+    private ProtoStatus encodePendingFrames(ProtoContext context, ProtoRcvQueue<HttpObject> sndUp) throws Throwable {
         this.frameScratch.clear();
         this.byteScratch.clear();
         try {
@@ -399,7 +480,7 @@ public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
             while (this.byteScratch.hasMore()) {
                 ByteBuf payload = this.byteScratch.takeMessage();
                 if (payload != null) {
-                    sndDown.offerMessage(new DefaultHttpByteBuf(payload));
+                    this.pendingOutbound.add(new DefaultHttpByteBuf(payload));
                 }
             }
 

@@ -14,7 +14,11 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cors;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Set;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoQueue;
 import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.codec.http.*;
@@ -49,6 +53,32 @@ public class CorsTest {
             req.setHeader(HttpHeaderNames.ACCESS_CONTROL_REQUEST_HEADERS, acrh);
         }
         return req;
+    }
+
+    private static DefaultHttpRequest buildRequestLine(HttpMethod method) {
+        return new DefaultHttpRequest(HttpVersion.HTTP_1_1, method, "/api/data");
+    }
+
+    private static DefaultLastHttpHeaders buildRequestHeaders(String origin, String acrm, String acrh) {
+        DefaultLastHttpHeaders headers = new DefaultLastHttpHeaders();
+        if (origin != null) {
+            headers.setHeader(HttpHeaderNames.ORIGIN, origin);
+        }
+        if (acrm != null) {
+            headers.setHeader(HttpHeaderNames.ACCESS_CONTROL_REQUEST_METHOD, acrm);
+        }
+        if (acrh != null) {
+            headers.setHeader(HttpHeaderNames.ACCESS_CONTROL_REQUEST_HEADERS, acrh);
+        }
+        return headers;
+    }
+
+    private static List<Object> drainObjects(ProtoQueue<Object> queue) {
+        List<Object> result = new ArrayList<Object>();
+        while (queue.hasMore()) {
+            result.add(queue.takeMessage());
+        }
+        return result;
     }
 
     @Test
@@ -205,7 +235,7 @@ public class CorsTest {
     public void testGetOrigin() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/api");
         req.setHeader(HttpHeaderNames.ORIGIN, "https://example.com");
-        assertEquals("https://example.com", CorsUtil.getOrigin(req));
+        assertEquals("https://example.com", CorsUtil.getOrigin((HttpRequest) req));
     }
 
     // =========================================================================
@@ -214,13 +244,13 @@ public class CorsTest {
 
     @Test
     public void testGetOrigin_null() {
-        assertNull(CorsUtil.getOrigin(null));
+        assertNull(CorsUtil.getOrigin((HttpRequest) null));
     }
 
     @Test
     public void testGetOrigin_absent() {
         DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/api");
-        assertNull(CorsUtil.getOrigin(req));
+        assertNull(CorsUtil.getOrigin((HttpRequest) req));
     }
 
     @Test
@@ -229,7 +259,7 @@ public class CorsTest {
         DefaultFullHttpRequest req = buildGetRequest("https://example.com");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
 
-        CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
+        CorsUtil.applySimpleCorsHeaders(req, (HttpResponse) resp, cfg);
 
         assertEquals("*", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
         assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
@@ -241,7 +271,7 @@ public class CorsTest {
         DefaultFullHttpRequest req = buildGetRequest("https://example.com");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
 
-        CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
+        CorsUtil.applySimpleCorsHeaders(req, (HttpResponse) resp, cfg);
 
         assertEquals("https://example.com", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
         // Vary: Origin must be set when echoing a specific origin
@@ -255,7 +285,7 @@ public class CorsTest {
         DefaultFullHttpRequest req = buildGetRequest("https://other.com");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
 
-        CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
+        CorsUtil.applySimpleCorsHeaders(req, (HttpResponse) resp, cfg);
 
         // No CORS headers written for disallowed origin
         assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
@@ -267,7 +297,7 @@ public class CorsTest {
         DefaultFullHttpRequest req = buildGetRequest("https://example.com");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
 
-        CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
+        CorsUtil.applySimpleCorsHeaders(req, (HttpResponse) resp, cfg);
 
         assertEquals("true", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
     }
@@ -278,7 +308,7 @@ public class CorsTest {
         DefaultFullHttpRequest req = buildGetRequest("https://example.com");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
 
-        CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
+        CorsUtil.applySimpleCorsHeaders(req, (HttpResponse) resp, cfg);
 
         String exposed = resp.getString(HttpHeaderNames.ACCESS_CONTROL_EXPOSE_HEADERS);
         assertNotNull(exposed);
@@ -295,7 +325,7 @@ public class CorsTest {
         DefaultFullHttpRequest req = buildGetRequest("https://example.com");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
         // Must not throw
-        CorsUtil.applySimpleCorsHeaders(req, resp, null);
+        CorsUtil.applySimpleCorsHeaders(req, (HttpResponse) resp, null);
         assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
 
@@ -305,7 +335,7 @@ public class CorsTest {
         DefaultFullHttpRequest req = buildGetRequest("https://example.com");
         DefaultFullHttpResponse resp = new DefaultFullHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK);
 
-        CorsUtil.applySimpleCorsHeaders(req, resp, cfg);
+        CorsUtil.applySimpleCorsHeaders(req, (HttpResponse) resp, cfg);
 
         assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
     }
@@ -412,21 +442,27 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowAnyOrigin().allowMethods("GET", "POST").build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        DefaultFullHttpRequest req = buildOptionsRequest("https://example.com", "POST", null);
+        DefaultHttpRequest requestLine = buildRequestLine(HttpMethod.OPTIONS);
+        DefaultLastHttpHeaders requestHeaders = buildRequestHeaders("https://example.com", "POST", null);
 
-        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
-        rcv.offerMessage(req);
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(requestLine);
+        rcv.offerMessage(requestHeaders);
         ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        assertEquals(1, snd.queueSize());
-        Object emitted = snd.takeMessage();
-        assertTrue("Expected FullHttpResponse for preflight", emitted instanceof FullHttpResponse);
-        FullHttpResponse preflight = (FullHttpResponse) emitted;
+        List<Object> emitted = drainObjects(snd);
+        assertEquals(3, emitted.size());
+        assertTrue(emitted.get(0) instanceof HttpResponse);
+        assertTrue(emitted.get(1) instanceof LastHttpHeaders);
+        assertTrue(emitted.get(2) instanceof LastHttpContent);
+
+        HttpResponse preflight = (HttpResponse) emitted.get(0);
+        LastHttpHeaders responseHeaders = (LastHttpHeaders) emitted.get(1);
         assertEquals(204, preflight.status().code());
-        assertEquals("*", preflight.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
-        String methods = preflight.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS);
+        assertEquals("*", responseHeaders.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        String methods = responseHeaders.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_METHODS);
         assertNotNull(methods);
         assertTrue(methods.contains("GET"));
         assertTrue(methods.contains("POST"));
@@ -437,16 +473,19 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowAnyOrigin().build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        DefaultFullHttpRequest req = buildGetRequest("https://example.com");
+        DefaultHttpRequest requestLine = buildRequestLine(HttpMethod.GET);
+        DefaultLastHttpHeaders requestHeaders = buildRequestHeaders("https://example.com", null, null);
 
-        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
-        rcv.offerMessage(req);
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(requestLine);
+        rcv.offerMessage(requestHeaders);
         ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        assertEquals(1, snd.queueSize());
-        assertSame(req, snd.takeMessage());
+        assertEquals(2, snd.queueSize());
+        assertSame(requestLine, snd.takeMessage());
+        assertSame(requestHeaders, snd.takeMessage());
     }
 
     @Test
@@ -454,17 +493,19 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowAnyOrigin().build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        DefaultFullHttpRequest req = new DefaultFullHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, "/api");
-        // No Origin header
+        DefaultHttpRequest requestLine = buildRequestLine(HttpMethod.GET);
+        DefaultLastHttpHeaders requestHeaders = buildRequestHeaders(null, null, null);
 
-        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
-        rcv.offerMessage(req);
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(requestLine);
+        rcv.offerMessage(requestHeaders);
         ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        assertEquals(1, snd.queueSize());
-        assertSame(req, snd.takeMessage());
+        assertEquals(2, snd.queueSize());
+        assertSame(requestLine, snd.takeMessage());
+        assertSame(requestHeaders, snd.takeMessage());
     }
 
     @Test
@@ -472,17 +513,20 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowAnyOrigin().disable().build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        DefaultFullHttpRequest req = buildOptionsRequest("https://example.com", "POST", null);
+        DefaultHttpRequest requestLine = buildRequestLine(HttpMethod.OPTIONS);
+        DefaultLastHttpHeaders requestHeaders = buildRequestHeaders("https://example.com", "POST", null);
 
-        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
-        rcv.offerMessage(req);
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(requestLine);
+        rcv.offerMessage(requestHeaders);
         ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
         // Disabled — passes through even OPTIONS preflight
-        assertEquals(1, snd.queueSize());
-        assertSame(req, snd.takeMessage());
+        assertEquals(2, snd.queueSize());
+        assertSame(requestLine, snd.takeMessage());
+        assertSame(requestHeaders, snd.takeMessage());
     }
 
     @Test
@@ -490,7 +534,7 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowAnyOrigin().build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
         ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         ProtoStatus status = handler.onMessage(null, rcv, snd);
@@ -508,21 +552,25 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowOrigins("https://example.com").allowCredentials(true).maxAge(600).build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        DefaultFullHttpRequest req = buildOptionsRequest("https://example.com", "DELETE", "Authorization");
+        DefaultHttpRequest requestLine = buildRequestLine(HttpMethod.OPTIONS);
+        DefaultLastHttpHeaders requestHeaders = buildRequestHeaders("https://example.com", "DELETE", "Authorization");
 
-        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
-        rcv.offerMessage(req);
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(requestLine);
+        rcv.offerMessage(requestHeaders);
         ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
-        FullHttpResponse resp = (FullHttpResponse) snd.takeMessage();
+        List<Object> emitted = drainObjects(snd);
+        HttpResponse resp = (HttpResponse) emitted.get(0);
+        LastHttpHeaders headers = (LastHttpHeaders) emitted.get(1);
         assertEquals(204, resp.status().code());
-        assertEquals("https://example.com", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
-        assertEquals("true", resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
-        assertEquals("600", resp.getString(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
+        assertEquals("https://example.com", headers.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        assertEquals("true", headers.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_CREDENTIALS));
+        assertEquals("600", headers.getString(HttpHeaderNames.ACCESS_CONTROL_MAX_AGE));
         // Vary must be set
-        assertNotNull(resp.getString(HttpHeaderNames.VARY));
+        assertNotNull(headers.getString(HttpHeaderNames.VARY));
     }
 
     @Test
@@ -530,18 +578,44 @@ public class CorsTest {
         CorsConfig cfg = CorsConfig.builder().allowOrigins("https://allowed.com").build();
         CorsHandler handler = new CorsHandler(cfg);
 
-        DefaultFullHttpRequest req = buildOptionsRequest("https://disallowed.com", "POST", null);
+        DefaultHttpRequest requestLine = buildRequestLine(HttpMethod.OPTIONS);
+        DefaultLastHttpHeaders requestHeaders = buildRequestHeaders("https://disallowed.com", "POST", null);
 
-        ProtoQueue<FullHttpRequest> rcv = new ProtoQueue<>(-1);
-        rcv.offerMessage(req);
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(requestLine);
+        rcv.offerMessage(requestHeaders);
         ProtoQueue<Object> snd = new ProtoQueue<>(-1);
 
         handler.onMessage(null, rcv, snd);
 
         // A 204 response is still emitted for the OPTIONS, but without CORS allow-origin header
-        Object emitted = snd.takeMessage();
-        assertTrue(emitted instanceof FullHttpResponse);
-        FullHttpResponse resp = (FullHttpResponse) emitted;
-        assertNull(resp.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+        List<Object> emitted = drainObjects(snd);
+        assertTrue(emitted.get(0) instanceof HttpResponse);
+        LastHttpHeaders respHeaders = (LastHttpHeaders) emitted.get(1);
+        assertNull(respHeaders.getString(HttpHeaderNames.ACCESS_CONTROL_ALLOW_ORIGIN));
+    }
+
+    @Test
+    public void testCorsHandler_preflight_discardsFollowingContent() throws Throwable {
+        CorsConfig cfg = CorsConfig.builder().allowAnyOrigin().allowMethods("POST").build();
+        CorsHandler handler = new CorsHandler(cfg);
+
+        DefaultHttpRequest requestLine = buildRequestLine(HttpMethod.OPTIONS);
+        DefaultLastHttpHeaders requestHeaders = buildRequestHeaders("https://example.com", "POST", null);
+        DefaultLastHttpContent requestBody = new DefaultLastHttpContent(ByteBuf.wrap("ignored".getBytes(StandardCharsets.UTF_8)));
+
+        ProtoQueue<HttpObject> rcv = new ProtoQueue<>(-1);
+        rcv.offerMessage(requestLine);
+        rcv.offerMessage(requestHeaders);
+        rcv.offerMessage(requestBody);
+        ProtoQueue<Object> snd = new ProtoQueue<>(-1);
+
+        handler.onMessage(null, rcv, snd);
+
+        List<Object> emitted = drainObjects(snd);
+        assertEquals(3, emitted.size());
+        assertTrue(emitted.get(0) instanceof HttpResponse);
+        assertTrue(emitted.get(1) instanceof LastHttpHeaders);
+        assertTrue(emitted.get(2) instanceof LastHttpContent);
     }
 }

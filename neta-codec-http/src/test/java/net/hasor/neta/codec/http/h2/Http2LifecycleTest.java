@@ -118,7 +118,7 @@ public class Http2LifecycleTest extends AbstractHttp2Test {
             ProtoPartitionControl[] serverControl = new ProtoPartitionControl[1];
             Queue<String> seenUris = new ConcurrentLinkedQueue<>();
             HoldingRequestHandler handler = new HoldingRequestHandler(seenUris);
-            VirtualPipe pipe = openHttpServer(neta, handler, serverControl);
+            VirtualPipe pipe = openHttp2VirtualPipe(neta, handler, serverControl);
 
             pipe.client().sendData(postRequest("/hold", "one")).get();
             assertTrue(waitUntil(() -> handler.contains("/hold") && serverControl[0] != null && activeStreamPartitionCount(serverControl[0]) == 1, 1000L));
@@ -163,7 +163,7 @@ public class Http2LifecycleTest extends AbstractHttp2Test {
             Queue<String> seenUris = new ConcurrentLinkedQueue<>();
             Queue<Class<?>> seenEvents = new ConcurrentLinkedQueue<>();
             HoldingRequestHandler handler = new HoldingRequestHandler(seenUris, seenEvents);
-            VirtualPipe pipe = openHttpServer(neta, handler, serverControl);
+            VirtualPipe pipe = openHttp2VirtualPipe(neta, handler, serverControl);
 
             pipe.client().sendData(postRequest("/priority", "one")).get();
             assertTrue(waitUntil(() -> handler.contains("/priority") && serverControl[0] != null && activeStreamPartitionCount(serverControl[0]) == 1, 1000L));
@@ -200,7 +200,7 @@ public class Http2LifecycleTest extends AbstractHttp2Test {
             ProtoPartitionControl[] serverControl = new ProtoPartitionControl[1];
             Queue<String> seenUris = new ConcurrentLinkedQueue<>();
             HoldingRequestHandler handler = new HoldingRequestHandler(seenUris);
-            VirtualPipe pipe = openHttpServer(neta, handler, serverControl);
+            VirtualPipe pipe = openHttp2VirtualPipe(neta, handler, serverControl);
 
             pipe.server().fireEvent(Http2GoawayEvent.class, new Http2GoawayEvent(0, 0, Http2ErrorCode.NO_ERROR, null));
 
@@ -226,7 +226,7 @@ public class Http2LifecycleTest extends AbstractHttp2Test {
             ProtoPartitionControl[] serverControl = new ProtoPartitionControl[1];
             Queue<String> seenUris = new ConcurrentLinkedQueue<>();
             HoldingRequestHandler handler = new HoldingRequestHandler(seenUris);
-            VirtualPipe pipe = openHttpServer(neta, handler, serverControl);
+            VirtualPipe pipe = openHttp2VirtualPipe(neta, handler, serverControl);
 
             pipe.client().sendData(postRequest("/ok", "one")).get();
             pipe.client().sendData(postRequest("/cancel", "two")).get();
@@ -269,7 +269,7 @@ public class Http2LifecycleTest extends AbstractHttp2Test {
     public void testResetWithoutExistingStreamDoesNotCreatePartition() throws Throwable {
         autoCloseNeta(neta -> {
             ProtoPartitionControl[] serverControl = new ProtoPartitionControl[1];
-            VirtualPipe pipe = openHttpServer(neta, echoRequestHandler(), serverControl);
+            VirtualPipe pipe = openHttp2VirtualPipe(neta, echoRequestHandler(), serverControl);
 
             pipe.server().fireEvent(Http2ResetEvent.class, new Http2ResetEvent(5, Http2ResetEvent.CANCEL));
 

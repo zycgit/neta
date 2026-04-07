@@ -14,15 +14,21 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.routing;
+
+/**
+ * Standard branch key definitions used by the HTTP routing system.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
+ */
 public interface HttpRouteKey {
-    /** Branch key for HTTP/1.1 over TLS (ALPN protocol identifier "http/1.1"). */
+    /** HTTP/1.1 branch key reused by cleartext entries, TLS ALPN entries, and TLS aggregate entries. */
     String BRANCH_H1     = "http/1.1";
-    /** Branch key for HTTP/2 over TLS (ALPN protocol identifier "h2"). */
+    /** HTTP/2 branch key reused by cleartext entries, TLS ALPN entries, and TLS aggregate entries. */
     String BRANCH_H2     = "h2";
-    /** Branch key for HTTP/1.1 Upgrade to h2c (RFC 7540 Section 3.2). */
+    /** h2c upgrade branch key reused by cleartext entries and TLS aggregate entries. */
     String BRANCH_H2C    = "h2c-upgrade";
-    /** Branch key for HTTP/3 over QUIC (ALPN protocol identifier "h3"). */
+    /** HTTP/3 branch key, which usually corresponds to the ALPN identifier {@code h3} in QUIC handshakes. */
     String BRANCH_H3     = "h3";
-    /** Branch key for HTTP-upgraded WebSocket traffic after the opening handshake completes. */
+    /** Traffic branch key used after an HTTP upgrade to WebSocket completes. */
     String BRANCH_SOCKET = "http-socket";
 }

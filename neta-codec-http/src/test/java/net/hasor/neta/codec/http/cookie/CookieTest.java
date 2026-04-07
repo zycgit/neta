@@ -20,7 +20,6 @@ import java.util.Collections;
 import java.util.List;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
-import net.hasor.neta.bytebuf.StringView;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -191,6 +190,19 @@ public class CookieTest {
         assertEquals("2", cookies.get(1).value());
         assertEquals("c", cookies.get(2).name());
         assertEquals("3", cookies.get(2).value());
+    }
+
+    @Test
+    public void testCookieDecoderPreservesDuplicateNames() {
+        List<Cookie> cookies = CookieDecoder.decode("sid=old; sid=new; theme=dark");
+
+        assertEquals(3, cookies.size());
+        assertEquals("sid", cookies.get(0).name());
+        assertEquals("old", cookies.get(0).value());
+        assertEquals("sid", cookies.get(1).name());
+        assertEquals("new", cookies.get(1).value());
+        assertEquals("theme", cookies.get(2).name());
+        assertEquals("dark", cookies.get(2).value());
     }
 
     @Test
@@ -410,6 +422,14 @@ public class CookieTest {
                 new DefaultCookie("y", "20"));
 
         assertEquals("x=10; y=20", CookieEncoder.encode(list));
+    }
+
+    @Test
+    public void testCookieEncoderPreservesDuplicateNames() {
+        Cookie c1 = new DefaultCookie("sid", "old");
+        Cookie c2 = new DefaultCookie("sid", "new");
+
+        assertEquals("sid=old; sid=new", CookieEncoder.encode(c1, c2));
     }
 
     @Test(expected = IllegalArgumentException.class)
@@ -647,6 +667,26 @@ public class CookieTest {
     }
 
     @Test
+    public void testIntegrationDuplicateSetCookieHeadersPreserved() {
+        DefaultHttpHeaders headers = new DefaultHttpHeaders();
+        headers.addHeader("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("sid", "old").setPath("/legacy")));
+        headers.addHeader("Set-Cookie", ServerCookieEncoder.encode(new DefaultCookie("sid", "new").setPath("/app")));
+
+        List<String> setCookies = headers.getValues("Set-Cookie");
+        assertEquals(2, setCookies.size());
+
+        DefaultCookie c1 = ServerCookieDecoder.decode(setCookies.get(0));
+        DefaultCookie c2 = ServerCookieDecoder.decode(setCookies.get(1));
+
+        assertEquals("sid", c1.name());
+        assertEquals("old", c1.value());
+        assertEquals("/legacy", c1.path());
+        assertEquals("sid", c2.name());
+        assertEquals("new", c2.value());
+        assertEquals("/app", c2.path());
+    }
+
+    @Test
     public void testByteBufCookieDecoderSingleCookie() {
         List<Cookie> cookies = CookieDecoder.decode(toBuf("session=abc123"));
 
@@ -728,75 +768,57 @@ public class CookieTest {
     }
 
     @Test
-    public void testByteBufCookieDecoderLazilyResolvesFields() {
+    public void testByteBufCookieDecoderDirectlyResolvesFields() {
         ByteBuf buf = toBuf("session=abc123");
         DefaultCookie cookie = (DefaultCookie) CookieDecoder.decode(buf).get(0);
-        assertFalse(cookie.isResolved());
+        assertTrue(cookie.isResolved());
 
         buf.free();
 
         assertEquals("session", cookie.name());
-        assertFalse(cookie.isResolved());
         assertEquals("abc123", cookie.value());
         assertTrue(cookie.isResolved());
     }
 
     @Test
-    public void testDefaultCookieAcceptsStringView() {
-        ByteBuf buf = toBuf("session=abc123");
-        try {
-            DefaultCookie cookie = new DefaultCookie(StringView.request(buf, 0, 7), StringView.request(buf, 8, 6));
+    public void testDefaultCookieAcceptsGenericCharSequence() {
+        DefaultCookie cookie = new DefaultCookie(new StringBuilder("session"), new StringBuilder("abc123"));
 
-            assertFalse(cookie.isResolved());
-            assertEquals("session", cookie.name());
-            assertFalse(cookie.isResolved());
-            assertEquals("abc123", cookie.value());
-            assertTrue(cookie.isResolved());
-        } finally {
-            buf.free();
-        }
+        assertTrue(cookie.isResolved());
+        assertEquals("session", cookie.name());
+        assertEquals("abc123", cookie.value());
     }
 
     @Test
-    public void testCookieInterfaceCanResolveLazyValues() {
-        ByteBuf buf = toBuf("session=abc123");
-        try {
-            Cookie cookie = new DefaultCookie(StringView.request(buf, 0, 7), StringView.request(buf, 8, 6));
+    public void testCookieInterfaceResolveIsNoOpForResolvedValue() {
+        Cookie cookie = new DefaultCookie(new StringBuilder("session"), new StringBuilder("abc123"));
 
-            assertFalse(cookie.isResolved());
-            assertSame(cookie, cookie.resolve());
-            assertTrue(cookie.isResolved());
-            assertEquals("session", cookie.name());
-            assertEquals("abc123", cookie.value());
-        } finally {
-            buf.free();
-        }
+        assertTrue(cookie.isResolved());
+        assertSame(cookie, cookie.resolve());
+        assertTrue(cookie.isResolved());
+        assertEquals("session", cookie.name());
+        assertEquals("abc123", cookie.value());
     }
 
     @Test
-    public void testDefaultCookieReleaseRecyclesLazyViewsAndKeepsValues() {
-        ByteBuf buf = toBuf("session=abc123;example.com;/api;Thu, 01 Jan 2099 00:00:00 GMT;Strict");
-        try {
-            DefaultCookie cookie = new DefaultCookie(StringView.request(buf, 0, 7), StringView.request(buf, 8, 6));
-            cookie.setLazyDomain(StringView.request(buf, 15, 11));
-            cookie.setLazyPath(StringView.request(buf, 27, 4));
-            cookie.setLazyExpires(StringView.request(buf, 32, 29));
-            cookie.setLazySameSite(StringView.request(buf, 62, 6));
+    public void testDefaultCookieReleaseKeepsResolvedValues() {
+        DefaultCookie cookie = new DefaultCookie(new StringBuilder("session"), new StringBuilder("abc123"));
+        cookie.setDomain("example.com");
+        cookie.setPath("/api");
+        cookie.setExpires("Thu, 01 Jan 2099 00:00:00 GMT");
+        cookie.setSameSite("Strict");
 
-            assertFalse(cookie.isResolved());
+        assertTrue(cookie.isResolved());
 
-            cookie.release();
+        cookie.release();
 
-            assertTrue(cookie.isResolved());
-            assertEquals("session", cookie.name());
-            assertEquals("abc123", cookie.value());
-            assertEquals("example.com", cookie.domain());
-            assertEquals("/api", cookie.path());
-            assertEquals("Thu, 01 Jan 2099 00:00:00 GMT", cookie.expires());
-            assertEquals("Strict", cookie.sameSite());
-        } finally {
-            buf.free();
-        }
+        assertTrue(cookie.isResolved());
+        assertEquals("session", cookie.name());
+        assertEquals("abc123", cookie.value());
+        assertEquals("example.com", cookie.domain());
+        assertEquals("/api", cookie.path());
+        assertEquals("Thu, 01 Jan 2099 00:00:00 GMT", cookie.expires());
+        assertEquals("Strict", cookie.sameSite());
     }
 
     // =========================================================================
@@ -853,23 +875,18 @@ public class CookieTest {
     }
 
     @Test
-    public void testByteBufServerCookieDecoderLazilyResolvesAttributes() {
+    public void testByteBufServerCookieDecoderDirectlyResolvesAttributes() {
         ByteBuf buf = toBuf("session=abc; Domain=example.com; Path=/api; Expires=Thu, 01 Jan 2099 00:00:00 GMT; SameSite=Strict");
         DefaultCookie c = ServerCookieDecoder.decode(buf);
-        assertFalse(c.isResolved());
+        assertTrue(c.isResolved());
 
         buf.free();
 
         assertEquals("session", c.name());
-        assertFalse(c.isResolved());
         assertEquals("abc", c.value());
-        assertFalse(c.isResolved());
         assertEquals("example.com", c.domain());
-        assertFalse(c.isResolved());
         assertEquals("/api", c.path());
-        assertFalse(c.isResolved());
         assertEquals("Thu, 01 Jan 2099 00:00:00 GMT", c.expires());
-        assertFalse(c.isResolved());
         assertEquals("Strict", c.sameSite());
         assertTrue(c.isResolved());
     }

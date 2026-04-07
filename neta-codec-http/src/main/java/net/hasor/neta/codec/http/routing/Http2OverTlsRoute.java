@@ -24,44 +24,41 @@ import net.hasor.neta.channel.ProtoSndQueue;
 import net.hasor.neta.codec.ssl.SslContext;
 
 /**
- * ALPN-based protocol routing for HTTPS connections.
+ * HTTPS ALPN route selector.
  * <p>
- * This selector does <b>not</b> inspect HTTP bytes. It waits for the TLS handshake
- * to finish, reads the negotiated ALPN protocol from {@link SslContext}, and then
- * chooses the downstream HTTP protocol branch.
+ * This selector reads the ALPN result from {@link SslContext} after the TLS handshake completes and returns the HTTP/1.1 or HTTP/2 branch key.
+ * This selector uses the ALPN result as its only routing signal.
  * <p>
  * Overall flow:
  * <pre>
  *   inbound TCP/TLS connection
- *              |
  *              v
  *        [ SslDuplexer ]
- *              |
  *              v
  *   +------------------------+
  *   | Http2OverTlsRoute      |
  *   | read SslContext ALPN   |
  *   +------------------------+
  *        |             |
- *        |             +--> BRANCH_H1 --> HttpServerDuplexe  --> HttpRequestAggregator --> handler
+ *        |             +--> BRANCH_H1 --> HttpServerDuplexe --> HttpRequestAggregator --> handler
  *        |
- *        +----------------> BRANCH_H2 --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpRequestAggregator --> handler
+ *        +----------------> BRANCH_H2 --> Http2FrameDuplexe --> Http2ObjectDuplexe --> HttpServerDuplexeAggregator --> handler
  * </pre>
  * <p>
  * Decision rules:
  * <ul>
- *   <li>returns {@code null} until {@link SslContext#isReady()} becomes {@code true};</li>
- *   <li>returns {@value #BRANCH_H2} when ALPN negotiated protocol is {@code "h2"};</li>
- *   <li>returns {@value #BRANCH_H1} for all other negotiated or fallback cases.</li>
+ *   <li>returns {@code null} when {@link SslContext#isReady()} returns {@code false};</li>
+ *   <li>returns {@value #BRANCH_H2} when the ALPN result is {@code "h2"};</li>
+ *   <li>returns {@value #BRANCH_H1} for all other negotiated results.</li>
  * </ul>
  * <p>
- * Typical usage demo:
+ * Typical usage example:
  * <pre>
  *   ProtoRoutingBuilder&lt;ByteBuf, ByteBuf&gt; alpn = ProtoHelper.typedRoutingAsStatic(new Http2OverTlsRoute());
  *   alpn.branchByInitializer(HttpRouteKey.BRANCH_H2, branch -&gt; {
  *       branch.addLast("h2-frame", new Http2FrameDuplexe(true));
  *       branch.addLast("h2-object", new Http2ObjectDuplexe(true));
- *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2PartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
+ *       branch.nextPartition("h2-stream", new Http2ObjectPartitionSelector(), partition -&gt; partition.policy(new Http2ObjectPartitionPolicy()).byInitializer(partitionCtx -&gt; partitionCtx.addLast("h2-aggregator", new HttpServerDuplexeAggregator(1048576))));
  *       branch.addLastDecoder("h2-handler", new HttpDispatchHandler(true));
  *   });
  *   alpn.branchByInitializer(HttpRouteKey.BRANCH_H1, branch -&gt; {
@@ -73,16 +70,21 @@ import net.hasor.neta.codec.ssl.SslContext;
  *   ctx.addLast("alpn-router", alpn.build());
  * </pre>
  * <p>
- * Use this selector only inside a TLS branch. For cleartext HTTP/1.1, h2 prior knowledge,
- * and h2c upgrade detection, use {@link HttpAggregatorRoute} instead.
- * @see HttpAggregatorRoute
+ * This selector applies to TLS entries that use the ALPN result as the only routing signal.
+ * Use {@link HttpAggregatorOverTlsRoute} when the route also needs to inspect the decrypted HTTP first packet.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-15
+ * @see HttpAggregatorOverTlsRoute
  * @see SslContext
  */
 public class Http2OverTlsRoute implements ProtoRoutingDataSelector<ByteBuf, ByteBuf>, HttpRouteKey {
     private static final Logger logger = Logger.getLogger(Http2OverTlsRoute.class);
 
+    /**
+     * Returns the HTTP branch key according to the ALPN result after the TLS handshake.
+     */
     @Override
-    public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> rcvDown) {
+    public String route(ProtoContext context, ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<ByteBuf> sndDown) {
         boolean printLog = context.getConfig().isPrintLog();
         SslContext sslCtx = context.context(SslContext.class);
         if (sslCtx == null || !sslCtx.isReady()) {

@@ -31,6 +31,7 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.channel.virtual.*;
+import net.hasor.neta.codec.http.websocket.WebSocketFrame;
 
 public class AbstractHttpTest {
     protected static int findFreePort() throws IOException {
@@ -303,6 +304,7 @@ public class AbstractHttpTest {
         for (HttpObject message : messages) {
             pipe.client().sendData(message).get();
         }
+        waitUntil(() -> !pipe.serverInbound().isEmpty() || !pipe.serverInboundErrors().isEmpty() || !pipe.clientOutboundErrors().isEmpty(), 200L);
         List<HttpObject> result = new ArrayList<>();
         for (Object item : drainQueue(pipe.serverInbound())) {
             result.add((HttpObject) item);
@@ -335,6 +337,7 @@ public class AbstractHttpTest {
         for (HttpObject message : messages) {
             pipe.server().sendData(message).get();
         }
+        waitUntil(() -> !pipe.clientInbound().isEmpty() || !pipe.clientInboundErrors().isEmpty() || !pipe.serverOutboundErrors().isEmpty(), 200L);
         List<HttpObject> result = new ArrayList<>();
         for (Object item : drainQueue(pipe.clientInbound())) {
             result.add((HttpObject) item);
@@ -404,12 +407,119 @@ public class AbstractHttpTest {
             if (outbound instanceof ByteBuf) {
                 channelOutbound.offer(((ByteBuf) outbound).retain());
             } else {
-                channelOutbound.offer(outbound);
+                channelOutbound.offer(snapshotOutbound(outbound));
             }
         });
         channel.subscribe(d -> d.isInbound() && !d.isSuccess(), SubscribeMode.SYNC, d -> channelInboundErrors.offer(d.getError()));
         channel.subscribe(d -> d.isOutbound() && !d.isSuccess(), SubscribeMode.SYNC, d -> channelOutboundErrors.offer(d.getError()));
         return new VirtualPipe(channel, channelInbound, channelOutbound, channelInboundErrors, channelOutboundErrors, channelEvents);
+    }
+
+    private Object snapshotOutbound(Object outbound) {
+        if (outbound instanceof WebSocketFrame) {
+            return snapshotWebSocketFrame((WebSocketFrame) outbound);
+        }
+        if (outbound instanceof FullHttpResponse) {
+            return snapshotFullHttpResponse((FullHttpResponse) outbound);
+        }
+        if (outbound instanceof FullHttpRequest) {
+            return snapshotFullHttpRequest((FullHttpRequest) outbound);
+        }
+        if (outbound instanceof HttpResponse) {
+            return snapshotHttpResponse((HttpResponse) outbound);
+        }
+        if (outbound instanceof HttpRequest) {
+            return snapshotHttpRequest((HttpRequest) outbound);
+        }
+        if (outbound instanceof LastHttpHeaders) {
+            return snapshotLastHttpHeaders((LastHttpHeaders) outbound);
+        }
+        if (outbound instanceof HttpHeaders) {
+            return snapshotHttpHeaders((HttpHeaders) outbound);
+        }
+        if (outbound instanceof LastHttpContent) {
+            return snapshotLastHttpContent((LastHttpContent) outbound);
+        }
+        if (outbound instanceof HttpContent) {
+            return snapshotHttpContent((HttpContent) outbound);
+        }
+        if (outbound instanceof HttpByteBuf) {
+            return snapshotHttpByteBuf((HttpByteBuf) outbound);
+        }
+        return outbound;
+    }
+
+    private DefaultHttpRequest snapshotHttpRequest(HttpRequest request) {
+        DefaultHttpRequest copy = new DefaultHttpRequest(request.protocolVersion(), request.method(), request.uri());
+        return inheritHttpObjectState(copy, request);
+    }
+
+    private DefaultHttpResponse snapshotHttpResponse(HttpResponse response) {
+        DefaultHttpResponse copy = new DefaultHttpResponse(response.protocolVersion(), response.status());
+        return inheritHttpObjectState(copy, response);
+    }
+
+    private DefaultHttpHeaders snapshotHttpHeaders(HttpHeaders headers) {
+        DefaultHttpHeaders copy = new DefaultHttpHeaders();
+        copy.appendHeaders(headers);
+        return inheritHttpObjectState(copy, headers);
+    }
+
+    private DefaultLastHttpHeaders snapshotLastHttpHeaders(LastHttpHeaders headers) {
+        DefaultLastHttpHeaders copy = new DefaultLastHttpHeaders(headers);
+        return inheritHttpObjectState(copy, headers);
+    }
+
+    private DefaultHttpContent snapshotHttpContent(HttpContent content) {
+        DefaultHttpContent copy = new DefaultHttpContent(retainContent(content.content()));
+        return inheritHttpObjectState(copy, content);
+    }
+
+    private DefaultLastHttpContent snapshotLastHttpContent(LastHttpContent content) {
+        DefaultLastHttpContent copy = new DefaultLastHttpContent(retainContent(content.content()));
+        return inheritHttpObjectState(copy, content);
+    }
+
+    private DefaultHttpByteBuf snapshotHttpByteBuf(HttpByteBuf content) {
+        DefaultHttpByteBuf copy = new DefaultHttpByteBuf(retainContent(content.content()));
+        return inheritHttpObjectState(copy, content);
+    }
+
+    private WebSocketFrame snapshotWebSocketFrame(WebSocketFrame frame) {
+        ByteBuf content = frame.content();
+        byte[] maskKey = frame.maskingKey();
+        byte[] maskCopy = null;
+        if (maskKey != null && maskKey.length > 0) {
+            maskCopy = new byte[maskKey.length];
+            System.arraycopy(maskKey, 0, maskCopy, 0, maskKey.length);
+        }
+
+        WebSocketFrame copy = WebSocketFrame.create(frame.opcode(), frame.isFinalFragment(), frame.isRsv1(), frame.isRsv2(), frame.isRsv3(), frame.isMasked(), maskCopy, retainContent(content), frame.payloadLength());
+        return inheritHttpObjectState(copy, frame);
+    }
+
+    private DefaultFullHttpRequest snapshotFullHttpRequest(FullHttpRequest request) {
+        DefaultFullHttpRequest copy = new DefaultFullHttpRequest(request.protocolVersion(), request.method(), request.uri(), retainContent(request.content()), new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
+        copy.appendHeaders(request);
+        return inheritHttpObjectState(copy, request);
+    }
+
+    private DefaultFullHttpResponse snapshotFullHttpResponse(FullHttpResponse response) {
+        DefaultFullHttpResponse copy = new DefaultFullHttpResponse(response.protocolVersion(), response.status(), retainContent(response.content()), new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
+        copy.appendHeaders(response);
+        return inheritHttpObjectState(copy, response);
+    }
+
+    private ByteBuf retainContent(ByteBuf content) {
+        return content == null ? ByteBuf.EMPTY : content.retain();
+    }
+
+    private <T extends HttpObject> T inheritHttpObjectState(T target, HttpObject source) {
+        target.streamId(source.streamId());
+        if (source.isBad()) {
+            target.markBad(source.badReason());
+        }
+        return target;
     }
 
     //

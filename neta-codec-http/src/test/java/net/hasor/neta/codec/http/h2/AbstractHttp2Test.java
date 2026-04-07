@@ -213,7 +213,11 @@ public class AbstractHttp2Test extends AbstractHttpTest {
 
     //
 
-    protected VirtualPipe openHttpServer(NetManager neta, ProtoHandler<HttpObject, Object> handler, ProtoPartitionControl[] ref) throws Throwable {
+    protected VirtualPipe openHttp2VirtualPipe(NetManager neta, ProtoHandler<HttpObject, Object> handler) throws Throwable {
+        return this.openHttp2VirtualPipe(neta, handler, new ProtoPartitionControl[1]);
+    }
+
+    protected VirtualPipe openHttp2VirtualPipe(NetManager neta, ProtoHandler<HttpObject, Object> handler, ProtoPartitionControl[] ref) throws Throwable {
         int MAX_CONTENT_LENGTH = 1048576;
         return openVirtualPipe(neta, clientCtx -> {
             ProtoHelper.standard()//

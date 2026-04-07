@@ -279,6 +279,11 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
 
     private void handleMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
         boolean startMessage = this.isStartMessage(msg);
+        if (startMessage && msg instanceof LastHttpHeaders && msg instanceof LastHttpContent) {
+            dst.offerMessage(msg);
+            return;
+        }
+
         if (startMessage) {
             if (this.phase != AggregatePhase.IDLE) {
                 throw new HttpProtocolStateException("received " + msg.getClass().getSimpleName() + " before previous aggregated message completed");
@@ -294,6 +299,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
                     msg.release();
                 }
             }
+            return;
         }
 
         if (msg instanceof LastHttpContent) {
@@ -433,10 +439,6 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         HttpObject fullMessage = this.buildAggregatedMessage(this.currentMessage, aggregated, headers);
         dst.offerMessage(fullMessage);
         this.logAggregated(context, this.currentMessage, this.currentContentLength);
-
-        if (this.aggregatedContent != null) {
-            this.aggregatedContent.free();
-        }
 
         this.releaseAggregationState(true);
         this.phase = AggregatePhase.IDLE;
