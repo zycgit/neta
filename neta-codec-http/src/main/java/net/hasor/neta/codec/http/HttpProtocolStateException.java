@@ -16,14 +16,24 @@
 package net.hasor.neta.codec.http;
 
 /**
- * Thrown when an HTTP codec observes an invalid protocol state transition,
- * sequencing violation, or mode/state mismatch.
+ * Thrown when the HTTP codec observes an illegal protocol state transition, timing violation, or a mode/state mismatch.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  */
 public class HttpProtocolStateException extends HttpProtocolException {
+    /**
+     * Create a protocol state exception.
+     * @param message exception description
+     */
     public HttpProtocolStateException(String message) {
         super(message);
     }
 
+    /**
+     * Create a protocol state exception bound to the specified stream.
+     * @param streamId stream identifier
+     * @param message exception description
+     */
     public HttpProtocolStateException(int streamId, String message) {
         super(message);
         this.setStreamId(streamId);

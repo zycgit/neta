@@ -21,19 +21,32 @@ import net.hasor.neta.codec.http.HttpHeaders;
 import net.hasor.neta.codec.http.cookie.Cookie;
 
 /**
- * Configuration for client-side automatic opening handshake.
+ * Configuration object for automatically initiating a client-side handshake.
  * <p>
- * Supplies request path, extra headers, and cookies for the handshake sent on channel activation.
+ * Provides the request path, additional headers, and cookies needed to send the
+ * handshake request automatically after channel activation.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-24
  */
 public class WebSocketAutoHandshakeConfig {
     private final String             requestPath;
     private final DefaultHttpHeaders headers;
     private final Cookie[]           cookies;
 
+    /**
+     * Create the auto-handshake configuration with the specified request path.
+     * @param requestPath handshake request path
+     */
     public WebSocketAutoHandshakeConfig(String requestPath) {
         this(requestPath, null);
     }
 
+    /**
+     * Create the auto-handshake configuration with the specified arguments.
+     * @param requestPath handshake request path
+     * @param headers additional request headers
+     * @param cookies additional cookies
+     */
     public WebSocketAutoHandshakeConfig(String requestPath, HttpHeaders headers, Cookie... cookies) {
         if (StringUtils.isBlank(requestPath)) {
             throw new IllegalArgumentException("requestPath must not be blank");
@@ -46,14 +59,23 @@ public class WebSocketAutoHandshakeConfig {
         this.cookies = cookies == null ? new Cookie[0] : Arrays.copyOf(cookies, cookies.length);
     }
 
+    /**
+     * Return the handshake request path.
+     */
     public String requestPath() {
         return this.requestPath;
     }
 
+    /**
+     * Return a copy of the additional request headers.
+     */
     public HttpHeaders headers() {
         return new DefaultHttpHeaders().appendHeaders(this.headers);
     }
 
+    /**
+     * Return a copy of the additional cookie array.
+     */
     public Cookie[] cookies() {
         return Arrays.copyOf(this.cookies, this.cookies.length);
     }

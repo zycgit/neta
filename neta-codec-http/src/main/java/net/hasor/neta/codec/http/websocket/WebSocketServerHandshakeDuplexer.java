@@ -31,28 +31,13 @@ import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSelector;
 
 /**
- * Server-side WebSocket opening-handshake duplexer.
+ * Server opening-handshake duplexer for WebSocket upgrades.
  * <p>
- * Function:
- * <pre>
- *   collect client upgrade request
- *   authorize or reject the handshake
- *   emit HTTP 101 response and publish WebSocketContext
- * </pre>
- * <p>
- * pipeline view:
- * <pre>
- *   inbound:  HttpObject request parts -> WebSocketServerHandshakeDuplexer -> upgraded flow
- *   outbound: handshake response        -> WebSocketServerHandshakeDuplexer -> HttpObject
- * </pre>
- * <p>
- * Typical usage:
- * <pre>
- *   ctx.addLast("http", new HttpServerDuplexe());
- *   ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
- *   ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
- *   ctx.addLast("ws-message", new WebSocketMessageDuplexer());
- * </pre>
+ * It aggregates the inbound HTTP upgrade request, delegates the authorization
+ * decision, emits the HTTP switching-protocols response, and installs the
+ * negotiated {@link WebSocketContext} when the handshake succeeds.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake {
     private static final Logger                       logger = LoggerFactory.getLogger(WebSocketServerHandshakeDuplexer.class);
@@ -81,30 +66,52 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         private       WebSocketHandshakeRequest handshakeRequest;
     }
 
+    /**
+     * Create a server handshake duplexer for the given websocket version.
+     * @param codecVersion websocket version to negotiate
+     */
     public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion) {
         this(WebSocketSettings.of(codecVersion));
     }
 
+    /**
+     * Create a server handshake duplexer with an explicit authorization hook.
+     * @param codecVersion websocket version to negotiate
+     * @param authorizer callback that accepts or rejects the request
+     */
     public WebSocketServerHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketHandshakeAuthorizer authorizer) {
         this(WebSocketSettings.builder(codecVersion).handshakeAuthorizer(authorizer).build());
     }
 
+    /**
+     * Create a server handshake duplexer from the full websocket settings.
+     * @param settings websocket handshake settings
+     */
     public WebSocketServerHandshakeDuplexer(WebSocketSettings settings) {
         super(Objects.requireNonNull(settings, "settings is null").version());
         this.settings = settings;
         this.authorizer = Objects.requireNonNull(settings.handshakeAuthorizer(), "handshakeAuthorizer is null");
     }
 
+    /**
+     * Initialize the per-channel server handshake state container.
+     */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         state(context);
     }
 
+    /**
+     * Reset the entire server-side handshake session state.
+     */
     @Override
     protected void resetState(ProtoContext context) {
         resetHandshakeSession(state(context));
     }
 
+    /**
+     * Route inbound and outbound HTTP objects through the server handshake flow.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,           //
             ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, //
@@ -116,6 +123,9 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
+    /**
+     * Convert handshake failures into HTTP rejection responses when possible.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         ServerHandshakeState state = state(context);
@@ -551,11 +561,13 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         }
 
         validateNegotiatedHeaders(state, headers);
+        DefaultLastHttpHeaders negotiatedHeaders = new DefaultLastHttpHeaders(headers);
+        negotiatedHeaders.streamId(state.streamId);
 
         context.sendData(responseLine);
         context.sendData(headers);
         context.sendData(lastContent);
-        return headers;
+        return negotiatedHeaders;
     }
 
     private void validateNegotiatedHeaders(ServerHandshakeState state, HttpHeaders headers) {
@@ -619,7 +631,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             body.markWriter();
         }
 
-        DefaultHttpResponse responseLine = new DefaultHttpResponse(responseVersion(state).text(), String.valueOf(code), reasonPhrase);
+        DefaultHttpResponse responseLine = new DefaultHttpResponse(responseVersion(state), HttpStatus.valueOf(code, reasonPhrase == null ? "" : reasonPhrase));
         DefaultLastHttpHeaders responseHeaders = new DefaultLastHttpHeaders(headers);
         responseLine.streamId(state.streamId);
         responseHeaders.streamId(state.streamId);

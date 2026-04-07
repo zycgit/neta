@@ -23,57 +23,80 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 /**
  * Default implementation of {@link FullHttpRequest}.
  * <p>
- * This object represents an already aggregated request by combining the request line, the final
- * header block, and the final content block into one instance.
+ * This object represents a fully aggregated request and combines the request line,
+ * header view, and aggregated content in a single instance.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
-public class DefaultFullHttpRequest implements FullHttpRequest {
+public class DefaultFullHttpRequest extends AbstractHttpObject<FullHttpRequest> implements FullHttpRequest {
     private final HttpRequest      requestLine;
     private final HttpHeaders      headers;
     private final CompositeByteBuf contentBuffer;
-    private       boolean          bad;
-    private       String           badReason;
 
     /**
-     * Creates an aggregated request with an empty payload and an empty final header block.
-     * @param version the HTTP version
-     * @param method the HTTP method
-     * @param uri the request target
+     * Create an aggregated request with empty content and empty headers.
+     * @param version HTTP version
+     * @param method HTTP method
+     * @param uri request target
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri) {
         this(version, method, uri, ByteBuf.EMPTY, new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
     }
 
     /**
-     * Creates an aggregated request with the specified payload and an empty final header block.
-     * @param version the HTTP version
-     * @param method the HTTP method
-     * @param uri the request target
-     * @param content the aggregated payload
+     * Create an aggregated request with the specified content and empty headers.
+     * @param version HTTP version
+     * @param method HTTP method
+     * @param uri request target
+     * @param content aggregated payload
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content) {
         this(version, method, uri, content, new DefaultHttpHeaders(), new DefaultLastHttpHeaders());
     }
 
     /**
-     * Creates an aggregated request with the specified payload and final header block.
-     * @param version the HTTP version
-     * @param method the HTTP method
-     * @param uri the request target
-     * @param content the aggregated payload
-     * @param headers the final header block
+     * Create an aggregated request with the specified content and headers.
+     * @param version HTTP version
+     * @param method HTTP method
+     * @param uri request target
+     * @param content aggregated payload
+     * @param headers final header block
      */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content, DefaultHttpHeaders headers) {
         this(version, method, uri, content, headers, new DefaultLastHttpHeaders());
     }
 
+    /**
+     * Create an aggregated request with the specified content, headers, and trailing headers.
+     * @param version HTTP version
+     * @param method HTTP method
+     * @param uri request target
+     * @param content aggregated payload
+     * @param headers request header view
+     * @param trailerHeaders trailing header view
+     */
     public DefaultFullHttpRequest(HttpVersion version, HttpMethod method, String uri, ByteBuf content, DefaultHttpHeaders headers, DefaultHttpHeaders trailerHeaders) {
         this(new DefaultHttpRequest(version, method, uri), headers, new DefaultHttpContent(content), trailerHeaders);
     }
 
+    /**
+     * Create an aggregated request from a request line, headers, and content object.
+     * @param requestLine request line object
+     * @param headers request header view
+     * @param content aggregated content object
+     */
     public DefaultFullHttpRequest(DefaultHttpRequest requestLine, DefaultHttpHeaders headers, DefaultHttpContent content) {
         this(requestLine, headers, content, new DefaultLastHttpHeaders());
     }
 
+    /**
+     * Create an aggregated request from a request line, headers, content object,
+     * and trailing headers.
+     * @param requestLine request line object
+     * @param headers request header view
+     * @param content aggregated content object
+     * @param trailerHeaders trailing header view
+     */
     public DefaultFullHttpRequest(DefaultHttpRequest requestLine, DefaultHttpHeaders headers, DefaultHttpContent content, DefaultHttpHeaders trailerHeaders) {
         if (requestLine == null) {
             throw new IllegalArgumentException("requestLine must not be null");
@@ -89,38 +112,19 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
         this.headers = headers;
         this.contentBuffer = ByteBufUtils.compositeBuffer();
         this.contentBuffer.addComponent(content.content());
-        if (requestLine.isBad()) {
-            this.bad = true;
-            this.badReason = requestLine.badReason();
-        }
+        this.inheritHttpObjectState(requestLine);
     }
 
     @Override
-    public int streamId() {
-        return this.requestLine.streamId();
-    }
-
-    @Override
-    public FullHttpRequest streamId(int streamId) {
-        this.requestLine.streamId(streamId);
-        this.headers.streamId(streamId);
+    protected FullHttpRequest self() {
         return this;
     }
 
     @Override
-    public boolean isBad() {
-        return this.bad;
-    }
-
-    @Override
-    public String badReason() {
-        return this.badReason;
-    }
-
-    @Override
-    public FullHttpRequest markBad(String reason) {
-        this.bad = true;
-        this.badReason = reason;
+    public FullHttpRequest streamId(int streamId) {
+        super.streamId(streamId);
+        this.requestLine.streamId(streamId);
+        this.headers.streamId(streamId);
         return this;
     }
 
@@ -131,7 +135,11 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
         return this.requestLine.protocolVersion();
     }
 
-    /** Sets the protocol version carried by this aggregated request. */
+    /**
+     * Set the protocol version on the aggregated request.
+     * @param version protocol version
+     * @return current request instance
+     */
     @Override
     public FullHttpRequest protocolVersion(HttpVersion version) {
         this.requestLine.protocolVersion(version);
@@ -147,7 +155,11 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
         return this.requestLine.method();
     }
 
-    /** Sets the request method carried by this aggregated request. */
+    /**
+     * Set the request method on the aggregated request.
+     * @param method request method
+     * @return current request instance
+     */
     @Override
     public FullHttpRequest method(HttpMethod method) {
         this.requestLine.method(method);
@@ -163,7 +175,11 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
         return this.requestLine.uri();
     }
 
-    /** Sets the request target carried by this request line. */
+    /**
+     * Set the request target on the aggregated request.
+     * @param uri request target
+     * @return current request instance
+     */
     @Override
     public FullHttpRequest uri(String uri) {
         this.requestLine.uri(uri);
@@ -245,10 +261,12 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     }
 
     /**
-     * Appends one body chunk into the aggregated content.
+     * Append a content chunk to the aggregated payload.
      * <p>
-     * The chunk data is added to the internal aggregated content buffer. Callers may release the
-     * original {@link HttpContent} after this method returns.
+     * The chunk data is added directly to the internal composite buffer while
+     * reusing the original payload buffer. After appending, the caller transfers
+     * responsibility for releasing that chunk payload to this object.
+     * @param content content chunk to append
      */
     public void appendContent(HttpContent content) {
         if (content == null) {
@@ -264,15 +282,17 @@ public class DefaultFullHttpRequest implements FullHttpRequest {
     public String toString() {
         ByteBuf currentContent = this.content();
         int readableBytes = currentContent != null ? currentContent.readableBytes() : 0;
-        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", headers: " + headerSize() + ", content: " + readableBytes + " bytes, bad: " + this.bad + ")";
+        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", headers: " + headerSize() + ", content: " + readableBytes + " bytes, bad: " + this.isBad() + ")";
     }
 
+    /**
+     * Release all state and buffers held by this aggregated request.
+     */
     @Override
     public void release() {
         this.requestLine.release();
         this.headers.release();
         this.contentBuffer.release();
-        this.bad = false;
-        this.badReason = null;
+        this.resetHttpObjectState();
     }
 }

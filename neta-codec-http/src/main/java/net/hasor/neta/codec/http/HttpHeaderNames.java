@@ -15,10 +15,12 @@
  */
 package net.hasor.neta.codec.http;
 /**
- * Standard HTTP header names.
+ * Standard HTTP header name constants.
  * <p>
- * These are all defined as lowercase to support HTTP/2 requirements while also not
- * violating HTTP/1.x requirements.  New header names should always be lowercase.
+ * All names are defined in lowercase so they satisfy HTTP/2 requirements without
+ * violating HTTP/1.x constraints. New header names should also always use lowercase.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public abstract class HttpHeaderNames {
     // ------------------------------------------------------------------------
@@ -86,7 +88,7 @@ public abstract class HttpHeaderNames {
     public static final String IF_RANGE                  = "if-range";
     /** {@code "if-unmodified-since"} */
     public static final String IF_UNMODIFIED_SINCE       = "if-unmodified-since";
-    /** @deprecated use {@link #CONNECTION} {@code "keep-alive"} */
+    /** @deprecated Use the {@code "keep-alive"} value with {@link #CONNECTION}. */
     @Deprecated
     public static final String KEEP_ALIVE                = "keep-alive";
     /** {@code "last-modified"} */
@@ -101,7 +103,7 @@ public abstract class HttpHeaderNames {
     public static final String PROXY_AUTHENTICATE        = "proxy-authenticate";
     /** {@code "proxy-authorization"} */
     public static final String PROXY_AUTHORIZATION       = "proxy-authorization";
-    /** @deprecated use {@link #CONNECTION} {@code "proxy-connection"} */
+    /** @deprecated Use the {@code "proxy-connection"} value with {@link #CONNECTION}. */
     @Deprecated
     public static final String PROXY_CONNECTION          = "proxy-connection";
     /** {@code "range"} */
@@ -180,7 +182,7 @@ public abstract class HttpHeaderNames {
     public static final String UPGRADE_INSECURE_REQUESTS              = "upgrade-insecure-requests";
     /** {@code "x-forwarded-for"} */
     public static final String X_FORWARDED_FOR                        = "x-forwarded-for";
-    /** {@code "x-forwarded-proto"} — carries the original URI scheme (http/https) when proxied or decoded from HTTP/2 and HTTP/3 {@code :scheme} pseudo-header. */
+    /** {@code "x-forwarded-proto"}, used to carry the original URI scheme (http/https) in proxy scenarios or when decoding the {@code :scheme} pseudo-header from HTTP/2 or HTTP/3. */
     public static final String X_FORWARDED_PROTO                      = "x-forwarded-proto";
     /** {@code "x-frame-options"} */
     public static final String X_FRAME_OPTIONS                        = "x-frame-options";

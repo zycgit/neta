@@ -16,14 +16,15 @@
 package net.hasor.neta.codec.http.h2;
 
 /**
- * HPACK dynamic table as defined in RFC 7541, Section 2.3.2.
+ * HPACK dynamic table as defined by RFC 7541 Section 2.3.2.
  * <p>
- * The dynamic table is a FIFO table with bounded size. New entries are
- * added at the beginning (lowest index), and oldest entries are evicted
- * from the end when the table exceeds its maximum size.
+ * The dynamic table is a capacity-bounded FIFO table. New entries are inserted at the front
+ * (lowest index), and the oldest entries are evicted from the tail when the capacity limit is
+ * exceeded.
  * <p>
- * Index calculation: dynamic table entries have indices starting at
- * {@code STATIC_TABLE_LENGTH + 1}.
+ * Dynamic table entries are indexed starting at {@code STATIC_TABLE_LENGTH + 1}.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 class HpackDynamicTable {
     private HpackHeaderField[] table;
@@ -34,8 +35,8 @@ class HpackDynamicTable {
     private int                maxSize;
 
     /**
-     * Creates a new dynamic table with the specified maximum size in bytes.
-     * @param maxSize maximum table size in bytes (as per SETTINGS_HEADER_TABLE_SIZE)
+     * Creates a new dynamic table with the specified maximum byte capacity.
+     * @param maxSize the maximum table capacity, with the same semantics as SETTINGS_HEADER_TABLE_SIZE
      */
     public HpackDynamicTable(int maxSize) {
         this.maxSize = maxSize;
@@ -46,24 +47,30 @@ class HpackDynamicTable {
         this.count = 0;
     }
 
-    /** Returns the number of entries in the dynamic table. */
+    /**
+     * Returns the number of entries currently stored in the dynamic table.
+     */
     public int length() {
         return count;
     }
 
-    /** Returns the current size of the dynamic table in bytes. */
+    /**
+     * Returns the current byte size used by the dynamic table.
+     */
     public int size() {
         return size;
     }
 
-    /** Returns the maximum allowed size of the dynamic table in bytes. */
+    /**
+     * Returns the maximum number of bytes allowed for the dynamic table.
+     */
     public int maxSize() {
         return maxSize;
     }
 
     /**
-     * Returns the entry at the given 0-based index (0 = most recently added).
-     * @param index 0-based index into the dynamic table
+     * Returns the entry at the specified zero-based index, where 0 refers to the most recently inserted entry.
+     * @param index the zero-based index within the dynamic table
      * @return the header field entry
      */
     public HpackHeaderField get(int index) {
@@ -75,30 +82,30 @@ class HpackDynamicTable {
     }
 
     /**
-     * Adds a new entry to the beginning of the dynamic table.
-     * Evicts oldest entries as needed to stay within size limits.
+     * Adds a new entry to the head of the dynamic table.
+     * Older entries are evicted first if needed to satisfy the capacity limit.
      * @param entry the header field to add
      */
     public void add(HpackHeaderField entry) {
         int entrySize = entry.size();
 
-        // If the entry is larger than the max table size, clear the table (RFC 7541, Section 4.4)
+        // If a single entry exceeds the table capacity, RFC 7541 Section 4.4 requires the table to be cleared.
         if (entrySize > maxSize) {
             clear();
             return;
         }
 
-        // Evict entries until there is enough room
+        // Keep evicting old entries until enough space is available.
         while (size + entrySize > maxSize) {
             evict();
         }
 
-        // Grow array if needed
+        // Grow the backing array if necessary.
         if (count == table.length) {
             grow();
         }
 
-        // Add at head
+        // Insert the new entry at the head.
         table[head] = entry;
         head = (head + 1) % table.length;
         count++;
@@ -106,9 +113,9 @@ class HpackDynamicTable {
     }
 
     /**
-     * Sets the maximum size of the dynamic table.
-     * Evicts entries as needed to comply with the new limit.
-     * @param newMaxSize the new maximum size in bytes
+     * Sets the maximum capacity of the dynamic table.
+     * Older entries are evicted if necessary to satisfy the new limit.
+     * @param newMaxSize the new maximum byte capacity
      */
     public void setMaxSize(int newMaxSize) {
         if (newMaxSize < 0) {
@@ -120,7 +127,9 @@ class HpackDynamicTable {
         }
     }
 
-    /** Clears all entries from the dynamic table. */
+    /**
+     * Removes all entries from the dynamic table.
+     */
     public void clear() {
         for (int i = 0; i < table.length; i++) {
             table[i] = null;
@@ -131,7 +140,9 @@ class HpackDynamicTable {
         size = 0;
     }
 
-    /** Evicts the oldest entry from the dynamic table. */
+    /**
+     * Evicts the oldest entry from the table.
+     */
     private void evict() {
         if (count == 0) {
             return;
@@ -143,10 +154,12 @@ class HpackDynamicTable {
         size -= evicted.size();
     }
 
-    /** Doubles the internal array capacity. */
+    /**
+     * Expands the internal array capacity to twice its current size.
+     */
     private void grow() {
         HpackHeaderField[] newTable = new HpackHeaderField[table.length * 2];
-        // Copy entries in order: oldest (tail) to newest (head-1)
+        // Copy entries in order, from the oldest entry (tail) to the newest entry (head - 1).
         for (int i = 0; i < count; i++) {
             int idx = (tail + i) % table.length;
             newTable[i] = table[idx];

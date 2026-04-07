@@ -17,10 +17,12 @@ package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Internal control-message wrapper for pipeline re-entry.
+ * Internal control-message wrapper that re-enters the normal message pipeline.
  * <p>
- * Used by protocol handlers when ping, pong, or close semantics need to be sent through the
- * normal outbound message pipeline.
+ * This type is used when protocol handlers need to send ping, pong, or close
+ * semantics through the ordinary outbound message path.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 final class InternalWebSocketMessage extends AbstractWebSocketMessage {
     private WebSocketOpcode opcode;
@@ -28,6 +30,12 @@ final class InternalWebSocketMessage extends AbstractWebSocketMessage {
     private InternalWebSocketMessage() {
     }
 
+    /**
+     * Create an internal control message for a supported control opcode.
+     * @param opcode control opcode, must be PING, PONG, or CLOSE
+     * @param content optional payload content; {@code null} is normalized to an empty buffer
+     * @return internal message instance
+     */
     static InternalWebSocketMessage of(WebSocketOpcode opcode, ByteBuf content) {
         if (opcode != WebSocketOpcode.PING && opcode != WebSocketOpcode.PONG && opcode != WebSocketOpcode.CLOSE) {
             throw new IllegalArgumentException("unsupported control opcode: " + opcode);
@@ -39,11 +47,17 @@ final class InternalWebSocketMessage extends AbstractWebSocketMessage {
         return message;
     }
 
+    /**
+     * Return the wrapped control opcode.
+     */
     @Override
     public WebSocketOpcode type() {
         return this.opcode;
     }
 
+    /**
+     * Clear opcode state when the object is recycled.
+     */
     @Override
     protected void recycle() {
         this.opcode = null;

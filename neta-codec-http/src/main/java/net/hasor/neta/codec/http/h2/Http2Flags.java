@@ -15,60 +15,80 @@
  */
 package net.hasor.neta.codec.http.h2;
 /**
- * HTTP/2 frame flag constants as defined in RFC 9113.
+ * HTTP/2 frame flag constants defined by RFC 9113.
  * <p>
- * Flags are specific to individual frame types and occupy 8 bits.
+ * Flags are frame-type specific and are always 8 bits wide.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 final class Http2Flags {
-    /** No flags set. */
+    /** No flags are set. */
     public static final int NONE        = 0x00;
-    /** ACK flag (0x01) - used with SETTINGS and PING frames. */
+    /** ACK flag (0x01), used by SETTINGS and PING frames. */
     public static final int ACK         = 0x01;
-    /** END_STREAM flag (0x01) - indicates the last frame for a stream. */
+    /** END_STREAM flag (0x01), indicating the last frame for a stream direction. */
     public static final int END_STREAM  = 0x01;
-    /** END_HEADERS flag (0x04) - indicates the end of a header block. */
+    /** END_HEADERS flag (0x04), indicating the end of a header block. */
     public static final int END_HEADERS = 0x04;
-    /** PADDED flag (0x08) - indicates the frame is padded. */
+    /** PADDED flag (0x08), indicating that the frame carries padding. */
     public static final int PADDED      = 0x08;
-    /** PRIORITY flag (0x20) - indicates that the priority fields are present. */
+    /** PRIORITY flag (0x20), indicating that priority fields are present. */
     public static final int PRIORITY    = 0x20;
 
     private Http2Flags() {
     }
 
-    /** Returns true if the specified flag is set in flags. */
+    /**
+     * Checks whether the specified flag is set in the given flag set.
+     * @param flags the flag set to inspect
+     * @param flag the target flag
+     * @return {@code true} if the flag is present
+     */
     public static boolean hasFlag(int flags, int flag) {
         return (flags & flag) != 0;
     }
 
-    /** Returns true if END_STREAM is set. */
+    /**
+     * Returns whether END_STREAM is set.
+     */
     public static boolean endStream(int flags) {
         return hasFlag(flags, END_STREAM);
     }
 
-    /** Returns true if END_HEADERS is set. */
+    /**
+     * Returns whether END_HEADERS is set.
+     */
     public static boolean endHeaders(int flags) {
         return hasFlag(flags, END_HEADERS);
     }
 
-    /** Returns true if PADDED is set. */
+    /**
+     * Returns whether PADDED is set.
+     */
     public static boolean padded(int flags) {
         return hasFlag(flags, PADDED);
     }
 
-    /** Returns true if PRIORITY is set. */
+    /**
+     * Returns whether PRIORITY is set.
+     */
     public static boolean priority(int flags) {
         return hasFlag(flags, PRIORITY);
     }
 
-    /** Returns true if ACK is set. */
+    /**
+     * Returns whether ACK is set.
+     */
     public static boolean ack(int flags) {
         return hasFlag(flags, ACK);
     }
 
     /**
      * Returns a human-readable description of the flags for the given frame type.
-     * Example: {@code "END_STREAM|END_HEADERS"} for HEADERS frame with 0x05.
+     * For example, a HEADERS frame with flags {@code 0x05} yields {@code "END_STREAM|END_HEADERS"}.
+     * @param frameType the frame type
+     * @param flags the flag set
+     * @return the readable description
      */
     public static String describe(int frameType, int flags) {
         if (flags == 0) {
@@ -92,7 +112,7 @@ final class Http2Flags {
         if (hasFlag(flags, PRIORITY)) {
             sb.append("PRIORITY|");
         }
-        // report any unknown bits
+        // Report any unknown bits.
         int known = 0x01 | END_HEADERS | PADDED | PRIORITY;
         int unknown = flags & ~known;
         if (unknown != 0) {

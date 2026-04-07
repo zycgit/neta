@@ -18,7 +18,9 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Partition selector that maps HTTP/2 traffic to child pipelines by {@code streamId}.
+ * Partition selector that maps HTTP/2 traffic to child pipelines according to {@code streamId}.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-04-03
  */
 public class Http2ObjectPartitionSelector implements ProtoPartitionSelector {
     @Override
@@ -44,7 +46,7 @@ public class Http2ObjectPartitionSelector implements ProtoPartitionSelector {
 
         Object eventData = ((SoEvent) data).getData();
         if (eventData instanceof AbstractHttp2Event) {
-            return PartitionKey.defaultKey(); // only HTTP/2 event
+            return PartitionKey.defaultKey(); // HTTP/2 event only.
         }
 
         return null;

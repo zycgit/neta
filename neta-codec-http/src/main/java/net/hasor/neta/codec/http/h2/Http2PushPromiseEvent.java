@@ -17,25 +17,66 @@ package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
- * HTTP/2 PUSH_PROMISE frame event.
+ * Event corresponding to an HTTP/2 PUSH_PROMISE frame.
  * <p>
- * The event is published by the message layer after the promised request header block
- * has been fully reassembled and HPACK-decoded.
+ * This event is published after the message layer fully reassembles the promised request header
+ * block and completes HPACK decoding.
+ * </p>
+ * <p>
+ * Sequence diagram:
+ * <pre>
+ * Server side proactively initiates server push
+ *   Application Handler   ProtoContext         Http2ObjectEncoder       Remote peer
+ *          |                  |                      |                      |
+ *          | fireEvent(...)   |                      |                      |
+ *          |----------------->|                      |                      |
+ *          |                  | onEvent(PUSH_PROMISE)|                      |
+ *          |                  |--------------------->|                      |
+ *          |                  |                      | sendPushPromise()    |
+ *          |                  |                      |--------------------->|
+ *          |                  |                      | PUSH_PROMISE frames  |
+ * </pre><pre>
+ * Remote endpoint sends PUSH_PROMISE
+ *   Remote peer           Http2ObjectDecoder        ProtoContext        Application Handler
+ *      |                        |                      |                      |
+ *      | PUSH_PROMISE /         |                      |                      |
+ *      | CONTINUATION           |                      |                      |
+ *      |----------------------->|                      |                      |
+ *      |                        | decodeHeaders()      |                      |
+ *      |                        | fireEvent(remote)    |                      |
+ *      |                        |--------------------->|                      |
+ *      |                        |                      | Http2PushPromiseEvent|
+ *      |                        |                      |--------------------->|
+ * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-25
  */
 public class Http2PushPromiseEvent extends AbstractHttp2Event {
     private final int         promisedStreamId;
     private final HttpHeaders headers;
 
+    /**
+     * Creates a PUSH_PROMISE event.
+     * @param streamId the current stream ID
+     * @param promisedStreamId the promised stream ID
+     * @param headers the decoded request headers
+     */
     public Http2PushPromiseEvent(int streamId, int promisedStreamId, HttpHeaders headers) {
         this.streamId(streamId);
         this.promisedStreamId = promisedStreamId;
         this.headers = headers;
     }
 
+    /**
+     * Returns the promised stream ID.
+     */
     public int promisedStreamId() {
         return this.promisedStreamId;
     }
 
+    /**
+     * Returns the decoded request headers.
+     */
     public HttpHeaders headers() {
         return this.headers;
     }

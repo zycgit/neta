@@ -24,16 +24,42 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
 /**
- * Reassembles HTTP/2 frames into downstream semantic {@link HttpObject} objects.
+ * Reassembles HTTP/2 frames into staged {@link HttpObject} instances and HTTP/2 events.
  * <p>
- * Decode path:
+ * This decoder implements the HTTP/2 message-layer state machine. It typically sits behind
+ * {@link Http2FrameDecoder} and is responsible for reassembling HEADERS, DATA, CONTINUATION, and
+ * related frames into a downstream-consumable {@link HttpObject} stream while translating control
+ * semantics such as PING, GOAWAY, RST_STREAM, PRIORITY, and PUSH_PROMISE into HTTP/2 events.
+ * <p>
+ * A single stream usually appears downstream as an ordered object flow:
  * <pre>
- *   ByteBuf -> Http2Frame -> HttpObject
+ *   [HttpRequest/HttpResponse] -> [HttpHeaders]* -> [LastHttpHeaders] -> [HttpContent]* -> [LastHttpContent]
  * </pre>
- * Only HEADERS and DATA continue as {@link HttpObject}. Control frames are
- * consumed internally or translated into HTTP/2 network events. This decoder also
- * enforces message-layer invariants from RFC 9113 such as header-block
- * reassembly and control-frame payload constraints.
+ * HEADERS establishes the start line and header block, while DATA produces content objects.
+ * Control frames are not forwarded directly as downstream messages; they are consumed by the
+ * protocol layer or converted into corresponding HTTP/2 events.
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLastDecoder("h2-frame", new Http2FrameDecoder(true));
+ *   ctx.addLastDecoder("h2-object", new Http2ObjectDecoder(true));
+ *   ctx.addLast("handler", httpHandler);
+ * </pre>
+ * <p>
+ * Pipeline view:
+ * <pre>
+ *   socket bytes
+ *      -> Http2FrameDecoder
+ *      -> Http2Frame
+ *      -> Http2ObjectDecoder
+ *      -> HttpObject + Http2 events
+ *      -> business handler
+ * </pre>
+ * <p>
+ * This layer also maintains stream lifecycle state, header-block reassembly, HPACK decoding,
+ * WINDOW_UPDATE feedback, and message-layer protocol error handling.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-25
  */
 class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
     private static final Logger        logger = Logger.getLogger(Http2ObjectDecoder.class);

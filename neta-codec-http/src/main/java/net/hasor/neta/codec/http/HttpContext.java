@@ -17,29 +17,25 @@ package net.hasor.neta.codec.http;
 import net.hasor.neta.channel.ProtoContext;
 
 /**
- * Per-connection mutable state for all HTTP/1.x handlers.
+ * Mutable per-connection state shared by all HTTP/1.x handlers.
  * <p>
- * Consolidates state used by {@link HttpRequestDecoder}, {@link HttpRequestEncoder},
+ * This context centralizes the state used by {@link HttpRequestDecoder}, {@link HttpRequestEncoder},
  * {@link HttpResponseDecoder}, {@link HttpResponseEncoder}, {@link HttpRequestAggregator},
- * {@link HttpResponseAggregator},
- * and {@link HttpServerDuplexe} into a single context object registered on
- * {@link ProtoContext} via {@code context.context(HttpContext.class, impl)}.
+ * {@link HttpResponseAggregator}, and {@link HttpServerDuplexe}, and is registered in {@link ProtoContext}
+ * through {@code context.context(HttpContext.class, impl)}.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2024-01-15
+ * @version : 2026-02-28
  */
 class HttpContext {
-    final RequestDecodeState        req     = new RequestDecodeState();
-    final ResponseDecodeState       resp    = new ResponseDecodeState();
-    final EncodeState<HttpRequest>  reqEnc  = new EncodeState<>();
-    final EncodeState<HttpResponse> respEnc = new EncodeState<>();
+    final RequestDecodeState  req     = new RequestDecodeState();
+    final ResponseDecodeState resp    = new ResponseDecodeState();
+    final EncodeState         reqEnc  = new EncodeState();
+    final EncodeState         respEnc = new EncodeState();
     boolean            transparentMode;
     InboundMessageType inboundErrorType;
 
-    /**
-     * Retrieves the existing {@link HttpContext} from the {@link ProtoContext},
-     * or creates and registers a new one if none exists.
-     */
-    static HttpContext getOrCreate(ProtoContext context) {
+    /** Returns the HttpContext for the current connection, creating one if necessary. */
+    public static HttpContext getOrCreate(ProtoContext context) {
         HttpContext existing = context.context(HttpContext.class);
         if (existing != null) {
             return existing;
@@ -49,11 +45,13 @@ class HttpContext {
         return impl;
     }
 
-    boolean isTransparentMode() {
+    /** Returns whether the current connection is in transparent pass-through mode. */
+    public boolean isTransparentMode() {
         return this.transparentMode;
     }
 
-    boolean switchTransparentMode(boolean enabled) {
+    /** Switches transparent pass-through mode and resets the HTTP state for the current connection. */
+    public boolean switchTransparentMode(boolean enabled) {
         boolean changed = this.transparentMode != enabled;
         this.transparentMode = enabled;
         this.req.releaseAndReset();
@@ -64,22 +62,24 @@ class HttpContext {
         return changed;
     }
 
-    void markInboundError(InboundMessageType messageType) {
+    /** Records the message type associated with the most recent inbound decode error on the current connection. */
+    public void markInboundError(InboundMessageType messageType) {
         this.inboundErrorType = messageType;
     }
 
-    InboundMessageType consumeInboundErrorType() {
+    /** Returns and clears the message type associated with the most recent inbound decode error. */
+    public InboundMessageType consumeInboundErrorType() {
         InboundMessageType messageType = this.inboundErrorType;
         this.inboundErrorType = null;
         return messageType;
     }
 
-    enum InboundMessageType {
+    public enum InboundMessageType {
         REQUEST,
         RESPONSE
     }
 
-    enum DecodePhase {
+    public enum DecodePhase {
         READ_INITIAL,
         READ_HEADER,
         DONE_HEADER,
@@ -92,7 +92,7 @@ class HttpContext {
         READ_END
     }
 
-    static class DecodeState<T extends HttpObject> {
+    public static class DecodeState<T extends HttpObject> {
         DecodePhase        decoderPhase          = DecodePhase.READ_INITIAL;
         T                  currentMessage;
         DefaultHttpHeaders currentHeaders;
@@ -125,7 +125,9 @@ class HttpContext {
             this.packetSequence = 0;
         }
 
-        /** Releases any in-flight resources before resetting state, for error/abort paths. */
+        /**
+         * Releases in-flight resources before resetting state on error or abort paths.
+         */
         void releaseAndReset() {
             if (this.currentMessage != null) {
                 this.currentMessage.release();
@@ -153,7 +155,7 @@ class HttpContext {
         }
     }
 
-    static class RequestDecodeState extends DecodeState<HttpRequest> {
+    public static class RequestDecodeState extends DecodeState<HttpRequest> {
         boolean reqRequestEmitted;
 
         @Override
@@ -163,7 +165,7 @@ class HttpContext {
         }
     }
 
-    static class ResponseDecodeState extends DecodeState<HttpResponse> {
+    public static class ResponseDecodeState extends DecodeState<HttpResponse> {
         boolean connectionClose;
 
         @Override
@@ -179,7 +181,7 @@ class HttpContext {
         }
     }
 
-    static class EncodeState<T extends HttpObject> {
+    public static class EncodeState {
         boolean chunkedEncoding = false;
         boolean trailerStarted  = false;
 

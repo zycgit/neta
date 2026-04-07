@@ -26,25 +26,13 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpEvent;
 
 /**
- * Converts inbound {@link WebSocketFrame} flow into message chunks and control events.
+ * Decode inbound websocket frames into message chunks and control events.
  * <p>
- * Function:
- * <pre>
- *   map TEXT/BINARY frames to WebSocketMessage chunks
- *   keep fragmentation as sequence-based chunk flow
- *   handle ping, pong, and close control semantics
- * </pre>
- * <p>
- * pipeline view:
- * <pre>
- *   WebSocketFrame -> WebSocketInboundHandler -> WebSocketMessage / WebSocket events
- * </pre>
- * <p>
- * Typical usage:
- * <pre>
- *   ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
- *   ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
- * </pre>
+ * Data frames are converted into {@link WebSocketMessage} chunks while preserving
+ * fragmentation semantics. Control frames are validated, emitted as events where
+ * appropriate, or answered automatically for ping and close handling.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, WebSocketMessage> {
     private static final Logger           logger         = Logger.getLogger(WebSocketInboundHandler.class);
@@ -59,14 +47,26 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     private              CharsetDecoder   textDecoder;
     private              byte[]           utf8CarryBytes = EMPTY_BYTES;
 
+    /**
+     * Create an inbound handler with fragment passthrough and no size limit.
+     */
     public WebSocketInboundHandler() {
         this(false, Integer.MAX_VALUE);
     }
 
+    /**
+     * Create an inbound handler and control whether fragmented messages are aggregated.
+     * @param aggregateFragments whether fragmented messages should be aggregated
+     */
     public WebSocketInboundHandler(boolean aggregateFragments) {
         this(aggregateFragments, Integer.MAX_VALUE);
     }
 
+    /**
+     * Create an inbound handler with fragment aggregation and message size limits.
+     * @param aggregateFragments whether fragmented messages should be aggregated
+     * @param maxMessagePayloadLength maximum allowed payload length per logical message
+     */
     public WebSocketInboundHandler(boolean aggregateFragments, int maxMessagePayloadLength) {
         if (maxMessagePayloadLength <= 0) {
             throw new IllegalArgumentException("maxMessagePayloadLength must be greater than 0.");
@@ -76,6 +76,9 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         this.maxMessagePayloadLength = maxMessagePayloadLength;
     }
 
+    /**
+     * Handle inbound-side events such as close, ping, and pong notifications.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event) throws Throwable {
         Object eventData = event.getData();
@@ -96,6 +99,9 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         return true;
     }
 
+    /**
+     * Decode inbound websocket frames into messages and emitted control events.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<WebSocketFrame> src, ProtoSndQueue<WebSocketMessage> dst) throws Throwable {
         while (src.hasMore()) {
@@ -118,6 +124,9 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         return ProtoStatus.Next;
     }
 
+    /**
+     * Reset decoder state after an inbound failure and swallow protocol violations.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         resetState();
@@ -328,7 +337,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
         try {
-            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(event.streamIdAsInt());
+            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(Math.toIntExact(event.streamId()));
             context.sendData(controlMessage);
         } finally {
             event.release();
@@ -489,6 +498,9 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         return null;
     }
 
+    /**
+     * Clear frame-aggregation state and close markers when the channel closes.
+     */
     @Override
     public void onClose(ProtoContext context) {
         resetState();

@@ -18,10 +18,10 @@ import java.util.*;
 import net.hasor.cobble.StringUtils;
 
 /**
- * Immutable configuration for the CORS handler.
- * <p>Use {@link CorsConfig.Builder} to create instances:
+ * Immutable configuration object for the CORS handler.
+ * <p>Instances can be created through {@link CorsConfig.Builder}:
  * <pre>
- *   // Allow any origin (wildcard) with common defaults
+ *   // Use common defaults and allow any origin (wildcard)
  *   CorsConfig cors = CorsConfig.builder().allowAnyOrigin().build();
  *   // Fine-grained configuration
  *   CorsConfig cors = CorsConfig.builder()
@@ -33,6 +33,8 @@ import net.hasor.cobble.StringUtils;
  *       .maxAge(3600)
  *       .build();
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class CorsConfig {
     private final Set<String> allowedOrigins;  // null means wildcard (*)
@@ -64,27 +66,28 @@ public final class CorsConfig {
     // Accessors
     // -------------------------------------------------------------------------
 
-    /** Whether CORS processing is enabled. */
+    /** Returns whether CORS handling is enabled. */
     public boolean isEnabled() {
         return enabled;
     }
 
-    /** Whether the wildcard origin {@code "*"} is set (all origins allowed). */
+    /** Returns whether the wildcard origin {@code "*"} is enabled. */
     public boolean isAnyOrigin() {
         return anyOrigin;
     }
 
     /**
-     * Returns the set of explicitly allowed origins.
-     * Empty when {@link #isAnyOrigin()} is {@code true}.
+     * Returns the explicitly allowed origin set.
+     * This set is empty when {@link #isAnyOrigin()} is {@code true}.
      */
     public Set<String> allowedOrigins() {
         return allowedOrigins;
     }
 
     /**
-     * Checks whether the given origin is allowed by this configuration.
-     * @param origin the value of the {@code Origin} request header (may be null)
+     * Checks whether the given origin is allowed by the current configuration.
+     * When {@link #isAnyOrigin()} is enabled, this returns {@code true} as long as the configuration itself is enabled.
+     * @param origin the value of the request {@code Origin} header, which may be null
      * @return {@code true} if the origin is allowed
      */
     public boolean isOriginAllowed(String origin) {
@@ -100,29 +103,29 @@ public final class CorsConfig {
         return allowedOrigins.contains(origin);
     }
 
-    /** Returns the set of allowed HTTP methods (upper-cased). */
+    /** Returns the allowed HTTP method set, with all elements normalized to uppercase. */
     public Set<String> allowedMethods() {
         return allowedMethods;
     }
 
-    /** Returns the set of allowed request headers (lower-cased for comparison). */
+    /** Returns the allowed request-header set, with all elements normalized to lowercase for comparison. */
     public Set<String> allowedHeaders() {
         return allowedHeaders;
     }
 
-    /** Returns the set of response headers exposed to the browser. */
+    /** Returns the response-header set exposed to the browser. */
     public Set<String> exposedHeaders() {
         return exposedHeaders;
     }
 
-    /** Whether cookies / credentials may be included in cross-origin requests. */
+    /** Returns whether cookies or other credentials are allowed on cross-origin requests. */
     public boolean isAllowCredentials() {
         return allowCredentials;
     }
 
     /**
-     * Returns the preflight cache duration in seconds, or {@code -1} if not set
-     * (i.e. the {@code Access-Control-Max-Age} header will be omitted).
+     * Returns the preflight cache duration in seconds.
+     * If not set, {@code -1} is returned, meaning no {@code Access-Control-Max-Age} header will be emitted.
      */
     public long maxAge() {
         return maxAge;
@@ -132,12 +135,15 @@ public final class CorsConfig {
     // Builder
     // -------------------------------------------------------------------------
 
+    /**
+     * Returns the string representation of the current configuration object.
+     */
     @Override
     public String toString() {
         return "CorsConfig{enabled=" + enabled + ", anyOrigin=" + anyOrigin + ", allowedOrigins=" + allowedOrigins + ", allowedMethods=" + allowedMethods + ", allowedHeaders=" + allowedHeaders + ", allowCredentials=" + allowCredentials + ", maxAge=" + maxAge + '}';
     }
 
-    /** Fluent builder for {@link CorsConfig}. */
+    /** Chainable builder for {@link CorsConfig}. */
     public static final class Builder {
         private final Set<String> allowedOrigins   = new LinkedHashSet<>();
         private final Set<String> allowedMethods   = new LinkedHashSet<>(Arrays.asList("GET", "HEAD", "POST"));
@@ -152,8 +158,8 @@ public final class CorsConfig {
         }
 
         /**
-         * Allows all origins (sets {@code Access-Control-Allow-Origin: *}).
-         * Cannot be combined with {@link #allowCredentials(boolean) allowCredentials(true)}.
+         * Allows all origins.
+         * The built response headers will emit {@code Access-Control-Allow-Origin: *}.
          */
         public Builder allowAnyOrigin() {
             this.anyOrigin = true;
@@ -161,8 +167,8 @@ public final class CorsConfig {
         }
 
         /**
-         * Allows the specified origins.
-         * @param origins one or more origin strings, e.g. {@code "https://example.com"}
+         * Allows specific origins.
+         * @param origins one or more origin strings, such as {@code "https://example.com"}
          */
         public Builder allowOrigins(String... origins) {
             this.anyOrigin = false;
@@ -171,8 +177,8 @@ public final class CorsConfig {
         }
 
         /**
-         * Sets the allowed HTTP methods (replaces defaults).
-         * Values are upper-cased automatically.
+         * Sets the allowed HTTP methods and overrides the defaults.
+         * Method names are automatically converted to uppercase.
          */
         public Builder allowMethods(String... methods) {
             this.allowedMethods.clear();
@@ -184,7 +190,7 @@ public final class CorsConfig {
 
         /**
          * Sets the allowed request headers.
-         * Values are lower-cased automatically for case-insensitive matching.
+         * Header names are automatically converted to lowercase for case-insensitive matching.
          */
         public Builder allowHeaders(String... headers) {
             for (String h : headers) {
@@ -194,7 +200,7 @@ public final class CorsConfig {
         }
 
         /**
-         * Sets the response headers that the browser is allowed to read.
+         * Sets the response headers that browsers are allowed to read.
          */
         public Builder exposeHeaders(String... headers) {
             Collections.addAll(this.exposedHeaders, headers);
@@ -203,7 +209,7 @@ public final class CorsConfig {
 
         /**
          * Enables or disables the {@code Access-Control-Allow-Credentials: true} header.
-         * When {@code true}, {@link #allowAnyOrigin()} must not be used.
+         * When set to {@code true}, it cannot be combined with {@link #allowAnyOrigin()}.
          */
         public Builder allowCredentials(boolean allowCredentials) {
             this.allowCredentials = allowCredentials;
@@ -212,14 +218,14 @@ public final class CorsConfig {
 
         /**
          * Sets the value of {@code Access-Control-Max-Age} in seconds.
-         * Use {@code -1} (the default) to omit the header.
+         * Using {@code -1} (the default) means the header will not be emitted.
          */
         public Builder maxAge(long seconds) {
             this.maxAge = seconds;
             return this;
         }
 
-        /** Disables CORS processing entirely (the handler becomes a no-op). */
+        /** Disables CORS handling completely, causing requests to pass through unchanged and utility methods to skip all CORS headers. */
         public Builder disable() {
             this.enabled = false;
             return this;

@@ -26,36 +26,39 @@ import net.hasor.neta.channel.*;
 /**
  * Decodes inbound socket bytes into staged HTTP/1.x response objects.
  * <p>
- * This decoder is the client-side counterpart to {@link HttpRequestDecoder}. It parses the
- * response line, headers, and body framing, then emits a staged stream of {@link HttpObject}
- * parts that can either be processed directly or aggregated into {@link FullHttpResponse}.
+ * This decoder is the client-side counterpart of {@link HttpRequestDecoder}. It parses the status
+ * line, header fields, and body framing, then emits a staged stream of {@link HttpObject}
+ * instances for downstream processing.
  * <p>
- * Output sequence per response:
- * <ol>
- *   <li>{@link DefaultHttpResponse}: status line.</li>
- *   <li>{@link DefaultLastHttpHeaders}: initial header block.</li>
- *   <li>Zero or more {@link DefaultHttpContent}: body chunks.</li>
- *   <li>Zero or more {@link DefaultTrailerHttpHeaders}: trailing chunk headers.</li>
- *   <li>{@link DefaultLastHttpContent}: end-of-body marker.</li>
- * </ol>
+ * A single response typically appears downstream as an ordered object stream:
+ * <pre>
+ *   [HttpResponse] -> [HttpHeaders]* -> [LastHttpHeaders] -> [HttpContent]* -> [TrailerHttpHeaders]* -> [LastHttpContent]
+ * </pre>
+ * Here {@code *} means the segment may appear zero or more times. If the initial header block is
+ * complete in one pass, {@link LastHttpHeaders} is emitted directly. If the message has no
+ * trailers, that segment is omitted. For close-delimited responses, the final
+ * {@link LastHttpContent} is not emitted because message completion is indicated by connection
+ * close.
  * <p>
  * Typical usage:
  * <pre>
  *   ctx.addLastDecoder("http-resp", new HttpResponseDecoder());
- *   ctx.addLastDecoder("http-agg", new HttpResponseAggregator(1048576));
+ *   ctx.addLast("handler", responseHandler);
  * </pre>
  * <p>
- * pipeline view:
+ * Pipeline view:
  * <pre>
  *   socket bytes
  *      -> HttpResponseDecoder
  *      -> HttpResponse + HttpHeaders + HttpContent ...
- *      -> HttpResponseAggregator or business handler
+ *      -> business handler
  * </pre>
  * <p>
- * After transparent mode is enabled, this decoder stops interpreting HTTP syntax and passes
- * raw payload through as {@link HttpByteBuf}. This is used by upgraded protocols on the
- * client side as well.
+ * When transparent mode is enabled, the decoder stops interpreting HTTP syntax and forwards the
+ * raw payload wrapped as {@link HttpByteBuf}. The same behavior applies to client-side protocol
+ * upgrade scenarios.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private static final Logger logger                          = Logger.getLogger(HttpResponseDecoder.class);
@@ -66,16 +69,18 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
     private final        int    maxHeaderSize;
     private final        int    maxChunkSize;
 
-    /** Creates a decoder with default limits. */
+    /**
+     * Creates a response decoder with the default limits.
+     */
     public HttpResponseDecoder() {
         this(DEFAULT_MAX_INITIAL_LINE_LENGTH, DEFAULT_MAX_HEADER_SIZE, DEFAULT_MAX_CHUNK_SIZE);
     }
 
     /**
-     * Creates a decoder with the specified limits.
-     * @param maxInitialLineLength maximum length of the status line
-     * @param maxHeaderSize maximum total size of all headers
-     * @param maxChunkSize maximum chunk size for content delivery
+     * Creates a response decoder with explicit limits.
+     * @param maxInitialLineLength the maximum length of the status line
+     * @param maxHeaderSize the maximum total size allowed for all header fields
+     * @param maxChunkSize the maximum output size of each content chunk
      */
     public HttpResponseDecoder(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
         if (maxInitialLineLength <= 0) {
@@ -93,11 +98,17 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         this.maxChunkSize = maxChunkSize;
     }
 
+    /**
+     * Initializes the response decoder context.
+     */
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
         HttpContext.getOrCreate(context);
     }
 
+    /**
+     * Handles transparent mode switching events.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event) {
         if (event.getEventType() != HttpThroughEvent.class) {
@@ -114,6 +125,9 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return true;
     }
 
+    /**
+     * Decodes the inbound byte stream into a sequence of response objects.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<ByteBuf> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         HttpContext httpCtx = HttpContext.getOrCreate(context);
@@ -248,6 +262,9 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
     }
 
+    /**
+     * Resets response decoding state when an error path is entered.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         HttpContext httpCtx = context.context(HttpContext.class);

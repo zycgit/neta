@@ -16,12 +16,32 @@
 package net.hasor.neta.codec.http.websocket.extension;
 
 /**
- * Extension SPI that spans handshake negotiation and runtime frame handling.
+ * Extension SPI that covers negotiation, validation, and runtime creation.
+ * <p>
+ * One implementation can select server-side extension results, validate
+ * client-side negotiated headers, parse the agreed header value, and create a
+ * runtime extension for a single websocket connection.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-23
  */
 public interface WebSocketExtensionSupport extends WebSocketServerExtensionSelector, WebSocketClientExtensionValidator {
+    /**
+     * Return the websocket extension name handled by this support object.
+     * @return extension name
+     */
     String extensionName();
 
+    /**
+     * Parse one negotiated extension header value.
+     * @param headerValue negotiated extension header value
+     * @return parsed extension result, or {@code null} when this support does not accept it
+     */
     WebSocketExtensionResult parseNegotiatedExtension(String headerValue);
 
+    /**
+     * Create the runtime extension for one negotiated extension result.
+     * @param negotiatedExtension negotiated extension result
+     * @return runtime extension instance
+     */
     WebSocketRuntimeExtension createRuntimeExtension(WebSocketExtensionResult negotiatedExtension);
 }

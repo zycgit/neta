@@ -25,7 +25,43 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
-/** Encodes semantic {@link HttpObject} values into wire-level {@link Http2Frame} objects. */
+/**
+ * Encodes staged {@link HttpObject} instances and HTTP/2 events into wire-level {@link Http2Frame} objects.
+ * <p>
+ * This encoder implements the send-side message-layer state machine of HTTP/2. It typically sits in
+ * front of {@link Http2FrameEncoder}, receiving upstream request objects, response objects, content
+ * objects, and HTTP/2 control events, then converting them into HEADERS, DATA, SETTINGS, PING,
+ * GOAWAY, RST_STREAM, PUSH_PROMISE, and related frames.
+ * <p>
+ * A single request or response usually appears at the encoder input as an ordered object flow:
+ * <pre>
+ *   [HttpRequest/HttpResponse] -> [HttpHeaders]* -> [LastHttpHeaders] -> [HttpContent]* -> [LastHttpContent]
+ * </pre>
+ * Start lines and header fields are rewritten into HTTP/2 header blocks, content objects are sliced
+ * into DATA frames, and control events are converted into the corresponding control frames through
+ * {@link #onEvent(ProtoContext, SoEvent)}.
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   ctx.addLastEncoder("h2-object", new Http2ObjectEncoder(false));
+ *   ctx.addLastEncoder("h2-frame", new Http2FrameEncoder());
+ * </pre>
+ * <p>
+ * Pipeline view:
+ * <pre>
+ *   HttpObject + Http2 events
+ *      -> Http2ObjectEncoder
+ *      -> Http2Frame
+ *      -> Http2FrameEncoder
+ *      -> socket bytes
+ * </pre>
+ * <p>
+ * This layer also handles connection preface and settings initiation, stream-ID allocation, HPACK
+ * header-block encoding, DATA slicing, half-close tracking, and mapping protocol errors to control
+ * frames.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-25
+ */
 class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     private static final Logger        logger                 = Logger.getLogger(Http2ObjectEncoder.class);
     private static final byte[]        CLIENT_PREFACE         = "PRI * HTTP/2.0\r\n\r\nSM\r\n\r\n".getBytes(StandardCharsets.US_ASCII);
@@ -215,6 +251,7 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
             this.encodeFullRequest(state, context, (FullHttpRequest) msg, dst);
             return;
         }
+
         if (msg instanceof HttpResponse) {
             this.bindResponse(state, context, (HttpResponse) msg);
             return;
@@ -549,18 +586,18 @@ class Http2ObjectEncoder implements ProtoHandler<HttpObject, Http2Frame> {
     }
 
     private void sendPriority(ProtoContext context, Http2PriorityEvent event) {
-        Http2Frame frame = priorityFrame(event.streamIdAsInt(), event.streamDependency(), event.weight(), event.exclusive());
+        Http2Frame frame = priorityFrame(Math.toIntExact(event.streamId()), event.streamDependency(), event.weight(), event.exclusive());
         this.queueControlFrame(context, frame);
     }
 
     private void sendPushPromise(ProtoContext context, Http2PushPromiseEvent event) {
         if (!this.serverMode) {
             String msg = "HTTP/2: client endpoint must not send PUSH_PROMISE frames";
-            throw new HttpProtocolConnectionException(event.streamIdAsInt(), Http2ErrorCode.PROTOCOL_ERROR, msg);
+            throw new HttpProtocolConnectionException(Math.toIntExact(event.streamId()), Http2ErrorCode.PROTOCOL_ERROR, msg);
         }
 
         int maxFrameSize = this.resolvePeerMaxFrameSize(context);
-        List<Http2Frame> frames = pushPromiseFrames(event.streamIdAsInt(), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
+        List<Http2Frame> frames = pushPromiseFrames(Math.toIntExact(event.streamId()), event.promisedStreamId(), event.headers(), (int) this.localSettings.headerTableSize(), maxFrameSize);
         this.queueControlFrames(context, frames);
     }
 

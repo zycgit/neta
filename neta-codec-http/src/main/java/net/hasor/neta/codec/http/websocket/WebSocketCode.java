@@ -16,36 +16,39 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * Standard WebSocket close status codes.
+ * Standard websocket close status code definitions.
  * <p>
- * Collects the RFC 6455 section 7.4 constants used by close frames and protocol violations.
+ * Collects the constants used by close frames and protocol-violation handling,
+ * primarily from RFC 6455 section 7.4.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-15
  */
 public final class WebSocketCode {
-    /** 1000 — Normal Closure. */
+    /** {@code 1000}, normal closure. */
     public static final int NORMAL_CLOSURE      = 1000;
-    /** 1001 — Going Away. */
+    /** {@code 1001}, endpoint is going away. */
     public static final int GOING_AWAY          = 1001;
-    /** 1002 — Protocol Error. */
+    /** {@code 1002}, protocol error. */
     public static final int PROTOCOL_ERROR      = 1002;
-    /** 1003 — Unsupported Data. */
+    /** {@code 1003}, unsupported data type. */
     public static final int UNSUPPORTED_DATA    = 1003;
-    /** 1004 — Reserved value, defined by RFC 6455 and must not be sent. */
+    /** {@code 1004}, reserved by RFC 6455 and must not be sent on the wire. */
     public static final int RESERVED            = 1004;
-    /** 1005 — No Status Received (synthetic, never sent on the wire). */
+    /** {@code 1005}, no status received, locally synthesized only, never sent on the wire. */
     public static final int NO_STATUS           = 1005;
-    /** 1006 — Abnormal Closure (synthetic, never sent on the wire). */
+    /** {@code 1006}, abnormal closure, locally synthesized only, never sent on the wire. */
     public static final int ABNORMAL_CLOSURE    = 1006;
-    /** 1007 — Invalid frame payload data. */
+    /** {@code 1007}, invalid frame payload data. */
     public static final int INVALID_DATA        = 1007;
-    /** 1008 — Policy Violation. */
+    /** {@code 1008}, policy violation. */
     public static final int POLICY_VIOLATION    = 1008;
-    /** 1009 — Message Too Big. */
+    /** {@code 1009}, message too big. */
     public static final int MESSAGE_TOO_BIG     = 1009;
-    /** 1010 — Mandatory Extension, client-only and must not be sent by a server. */
+    /** {@code 1010}, mandatory extension required, used only by clients and never sent by servers. */
     public static final int MANDATORY_EXTENSION = 1010;
-    /** 1011 — Unexpected Condition. */
+    /** {@code 1011}, unexpected internal error. */
     public static final int UNEXPECTED          = 1011;
-    /** 1015 — TLS Handshake failure (synthetic, never sent on the wire). */
+    /** {@code 1015}, TLS handshake failure, locally synthesized only, never sent on the wire. */
     public static final int TLS_HANDSHAKE       = 1015;
 
     private WebSocketCode() {

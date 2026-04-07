@@ -19,44 +19,83 @@ import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpProtocolStateException;
 
 /**
- * Bidirectional semantic message-layer codec for HTTP/2 traffic.
+ * HTTP/2 message-layer duplex codec that combines frame-to-object decoding and object-to-frame encoding.
  * <p>
- * Pairs {@link Http2ObjectDecoder} and {@link Http2ObjectEncoder} so higher layers
- * can work with downstream HTTP/2 payload messages instead of raw frames, while
- * control frames stay internal or surface as network events.
+ * This class packages {@link Http2ObjectDecoder} and {@link Http2ObjectEncoder} into a single
+ * bidirectional pipeline node and serves as the standard entry point for HTTP/2 semantic traffic.
  * <p>
- * The message layer is the main protocol boundary in Neta's HTTP/2 stack. It owns
- * header-block reassembly, control-frame interpretation, automatic ACK and window
- * maintenance, and the split between public payload messages and internal protocol
- * actions.
+ * It is also the boundary where HTTP/2 frame streams are lifted into an {@link HttpObject} stream.
+ * An "HttpObject stream" means a single stream is exposed as an ordered sequence that follows HTTP
+ * message semantics rather than staying at raw frame level. HEADERS, CONTINUATION, and DATA are
+ * reorganized into request or response objects, header blocks, content chunks, optional trailing
+ * headers, and final end markers. Control frames are handled at this layer as protocol actions or
+ * are surfaced as HTTP/2 events.
  * <p>
- * When a {@link ProtoRoutingControl} is provided, inbound rounds also check whether the
- * current h2 branch received a promoted route seed. If present, the seed is emitted as an
- * {@link HttpObject} before normal decoded traffic so h2c-upgraded stream 1 requests can
- * continue through the standard HTTP/2 branch and stream partition flow.
+ * Pipeline view:
+ * <pre>
+ *   inbound:  Http2Frame  -> Http2ObjectDuplexe -> HttpObject
+ *   outbound: HttpObject  -> Http2ObjectDuplexe -> Http2Frame
+ * </pre>
  * <p>
- * This is the intended public entry point for the HTTP/2 message layer. The
- * standalone message encoder and decoder remain internal building blocks.
+ * Recommended usage falls into two scenarios depending on the processing goal:
+ * <p>
+ * Scenario 1: stream the HTTP/2 message parts.
+ * <pre>
+ *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
+ *   ctx.addLast("h2-object", new Http2ObjectDuplexe(true));
+ *   ctx.addLast("handler", streamPartHandler);
+ * </pre>
+ * This mode works directly with the {@link HttpObject} stream and suits proxy forwarding,
+ * incremental processing, large bodies, server push handling, or any case where you do not want
+ * to aggregate a full stream payload first.
+ * <p>
+ * Scenario 2: aggregate the full HTTP/2 message.
+ * <pre>
+ *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
+ *   ctx.addLast("h2-object", new Http2ObjectDuplexe(true));
+ *   ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1048576));
+ *   ctx.addLast("handler", fullMessageHandler);
+ * </pre>
+ * Add an aggregator only when upper-layer logic explicitly needs a {@code FullHttpRequest} or
+ * {@code FullHttpResponse}, such as unified signature verification, direct object mapping, or
+ * processing that naturally depends on the full message body.
+ * <p>
+ * When a {@link ProtoRoutingControl} is supplied, the inbound side also checks whether the current
+ * HTTP/2 branch owns an upgraded route seed. If present, that seed is emitted as an {@link HttpObject}
+ * before normal frame decoding continues, so the h2c-upgraded stream 1 request can still enter the
+ * standard HTTP/2 branch and stream partition flow.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-25
  */
 public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject, HttpObject, Http2Frame> {
     private final Http2ObjectDecoder  decoder;
     private final Http2ObjectEncoder  encoder;
     private final ProtoRoutingControl routingControl;
 
-    /** Creates a message duplexe with default HPACK limits for the specified endpoint role. */
+    /**
+     * Creates a message-layer duplex codec for the given endpoint role using default local settings.
+     */
     public Http2ObjectDuplexe(boolean serverMode) {
         this(serverMode, Http2Settings.defaultLocalSettings(serverMode), null);
     }
 
-    /** Creates a message duplexe with route-seed support for upgraded h2 branches. */
+    /**
+     * Creates a message-layer duplex codec with route-seed support for an upgraded HTTP/2 branch.
+     */
     public Http2ObjectDuplexe(boolean serverMode, ProtoRoutingControl routingControl) {
         this(serverMode, Http2Settings.defaultLocalSettings(serverMode), routingControl);
     }
 
+    /**
+     * Creates a message-layer duplex codec for the given endpoint role and local settings.
+     */
     public Http2ObjectDuplexe(boolean serverMode, Http2Settings localSettings) {
         this(serverMode, localSettings, null);
     }
 
+    /**
+     * Creates a message-layer duplex codec for the given endpoint role with explicit settings and routing control.
+     */
     public Http2ObjectDuplexe(boolean serverMode, Http2Settings localSettings, ProtoRoutingControl routingControl) {
         localSettings = localSettings != null ? new Http2Settings(localSettings) : Http2Settings.defaultLocalSettings(serverMode);
         this.decoder = new Http2ObjectDecoder(serverMode, localSettings);
@@ -64,18 +103,27 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
         this.routingControl = routingControl;
     }
 
+    /**
+     * Initializes the codecs on both inbound and outbound sides.
+     */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.decoder.onInit(name, rcvSize, context);
         this.encoder.onInit(name, sndSize, context);
     }
 
+    /**
+     * Activates the codecs on both inbound and outbound sides.
+     */
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         this.decoder.onActive(context);
         this.encoder.onActive(context);
     }
 
+    /**
+     * Dispatches events by direction and routes HTTP/2 control events to the outbound encoder.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (event.getEventType() == Http2PingEvent.class || event.getEventType() == Http2GoawayEvent.class || event.getEventType() == Http2ResetEvent.class || event.getEventType() == Http2PriorityEvent.class || event.getEventType() == Http2PushPromiseEvent.class) {
@@ -88,6 +136,9 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
         }
     }
 
+    /**
+     * Processes messages according to direction and flushes pending control frames after inbound decoding.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,           //
             ProtoRcvQueue<Http2Frame> rcvUp, ProtoSndQueue<HttpObject> rcvDown, //
@@ -102,6 +153,9 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
         }
     }
 
+    /**
+     * Processes exceptions according to direction.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
@@ -111,6 +165,9 @@ public class Http2ObjectDuplexe implements ProtoDuplexer<Http2Frame, HttpObject,
         }
     }
 
+    /**
+     * Closes and releases codec state on both inbound and outbound sides.
+     */
     @Override
     public void onClose(ProtoContext context) {
         this.decoder.onClose(context);

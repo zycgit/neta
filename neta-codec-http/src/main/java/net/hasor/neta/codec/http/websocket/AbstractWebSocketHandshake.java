@@ -28,33 +28,26 @@ import net.hasor.neta.channel.ProtoStatus;
 import net.hasor.neta.codec.http.*;
 
 /**
- * Shared foundation for WebSocket opening-handshake duplexers.
+ * Shared base implementation for websocket opening-handshake duplexers.
  * <p>
- * Function:
+ * Main responsibilities:
  * <pre>
- *   validate HTTP upgrade preconditions
- *   share version-compatibility rules
- *   build handshake results and failure handling helpers
+ *   Validate HTTP upgrade preconditions
+ *   Share version compatibility rules
+ *   Provide helper methods for handshake success and failure handling
  * </pre>
- * <p>
- * pipeline view:
- * <pre>
- *   HttpObject request/response parts
- *      -> AbstractWebSocketHandshake subclass
- *      -> upgraded WebSocket context + handshake events
- * </pre>
- * <p>
- * Typical usage:
- * <pre>
- *   ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
- *   ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
- * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private static final Logger           logger         = Logger.getLogger(AbstractWebSocketHandshake.class);
     private static final String           WEBSOCKET_GUID = "258EAFA5-E914-47DA-95CA-C5AB0DC85B11";
     protected final      WebSocketVersion codecVersion;
 
+    /**
+     * Create the base handshake duplexer.
+     * @param codecVersion frame-format version to use after handshake negotiation completes
+     */
     protected AbstractWebSocketHandshake(WebSocketVersion codecVersion) {
         if (codecVersion == null) {
             throw new IllegalArgumentException("codecVersion must not be null");
@@ -63,25 +56,37 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         this.codecVersion = codecVersion;
     }
 
+    /**
+     * Reset handshake state when an error occurs.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         resetState(context);
         return ProtoStatus.Next;
     }
 
+    /**
+     * Reset handshake state when the duplexer closes.
+     */
     @Override
     public void onClose(ProtoContext context) {
         resetState(context);
     }
 
+    /**
+     * Reset the handshake-related state held by the concrete implementation.
+     * @param context protocol context
+     */
     protected abstract void resetState(ProtoContext context);
 
-    // Handshake errors may be wrapped by transport/framework exceptions before they
-    // reach onError(...). We therefore need to search the cause chain for the first
-    // WebSocketHandshakeException instead of only checking the outermost Throwable.
-    // getRootCause(...) is not suitable here because WebSocketHandshakeException may
-    // itself wrap another cause, in which case the root cause would no longer be the
-    // handshake-domain marker we need for routing logic.
+    // A handshake exception may be wrapped by transport or framework exceptions before it reaches onError(...).
+    // Walk the cause chain and locate the first WebSocketHandshakeException so handshake-domain failures can still be recognized.
+
+    /**
+     * Extract a handshake exception from the exception chain.
+     * @param e original exception
+     * @return handshake exception, or {@code null} if none exists
+     */
     protected final WebSocketHandshakeException handshakeError(Throwable e) {
         for (Throwable item : ExceptionUtils.getThrowables(e)) {
             if (item instanceof WebSocketHandshakeException) {
@@ -93,6 +98,11 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
 
     //
 
+    /**
+     * Return whether the requested version is compatible with the current codec version.
+     * @param requestedVersion requested version
+     * @return {@code true} if compatible
+     */
     protected final boolean isCompatible(WebSocketVersion requestedVersion) {
         if (requestedVersion == this.codecVersion) {
             return true;
@@ -100,25 +110,52 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         return requestedVersion != null && requestedVersion.isRfc6455Framing() && this.codecVersion.isRfc6455Framing();
     }
 
+    /**
+     * Return whether the object belongs to an HTTP request.
+     * @param msg HTTP object
+     * @return {@code true} if it is a request-side fragment
+     */
     protected final boolean isHttpRequestPart(HttpObject msg) {
         return msg instanceof HttpRequest || msg instanceof HttpHeaders || msg instanceof HttpContent;
     }
 
+    /**
+     * Return whether the object belongs to an HTTP response.
+     * @param msg HTTP object
+     * @return {@code true} if it is a response-side fragment
+     */
     protected final boolean isHttpResponsePart(HttpObject msg) {
         return msg instanceof HttpResponse || msg instanceof HttpHeaders || msg instanceof HttpContent;
     }
 
+    /**
+     * Log and drop an unsupported handshake object.
+     * @param context protocol context
+     * @param stage current handshake stage
+     * @param msg dropped object
+     */
     protected final void warnAndDrop(ProtoContext context, String stage, HttpObject msg) {
         long channelId = context.getChannel().getChannelId();
         String typeName = msg == null ? "null" : msg.getClass().getSimpleName();
         logger.warn("[WS-HS] channel=" + channelId + " stage=" + stage + " drop unsupported handshake object type=" + typeName);
     }
 
+    /**
+     * Log the reason why a handshake object or stage was dropped.
+     * @param context protocol context
+     * @param stage current handshake stage
+     * @param reason explanation text
+     */
     protected final void warnDropReason(ProtoContext context, String stage, String reason) {
         long channelId = context.getChannel().getChannelId();
         logger.warn("[WS-HS] channel=" + channelId + " stage=" + stage + ' ' + reason);
     }
 
+    /**
+     * Detect the websocket version from handshake request fragments.
+     * @param request handshake request snapshot
+     * @return detected version, or {@code null} if it cannot be recognized
+     */
     protected final WebSocketVersion detectVersion(HttpMessageParts request) {
         if (request == null) {
             return null;
@@ -147,6 +184,11 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         return null;
     }
 
+    /**
+     * Compute the Accept key used by the RFC 6455 handshake response.
+     * @param key client request key
+     * @return server response key
+     */
     protected final String computeAcceptKey(String key) {
         try {
             MessageDigest sha1 = MessageDigest.getInstance("SHA-1");
@@ -157,6 +199,13 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         }
     }
 
+    /**
+     * Compute the Hixie-76 handshake response body.
+     * @param key1 first key
+     * @param key2 second key
+     * @param key3 8-byte payload associated with the third key
+     * @return response bytes
+     */
     protected final byte[] computeHixie76Response(String key1, String key2, byte[] key3) {
         long num1 = extractDigits(key1);
         int spaces1 = countSpaces(key1);
@@ -208,6 +257,13 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
         return count;
     }
 
+    /**
+     * Complete the websocket upgrade and install the handshake result context.
+     * Also enables HTTP pass-through mode and publishes the handshake-complete event on the receive side.
+     * @param context protocol context
+     * @param webSocketContext parsed websocket context
+     * @throws Throwable thrown if subsequent events fail to publish
+     */
     protected final void finishWebSocketUpgrade(ProtoContext context, WebSocketContext webSocketContext) throws Throwable {
         context.context(WebSocketContext.class, webSocketContext);
         context.rootContext(WebSocketContext.class, webSocketContext);

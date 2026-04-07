@@ -18,66 +18,81 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Wire-level WebSocket frame model.
+ * Wire-level frame model for websocket traffic.
  * <p>
- * Maps directly to the RFC 6455 frame format and is used between frame codecs and message
- * handlers.
- * <p>Fields map directly to the wire format:
+ * This model maps directly to the RFC 6455 frame format and is used to pass data
+ * between frame codecs and message handlers.
+ * <p>Each field corresponds directly to the on-the-wire layout:
  * <pre>
  *  0                   1                   2                   3
  *  0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7 8 9 0 1
  * +-+-+-+-+-------+-+-------------+-------------------------------+
  * |F|R|R|R| opcode|M| Payload len |    Extended payload length    |
- * |I|S|S|S|  (4)  |A|     (7)    |             (16/64)           |
- * |N|V|V|V|       |S|            |   (if payload len==126/127)   |
- * | |1|2|3|       |K|            |                               |
+ * |I|S|S|S|  (4)  |A|     (7)     |             (16/64)           |
+ * |N|V|V|V|       |S|             |   (if payload len==126/127)   |
+ * | |1|2|3|       |K|             |                               |
  * +-+-+-+-+-------+-+-------------+-------------------------------+
  * |     Masking-key (if masked)   |  Payload Data ...             |
  * +-------------------------------- - - - - - - - - - - - - - - - +
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public interface WebSocketFrame extends HttpObject {
-    /** Returns the opcode of this frame. */
+    /**
+     * Return the opcode of the current frame.
+     */
     WebSocketOpcode opcode();
 
     /**
-     * Returns {@code true} if the FIN bit is set (final fragment of a message).
-     * For control frames this is always {@code true}.
+     * Return {@code true} when the FIN bit is set, meaning this frame is the
+     * final fragment of the current message.
+     * For control frames, this value is always {@code true}.
      */
     boolean isFinalFragment();
 
-    /** Returns {@code true} if the RSV1 bit is set. */
+    /**
+     * Return {@code true} when the RSV1 bit is set.
+     */
     boolean isRsv1();
 
-    /** Returns {@code true} if the RSV2 bit is set. */
+    /**
+     * Return {@code true} when the RSV2 bit is set.
+     */
     boolean isRsv2();
 
-    /** Returns {@code true} if the RSV3 bit is set. */
+    /**
+     * Return {@code true} when the RSV3 bit is set.
+     */
     boolean isRsv3();
 
     /**
-     * Returns {@code true} if the MASK bit is set.
-     * Client→server frames MUST be masked; server→client frames MUST NOT.
+     * Return {@code true} when the MASK bit is set.
+     * Frames sent from clients to servers must be masked, while frames sent
+     * from servers to clients must not be masked.
      */
     boolean isMasked();
 
     /**
-     * Returns the 4-byte masking key, or {@code null} if this frame is not masked.
-     * The masking key is only meaningful when {@link #isMasked()} is {@code true}.
+     * Return the 4-byte masking key, or {@code null} if the frame is not masked.
+     * This value is meaningful only when {@link #isMasked()} returns {@code true}.
      */
     byte[] maskingKey();
 
     /**
-     * Returns the (already unmasked) payload of this frame.
+     * Return the payload content of the current frame.
+     * For inbound masked frames produced by the decoder, the returned content
+     * has already been unmasked.
      */
     ByteBuf content();
 
     /**
-     * Returns the payload length represented by this frame object.
+     * Return the payload length represented by the current frame object.
      * <p>
-     * For normal frames this equals {@code content().readableBytes()}. When the decoder is
-     * configured for streaming, a large wire frame may be emitted as multiple frame objects and
-     * this value then reflects the payload length of the current emitted slice.
+     * For ordinary frames, this value equals {@code content().readableBytes()}.
+     * When the decoder enables streaming output, one large wire-level frame may
+     * be split into multiple frame objects, and this value then represents the
+     * payload length of the current output fragment.
      */
     int payloadLength();
 

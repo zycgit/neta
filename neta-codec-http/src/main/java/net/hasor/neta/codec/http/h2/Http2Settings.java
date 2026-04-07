@@ -15,26 +15,28 @@
  */
 package net.hasor.neta.codec.http.h2;
 /**
- * HTTP/2 connection settings as defined in RFC 9113, Section 6.5.2.
+ * HTTP/2 connection settings defined by RFC 9113 Section 6.5.2.
  * <p>
- * Settings parameters control connection-level behavior such as flow control,
- * header table size, and concurrency limits.
+ * Settings parameters control connection-level behavior such as flow control, header table size,
+ * and concurrency limits.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 public class Http2Settings {
-    /** SETTINGS_HEADER_TABLE_SIZE (0x01) - HPACK header table size. Default: 4096. */
+    /** SETTINGS_HEADER_TABLE_SIZE (0x01), the HPACK header table size, defaulting to 4096. */
     public static final int SETTINGS_HEADER_TABLE_SIZE      = 0x01;
-    /** SETTINGS_ENABLE_PUSH (0x02) - Server push enable/disable. Default: 1 (enabled). */
+    /** SETTINGS_ENABLE_PUSH (0x02), the server push switch, defaulting to 1 (enabled). */
     public static final int SETTINGS_ENABLE_PUSH            = 0x02;
-    /** SETTINGS_MAX_CONCURRENT_STREAMS (0x03) - Max concurrent streams. Default: unlimited. */
+    /** SETTINGS_MAX_CONCURRENT_STREAMS (0x03), the maximum concurrent stream count, unlimited by default. */
     public static final int SETTINGS_MAX_CONCURRENT_STREAMS = 0x03;
-    /** SETTINGS_INITIAL_WINDOW_SIZE (0x04) - Initial flow-control window size. Default: 65535. */
+    /** SETTINGS_INITIAL_WINDOW_SIZE (0x04), the initial flow-control window size, defaulting to 65535. */
     public static final int SETTINGS_INITIAL_WINDOW_SIZE    = 0x04;
-    /** SETTINGS_MAX_FRAME_SIZE (0x05) - Max frame payload size. Default: 16384. */
+    /** SETTINGS_MAX_FRAME_SIZE (0x05), the maximum frame payload size, defaulting to 16384. */
     public static final int SETTINGS_MAX_FRAME_SIZE         = 0x05;
-    /** SETTINGS_MAX_HEADER_LIST_SIZE (0x06) - Max size of header list. Default: unlimited. */
+    /** SETTINGS_MAX_HEADER_LIST_SIZE (0x06), the maximum header list size, unlimited by default. */
     public static final int SETTINGS_MAX_HEADER_LIST_SIZE   = 0x06;
 
-    /** Default values per RFC 9113 */
+    /** Default values defined by RFC 9113. */
     private long    headerTableSize      = 4096;
     private boolean enablePush           = true;
     private long    maxConcurrentStreams = Long.MAX_VALUE;
@@ -45,7 +47,10 @@ public class Http2Settings {
     public Http2Settings() {
     }
 
-    /** Copy constructor. */
+    /**
+     * Copy constructor.
+     * @param other the source settings
+     */
     public Http2Settings(Http2Settings other) {
         this.headerTableSize = other.headerTableSize;
         this.enablePush = other.enablePush;
@@ -55,14 +60,34 @@ public class Http2Settings {
         this.maxHeaderListSize = other.maxHeaderListSize;
     }
 
+    /**
+     * Builds the default local settings.
+     * @param serverMode whether server mode is used
+     * @return the default settings
+     */
     public static Http2Settings defaultLocalSettings(boolean serverMode) {
         return defaultLocalSettings(serverMode, 4096, 8192, 65535);
     }
 
+    /**
+     * Builds the default local settings.
+     * @param serverMode whether server mode is used
+     * @param maxHeaderListSize the maximum header list size
+     * @param initialWindowSize the initial window size
+     * @return the default settings
+     */
     public static Http2Settings defaultLocalSettings(boolean serverMode, long maxHeaderListSize, int initialWindowSize) {
         return defaultLocalSettings(serverMode, 4096, maxHeaderListSize, initialWindowSize);
     }
 
+    /**
+     * Builds the default local settings.
+     * @param serverMode whether server mode is used
+     * @param headerTableSize the header table size
+     * @param maxHeaderListSize the maximum header list size
+     * @param initialWindowSize the initial window size
+     * @return the default settings
+     */
     public static Http2Settings defaultLocalSettings(boolean serverMode, long headerTableSize, long maxHeaderListSize, int initialWindowSize) {
         Http2Settings settings = new Http2Settings();
         settings.headerTableSize(headerTableSize);
@@ -75,10 +100,18 @@ public class Http2Settings {
         return settings;
     }
 
+    /**
+     * Returns the header table size.
+     */
     public long headerTableSize() {
         return headerTableSize;
     }
 
+    /**
+     * Sets the header table size.
+     * @param value the new value
+     * @return the current settings instance
+     */
     public Http2Settings headerTableSize(long value) {
         if (value < 0 || value > 0xFFFFFFFFL) {
             throw new IllegalArgumentException("invalid HEADER_TABLE_SIZE: " + value);
@@ -87,19 +120,35 @@ public class Http2Settings {
         return this;
     }
 
+    /**
+     * Returns whether push is enabled.
+     */
     public boolean enablePush() {
         return enablePush;
     }
 
+    /**
+     * Sets whether push is enabled.
+     * @param value whether push is enabled
+     * @return the current settings instance
+     */
     public Http2Settings enablePush(boolean value) {
         this.enablePush = value;
         return this;
     }
 
+    /**
+     * Returns the maximum concurrent stream count.
+     */
     public long maxConcurrentStreams() {
         return maxConcurrentStreams;
     }
 
+    /**
+     * Sets the maximum concurrent stream count.
+     * @param value the new value
+     * @return the current settings instance
+     */
     public Http2Settings maxConcurrentStreams(long value) {
         if (value < 0 || value > 0xFFFFFFFFL) {
             throw new IllegalArgumentException("invalid MAX_CONCURRENT_STREAMS: " + value);
@@ -108,10 +157,18 @@ public class Http2Settings {
         return this;
     }
 
+    /**
+     * Returns the initial window size.
+     */
     public int initialWindowSize() {
         return initialWindowSize;
     }
 
+    /**
+     * Sets the initial window size.
+     * @param value the new value
+     * @return the current settings instance
+     */
     public Http2Settings initialWindowSize(int value) {
         if (value < 0) {
             throw new IllegalArgumentException("invalid INITIAL_WINDOW_SIZE: " + value);
@@ -120,10 +177,18 @@ public class Http2Settings {
         return this;
     }
 
+    /**
+     * Returns the maximum frame size.
+     */
     public int maxFrameSize() {
         return maxFrameSize;
     }
 
+    /**
+     * Sets the maximum frame size.
+     * @param value the new value
+     * @return the current settings instance
+     */
     public Http2Settings maxFrameSize(int value) {
         if (value < 16384 || value > 16777215) {
             throw new IllegalArgumentException("invalid MAX_FRAME_SIZE: " + value + " (must be 16384..16777215)");
@@ -132,10 +197,18 @@ public class Http2Settings {
         return this;
     }
 
+    /**
+     * Returns the maximum header list size.
+     */
     public long maxHeaderListSize() {
         return maxHeaderListSize;
     }
 
+    /**
+     * Sets the maximum header list size.
+     * @param value the new value
+     * @return the current settings instance
+     */
     public Http2Settings maxHeaderListSize(long value) {
         if (value < 0 || value > 0xFFFFFFFFL) {
             throw new IllegalArgumentException("invalid MAX_HEADER_LIST_SIZE: " + value);
@@ -145,8 +218,10 @@ public class Http2Settings {
     }
 
     /**
-     * Applies a setting identified by its SETTINGS parameter ID.
-     * Unknown settings are silently ignored per RFC 9113.
+     * Applies a setting by its SETTINGS parameter ID.
+     * Unknown settings are silently ignored as required by RFC 9113.
+     * @param id the setting ID
+     * @param value the setting value
      */
     public void applySetting(int id, long value) {
         switch (id) {

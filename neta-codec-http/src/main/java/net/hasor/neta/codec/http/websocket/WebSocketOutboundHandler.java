@@ -20,34 +20,30 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpEvent;
 
 /**
- * Converts outbound message chunks and control events into {@link WebSocketFrame} flow.
+ * Encode outbound websocket messages and control events into websocket frames.
  * <p>
- * Function:
- * <pre>
- *   map TEXT/BINARY message chunks to frames
- *   preserve fragmentation through sequence markers
- *   generate ping, pong, and close control frames
- * </pre>
- * <p>
- * pipeline view:
- * <pre>
- *   WebSocketMessage / WebSocket events -> WebSocketOutboundHandler -> WebSocketFrame
- * </pre>
- * <p>
- * Typical usage:
- * <pre>
- *   ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
- * </pre>
+ * It preserves message chunk sequencing, optionally auto-fragments large final
+ * data messages, and emits ping, pong, and close control frames using the
+ * negotiated masking rules.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, WebSocketFrame> {
     private final int             maxFramePayloadLength;
     private       WebSocketOpcode fragmentType;
     private       int             expectedSequence;
 
+    /**
+     * Create an outbound handler without automatic fragmentation.
+     */
     public WebSocketOutboundHandler() {
         this(0);
     }
 
+    /**
+     * Create an outbound handler with an optional automatic frame size limit.
+     * @param maxFramePayloadLength maximum payload length per frame, or {@code 0} to disable auto-fragmentation
+     */
     public WebSocketOutboundHandler(int maxFramePayloadLength) {
         if (maxFramePayloadLength < 0) {
             throw new IllegalArgumentException("maxFramePayloadLength must not be negative.");
@@ -55,6 +51,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         this.maxFramePayloadLength = maxFramePayloadLength;
     }
 
+    /**
+     * Handle outbound-side ping and pong events by sending control messages.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event) throws Throwable {
         Object eventData = event.getData();
@@ -71,6 +70,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         }
     }
 
+    /**
+     * Encode outbound websocket messages into frames.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<WebSocketMessage> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
         while (src.hasMore()) {
@@ -130,7 +132,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
 
     private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
         try {
-            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(event.streamIdAsInt());
+            WebSocketMessage controlMessage = InternalWebSocketMessage.of(ping ? WebSocketOpcode.PING : WebSocketOpcode.PONG, content).streamId(Math.toIntExact(event.streamId()));
             context.sendData(controlMessage);
         } finally {
             event.release();
@@ -267,6 +269,9 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
         return chunk;
     }
 
+    /**
+     * Clear outbound fragmentation state when the channel closes.
+     */
     @Override
     public void onClose(ProtoContext context) {
         resetState();

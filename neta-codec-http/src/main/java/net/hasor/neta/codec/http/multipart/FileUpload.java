@@ -17,11 +17,11 @@ package net.hasor.neta.codec.http.multipart;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Represents a single part (field) within a {@code multipart/form-data} request body,
- * as specified in <a href="https://tools.ietf.org/html/rfc7578">RFC 7578</a>.
- * <p>Each part has a set of MIME headers (most importantly {@code Content-Disposition})
- * and a body payload.  For file uploads the {@link #filename()} will be non-null.
- * <h3>Example raw part</h3>
+ * Represents a single part (field) inside a {@code multipart/form-data} request body, as defined by
+ * <a href="https://tools.ietf.org/html/rfc7578">RFC 7578</a>.
+ * <p>Each part contains a set of MIME headers, most importantly {@code Content-Disposition}, plus
+ * an entity payload. For file-upload parts, {@link #filename()} is not null.
+ * <h3>Raw Part Example</h3>
  * <pre>
  * --boundary\r\n
  * Content-Disposition: form-data; name="file"; filename="photo.png"\r\n
@@ -30,33 +30,34 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * &lt;binary data&gt;
  * --boundary--\r\n
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public interface FileUpload {
     /**
-     * Returns the {@code name} parameter of the {@code Content-Disposition} header,
-     * i.e. the HTML form field name.
+     * Returns the {@code name} parameter from the {@code Content-Disposition} header,
+     * which is the HTML form field name.
      */
     String name();
 
     /**
-     * Returns the {@code filename} parameter of the {@code Content-Disposition} header,
-     * or {@code null} if this part is a plain form field (not a file).
+     * Returns the {@code filename} parameter from the {@code Content-Disposition} header.
+     * Regular form fields return {@code null}.
      */
     String filename();
 
     /**
-     * Returns the {@code Content-Type} of this part, or {@code null} if not specified.
+     * Returns the {@code Content-Type} of the current part, or {@code null} if it is not specified.
      */
     String contentType();
 
     /**
-     * Returns the raw body of this part.
+     * Returns the raw body content of the current part.
      */
     ByteBuf content();
 
     /**
-     * Returns the value of any additional part header by name (case-insensitive),
-     * or {@code null} if not present.
+     * Returns the value of an additional part header by name, ignoring case, or {@code null} if it is absent.
      */
     String header(String name);
 }

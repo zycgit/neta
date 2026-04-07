@@ -16,18 +16,20 @@
 package net.hasor.neta.codec.http.websocket;
 
 /**
- * Supported WebSocket protocol versions.
+ * Definitions of supported websocket protocol versions.
  * <p>
- * Distinguishes the legacy V0 handshake/framing family from the RFC 6455-compatible versions.
+ * Used to distinguish the early V0 handshake/frame family from RFC 6455-compatible versions.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-15
  */
 public enum WebSocketVersion {
-    /** Hixie-76 / hybi-00 (version 0). */
+    /** Hixie-76 / hybi-00, protocol version {@code 0}. */
     V0(0),
-    /** hybi-07 (version 7). */
+    /** hybi-07, protocol version {@code 7}. */
     V7(7),
-    /** hybi-08/10 (version 8). */
+    /** hybi-08/10, protocol version {@code 8}. */
     V8(8),
-    /** RFC 6455 (version 13). */
+    /** RFC 6455, protocol version {@code 13}. */
     V13(13);
 
     private final int code;
@@ -37,9 +39,9 @@ public enum WebSocketVersion {
     }
 
     /**
-     * Resolves a version number from the {@code Sec-WebSocket-Version} header value.
-     * @param version the header value (e.g. "13", "8", "7"), or {@code null} for Hixie-76
-     * @return the matching version, or {@code null} if unknown
+     * Resolve the protocol version from a {@code Sec-WebSocket-Version} header value.
+     * @param version header value such as {@code "13"}, {@code "8"}, or {@code "7"}; empty values are treated as V0
+     * @return matching version, or {@code null} if unknown
      */
     public static WebSocketVersion of(String version) {
         if (version == null || version.isEmpty()) {
@@ -59,7 +61,11 @@ public enum WebSocketVersion {
         }
     }
 
-    /** Resolves a numeric protocol version code. */
+    /**
+     * Resolve the websocket version from a numeric protocol version.
+     * @param version numeric version value
+     * @return matching version, or {@code null} if unknown
+     */
     public static WebSocketVersion of(int version) {
         switch (version) {
             case 0:
@@ -75,12 +81,16 @@ public enum WebSocketVersion {
         }
     }
 
-    /** Returns the numeric version value used in the {@code Sec-WebSocket-Version} header. */
+    /**
+     * Return the numeric version value used by the {@code Sec-WebSocket-Version} header.
+     */
     public int code() {
         return code;
     }
 
-    /** Returns {@code true} if this version uses the RFC 6455 binary frame format. */
+    /**
+     * Return {@code true} when this version uses RFC 6455 binary framing.
+     */
     public boolean isRfc6455Framing() {
         return this != V0;
     }

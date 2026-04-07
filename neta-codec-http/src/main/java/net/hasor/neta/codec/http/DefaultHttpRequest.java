@@ -18,25 +18,25 @@ package net.hasor.neta.codec.http;
 /**
  * Default implementation of {@link HttpRequest}.
  * <p>
- * This object holds only the request line fields. Header blocks and body chunks are represented
- * by separate {@link HttpHeaders} and {@link HttpContent} objects later in the message flow.
+ * This object stores only the request line fields. Header blocks and content chunks
+ * are represented later in the message stream as separate {@link HttpHeaders} and
+ * {@link HttpContent} objects.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
-public class DefaultHttpRequest implements HttpRequest {
-    private int         streamId;
+public class DefaultHttpRequest extends AbstractHttpObject<HttpRequest> implements HttpRequest {
     private HttpVersion version;
     private HttpMethod  method;
     private String      uri;
     private String      versionText;
     private String      methodText;
     private String      uriText;
-    private boolean     bad;
-    private String      badReason;
 
     /**
-     * Creates a request start-line object.
-     * @param version the HTTP version
-     * @param method the HTTP method
-     * @param uri the request target
+     * Create a request start-line object.
+     * @param version HTTP version
+     * @param method HTTP method
+     * @param uri request target
      */
     public DefaultHttpRequest(HttpVersion version, HttpMethod method, String uri) {
         if (version == null) {
@@ -58,10 +58,10 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     /**
-     * Creates a request start-line object from parsed text fields.
-     * @param version the raw protocol version text
-     * @param method the raw request method text
-     * @param uri the raw request target text
+     * Create a request start-line object from parsed text fields.
+     * @param version raw protocol version text
+     * @param method raw request method text
+     * @param uri raw request target text
      */
     public DefaultHttpRequest(String version, String method, String uri) {
         if (version == null || version.isEmpty()) {
@@ -79,33 +79,13 @@ public class DefaultHttpRequest implements HttpRequest {
     }
 
     @Override
-    public int streamId() {
-        return streamId;
-    }
-
-    @Override
-    public HttpRequest streamId(int streamId) {
-        this.streamId = streamId;
+    protected HttpRequest self() {
         return this;
     }
 
-    @Override
-    public boolean isBad() {
-        return this.bad;
-    }
-
-    @Override
-    public String badReason() {
-        return this.badReason;
-    }
-
-    @Override
-    public HttpRequest markBad(String reason) {
-        this.bad = true;
-        this.badReason = reason;
-        return this;
-    }
-
+    /**
+     * Return the protocol version.
+     */
     @Override
     public HttpVersion protocolVersion() {
         if (this.version == null) {
@@ -114,11 +94,19 @@ public class DefaultHttpRequest implements HttpRequest {
         return version;
     }
 
+    /**
+     * Return the raw protocol version text.
+     * @return raw protocol version text
+     */
     public String protocolVersionText() {
         return this.versionText;
     }
 
-    /** Sets the protocol version carried by this request line. */
+    /**
+     * Set the protocol version on the request line.
+     * @param version protocol version
+     * @return current request instance
+     */
     @Override
     public HttpRequest protocolVersion(HttpVersion version) {
         if (version == null) {
@@ -129,6 +117,9 @@ public class DefaultHttpRequest implements HttpRequest {
         return this;
     }
 
+    /**
+     * Return the request method.
+     */
     @Override
     public HttpMethod method() {
         if (this.method == null) {
@@ -137,11 +128,19 @@ public class DefaultHttpRequest implements HttpRequest {
         return method;
     }
 
+    /**
+     * Return the raw request method text.
+     * @return raw request method text
+     */
     public String methodText() {
         return this.methodText;
     }
 
-    /** Sets the request method carried by this request line. */
+    /**
+     * Set the request method on the request line.
+     * @param method request method
+     * @return current request instance
+     */
     @Override
     public HttpRequest method(HttpMethod method) {
         if (method == null) {
@@ -152,6 +151,9 @@ public class DefaultHttpRequest implements HttpRequest {
         return this;
     }
 
+    /**
+     * Return the request target.
+     */
     @Override
     public String uri() {
         if (this.uri == null) {
@@ -160,7 +162,11 @@ public class DefaultHttpRequest implements HttpRequest {
         return uri;
     }
 
-    /** Sets the request target carried by this request line. */
+    /**
+     * Set the request target on the request line.
+     * @param uri request target
+     * @return current request instance
+     */
     @Override
     public HttpRequest uri(String uri) {
         if (uri == null) {
@@ -173,19 +179,20 @@ public class DefaultHttpRequest implements HttpRequest {
 
     @Override
     public String toString() {
-        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", bad: " + this.bad + ')';
+        return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", method: " + methodText() + ", uri: " + uri() + ", bad: " + this.isBad() + ')';
     }
 
+    /**
+     * Release the state held by this request object.
+     */
     @Override
     public void release() {
-        this.streamId = 0;
+        this.resetHttpObjectState();
         this.version = null;
         this.method = null;
         this.uri = null;
         this.versionText = null;
         this.methodText = null;
         this.uriText = null;
-        this.bad = false;
-        this.badReason = null;
     }
 }

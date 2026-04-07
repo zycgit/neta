@@ -19,54 +19,34 @@ import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Default implementation of {@link HttpContent}.
  * <p>
- * Each instance represents one non-terminal body chunk emitted after the header section has been
- * closed by {@link LastHttpHeaders}.
+ * Each instance represents a non-terminal content chunk emitted after the header
+ * section has been closed by {@link LastHttpHeaders}.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
-public class DefaultHttpContent implements HttpContent {
-    private int     streamId;
+public class DefaultHttpContent extends AbstractHttpObject<HttpContent> implements HttpContent {
     private ByteBuf content;
-    private boolean bad;
-    private String  badReason;
 
     /**
-     * Creates a body chunk with the specified payload.
-     * @param content the chunk payload
+     * Create a content chunk with the specified payload.
+     * @param content chunk payload
      */
     public DefaultHttpContent(ByteBuf content) {
         this.content = content == null ? ByteBuf.EMPTY : content;
     }
 
     @Override
-    public int streamId() {
-        return streamId;
-    }
-
-    @Override
-    public HttpContent streamId(int streamId) {
-        this.streamId = streamId;
+    protected HttpContent self() {
         return this;
     }
 
+    /**
+     * Return the payload of this content chunk.
+     * @return payload buffer
+     */
     @Override
     public ByteBuf content() {
         return this.content;
-    }
-
-    @Override
-    public boolean isBad() {
-        return this.bad;
-    }
-
-    @Override
-    public String badReason() {
-        return this.badReason;
-    }
-
-    @Override
-    public HttpContent markBad(String reason) {
-        this.bad = true;
-        this.badReason = reason;
-        return this;
     }
 
     @Override
@@ -78,14 +58,15 @@ public class DefaultHttpContent implements HttpContent {
         }
     }
 
+    /**
+     * Release the payload and associated state.
+     */
     @Override
     public void release() {
         if (this.content != null) {
             this.content.release();
             this.content = null;
         }
-        this.streamId = 0;
-        this.bad = false;
-        this.badReason = null;
+        this.resetHttpObjectState();
     }
 }

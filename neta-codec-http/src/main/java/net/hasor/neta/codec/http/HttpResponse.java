@@ -17,30 +17,59 @@ package net.hasor.neta.codec.http;
 /**
  * Represents only the status line of an HTTP response.
  * <p>
- * In this object model the response start line is separated from the header and body sections.
- * A decoded response therefore begins with {@link HttpResponse}, followed by zero or more
- * {@link HttpHeaders}, one {@link LastHttpHeaders}, zero or more {@link HttpContent}, optional
- * {@link TrailerHttpHeaders}, and one {@link LastHttpContent}.
+ * In the current object model, the response start line is separated from the header section and body section. As a result, a decoded response emits
+ * {@link HttpResponse} first, followed by zero or more {@link HttpHeaders} objects, one {@link LastHttpHeaders}, zero or more {@link HttpContent} objects,
+ * optional {@link TrailerHttpHeaders}, and, when the message has an explicit end boundary, a {@link LastHttpContent}.
+ * Responses delimited by connection close end when the connection closes.
  * <pre>
  *   status-line = HTTP-version SP status-code SP reason-phrase CRLF
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  */
 public interface HttpResponse extends HttpObject {
-    /** Returns the protocol version carried by this status line. */
+    /**
+     * Returns the protocol version from the status line.
+     * @return protocol version
+     */
     HttpVersion protocolVersion();
 
-    /** Sets the protocol version carried by this status line. */
+    /**
+     * Sets the protocol version in the status line.
+     * @param version protocol version
+     * @return this response object
+     */
     HttpResponse protocolVersion(HttpVersion version);
 
-    /** Returns the status carried by this status line. */
+    /**
+     * Returns the response status from the status line.
+     * @return response status
+     */
     HttpStatus status();
 
-    /** Sets the response status carried by this status line. */
+    /**
+     * Sets the response status in the status line.
+     * @param status response status
+     * @return this response object
+     */
     HttpResponse status(HttpStatus status);
 
+    /**
+     * Returns the textual form of the status code.
+     * @return status code text
+     */
     String statusText();
 
+    /**
+     * Returns the reason phrase.
+     * @return reason phrase
+     */
     String reasonText();
 
+    /**
+     * Sets the reason phrase.
+     * @param reason reason phrase
+     * @return this response object
+     */
     HttpResponse reasonText(String reason);
 }

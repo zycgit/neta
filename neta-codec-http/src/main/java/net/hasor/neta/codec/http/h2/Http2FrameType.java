@@ -15,38 +15,44 @@
  */
 package net.hasor.neta.codec.http.h2;
 /**
- * HTTP/2 frame types as defined in RFC 9113 (Section 4).
+ * HTTP/2 frame types defined by RFC 9113 Section 4.
  * <p>
  * Each frame type is identified by an 8-bit type code.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 final class Http2FrameType {
-    /** DATA frame (type=0x00) - conveys arbitrary, variable-length sequences of octets. */
+    /** DATA frame (type=0x00), carrying an arbitrary-length byte sequence. */
     public static final int DATA          = 0x00;
-    /** HEADERS frame (type=0x01) - opens a stream and carries header block fragment. */
+    /** HEADERS frame (type=0x01), used to open a stream and carry header-block fragments. */
     public static final int HEADERS       = 0x01;
-    /** PRIORITY frame (type=0x02) - specifies sender-advised priority of a stream. */
+    /** PRIORITY frame (type=0x02), used to declare the sender's suggested stream priority. */
     public static final int PRIORITY      = 0x02;
-    /** RST_STREAM frame (type=0x03) - allows immediate termination of a stream. */
+    /** RST_STREAM frame (type=0x03), used to terminate a stream immediately. */
     public static final int RST_STREAM    = 0x03;
-    /** SETTINGS frame (type=0x04) - conveys configuration parameters. */
+    /** SETTINGS frame (type=0x04), used to carry configuration parameters. */
     public static final int SETTINGS      = 0x04;
-    /** PUSH_PROMISE frame (type=0x05) - notify peer of an intent to initiate streams. */
+    /** PUSH_PROMISE frame (type=0x05), used to notify the peer about an upcoming new stream. */
     public static final int PUSH_PROMISE  = 0x05;
-    /** PING frame (type=0x06) - mechanism for measuring RTT and performing liveness checks. */
+    /** PING frame (type=0x06), used to measure RTT and perform liveness checks. */
     public static final int PING          = 0x06;
-    /** GOAWAY frame (type=0x07) - initiate shutdown of a connection. */
+    /** GOAWAY frame (type=0x07), used to initiate connection shutdown. */
     public static final int GOAWAY        = 0x07;
-    /** WINDOW_UPDATE frame (type=0x08) - manage flow control. */
+    /** WINDOW_UPDATE frame (type=0x08), used to manage the flow-control window. */
     public static final int WINDOW_UPDATE = 0x08;
-    /** CONTINUATION frame (type=0x09) - continue a sequence of header block fragments. */
+    /** CONTINUATION frame (type=0x09), used to continue transferring header-block fragments. */
     public static final int CONTINUATION  = 0x09;
-    /** Synthetic type for the client connection preface (not a real HTTP/2 frame type). Used internally. */
+    /** Synthetic type for the client connection preface. This value is internal only and is never encoded as a wire-level frame type. */
     public static final int PREFACE       = 0xFF;
 
     private Http2FrameType() {
     }
 
-    /** Returns a human-readable name for the given frame type code. */
+    /**
+     * Returns a readable name for the given frame type code.
+     * @param type the frame type code
+     * @return the type name
+     */
     public static String name(int type) {
         switch (type) {
             case DATA:

@@ -18,45 +18,97 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Bidirectional frame-layer codec for HTTP/2 traffic.
+ * HTTP/2 frame-layer duplex codec that combines binary frame decoding and frame encoding.
  * <p>
- * Pairs {@link Http2FrameDecoder} and {@link Http2FrameEncoder} so frame pipelines
- * can be wired as a single duplex node.
+ * This class packages {@link Http2FrameDecoder} and {@link Http2FrameEncoder} into a single
+ * bidirectional pipeline node and serves as the standard entry point for HTTP/2 binary framing traffic.
+ * <p>
+ * It is also the first point where connection bytes are lifted into an {@link Http2Frame} stream.
+ * An "Http2Frame stream" means the transport byte stream is split into an ordered sequence of
+ * complete HTTP/2 frames that still preserve frame-layer semantics. Preface handling, the fixed
+ * 9-byte frame header, payload extraction, and basic frame-size validation all happen here, while
+ * higher-level HTTP message reconstruction is left to {@link Http2ObjectDuplexe}.
+ * <p>
+ * Pipeline view:
+ * <pre>
+ *   inbound:  socket bytes -> Http2FrameDuplexe -> Http2Frame
+ *   outbound: Http2Frame   -> Http2FrameDuplexe -> socket bytes
+ * </pre>
+ * <p>
+ * Recommended usage falls into two scenarios depending on the processing goal:
+ * <p>
+ * Scenario 1: work at raw frame level.
+ * <pre>
+ *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
+ *   ctx.addLast("handler", frameHandler);
+ * </pre>
+ * This mode suits protocol inspection, low-level testing, custom frame handling, or debugging work
+ * where the application needs direct access to {@link Http2Frame} objects.
+ * <p>
+ * Scenario 2: continue into the HTTP/2 message layer.
+ * <pre>
+ *   ctx.addLast("h2-frame", new Http2FrameDuplexe(true));
+ *   ctx.addLast("h2-object", new Http2ObjectDuplexe(true));
+ *   ctx.addLast("handler", httpHandler);
+ * </pre>
+ * Use this mode for normal request and response processing, where frame streams should be lifted
+ * into {@link net.hasor.neta.codec.http.HttpObject} messages and HTTP/2 events.
+ * <p>
+ * The inbound side validates connection preface handling according to endpoint role, while the
+ * outbound side serializes complete {@link Http2Frame} objects back to the wire format.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-21
  */
 public class Http2FrameDuplexe implements ProtoDuplexer<ByteBuf, Http2Frame, Http2Frame, ByteBuf> {
     private final Http2FrameDecoder decoder;
     private final Http2FrameEncoder encoder;
 
-    /** Creates a client-side frame duplexe. */
+    /**
+     * Creates a client-side frame codec.
+     */
     public Http2FrameDuplexe() {
         this(false);
     }
 
     /**
-     * Creates a frame duplexe for the specified endpoint role.
-     * @param serverMode true when decoding server-side inbound traffic that expects the client preface
+     * Creates a frame codec for the given endpoint role.
+     * @param serverMode when {@code true}, server mode is used and the inbound side expects the client preface
      */
     public Http2FrameDuplexe(boolean serverMode) {
         this(serverMode, new Http2Settings());
     }
 
+    /**
+     * Creates a frame codec for the given endpoint role with explicit local settings.
+     * @param serverMode whether the codec runs in server mode
+     * @param settings local HTTP/2 settings used by the frame decoder
+     */
     public Http2FrameDuplexe(boolean serverMode, Http2Settings settings) {
         this.decoder = new Http2FrameDecoder(serverMode, settings);
         this.encoder = new Http2FrameEncoder();
     }
 
+    /**
+     * Initializes the codecs on both inbound and outbound sides.
+     */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.decoder.onInit(name, rcvSize, context);
         this.encoder.onInit(name, sndSize, context);
     }
 
+    /**
+     * Activates the codecs on both inbound and outbound sides.
+     */
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         this.decoder.onActive(context);
         this.encoder.onActive(context);
     }
 
+    /**
+     * Dispatches events by direction.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (isRcv) {
@@ -66,6 +118,9 @@ public class Http2FrameDuplexe implements ProtoDuplexer<ByteBuf, Http2Frame, Htt
         }
     }
 
+    /**
+     * Processes messages according to direction.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,          //
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<Http2Frame> rcvDown,   //
@@ -77,6 +132,9 @@ public class Http2FrameDuplexe implements ProtoDuplexer<ByteBuf, Http2Frame, Htt
         }
     }
 
+    /**
+     * Processes exceptions according to direction.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
@@ -86,6 +144,9 @@ public class Http2FrameDuplexe implements ProtoDuplexer<ByteBuf, Http2Frame, Htt
         }
     }
 
+    /**
+     * Closes and releases codec state on both inbound and outbound sides.
+     */
     @Override
     public void onClose(ProtoContext context) {
         this.decoder.onClose(context);

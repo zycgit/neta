@@ -15,13 +15,15 @@
  */
 package net.hasor.neta.codec.http;
 /**
- * Represents an HTTP URI scheme as defined in
+ * Represents the scheme component of an HTTP URI, as defined in
  * <a href="https://tools.ietf.org/html/rfc7230#section-2.7">RFC 7230, Section 2.7</a>.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class HttpScheme {
-    /** Scheme for non-secure HTTP connection (port 80). */
+    /** Scheme used for non-secure HTTP connections. The default port is 80. */
     public static final HttpScheme HTTP  = new HttpScheme(80, "http");
-    /** Scheme for secure HTTP connection (port 443). */
+    /** Scheme used for secure HTTP connections. The default port is 443. */
     public static final HttpScheme HTTPS = new HttpScheme(443, "https");
 
     private final int    port;
@@ -32,12 +34,18 @@ public final class HttpScheme {
         this.name = name;
     }
 
-    /** Returns the scheme name (e.g., "http" or "https"). */
+    /**
+     * Returns the scheme name, such as "http" or "https".
+     * @return scheme name
+     */
     public String name() {
         return name;
     }
 
-    /** Returns the default port for this scheme (80 for HTTP, 443 for HTTPS). */
+    /**
+     * Returns the default port for this scheme, such as 80 for HTTP or 443 for HTTPS.
+     * @return default port
+     */
     public int port() {
         return port;
     }

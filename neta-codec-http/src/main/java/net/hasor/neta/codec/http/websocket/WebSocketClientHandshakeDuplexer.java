@@ -28,28 +28,13 @@ import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
- * Client-side WebSocket opening-handshake duplexer.
+ * Client opening-handshake duplexer for WebSocket upgrades.
  * <p>
- * Function:
- * <pre>
- *   send client upgrade request
- *   validate server HTTP 101 response
- *   publish WebSocketContext and WebSocketHandshakeEvent
- * </pre>
- * <p>
- * pipeline view:
- * <pre>
- *   outbound: HttpObject handshake request -> WebSocketClientHandshakeDuplexer -> HttpObject
- *   inbound:  HttpObject 101 response      -> WebSocketClientHandshakeDuplexer -> HttpObject or upgraded flow
- * </pre>
- * <p>
- * Typical usage:
- * <pre>
- *   ctx.addLast("http", new HttpClientDuplexe());
- *   ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
- *   ctx.addLast("ws-frame", new WebSocketFrameDuplexer());
- *   ctx.addLast("ws-message", new WebSocketMessageDuplexer());
- * </pre>
+ * It buffers the outbound HTTP upgrade request long enough to capture the
+ * handshake parameters, validates the inbound HTTP 101 response, and publishes
+ * the negotiated {@link WebSocketContext} when the upgrade completes.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake {
     private static final Logger            logger = LoggerFactory.getLogger(WebSocketClientHandshakeDuplexer.class);
@@ -71,24 +56,43 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         private       byte[]                key3;
     }
 
+    /**
+     * Create a client handshake duplexer for the given protocol version.
+     * @param codecVersion websocket version to negotiate
+     */
     public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion) {
         this(WebSocketSettings.of(codecVersion));
     }
 
+    /**
+     * Create a client handshake duplexer with automatic handshake settings.
+     * @param codecVersion websocket version to negotiate
+     * @param autoHandshakeConfig auto-handshake request settings
+     */
     public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketAutoHandshakeConfig autoHandshakeConfig) {
         this(WebSocketSettings.builder(codecVersion).autoHandshakeConfig(autoHandshakeConfig).build());
     }
 
+    /**
+     * Create a client handshake duplexer from the full websocket settings.
+     * @param settings websocket handshake settings
+     */
     public WebSocketClientHandshakeDuplexer(WebSocketSettings settings) {
         super(settings.version());
         this.settings = settings;
     }
 
+    /**
+     * Initialize the per-channel handshake state container.
+     */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         state(context);
     }
 
+    /**
+     * Send the opening handshake automatically when auto-handshake is enabled.
+     */
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         ClientHandshakeState state = state(context);
@@ -99,11 +103,17 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
+    /**
+     * Reset every piece of handshake state tracked for the current channel.
+     */
     @Override
     protected void resetState(ProtoContext context) {
         resetHandshakeSession(state(context));
     }
 
+    /**
+     * Route inbound and outbound HTTP objects through the client handshake flow.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,           //
             ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown, //
@@ -115,6 +125,9 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         }
     }
 
+    /**
+     * Consume handshake failures, reset local state, and close the channel when required.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         ClientHandshakeState state = state(context);

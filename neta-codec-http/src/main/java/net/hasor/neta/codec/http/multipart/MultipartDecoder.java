@@ -24,59 +24,66 @@ import net.hasor.neta.codec.http.HttpHeaderNames;
 import net.hasor.neta.codec.http.HttpHeaderValues;
 
 /**
- * Decodes a {@code multipart/form-data} body into a list of {@link FileUpload} parts.
- * <p>The decoder is a pure utility (no pipeline integration needed) that operates on a
- * fully-aggregated body {@link ByteBuf} together with the {@code boundary} string extracted
- * from the {@code Content-Type} header.
- * <h3>Usage</h3>
+ * Decodes a {@code multipart/form-data} request body into a list of {@link FileUpload} parts.
+ * <p>This decoder is a pure utility type. It works on a fully aggregated request-body {@link ByteBuf}
+ * together with the {@code boundary} string extracted from the {@code Content-Type} header.
+ * The current implementation returns only parts that can produce a valid {@code Content-Disposition}
+ * header containing a {@code name} parameter.
+ * <h3>Usage Example</h3>
  * <pre>
  *   String boundary = MultipartDecoder.extractBoundary(request.headers().get(HttpHeaderNames.CONTENT_TYPE));
  *   List&lt;FileUpload&gt; parts = MultipartDecoder.decode(request.content(), boundary);
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class MultipartDecoder {
     /**
-     * Extracts the boundary value from a {@code Content-Type} header value such as
+     * Extracts the boundary from a {@code Content-Type} header value, for example:
      * {@code "multipart/form-data; boundary=----WebKitFormBoundary"}.
-     * @param contentType the full {@code Content-Type} header value
-     * @return the boundary string, or {@code null} if not found
+     * @param contentType the complete {@code Content-Type} header value
+     * @return the boundary string, or {@code null} if it cannot be found
      */
     public static String extractBoundary(String contentType) {
         if (StringUtils.isBlank(contentType)) {
             return null;
         }
+
         for (String token : contentType.split(";")) {
             token = token.trim();
             String lower = token.toLowerCase();
             if (StringUtils.startsWith(lower, "boundary=")) {
                 String boundary = token.substring("boundary=".length()).trim();
-                // Strip surrounding quotes if present
+                // Remove wrapping quotes when present.
                 if (boundary.length() >= 2 && boundary.charAt(0) == '"' && boundary.charAt(boundary.length() - 1) == '"') {
                     boundary = boundary.substring(1, boundary.length() - 1);
                 }
                 return boundary;
             }
         }
+
         return null;
     }
 
     /**
-     * Decodes a {@code multipart/form-data} body.
-     * @param body the complete body bytes (not null)
-     * @param boundary the boundary string (not null, not empty)
-     * @return an unmodifiable list of decoded parts
-     * @throws IllegalArgumentException if boundary is null or empty
+     * Decodes a {@code multipart/form-data} request body.
+     * @param body the complete request-body bytes; returns an empty list when passed {@code null} or empty content
+     * @param boundary the boundary string, which must not be null or empty
+     * @return an unmodifiable part list
+     * @throws IllegalArgumentException if the boundary is null or empty
      */
     public static List<FileUpload> decode(ByteBuf body, String boundary) {
         return decode(body, boundary, StandardCharsets.UTF_8);
     }
 
     /**
-     * Decodes a {@code multipart/form-data} body using the specified charset for header parsing.
-     * @param body the complete body bytes
+     * Parses headers with the specified charset and decodes the {@code multipart/form-data} request body.
+     * The current implementation skips parts that have no empty-line separator, no {@code name}
+     * parameter, or an incomplete structure.
+     * @param body the complete request-body bytes
      * @param boundary the boundary string
-     * @param charset charset used for header parsing
-     * @return an unmodifiable list of decoded parts
+     * @param charset the charset used to parse headers
+     * @return an unmodifiable part list
      */
     public static List<FileUpload> decode(ByteBuf body, String boundary, Charset charset) {
         if (boundary == null || boundary.isEmpty()) {
@@ -91,7 +98,7 @@ public final class MultipartDecoder {
 
         List<FileUpload> parts = new ArrayList<>(4);
 
-        // Find and iterate over all boundary positions
+        // Find and iterate over all boundary positions.
         int pos = 0;
         while (pos < bodyLen) {
             int delimPos = indexOfInBuf(body, delimiterBytes, pos);
@@ -99,14 +106,14 @@ public final class MultipartDecoder {
                 break;
             }
 
-            // Skip past the delimiter line (delimiter + optional \r\n or --)
+            // Skip the delimiter line, including the delimiter itself and the optional \r\n or --.
             int afterDelim = delimPos + delimiterBytes.length;
             if (afterDelim + 2 <= bodyLen) {
-                // Check for final boundary "--"
+                // Check whether this is the closing boundary "--".
                 if (body.getByte(afterDelim) == '-' && body.getByte(afterDelim + 1) == '-') {
-                    break; // end of multipart
+                    break; // End of the multipart body.
                 }
-                // Skip CRLF after delimiter
+                // Skip the CRLF following the delimiter.
                 if (body.getByte(afterDelim) == '\r' && body.getByte(afterDelim + 1) == '\n') {
                     afterDelim += 2;
                 } else if (body.getByte(afterDelim) == '\n') {
@@ -116,13 +123,13 @@ public final class MultipartDecoder {
                 break;
             }
 
-            // Find the next boundary to determine the end of this part's body
+            // Find the next boundary to determine the end position of the current part.
             int nextDelimPos = indexOfInBuf(body, delimiterBytes, afterDelim);
             if (nextDelimPos < 0) {
                 break;
             }
 
-            // The part content ends at the CRLF just before the next boundary
+            // The current part content ends at the CRLF right before the next boundary.
             int partEnd = nextDelimPos;
             if (partEnd >= 2 && body.getByte(partEnd - 2) == '\r' && body.getByte(partEnd - 1) == '\n') {
                 partEnd -= 2;
@@ -130,7 +137,7 @@ public final class MultipartDecoder {
                 partEnd -= 1;
             }
 
-            // Parse headers and body from afterDelim..partEnd
+            // Parse headers and body content between afterDelim and partEnd.
             FileUpload part = parsePart(body, afterDelim, partEnd, charset);
             if (part != null) {
                 parts.add(part);
@@ -143,11 +150,11 @@ public final class MultipartDecoder {
     }
 
     // -------------------------------------------------------------------------
-    // Internal helpers
+    // Internal helper methods
     // -------------------------------------------------------------------------
 
     private static FileUpload parsePart(ByteBuf data, int start, int end, Charset charset) {
-        // Find the blank line separating headers from body (\r\n\r\n or \n\n)
+        // Find the empty line separating headers from the body (\r\n\r\n or \n\n).
         int headerEnd = -1;
         int bodyStart = -1;
         for (int i = start; i < end - 1; i++) {
@@ -165,10 +172,10 @@ public final class MultipartDecoder {
             return null;
         }
 
-        // Parse headers directly from ByteBuf (avoids copying header section to byte[])
+        // Parse headers directly from the ByteBuf to avoid copying them into a byte array.
         Map<String, String> headers = parseHeaders(data, start, headerEnd, charset);
 
-        // Parse Content-Disposition
+        // Parse Content-Disposition.
         String disposition = headers.get(HttpHeaderNames.CONTENT_DISPOSITION);
         String fieldName = null;
         String filename = null;
@@ -177,12 +184,12 @@ public final class MultipartDecoder {
             filename = extractParam(disposition, HttpHeaderValues.FILENAME);
         }
         if (fieldName == null) {
-            return null; // no name → skip malformed part
+            return null; // Missing name, so skip the malformed part.
         }
 
         String contentType = headers.get(HttpHeaderNames.CONTENT_TYPE);
 
-        // Extract body bytes — copy directly from ByteBuf to a new ByteBuf via getBuffer
+        // Extract body bytes and copy them into a new ByteBuf through getBuffer.
         int bodyLen = end - bodyStart;
         ByteBuf content;
         if (bodyLen > 0) {
@@ -200,7 +207,7 @@ public final class MultipartDecoder {
         Map<String, String> headers = new LinkedHashMap<>(4, 1.0f);
         int pos = start;
         while (pos < end) {
-            // Find end of line (\r\n or \n)
+            // Find the line ending (\r\n or \n).
             int lineEnd = -1;
             int nextStart = -1;
             for (int i = pos; i < end; i++) {
@@ -219,7 +226,7 @@ public final class MultipartDecoder {
                 nextStart = end;
             }
 
-            // Parse header from pos..lineEnd
+            // Parse the header line inside the pos..lineEnd range.
             if (lineEnd > pos) {
                 int colon = -1;
                 for (int i = pos; i < lineEnd; i++) {
@@ -229,7 +236,7 @@ public final class MultipartDecoder {
                     }
                 }
                 if (colon > pos) {
-                    // Trim key boundaries
+                    // Trim whitespace around the key boundaries.
                     int keyEnd = colon;
                     while (keyEnd > pos && data.getByte(keyEnd - 1) <= ' ') {
                         keyEnd--;
@@ -240,7 +247,7 @@ public final class MultipartDecoder {
                     }
                     int keyLen = keyEnd - keyStart;
 
-                    // Reuse constants for common header names (avoids String allocation)
+                    // Reuse constants for common header names to avoid extra String allocations.
                     String key;
                     if (keyLen == 19 && regionMatchesBuf(data, keyStart, HttpHeaderNames.CONTENT_DISPOSITION)) {
                         key = HttpHeaderNames.CONTENT_DISPOSITION;
@@ -250,7 +257,7 @@ public final class MultipartDecoder {
                         key = data.getString(keyStart, keyLen, StandardCharsets.US_ASCII).toLowerCase();
                     }
 
-                    // Trim value and extract String directly from ByteBuf
+                    // Trim the value and extract the string directly from the ByteBuf.
                     int valStart = colon + 1;
                     while (valStart < lineEnd && data.getByte(valStart) <= ' ') {
                         valStart++;
@@ -269,7 +276,7 @@ public final class MultipartDecoder {
         return headers;
     }
 
-    /** Extracts a named parameter from a header value, e.g. {@code name="field"} → {@code "field"}. */
+    /** Extracts the specified parameter from a header value, for example {@code name="field"} -> {@code "field"}. */
     private static String extractParam(String header, String param) {
         String searchKey = param + "=";
         int idx = indexOfIgnoreCase(header, searchKey, 0);
@@ -295,7 +302,7 @@ public final class MultipartDecoder {
         }
     }
 
-    /** Case-insensitive indexOf without creating temporary lowercase strings. */
+    /** Performs a case-insensitive indexOf without creating temporary lowercase strings. */
     private static int indexOfIgnoreCase(String str, String search, int fromIndex) {
         int searchLen = search.length();
         int maxIdx = str.length() - searchLen;
@@ -307,22 +314,23 @@ public final class MultipartDecoder {
         return -1;
     }
 
-    /** Optimized brute-force indexOf for a byte sequence within a ByteBuf, using first-byte fast skip. */
+    /** Performs an optimized naive match on a ByteBuf byte sequence, first fast-skipping on the leading byte. */
     private static int indexOfInBuf(ByteBuf buf, byte[] needle, int fromIndex) {
         if (needle.length == 0) {
             return fromIndex;
         }
+
         byte first = needle[0];
         int bufLen = buf.readableBytes();
         int maxI = bufLen - needle.length;
         for (int i = fromIndex; i <= maxI; i++) {
-            // Fast-skip until first byte matches
+            // Fast-skip until the first byte matches.
             if (buf.getByte(i) != first) {
                 while (++i <= maxI && buf.getByte(i) != first) {
                 }
             }
             if (i <= maxI) {
-                // Verify remaining bytes
+                // Verify the remaining bytes.
                 boolean match = true;
                 for (int j = 1; j < needle.length; j++) {
                     if (buf.getByte(i + j) != needle[j]) {
@@ -335,10 +343,11 @@ public final class MultipartDecoder {
                 }
             }
         }
+
         return -1;
     }
 
-    /** Case-insensitive match of a ByteBuf region against a lowercase ASCII string constant. */
+    /** Performs a case-insensitive match between a ByteBuf region and a lowercase ASCII string constant. */
     private static boolean regionMatchesBuf(ByteBuf buf, int offset, String expected) {
         for (int i = 0; i < expected.length(); i++) {
             byte b = buf.getByte(offset + i);

@@ -16,14 +16,14 @@
 package net.hasor.neta.codec.http.h2;
 
 /**
- * Default implementation of {@link Http2Context} backed by the state
- * managed in {@link Http2ObjectDecoder}.
+ * Default implementation of {@link Http2Context}.
  * <p>
- * Registered on {@link net.hasor.neta.channel.ProtoContext} by
- * {@link Http2ObjectDuplexe} during
- * {@code onInit()}, providing live access to the HTTP/2 connection state.
+ * The underlying state is provided by {@link Http2DecoderContent} and is installed into the root
+ * context during HTTP/2 decoder initialization before being exposed through the current
+ * {@link net.hasor.neta.channel.ProtoContext}. This object does not own protocol state by itself;
+ * it only exposes a live read-only view of the same HTTP/2 connection.
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2024-01-15
+ * @version : 2026-02-20
  */
 class Http2ContextImpl implements Http2Context {
     private final boolean             serverMode;

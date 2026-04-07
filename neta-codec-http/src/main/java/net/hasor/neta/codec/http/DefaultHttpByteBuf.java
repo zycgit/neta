@@ -19,32 +19,30 @@ import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Default implementation of {@link HttpByteBuf}.
  * <p>
- * Each instance represents one non-terminal body chunk emitted after the header section has been
- * closed by {@link LastHttpHeaders}.
+ * Each instance represents a chunk of raw bytes passed through the HTTP pipeline.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
-public class DefaultHttpByteBuf implements HttpByteBuf {
-    private int     streamId;
+public class DefaultHttpByteBuf extends AbstractHttpObject<HttpByteBuf> implements HttpByteBuf {
     private ByteBuf content;
 
     /**
-     * Creates a body chunk with the specified payload.
-     * @param content the chunk payload
+     * Create a raw byte wrapper with the specified payload.
+     * @param content chunk payload
      */
     public DefaultHttpByteBuf(ByteBuf content) {
         this.content = content == null ? ByteBuf.EMPTY : content;
     }
 
     @Override
-    public int streamId() {
-        return streamId;
-    }
-
-    @Override
-    public HttpByteBuf streamId(int streamId) {
-        this.streamId = streamId;
+    protected HttpByteBuf self() {
         return this;
     }
 
+    /**
+     * Return the raw payload.
+     * @return payload buffer
+     */
     @Override
     public ByteBuf content() {
         return this.content;
@@ -59,11 +57,15 @@ public class DefaultHttpByteBuf implements HttpByteBuf {
         }
     }
 
+    /**
+     * Release the payload buffer held by this object.
+     */
     @Override
     public void release() {
         if (this.content != null) {
             this.content.release();
             this.content = null;
         }
+        this.resetHttpObjectState();
     }
 }

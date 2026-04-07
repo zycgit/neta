@@ -14,12 +14,12 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
-import net.hasor.cobble.function.Release;
-import net.hasor.neta.bytebuf.StringView;
 
 /**
- * Default mutable implementation of {@link Cookie}.
- * <p>Use the builder-style setters to configure cookie attributes:
+ * Default implementation of {@link Cookie}.
+ * <p>This implementation stores {@link String} values directly and does not keep a lazily resolved
+ * view inside the cookie model.
+ * <p>Cookie attributes can be configured through chainable setters:
  * <pre>
  *   Cookie c = new DefaultCookie("session", "abc123")
  *       .setPath("/")
@@ -28,25 +28,27 @@ import net.hasor.neta.bytebuf.StringView;
  *       .setHttpOnly(true)
  *       .setSecure(true);
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class DefaultCookie implements Cookie {
-    /** Sentinel value indicating {@code Max-Age} is not set. */
-    public static final long         UNDEFINED_MAX_AGE = Long.MIN_VALUE;
-    private             CharSequence name;
-    private             CharSequence value;
-    private             CharSequence domain;
-    private             CharSequence path;
-    private             long         maxAge            = UNDEFINED_MAX_AGE;
-    private             CharSequence expires;
-    private             boolean      secure;
-    private             boolean      httpOnly;
-    private             CharSequence sameSite;
+    /** Sentinel value indicating that {@code Max-Age} is not set. */
+    public static final long    UNDEFINED_MAX_AGE = Long.MIN_VALUE;
+    private final       String  name;
+    private             String  value;
+    private             String  domain;
+    private             String  path;
+    private             long    maxAge            = UNDEFINED_MAX_AGE;
+    private             String  expires;
+    private             boolean secure;
+    private             boolean httpOnly;
+    private             String  sameSite;
 
     /**
      * Creates a new cookie with the given name and value.
-     * @param name cookie name (must not be {@code null} or empty)
-     * @param value cookie value (must not be {@code null})
-     * @throws IllegalArgumentException if name is null or empty, or value is null
+     * @param name the cookie name, which must not be {@code null} or empty
+     * @param value the cookie value, which must not be {@code null}
+     * @throws IllegalArgumentException if the name is {@code null}, empty, or the value is {@code null}
      */
     public DefaultCookie(CharSequence name, CharSequence value) {
         if (name == null || name.length() == 0) {
@@ -55,111 +57,92 @@ public class DefaultCookie implements Cookie {
         if (value == null) {
             throw new IllegalArgumentException("cookie value must not be null");
         }
-        this.name = name;
-        this.value = value;
+        this.name = name.toString();
+        this.value = value.toString();
     }
 
     // -------------------------------------------------------------------------
-    // Cookie interface
+    // Cookie interface implementation
     // -------------------------------------------------------------------------
 
-    private static String materialize(CharSequence value) {
-        if (value == null) {
-            return null;
-        }
-        if (value instanceof String) {
-            return (String) value;
-        }
-        return ((StringView) value).resolve();
-    }
-
-    private static boolean isResolved(CharSequence value) {
-        return !(value instanceof StringView) || ((StringView) value).isResolved();
-    }
-
-    private static CharSequence releaseValue(CharSequence value) {
-        if (value == null || value instanceof String) {
-            return value;
-        }
-
-        if (value instanceof Release) {
-            String resolved = value.toString();
-            ((Release) value).release();
-            return resolved;
-        }
-        return value.toString();
-    }
-
+    /**
+     * Returns the cookie name.
+     */
     @Override
     public String name() {
-        this.name = materialize(this.name);
-        return (String) this.name;
+        return this.name;
     }
 
+    /**
+     * Returns the cookie value.
+     */
     @Override
     public String value() {
-        this.value = materialize(this.value);
-        return (String) this.value;
+        return this.value;
     }
 
+    /**
+     * Returns the cookie Domain attribute.
+     */
     @Override
     public String domain() {
-        this.domain = materialize(this.domain);
-        return (String) this.domain;
+        return this.domain;
     }
 
+    /**
+     * Returns the cookie Path attribute.
+     */
     @Override
     public String path() {
-        this.path = materialize(this.path);
-        return (String) this.path;
+        return this.path;
     }
 
+    /**
+     * Returns the currently stored {@code Max-Age} value in seconds.
+     */
     @Override
     public long maxAge() {
         return maxAge;
     }
 
+    /**
+     * Returns the cookie Expires attribute.
+     */
     @Override
     public String expires() {
-        this.expires = materialize(this.expires);
-        return (String) this.expires;
+        return this.expires;
     }
 
+    /**
+     * This implementation always stores strings directly, so it is always in a resolved state.
+     */
     @Override
     public boolean isResolved() {
-        return isResolved(this.name) &&    //
-                isResolved(this.value) &&  //
-                isResolved(this.domain) && //
-                isResolved(this.path) &&   //
-                isResolved(this.expires) &&//
-                isResolved(this.sameSite);
+        return true;
     }
 
+    /**
+     * This implementation always stores strings directly, so this method returns itself.
+     */
     @Override
     public Cookie resolve() {
-        this.name();
-        this.value();
-        this.domain();
-        this.path();
-        this.expires();
-        this.sameSite();
         return this;
     }
 
+    /**
+     * This implementation does not hold additional lazy-view resources, so this method is a no-op.
+     */
     @Override
     public void release() {
-        this.name = releaseValue(this.name);
-        this.value = releaseValue(this.value);
-        this.domain = releaseValue(this.domain);
-        this.path = releaseValue(this.path);
-        this.expires = releaseValue(this.expires);
-        this.sameSite = releaseValue(this.sameSite);
     }
 
     // -------------------------------------------------------------------------
-    // Setters (builder-style)
+    // Setters (chainable style)
     // -------------------------------------------------------------------------
 
+    /**
+     * Returns whether the Secure flag is set.
+     */
     @Override
     public boolean isSecure() {
         return secure;
@@ -173,6 +156,9 @@ public class DefaultCookie implements Cookie {
         return this;
     }
 
+    /**
+     * Returns whether the HttpOnly flag is set.
+     */
     @Override
     public boolean isHttpOnly() {
         return httpOnly;
@@ -186,14 +172,16 @@ public class DefaultCookie implements Cookie {
         return this;
     }
 
+    /**
+     * Returns the cookie SameSite attribute.
+     */
     @Override
     public String sameSite() {
-        this.sameSite = materialize(this.sameSite);
-        return (String) this.sameSite;
+        return this.sameSite;
     }
 
     /**
-     * Sets the value of this cookie and returns {@code this} for chaining.
+     * Sets the current cookie value and returns {@code this} for chaining.
      */
     public DefaultCookie setValue(String value) {
         if (value == null) {
@@ -220,8 +208,8 @@ public class DefaultCookie implements Cookie {
     }
 
     /**
-     * Sets the {@code Max-Age} attribute (in seconds) and returns {@code this} for chaining.
-     * Pass {@link #UNDEFINED_MAX_AGE} to clear the attribute.
+     * Sets the {@code Max-Age} attribute in seconds and returns {@code this} for chaining.
+     * Passing {@link #UNDEFINED_MAX_AGE} clears the attribute.
      */
     public DefaultCookie setMaxAge(long maxAge) {
         this.maxAge = maxAge;
@@ -229,8 +217,7 @@ public class DefaultCookie implements Cookie {
     }
 
     /**
-     * Sets the {@code Expires} attribute as an RFC 1123 date string and returns
-     * {@code this} for chaining.
+     * Sets the {@code Expires} attribute as an RFC 1123 date string and returns {@code this} for chaining.
      */
     public DefaultCookie setExpires(String expires) {
         this.expires = expires;
@@ -239,45 +226,16 @@ public class DefaultCookie implements Cookie {
 
     /**
      * Sets the {@code SameSite} attribute and returns {@code this} for chaining.
-     * Common values: {@code "Strict"}, {@code "Lax"}, {@code "None"}.
+     * Common values include {@code "Strict"}, {@code "Lax"}, and {@code "None"}.
      */
     public DefaultCookie setSameSite(String sameSite) {
         this.sameSite = sameSite;
         return this;
     }
 
-    // -------------------------------------------------------------------------
-    // Object overrides
-    // -------------------------------------------------------------------------
-
-    DefaultCookie setLazyValue(CharSequence value) {
-        if (value == null) {
-            throw new IllegalArgumentException("cookie value must not be null");
-        }
-        this.value = value;
-        return this;
-    }
-
-    DefaultCookie setLazyDomain(CharSequence domain) {
-        this.domain = domain;
-        return this;
-    }
-
-    DefaultCookie setLazyPath(CharSequence path) {
-        this.path = path;
-        return this;
-    }
-
-    DefaultCookie setLazyExpires(CharSequence expires) {
-        this.expires = expires;
-        return this;
-    }
-
-    DefaultCookie setLazySameSite(CharSequence sameSite) {
-        this.sameSite = sameSite;
-        return this;
-    }
-
+    /**
+     * Returns the string representation of this cookie in {@code Set-Cookie} header form.
+     */
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
@@ -306,6 +264,10 @@ public class DefaultCookie implements Cookie {
         return sb.toString();
     }
 
+    /**
+     * Returns whether this object is equivalent to another cookie.
+     * The current implementation compares only {@link #name()} and {@link #value()}.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) {
@@ -318,6 +280,9 @@ public class DefaultCookie implements Cookie {
         return this.name().equals(that.name()) && this.value().equals(that.value());
     }
 
+    /**
+     * Returns the hash code computed from {@link #name()} and {@link #value()}.
+     */
     @Override
     public int hashCode() {
         return 31 * this.name().hashCode() + this.value().hashCode();

@@ -19,29 +19,32 @@ import java.util.Collection;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Encodes one or more {@link Cookie} objects into the value of an HTTP <b>request</b>
- * {@code Cookie} header.
- * <p>Request cookies contain only {@code name=value} pairs separated by {@code "; "},
- * per <a href="https://tools.ietf.org/html/rfc6265#section-4.2">RFC 6265 §4.2</a>:
+ * Encodes one or more {@link Cookie} objects into an HTTP request-side {@code Cookie} header value.
+ * <p>Request cookies contain only {@code name=value} pairs separated by {@code "; "}, as defined by
+ * <a href="https://tools.ietf.org/html/rfc6265#section-4.2">RFC 6265 §4.2</a>：
  * <pre>
  *   Cookie: name1=value1; name2=value2; name3=value3
  * </pre>
- * <h3>Usage</h3>
+ * <p>In other words, if a request contains multiple cookies, they should be encoded into a single
+ * header value by this type rather than being split into multiple {@code Cookie} headers.
+ * <h3>Usage Example</h3>
  * <pre>
  *   Cookie c1 = new DefaultCookie("session", "abc");
  *   Cookie c2 = new DefaultCookie("lang", "en");
  *   String headerValue = CookieEncoder.encode(c1, c2);
  *   // "session=abc; lang=en"
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class CookieEncoder {
     private static final byte[] SEPARATOR = { ';', ' ' };
 
     /**
      * Encodes one or more cookies directly into a {@link ByteBuf}.
-     * @param dst the destination buffer to write to; must not be {@code null}
-     * @param cookies the cookies to encode; must not be {@code null} or empty
-     * @throws IllegalArgumentException if {@code cookies} is null or empty
+     * @param dst the destination buffer, which must not be {@code null}
+     * @param cookies the cookies to encode, which must not be {@code null} or empty
+     * @throws IllegalArgumentException if {@code cookies} is {@code null} or empty
      */
     public static void encode(ByteBuf dst, Cookie... cookies) {
         if (cookies == null || cookies.length == 0) {
@@ -59,9 +62,9 @@ public final class CookieEncoder {
 
     /**
      * Encodes a collection of cookies directly into a {@link ByteBuf}.
-     * @param dst the destination buffer to write to; must not be {@code null}
-     * @param cookies the cookies to encode; must not be {@code null} or empty
-     * @throws IllegalArgumentException if {@code cookies} is null or empty
+     * @param dst the destination buffer, which must not be {@code null}
+     * @param cookies the cookie collection to encode, which must not be {@code null} or empty
+     * @throws IllegalArgumentException if {@code cookies} is {@code null} or empty
      */
     public static void encode(ByteBuf dst, Collection<? extends Cookie> cookies) {
         if (cookies == null || cookies.isEmpty()) {
@@ -81,17 +84,19 @@ public final class CookieEncoder {
     }
 
     /**
-     * Encodes one or more cookies into a single {@code Cookie} header value.
-     * @param cookies the cookies to encode; must not be {@code null} or empty
-     * @return the encoded header value, e.g. {@code "session=abc; lang=en"}
-     * @throws IllegalArgumentException if {@code cookies} is null or empty
+     * Encodes one or more cookies as a single {@code Cookie} header value.
+     * Even if multiple cookies share the same name, the current implementation preserves all of them
+     * in the same header value in input order.
+     * @param cookies the cookies to encode, which must not be {@code null} or empty
+     * @return the encoded header value, for example {@code "session=abc; lang=en"}
+     * @throws IllegalArgumentException if {@code cookies} is {@code null} or empty
      */
     public static String encode(Cookie... cookies) {
         if (cookies == null || cookies.length == 0) {
             throw new IllegalArgumentException("at least one cookie is required");
         }
 
-        // Calculate exact length
+        // Compute the exact output length.
         int totalLen = 0;
         for (int i = 0; i < cookies.length; i++) {
             Cookie c = cookies[i];
@@ -119,10 +124,12 @@ public final class CookieEncoder {
     }
 
     /**
-     * Encodes a collection of cookies into a single {@code Cookie} header value.
-     * @param cookies the cookies to encode; must not be {@code null} or empty
+     * Encodes a collection of cookies as a single {@code Cookie} header value.
+     * Even if multiple cookies share the same name, the current implementation preserves all of them
+     * in the same header value in input order.
+     * @param cookies the cookie collection to encode, which must not be {@code null} or empty
      * @return the encoded header value
-     * @throws IllegalArgumentException if {@code cookies} is null or empty
+     * @throws IllegalArgumentException if {@code cookies} is {@code null} or empty
      */
     public static String encode(Collection<? extends Cookie> cookies) {
         if (cookies == null || cookies.isEmpty()) {

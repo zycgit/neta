@@ -17,15 +17,19 @@ package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Represents one chunk of HTTP message body content.
+ * Represents a content chunk within an HTTP message body.
  * <p>
- * {@link HttpContent} objects appear only after {@link LastHttpHeaders} has closed the header
- * section. A message body may contain zero or more ordinary content chunks and is always finished
- * by {@link LastHttpContent}. Callers that need an extra reference to the payload should retain
- * the returned {@link ByteBuf} directly via {@link #content()}.
+ * {@link HttpContent} appears only after {@link LastHttpHeaders} has closed the initial header section. A message body may contain zero or more regular content chunks.
+ * Messages with an explicit end boundary terminate with {@link LastHttpContent}, while responses delimited by connection close end when the connection closes.
+ * If a caller needs to retain the payload reference beyond normal ownership, call retain directly on the {@link ByteBuf} returned by {@link #content()}.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  * @see LastHttpContent
  */
 public interface HttpContent extends HttpObject {
-    /** Returns the payload. */
+    /**
+     * Returns the payload carried by this content chunk.
+     * @return payload buffer
+     */
     ByteBuf content();
 }

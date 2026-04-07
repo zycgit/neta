@@ -16,54 +16,72 @@
 package net.hasor.neta.codec.http.h2;
 
 /**
- * Protocol context interface for HTTP/2 connections.
+ * Protocol context interface for an HTTP/2 connection.
  * <p>
- * Registered on {@link net.hasor.neta.channel.ProtoContext} via
- * {@code context.context(Http2Context.class, impl)} to expose HTTP/2 state
- * to routing decisions and downstream handlers.
+ * This is a connection-level read-only state view used to expose the current HTTP/2 connection's
+ * negotiated settings and flow-control state to routing decisions and downstream handlers.
+ * <p>
+ * The current implementation installs the shared instance into the root context during HTTP/2
+ * decoder initialization and then exposes that same instance through the current
+ * {@link net.hasor.neta.channel.ProtoContext}. It therefore represents connection-level state,
+ * not local state owned by a single stream or branch.
  * </p>
  * <p>
- * Usage in {@link net.hasor.neta.channel.ProtoRouting}:
+ * When connection-level state must be read across branches, prefer accessing it from the root
+ * context. If the current node already runs inside the same HTTP/2 branch, it may also be read
+ * directly from the current context.
+ * </p>
+ * <p>
+ * In a {@link net.hasor.neta.channel.ProtoRoutingDataSelector} used by
+ * {@link net.hasor.neta.channel.ProtoRoutingDuplexer}, a typical access pattern looks like this:
  * <pre>{@code
- * (context, rcvUp, rcvDown) -> {
- *     Http2Context h2 = context.context(Http2Context.class);
+ * (context, rcvUp, sndDown) -> {
+ *     Http2Context h2 = context.rootContext(Http2Context.class);
  *     if (h2 != null && h2.isReady()) {
  *         return "http2-stream";
  *     }
- *     return null; // defer routing
+ *     return null; // Defer routing.
  * }
  * }</pre>
  * @author 赵永春 (zyc@hasor.net)
- * @version : 2024-01-15
+ * @version : 2026-02-20
  */
 public interface Http2Context {
-    /** Returns {@code true} when the HTTP/2 connection preface and SETTINGS exchange are complete. */
+    /**
+     * Returns {@code true} once the connection has received the peer preface.
+     */
     boolean isReady();
 
-    /** Returns {@code true} if this endpoint is the server side. */
+    /**
+     * Returns {@code true} if the current endpoint is the server side.
+     */
     boolean isServer();
 
-    /** Returns {@code true} if this endpoint is the client side. */
+    /**
+     * Returns {@code true} if the current endpoint is the client side.
+     */
     boolean isClient();
 
-    /** Returns the last stream ID observed or created by this endpoint. */
+    /**
+     * Returns the largest stream ID currently being tracked.
+     */
     int lastStreamId();
 
     /**
-     * Returns the negotiated SETTINGS_MAX_CONCURRENT_STREAMS value from the remote peer,
-     * or -1 if not yet negotiated.
+     * Returns the currently effective remote SETTINGS_MAX_CONCURRENT_STREAMS value.
+     * The initial value is {@link Long#MAX_VALUE}.
      */
     long maxConcurrentStreams();
 
     /**
-     * Returns the negotiated SETTINGS_INITIAL_WINDOW_SIZE value from the remote peer,
-     * or the default (65535) if not yet negotiated.
+     * Returns the negotiated remote SETTINGS_INITIAL_WINDOW_SIZE value.
+     * If negotiation has not completed yet, the default value 65535 is returned.
      */
     int initialWindowSize();
 
     /**
-     * Returns the negotiated SETTINGS_MAX_FRAME_SIZE value from the remote peer,
-     * or the default (16384) if not yet negotiated.
+     * Returns the negotiated remote SETTINGS_MAX_FRAME_SIZE value.
+     * If negotiation has not completed yet, the default value 16384 is returned.
      */
     int maxFrameSize();
 }

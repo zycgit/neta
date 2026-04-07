@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufUtils;
@@ -22,19 +21,18 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
- * Decodes upgraded HTTP payload into {@link WebSocketFrame} objects.
+ * Decode upgraded HTTP payloads into {@link WebSocketFrame} objects.
  * <p>
- * Function:
+ * Main responsibilities:
  * <pre>
- *   read transparent HttpByteBuf payload
- *   parse WebSocket frame header and payload
- *   emit WebSocketFrame objects
+ *   read transparent {@link HttpByteBuf} payloads
+ *   parse the WebSocket frame header and payload
+ *   emit {@link WebSocketFrame} objects
  * </pre>
  * <p>
- * pipeline view:
+ * Pipeline view:
  * <pre>
  *   socket bytes -> HTTP codec -> HttpByteBuf -> WebSocketFrameDecoder -> WebSocketFrame
  * </pre>
@@ -45,6 +43,8 @@ import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
  *   ctx.addLast("ws-handshake", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
  *   ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocketFrame> {
     private static final Logger              logger           = Logger.getLogger(WebSocketFrameDecoder.class);
@@ -58,16 +58,30 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     private              CompositeByteBuf    accumulator;
     private              Rfc6455PayloadState streamingState;
 
+    /**
+     * Streaming state used when a large RFC 6455 payload is emitted as multiple
+     * frame slices.
+     */
     private static final class Rfc6455PayloadState {
+        /** Opcode of the original wire frame being streamed. */
         private final WebSocketOpcode opcode;
+        /** Whether the original wire frame carries FIN. */
         private final boolean         finalFragment;
+        /** Cached RSV1 bit from the wire frame header. */
         private final boolean         rsv1;
+        /** Cached RSV2 bit from the wire frame header. */
         private final boolean         rsv2;
+        /** Cached RSV3 bit from the wire frame header. */
         private final boolean         rsv3;
+        /** Whether the original frame is masked. */
         private final boolean         masked;
+        /** Masking key copied from the original header when MASK is present. */
         private final byte[]          maskKey;
+        /** Total payload length of the original wire frame. */
         private final long            payloadLength;
+        /** Remaining bytes still to be emitted. */
         private       long            remainingPayloadLength;
+        /** Payload bytes that have already been emitted. */
         private       long            emittedPayloadLength;
 
         private Rfc6455PayloadState(WebSocketOpcode opcode, boolean finalFragment, boolean rsv1, boolean rsv2, boolean rsv3, boolean masked, byte[] maskKey, long payloadLength) {
@@ -84,12 +98,20 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         }
     }
 
-    /** Creates a decoder for the specified WebSocket protocol version. */
+    /**
+     * Create a decoder for the specified WebSocket protocol version.
+     * @param version WebSocket version
+     */
     public WebSocketFrameDecoder(WebSocketVersion version) {
         this(version, Integer.MAX_VALUE);
     }
 
-    /** Creates a decoder for the specified WebSocket protocol version and payload slice size. */
+    /**
+     * Create a decoder for the specified WebSocket version and maximum payload
+     * chunk length.
+     * @param version WebSocket version
+     * @param maxPayloadChunkLength maximum length of emitted payload slices
+     */
     public WebSocketFrameDecoder(WebSocketVersion version, int maxPayloadChunkLength) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
@@ -103,12 +125,19 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         this.maxPayloadChunkLength = maxPayloadChunkLength;
     }
 
-    /** Creates a decoder that first uses the negotiated handshake version and falls back to RFC 6455 (version 13). */
+    /**
+     * Create a decoder with automatic version detection, preferring the
+     * negotiated handshake version and falling back to RFC 6455 version 13.
+     */
     public WebSocketFrameDecoder() {
         this(Integer.MAX_VALUE);
     }
 
-    /** Creates an auto-detect decoder and emits large RFC6455 payloads in slices not larger than maxPayloadChunkLength. */
+    /**
+     * Create a decoder with automatic version detection and limit the maximum
+     * emitted chunk length for large RFC 6455 payloads.
+     * @param maxPayloadChunkLength maximum length of emitted payload slices
+     */
     public WebSocketFrameDecoder(int maxPayloadChunkLength) {
         if (maxPayloadChunkLength <= 0) {
             throw new IllegalArgumentException("maxPayloadChunkLength must be greater than 0.");
@@ -135,6 +164,9 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         return this.defaultVersion;
     }
 
+    /**
+     * Decode inbound HTTP payload objects and emit WebSocket frames.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<WebSocketFrame> dst) throws Throwable {
         while (src.hasMore()) {
@@ -169,11 +201,13 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         return ProtoStatus.Next;
     }
 
+    /**
+     * Handle decoding errors and reset internal state.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         this.resetAccumulator();
         this.streamingState = null;
-        this.resetRuntimeExtensions(context, false);
 
         long channelID = context.getChannel().getChannelId();
         if (context.getConfig().isPrintLog()) {
@@ -185,11 +219,13 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
         return ProtoStatus.Next;
     }
 
+    /**
+     * Release buffered state when the decoder is closed.
+     */
     @Override
     public void onClose(ProtoContext context) {
         this.resetAccumulator();
         this.streamingState = null;
-        this.resetRuntimeExtensions(context, true);
     }
 
     // =========================================================================
@@ -344,7 +380,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
                 throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "unsupported WebSocket opcode: " + opcodeVal);
         }
 
-        dst.offerMessage(this.applyInboundExtensions(context, frame));
+        dst.offerMessage(frame);
         return true;
     }
 
@@ -412,30 +448,8 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             this.streamingState = null;
         }
 
-        dst.offerMessage(this.applyInboundExtensions(context, frame));
+        dst.offerMessage(frame);
         return true;
-    }
-
-    private WebSocketFrame applyInboundExtensions(ProtoContext context, WebSocketFrame frame) {
-        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
-        if (wsContext != null) {
-            for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
-                if (!runtimeExtension.handlesInboundFrame(frame)) {
-                    continue;
-                }
-                WebSocketFrame decodedFrame = runtimeExtension.decodeFrame(context, frame);
-                if (decodedFrame != frame) {
-                    frame.release();
-                }
-                return decodedFrame;
-            }
-        }
-
-        if (!frame.isRsv1() && !frame.isRsv2() && !frame.isRsv3()) {
-            return frame;
-        }
-
-        throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "RSV bits require a negotiated websocket extension.");
     }
 
     private void validateMasking(ProtoContext context, boolean masked) {
@@ -452,40 +466,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
     }
 
     private WebSocketContext resolveHandshakeContext(ProtoContext context) {
-        WebSocketContext wsContext = context.context(WebSocketContext.class);
-        if (wsContext != null && wsContext.isReady()) {
-            return wsContext;
-        }
-
-        wsContext = context.rootContext(WebSocketContext.class);
-        if (wsContext != null && wsContext.isReady()) {
-            return wsContext;
-        }
-        return null;
-    }
-
-    private WebSocketContextImpl resolveRuntimeContext(ProtoContext context) {
-        WebSocketContext wsContext = resolveHandshakeContext(context);
-        if (wsContext instanceof WebSocketContextImpl) {
-            return (WebSocketContextImpl) wsContext;
-        }
-
-        return null;
-    }
-
-    private void resetRuntimeExtensions(ProtoContext context, boolean close) {
-        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
-        if (wsContext == null) {
-            return;
-        }
-
-        for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
-            if (close) {
-                runtimeExtension.close();
-            } else {
-                runtimeExtension.reset();
-            }
-        }
+        return WebSocketUtils.readyContext(context);
     }
 
     // =========================================================================

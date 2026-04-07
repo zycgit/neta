@@ -17,8 +17,16 @@ package net.hasor.neta.codec.http.websocket.extension;
 import net.hasor.neta.codec.http.websocket.WebSocketVersion;
 
 /**
- * Client-side validator for negotiated WebSocket extensions.
+ * Client-side validator for websocket extension negotiation results.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-23
  */
 public interface WebSocketClientExtensionValidator {
+    /**
+     * Validate the extension header returned by the server during the handshake.
+     * @param version websocket version
+     * @param requestedExtensions extension header originally requested by the client
+     * @param negotiatedExtensions extension header returned by the server
+     */
     void validateClientExtensions(WebSocketVersion version, String requestedExtensions, String negotiatedExtensions);
 }

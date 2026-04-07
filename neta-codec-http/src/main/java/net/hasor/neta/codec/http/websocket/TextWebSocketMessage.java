@@ -22,6 +22,8 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * Pooled text message chunk.
  * <p>
  * Represents application-visible TEXT data after frame decoding or before frame encoding.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-15
  */
 public final class TextWebSocketMessage extends AbstractWebSocketMessage {
     private static final int                              RECYCLE_INDEX   = RecycleObjectPool.registerType();
@@ -40,21 +42,38 @@ public final class TextWebSocketMessage extends AbstractWebSocketMessage {
     private TextWebSocketMessage() {
     }
 
+    /**
+     * Create a text message that is also the final chunk.
+     * @param content payload content
+     * @return text message object
+     */
     public static TextWebSocketMessage request(ByteBuf content) {
         return request(WebSocketMessage.FINAL_SEQUENCE, content);
     }
 
+    /**
+     * Create a text message with the specified chunk sequence.
+     * @param sequence chunk sequence
+     * @param content payload content
+     * @return text message object
+     */
     public static TextWebSocketMessage request(int sequence, ByteBuf content) {
         TextWebSocketMessage msg = RecycleObjectPool.get(RECYCLE_INDEX, RECYCLE_HANDLER);
         msg.initMessage(sequence, content);
         return msg;
     }
 
+    /**
+     * Return the message type, always {@link WebSocketOpcode#TEXT}.
+     */
     @Override
     public WebSocketOpcode type() {
         return WebSocketOpcode.TEXT;
     }
 
+    /**
+     * Return the object to the recycle pool.
+     */
     @Override
     protected void recycle() {
         RECYCLE_HANDLER.free(this);

@@ -17,8 +17,16 @@ package net.hasor.neta.codec.http.websocket.extension;
 import net.hasor.neta.codec.http.websocket.WebSocketHandshakeRequest;
 
 /**
- * Server-side selector for negotiated WebSocket extensions.
+ * Server-side selector for websocket extension negotiation results.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-23
  */
 public interface WebSocketServerExtensionSelector {
+    /**
+     * Select the extension header returned by the server for the current handshake.
+     * @param request handshake request snapshot
+     * @param proposedExtensions proposed extension header value
+     * @return selected extension header, or {@code null} when no extension is enabled
+     */
     String selectServerExtensions(WebSocketHandshakeRequest request, String proposedExtensions);
 }

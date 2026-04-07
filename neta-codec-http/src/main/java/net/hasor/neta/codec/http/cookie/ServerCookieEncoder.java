@@ -19,15 +19,16 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Encodes a {@link Cookie} into the value of an HTTP <b>response</b>
- * {@code Set-Cookie} header.
- * <p>The generated header value includes the cookie's {@code name=value} pair
- * followed by any configured attributes, per
- * <a href="https://tools.ietf.org/html/rfc6265#section-4.1">RFC 6265 §4.1</a>:
- * <pre>
- *   Set-Cookie: name=value; Path=/; Domain=example.com; Max-Age=3600; Secure; HttpOnly; SameSite=Lax
- * </pre>
- * <h3>Usage</h3>
+ * Encodes a single {@link Cookie} as the value of one HTTP response-side {@code Set-Cookie} header.
+ * <p>The current implementation emits {@code name=value} and appends {@code Domain}, {@code Path},
+ * {@code Max-Age}, {@code Expires}, {@code Secure}, {@code HttpOnly}, and {@code SameSite} when
+ * the corresponding attributes have been set and satisfy the current output rules.
+ * <p>This type is responsible only for generating one {@code Set-Cookie} header value and does not
+ * merge multiple cookies into a single response header.
+ * If multiple cookies need to be returned, whether they share the same name or not, the caller
+ * should encode them separately and write them as multiple header entries.
+ * In other words, a response with multiple cookies should emit one {@code Set-Cookie} header per cookie.
+ * <h3>Usage Example</h3>
  * <pre>
  *   DefaultCookie c = new DefaultCookie("session", "abc123")
  *       .setPath("/")
@@ -36,9 +37,11 @@ import net.hasor.neta.bytebuf.ByteBuf;
  *   String headerValue = ServerCookieEncoder.encode(c);
  *   // "session=abc123; Path=/; Max-Age=3600; HttpOnly"
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class ServerCookieEncoder {
-    // pre-computed attribute prefix byte arrays
+    // Precomputed attribute-prefix byte arrays.
     private static final byte[] PFX_DOMAIN   = "; Domain=".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] PFX_PATH     = "; Path=".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] PFX_MAXAGE   = "; Max-Age=".getBytes(StandardCharsets.US_ASCII);
@@ -48,10 +51,11 @@ public final class ServerCookieEncoder {
     private static final byte[] PFX_SAMESITE = "; SameSite=".getBytes(StandardCharsets.US_ASCII);
 
     /**
-     * Encodes a single cookie directly into a {@link ByteBuf} as a {@code Set-Cookie} header value.
-     * @param dst the destination buffer to write to; must not be {@code null}
-     * @param cookie the cookie to encode; must not be {@code null}
-     * @throws IllegalArgumentException if {@code cookie} is null
+     * Encodes a single cookie directly into a {@link ByteBuf} as the value of a {@code Set-Cookie} header.
+     * Blank string attributes are not written to the result.
+     * @param dst the destination buffer, which must not be {@code null}
+     * @param cookie the cookie to encode, which must not be {@code null}
+     * @throws IllegalArgumentException if {@code cookie} is {@code null}
      */
     public static void encode(ByteBuf dst, Cookie cookie) {
         if (cookie == null) {
@@ -102,17 +106,18 @@ public final class ServerCookieEncoder {
     }
 
     /**
-     * Encodes a single cookie into a {@code Set-Cookie} header value.
-     * @param cookie the cookie to encode; must not be {@code null}
-     * @return the complete {@code Set-Cookie} header value
-     * @throws IllegalArgumentException if {@code cookie} is null
+     * Encodes a single cookie as a {@code Set-Cookie} header value.
+     * Blank string attributes are not written to the result.
+     * @param cookie the cookie to encode, which must not be {@code null}
+     * @return the encoded {@code Set-Cookie} header value
+     * @throws IllegalArgumentException if {@code cookie} is {@code null}
      */
     public static String encode(Cookie cookie) {
         if (cookie == null) {
             throw new IllegalArgumentException("cookie must not be null");
         }
 
-        // Pre-calculate exact buffer size to avoid any reallocation
+        // Precompute the exact buffer size to avoid reallocation.
         String name = cookie.name();
         String value = cookie.value();
         String domain = cookie.domain();
@@ -123,7 +128,7 @@ public final class ServerCookieEncoder {
         boolean httpOnly = cookie.isHttpOnly();
         String sameSite = cookie.sameSite();
 
-        // Pre-allocated attribute prefix strings (constant folded by JIT)
+        // Predefined attribute-prefix strings that can be constant-folded by the JIT.
         final String PFX_DOMAIN = "; Domain=";
         final String PFX_PATH = "; Path=";
         final String PFX_MAXAGE = "; Max-Age=";

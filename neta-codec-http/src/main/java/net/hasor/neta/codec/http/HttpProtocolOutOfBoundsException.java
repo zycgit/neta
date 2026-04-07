@@ -16,15 +16,24 @@
 package net.hasor.neta.codec.http;
 
 /**
- * Thrown when a protocol decoder detects payload boundary violations,
- * out-of-range values, or numeric constraints that make the input impossible
- * to process safely.
+ * Thrown when the protocol decoder detects payload boundary overflow, an out-of-range value, or an invalid numeric constraint that makes the input unsafe to process.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  */
 public class HttpProtocolOutOfBoundsException extends HttpProtocolException {
+    /**
+     * Create an out-of-bounds exception.
+     * @param message exception description
+     */
     public HttpProtocolOutOfBoundsException(String message) {
         super(message);
     }
 
+    /**
+     * Create an out-of-bounds exception bound to the specified stream.
+     * @param streamId stream identifier
+     * @param message exception description
+     */
     public HttpProtocolOutOfBoundsException(int streamId, String message) {
         super(message);
         this.setStreamId(streamId);

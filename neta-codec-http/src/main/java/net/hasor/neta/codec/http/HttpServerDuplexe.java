@@ -20,57 +20,91 @@ import net.hasor.neta.channel.*;
 /**
  * Server-side HTTP/1.x duplex codec that combines request decoding and response encoding.
  * <p>
- * This class packages {@link HttpRequestDecoder} and {@link HttpResponseEncoder} into one
- * bidirectional pipeline node. It is the normal entry point for HTTP/1.x server traffic.
+ * This class packages {@link HttpRequestDecoder} and {@link HttpResponseEncoder} into a single
+ * bidirectional pipeline node and serves as the standard entry point for HTTP/1.x server traffic.
  * <p>
- * pipeline view:
+ * It is also the first point on the server side where connection bytes are lifted into an
+ * {@link HttpObject} stream. An "HttpObject stream" means a request is split into an ordered
+ * sequence that follows HTTP semantics rather than being aggregated into a single request object
+ * by default. The request line, header block, message body, and trailing headers all flow
+ * downstream as independent objects in order.
+ * <p>
+ * Pipeline view:
  * <pre>
  *   inbound:  socket bytes -> HttpServerDuplexe -> HttpObject
  *   outbound: HttpObject   -> HttpServerDuplexe -> socket bytes
  * </pre>
  * <p>
- * Typical usage:
+ * Recommended usage falls into two scenarios depending on the processing goal:
+ * <p>
+ * Scenario 1: stream the request.
+ * <pre>
+ *   ctx.addLast("http", new HttpServerDuplexe());
+ *   ctx.addLast("handler", requestPartHandler);
+ * </pre>
+ * This mode works directly with the {@link HttpObject} stream and suits upload forwarding,
+ * streaming gateways, large request bodies, incremental computation, or any case where you do not
+ * want to wait for the full request before processing.
+ * <p>
+ * Scenario 2: aggregate the full request.
  * <pre>
  *   ctx.addLast("http", new HttpServerDuplexe());
  *   ctx.addLastDecoder("http-agg", new HttpRequestAggregator(1048576));
+ *   ctx.addLast("handler", fullRequestHandler);
  * </pre>
+ * Add the aggregator only when business logic explicitly needs a {@link FullHttpRequest}, such as
+ * form endpoints, JSON APIs, signature verification, or other logic that naturally operates on a
+ * complete request.
  * <p>
- * When {@link HttpThroughEvent} enables transparent mode, both halves stop interpreting HTTP
- * framing and forward upgraded payload as raw buffers.
+ * When {@link HttpThroughEvent} enables transparent mode, both inbound and outbound sides stop
+ * interpreting HTTP frame semantics and forward the upgraded raw payload directly.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, HttpObject, ByteBuf> {
     private final HttpRequestDecoder  decoder;
     private final HttpResponseEncoder encoder;
 
-    /** Creates a server codec with default decoder limits. */
+    /**
+     * Creates a server codec with the default decoding limits.
+     */
     public HttpServerDuplexe() {
         this.decoder = new HttpRequestDecoder();
         this.encoder = new HttpResponseEncoder();
     }
 
     /**
-     * Creates a server codec with the specified decoder limits.
-     * @param maxInitialLineLength maximum length of the request-line
-     * @param maxHeaderSize maximum total size of all headers
-     * @param maxChunkSize maximum chunk size for content delivery
+     * Creates a server codec with explicit decoding limits.
+     * @param maxInitialLineLength the maximum length of the request line
+     * @param maxHeaderSize the maximum total size allowed for all header fields
+     * @param maxChunkSize the maximum output size of each content chunk
      */
     public HttpServerDuplexe(int maxInitialLineLength, int maxHeaderSize, int maxChunkSize) {
         this.decoder = new HttpRequestDecoder(maxInitialLineLength, maxHeaderSize, maxChunkSize);
         this.encoder = new HttpResponseEncoder();
     }
 
+    /**
+     * Initializes the codecs on both inbound and outbound sides.
+     */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.decoder.onInit(name, rcvSize, context);
         this.encoder.onInit(name, sndSize, context);
     }
 
+    /**
+     * Activates the codecs on both inbound and outbound sides.
+     */
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         this.decoder.onActive(context);
         this.encoder.onActive(context);
     }
 
+    /**
+     * Dispatches events by direction and synchronizes transparent mode switching on both sides.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (event.getEventType() == HttpThroughEvent.class) {
@@ -86,6 +120,9 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
         }
     }
 
+    /**
+     * Processes messages according to direction.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
@@ -97,6 +134,9 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
         }
     }
 
+    /**
+     * Processes exceptions according to direction.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
@@ -106,6 +146,9 @@ public class HttpServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Htt
         }
     }
 
+    /**
+     * Closes and releases codec state on both inbound and outbound sides.
+     */
     @Override
     public void onClose(ProtoContext context) {
         this.decoder.onClose(context);

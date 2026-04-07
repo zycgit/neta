@@ -14,31 +14,37 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.cookie;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.StringView;
 
 /**
- * Decodes the value of the HTTP <b>request</b> {@code Cookie} header into a list of
- * {@link Cookie} objects.
- * <p>A request {@code Cookie} header contains one or more {@code name=value} pairs
- * separated by {@code "; "} (semicolon followed by space), as specified in
- * <a href="https://tools.ietf.org/html/rfc6265#section-4.2">RFC 6265 §4.2</a>.
- * <h3>Usage</h3>
+ * Decodes the HTTP request-side {@code Cookie} header value into a list of {@link Cookie} objects.
+ * <p>A request {@code Cookie} header consists of one or more {@code name=value} fragments separated
+ * by semicolons, and whitespace is trimmed at fragment boundaries. The current implementation skips
+ * fragments that have no name, no equals sign, or unclosed double quotes.
+ * <p>In other words, if a request contains multiple cookies, a single {@code Cookie} header value
+ * should be read first and then decoded into a list by this type.
+ * If the same header value contains multiple cookies with the same name, the current implementation
+ * preserves all of them in encounter order.
+ * <h3>Usage Example</h3>
  * <pre>
  *   String header = "session=abc123; lang=en; theme=dark";
  *   List&lt;Cookie&gt; cookies = CookieDecoder.decode(header);
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class CookieDecoder {
     /**
-     * Decodes the value of an HTTP {@code Cookie} request header from a {@link ByteBuf}.
-     * The buffer's readerIndex is not modified.
+     * Decodes the HTTP request {@code Cookie} header value from a {@link ByteBuf}.
+     * This method does not modify the buffer readerIndex.
      * @param buf the buffer containing the raw {@code Cookie} header value; may be {@code null}
-     * @return an unmodifiable list of decoded cookies; empty if input is null or has no readable bytes
+     * @return an unmodifiable cookie list; returns an empty list when the input is {@code null},
+     * has no readable bytes, or all fragments are invalid
      */
     public static List<Cookie> decode(ByteBuf buf) {
         if (buf == null || buf.readableBytes() == 0) {
@@ -94,8 +100,8 @@ public final class CookieDecoder {
             }
 
             cookies.add(new DefaultCookie(//
-                    StringView.request(buf, segStart, nameEnd - segStart),//
-                    StringView.request(buf, valStart, valEnd - valStart)));
+                    buf.getString(segStart, nameEnd - segStart, StandardCharsets.US_ASCII),//
+                    buf.getString(valStart, valEnd - valStart, StandardCharsets.US_ASCII)));
             pos = semiIdx + 1;
         }
 
@@ -103,9 +109,12 @@ public final class CookieDecoder {
     }
 
     /**
-     * Decodes the value of an HTTP {@code Cookie} request header.
-     * @param cookieHeader the raw value of the {@code Cookie} header; may be {@code null}
-     * @return an unmodifiable list of decoded cookies; empty if input is null or blank
+     * Decodes an HTTP request {@code Cookie} header value.
+     * The current implementation skips fragments that have no name, no equals sign, or unclosed
+     * double quotes.
+     * @param cookieHeader the raw {@code Cookie} header value; may be {@code null}
+     * @return an unmodifiable cookie list; returns an empty list when the input is {@code null},
+     * blank, or all fragments are invalid
      */
     public static List<Cookie> decode(String cookieHeader) {
         if (StringUtils.isBlank(cookieHeader)) {
@@ -117,27 +126,27 @@ public final class CookieDecoder {
 
         int pos = 0;
         while (pos < len) {
-            // find ';' for segment boundary (or end of string)
+            // Find ';' as the current fragment boundary, or the end of the string.
             int semiIdx = cookieHeader.indexOf(';', pos);
             if (semiIdx < 0) {
                 semiIdx = len;
             }
 
-            // skip leading whitespace in this segment
+            // Skip leading whitespace of the current fragment.
             int segStart = pos;
             while (segStart < semiIdx && cookieHeader.charAt(segStart) == ' ') {
                 segStart++;
             }
 
-            // find '=' within this segment
+            // Find '=' inside the current fragment.
             int eqIdx = cookieHeader.indexOf('=', segStart);
             if (eqIdx < 0 || eqIdx >= semiIdx || eqIdx == segStart) {
-                // No '=' in this segment, or name is empty – skip
+                // The current fragment has no '=', or the name is empty, so skip it.
                 pos = semiIdx + 1;
                 continue;
             }
 
-            // extract name (trim trailing spaces)
+            // Extract the name and trim trailing spaces.
             int nameEnd = eqIdx;
             while (nameEnd > segStart && cookieHeader.charAt(nameEnd - 1) == ' ') {
                 nameEnd--;
@@ -147,7 +156,7 @@ public final class CookieDecoder {
                 continue;
             }
 
-            // extract value (trim leading/trailing spaces, strip optional quotes)
+            // Extract the value and trim surrounding spaces and optional quotes.
             int valStart = eqIdx + 1;
             while (valStart < semiIdx && cookieHeader.charAt(valStart) == ' ') {
                 valStart++;
@@ -157,7 +166,7 @@ public final class CookieDecoder {
                 valEnd--;
             }
 
-            // RFC 6265: cookie-value may optionally be enclosed in double quotes
+            // RFC 6265: cookie-value may be wrapped in double quotes.
             if (valStart < valEnd && cookieHeader.charAt(valStart) == '"') {
                 if (valEnd - valStart < 2 || cookieHeader.charAt(valEnd - 1) != '"') {
                     pos = semiIdx + 1;

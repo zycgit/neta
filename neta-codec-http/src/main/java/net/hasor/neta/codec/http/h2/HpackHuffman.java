@@ -16,13 +16,15 @@
 package net.hasor.neta.codec.http.h2;
 
 /**
- * HPACK Huffman coding as defined in RFC 7541, Appendix B.
+ * HPACK Huffman coding implementation defined by RFC 7541 Appendix B.
  * <p>
- * Provides decoding of Huffman-encoded HPACK string literals.
- * The Huffman code table is a static mapping of byte values to variable-length bit sequences.
+ * It provides encoding and decoding support for Huffman-coded HPACK string literals.
+ * The Huffman table is a static mapping from byte values to variable-length bit sequences.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 final class HpackHuffman {
-    // Huffman code table from RFC 7541, Appendix B. Each entry is: [code, bitLength]
+    // The Huffman table comes from RFC 7541 Appendix B. Each entry is [code, bitLength].
     // @formatter:off
     private static final int[][] HUFFMAN_TABLE = {
         {0x1ff8, 13}, {0x7fffd8, 23}, {0xfffffe2, 28}, {0xfffffe3, 28},
@@ -99,8 +101,8 @@ final class HpackHuffman {
     /**
      * Decodes a Huffman-encoded byte sequence into a string.
      * @param data the byte array containing Huffman-encoded data
-     * @param offset start offset
-     * @param length number of bytes
+     * @param offset the starting offset
+     * @param length the number of bytes to decode
      * @return the decoded string
      */
     public static String decode(byte[] data, int offset, int length) {
@@ -114,7 +116,7 @@ final class HpackHuffman {
             bitsLeft += 8;
 
             while (bitsLeft >= 5) {
-                // Try to match the longest code possible
+                // Try to match the longest available code word.
                 boolean matched = false;
                 for (int sym = 0; sym < 256; sym++) {
                     int code = HUFFMAN_TABLE[sym][0];
@@ -136,7 +138,7 @@ final class HpackHuffman {
             }
         }
 
-        // Remaining bits should be padding (all 1s) per RFC 7541
+        // Per RFC 7541, the remaining bits must be padding, which means all 1s.
         if (bitsLeft > 7) {
             throw new HpackDecodingException("HPACK Huffman: invalid padding");
         }
@@ -152,9 +154,9 @@ final class HpackHuffman {
     }
 
     /**
-     * Encodes a string using Huffman coding.
+     * Encodes a string with Huffman coding.
      * @param s the string to encode
-     * @return the Huffman-encoded bytes
+     * @return the Huffman-encoded byte array
      */
     public static byte[] encode(String s) {
         ByteArrayBitWriter writer = new ByteArrayBitWriter(s.length() * 2);
@@ -164,12 +166,14 @@ final class HpackHuffman {
             int codeLen = HUFFMAN_TABLE[sym][1];
             writer.writeBits(code, codeLen);
         }
-        // Pad with EOS prefix bits (all 1s) to byte boundary
+        // Pad to the byte boundary with EOS prefix bits (all 1s).
         writer.padToByte();
         return writer.toByteArray();
     }
 
-    /** Helper for writing variable-length bit sequences. */
+    /**
+     * Helper used to write variable-length bit sequences.
+     */
     private static class ByteArrayBitWriter {
         private byte[] buf;
         private int    bytePos;
@@ -196,7 +200,7 @@ final class HpackHuffman {
 
         void padToByte() {
             if (bitPos > 0) {
-                // Fill remaining bits with 1s (EOS prefix)
+                // Fill the remaining bits with 1s, which is the EOS prefix.
                 int remaining = 8 - bitPos;
                 buf[bytePos] |= (byte) ((1 << remaining) - 1);
                 bytePos++;

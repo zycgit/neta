@@ -21,18 +21,18 @@ import java.util.Queue;
 import net.hasor.neta.codec.http.DefaultHttpHeaders;
 
 /**
- * Per-connection state container shared by the HTTP/2 message layer.
+ * Connection-level state container shared by the HTTP/2 message layer.
  * <p>
- * Operations are grouped into four categories:
+ * Operations are divided into four categories:
  * <ul>
- *   <li><b>init</b>  — constructor + one-time configuration injected by the duplex entry.</li>
- *   <li><b>append</b> — called exclusively by {@link Http2ObjectDecoder} to populate
- *       state as frames arrive.</li>
- *   <li><b>poll</b>   — called by the message duplexe or higher HTTP adaptation on the SND cycle to drain
- *       queued control frames.</li>
- *   <li><b>release</b> — called on connection close to free resources.</li>
+ *   <li><b>init</b>: the constructor and configuration injected once by the duplex entry.</li>
+ *   <li><b>append</b>: called only by {@link Http2ObjectDecoder} to extend state as frames arrive.</li>
+ *   <li><b>poll</b>: called during the SND cycle by the message duplexer or a higher-level HTTP adapter to extract queued control frames.</li>
+ *   <li><b>release</b>: called when the connection closes to release resources.</li>
  * </ul>
- * All fields are private; no caller may access internal collections or sub-objects directly.
+ * All fields are private, and callers must not access internal collections or child objects directly.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-28
  */
 class Http2DecoderContent {
     private final Queue<Integer>            responseStreamIdQueue   = new LinkedList<>();
@@ -49,31 +49,44 @@ class Http2DecoderContent {
     private       int                       openPromisedStreamId    = -1;
     private       int                       lastEmittedStreamId     = 0;
 
-    Http2DecoderContent(boolean serverMode, Http2Settings localSettings) {
+    /**
+     * Creates the decoder-side connection state container.
+     * @param serverMode whether the current endpoint runs in server mode; in server mode the preface starts as not received
+     * @param localSettings the HTTP/2 settings advertised by the local endpoint; if {@code null}, an empty default configuration is used
+     */
+    public Http2DecoderContent(boolean serverMode, Http2Settings localSettings) {
         this.localSettings = localSettings != null ? new Http2Settings(localSettings) : new Http2Settings();
         this.hpackDecoder = new HpackDecoder((int) this.localSettings.headerTableSize(), normalizeHeaderListSize(this.localSettings.maxHeaderListSize()));
         this.prefaceReceived = !serverMode;
     }
 
-    // ─── append (called by Http2ObjectDecoder) ───────────────────────────────
+    // append (called by Http2ObjectDecoder)
 
-    /** Marks the connection preface as received. */
-    void markPrefaceReceived() {
+    /**
+     * Marks the connection preface as received.
+     */
+    public void markPrefaceReceived() {
         this.prefaceReceived = true;
     }
 
-    /** Returns or creates the stream for the given stream ID. */
-    Http2Stream getOrCreateStream(int streamId) {
+    /**
+     * Returns the stream for the given stream ID, creating it if necessary.
+     */
+    public Http2Stream getOrCreateStream(int streamId) {
         return streams.computeIfAbsent(streamId, id -> new Http2Stream(id));
     }
 
-    /** Returns the stream for the given stream ID, or {@code null} if absent. */
-    Http2Stream getStream(int streamId) {
+    /**
+     * Returns the stream for the given stream ID, or {@code null} if it does not exist.
+     */
+    public Http2Stream getStream(int streamId) {
         return streams.get(streamId);
     }
 
-    /** Closes and releases the stream for the given stream ID. */
-    void closeStream(int streamId) {
+    /**
+     * Closes and releases the stream for the given stream ID.
+     */
+    public void closeStream(int streamId) {
         Http2Stream stream = streams.remove(streamId);
         if (stream != null) {
             stream.state(Http2StreamState.CLOSED);
@@ -86,114 +99,151 @@ class Http2DecoderContent {
         }
     }
 
-    /** Removes any pending response-stream-ID entry for the given stream from the FIFO queue. */
-    void removeFromResponseQueue(int streamId) {
+    /**
+     * Removes queued response stream-ID entries for the given stream from the FIFO queue.
+     */
+    public void removeFromResponseQueue(int streamId) {
         responseStreamIdQueue.removeIf(id -> id == streamId);
     }
 
-    /** Decodes an HPACK-compressed header block. */
-    DefaultHttpHeaders decodeHeaders(byte[] data, int offset, int length) {
+    /**
+     * Decodes an HPACK-compressed header block.
+     */
+    public DefaultHttpHeaders decodeHeaders(byte[] data, int offset, int length) {
         return hpackDecoder.decode(data, offset, length);
     }
 
-    /** Queues a PING ACK payload to be sent to the remote peer. */
-    void offerPingAck(byte[] payload) {
+    /**
+     * Queues a PING ACK payload that should be sent to the remote peer.
+     */
+    public void offerPingAck(byte[] payload) {
         pendingPingAcks.offer(payload);
     }
 
-    /** Queues a WINDOW_UPDATE frame to be sent to the remote peer. */
-    void offerWindowUpdate(Http2Frame frame) {
+    /**
+     * Queues a WINDOW_UPDATE frame that should be sent to the remote peer.
+     */
+    public void offerWindowUpdate(Http2Frame frame) {
         pendingWindowUpdates.offer(frame);
     }
 
-    /** Records a completed request stream ID for later response association. */
-    void offerResponseStreamId(int streamId) {
+    /**
+     * Records the stream ID of a completed request for later response association.
+     */
+    public void offerResponseStreamId(int streamId) {
         responseStreamIdQueue.offer(streamId);
     }
 
-    /** Marks that a SETTINGS ACK must be sent on the next SND cycle. */
-    void markSettingsAckPending() {
+    /**
+     * Marks that the next SND cycle must send a SETTINGS ACK.
+     */
+    public void markSettingsAckPending() {
         this.pendingSettingsAck = true;
     }
 
-    /** Marks that a fragmented header block is open on the given stream. */
-    void openHeaderBlockOn(int streamId, int frameType, int promisedStreamId) {
+    /**
+     * Marks that the given stream currently owns an open fragmented header block.
+     */
+    public void openHeaderBlockOn(int streamId, int frameType, int promisedStreamId) {
         this.openHeaderBlockStreamId = streamId;
         this.openHeaderBlockType = frameType;
         this.openPromisedStreamId = promisedStreamId;
     }
 
-    /** Clears the active fragmented header-block marker. */
-    void closeOpenHeaderBlock() {
+    /**
+     * Clears the marker for the currently active fragmented header block.
+     */
+    public void closeOpenHeaderBlock() {
         this.openHeaderBlockStreamId = -1;
         this.openHeaderBlockType = -1;
         this.openPromisedStreamId = -1;
     }
 
     /**
-     * Applies a remote SETTINGS parameter and updates the HPACK decoder table size
-     * atomically if {@code SETTINGS_HEADER_TABLE_SIZE} was included.
+     * Applies a remote SETTINGS parameter. If it includes {@code SETTINGS_HEADER_TABLE_SIZE}, the HPACK decoder table capacity is updated accordingly.
      */
-    void applyRemoteSetting(int id, long value) {
+    public void applyRemoteSetting(int id, long value) {
         remoteSettings.applySetting(id, value);
         hpackDecoder.setMaxHeaderTableSize((int) remoteSettings.headerTableSize());
     }
 
-    /** Records the stream ID of the most recently emitted {@link net.hasor.neta.codec.http.HttpObject}. */
-    void setLastEmittedStreamId(int streamId) {
+    /**
+     * Records the stream ID of the most recently emitted {@link net.hasor.neta.codec.http.HttpObject}.
+     */
+    public void setLastEmittedStreamId(int streamId) {
         this.lastEmittedStreamId = streamId;
     }
 
-    /** Returns the server's configured initial flow control window size. */
-    int serverInitialWindowSize() {
+    /**
+     * Returns the initial flow-control window size configured by the server.
+     */
+    public int serverInitialWindowSize() {
         return this.localSettings.initialWindowSize();
     }
 
-    /** Returns the remote peer's negotiated initial flow control window size. */
-    int remoteInitialWindowSize() {
+    /**
+     * Returns the initial flow-control window size negotiated with the remote peer.
+     */
+    public int remoteInitialWindowSize() {
         return remoteSettings.initialWindowSize();
     }
 
-    /** Returns true if a HEADERS block is waiting for CONTINUATION frames. */
-    boolean hasOpenHeaderBlock() {
+    /**
+     * Returns {@code true} if a HEADERS block is still waiting for CONTINUATION frames.
+     */
+    public boolean hasOpenHeaderBlock() {
         return this.openHeaderBlockStreamId > 0;
     }
 
-    /** Returns the stream id that currently owns the open header block, or -1 when none exists. */
-    int openHeaderBlockStreamId() {
+    /**
+     * Returns the stream ID that currently owns the open header block, or -1 if none exists.
+     */
+    public int openHeaderBlockStreamId() {
         return this.openHeaderBlockStreamId;
     }
 
-    /** Returns the frame type that owns the open header block, or -1 when none exists. */
-    int openHeaderBlockType() {
+    /**
+     * Returns the frame type of the currently open header block, or -1 if none exists.
+     */
+    public int openHeaderBlockType() {
         return this.openHeaderBlockType;
     }
 
-    /** Returns the promised stream id associated with an open PUSH_PROMISE block, or -1 when none exists. */
-    int openPromisedStreamId() {
+    /**
+     * Returns the promised stream ID associated with the currently open PUSH_PROMISE block, or -1 if none exists.
+     */
+    public int openPromisedStreamId() {
         return this.openPromisedStreamId;
     }
 
-    // ─── poll (called by Http2ObjectEncoder on SND cycle) ───────────────────────
+    // poll (called by Http2ObjectEncoder during the SND cycle)
 
-    /** Polls the next response stream ID. Returns -1 if the queue is empty. */
-    int pollResponseStreamId() {
+    /**
+     * Polls the next response stream ID, or -1 when the queue is empty.
+     */
+    public int pollResponseStreamId() {
         Integer id = this.responseStreamIdQueue.poll();
         return id != null ? id : -1;
     }
 
-    /** Polls the next pending PING ACK payload, or {@code null} if none pending. */
-    byte[] pollPendingPingAck() {
+    /**
+     * Polls the next pending PING ACK payload, or {@code null} if none exists.
+     */
+    public byte[] pollPendingPingAck() {
         return this.pendingPingAcks.poll();
     }
 
-    /** Polls the next pending WINDOW_UPDATE frame, or {@code null} if none pending. */
-    Http2Frame pollPendingWindowUpdate() {
+    /**
+     * Polls the next pending WINDOW_UPDATE frame, or {@code null} if none exists.
+     */
+    public Http2Frame pollPendingWindowUpdate() {
         return this.pendingWindowUpdates.poll();
     }
 
-    /** Checks and atomically consumes the pending SETTINGS ACK flag. */
-    boolean consumeSettingsAck() {
+    /**
+     * Checks and atomically consumes the pending SETTINGS ACK marker.
+     */
+    public boolean consumeSettingsAck() {
         if (this.pendingSettingsAck) {
             this.pendingSettingsAck = false;
             return true;
@@ -201,15 +251,19 @@ class Http2DecoderContent {
         return false;
     }
 
-    // ─── state view (read-only, for Http2ContextImpl) ────────────────────────────
+    // state view (read-only, used by Http2ContextImpl)
 
-    /** Returns {@code true} if the connection preface has been received. */
-    boolean isPrefaceReceived() {
+    /**
+     * Returns {@code true} when the connection preface has been received.
+     */
+    public boolean isPrefaceReceived() {
         return prefaceReceived;
     }
 
-    /** Returns the highest stream ID currently tracked. */
-    int lastStreamId() {
+    /**
+     * Returns the highest stream ID currently being tracked.
+     */
+    public int lastStreamId() {
         int max = 0;
         for (Integer id : this.streams.keySet()) {
             if (id > max) {
@@ -219,8 +273,10 @@ class Http2DecoderContent {
         return max;
     }
 
-    /** Returns the highest stream id initiated by the remote endpoint. */
-    int lastRemoteInitiatedStreamId(boolean serverMode) {
+    /**
+     * Returns the highest stream ID initiated by the remote peer.
+     */
+    public int lastRemoteInitiatedStreamId(boolean serverMode) {
         int max = 0;
         int remoteParity = serverMode ? 1 : 0;
         for (Integer id : this.streams.keySet()) {
@@ -231,29 +287,42 @@ class Http2DecoderContent {
         return max;
     }
 
-    /** Returns the stream ID of the most recently emitted HttpObject. */
-    int lastEmittedStreamId() {
+    /**
+     * Returns the stream ID of the most recently emitted HttpObject.
+     */
+    public int lastEmittedStreamId() {
         return lastEmittedStreamId;
     }
 
-    /** Returns the remote peer's negotiated {@code SETTINGS_MAX_CONCURRENT_STREAMS}. */
-    long remoteMaxConcurrentStreams() {
+    /**
+     * Returns the {@code SETTINGS_MAX_CONCURRENT_STREAMS} value negotiated with the remote peer.
+     */
+    public long remoteMaxConcurrentStreams() {
         return remoteSettings.maxConcurrentStreams();
     }
 
-    /** Returns the remote peer's negotiated {@code SETTINGS_MAX_FRAME_SIZE}. */
-    int remoteMaxFrameSize() {
+    /**
+     * Returns the {@code SETTINGS_MAX_FRAME_SIZE} value negotiated with the remote peer.
+     */
+    public int remoteMaxFrameSize() {
         return remoteSettings.maxFrameSize();
     }
 
-    Http2Settings localSettings() {
+    /**
+     * Returns the local settings snapshot currently held by the decoder side.
+     * <p>
+     * The returned value is a copy, so caller-side modifications do not affect the connection state.
+     */
+    public Http2Settings localSettings() {
         return new Http2Settings(this.localSettings);
     }
 
-    // ─── release ───────────────────────────────────────────────────────────────────
+    // release
 
-    /** Releases all stream resources on connection close. */
-    void releaseAll() {
+    /**
+     * Releases all stream resources when the connection closes.
+     */
+    public void releaseAll() {
         for (Http2Stream stream : streams.values()) {
             stream.release();
         }

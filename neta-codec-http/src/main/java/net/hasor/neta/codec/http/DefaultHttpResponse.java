@@ -20,23 +20,23 @@ import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Default implementation of {@link HttpResponse}.
  * <p>
- * This object holds only the response status line. Header blocks and body chunks are represented
- * by separate {@link HttpHeaders} and {@link HttpContent} objects later in the message flow.
+ * This object stores only the response status line. Header blocks and content chunks
+ * are represented later in the message stream as separate {@link HttpHeaders} and
+ * {@link HttpContent} objects.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
-public class DefaultHttpResponse implements HttpResponse {
-    private int         streamId;
+public class DefaultHttpResponse extends AbstractHttpObject<HttpResponse> implements HttpResponse {
     private HttpVersion version;
     private HttpStatus  status;
     private String      reasonText;
     private String      versionText;
     private String      statusText;
-    private boolean     bad;
-    private String      badReason;
 
     /**
-     * Creates a response status-line object.
-     * @param version the HTTP version
-     * @param status the HTTP response status
+     * Create a response status-line object.
+     * @param version HTTP version
+     * @param status HTTP response status
      */
     public DefaultHttpResponse(HttpVersion version, HttpStatus status) {
         if (version == null) {
@@ -54,10 +54,10 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     /**
-     * Creates a response status-line object from parsed text fields.
-     * @param version the raw protocol version text
-     * @param status the raw status code text
-     * @param reason the raw reason phrase text
+     * Create a response status-line object from parsed text fields.
+     * @param version raw protocol version text
+     * @param status raw status code text
+     * @param reason raw reason phrase text
      */
     public DefaultHttpResponse(String version, String status, String reason) {
         if (version == null || version.isEmpty()) {
@@ -72,8 +72,8 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     /**
-     * Creates a response status-line object from one complete status line without the trailing CRLF.
-     * @param statusLine the status line bytes
+     * Create a response status object from a complete status line without the trailing CRLF.
+     * @param statusLine status line bytes
      */
     public DefaultHttpResponse(ByteBuf statusLine) {
         if (statusLine == null) {
@@ -110,33 +110,13 @@ public class DefaultHttpResponse implements HttpResponse {
     }
 
     @Override
-    public int streamId() {
-        return this.streamId;
-    }
-
-    @Override
-    public HttpResponse streamId(int streamId) {
-        this.streamId = streamId;
+    protected HttpResponse self() {
         return this;
     }
 
-    @Override
-    public boolean isBad() {
-        return this.bad;
-    }
-
-    @Override
-    public String badReason() {
-        return this.badReason;
-    }
-
-    @Override
-    public HttpResponse markBad(String reason) {
-        this.bad = true;
-        this.badReason = reason;
-        return this;
-    }
-
+    /**
+     * Return the protocol version.
+     */
     @Override
     public HttpVersion protocolVersion() {
         if (this.version == null) {
@@ -145,7 +125,11 @@ public class DefaultHttpResponse implements HttpResponse {
         return version;
     }
 
-    /** Sets the protocol version carried by this status line. */
+    /**
+     * Set the protocol version on the status line.
+     * @param version protocol version
+     * @return current response instance
+     */
     @Override
     public HttpResponse protocolVersion(HttpVersion version) {
         if (version == null) {
@@ -156,10 +140,17 @@ public class DefaultHttpResponse implements HttpResponse {
         return this;
     }
 
+    /**
+     * Return the raw protocol version text.
+     * @return raw protocol version text
+     */
     public String protocolVersionText() {
         return this.versionText;
     }
 
+    /**
+     * Return the response status.
+     */
     @Override
     public HttpStatus status() {
         if (this.status == null) {
@@ -168,7 +159,11 @@ public class DefaultHttpResponse implements HttpResponse {
         return status;
     }
 
-    /** Sets the response status carried by this status line. */
+    /**
+     * Set the response status on the status line.
+     * @param status response status
+     * @return current response instance
+     */
     @Override
     public HttpResponse status(HttpStatus status) {
         if (status == null) {
@@ -180,17 +175,28 @@ public class DefaultHttpResponse implements HttpResponse {
         return this;
     }
 
+    /**
+     * Return the status code text.
+     */
     @Override
     public String statusText() {
         return this.statusText;
     }
 
+    /**
+     * Set the reason phrase.
+     * @param reason reason phrase
+     * @return current response instance
+     */
     @Override
     public HttpResponse reasonText(String reason) {
         this.reasonText = reason;
         return this;
     }
 
+    /**
+     * Return the reason phrase.
+     */
     @Override
     public String reasonText() {
         return this.reasonText;
@@ -201,15 +207,16 @@ public class DefaultHttpResponse implements HttpResponse {
         return getClass().getSimpleName() + "(version: " + protocolVersionText() + ", status: " + statusText() + ' ' + reasonText() + ')';
     }
 
+    /**
+     * Release the state held by this response object.
+     */
     @Override
     public void release() {
-        this.streamId = 0;
+        this.resetHttpObjectState();
         this.version = null;
         this.status = null;
         this.versionText = null;
         this.statusText = null;
         this.reasonText = null;
-        this.bad = false;
-        this.badReason = null;
     }
 }

@@ -14,24 +14,24 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
+
 import net.hasor.cobble.logging.Logger;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.DefaultHttpByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
- * Encodes {@link WebSocketFrame} objects into upgraded HTTP payload.
+ * Encode {@link WebSocketFrame} into upgraded HTTP payload objects.
  * <p>
- * Function:
+ * Main responsibilities:
  * <pre>
- *   serialize frame header and payload
+ *   serialize the frame header and payload
  *   apply RFC 6455 or V0 framing rules
- *   emit transparent HttpByteBuf for the HTTP codec
+ *   produce transparent {@code HttpByteBuf} objects for the HTTP codec
  * </pre>
  * <p>
- * pipeline view:
+ * Pipeline view:
  * <pre>
  *   WebSocketFrame -> WebSocketFrameEncoder -> HttpByteBuf -> HTTP codec -> socket bytes
  * </pre>
@@ -41,6 +41,8 @@ import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
  *   ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
  *   ctx.addLast("http", new HttpClientDuplexe());
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpObject> {
     private static final Logger              logger           = Logger.getLogger(WebSocketFrameEncoder.class);
@@ -49,7 +51,10 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
     private final        WebSocketVersion    defaultVersion;
     private final        boolean             detectVersion;
 
-    /** Creates an encoder for the specified WebSocket protocol version. */
+    /**
+     * Create an encoder for the specified WebSocket protocol version.
+     * @param version WebSocket version
+     */
     public WebSocketFrameEncoder(WebSocketVersion version) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
@@ -59,7 +64,10 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
         this.detectVersion = false;
     }
 
-    /** Creates an encoder that first uses the negotiated handshake version and falls back to RFC 6455 (version 13). */
+    /**
+     * Create an encoder with automatic version detection, preferring the
+     * negotiated handshake version and falling back to RFC 6455 version 13.
+     */
     public WebSocketFrameEncoder() {
         this.defaultVersion = WebSocketVersion.V13;
         this.detectVersion = true;
@@ -83,6 +91,9 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
 
     // RFC 6455 encoding (V7, V8, V13)
 
+    /**
+     * Encode outbound WebSocket frames into HTTP payload objects.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<WebSocketFrame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         WebSocketVersion version = resolveVersion(context);
@@ -92,31 +103,29 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
                 continue;
             }
 
-            WebSocketFrame frame = inputFrame;
             try {
-                frame = this.applyOutboundExtensions(context, inputFrame);
                 ByteBuf encoded;
                 if (version.isRfc6455Framing()) {
-                    encoded = encodeRfc6455(context, frame);
+                    encoded = encodeRfc6455(context, inputFrame);
                 } else {
-                    encoded = encodeHixie76(context, frame);
+                    encoded = encodeHixie76(context, inputFrame);
                 }
 
                 dst.offerMessage(new DefaultHttpByteBuf(encoded));
             } finally {
-                if (frame != inputFrame) {
-                    inputFrame.release();
-                }
-                frame.release();
+                inputFrame.release();
             }
         }
 
         return ProtoStatus.Next;
     }
 
+    /**
+     * Handle encoding errors. The encoder itself is stateless and does not keep
+     * buffered frame state.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
-        this.resetRuntimeExtensions(context, false);
         long channelID = context.getChannel().getChannelId();
         if (context.getConfig().isPrintLog()) {
             logger.warn("[WS-ENC] channel=" + channelID + " encoder error, stateless reset. cause=" + e.getClass().getSimpleName() + ": " + e.getMessage(), e);
@@ -127,16 +136,24 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
         return ProtoStatus.Next;
     }
 
+    /**
+     * Close the encoder. No additional cleanup is required because no buffered
+     * state is retained.
+     */
     @Override
     public void onClose(ProtoContext context) {
-        this.resetRuntimeExtensions(context, true);
     }
 
     // Hixie-76 encoding (V0)
 
-    /** Writes a variable-length integer in Hixie-76 style (7-bit groups, MSB first, continuation high bit). */
+    /**
+     * Write a variable-length integer in Hixie-76 style using big-endian 7-bit
+     * groups, with the high bit indicating continuation.
+     * @param out target buffer
+     * @param length length value
+     */
     private static void writeVariableLength(ByteBuf out, int length) {
-        // Determine number of 7-bit groups needed
+        // Determine how many 7-bit groups are needed.
         int groups = 1;
         int tmp = length;
         while (tmp > 0x7F) {
@@ -144,7 +161,7 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
             tmp >>= 7;
         }
 
-        // Write from most-significant group to least-significant
+        // Write from the most-significant group to the least-significant group.
         for (int i = groups - 1; i >= 0; i--) {
             byte b = (byte) ((length >> (i * 7)) & 0x7F);
             if (i > 0) {
@@ -309,82 +326,12 @@ public class WebSocketFrameEncoder implements ProtoHandler<WebSocketFrame, HttpO
             }
         }
 
-        this.validateNegotiatedRsv(context, frame);
-
         if (opcode == WebSocketOpcode.PING || opcode == WebSocketOpcode.PONG || opcode == WebSocketOpcode.CLOSE) {
             WebSocketUtils.validateControlFrame(frame, wsContext != null && wsContext.isClient());
         }
     }
 
-    private WebSocketFrame applyOutboundExtensions(ProtoContext context, WebSocketFrame frame) {
-        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
-        if (wsContext == null) {
-            return frame;
-        }
-
-        WebSocketFrame current = frame;
-        for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
-            WebSocketFrame encoded = runtimeExtension.encodeFrame(context, current);
-            if (encoded != current) {
-                current.release();
-                current = encoded;
-            }
-        }
-
-        return current;
-    }
-
-    private void validateNegotiatedRsv(ProtoContext context, WebSocketFrame frame) {
-        if (!frame.isRsv1() && !frame.isRsv2() && !frame.isRsv3()) {
-            return;
-        }
-
-        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
-        if (wsContext != null) {
-            for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
-                if (runtimeExtension.handlesOutboundFrame(frame)) {
-                    return;
-                }
-            }
-        }
-
-        throw new WebSocketProtocolViolationException(WebSocketCode.PROTOCOL_ERROR, "RSV bits require a negotiated websocket extension.");
-    }
-
     private WebSocketContext resolveHandshakeContext(ProtoContext context) {
-        WebSocketContext wsContext = context.context(WebSocketContext.class);
-        if (wsContext != null && wsContext.isReady()) {
-            return wsContext;
-        }
-
-        wsContext = context.rootContext(WebSocketContext.class);
-        if (wsContext != null && wsContext.isReady()) {
-            return wsContext;
-        }
-        return null;
-    }
-
-    private WebSocketContextImpl resolveRuntimeContext(ProtoContext context) {
-        WebSocketContext wsContext = resolveHandshakeContext(context);
-        if (wsContext instanceof WebSocketContextImpl) {
-            return (WebSocketContextImpl) wsContext;
-        }
-
-        return null;
-    }
-
-    private void resetRuntimeExtensions(ProtoContext context, boolean close) {
-        WebSocketContextImpl wsContext = resolveRuntimeContext(context);
-        if (wsContext == null) {
-            return;
-        }
-
-        for (WebSocketRuntimeExtension runtimeExtension : wsContext.runtimeList()) {
-            if (close) {
-                runtimeExtension.close();
-            } else {
-                runtimeExtension.reset();
-            }
-        }
+        return WebSocketUtils.readyContext(context);
     }
 }

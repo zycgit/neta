@@ -18,34 +18,52 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * Application-level WebSocket data chunk.
+ * Message-layer payload abstraction for websocket traffic.
  * <p>
- * Represents TEXT or BINARY payload after frame parsing, with fragmentation preserved through the
- * sequence field instead of eager aggregation.
+ * Inbound handlers typically use this type to represent staged TEXT or BINARY
+ * message chunks and preserve fragmentation order through the {@code sequence}
+ * field.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-15
  */
 public interface WebSocketMessage extends HttpObject {
-    /** Final chunk marker. When used alone it means start and end in one chunk. */
+    /**
+     * Marker for the final chunk.
+     * When used alone, it means the entire message consists of this single chunk.
+     */
     int FINAL_SEQUENCE = -1;
-    /** First chunk marker of a fragmented message stream. */
+    /**
+     * Marker for the first chunk in a fragmented message stream.
+     */
     int START_SEQUENCE = 0;
 
-    /** Returns the message type. */
+    /**
+     * Return the logical message type.
+     */
     WebSocketOpcode type();
 
     /**
-     * Returns the chunk sequence in the websocket message stream.
+     * Return the position of this chunk within the websocket message stream.
      * <p>
-     * {@code -1} means final chunk, {@code 0} means first chunk, and positive values mean
-     * continuation chunks in order.
+     * {@code -1} means the final chunk, {@code 0} means the first chunk, and
+     * positive numbers represent subsequent chunks in order.
      */
     int sequence();
 
-    /** Sets the chunk sequence and returns this message instance. */
+    /**
+     * Set the chunk sequence and return the current message instance.
+     * @param sequence chunk sequence
+     * @return current message instance
+     */
     WebSocketMessage sequence(int sequence);
 
-    /** Returns the raw payload content. */
+    /**
+     * Return the raw payload content.
+     */
     ByteBuf content();
 
-    /** Returns the payload length represented by this message chunk. */
+    /**
+     * Return the payload length represented by this message chunk.
+     */
     int payloadLength();
 }

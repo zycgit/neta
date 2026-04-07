@@ -20,31 +20,14 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
 /**
- * Server-side upgrade bridge used inside HTTP/WebSocket mixed routing.
+ * Bridge duplexer that upgrades one routed server HTTP exchange into a websocket route.
  * <p>
- * This duplexer is intended for routed server pipelines where the same connection first carries
- * normal HTTP traffic and later upgrades to WebSocket. Before upgrade, ordinary HTTP requests are
- * passed through unchanged. When an inbound WebSocket upgrade request is detected, the duplexer
- * temporarily delegates request processing to {@link WebSocketServerHandshakeDuplexer}. After the
- * handshake succeeds, it switches the current {@link ProtoRoutingControl route} to the configured
- * target branch.
- * <p>
- * Function:
- * <pre>
- *   keep ordinary HTTP traffic on the current route
- *   intercept one server-side upgrade transaction
- *   validate and complete the handshake through WebSocketServerHandshakeDuplexer
- *   switch to the target route after WebSocket becomes ready
- * </pre>
- * <p>
- * pipeline view:
- * <pre>
- *   HTTP branch
- *      -> WebSocketServerUpgradeRouteDuplexer
- *      -> HttpRequestAggregator / other HTTP handlers
- *      -> switchRoute(target)
- *      -> WebSocket branch
- * </pre>
+ * Ordinary HTTP requests keep flowing through the current route. When an inbound
+ * request is recognized as a websocket upgrade request, the request is delegated
+ * to {@link WebSocketServerHandshakeDuplexer}. After a successful handshake the
+ * active route switches to the configured websocket branch.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-24
  */
 public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
     private final WebSocketServerHandshakeDuplexer delegate;
@@ -55,31 +38,56 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
     private       boolean                          handshakePending;
     private       Boolean                          currentRequestHandshake;
 
+    /**
+     * Create a server-side route bridge with default accept-all authorization.
+     * @param routingControl routing controller used to switch branches
+     * @param version websocket version to negotiate
+     * @param targetRoute route name to switch to after a successful handshake
+     */
     public WebSocketServerUpgradeRouteDuplexer(ProtoRoutingControl routingControl, WebSocketVersion version, String targetRoute) {
         this(routingControl, version, targetRoute, (event, callback) -> callback.accept());
     }
 
+    /**
+     * Create a server-side route bridge with an explicit handshake authorizer.
+     * @param routingControl routing controller used to switch branches
+     * @param version websocket version to negotiate
+     * @param targetRoute route name to switch to after a successful handshake
+     * @param authorizer callback that accepts or rejects the request
+     */
     public WebSocketServerUpgradeRouteDuplexer(ProtoRoutingControl routingControl, WebSocketVersion version, String targetRoute, WebSocketHandshakeAuthorizer authorizer) {
         this.delegate = new WebSocketServerHandshakeDuplexer(version, Objects.requireNonNull(authorizer, "authorizer is null"));
         this.routingControl = Objects.requireNonNull(routingControl, "routingControl is null");
         this.targetRoute = targetRoute;
     }
 
+    /**
+     * Initialize the delegated handshake duplexer.
+     */
     @Override
     public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.delegate.onInit(name, rcvSize, sndSize, context);
     }
 
+    /**
+     * Forward channel activation to the delegated handshake duplexer.
+     */
     @Override
     public void onActive(ProtoContext context) throws Throwable {
         this.delegate.onActive(context);
     }
 
+    /**
+     * Forward events to the delegated handshake duplexer.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         return this.delegate.onEvent(context, event, isRcv);
     }
 
+    /**
+     * Intercept the upgrade exchange and switch the route once websocket is ready.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, boolean isRcv,//
             ProtoRcvQueue<HttpObject> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
@@ -184,6 +192,9 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
         return ProtoStatus.Next;
     }
 
+    /**
+     * Reset buffered route state when the upgrade flow fails.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         this.handshakePending = false;
@@ -191,6 +202,9 @@ public class WebSocketServerUpgradeRouteDuplexer implements ProtoDuplexer<HttpOb
         return this.delegate.onError(context, isRcv, e, eh);
     }
 
+    /**
+     * Clear any buffered route state when the channel closes.
+     */
     @Override
     public void onClose(ProtoContext context) {
         this.handshakePending = false;

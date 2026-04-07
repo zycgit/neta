@@ -20,7 +20,9 @@ import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Default mutable implementation of {@link FileUpload}.
+ * Default implementation of {@link FileUpload}, storing part metadata and the content-buffer reference.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class DefaultFileUpload implements FileUpload {
     private final String              name;
@@ -30,19 +32,19 @@ public class DefaultFileUpload implements FileUpload {
     private final Map<String, String> headers;
 
     /**
-     * Creates a plain form field (no filename, no content-type).
+     * Creates a regular form-field part without a filename or content type.
      */
     public DefaultFileUpload(String name, ByteBuf content) {
         this(name, null, null, content, new LinkedHashMap<>());
     }
 
     /**
-     * Creates a file upload part.
-     * @param name form field name
-     * @param filename original filename (may be {@code null} for plain fields)
-     * @param contentType MIME type of the part body (may be {@code null})
-     * @param content raw body bytes
-     * @param headers extra part headers (may be empty, not null)
+     * Creates a file-upload part.
+     * @param name the form field name
+     * @param filename the original filename, which may be {@code null} for regular fields
+     * @param contentType the MIME type of the part body, which may be {@code null}
+     * @param content the raw content bytes
+     * @param headers the additional part-header map; the current implementation stores this reference directly
      */
     public DefaultFileUpload(String name, String filename, String contentType, ByteBuf content, Map<String, String> headers) {
         if (StringUtils.isBlank(name)) {
@@ -58,26 +60,42 @@ public class DefaultFileUpload implements FileUpload {
         this.headers = headers;
     }
 
+    /**
+     * Returns the form field name.
+     */
     @Override
     public String name() {
         return name;
     }
 
+    /**
+     * Returns the uploaded filename.
+     */
     @Override
     public String filename() {
         return filename;
     }
 
+    /**
+     * Returns the content type of the part.
+     */
     @Override
     public String contentType() {
         return contentType;
     }
 
+    /**
+     * Returns the part body content.
+     */
     @Override
     public ByteBuf content() {
         return content;
     }
 
+    /**
+     * Returns a part-header value by name.
+     * The lookup parameter is converted to lowercase before accessing the internal map.
+     */
     @Override
     public String header(String name) {
         if (name == null) {
@@ -86,6 +104,9 @@ public class DefaultFileUpload implements FileUpload {
         return headers.get(name.toLowerCase());
     }
 
+    /**
+     * Returns the string representation of the current upload part.
+     */
     @Override
     public String toString() {
         return "DefaultFileUpload{name='" + name + '\'' + ", filename='" + filename + '\'' + ", contentType='" + contentType + '\'' + '}';

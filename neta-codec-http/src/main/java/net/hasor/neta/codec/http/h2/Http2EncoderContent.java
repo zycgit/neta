@@ -21,18 +21,18 @@ import net.hasor.neta.codec.http.HttpRequest;
 import net.hasor.neta.codec.http.HttpResponse;
 
 /**
- * Per-connection state container for {@link Http2ObjectEncoder}.
+ * Connection-level state container used by {@link Http2ObjectEncoder}.
  * <p>
- * Operations are grouped into four categories:
+ * Operations are divided into four categories:
  * <ul>
- *   <li><b>init</b>   — constructor; all state is fully initialized at construction time.</li>
- *   <li><b>append</b> — called by the Encoder to build outbound frames (HPACK encoding,
- *       stream ID allocation, preface tracking).</li>
- *   <li><b>bind</b>   — current stream binding is refreshed from explicit outbound message
- *       stream IDs or higher-layer response association.</li>
- *   <li><b>release</b> — no resources to release (HPACK encoder is GC-eligible).</li>
+ *   <li><b>init</b>: the constructor, where all state is initialized.</li>
+ *   <li><b>append</b>: called by the encoder to build outbound frames, including HPACK encoding, stream-ID allocation, and preface tracking.</li>
+ *   <li><b>bind</b>: refreshes the current stream binding according to an explicit outbound message stream ID or higher-level response association.</li>
+ *   <li><b>release</b>: no extra resources need explicit release; the HPACK encoder can be reclaimed by the GC.</li>
  * </ul>
- * All fields are private; no caller may access internal sub-objects directly.
+ * All fields are private, and callers must not access internal child objects directly.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-28
  */
 class Http2EncoderContent {
     private final HpackEncoder      hpackEncoder;
@@ -45,7 +45,12 @@ class Http2EncoderContent {
     private       HttpResponse      pendingResponse;
     private       boolean           trailingHeadersSent;
 
-    Http2EncoderContent(boolean serverMode, Http2Settings localSettings) {
+    /**
+     * Creates the encoder-side connection state container.
+     * @param serverMode whether the current endpoint runs in server mode; this determines the initial stream-ID parity
+     * @param localSettings the HTTP/2 settings used during encoding; if {@code null}, an empty default configuration is used
+     */
+    public Http2EncoderContent(boolean serverMode, Http2Settings localSettings) {
         this.localSettings = localSettings != null ? new Http2Settings(localSettings) : new Http2Settings();
         this.hpackEncoder = new HpackEncoder((int) this.localSettings.headerTableSize());
         this.nextStreamId = new AtomicInteger(serverMode ? 2 : 1);
@@ -55,74 +60,109 @@ class Http2EncoderContent {
 
     // ─── preface state ────────────────────────────────────────────────────────
 
-    /** Returns {@code true} if the connection preface has already been sent. */
-    boolean isPrefaceSent() {
+    /**
+     * Returns {@code true} once the connection preface has been sent.
+     */
+    public boolean isPrefaceSent() {
         return prefaceSent;
     }
 
-    /** Marks the connection preface as sent. */
-    void markPrefaceSent() {
+    /**
+     * Marks the connection preface as sent.
+     */
+    public void markPrefaceSent() {
         this.prefaceSent = true;
     }
 
     // ─── stream ID management ─────────────────────────────────────────────────
 
-    /** Returns the stream ID to use for the current outbound message. */
-    int currentStreamId() {
+    /**
+     * Returns the stream ID that should be used for the current outbound message.
+     */
+    public int currentStreamId() {
         return currentStreamId;
     }
 
-    /** Sets the stream ID to be reused by the next outbound message fragment sequence. */
-    void setCurrentStreamId(int streamId) {
+    /**
+     * Sets the stream ID that the next outbound message fragment sequence should reuse.
+     */
+    public void setCurrentStreamId(int streamId) {
         this.currentStreamId = streamId;
     }
 
-    HttpRequest pendingRequest() {
+    /**
+     * Returns the currently buffered request start-line object that has not yet entered header encoding.
+     */
+    public HttpRequest pendingRequest() {
         return this.pendingRequest;
     }
 
-    void pendingRequest(HttpRequest pendingRequest) {
+    /**
+     * Stores the request start-line object that is about to be encoded.
+     */
+    public void pendingRequest(HttpRequest pendingRequest) {
         this.pendingRequest = pendingRequest;
     }
 
-    HttpResponse pendingResponse() {
+    /**
+     * Returns the currently buffered response start-line object that has not yet entered header encoding.
+     */
+    public HttpResponse pendingResponse() {
         return this.pendingResponse;
     }
 
-    void pendingResponse(HttpResponse pendingResponse) {
+    /**
+     * Stores the response start-line object that is about to be encoded.
+     */
+    public void pendingResponse(HttpResponse pendingResponse) {
         this.pendingResponse = pendingResponse;
     }
 
-    void clearPendingStartLine() {
+    /**
+     * Clears the currently buffered request/response start-line binding.
+     */
+    public void clearPendingStartLine() {
         this.pendingRequest = null;
         this.pendingResponse = null;
     }
 
-    boolean trailingHeadersSent() {
+    /**
+     * Returns {@code true} once trailing headers have been sent on the current stream.
+     */
+    public boolean trailingHeadersSent() {
         return this.trailingHeadersSent;
     }
 
-    void trailingHeadersSent(boolean trailingHeadersSent) {
+    /**
+     * Marks whether trailing headers have already been sent on the current stream.
+     */
+    public void trailingHeadersSent(boolean trailingHeadersSent) {
         this.trailingHeadersSent = trailingHeadersSent;
     }
 
     /**
-     * Allocates and returns the next outbound stream ID for a new request (client mode).
-     * Uses odd-numbered IDs and increments by 2 per RFC 9113.
+     * Allocates and returns the next stream ID for a new outbound request, used only in client mode.
+     * According to RFC 9113, odd IDs are used here and incremented by 2.
      */
-    int allocateNextStreamId() {
+    public int allocateNextStreamId() {
         int id = nextStreamId.getAndAdd(2);
         this.currentStreamId = id;
         return id;
     }
 
-    void queueOutboundFrame(Http2Frame frame) {
+    /**
+     * Adds a frame to the outbound staging queue.
+     */
+    public void queueOutboundFrame(Http2Frame frame) {
         if (frame != null) {
             this.pendingOutboundFrames.offer(frame);
         }
     }
 
-    void queueOutboundFrames(Iterable<Http2Frame> frames) {
+    /**
+     * Appends a batch of frames to the outbound staging queue.
+     */
+    public void queueOutboundFrames(Iterable<Http2Frame> frames) {
         if (frames == null) {
             return;
         }
@@ -131,31 +171,41 @@ class Http2EncoderContent {
         }
     }
 
-    Http2Frame pollPendingOutboundFrame() {
+    /**
+     * Polls one pending outbound frame, or {@code null} if the queue is empty.
+     */
+    public Http2Frame pollPendingOutboundFrame() {
         return this.pendingOutboundFrames.poll();
     }
 
-    boolean hasPendingOutboundFrames() {
+    /**
+     * Returns {@code true} when the outbound staging queue still contains frames to send.
+     */
+    public boolean hasPendingOutboundFrames() {
         return !this.pendingOutboundFrames.isEmpty();
     }
 
     // ─── HPACK header encoding ────────────────────────────────────────────────
 
-    /** Begins a new HPACK header-block encoding session. */
-    void beginHeaderEncode() {
+    /**
+     * Starts a new HPACK header-block encoding session.
+     */
+    public void beginHeaderEncode() {
         hpackEncoder.beginEncode();
     }
 
-    /** Encodes a single header field into the current session. */
-    void encodeHeader(String name, String value) {
+    /**
+     * Encodes a single header field in the current session.
+     */
+    public void encodeHeader(String name, String value) {
         hpackEncoder.encodeHeaderDirect(name, value);
     }
 
     /**
-     * Finalises encoding and returns the complete HPACK-compressed header block.
-     * Must be called after {@link #beginHeaderEncode()} and all {@link #encodeHeader} calls.
+     * Finishes encoding and returns the complete HPACK-compressed header block.
+     * This must be executed after {@link #beginHeaderEncode()} and after all {@link #encodeHeader} calls.
      */
-    byte[] finishHeaderEncode() {
+    public byte[] finishHeaderEncode() {
         int len = hpackEncoder.encodedLength();
         byte[] block = new byte[len];
         System.arraycopy(hpackEncoder.encodedBuffer(), 0, block, 0, len);

@@ -17,10 +17,15 @@ package net.hasor.neta.codec.http;
 
 /**
  * Default implementation of {@link TrailerHttpHeaders}.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  */
 public class DefaultTrailerHttpHeaders extends DefaultHttpHeaders implements TrailerHttpHeaders {
     public static final TrailerHttpHeaders EMPTY = new DefaultTrailerHttpHeaders();
 
+    /**
+     * Create an empty trailer header block.
+     */
     public DefaultTrailerHttpHeaders() {
         super();
     }

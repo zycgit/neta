@@ -18,16 +18,25 @@ package net.hasor.neta.codec.http;
 /**
  * Default implementation of {@link LastHttpHeaders}.
  * <p>
- * This is the final header block of a message. Any following object belongs to the body section.
+ * This marks the end of the initial header section. Subsequent objects enter the
+ * content phase, and chunked messages may still emit trailing headers.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  */
 public class DefaultLastHttpHeaders extends DefaultHttpHeaders implements LastHttpHeaders {
     public static final LastHttpHeaders EMPTY = new DefaultLastHttpHeaders();
 
-    /** Creates an empty terminal header block. */
+    /**
+     * Create an empty terminal header block.
+     */
     public DefaultLastHttpHeaders() {
         super();
     }
 
+    /**
+     * Create a terminal header block copy from an existing header block.
+     * @param headers source header block
+     */
     public DefaultLastHttpHeaders(HttpHeaders headers) {
         if (headers != null) {
             this.appendHeaders(headers);

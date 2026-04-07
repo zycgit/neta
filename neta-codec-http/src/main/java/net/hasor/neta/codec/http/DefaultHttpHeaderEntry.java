@@ -17,11 +17,20 @@ package net.hasor.neta.codec.http;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.function.Release;
 
-/** Default implementation of one HTTP header entry. */
+/**
+ * Default implementation of a single HTTP header entry.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-10
+ */
 public class DefaultHttpHeaderEntry implements Release {
     private final String name;
     private final String value;
 
+    /**
+     * Create a header entry.
+     * @param name header name
+     * @param value header value
+     */
     public DefaultHttpHeaderEntry(String name, String value) {
         if (StringUtils.isBlank(name)) {
             throw new IllegalArgumentException("name must not be empty");
@@ -34,14 +43,26 @@ public class DefaultHttpHeaderEntry implements Release {
         this.value = value;
     }
 
+    /**
+     * Return the header name.
+     * @return header name
+     */
     public String getName() {
         return this.name;
     }
 
+    /**
+     * Return the header value.
+     * @return header value
+     */
     public String getValue() {
         return this.value;
     }
 
+    /**
+     * Retain this header entry and return itself.
+     * @return current header entry
+     */
     public DefaultHttpHeaderEntry retain() {
         return this;
     }

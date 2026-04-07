@@ -16,15 +16,27 @@
 package net.hasor.neta.codec.http;
 import net.hasor.neta.channel.SoEventData;
 
+/**
+ * Defines the common contract for HTTP-related user events.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
+ */
 public interface HttpEvent extends SoEventData {
-	long streamId();
+    /**
+     * Returns the stream identifier associated with this event.
+     * @return stream identifier
+     */
+    long streamId();
 
-	HttpEvent streamId(long streamId);
+    /**
+     * Sets the stream identifier associated with this event.
+     * @param streamId stream identifier
+     * @return this event object
+     */
+    HttpEvent streamId(long streamId);
 
-	default int streamIdAsInt() {
-		return Math.toIntExact(this.streamId());
-	}
-
-	default void release() {
-	}
+    /**
+     * Releases resources held by this event.
+     */
+    void release();
 }

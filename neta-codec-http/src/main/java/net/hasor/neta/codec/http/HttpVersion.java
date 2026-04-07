@@ -23,15 +23,17 @@ import java.nio.charset.StandardCharsets;
  *   HTTP-version = HTTP-name "/" DIGIT "." DIGIT
  *   HTTP-name    = %x48.54.54.50 ; "HTTP", case-sensitive
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class HttpVersion {
-    /** HTTP/1.0 - connection is closed after each request/response by default. */
+    /** HTTP/1.0 closes the connection by default after each request or response. */
     public static final HttpVersion HTTP_1_0 = new HttpVersion("HTTP", 1, 0, false);
-    /** HTTP/1.1 - connection is kept alive by default (RFC 7230). */
+    /** HTTP/1.1 keeps connections alive by default. See RFC 7230. */
     public static final HttpVersion HTTP_1_1 = new HttpVersion("HTTP", 1, 1, true);
-    /** HTTP/2.0 - binary framing, multiplexed streams (RFC 7540 / RFC 9113). */
+    /** HTTP/2.0 uses binary framing and multiplexed streams. See RFC 7540 / RFC 9113. */
     public static final HttpVersion HTTP_2_0 = new HttpVersion("HTTP", 2, 0, true);
-    /** HTTP/3.0 - QUIC-based transport (RFC 9114). */
+    /** HTTP/3.0 runs over QUIC transport. See RFC 9114. */
     public static final HttpVersion HTTP_3_0 = new HttpVersion("HTTP", 3, 0, true);
 
     private final String  protocolName;
@@ -42,11 +44,11 @@ public final class HttpVersion {
     private final boolean keepAliveDefault;
 
     /**
-     * Creates a new HttpVersion instance.
-     * @param protocolName the protocol name (e.g., "HTTP")
-     * @param majorVersion the major version number
-     * @param minorVersion the minor version number
-     * @param keepAliveDefault whether keep-alive is the default behavior
+     * Creates an HttpVersion instance.
+     * @param protocolName protocol name, such as "HTTP"
+     * @param majorVersion major version number
+     * @param minorVersion minor version number
+     * @param keepAliveDefault whether keep-alive is enabled by default
      */
     public HttpVersion(String protocolName, int majorVersion, int minorVersion, boolean keepAliveDefault) {
         if (protocolName == null || protocolName.trim().isEmpty()) {
@@ -67,18 +69,17 @@ public final class HttpVersion {
     }
 
     /**
-     * Parses an HTTP version string (e.g., "HTTP/1.1") and returns the corresponding
-     * {@link HttpVersion} instance. If the string matches a well-known version,
-     * the cached constant is returned.
-     * @param text the version string to parse
+     * Parses an HTTP version string such as "HTTP/1.1" and returns the matching {@link HttpVersion} instance.
+     * Returns a cached constant when the input matches a known version.
+     * @param text version string to parse
      * @return the matching HttpVersion
-     * @throws IllegalArgumentException if the text is not a valid HTTP version
+     * @throws IllegalArgumentException if the text does not follow the HTTP version format
      */
     public static HttpVersion valueOf(String text) {
         if (text == null || text.isEmpty()) {
             throw new IllegalArgumentException("text must not be empty");
         }
-        // Fast path: direct comparison (works for canonical HTTP/1.x without whitespace)
+        // Fast path: direct comparison for canonical HTTP/1.x text without surrounding whitespace.
         if ("HTTP/1.1".equals(text)) {
             return HTTP_1_1;
         }
@@ -86,7 +87,7 @@ public final class HttpVersion {
             return HTTP_1_0;
         }
 
-        // Slow path: normalize and retry
+        // Slow path: normalize first, then try again.
         text = text.trim().toUpperCase();
         if ("HTTP/1.1".equals(text)) {
             return HTTP_1_1;
@@ -95,7 +96,7 @@ public final class HttpVersion {
             return HTTP_1_0;
         }
 
-        // Parse custom version: PROTOCOL/MAJOR.MINOR
+        // Parse a custom version in PROTOCOL/MAJOR.MINOR form.
         int slashIdx = text.indexOf('/');
         if (slashIdx < 0) {
             throw new IllegalArgumentException("invalid version format: " + text);
@@ -116,8 +117,8 @@ public final class HttpVersion {
     }
 
     /**
-     * Parses an HTTP version from a {@link CharSequence} without requiring an eager String copy.
-     * @param text the version text to parse
+     * Parses an HTTP version from a {@link CharSequence} to avoid creating a String too early.
+     * @param text version text to parse
      * @return the matching HttpVersion
      */
     public static HttpVersion valueOf(CharSequence text) {
@@ -162,36 +163,51 @@ public final class HttpVersion {
         return true;
     }
 
-    /** Returns the protocol name (e.g., "HTTP"). */
+    /**
+     * Returns the protocol name, such as "HTTP".
+     * @return protocol name
+     */
     public String protocolName() {
         return protocolName;
     }
 
-    /** Returns the major version number (e.g., 1 in HTTP/1.1). */
+    /**
+     * Returns the major version number, such as 1 in HTTP/1.1.
+     * @return major version number
+     */
     public int majorVersion() {
         return majorVersion;
     }
 
-    /** Returns the minor version number (e.g., 1 in HTTP/1.1). */
+    /**
+     * Returns the minor version number, such as 1 in HTTP/1.1.
+     * @return minor version number
+     */
     public int minorVersion() {
         return minorVersion;
     }
 
-    /** Returns the full version text (e.g., "HTTP/1.1"). */
+    /**
+     * Returns the full version text, such as "HTTP/1.1".
+     * @return full version text
+     */
     public String text() {
         return text;
     }
 
-    /** Returns the pre-cached ASCII bytes of the version text (e.g., "HTTP/1.1"). */
+    /**
+     * Returns the cached ASCII bytes of the version text, such as "HTTP/1.1".
+     * @return version text bytes
+     */
     public byte[] textBytes() {
         return textBytes;
     }
 
     /**
-     * Returns {@code true} if the connection is kept alive by default
-     * unless the "Connection" header is set to "close" explicitly.
+     * Returns the default persistence behavior for this version when evaluating connection keep-alive.
      * <p>
-     * Per RFC 7230, HTTP/1.1 defaults to keep-alive, while HTTP/1.0 defaults to close.
+     * The current implementation returns false for HTTP/1.0 and true for HTTP/1.1, HTTP/2.0, and HTTP/3.0.
+     * @return whether the connection is kept alive by default
      */
     public boolean isKeepAliveDefault() {
         return keepAliveDefault;

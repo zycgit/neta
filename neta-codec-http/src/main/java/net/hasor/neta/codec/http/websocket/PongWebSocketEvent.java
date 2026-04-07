@@ -18,30 +18,82 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
 
 /**
- * Network event that requests or represents a WebSocket pong.
+ * Event representing a received pong control frame or a request to send pong actively.
  * <p>
- * Carries the optional pong payload and is commonly emitted by inbound control-frame handling.
+ * This event has two sources. One source is when the WebSocket inbound handler
+ * consumes a network-side PONG frame and creates the event for publication to
+ * the receive side. The other source is business code actively calling
+ * fireEvent, after which handlers intercept it and convert it into an outbound
+ * pong control message.
+ * </p>
+ * <p>
+ * Sequence diagram:
+ * <pre>
+ * Branch A: receiving a network-side PONG frame
+ *   Remote peer         WebSocketInboundHandler            ProtoContext             Application listener
+ *        |                        |                              |                            |
+ *        | PONG Frame             |                              |                            |
+ *        |----------------------->|                              |                            |
+ *        |                        | handlePong(...)              |                            |
+ *        |                        | new PongWebSocketEvent(...)  |                            |
+ *        |                        | fireEvent(...)               |                            |
+ *        |                        |----------------------------->|                            |
+ *        |                        |                              | PongWebSocketEvent         |
+ *        |                        |                              |--------------------------->|
+ * </pre><pre>
+ * Branch B: actively sending PONG locally
+ *   Business/Upstream Handler      ProtoContext         Inbound/Outbound Handler       WebSocket outbound flow
+ *             |                        |                         |                              |
+ *             | fireEvent(PONG)        |                         |                              |
+ *             |----------------------->|                         |                              |
+ *             |                        | onEvent(...)            |                              |
+ *             |                        |------------------------>|                              |
+ *             |                        |                         | sendControlEventFrame(...)   |
+ *             |                        |                         |----------------------------->|
+ *             |                        | sendData(PONG)          |                              |
+ *             |                        |------------------------------------------------------->|
+ * </pre>
+ * <p>
+ * The event may carry an optional pong payload.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-23
  */
 public class PongWebSocketEvent extends AbstractHttpEvent {
     private final ByteBuf content;
 
+    /**
+     * Create a pong event with an empty payload.
+     */
     public PongWebSocketEvent() {
         this(ByteBuf.EMPTY);
     }
 
+    /**
+     * Create a pong event with the specified payload.
+     * @param content pong payload
+     */
     public PongWebSocketEvent(ByteBuf content) {
         this.content = content == null ? ByteBuf.EMPTY.retain() : content.retain();
     }
 
+    /**
+     * Return the pong event payload.
+     */
     public ByteBuf content() {
         return this.content;
     }
 
+    /**
+     * Release the payload resource held by this event.
+     */
     @Override
     protected void doRelease() {
         this.content.release();
     }
 
+    /**
+     * Return the compact summary string of the event.
+     */
     @Override
     public String toString() {
         return "PongWebSocketEvent{payloadLen=" + this.content.readableBytes() + '}';

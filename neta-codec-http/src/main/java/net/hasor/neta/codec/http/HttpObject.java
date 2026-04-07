@@ -17,44 +17,57 @@ package net.hasor.neta.codec.http;
 import net.hasor.cobble.function.Release;
 
 /**
- * Marker interface for all HTTP objects that flow through the HTTP codec pipeline.
+ * Marks all HTTP objects that flow through the HTTP codec pipeline.
  * <p>
- * A complete message is represented as an ordered sequence of {@link HttpObject}s:
+ * A complete message is typically represented as an ordered sequence of {@link HttpObject} instances:
  * <ol>
- *   <li>{@link HttpRequest} or {@link HttpResponse} for the start line</li>
- *   <li>Zero or more {@link HttpHeaders} header blocks</li>
- *   <li>One {@link LastHttpHeaders} marker that closes the header section</li>
- *   <li>Zero or more {@link HttpContent} body chunks</li>
- *   <li>Zero or more {@link TrailerHttpHeaders} blocks after the body for chunked messages</li>
- *   <li>One {@link LastHttpContent} marker that closes the body section</li>
+ *   <li>a {@link HttpRequest} or {@link HttpResponse} carrying the start line</li>
+ *   <li>zero or more {@link HttpHeaders} header blocks</li>
+ *   <li>a {@link LastHttpHeaders} object that closes the initial header section</li>
+ *   <li>zero or more {@link HttpContent} body chunks</li>
+ *   <li>for chunked messages, zero or more {@link TrailerHttpHeaders} objects after the body</li>
+ *   <li>for messages with an explicit end boundary, a {@link LastHttpContent} object that closes the content section</li>
  * </ol>
  * <p>
- * Aggregated forms such as {@link FullHttpRequest} and {@link FullHttpResponse} collapse the
- * final header marker and final content marker into a single object for convenience.
+ * Responses delimited by connection close do not emit a terminal object after the last content chunk; the message ends when the connection closes.
  * <p>
- * HTTP/2 transparency: objects decoded from HTTP/2 carry the originating stream ID via
- * {@link #streamId()}, enabling protocol-agnostic proxy and routing logic. HTTP/1.x objects
- * typically return {@code 0}.
+ * Aggregated forms such as {@link FullHttpRequest} and {@link FullHttpResponse} fold the final header marker and final content marker into a single object for easier use.
+ * <p>
+ * In HTTP/2 pass-through scenarios, objects decoded from HTTP/2 carry their source stream identifier through {@link #streamId()} so protocol-agnostic proxying and routing can preserve stream affinity.
+ * HTTP/1.x objects usually return {@code 0}.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  */
 public interface HttpObject extends Release {
-    /** Returns the HTTP/2 stream ID associated with this object, or {@code 0} when none exists. */
+    /**
+     * Returns the HTTP/2 stream identifier associated with this object, or {@code 0} when no stream is attached.
+     * @return stream identifier
+     */
     int streamId();
 
-    /** Associates this object with an HTTP/2 stream ID and returns {@code this} for chaining. */
+    /**
+     * Associates an HTTP/2 stream identifier with this object and returns the current object for chaining.
+     * @param streamId stream identifier
+     * @return this object
+     */
     HttpObject streamId(int streamId);
 
-    /** Returns whether this object belongs to a syntactically malformed HTTP message. */
-    default boolean isBad() {
-        return false;
-    }
+    /**
+     * Returns whether this object belongs to a malformed HTTP message.
+     * @return whether this is a bad message object
+     */
+    boolean isBad();
 
-    /** Returns the parse failure reason when {@link #isBad()} is true, otherwise {@code null}. */
-    default String badReason() {
-        return null;
-    }
+    /**
+     * Returns the parse failure reason when {@link #isBad()} is true; otherwise returns {@code null}.
+     * @return failure reason
+     */
+    String badReason();
 
-    /** Marks this object as malformed and returns {@code this} for chaining. */
-    default HttpObject markBad(String reason) {
-        return this;
-    }
+    /**
+     * Marks this object as a bad message object and returns the current object for chaining.
+     * @param reason failure reason
+     * @return this object
+     */
+    HttpObject markBad(String reason);
 }

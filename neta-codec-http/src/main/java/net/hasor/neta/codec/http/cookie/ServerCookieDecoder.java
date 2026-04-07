@@ -17,24 +17,28 @@ package net.hasor.neta.codec.http.cookie;
 import java.nio.charset.StandardCharsets;
 import net.hasor.cobble.StringUtils;
 import net.hasor.neta.bytebuf.ByteBuf;
-import net.hasor.neta.bytebuf.StringView;
 
 /**
- * Decodes the value of an HTTP <b>response</b> {@code Set-Cookie} header into a
+ * Decodes a single HTTP response-side {@code Set-Cookie} header value into a
  * {@link DefaultCookie} instance.
- * <p>A {@code Set-Cookie} header carries a single cookie definition with optional
- * attributes, per <a href="https://tools.ietf.org/html/rfc6265#section-4.1">RFC 6265 §4.1</a>:
- * <pre>
- *   Set-Cookie: name=value; Path=/; Domain=example.com; Max-Age=3600; Secure; HttpOnly; SameSite=Lax
- * </pre>
- * <h3>Usage</h3>
+ * <p>The current implementation parses the first {@code name=value} fragment and recognizes
+ * {@code Domain}, {@code Path}, {@code Max-Age}, {@code Expires}, {@code SameSite},
+ * {@code Secure}, and {@code HttpOnly}. Other attributes are ignored.
+ * <p>This type is responsible only for one {@code Set-Cookie} header value and does not merge
+ * multiple response headers into a collection.
+ * If the response contains multiple {@code Set-Cookie} headers, whether they share the same name or
+ * not, the caller should read them one by one and decode each entry separately.
+ * In other words, the decoder should be called once for each {@code Set-Cookie} header in the response.
+ * <h3>Usage Example</h3>
  * <pre>
  *   String header = "session=abc; Path=/api; HttpOnly; Secure; Max-Age=3600";
  *   DefaultCookie cookie = ServerCookieDecoder.decode(header);
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class ServerCookieDecoder {
-    // pre-computed lowercase attribute names for byte-level comparison
+    // Precomputed lowercase attribute names used by byte-level comparisons.
     private static final byte[] SECURE   = "secure".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] HTTPONLY = "httponly".getBytes(StandardCharsets.US_ASCII);
     private static final byte[] DOMAIN   = "domain".getBytes(StandardCharsets.US_ASCII);
@@ -44,11 +48,12 @@ public final class ServerCookieDecoder {
     private static final byte[] SAMESITE = "samesite".getBytes(StandardCharsets.US_ASCII);
 
     /**
-     * Decodes one {@code Set-Cookie} response header value from a {@link ByteBuf}.
-     * The buffer's readerIndex is not modified.
+     * Decodes a single {@code Set-Cookie} response header value from a {@link ByteBuf}.
+     * This method does not modify the buffer readerIndex.
+     * Unrecognized attributes are ignored.
      * @param buf the buffer containing the raw {@code Set-Cookie} header value; may be {@code null}
-     * @return the decoded {@link DefaultCookie}, or {@code null} if the input is null or empty
-     * @throws IllegalArgumentException if the header does not contain a valid {@code name=value} pair
+     * @return the decoded {@link DefaultCookie}, or {@code null} if the input is {@code null} or empty
+     * @throws IllegalArgumentException if the header value does not contain a valid {@code name=value} pair
      */
     public static DefaultCookie decode(ByteBuf buf) {
         if (buf == null || buf.readableBytes() == 0) {
@@ -57,17 +62,17 @@ public final class ServerCookieDecoder {
 
         final int length = buf.readableBytes();
 
-        // find first ';' to isolate name=value pair
+        // Find the first ';' to separate the name=value pair.
         int firstSemi = CookieUtils.indexOf(buf, 0, length, (byte) ';');
         int firstEnd = firstSemi < 0 ? length : firstSemi;
 
-        // find '='
+        // Find '='.
         int eqIdx = CookieUtils.indexOf(buf, 0, firstEnd, (byte) '=');
         if (eqIdx <= 0) {
             throw new IllegalArgumentException("Invalid Set-Cookie header: missing '=' in name=value pair: " + buf.getString(0, firstEnd, StandardCharsets.US_ASCII));
         }
 
-        // trim name
+        // Trim leading and trailing whitespace around the name.
         int nameStart = 0;
         while (nameStart < eqIdx && buf.getByte(nameStart) <= ' ') {
             nameStart++;
@@ -77,7 +82,7 @@ public final class ServerCookieDecoder {
             nameEnd--;
         }
 
-        // trim value
+        // Trim leading and trailing whitespace around the value.
         int valStart = eqIdx + 1;
         while (valStart < firstEnd && buf.getByte(valStart) <= ' ') {
             valStart++;
@@ -87,17 +92,17 @@ public final class ServerCookieDecoder {
             valEnd--;
         }
 
-        // unquote
+        // Remove wrapping quotes.
         if (valEnd - valStart >= 2 && buf.getByte(valStart) == '"' && buf.getByte(valEnd - 1) == '"') {
             valStart++;
             valEnd--;
         }
 
         DefaultCookie cookie = new DefaultCookie(                          //
-                StringView.request(buf, nameStart, nameEnd - nameStart),//
-                StringView.request(buf, valStart, valEnd - valStart));
+                buf.getString(nameStart, nameEnd - nameStart, StandardCharsets.US_ASCII),//
+                buf.getString(valStart, valEnd - valStart, StandardCharsets.US_ASCII));
 
-        // parse attributes
+        // Parse attributes.
         int pos = firstSemi < 0 ? length : firstSemi + 1;
         while (pos < length) {
             int nextSemi = CookieUtils.indexOf(buf, pos, length, (byte) ';');
@@ -129,9 +134,9 @@ public final class ServerCookieDecoder {
                     }
 
                     if (keyLen == 6 && CookieUtils.equalsIgnoreCase(buf, start, DOMAIN)) {
-                        cookie.setLazyDomain(StringView.request(buf, aValStart, attrEnd - aValStart));
+                        cookie.setDomain(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
                     } else if (keyLen == 4 && CookieUtils.equalsIgnoreCase(buf, start, PATH)) {
-                        cookie.setLazyPath(StringView.request(buf, aValStart, attrEnd - aValStart));
+                        cookie.setPath(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
                     } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, MAX_AGE)) {
                         long maxAge = 0;
                         boolean negative = false;
@@ -153,9 +158,9 @@ public final class ServerCookieDecoder {
                             cookie.setMaxAge(negative ? -maxAge : maxAge);
                         }
                     } else if (keyLen == 7 && CookieUtils.equalsIgnoreCase(buf, start, EXPIRES)) {
-                        cookie.setLazyExpires(StringView.request(buf, aValStart, attrEnd - aValStart));
+                        cookie.setExpires(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
                     } else if (keyLen == 8 && CookieUtils.equalsIgnoreCase(buf, start, SAMESITE)) {
-                        cookie.setLazySameSite(StringView.request(buf, aValStart, attrEnd - aValStart));
+                        cookie.setSameSite(buf.getString(aValStart, attrEnd - aValStart, StandardCharsets.US_ASCII));
                     }
                 }
             }
@@ -167,10 +172,11 @@ public final class ServerCookieDecoder {
     }
 
     /**
-     * Decodes one {@code Set-Cookie} response header value.
+     * Decodes a single {@code Set-Cookie} response header value.
+     * Unrecognized attributes are ignored.
      * @param setCookieHeader the raw {@code Set-Cookie} header value; may be {@code null}
-     * @return the decoded {@link DefaultCookie}, or {@code null} if the input is null or blank
-     * @throws IllegalArgumentException if the header does not contain a valid {@code name=value} pair
+     * @return the decoded {@link DefaultCookie}, or {@code null} if the input is {@code null} or blank
+     * @throws IllegalArgumentException if the header value does not contain a valid {@code name=value} pair
      */
     public static DefaultCookie decode(String setCookieHeader) {
         if (StringUtils.isBlank(setCookieHeader)) {
@@ -179,17 +185,17 @@ public final class ServerCookieDecoder {
 
         int length = setCookieHeader.length();
 
-        // Find first semicolon to isolate name=value pair
+        // Find the first semicolon to separate the name=value pair.
         int firstSemi = setCookieHeader.indexOf(';');
         int firstEnd = firstSemi < 0 ? length : firstSemi;
 
-        // Parse name=value (first token)
+        // Parse name=value from the first fragment.
         int eqIdx = setCookieHeader.indexOf('=');
         if (eqIdx <= 0 || eqIdx >= firstEnd) {
             throw new IllegalArgumentException("Invalid Set-Cookie header: missing '=' in name=value pair: " + setCookieHeader.substring(0, firstEnd));
         }
 
-        // Trim name
+        // Trim leading and trailing whitespace around the name.
         int nameStart = 0;
         while (nameStart < eqIdx && setCookieHeader.charAt(nameStart) <= ' ') {
             nameStart++;
@@ -200,7 +206,7 @@ public final class ServerCookieDecoder {
         }
         String name = setCookieHeader.substring(nameStart, nameEnd);
 
-        // Trim value
+        // Trim leading and trailing whitespace around the value.
         int valStart = eqIdx + 1;
         while (valStart < firstEnd && setCookieHeader.charAt(valStart) <= ' ') {
             valStart++;
@@ -211,20 +217,20 @@ public final class ServerCookieDecoder {
         }
         String value = setCookieHeader.substring(valStart, valEnd);
 
-        // Unquote value if quoted
+        // Remove wrapping quotes when the value is quoted.
         if (value.length() >= 2 && value.charAt(0) == '"' && value.charAt(value.length() - 1) == '"') {
             value = value.substring(1, value.length() - 1);
         }
 
         DefaultCookie cookie = new DefaultCookie(name, value);
 
-        // Parse attributes using indexOf-based iteration (avoids split() and array allocation)
+        // Parse attributes iteratively with indexOf to avoid split() and array allocations.
         int pos = firstSemi < 0 ? length : firstSemi + 1;
         while (pos < length) {
             int nextSemi = setCookieHeader.indexOf(';', pos);
             int end = nextSemi < 0 ? length : nextSemi;
 
-            // Trim attribute
+            // Trim surrounding whitespace of the attribute.
             int start = pos;
             while (start < end && setCookieHeader.charAt(start) <= ' ') {
                 start++;
@@ -237,7 +243,7 @@ public final class ServerCookieDecoder {
             if (start < attrEnd) {
                 int attrEq = setCookieHeader.indexOf('=', start);
                 if (attrEq < 0 || attrEq >= attrEnd) {
-                    // Flag attribute (no value) - use regionMatches for case-insensitive comparison
+                    // Flag attribute with no value, using regionMatches for case-insensitive comparison.
                     int attrLen = attrEnd - start;
                     if (attrLen == 6 && setCookieHeader.regionMatches(true, start, "secure", 0, 6)) {
                         cookie.setSecure(true);
@@ -245,9 +251,9 @@ public final class ServerCookieDecoder {
                         cookie.setHttpOnly(true);
                     }
                 } else {
-                    // key=value attribute - use regionMatches instead of toLowerCase().startsWith()
+                    // key=value attribute, using regionMatches instead of toLowerCase().startsWith().
                     int keyLen = attrEq - start;
-                    // Trim value boundaries (defer substring creation to matching branch)
+                    // Trim value boundaries and delay substring creation until a matching branch is chosen.
                     int aValStart = attrEq + 1;
                     while (aValStart < attrEnd && setCookieHeader.charAt(aValStart) <= ' ') {
                         aValStart++;
@@ -258,7 +264,7 @@ public final class ServerCookieDecoder {
                     } else if (keyLen == 4 && setCookieHeader.regionMatches(true, start, "path", 0, 4)) {
                         cookie.setPath(setCookieHeader.substring(aValStart, attrEnd));
                     } else if (keyLen == 7 && setCookieHeader.regionMatches(true, start, "max-age", 0, 7)) {
-                        // Parse long directly without substring allocation
+                        // Parse the long value directly to avoid an extra substring allocation.
                         long maxAge = 0;
                         boolean negative = false;
                         int mi = aValStart;
@@ -283,7 +289,7 @@ public final class ServerCookieDecoder {
                     } else if (keyLen == 8 && setCookieHeader.regionMatches(true, start, "samesite", 0, 8)) {
                         cookie.setSameSite(setCookieHeader.substring(aValStart, attrEnd));
                     }
-                    // Unknown attributes are silently ignored per RFC 6265
+                    // Per RFC 6265, unknown attributes are silently ignored.
                 }
             }
 

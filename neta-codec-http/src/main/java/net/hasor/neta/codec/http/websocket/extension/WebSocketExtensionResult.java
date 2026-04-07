@@ -18,16 +18,27 @@ import java.util.*;
 import net.hasor.cobble.StringUtils;
 
 /**
- * Structured result of a negotiated WebSocket extension entry.
+ * Structured representation of one websocket extension negotiation entry.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-04-07
  */
 public final class WebSocketExtensionResult {
     private final String              name;
     private final Map<String, String> parameters;
 
+    /**
+     * Create a negotiation result with only an extension name.
+     * @param name extension name
+     */
     public WebSocketExtensionResult(String name) {
         this(name, Collections.emptyMap());
     }
 
+    /**
+     * Create a negotiation result with extension parameters.
+     * @param name extension name
+     * @param parameters extension parameters
+     */
     public WebSocketExtensionResult(String name, Map<String, String> parameters) {
         if (StringUtils.isBlank(name)) {
             throw new IllegalArgumentException("extension name is blank");
@@ -41,18 +52,36 @@ public final class WebSocketExtensionResult {
         }
     }
 
+    /**
+     * Return the negotiated extension name.
+     * @return extension name
+     */
     public String name() {
         return this.name;
     }
 
+    /**
+     * Return the negotiated extension parameters.
+     * @return extension parameters
+     */
     public Map<String, String> parameters() {
         return this.parameters;
     }
 
+    /**
+     * Determine whether a parameter is present.
+     * @param name parameter name
+     * @return {@code true} when the parameter exists
+     */
     public boolean hasParameter(String name) {
         return this.parameter(name) != null || this.parameters.containsKey(name);
     }
 
+    /**
+     * Resolve one parameter value case-insensitively.
+     * @param name parameter name
+     * @return parameter value, or {@code null} when absent
+     */
     public String parameter(String name) {
         if (StringUtils.isBlank(name) || this.parameters.isEmpty()) {
             return null;
@@ -67,6 +96,10 @@ public final class WebSocketExtensionResult {
         return null;
     }
 
+    /**
+     * Render this extension result back into an HTTP header value.
+     * @return extension header string
+     */
     public String asHeaderValue() {
         if (this.parameters.isEmpty()) {
             return this.name;
@@ -83,6 +116,11 @@ public final class WebSocketExtensionResult {
         return builder.toString();
     }
 
+    /**
+     * Parse an extension header value into structured results.
+     * @param headerValue extension header value
+     * @return parsed extension results
+     */
     public static List<WebSocketExtensionResult> parse(String headerValue) {
         if (StringUtils.isBlank(headerValue)) {
             return Collections.emptyList();
@@ -140,6 +178,11 @@ public final class WebSocketExtensionResult {
         return new WebSocketExtensionResult(name, parameters);
     }
 
+    /**
+     * Compare this extension result with another object.
+     * @param obj candidate object
+     * @return {@code true} when both results carry the same name and parameters
+     */
     @Override
     public boolean equals(Object obj) {
         if (this == obj) {
@@ -154,11 +197,19 @@ public final class WebSocketExtensionResult {
         return Objects.equals(this.name, that.name) && Objects.equals(this.parameters, that.parameters);
     }
 
+    /**
+     * Return the hash code for this extension result.
+     * @return hash code
+     */
     @Override
     public int hashCode() {
         return Objects.hash(this.name, this.parameters);
     }
 
+    /**
+     * Return the HTTP header representation of this extension result.
+     * @return extension header string
+     */
     @Override
     public String toString() {
         return this.asHeaderValue();

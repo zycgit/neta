@@ -16,15 +16,49 @@
 package net.hasor.neta.codec.http.h2;
 
 /**
- * HTTP/2 PRIORITY frame event.
+ * Event corresponding to an HTTP/2 PRIORITY frame.
  * <p>
- * Carries the dependency tree information from RFC 9113 Section 6.3.
+ * This event carries the dependency-tree information defined by RFC 9113 Section 6.3.
+ * </p>
+ * <p>
+ * Sequence diagram:
+ * <pre>
+ * Local side proactively adjusts priority
+ *   Application Handler   ProtoContext         Http2ObjectEncoder       Remote peer
+ *          |                  |                      |                      |
+ *          | fireEvent(...)   |                      |                      |
+ *          |----------------->|                      |                      |
+ *          |                  | onEvent(PRIORITY)    |                      |
+ *          |                  |--------------------->|                      |
+ *          |                  |                      | sendPriority()       |
+ *          |                  |                      |--------------------->|
+ *          |                  |                      |   PRIORITY frame     |
+ * </pre><pre>
+ * Remote endpoint sends a PRIORITY frame
+ *   Remote peer           Http2ObjectDecoder        ProtoContext        Application Handler
+ *      |                        |                      |                      |
+ *      | PRIORITY frame         |                      |                      |
+ *      |----------------------->|                      |                      |
+ *      |                        | fireEvent(remote)    |                      |
+ *      |                        |--------------------->|                      |
+ *      |                        |                      | Http2PriorityEvent   |
+ *      |                        |                      |--------------------->|
+ * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-25
  */
 public class Http2PriorityEvent extends AbstractHttp2Event {
     private final int     streamDependency;
     private final int     weight;
     private final boolean exclusive;
 
+    /**
+     * Creates a PRIORITY event.
+     * @param streamId the current stream ID
+     * @param streamDependency the dependent stream ID
+     * @param weight the weight value
+     * @param exclusive whether the dependency is exclusive
+     */
     public Http2PriorityEvent(int streamId, int streamDependency, int weight, boolean exclusive) {
         this.streamId(streamId);
         this.streamDependency = streamDependency;
@@ -32,14 +66,23 @@ public class Http2PriorityEvent extends AbstractHttp2Event {
         this.exclusive = exclusive;
     }
 
+    /**
+     * Returns the dependent stream ID.
+     */
     public int streamDependency() {
         return this.streamDependency;
     }
 
+    /**
+     * Returns the weight value.
+     */
     public int weight() {
         return this.weight;
     }
 
+    /**
+     * Returns whether the dependency is exclusive.
+     */
     public boolean exclusive() {
         return this.exclusive;
     }

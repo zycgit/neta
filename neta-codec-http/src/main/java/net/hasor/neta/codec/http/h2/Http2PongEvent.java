@@ -17,16 +17,44 @@ package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Network event that represents an inbound HTTP/2 PING ACK.
+ * Network event representing an inbound HTTP/2 PING ACK.
+ * <p>
+ * This event is created only when the decoder processes a {@code PING} frame carrying the ACK flag,
+ * exposing the peer's response to a previous local ping. A regular inbound {@code PING} does not
+ * produce this event; instead, the decoder converts it into an outbound ACK frame.
+ * </p>
+ * <p>
+ * Sequence diagram:
+ * <pre>
+ *   Remote peer           Http2ObjectDecoder        ProtoContext        Application Handler
+ *      |                        |                      |                      |
+ *      | PING ACK frame         |                      |                      |
+ *      |----------------------->|                      |                      |
+ *      |                        | fireEvent(remote)    |                      |
+ *      |                        |--------------------->|                      |
+ *      |                        |                      | Http2PongEvent       |
+ *      |                        |                      |--------------------->|
+ * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-25
  */
 public class Http2PongEvent extends AbstractHttp2Event {
     private final ByteBuf data;
 
+    /**
+     * Creates a PONG event with an empty 8-byte payload.
+     * @param streamId the associated stream ID
+     */
     public Http2PongEvent(int streamId) {
         this.streamId(streamId);
         this.data = ByteBuf.wrap(new byte[8]);
     }
 
+    /**
+     * Creates a PONG event with the specified 8-byte payload.
+     * @param streamId the associated stream ID
+     * @param data the PONG payload, which must be exactly 8 bytes
+     */
     public Http2PongEvent(int streamId, ByteBuf data) {
         this.streamId(streamId);
 
@@ -40,6 +68,9 @@ public class Http2PongEvent extends AbstractHttp2Event {
         this.data = data.retain();
     }
 
+    /**
+     * Returns the PONG payload.
+     */
     public ByteBuf getData() {
         return this.data;
     }

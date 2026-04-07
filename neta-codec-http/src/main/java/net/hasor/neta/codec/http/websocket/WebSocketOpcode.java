@@ -15,27 +15,32 @@
  */
 package net.hasor.neta.codec.http.websocket;
 /**
- * WebSocket opcodes used by frames and internal control flow.
+ * Opcode definitions used by websocket frames and internal control flow.
  * <p>
- * Covers the standard RFC 6455 values plus one internal synthetic handshake marker.
+ * Besides standard RFC 6455 values, this enum also contains one internal
+ * handshake-complete marker.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public enum WebSocketOpcode {
-    /** Continuation frame (opcode 0x0). */
+    /** Continuation frame, opcode {@code 0x0}. */
     CONTINUATION(0x0),
-    /** UTF-8 text frame (opcode 0x1). */
+    /** UTF-8 text frame, opcode {@code 0x1}. */
     TEXT(0x1),
-    /** Binary frame (opcode 0x2). */
+    /** Binary frame, opcode {@code 0x2}. */
     BINARY(0x2),
-    /** Connection-close control frame (opcode 0x8). */
+    /** Close-connection control frame, opcode {@code 0x8}. */
     CLOSE(0x8),
-    /** Ping control frame (opcode 0x9). */
+    /** Ping control frame, opcode {@code 0x9}. */
     PING(0x9),
-    /** Pong control frame (opcode 0xA). */
+    /** Pong control frame, opcode {@code 0xA}. */
     PONG(0xA),
-    /** Synthetic message type emitted after handshake completion. */
+    /** Internal synthetic message type emitted after handshake completion. */
     HANDSHAKE_COMPLETE(-1);
 
-    /** Lookup table for O(1) opcode resolution (WebSocket opcodes are 0x0-0xF). */
+    /**
+     * Lookup table for O(1) opcode resolution. Wire-level websocket opcodes range from {@code 0x0} to {@code 0xF}.
+     */
     private static final WebSocketOpcode[] LOOKUP = new WebSocketOpcode[16];
 
     static {
@@ -53,9 +58,9 @@ public enum WebSocketOpcode {
     }
 
     /**
-     * Resolves an opcode integer to the corresponding enum constant.
-     * @param code the raw opcode byte (0-15)
-     * @return the matching constant, or {@code null} if unknown
+     * Resolve an integer opcode to the corresponding enum constant.
+     * @param code raw opcode value, expected to be in the range 0 to 15
+     * @return matching enum constant, or {@code null} if unknown
      */
     public static WebSocketOpcode of(int code) {
         if (code >= 0 && code < LOOKUP.length) {
@@ -64,7 +69,9 @@ public enum WebSocketOpcode {
         return null;
     }
 
-    /** Returns the numeric opcode value. */
+    /**
+     * Return the numeric opcode value.
+     */
     public int code() {
         return code;
     }

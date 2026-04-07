@@ -26,24 +26,20 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.routing.HttpRouteKey;
 
 /**
- * Server-side bridge for RFC 7540 h2c upgrade over HTTP/1.1.
+ * Server-side bridge handling the RFC 7540 h2c upgrade flow over HTTP/1.1.
  * <p>
- * This handler is designed to sit <b>after</b> the normal HTTP/1.1 request
- * codec on the h2c branch. It only owns the upgrade transaction itself:
- * it buffers staged {@link HttpObject} request parts, decides whether the
- * current request is a legal {@code Upgrade: h2c} exchange, emits the raw
- * HTTP/1.1 {@code 101 Switching Protocols} response and server HTTP/2 SETTINGS
- * preface, promotes stream 1 into a one-shot route seed for the {@code h2}
- * branch, then lets all later traffic continue on the normal {@code h2} route.
- * The route seed is used only for the <b>already consumed upgrade request</b>:
- * once this handler has accepted the HTTP/1.1 upgrade request, that request can
- * no longer be re-decoded by the later {@code h2} branch, so it must be handed
- * off explicitly as the synthetic stream 1 request. The later client HTTP/2
- * connection preface, client SETTINGS, and SETTINGS ACK are <b>not</b> carried
- * by the seed; they flow as normal post-switch HTTP/2 traffic on the {@code h2}
- * branch.
+ * This handler is designed to sit on the h2c branch after the regular HTTP/1.1 request codec. It
+ * is responsible only for the upgrade transaction itself: buffering staged {@link HttpObject}
+ * request parts, deciding whether the current request is a valid {@code Upgrade: h2c} exchange,
+ * sending the raw HTTP/1.1 {@code 101 Switching Protocols} response together with the server-side
+ * HTTP/2 SETTINGS preface, promoting stream 1 into a one-shot route seed for the {@code h2} branch,
+ * and letting all later traffic continue through the regular {@code h2} route.
+ * The route seed is used only for the already-consumed upgrade request. Once this handler accepts
+ * the HTTP/1.1 upgrade request, it explicitly hands it off as a synthetic stream-1 request. The
+ * client HTTP/2 connection preface, client SETTINGS, and SETTINGS ACK sent afterwards flow to the
+ * {@code h2} branch as normal HTTP/2 traffic after the switch.
  * <p>
- * Sequence view:
+ * Sequence outline:
  * <pre>
  *   client                h2c branch                         h2 branch
  *     |                       |                                  |
@@ -68,10 +64,11 @@ import net.hasor.neta.codec.http.routing.HttpRouteKey;
  *     | SETTINGS ACK          |                                  |
  *     |---------------------->| routed as normal h2 traffic      |
  * </pre>
- * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-04-07
  */
-public class H2cUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private static final Logger                   logger               = Logger.getLogger(H2cUpgradeServerDuplexe.class);
+public class H2CUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
+    private static final Logger                   logger               = Logger.getLogger(H2CUpgradeServerDuplexe.class);
     private final        ProtoRoutingControl      control;
     private final        Http2Settings            http2Settings;
     private final        Http2ObjectEncoder       h2ObjectEncoder;
@@ -81,11 +78,14 @@ public class H2cUpgradeServerDuplexe implements ProtoDuplexer<HttpObject, HttpOb
     private final        List<HttpObject>         bufferedRequestParts = new ArrayList<>();
     private              boolean                  upgraded;
 
-    public H2cUpgradeServerDuplexe(ProtoRoutingControl control) {
+    /**
+     * Creates an h2c upgrade bridge with the given routing controller.
+     */
+    public H2CUpgradeServerDuplexe(ProtoRoutingControl control) {
         this(control, Http2Settings.defaultLocalSettings(true));
     }
 
-    private H2cUpgradeServerDuplexe(ProtoRoutingControl control, Http2Settings http2Settings) {
+    private H2CUpgradeServerDuplexe(ProtoRoutingControl control, Http2Settings http2Settings) {
         this.control = Objects.requireNonNull(control, "control is null");
         this.http2Settings = http2Settings != null ? new Http2Settings(http2Settings) : Http2Settings.defaultLocalSettings(true);
         this.h2ObjectEncoder = new Http2ObjectEncoder(true, this.http2Settings);

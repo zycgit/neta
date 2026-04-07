@@ -19,15 +19,17 @@ import net.hasor.neta.bytebuf.ByteBuf;
 /**
  * Default implementation of {@link LastHttpContent}.
  * <p>
- * This is the terminal content object of a message body. It may carry a final payload buffer but
- * does not carry trailer headers in this object model.
+ * This is the terminal content object for the message body. It can carry the final
+ * payload buffer, but it does not carry trailing headers in the current object model.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class DefaultLastHttpContent extends DefaultHttpContent implements LastHttpContent {
     public static final LastHttpContent EMPTY = new DefaultLastHttpContent(ByteBuf.EMPTY);
 
     /**
-     * Creates a body chunk with the specified payload.
-     * @param content the chunk payload
+     * Create a terminal content chunk with the specified payload.
+     * @param content chunk payload
      */
     public DefaultLastHttpContent(ByteBuf content) {
         super(content);

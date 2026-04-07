@@ -17,8 +17,11 @@ package net.hasor.neta.codec.http;
 /**
  * Marks the end of an HTTP message body.
  * <p>
- * This object closes the content section started after {@link LastHttpHeaders}. It may carry a
- * final payload buffer, but it no longer owns trailer headers in this object model.
+ * This object terminates the content section that starts after
+ * {@link LastHttpHeaders}. It may carry the final payload buffer, but in the
+ * current object model it does not carry trailing headers.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public interface LastHttpContent extends HttpContent {
 }

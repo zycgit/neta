@@ -14,32 +14,34 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h2;
-import java.util.HashMap;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 import net.hasor.neta.codec.http.HttpProtocolStateException;
 import net.hasor.neta.codec.http.LastHttpContent;
 
 /**
- * Lifecycle guard for HTTP/2 partition pipelines.
+ * Lifecycle guard for the HTTP/2 partition pipeline.
  * <p>
- * Install this duplexer in the default partition. It consumes HTTP/2 control and stream-lifecycle
- * events, then closes affected stream partitions from the control plane. For backward compatibility
- * it can still be installed inside a stream partition, where it will close the current partition
- * after both directions forward a terminal {@link LastHttpContent}.
+ * This duplexer is recommended for installation in the default partition. It consumes HTTP/2
+ * control events and stream lifecycle events, then closes affected stream partitions from the
+ * control plane. For compatibility with older usage patterns, it may still be installed inside a
+ * specific stream partition. In that mode, it closes the current partition after both inbound and
+ * outbound directions have forwarded terminal {@link LastHttpContent} messages.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-04-03
  */
 public class Http2ObjectStreamManager implements ProtoDuplexer<HttpObject, HttpObject, HttpObject, HttpObject> {
-    private final ProtoPartitionControl      control;
-    private final Http2ObjectPartitionPolicy policy;
+    private final ProtoPartitionControl       control;
+    private final Http2ObjectPartitionPolicy  policy;
     private final Map<Long, StreamCloseState> streamCloseStates;
-    private       boolean                    inboundClosed;
-    private       boolean                    outboundClosed;
-    private       boolean                    partitionClosed;
+    private       boolean                     inboundClosed;
+    private       boolean                     outboundClosed;
+    private       boolean                     partitionClosed;
 
+    /**
+     * Creates an HTTP/2 stream lifecycle manager.
+     */
     public Http2ObjectStreamManager(ProtoPartitionControl control, Http2ObjectPartitionPolicy policy) {
         this.control = Objects.requireNonNull(control, "control is null.");
         this.policy = Objects.requireNonNull(policy, "policy is null.");

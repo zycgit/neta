@@ -17,10 +17,11 @@ package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Represents an HTTP/2 stream's accumulated state.
+ * Represents the accumulated state of an HTTP/2 stream.
  * <p>
- * Each HTTP/2 connection can have multiple concurrent streams,
- * each identified by a unique stream ID.
+ * A single HTTP/2 connection can contain multiple concurrent streams, each identified by a unique stream ID.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 class Http2Stream {
     private final int              streamId;
@@ -32,60 +33,98 @@ class Http2Stream {
 
     /**
      * Creates a new HTTP/2 stream.
-     * @param streamId the stream identifier (odd for client-initiated, even for server-initiated)
+     * @param streamId the stream identifier; client-initiated streams are odd and server-initiated streams are even
      */
     public Http2Stream(int streamId) {
         this.streamId = streamId;
         this.state = Http2StreamState.IDLE;
     }
 
+    /**
+     * Returns the stream ID.
+     */
     public int streamId() {
         return streamId;
     }
 
+    /**
+     * Returns the current stream state.
+     */
     public Http2StreamState state() {
         return state;
     }
 
+    /**
+     * Sets the current stream state.
+     * @param state the new state
+     */
     public void state(Http2StreamState state) {
         this.state = state;
     }
 
+    /**
+     * Returns the accumulated header block.
+     */
     public ByteBuf accumulatedHeaderBlock() {
         return accumulatedHeaderBlock;
     }
 
+    /**
+     * Sets the accumulated header block.
+     * @param buf the new header-block buffer
+     */
     public void accumulatedHeaderBlock(ByteBuf buf) {
         this.accumulatedHeaderBlock = buf;
     }
 
-    /** Returns true if the original HEADERS frame carried END_STREAM but not END_HEADERS. */
+    /**
+     * Returns {@code true} if the original HEADERS frame carried END_STREAM but not END_HEADERS yet.
+     */
     public boolean isEndStreamPending() {
         return endStreamPending;
     }
 
-    /** Records whether the peer intends to close the stream after the full header block arrives. */
+    /**
+     * Records whether the peer intends to close the stream after the full header block arrives.
+     * @param pending whether closure is pending
+     */
     public void setEndStreamPending(boolean pending) {
         this.endStreamPending = pending;
     }
 
+    /**
+     * Returns whether the initial headers have already been emitted.
+     */
     public boolean isInitialHeadersEmitted() {
         return this.initialHeadersEmitted;
     }
 
+    /**
+     * Sets whether the initial headers have already been emitted.
+     * @param initialHeadersEmitted whether they have been emitted
+     */
     public void setInitialHeadersEmitted(boolean initialHeadersEmitted) {
         this.initialHeadersEmitted = initialHeadersEmitted;
     }
 
+    /**
+     * Returns whether the terminal object has already been emitted.
+     */
     public boolean isTerminalObjectEmitted() {
         return this.terminalObjectEmitted;
     }
 
+    /**
+     * Sets whether the terminal object has already been emitted.
+     * @param terminalObjectEmitted whether it has been emitted
+     */
     public void setTerminalObjectEmitted(boolean terminalObjectEmitted) {
         this.terminalObjectEmitted = terminalObjectEmitted;
     }
 
-    /** Releases resources held by this stream. */
+    /**
+     * Releases resources held by the current stream.
+     */
     public void release() {
         if (accumulatedHeaderBlock != null) {
             accumulatedHeaderBlock.free();

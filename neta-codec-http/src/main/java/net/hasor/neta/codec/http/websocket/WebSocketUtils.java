@@ -39,9 +39,13 @@ import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionSupport;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
- * Utility entry point for WebSocket frames, messages, events, and handshake helpers.
+ * Factory and validation helpers shared across the websocket codec pipeline.
  * <p>
- * Provides the common factory and convenience methods used by tests and normal pipeline code.
+ * This utility centralizes handshake-request creation, frame and message
+ * factories, control-frame validation, runtime-extension resolution, and close
+ * state tracking helpers.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-15
  */
 public final class WebSocketUtils {
     private static final String DEFAULT_HANDSHAKE_HOST   = "localhost";
@@ -102,36 +106,87 @@ public final class WebSocketUtils {
         return runtimeExtensions.isEmpty() ? Collections.emptyList() : runtimeExtensions;
     }
 
-    /** Returns {@code true} when the channel contains a ready WebSocket context. */
+    /**
+     * Return the ready websocket context from the current or root protocol context.
+     * @param context protocol context that may carry websocket state
+     * @return ready websocket context, or {@code null} when the handshake is incomplete
+     */
+    public static WebSocketContext readyContext(ProtoContext context) {
+        if (context == null) {
+            return null;
+        }
+
+        WebSocketContext webSocketContext = context.context(WebSocketContext.class);
+        if (webSocketContext == null || !webSocketContext.isReady()) {
+            webSocketContext = context.rootContext(WebSocketContext.class);
+        }
+
+        return webSocketContext != null && webSocketContext.isReady() ? webSocketContext : null;
+    }
+
+    /**
+     * Determine whether the ready websocket context contains negotiated extensions.
+     * @param context protocol context that may carry websocket state
+     * @return {@code true} when at least one extension has been negotiated
+     */
+    public static boolean hasNegotiatedExtensions(ProtoContext context) {
+        WebSocketContext webSocketContext = readyContext(context);
+        return webSocketContext != null && !webSocketContext.extensionList().isEmpty();
+    }
+
+    /**
+     * Return the runtime extensions initialized for the ready websocket context.
+     * @param context protocol context that may carry websocket state
+     * @return initialized runtime extensions, or an empty list when none are active
+     */
+    public static List<WebSocketRuntimeExtension> runtimeExtensions(ProtoContext context) {
+        WebSocketContext webSocketContext = readyContext(context);
+        if (webSocketContext instanceof WebSocketContextImpl) {
+            return ((WebSocketContextImpl) webSocketContext).runtimeList();
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * Determine whether the channel already contains a ready websocket context.
+     * @param channel channel to inspect
+     * @return {@code true} when the websocket handshake has completed
+     */
     public static boolean isReady(SoChannel<?> channel) {
         return channel != null && isReady(channel.findProtoContext(WebSocketContext.class));
     }
 
-    /** Returns {@code true} when the protocol context can resolve a ready WebSocket context. */
+    /**
+     * Determine whether the protocol context can resolve a ready websocket context.
+     * @param context protocol context to inspect
+     * @return {@code true} when the websocket handshake has completed
+     */
     public static boolean isReady(ProtoContext context) {
-        if (context == null) {
-            return false;
-        }
-
-        WebSocketContext webSocketContext = context.context(WebSocketContext.class);
-        if (webSocketContext == null) {
-            webSocketContext = context.rootContext(WebSocketContext.class);
-        }
-
-        return isReady(webSocketContext);
+        return isReady(readyContext(context));
     }
 
-    /** Returns {@code true} when the WebSocket context exists and the opening handshake is complete. */
+    /**
+     * Determine whether the given websocket context represents a completed handshake.
+     * @param context websocket context to inspect
+     * @return {@code true} when the context is present and ready
+     */
     public static boolean isReady(WebSocketContext context) {
         return context != null && context.isReady();
     }
 
-    /** Validates a control frame using server-side close-code semantics by default. */
+    /**
+     * Validate a control frame using the default server-side close-code rules.
+     * @param frame control frame to validate
+     */
     public static void validateControlFrame(WebSocketFrame frame) {
         validateControlFrame(frame, false);
     }
 
-    /** Validates a control frame and applies role-sensitive close-code rules based on whether the sender is a client. */
+    /**
+     * Validate a control frame and apply sender-role-specific close-code rules.
+     * @param frame control frame to validate
+     * @param senderIsClient whether the sender role is the websocket client
+     */
     public static void validateControlFrame(WebSocketFrame frame, boolean senderIsClient) {
         if (frame == null) {
             throw new IllegalArgumentException("frame must not be null");
@@ -263,7 +318,14 @@ public final class WebSocketUtils {
         context.getChannel().setAttribute(key, value ? Boolean.TRUE : null);
     }
 
-    /** Creates a client opening-handshake request for the requested websocket version and applies custom headers and cookies. */
+    /**
+     * Create a client opening-handshake request and merge extra headers and cookies.
+     * @param version websocket version to request
+     * @param uri request URI
+     * @param headers extra request headers to merge into the handshake
+     * @param cookies extra cookies to merge into the handshake
+     * @return complete HTTP handshake request
+     */
     public static FullHttpRequest createHandshake(WebSocketVersion version, String uri, HttpHeaders headers, Cookie... cookies) {
         FullHttpRequest request = createHandshake(version, uri);
         List<Cookie> mergedCookies = new ArrayList<>();
@@ -299,7 +361,12 @@ public final class WebSocketUtils {
         return request;
     }
 
-    /** Creates a client opening-handshake request for the requested websocket version. */
+    /**
+     * Create a bare client opening-handshake request for the given websocket version.
+     * @param version websocket version to request
+     * @param uri request URI
+     * @return complete HTTP handshake request
+     */
     public static FullHttpRequest createHandshake(WebSocketVersion version, String uri) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
@@ -371,6 +438,11 @@ public final class WebSocketUtils {
 
     //
 
+    /**
+     * Create a final unmasked text frame from the given string.
+     * @param text text payload
+     * @return text frame
+     */
     public static WebSocketFrame textFrame(String text) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(text.length() * 3, Integer.MAX_VALUE);
         buf.writeString(text, StandardCharsets.UTF_8);
@@ -378,10 +450,23 @@ public final class WebSocketUtils {
         return textFrame(true, false, null, buf);
     }
 
+    /**
+     * Create a text frame with explicit fragment and masking flags.
+     * @param finalFragment whether this frame is the final fragment
+     * @param masked whether the payload should be masked
+     * @param maskingKey masking key, or {@code null} when masking is disabled
+     * @param content frame payload
+     * @return text frame
+     */
     public static WebSocketFrame textFrame(boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
         return WebSocketFrame.create(WebSocketOpcode.TEXT, finalFragment, masked, maskingKey, content);
     }
 
+    /**
+     * Create a final unmasked binary frame from the given bytes.
+     * @param data binary payload
+     * @return binary frame
+     */
     public static WebSocketFrame binaryFrame(byte[] data) {
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(data.length, Integer.MAX_VALUE);
         buf.writeBytes(data, 0, data.length);
@@ -389,26 +474,62 @@ public final class WebSocketUtils {
         return binaryFrame(true, false, null, buf);
     }
 
+    /**
+     * Create a binary frame with explicit fragment and masking flags.
+     * @param finalFragment whether this frame is the final fragment
+     * @param masked whether the payload should be masked
+     * @param maskingKey masking key, or {@code null} when masking is disabled
+     * @param content frame payload
+     * @return binary frame
+     */
     public static WebSocketFrame binaryFrame(boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
         return WebSocketFrame.create(WebSocketOpcode.BINARY, finalFragment, masked, maskingKey, content);
     }
 
+    /**
+     * Create an empty unmasked ping frame.
+     * @return ping frame
+     */
     public static WebSocketFrame pingFrame() {
         return WebSocketFrame.create(WebSocketOpcode.PING, true, false, null, ByteBuf.EMPTY);
     }
 
+    /**
+     * Create a ping frame with explicit masking and payload.
+     * @param masked whether the payload should be masked
+     * @param maskingKey masking key, or {@code null} when masking is disabled
+     * @param content frame payload
+     * @return ping frame
+     */
     public static WebSocketFrame pingFrame(boolean masked, byte[] maskingKey, ByteBuf content) {
         return WebSocketFrame.create(WebSocketOpcode.PING, true, masked, maskingKey, content);
     }
 
+    /**
+     * Create an empty unmasked pong frame.
+     * @return pong frame
+     */
     public static WebSocketFrame pongFrame() {
         return WebSocketFrame.create(WebSocketOpcode.PONG, true, false, null, ByteBuf.EMPTY);
     }
 
+    /**
+     * Create a pong frame with explicit masking and payload.
+     * @param masked whether the payload should be masked
+     * @param maskingKey masking key, or {@code null} when masking is disabled
+     * @param content frame payload
+     * @return pong frame
+     */
     public static WebSocketFrame pongFrame(boolean masked, byte[] maskingKey, ByteBuf content) {
         return WebSocketFrame.create(WebSocketOpcode.PONG, true, masked, maskingKey, content);
     }
 
+    /**
+     * Create an unmasked close frame from a status code and optional reason.
+     * @param statusCode websocket close status code
+     * @param reason optional close reason text
+     * @return close frame
+     */
     public static WebSocketFrame closeFrame(int statusCode, String reason) {
         String reasonStr = reason != null ? reason : "";
         ByteBuf buf = ByteBufAllocator.DEFAULT.buffer(2 + reasonStr.length() * 3, Integer.MAX_VALUE);
@@ -422,44 +543,99 @@ public final class WebSocketUtils {
         return WebSocketFrame.create(WebSocketOpcode.CLOSE, true, false, null, buf);
     }
 
+    /**
+     * Create a close frame with explicit masking and payload.
+     * @param masked whether the payload should be masked
+     * @param maskingKey masking key, or {@code null} when masking is disabled
+     * @param content frame payload
+     * @return close frame
+     */
     public static WebSocketFrame closeFrame(boolean masked, byte[] maskingKey, ByteBuf content) {
         return WebSocketFrame.create(WebSocketOpcode.CLOSE, true, masked, maskingKey, content);
     }
 
+    /**
+     * Create a continuation frame.
+     * @param finalFragment whether this frame is the final fragment
+     * @param masked whether the payload should be masked
+     * @param maskingKey masking key, or {@code null} when masking is disabled
+     * @param content frame payload
+     * @return continuation frame
+     */
     public static WebSocketFrame continuationFrame(boolean finalFragment, boolean masked, byte[] maskingKey, ByteBuf content) {
         return WebSocketFrame.create(WebSocketOpcode.CONTINUATION, finalFragment, masked, maskingKey, content);
     }
 
     //
 
+    /**
+     * Create a final text message chunk.
+     * @param content message payload
+     * @return text message chunk
+     */
     public static TextWebSocketMessage textMessage(ByteBuf content) {
         return textMessage(WebSocketMessage.FINAL_SEQUENCE, content);
     }
 
+    /**
+     * Create a text message chunk with the given sequence number.
+     * @param sequence message chunk sequence
+     * @param content message payload
+     * @return text message chunk
+     */
     public static TextWebSocketMessage textMessage(int sequence, ByteBuf content) {
         return TextWebSocketMessage.request(sequence, content);
     }
 
+    /**
+     * Create a final binary message chunk.
+     * @param content message payload
+     * @return binary message chunk
+     */
     public static BinaryWebSocketMessage binaryMessage(ByteBuf content) {
         return binaryMessage(WebSocketMessage.FINAL_SEQUENCE, content);
     }
 
+    /**
+     * Create a binary message chunk with the given sequence number.
+     * @param sequence message chunk sequence
+     * @param content message payload
+     * @return binary message chunk
+     */
     public static BinaryWebSocketMessage binaryMessage(int sequence, ByteBuf content) {
         return BinaryWebSocketMessage.request(sequence, content);
     }
 
+    /**
+     * Create an empty ping event.
+     * @return ping event
+     */
     public static PingWebSocketEvent pingEvent() {
         return new PingWebSocketEvent();
     }
 
+    /**
+     * Create a ping event carrying an application payload.
+     * @param content event payload
+     * @return ping event
+     */
     public static PingWebSocketEvent pingEvent(ByteBuf content) {
         return new PingWebSocketEvent(content);
     }
 
+    /**
+     * Create an empty pong event.
+     * @return pong event
+     */
     public static PongWebSocketEvent pongEvent() {
         return new PongWebSocketEvent();
     }
 
+    /**
+     * Create a pong event carrying an application payload.
+     * @param content event payload
+     * @return pong event
+     */
     public static PongWebSocketEvent pongEvent(ByteBuf content) {
         return new PongWebSocketEvent(content);
     }

@@ -19,49 +19,64 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 
 /**
- * Aggregates staged response-side {@link HttpObject} sequences into {@link FullHttpResponse}.
+ * Aggregates response-related {@link HttpObject} streams into a {@link FullHttpResponse}.
  * <p>
- * Use this handler after {@link HttpResponseDecoder} when downstream code prefers complete
- * response objects instead of staged headers and body chunks.
+ * This handler consumes segmented response objects such as {@link HttpResponse},
+ * {@link HttpHeaders}, and {@link HttpContent}, and emits a fully aggregated response object.
  * <p>
- * pipeline view:
- * <pre>
- *   socket bytes
- *      -> HttpResponseDecoder
- *      -> HttpResponse + HttpHeaders + HttpContent ...
- *      -> HttpResponseAggregator
- *      -> FullHttpResponse
- * </pre>
- * <p>
- * For client pipelines this is usually the receive-side aggregation choice. If you want the
- * same idea packaged as a duplex node, use {@link HttpClientDuplexeAggregator}.
+ * Use it after {@link HttpResponseDecoder} or {@link HttpClientDuplexe} when downstream business
+ * logic only wants complete responses instead of processing the status line, header block, and
+ * message body in pieces.
+ * If both response aggregation and request aggregation are needed in the same duplex node, use
+ * {@link HttpClientDuplexeAggregator} instead.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-13
  */
 public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse> {
     private static final Logger logger = Logger.getLogger(HttpResponseAggregator.class);
 
+    /**
+     * Creates a response aggregator with the default maximum content length.
+     */
     public HttpResponseAggregator() {
         super();
     }
 
+    /**
+     * Creates a response aggregator with an explicit maximum content length.
+     * @param maxContentLength the maximum content length
+     */
     public HttpResponseAggregator(int maxContentLength) {
         super(maxContentLength);
     }
 
+    /**
+     * Returns whether the current object is a response start message.
+     * @param msg the object to test
+     * @return true if this is a response start message
+     */
     @Override
     protected boolean isStartMessage(HttpObject msg) {
         return msg instanceof HttpResponse;
     }
 
-    @Override
-    protected boolean isFullMessage(HttpObject msg) {
-        return msg instanceof FullHttpResponse;
-    }
-
+    /**
+     * Casts the start message to a response object.
+     * @param msg the start message
+     * @return the response object
+     */
     @Override
     protected HttpResponse castStartMessage(HttpObject msg) {
         return (HttpResponse) msg;
     }
 
+    /**
+     * Builds the aggregated full response.
+     * @param message the start response object
+     * @param aggregated the aggregated content buffer
+     * @param headers the aggregated header collection
+     * @return the full response object
+     */
     @Override
     protected HttpObject buildAggregatedMessage(HttpResponse message, ByteBuf aggregated, DefaultHttpHeaders headers) {
         DefaultFullHttpResponse fullResp = new DefaultFullHttpResponse(message.protocolVersion(), message.status(), aggregated, headers);
@@ -69,6 +84,12 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         return fullResp;
     }
 
+    /**
+     * Logs completion of response aggregation.
+     * @param context the protocol context
+     * @param message the start response object
+     * @param contentLength the aggregated content length
+     */
     @Override
     protected void logAggregated(ProtoContext context, HttpResponse message, int contentLength) {
         if (context.getConfig().isPrintLog()) {
@@ -77,6 +98,10 @@ public class HttpResponseAggregator extends AbstractHttpAggregator<HttpResponse>
         }
     }
 
+    /**
+     * Returns the log prefix.
+     * @return the log prefix
+     */
     @Override
     protected String logPrefix() {
         return "[HTTP-RESP-AGG]";

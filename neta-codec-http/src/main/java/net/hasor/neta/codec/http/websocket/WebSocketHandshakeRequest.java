@@ -18,9 +18,12 @@ import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
- * Immutable snapshot of a server-side opening-handshake request.
+ * Snapshot object for a server-side opening handshake request.
  * <p>
- * Exposes requested version, path, protocols, extensions, and headers to the authorizer.
+ * Exposes the requested version, path, sub-protocols, extensions, and headers
+ * to the handshake authorizer.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 public class WebSocketHandshakeRequest {
     private       int                streamId;
@@ -31,10 +34,25 @@ public class WebSocketHandshakeRequest {
     private final String             requestedExtensions;
     private final DefaultHttpHeaders headers;
 
+    /**
+     * Create a request snapshot from the specified handshake parameters.
+     * @param version websocket version
+     * @param requestPath request path
+     * @param requestedProtocols requested sub-protocols
+     * @param requestedExtensions requested extensions
+     */
     public WebSocketHandshakeRequest(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions) {
         this(version, requestPath, requestedProtocols, requestedExtensions, null);
     }
 
+    /**
+     * Create a request snapshot from the specified handshake parameters and headers.
+     * @param version websocket version
+     * @param requestPath request path
+     * @param requestedProtocols requested sub-protocols
+     * @param requestedExtensions requested extensions
+     * @param headers request headers
+     */
     public WebSocketHandshakeRequest(WebSocketVersion version, String requestPath, String requestedProtocols, String requestedExtensions, HttpHeaders headers) {
         if (version == null) {
             throw new IllegalArgumentException("version must not be null");
@@ -49,39 +67,71 @@ public class WebSocketHandshakeRequest {
         }
     }
 
+    /**
+     * Return the HTTP stream ID.
+     */
     public int streamId() {
         return this.streamId;
     }
 
+    /**
+     * Set the HTTP stream ID.
+     * @param streamId stream ID
+     * @return current request object
+     */
     public WebSocketHandshakeRequest streamId(int streamId) {
         this.streamId = streamId;
         return this;
     }
 
+    /**
+     * Return the websocket version.
+     */
     public WebSocketVersion version() {
         return this.version;
     }
 
+    /**
+     * Return the request path.
+     */
     public String requestPath() {
         return this.requestPath;
     }
 
+    /**
+     * Return the requested sub-protocol header value.
+     */
     public String requestedProtocols() {
         return this.requestedProtocols;
     }
 
+    /**
+     * Return the requested extension header value.
+     */
     public String requestedExtensions() {
         return this.requestedExtensions;
     }
 
+    /**
+     * Read a request header by name.
+     * @param name request header name
+     * @return request header value
+     */
     public String header(String name) {
         return this.headers.getString(name);
     }
 
+    /**
+     * Return the snapshot of handshake request headers.
+     */
     public HttpHeaders headers() {
         return this.headers;
     }
 
+    /**
+     * Release the internally held request-header resources.
+     * After this call, the object no longer retains valid header content.
+     */
     public void release() {
         if (this.released) {
             return;
@@ -92,6 +142,9 @@ public class WebSocketHandshakeRequest {
         this.headers.release();
     }
 
+    /**
+     * Return a compact summary string for the request.
+     */
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder("WebSocketHandshakeRequest{");

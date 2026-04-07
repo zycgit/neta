@@ -19,36 +19,56 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * HTTP/2 binary frame encoder that converts {@link Http2Frame} objects into
- * raw bytes ({@code ByteBuf}).
+ * Encodes HTTP/2 binary frames into outbound socket bytes.
  * <p>
- * This encoder serializes the 9-byte frame header and payload for each
- * {@link Http2Frame}, producing the HTTP/2 wire format defined in RFC 9113.
+ * This encoder serializes {@link Http2Frame} objects into the wire format defined by RFC 9113. It
+ * typically appears at the end of the HTTP/2 outbound pipeline, receives frames produced by the
+ * upstream {@link Http2ObjectEncoder}, writes the 9-byte frame header and payload, and hands the
+ * result to the transport layer.
  * <p>
- * <b>Encode path:</b> {@code HttpObject → Http2Frame → ByteBuf}
+ * A single connection typically arrives at the encoder as an ordered frame stream:
+ * <pre>
+ *   [PREFACE]? -> [SETTINGS] -> [HEADERS] -> [DATA]* -> [WINDOW_UPDATE]* -> [GOAWAY] ...
+ * </pre>
+ * Ordinary frames are written as a standard frame header plus payload. The special
+ * {@link Http2FrameType#PREFACE} frame writes the raw client connection preface bytes directly and
+ * does not include a frame header.
  * <p>
- * Special handling: frames with type {@link Http2FrameType#PREFACE} are written
- * as raw bytes (the client connection preface) without a frame header.
+ * Typical usage:
+ * <pre>
+ *   ctx.addLastEncoder("h2-object", new Http2ObjectEncoder(false));
+ *   ctx.addLastEncoder("h2-frame", new Http2FrameEncoder());
+ * </pre>
  * <p>
- * Frame format (RFC 9113, Section 4):
+ * Pipeline view:
+ * <pre>
+ *   Http2Frame
+ *      -> Http2FrameEncoder
+ *      -> socket bytes
+ * </pre>
+ * <p>
+ * Frame format (RFC 9113 Section 4):
  * <pre>
  *   +-----------------------------------------------+
- *   |                 Length (24)                     |
+ *   |                 Length (24)                   |
  *   +---------------+---------------+---------------+
  *   |   Type (8)    |   Flags (8)   |
- *   +-+-------------+---------------+--------------+
- *   |R|                 Stream Identifier (31)       |
- *   +=+==============================================+
- *   |                 Frame Payload (0...)            |
- *   +------------------------------------------------+
+ *   +-+-------------+---------------+---------------+
+ *   |R|                 Stream Identifier (31)      |
+ *   +=+=============================================+
+ *   |                 Frame Payload (0...)          |
+ *   +-----------------------------------------------+
  * </pre>
- * @see Http2Frame
- * @see Http2ObjectEncoder
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-24
  */
 public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
     private static final Logger logger            = Logger.getLogger(Http2FrameEncoder.class);
     private static final int    FRAME_HEADER_SIZE = 9;
 
+    /**
+     * Encodes outbound HTTP/2 frames into {@link ByteBuf} instances.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http2Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
         boolean isPrintLog = context.getConfig().isPrintLog();
@@ -89,20 +109,20 @@ public class Http2FrameEncoder implements ProtoHandler<Http2Frame, ByteBuf> {
     }
 
     /**
-     * Writes a single HTTP/2 frame to the output.
-     * Writes the 9-byte frame header followed by the payload.
+     * Writes a single HTTP/2 frame to the output buffer.
+     * The 9-byte frame header is written first, followed by the payload.
      */
     private static ByteBuf buildFrameBuffer(ProtoContext context, Http2Frame frame) {
         int payloadLength = frame.payloadLength();
         ByteBuf buf = context.byteBufAllocator().buffer(FRAME_HEADER_SIZE + payloadLength);
 
-        // Write frame header (9 bytes)
+        // Write the 9-byte frame header.
         buf.writeInt24(payloadLength);
         buf.writeByte((byte) frame.type());
         buf.writeByte((byte) frame.flags());
         buf.writeInt32(frame.streamId() & 0x7FFFFFFF);
 
-        // Write payload
+        // Write the payload.
         if (payloadLength > 0) {
             buf.writeBytes(frame.payload(), frame.payloadOffset(), payloadLength);
         }

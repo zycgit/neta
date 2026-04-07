@@ -14,57 +14,68 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.websocket;
-
 import java.util.List;
 import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
 
 /**
- * Resolved WebSocket session context.
+ * Context object representing the parsed websocket handshake result.
  * <p>
- * Exposes handshake outcome, negotiated sub-protocol, version, request path, and extensions to
- * later pipeline stages and routing logic.
+ * Exposes handshake results, negotiated sub-protocol, version, request path,
+ * and extension information to later pipeline stages and routing logic.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 public interface WebSocketContext {
-    /** Returns {@code true} when the WebSocket opening handshake is complete. */
+    /**
+     * Return {@code true} after the websocket opening handshake completes.
+     */
     boolean isReady();
 
-    /** Returns {@code true} if this endpoint is the server side. */
+    /**
+     * Return {@code true} when the current endpoint is the server side.
+     */
     boolean isServer();
 
-    /** Returns {@code true} if this endpoint is the client side. */
+    /**
+     * Return {@code true} when the current endpoint is the client side.
+     */
     boolean isClient();
 
     /**
-     * Returns the negotiated sub-protocol from the {@code Sec-WebSocket-Protocol} header,
-     * or {@code null} if no sub-protocol was negotiated.
+     * Return the sub-protocol negotiated from the {@code Sec-WebSocket-Protocol} header.
+     * Returns {@code null} if no sub-protocol was negotiated.
      */
     String subProtocol();
 
     /**
-     * Returns the WebSocket version (e.g. 13 for RFC 6455).
+     * Return the websocket version number.
+     * For example, RFC 6455 corresponds to version 13.
      */
     int version();
 
     /**
-     * Returns the WebSocket request URI path (e.g. {@code "/chat"}).
-     * Available on the server side after the opening handshake.
-     * @return the request path, or {@code null} if not available
+     * Return the URI path from the handshake request, such as {@code "/chat"}.
+     * This value becomes available after the handshake completes.
+     * @return request path, or {@code null} if unavailable
      */
     String requestPath();
 
     /**
-     * Returns the negotiated extensions as a comma-separated string
-     * (e.g. {@code "permessage-deflate"}), or {@code null} if none.
+     * Return the negotiated extension string in comma-separated form,
+     * for example {@code "permessage-deflate"}; returns {@code null} if no
+     * extensions were negotiated.
      */
     String extensions();
 
     /**
-     * Returns structured negotiated extension results, or an empty list if none.
+     * Return structured extension negotiation results; returns an empty list if no extensions were negotiated.
      */
     List<WebSocketExtensionResult> extensionList();
 
     /**
-     * Returns {@code true} if the named extension has been negotiated.
+     * Return {@code true} when an extension with the specified name was negotiated successfully.
+     * @param name extension name
+     * @return {@code true} if the extension was negotiated successfully
      */
     boolean hasExtension(String name);
 }

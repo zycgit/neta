@@ -17,27 +17,43 @@ package net.hasor.neta.codec.http;
 /**
  * Network event used to switch the HTTP/1.x codec into or out of transparent mode.
  * <p>
- * When transparent mode is enabled, inbound {@code ByteBuf} frames are wrapped as
- * {@code HttpByteBuf} and forwarded without HTTP parsing. Outbound {@code HttpByteBuf}
- * messages are written as raw bytes without HTTP encoding.
+ * When transparent mode is enabled, inbound {@code ByteBuf} instances are wrapped as {@code HttpByteBuf}
+ * and forwarded directly without HTTP parsing. Outbound {@code HttpByteBuf} instances are also written as
+ * raw bytes without HTTP encoding.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2026-03-12
  */
 public final class HttpThroughEvent extends AbstractHttpEvent {
     private final boolean enabled;
 
+    /**
+     * Create a transparent-mode toggle event.
+     * @param enabled whether transparent mode should be enabled
+     */
     public HttpThroughEvent(boolean enabled) {
         this.enabled = enabled;
     }
 
+    /**
+     * Create an event that enables transparent mode.
+     * @return an event that enables transparent mode
+     */
     public static HttpThroughEvent enable() {
         return new HttpThroughEvent(true);
     }
 
+    /**
+     * Create an event that disables transparent mode.
+     * @return an event that disables transparent mode
+     */
     public static HttpThroughEvent disable() {
         return new HttpThroughEvent(false);
     }
 
+    /**
+     * Return whether this event enables transparent mode.
+     * @return whether transparent mode is enabled
+     */
     public boolean enabled() {
         return this.enabled;
     }

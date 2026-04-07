@@ -21,31 +21,16 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.channel.*;
 
 /**
- * Shared base class for HTTP/1.x staged-message aggregation.
+ * Common base class for staged HTTP/1.x message aggregation.
  * <p>
- * This handler converts the staged output of an HTTP decoder into one full in-memory message.
- * Concrete subclasses decide whether the start line is request-side or response-side and which
- * aggregated type to build.
+ * This handler converts the staged messages emitted by the HTTP decoder into a single in-memory message.
+ * Concrete subclasses decide whether the start line belongs to the request side or the response side,
+ * and which aggregated message type should be produced.
  * <p>
- * Expected staged input shape:
- * <pre>
- *   Start-Line Object
- *      -> HttpHeaders
- *      -> HttpContent ...
- *      -> LastHttpContent
- *      => FullHttpRequest or FullHttpResponse
- * </pre>
- * <p>
- * pipeline view:
- * <pre>
- *   HttpRequestDecoder / HttpResponseDecoder
- *      -> HttpObject parts
- *      -> AbstractHttpAggregator subclass
- *      -> FullHttpRequest / FullHttpResponse
- * </pre>
- * <p>
- * When transparent mode is enabled, aggregation is reset and objects are forwarded as-is,
- * because upgraded protocols no longer follow HTTP message framing.
+ * When transparent mode is enabled, the aggregation state is reset and received objects are forwarded
+ * unchanged because the upgraded protocol no longer follows HTTP message framing.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public abstract class AbstractHttpAggregator<M extends HttpObject> implements ProtoHandler<HttpObject, HttpObject> {
     private final       Logger                    logger                     = Logger.getLogger(this.getClass());
@@ -60,10 +45,17 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
     private             int                       currentContentLength;
     private             boolean                   headersClosed;
 
+    /**
+     * Create an aggregator that uses the default maximum content length.
+     */
     protected AbstractHttpAggregator() {
         this(DEFAULT_MAX_CONTENT_LENGTH);
     }
 
+    /**
+     * Create an aggregator with the specified maximum content length.
+     * @param maxContentLength maximum allowed content length
+     */
     protected AbstractHttpAggregator(int maxContentLength) {
         if (maxContentLength <= 0) {
             throw new IllegalArgumentException("maxContentLength must be positive");
@@ -71,11 +63,17 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         this.maxContentLength = maxContentLength;
     }
 
+    /**
+     * Initialize the aggregator context.
+     */
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
         HttpContext.getOrCreate(context);
     }
 
+    /**
+     * Handle transparent-mode toggle events.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event) {
         if (event.getEventType() != HttpThroughEvent.class) {
@@ -92,6 +90,9 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         return true;
     }
 
+    /**
+     * Aggregate received HTTP objects or pass them through unchanged.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         HttpContext httpContext = HttpContext.getOrCreate(context);
@@ -131,6 +132,9 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         return ProtoStatus.Next;
     }
 
+    /**
+     * Handle exceptions raised during aggregation.
+     */
     @Override
     public ProtoStatus onError(ProtoContext context, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (e instanceof HttpProtocolException && this.handleProtocolError(context, (HttpProtocolException) e, true)) {
@@ -143,6 +147,9 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         return ProtoStatus.Next;
     }
 
+    /**
+     * Close the aggregator and reset its state.
+     */
     @Override
     public void onClose(ProtoContext context) {
         this.resetAggregation();
@@ -150,22 +157,41 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
 
     //
 
+    /**
+     * Return whether the aggregator is currently idle.
+     * @return whether the aggregator is idle
+     */
     protected final boolean isIdle() {
         return this.phase == AggregatePhase.IDLE;
     }
 
+    /**
+     * Return the start message that is currently being aggregated.
+     * @return the current start message
+     */
     protected final M currentMessage() {
         return this.currentMessage;
     }
 
+    /**
+     * Return the header block that is currently being aggregated.
+     * @return the current header block
+     */
     protected final DefaultHttpHeaders currentHeaders() {
         return this.currentHeaders;
     }
 
+    /**
+     * Return the maximum content length allowed for aggregation.
+     * @return the maximum content length
+     */
     protected final int maxContentLength() {
         return this.maxContentLength;
     }
 
+    /**
+     * Reset the current aggregation state.
+     */
     protected final void resetAggregation() {
         this.releaseAggregationState(false);
         this.phase = AggregatePhase.IDLE;
@@ -177,6 +203,9 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         this.headersClosed = false;
     }
 
+    /**
+     * Enter discard mode and clear the current aggregation state.
+     */
     protected final void enterDiscardMode() {
         this.releaseAggregationState(false);
         this.phase = AggregatePhase.DISCARD;
@@ -188,57 +217,83 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         this.headersClosed = true;
     }
 
+    /**
+     * Handle a protocol-level exception.
+     * @param context protocol context
+     * @param e protocol exception
+     * @param fromPipelineError whether the exception came from the pipeline error callback
+     * @return whether the exception has been consumed
+     */
     protected boolean handleProtocolError(ProtoContext context, HttpProtocolException e, boolean fromPipelineError) {
         this.resetAggregation();
         return false;
     }
 
+    /**
+     * Perform validation after the header section has been closed.
+     * @param context protocol context
+     * @param message start message
+     * @param contentLength parsed content length
+     */
     protected void onHeadersClosed(ProtoContext context, M message, long contentLength) {
         if (contentLength > this.maxContentLength) {
             throw new HttpContentTooLargeException("content length exceeds maximum: " + contentLength + " > " + this.maxContentLength, this.maxContentLength, contentLength);
         }
     }
 
+    /**
+     * Perform custom handling when aggregated content exceeds the limit.
+     * @param context protocol context
+     * @param message start message
+     * @param newLength new aggregated length
+     * @return whether the oversized-content condition has already been handled
+     */
     protected boolean onContentTooLarge(ProtoContext context, M message, int newLength) {
         return false;
     }
 
+    /**
+     * Determine whether the current object is the start message for aggregation.
+     */
     protected abstract boolean isStartMessage(HttpObject msg);
 
-    protected abstract boolean isFullMessage(HttpObject msg);
-
+    /**
+     * Cast the start message to the concrete type used by the aggregator.
+     */
     protected abstract M castStartMessage(HttpObject msg);
 
+    /**
+     * Build the fully aggregated message object.
+     */
     protected abstract HttpObject buildAggregatedMessage(M message, ByteBuf aggregated, DefaultHttpHeaders headers);
 
+    /**
+     * Emit the log entry for a completed aggregation.
+     */
     protected abstract void logAggregated(ProtoContext context, M message, int contentLength);
 
+    /**
+     * Return the log prefix.
+     */
     protected abstract String logPrefix();
 
     private void handleMessage(ProtoContext context, HttpObject msg, ProtoSndQueue<HttpObject> dst) {
-        if (this.isFullMessage(msg)) {
-            if (this.phase != AggregatePhase.IDLE) {
-                throw new HttpProtocolStateException("received a full HTTP message before the previous aggregated message completed");
-            }
-            dst.offerMessage(msg);
-            return;
-        }
-
-        if (this.isStartMessage(msg)) {
+        boolean startMessage = this.isStartMessage(msg);
+        if (startMessage) {
             if (this.phase != AggregatePhase.IDLE) {
                 throw new HttpProtocolStateException("received " + msg.getClass().getSimpleName() + " before previous aggregated message completed");
             }
             this.resetFor(this.castStartMessage(msg));
-            return;
         }
 
         if (msg instanceof HttpHeaders) {
             try {
                 this.appendHeaders(context, (HttpHeaders) msg);
             } finally {
-                msg.release();
+                if (!startMessage) {
+                    msg.release();
+                }
             }
-            return;
         }
 
         if (msg instanceof LastHttpContent) {
@@ -246,7 +301,9 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
             try {
                 this.appendContent(context, last.content(), true);
             } finally {
-                msg.release();
+                if (!startMessage) {
+                    msg.release();
+                }
             }
             this.emitAggregated(context, dst);
             return;
@@ -256,8 +313,14 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
             try {
                 this.appendContent(context, ((HttpContent) msg).content(), false);
             } finally {
-                msg.release();
+                if (!startMessage) {
+                    msg.release();
+                }
             }
+            return;
+        }
+
+        if (startMessage) {
             return;
         }
 
@@ -272,7 +335,7 @@ public abstract class AbstractHttpAggregator<M extends HttpObject> implements Pr
         if (msg instanceof HttpContent || msg instanceof HttpHeaders) {
             return true;
         }
-        if (msg instanceof FullHttpRequest || msg instanceof FullHttpResponse || msg instanceof HttpRequest || msg instanceof HttpResponse) {
+        if (this.isStartMessage(msg)) {
             this.resetAggregation();
             return false;
         }

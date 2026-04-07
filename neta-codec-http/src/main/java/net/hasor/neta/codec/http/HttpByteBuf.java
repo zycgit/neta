@@ -17,16 +17,19 @@ package net.hasor.neta.codec.http;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Wraps raw bytes that travel through the HTTP pipeline without request/response parsing.
+ * Wraps raw bytes that pass through the HTTP pipeline without being parsed as a request or response.
  * <p>
- * This type is primarily used by the HTTP transparent mode: decoders wrap inbound {@link ByteBuf}
- * instances as {@link HttpByteBuf}, and encoders pass their {@link #content()} through directly
- * without applying HTTP framing.
+ * This type is primarily used in HTTP transparent mode. Decoders wrap inbound {@link ByteBuf} instances as {@link HttpByteBuf},
+ * while encoders forward the payload returned by {@link #content()} directly without adding HTTP framing semantics.
  * <p>
- * Callers that need an extra reference to the payload should retain the returned {@link ByteBuf}
- * directly via {@link #content()}.
+ * If a caller needs to retain the payload reference beyond normal ownership, call retain directly on the {@link ByteBuf} returned by {@link #content()}.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2022-11-03
  */
 public interface HttpByteBuf extends HttpObject {
-    /** Returns the payload. */
+    /**
+     * Returns the raw payload carried by this pass-through object.
+     * @return raw payload buffer
+     */
     ByteBuf content();
 }

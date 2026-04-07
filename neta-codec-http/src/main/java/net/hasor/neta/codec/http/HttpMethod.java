@@ -19,36 +19,38 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents an HTTP request method as defined in
+ * Represents an HTTP request method, as defined in
  * <a href="https://tools.ietf.org/html/rfc7231#section-4">RFC 7231, Section 4</a>
  * and <a href="https://tools.ietf.org/html/rfc5789">RFC 5789 (PATCH)</a>.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class HttpMethod {
-    /** The OPTIONS method (RFC 7231 §4.3.7). */
+    /** OPTIONS method. See RFC 7231 §4.3.7. */
     public static final HttpMethod OPTIONS = new HttpMethod("OPTIONS");
 
-    /** The GET method (RFC 7231 §4.3.1). */
+    /** GET method. See RFC 7231 §4.3.1. */
     public static final HttpMethod GET = new HttpMethod("GET");
 
-    /** The HEAD method (RFC 7231 §4.3.2). */
+    /** HEAD method. See RFC 7231 §4.3.2. */
     public static final HttpMethod HEAD = new HttpMethod("HEAD");
 
-    /** The POST method (RFC 7231 §4.3.3). */
+    /** POST method. See RFC 7231 §4.3.3. */
     public static final HttpMethod POST = new HttpMethod("POST");
 
-    /** The PUT method (RFC 7231 §4.3.4). */
+    /** PUT method. See RFC 7231 §4.3.4. */
     public static final HttpMethod PUT = new HttpMethod("PUT");
 
-    /** The PATCH method (RFC 5789). */
+    /** PATCH method. See RFC 5789. */
     public static final HttpMethod PATCH = new HttpMethod("PATCH");
 
-    /** The DELETE method (RFC 7231 §4.3.5). */
+    /** DELETE method. See RFC 7231 §4.3.5. */
     public static final HttpMethod DELETE = new HttpMethod("DELETE");
 
-    /** The TRACE method (RFC 7231 §4.3.8). */
+    /** TRACE method. See RFC 7231 §4.3.8. */
     public static final HttpMethod TRACE = new HttpMethod("TRACE");
 
-    /** The CONNECT method (RFC 7231 §4.3.6). */
+    /** CONNECT method. See RFC 7231 §4.3.6. */
     public static final HttpMethod CONNECT = new HttpMethod("CONNECT");
 
     private static final Map<String, HttpMethod> KNOWN_METHODS = new HashMap<>();
@@ -69,9 +71,9 @@ public final class HttpMethod {
     private final byte[] nameBytes;
 
     /**
-     * Creates a new HTTP method with the specified name.
-     * The name is validated as an HTTP token per RFC 7230 §3.2.6.
-     * @param name the method name (case-sensitive, uppercase by convention)
+     * Creates an HTTP method with the given name.
+     * The method name is validated as an HTTP token according to RFC 7230 §3.2.6.
+     * @param name method name, conventionally case-sensitive and usually uppercase
      * @throws IllegalArgumentException if the name is null, empty, or contains invalid characters
      */
     public HttpMethod(String name) {
@@ -90,31 +92,30 @@ public final class HttpMethod {
     }
 
     /**
-     * Returns the {@link HttpMethod} instance for the given method name.
-     * If the name matches a standard HTTP method, the cached constant is returned.
-     * Otherwise, a new instance is created.
-     * @param name the method name
-     * @return the corresponding HttpMethod
+     * Returns the {@link HttpMethod} for the given method name.
+     * Returns a cached constant for standard HTTP methods; otherwise creates a new instance.
+     * @param name method name
+     * @return matching HttpMethod
      */
     public static HttpMethod valueOf(String name) {
         if (name == null || name.isEmpty()) {
             throw new IllegalArgumentException("name must not be empty");
         }
-        // Fast path: try direct lookup first (works for canonical uppercase methods without whitespace)
+        // Fast path: direct lookup for canonical uppercase method names without extra whitespace.
         HttpMethod known = KNOWN_METHODS.get(name);
         if (known != null) {
             return known;
         }
-        // Slow path: normalize and retry
+        // Slow path: normalize first, then try again.
         name = name.trim().toUpperCase();
         known = KNOWN_METHODS.get(name);
         return known != null ? known : new HttpMethod(name);
     }
 
     /**
-     * Returns the {@link HttpMethod} instance for the given method text.
-     * @param name the method text
-     * @return the corresponding HttpMethod
+     * Returns the {@link HttpMethod} for the given method text.
+     * @param name method text
+     * @return matching HttpMethod
      */
     public static HttpMethod valueOf(CharSequence name) {
         if (name == null || name.length() == 0) {
@@ -178,12 +179,18 @@ public final class HttpMethod {
         return true;
     }
 
-    /** Returns the method name (e.g., "GET", "POST"). */
+    /**
+     * Returns the method name, such as "GET" or "POST".
+     * @return method name
+     */
     public String name() {
         return name;
     }
 
-    /** Returns the pre-cached ASCII bytes of the method name. */
+    /**
+     * Returns the cached ASCII bytes of the method name.
+     * @return method name bytes
+     */
     public byte[] nameBytes() {
         return nameBytes;
     }

@@ -17,51 +17,33 @@ package net.hasor.neta.codec.http;
 import java.util.*;
 import net.hasor.cobble.StringUtils;
 
-/** Default implementation of {@link HttpHeaders} backed by ordinary string header entries. */
-public class DefaultHttpHeaders extends HttpHeaderNames implements HttpHeaders {
+/**
+ * Default implementation of {@link HttpHeaders} backed by plain string header entries.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-10
+ */
+public class DefaultHttpHeaders extends AbstractHttpObject<HttpHeaders> implements HttpHeaders {
     private final List<DefaultHttpHeaderEntry> entries;
-    private       int                          streamId;
-    private       boolean                      bad;
-    private       String                       badReason;
 
+    /**
+     * Create an empty header block.
+     */
     public DefaultHttpHeaders() {
         this.entries = new ArrayList<>();
     }
 
     @Override
-    public int streamId() {
-        return this.streamId;
-    }
-
-    @Override
-    public HttpHeaders streamId(int streamId) {
-        this.streamId = streamId;
+    protected HttpHeaders self() {
         return this;
     }
 
-    @Override
-    public boolean isBad() {
-        return this.bad;
-    }
-
-    @Override
-    public String badReason() {
-        return this.badReason;
-    }
-
-    @Override
-    public HttpHeaders markBad(String reason) {
-        this.bad = true;
-        this.badReason = reason;
-        return this;
-    }
-
+    /**
+     * Release header entries and associated state.
+     */
     @Override
     public void release() {
         this.entries.clear();
-        this.streamId = 0;
-        this.bad = false;
-        this.badReason = null;
+        this.resetHttpObjectState();
     }
 
     // write

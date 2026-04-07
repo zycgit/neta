@@ -19,8 +19,10 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * Represents an HTTP response status code and its reason phrase as defined in
+ * Represents an HTTP response status code and its reason phrase, as defined in
  * <a href="https://tools.ietf.org/html/rfc7231#section-6">RFC 7231, Section 6</a>.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class HttpStatus {
     // --- 1xx Informational (RFC 7231 §6.2) ---
@@ -91,7 +93,7 @@ public final class HttpStatus {
     public static final HttpStatus NETWORK_AUTHENTICATION_REQUIRED = new HttpStatus(511, "Network Authentication Required");
 
     private static final Map<Integer, HttpStatus> KNOWN_STATUSES = new HashMap<>();
-    /** Array-based fast lookup for status codes 100-599 (avoids Integer autoboxing + HashMap overhead). */
+    /** Fast array lookup table for status codes 100 through 599, avoiding Integer boxing and HashMap overhead. */
     private static final HttpStatus[]             STATUS_LOOKUP  = new HttpStatus[600];
 
     static {
@@ -114,9 +116,9 @@ public final class HttpStatus {
     private final byte[] reasonPhraseBytes;
 
     /**
-     * Creates a new HttpResponseStatus with the specified status code and reason phrase.
-     * @param code the HTTP status code (100-599)
-     * @param reasonPhrase the reason phrase
+     * Creates an HttpStatus with the specified status code and reason phrase.
+     * @param code HTTP status code, typically in the range 100 to 599
+     * @param reasonPhrase reason phrase
      */
     public HttpStatus(int code, String reasonPhrase) {
         if (code < 100 || code > 999) {
@@ -143,13 +145,12 @@ public final class HttpStatus {
 
     /**
      * Returns the {@link HttpStatus} for the given status code.
-     * If the code matches a standard status, the cached constant is returned.
-     * Otherwise, a new instance is created with a default "Unknown Status" reason phrase.
-     * @param code the status code
-     * @return the corresponding HttpResponseStatus
+     * Returns a cached constant for standard status codes; otherwise creates a new instance with the default reason phrase "Unknown Status {code}".
+     * @param code status code
+     * @return matching HttpStatus
      */
     public static HttpStatus valueOf(int code) {
-        // Fast path: array-based lookup for common codes (avoids autoboxing + HashMap)
+        // Fast path: use array lookup for common status codes to avoid boxing and HashMap overhead.
         if (code >= 100 && code < STATUS_LOOKUP.length) {
             HttpStatus known = STATUS_LOOKUP[code];
             if (known != null) {
@@ -161,14 +162,13 @@ public final class HttpStatus {
 
     /**
      * Returns the {@link HttpStatus} for the given status code and reason phrase.
-     * If the code matches a standard status and the reason phrase matches,
-     * the cached constant is returned.
-     * @param code the status code
-     * @param reasonPhrase the reason phrase
-     * @return the corresponding HttpResponseStatus
+     * Returns a cached constant when both the standard status code and reason phrase match.
+     * @param code status code
+     * @param reasonPhrase reason phrase
+     * @return matching HttpStatus
      */
     public static HttpStatus valueOf(int code, String reasonPhrase) {
-        // Fast path: array-based lookup for common codes
+        // Fast path: use array lookup for common status codes.
         if (code >= 100 && code < STATUS_LOOKUP.length) {
             HttpStatus known = STATUS_LOOKUP[code];
             if (known != null && known.reasonPhrase.equals(reasonPhrase)) {
@@ -179,10 +179,10 @@ public final class HttpStatus {
     }
 
     /**
-     * Returns the {@link HttpStatus} for the given status code and reason phrase text.
-     * @param codeText the status code text
-     * @param reasonPhrase the reason phrase text
-     * @return the corresponding HttpStatus
+     * Returns the {@link HttpStatus} for the given status code text and reason phrase text.
+     * @param codeText status code text
+     * @param reasonPhrase reason phrase text
+     * @return matching HttpStatus
      */
     public static HttpStatus valueOf(CharSequence codeText, CharSequence reasonPhrase) {
         if (codeText == null || codeText.length() == 0) {
@@ -200,27 +200,42 @@ public final class HttpStatus {
         return valueOf(code, reason);
     }
 
-    /** Returns the HTTP status code (e.g., 200, 404). */
+    /**
+     * Returns the HTTP status code, such as 200 or 404.
+     * @return HTTP status code
+     */
     public int code() {
         return code;
     }
 
-    /** Returns the reason phrase (e.g., "OK", "Not Found"). */
+    /**
+     * Returns the reason phrase, such as "OK" or "Not Found".
+     * @return reason phrase
+     */
     public String reasonPhrase() {
         return reasonPhrase;
     }
 
-    /** Returns the status code as a pre-cached String (e.g., "200", "404"). */
+    /**
+     * Returns the cached string form of the status code, such as "200" or "404".
+     * @return string form of the status code
+     */
     public String codeAsString() {
         return codeStr;
     }
 
-    /** Returns the pre-cached ASCII bytes of the status code. */
+    /**
+     * Returns the cached ASCII bytes for the status code.
+     * @return status code bytes
+     */
     public byte[] codeBytes() {
         return codeBytes;
     }
 
-    /** Returns the pre-cached ASCII bytes of the reason phrase. */
+    /**
+     * Returns the cached ASCII bytes for the reason phrase.
+     * @return reason phrase bytes
+     */
     public byte[] reasonPhraseBytes() {
         return reasonPhraseBytes;
     }
@@ -228,38 +243,54 @@ public final class HttpStatus {
     /**
      * Returns the class of this status code.
      * <ul>
-     *   <li>1xx - Informational</li>
-     *   <li>2xx - Success</li>
-     *   <li>3xx - Redirection</li>
-     *   <li>4xx - Client Error</li>
-     *   <li>5xx - Server Error</li>
+     *   <li>1xx: informational response</li>
+     *   <li>2xx: success</li>
+     *   <li>3xx: redirection</li>
+     *   <li>4xx: client error</li>
+     *   <li>5xx: server error</li>
      * </ul>
+     * @return status code class
      */
     public int codeClass() {
         return code / 100;
     }
 
-    /** Returns {@code true} if this is an informational (1xx) status. */
+    /**
+     * Returns whether this status is informational (1xx).
+     * @return whether this is 1xx
+     */
     public boolean isInformational() {
         return codeClass() == 1;
     }
 
-    /** Returns {@code true} if this is a success (2xx) status. */
+    /**
+     * Returns whether this status indicates success (2xx).
+     * @return whether this is 2xx
+     */
     public boolean isSuccess() {
         return codeClass() == 2;
     }
 
-    /** Returns {@code true} if this is a redirection (3xx) status. */
+    /**
+     * Returns whether this status indicates redirection (3xx).
+     * @return whether this is 3xx
+     */
     public boolean isRedirection() {
         return codeClass() == 3;
     }
 
-    /** Returns {@code true} if this is a client error (4xx) status. */
+    /**
+     * Returns whether this status indicates a client error (4xx).
+     * @return whether this is 4xx
+     */
     public boolean isClientError() {
         return codeClass() == 4;
     }
 
-    /** Returns {@code true} if this is a server error (5xx) status. */
+    /**
+     * Returns whether this status indicates a server error (5xx).
+     * @return whether this is 5xx
+     */
     public boolean isServerError() {
         return codeClass() == 5;
     }

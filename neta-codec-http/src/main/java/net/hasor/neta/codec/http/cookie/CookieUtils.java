@@ -17,14 +17,20 @@ package net.hasor.neta.codec.http.cookie;
 import net.hasor.neta.bytebuf.ByteBuf;
 
 /**
- * Internal utility methods for ByteBuf-based cookie encoding and decoding.
+ * Package-private utility methods used by cookie encoding and decoding.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-19
  */
 final class CookieUtils {
-    // Reusable scratch for writeLong (max 20 digits for Long.MIN_VALUE)
+    // Reusable scratch buffer for writeLong (Long.MIN_VALUE needs at most 20 characters).
     private static final ThreadLocal<byte[]> LONG_SCRATCH = ThreadLocal.withInitial(() -> new byte[20]);
 
-    /** Find the index of {@code target} byte in the buffer between {@code from} (inclusive) and {@code to} (exclusive). Returns -1 if not found. Offset is relative to readerIndex. */
-    static int indexOf(ByteBuf buf, int from, int to, byte target) {
+    /**
+     * Finds the position of the target byte {@code target} within the buffer range from {@code from}
+     * (inclusive) to {@code to} (exclusive).
+     * Returns -1 when the target is not found.
+     */
+    public static int indexOf(ByteBuf buf, int from, int to, byte target) {
         for (int i = from; i < to; i++) {
             if (buf.getByte(i) == target) {
                 return i;
@@ -33,8 +39,10 @@ final class CookieUtils {
         return -1;
     }
 
-    /** Case-insensitive comparison of buffer bytes against a lowercase ASCII byte array. Offset is relative to readerIndex. */
-    static boolean equalsIgnoreCase(ByteBuf buf, int offset, byte[] lowerTarget) {
+    /**
+     * Performs a case-insensitive comparison between buffer bytes and a lowercase ASCII byte array.
+     */
+    public static boolean equalsIgnoreCase(ByteBuf buf, int offset, byte[] lowerTarget) {
         for (int i = 0; i < lowerTarget.length; i++) {
             byte b = buf.getByte(offset + i);
             if (b != lowerTarget[i] && toLower(b) != lowerTarget[i]) {
@@ -44,12 +52,14 @@ final class CookieUtils {
         return true;
     }
 
-    static byte toLower(byte b) {
+    public static byte toLower(byte b) {
         return (b >= 'A' && b <= 'Z') ? (byte) (b + 32) : b;
     }
 
-    /** Write a long value as ASCII decimal digits directly to the buffer. */
-    static void writeLong(ByteBuf dst, long value) {
+    /**
+     * Writes the given long value to the buffer directly as ASCII decimal digits.
+     */
+    public static void writeLong(ByteBuf dst, long value) {
         if (value == 0) {
             dst.writeByte((byte) '0');
             return;
@@ -58,7 +68,7 @@ final class CookieUtils {
             dst.writeByte((byte) '-');
             value = -value;
         }
-        // max digits for long is 19
+        // The maximum number of decimal digits in a long is 19.
         byte[] tmp = LONG_SCRATCH.get();
         int pos = tmp.length;
         while (value > 0) {

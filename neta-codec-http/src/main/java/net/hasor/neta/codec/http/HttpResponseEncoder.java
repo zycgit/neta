@@ -23,35 +23,44 @@ import net.hasor.neta.channel.*;
 /**
  * Encodes staged response-side {@link HttpObject} instances into outbound HTTP/1.x bytes.
  * <p>
- * This encoder accepts the same staged object sequence that {@link HttpResponseDecoder} emits:
- * status line, header blocks, content chunks, and final markers. It is typically used in a
- * server pipeline or in the outbound side of a proxy.
+ * This encoder accepts the same response object stream produced by {@link HttpResponseDecoder} and
+ * serializes it back into HTTP/1.x wire format. It is typically used in server pipelines or on
+ * the outbound side of a proxy path.
  * <p>
- * Aggregated responses such as {@link FullHttpResponse} are encoded by the same staged dispatch
- * path because they also implement {@link HttpResponse}, {@link LastHttpHeaders}, and
- * {@link LastHttpContent}.
+ * A single response usually enters the encoder as an ordered object stream:
+ * <pre>
+ *   [HttpResponse] -> [HttpHeaders]* -> [LastHttpHeaders] -> [HttpContent]* -> [TrailerHttpHeaders]* -> [LastHttpContent]
+ * </pre>
+ * Here {@code *} means the segment may appear zero or more times. The initial header section must
+ * be closed by {@link LastHttpHeaders}. For close-delimited responses, the final
+ * {@link LastHttpContent} may be omitted because connection close marks the end of the message.
+ * Aggregated responses such as {@link FullHttpResponse} are still encoded piece by piece along the
+ * same staged dispatch path.
  * <p>
  * Typical usage:
  * <pre>
  *   ctx.addLastEncoder("http-resp", new HttpResponseEncoder());
  * </pre>
  * <p>
- * pipeline view:
+ * Pipeline view:
  * <pre>
  *   HttpResponse + HttpHeaders + HttpContent ...
  *      -> HttpResponseEncoder
  *      -> socket bytes
  * </pre>
  * <p>
- * In transparent mode, this encoder no longer serializes HTTP syntax and instead accepts only
- * {@link HttpByteBuf}, forwarding its payload directly. That is the outbound half of HTTP/1.x
- * protocol upgrade handling.
- * <p><b>Ownership:</b> once a response-side {@link HttpObject} is consumed by this encoder, the
- * encoder takes over its lifecycle and releases the source object after the encoded output has
- * been produced. Callers should not release a successfully handed-off message a second time.
- * <p><b>Thread safety:</b> this handler is stateless. Per-connection state is stored in
- * {@link HttpContext} on the {@link ProtoContext}, making it safe to share a single instance
- * across multiple connections or pipelines.
+ * In transparent mode, the encoder no longer serializes HTTP syntax. Instead, it only accepts
+ * {@link HttpByteBuf} and forwards the embedded payload directly. This corresponds to the outbound
+ * half of an HTTP/1.x protocol upgrade.
+ * <p><b>Ownership:</b> once a response-side {@link HttpObject} is consumed successfully by this
+ * encoder, the encoder takes over its lifecycle and releases the source object after producing the
+ * encoded output. Callers must not release messages that have already been handed off
+ * successfully.
+ * <p><b>Thread safety:</b> this handler is stateless by itself. Per-connection state is stored in
+ * {@link HttpContext} attached to the {@link ProtoContext}, so a single instance can be shared
+ * safely across multiple connections or pipelines.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private static final Logger              logger         = Logger.getLogger(HttpResponseEncoder.class);
@@ -60,11 +69,17 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     private static final int                 SCRATCH_SIZE   = 2048;
     private static final ThreadLocal<byte[]> SCRATCH_BUF    = ThreadLocal.withInitial(() -> new byte[SCRATCH_SIZE]);
 
+    /**
+     * Initializes the response encoder context.
+     */
     @Override
     public void onInit(String name, int poolSize, ProtoContext context) {
         HttpContext.getOrCreate(context);
     }
 
+    /**
+     * Handles transparent mode switching events.
+     */
     @Override
     public boolean onEvent(ProtoContext context, SoEvent event) {
         if (event.getEventType() != HttpThroughEvent.class) {
@@ -81,10 +96,13 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         return true;
     }
 
+    /**
+     * Encodes response objects into an outbound byte stream.
+     */
     @Override
     public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
         HttpContext httpCtx = HttpContext.getOrCreate(context);
-        HttpContext.EncodeState<HttpResponse> respCtx = httpCtx.respEnc;
+        HttpContext.EncodeState respCtx = httpCtx.respEnc;
         while (src.hasMore()) {
             HttpObject msg = src.takeMessage();
             if (msg == null) {
@@ -127,7 +145,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     //
 
     // status-line
-    private void handleStatusLinePart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
+    private void handleStatusLinePart(HttpContext.EncodeState respCtx, ProtoContext context, HttpResponse response, ProtoSndQueue<ByteBuf> dst) {
         respCtx.reset();
 
         ByteBuf buf = context.byteBufAllocator().buffer(128);
@@ -160,7 +178,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     // header
-    private void handleHeadersPart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
+    private void handleHeadersPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
         if (headers instanceof TrailerHttpHeaders) {
             this.handleTrailerHeadersPart(respCtx, context, headers, dst);
         } else {
@@ -183,7 +201,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         dst.offerMessage(buf);
     }
 
-    private void handleTrailerHeadersPart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
+    private void handleTrailerHeadersPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpHeaders headers, ProtoSndQueue<ByteBuf> dst) {
         respCtx.chunkedEncoding = true;
         ByteBuf buf = context.byteBufAllocator().buffer(128);
 
@@ -236,7 +254,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
     }
 
     // body
-    private void handleBodyPart(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
+    private void handleBodyPart(HttpContext.EncodeState respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
         if (content instanceof LastHttpContent) {
             this.encodeLastContent(respCtx, context, (LastHttpContent) content, dst);
         } else {
@@ -244,7 +262,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
     }
 
-    private void encodeContent(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
+    private void encodeContent(HttpContext.EncodeState respCtx, ProtoContext context, HttpContent content, ProtoSndQueue<ByteBuf> dst) {
         ByteBuf body = content.content();
         if (respCtx.chunkedEncoding) {
             this.offerChunkContent(context, body, dst);
@@ -253,7 +271,7 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
     }
 
-    private void encodeLastContent(HttpContext.EncodeState<HttpResponse> respCtx, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<ByteBuf> dst) {
+    private void encodeLastContent(HttpContext.EncodeState respCtx, ProtoContext context, LastHttpContent lastContent, ProtoSndQueue<ByteBuf> dst) {
         ByteBuf body = lastContent.content();
 
         if (respCtx.trailerStarted) {
@@ -315,7 +333,9 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
 
     //
 
-    /** Writes an ASCII string directly byte-by-byte, avoiding String.getBytes() allocation. */
+    /**
+     * Writes an ASCII string byte by byte to avoid an extra String.getBytes() allocation.
+     */
     private static void writeAscii(ByteBuf buf, String s) {
         int len = s.length();
         if (len <= SCRATCH_SIZE) {
@@ -329,7 +349,9 @@ public class HttpResponseEncoder implements ProtoHandler<HttpObject, ByteBuf> {
         }
     }
 
-    /** Writes an int as hex string without String allocation. */
+    /**
+     * Writes an integer to the buffer in hexadecimal form without creating a temporary string.
+     */
     private static void writeHexInt(ByteBuf buf, int value) {
         byte[] scratch = SCRATCH_BUF.get();
         int idx = 15;

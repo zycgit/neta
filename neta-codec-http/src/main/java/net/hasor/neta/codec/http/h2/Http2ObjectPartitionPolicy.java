@@ -17,20 +17,24 @@ package net.hasor.neta.codec.http.h2;
 import net.hasor.neta.channel.*;
 
 /**
- * HTTP/2 partition policy that keeps connection-level control events from leaking into
- * per-stream business handlers and enforces stream lifecycle boundaries.
+ * HTTP/2 partition policy that prevents connection-level control events from leaking into
+ * per-stream business handlers and strictly preserves stream lifecycle boundaries.
  * <p>
- * This policy is consulted only when the matched partition does not already exist.
- * Returning {@link ReceivePolicy#Drop} for an event means the current event must not create
- * a new partition. It does not mean that the same HTTP/2 event type is globally discarded.
- * Once a stream partition already exists, later RESET and GOAWAY events bypass this policy
- * and are handled by the partition-local lifecycle duplexer.
+ * This policy is consulted only when the matching partition does not already exist.
+ * Returning {@link ReceivePolicy#Drop} for an event means that the current event must not create a
+ * new partition; it does not mean that the same class of HTTP/2 event is globally discarded.
+ * Once a stream partition already exists, later RESET and GOAWAY events bypass this policy and are
+ * handled by the lifecycle duplexer inside that partition.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-04-03
  */
 public class Http2ObjectPartitionPolicy implements ProtoPartitionPolicy {
     private volatile long lastAcceptedStreamId = Long.MAX_VALUE;
 
     @Override
-    public ReceivePolicy newPartition(ProtoContext context, ProtoPartitionControl control, PartitionKey key, PartitionDataKind kind, Object data) {
+    /**
+     * Decides whether the current data should create a new partition.
+     */ public ReceivePolicy newPartition(ProtoContext context, ProtoPartitionControl control, PartitionKey key, PartitionDataKind kind, Object data) {
         switch (kind) {
             case Event:
                 return this.partitionForEvent(control, key, data);
@@ -81,7 +85,7 @@ public class Http2ObjectPartitionPolicy implements ProtoPartitionPolicy {
             return ReceivePolicy.Accept;
         }
 
-        // during the graceful closing process
+        // The connection is in graceful shutdown.
         control.requestClose(key);
         return ReceivePolicy.Drop;
     }

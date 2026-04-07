@@ -19,31 +19,65 @@ import net.hasor.neta.codec.http.DefaultHttpHeaders;
 import net.hasor.neta.codec.http.HttpHeaderTooLargeException;
 
 /**
- * HPACK decoder as defined in RFC 7541.
+ * Decodes an HPACK header block into an HTTP/2 header collection.
  * <p>
- * Decodes a compressed header block into a set of HTTP header fields.
- * Supports indexed header field, literal header field with/without indexing,
- * and dynamic table size updates.
+ * This decoder implements the HPACK decompression flow defined by RFC 7541. It is typically used
+ * by the HTTP/2 message-layer decoder to restore the compressed header blocks carried by HEADERS,
+ * PUSH_PROMISE, and CONTINUATION into {@link DefaultHttpHeaders} so that later stages can rebuild
+ * request headers, response headers, or trailers.
+ * <p>
+ * A single decode operation internally behaves like an ordered header-block consumption flow:
+ * <pre>
+ *   compressed header block bytes
+ *      -> HpackDecoder
+ *      -> [name: value] + [name: value] + ...
+ * </pre>
+ * Input fragments are interpreted as indexed header fields, literal header fields with or without
+ * indexing, never-indexed literal header fields, and dynamic-table size update instructions.
+ * <p>
+ * Typical usage:
+ * <pre>
+ *   HpackDecoder decoder = new HpackDecoder(4096, 16384);
+ *   DefaultHttpHeaders headers = decoder.decode(data, offset, length);
+ * </pre>
+ * <p>
+ * Pipeline view:
+ * <pre>
+ *   compressed header block bytes
+ *      -> HpackDecoder
+ *      -> DefaultHttpHeaders
+ * </pre>
+ * <p>
+ * The decoder also maintains the dynamic-table state and enforces the configured upper bound on the
+ * total header-list size.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 class HpackDecoder {
     private final HpackDynamicTable dynamicTable;
     private final int               maxHeaderListSize;
-    // Reusable decode result fields to avoid array allocations in hot paths
+    // Reusable decoded-result fields to avoid array allocations on the hot path.
     private       int               decodedPos;
     private       int               decodedInt;
     private       String            decodedString;
 
     /**
      * Creates a new HPACK decoder.
-     * @param maxHeaderTableSize initial maximum dynamic table size
-     * @param maxHeaderListSize maximum allowed total header list size
+     * @param maxHeaderTableSize the initial maximum capacity of the dynamic table
+     * @param maxHeaderListSize the maximum total size allowed for the header list
      */
     public HpackDecoder(int maxHeaderTableSize, int maxHeaderListSize) {
         this.dynamicTable = new HpackDynamicTable(maxHeaderTableSize);
         this.maxHeaderListSize = maxHeaderListSize;
     }
 
-    /* Decodes a compressed header block fragment into HTTP headers. */
+    /**
+     * Decodes a compressed header-block fragment into HTTP headers.
+     * @param data the compressed data
+     * @param offset the starting offset
+     * @param length the data length
+     * @return the decoded HTTP header collection
+     */
     public DefaultHttpHeaders decode(byte[] data, int offset, int length) {
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
         int end = offset + length;
@@ -54,10 +88,10 @@ class HpackDecoder {
             int b = data[pos] & 0xFF;
 
             if ((b & 0x80) != 0) {
-                // 1xxxxxxx - Indexed Header Field (RFC 7541, Section 6.1)
+                // 1xxxxxxx: indexed header field, see RFC 7541 Section 6.1.
                 decodeInteger(data, pos, end, 7);
-                pos = decodedPos;
-                int index = decodedInt;
+                pos = this.decodedPos;
+                int index = this.decodedInt;
                 if (index == 0) {
                     throw new HpackDecodingException("HPACK: invalid indexed header field index 0");
                 }
@@ -65,71 +99,71 @@ class HpackDecoder {
                 headers.addHeader(entry.name(), entry.value());
                 totalSize += entry.name().length() + entry.value().length();
             } else if ((b & 0xC0) == 0x40) {
-                // 01xxxxxx - Literal Header Field with Incremental Indexing (RFC 7541, Section 6.2.1)
+                // 01xxxxxx: literal header field with incremental indexing, see RFC 7541 Section 6.2.1.
                 decodeInteger(data, pos, end, 6);
-                pos = decodedPos;
-                int nameIndex = decodedInt;
+                pos = this.decodedPos;
+                int nameIndex = this.decodedInt;
 
                 String name;
                 if (nameIndex > 0) {
                     name = getEntry(nameIndex).name();
                 } else {
                     decodeString(data, pos, end);
-                    pos = decodedPos;
-                    name = decodedString;
+                    pos = this.decodedPos;
+                    name = this.decodedString;
                 }
 
                 decodeString(data, pos, end);
-                pos = decodedPos;
-                String value = decodedString;
+                pos = this.decodedPos;
+                String value = this.decodedString;
 
                 headers.addHeader(name, value);
-                dynamicTable.add(new HpackHeaderField(name, value));
+                this.dynamicTable.add(new HpackHeaderField(name, value));
                 totalSize += name.length() + value.length();
             } else if ((b & 0xF0) == 0x00) {
-                // 0000xxxx - Literal Header Field without Indexing (RFC 7541, Section 6.2.2)
+                // 0000xxxx: literal header field without indexing, see RFC 7541 Section 6.2.2.
                 decodeInteger(data, pos, end, 4);
-                pos = decodedPos;
-                int nameIndex = decodedInt;
+                pos = this.decodedPos;
+                int nameIndex = this.decodedInt;
 
                 String name;
                 if (nameIndex > 0) {
                     name = getEntry(nameIndex).name();
                 } else {
                     decodeString(data, pos, end);
-                    pos = decodedPos;
-                    name = decodedString;
+                    pos = this.decodedPos;
+                    name = this.decodedString;
                 }
 
                 decodeString(data, pos, end);
-                pos = decodedPos;
-                String value = decodedString;
+                pos = this.decodedPos;
+                String value = this.decodedString;
 
                 headers.addHeader(name, value);
                 totalSize += name.length() + value.length();
             } else if ((b & 0xF0) == 0x10) {
-                // 0001xxxx - Literal Header Field Never Indexed (RFC 7541, Section 6.2.3)
+                // 0001xxxx: never-indexed literal header field, see RFC 7541 Section 6.2.3.
                 decodeInteger(data, pos, end, 4);
-                pos = decodedPos;
-                int nameIndex = decodedInt;
+                pos = this.decodedPos;
+                int nameIndex = this.decodedInt;
 
                 String name;
                 if (nameIndex > 0) {
                     name = getEntry(nameIndex).name();
                 } else {
                     decodeString(data, pos, end);
-                    pos = decodedPos;
-                    name = decodedString;
+                    pos = this.decodedPos;
+                    name = this.decodedString;
                 }
 
                 decodeString(data, pos, end);
-                pos = decodedPos;
-                String value = decodedString;
+                pos = this.decodedPos;
+                String value = this.decodedString;
 
                 headers.addHeader(name, value);
                 totalSize += name.length() + value.length();
             } else if ((b & 0xE0) == 0x20) {
-                // 001xxxxx - Dynamic Table Size Update (RFC 7541, Section 6.3)
+                // 001xxxxx: dynamic table size update, see RFC 7541 Section 6.3.
                 decodeInteger(data, pos, end, 5);
                 pos = decodedPos;
                 int newMaxSize = decodedInt;
@@ -138,15 +172,17 @@ class HpackDecoder {
                 throw new HpackDecodingException("HPACK: unknown header field representation: 0x" + Integer.toHexString(b));
             }
 
-            if (totalSize > maxHeaderListSize) {
-                throw new HttpHeaderTooLargeException("HPACK: header list size exceeds maximum: " + totalSize + " > " + maxHeaderListSize, maxHeaderListSize, totalSize);
+            if (totalSize > this.maxHeaderListSize) {
+                throw new HttpHeaderTooLargeException("HPACK: header list size exceeds maximum: " + totalSize + " > " + this.maxHeaderListSize, this.maxHeaderListSize, totalSize);
             }
         }
 
         return headers;
     }
 
-    /* Gets an entry from the combined static + dynamic table. */
+    /**
+     * Reads an entry from the combined view of the static table and dynamic table.
+     */
     private HpackHeaderField getEntry(int index) {
         if (index <= HpackStaticTable.LENGTH) {
             return HpackStaticTable.get(index);
@@ -155,7 +191,9 @@ class HpackDecoder {
         return dynamicTable.get(dynamicIdx);
     }
 
-    /* Decodes an HPACK integer representation (RFC 7541, Section 5.1). */
+    /**
+     * Decodes an HPACK integer representation, see RFC 7541 Section 5.1.
+     */
     private void decodeInteger(byte[] data, int pos, int end, int prefixBits) {
         int prefixMask = (1 << prefixBits) - 1;
         int value = data[pos] & prefixMask;
@@ -167,7 +205,7 @@ class HpackDecoder {
             return;
         }
 
-        // Multi-byte integer
+        // Multi-byte integer encoding.
         int shift = 0;
         int b;
         do {
@@ -187,7 +225,9 @@ class HpackDecoder {
         this.decodedInt = value;
     }
 
-    /* Decodes an HPACK string literal (RFC 7541, Section 5.2). */
+    /**
+     * Decodes an HPACK string literal, see RFC 7541 Section 5.2.
+     */
     private void decodeString(byte[] data, int pos, int end) {
         if (pos >= end) {
             throw new HpackDecodingException("HPACK: truncated string");
@@ -214,8 +254,11 @@ class HpackDecoder {
         this.decodedString = value;
     }
 
-    /* Updates the dynamic table maximum size (called on SETTINGS change). */
+    /**
+     * Updates the maximum dynamic-table capacity, typically after a SETTINGS change.
+     * @param maxSize the new capacity
+     */
     public void setMaxHeaderTableSize(int maxSize) {
-        dynamicTable.setMaxSize(maxSize);
+        this.dynamicTable.setMaxSize(maxSize);
     }
 }

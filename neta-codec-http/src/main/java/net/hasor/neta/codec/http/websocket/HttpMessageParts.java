@@ -21,9 +21,11 @@ import net.hasor.neta.bytebuf.CompositeByteBuf;
 import net.hasor.neta.codec.http.*;
 
 /**
- * Incremental collector for staged HTTP handshake parts.
+ * Incremental aggregator for HTTP request and response fragments used during websocket handshake.
  * <p>
- * Aggregates request or response line, headers, and body into one reusable handshake snapshot.
+ * It captures the start line, headers, and body into a reusable handshake snapshot.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-22
  */
 final class HttpMessageParts {
     private HttpVersion        protocolVersion;
@@ -36,14 +38,26 @@ final class HttpMessageParts {
     private boolean            active;
     private boolean            complete;
 
+    /**
+     * Determine whether aggregation has started for the current message.
+     * @return {@code true} once at least one start-line fragment has been seen
+     */
     public boolean isActive() {
         return this.active;
     }
 
+    /**
+     * Determine whether the current aggregated message has reached its end marker.
+     * @return {@code true} when the request or response is complete
+     */
     public boolean isComplete() {
         return this.complete;
     }
 
+    /**
+     * Append one request-side HTTP fragment into the current aggregation state.
+     * @param msg request-side HTTP fragment
+     */
     public void appendRequest(HttpObject msg) {
         boolean aggregateLike = msg instanceof HttpRequest && msg instanceof HttpContent;
         if (msg instanceof HttpRequest) {
@@ -65,6 +79,10 @@ final class HttpMessageParts {
         }
     }
 
+    /**
+     * Append one response-side HTTP fragment into the current aggregation state.
+     * @param msg response-side HTTP fragment
+     */
     public void appendResponse(HttpObject msg) {
         boolean aggregateLike = msg instanceof HttpResponse && msg instanceof HttpContent;
         if (msg instanceof HttpResponse) {
@@ -85,30 +103,59 @@ final class HttpMessageParts {
         }
     }
 
+    /**
+     * Return the aggregated protocol version.
+     * @return request or response protocol version
+     */
     public HttpVersion protocolVersion() {
         return this.protocolVersion;
     }
 
+    /**
+     * Return the aggregated request method.
+     * @return request method, or {@code null} for responses
+     */
     public HttpMethod method() {
         return this.method;
     }
 
+    /**
+     * Return the aggregated response status.
+     * @return response status, or {@code null} for requests
+     */
     public HttpStatus status() {
         return this.status;
     }
 
+    /**
+     * Return the aggregated request URI.
+     * @return request URI, or {@code null} for responses
+     */
     public String uri() {
         return this.uri;
     }
 
+    /**
+     * Return the stream identifier associated with the aggregated message.
+     * @return stream identifier
+     */
     public int streamId() {
         return this.streamId;
     }
 
+    /**
+     * Return one header value from the aggregated header set.
+     * @param name header name to resolve
+     * @return header value, or {@code null} when absent
+     */
     public String header(String name) {
         return this.headers == null ? null : this.headers.getString(name);
     }
 
+    /**
+     * Create a defensive copy of the aggregated headers.
+     * @return copied header set
+     */
     public HttpHeaders headersSnapshot() {
         DefaultHttpHeaders copy = new DefaultHttpHeaders();
         if (this.headers != null) {
@@ -117,10 +164,17 @@ final class HttpMessageParts {
         return copy;
     }
 
+    /**
+     * Return the aggregated body content.
+     * @return aggregated body buffer, or {@link ByteBuf#EMPTY} when no body exists
+     */
     public ByteBuf body() {
         return this.body == null ? ByteBuf.EMPTY : this.body;
     }
 
+    /**
+     * Reset the aggregation state so it can be reused for the next message.
+     */
     public void reset() {
         if (this.body != null) {
             this.body.free();

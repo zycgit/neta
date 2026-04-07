@@ -18,30 +18,71 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
 
 /**
- * Network event that requests or represents a WebSocket ping.
+ * Event used to request sending a websocket ping control frame.
  * <p>
- * Carries the optional ping payload and participates in the shared WebSocket event lifecycle.
+ * This event is not produced automatically by inbound network frames. Instead,
+ * it is actively published by business code or an upstream protocol handler,
+ * then intercepted by
+ * {@link WebSocketInboundHandler#onEvent(net.hasor.neta.channel.ProtoContext, net.hasor.neta.channel.SoEvent)}
+ * or {@link WebSocketOutboundHandler#onEvent(net.hasor.neta.channel.ProtoContext, net.hasor.neta.channel.SoEvent)}
+ * and converted into an actual ping control message.
+ * </p>
+ * <p>
+ * Sequence diagram:
+ * <pre>
+ * Local side actively sends ping
+ *   Business/Upstream Handler      ProtoContext         Inbound/Outbound Handler       WebSocket outbound flow
+ *             |                        |                         |                              |
+ *             | fireEvent(PING)        |                         |                              |
+ *             |----------------------->|                         |                              |
+ *             |                        | onEvent(...)            |                              |
+ *             |                        |------------------------>|                              |
+ *             |                        |                         | sendControlEventFrame(...)   |
+ *             |                        |                         |----------------------------->|
+ *             |                        | sendData(PING)          |                              |
+ *             |                        |------------------------------------------------------->|
+ * </pre>
+ * <p>
+ * The event may carry an optional ping payload.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2023-10-23
  */
 public class PingWebSocketEvent extends AbstractHttpEvent {
     private final ByteBuf content;
 
+    /**
+     * Create a ping event with an empty payload.
+     */
     public PingWebSocketEvent() {
         this(ByteBuf.EMPTY);
     }
 
+    /**
+     * Create a ping event with the specified payload.
+     * @param content ping payload
+     */
     public PingWebSocketEvent(ByteBuf content) {
         this.content = content == null ? ByteBuf.EMPTY.retain() : content.retain();
     }
 
+    /**
+     * Return the ping event payload.
+     */
     public ByteBuf content() {
         return this.content;
     }
 
+    /**
+     * Release the payload held by this event.
+     */
     @Override
     protected void doRelease() {
         this.content.release();
     }
 
+    /**
+     * Return a compact summary string for the event.
+     */
     @Override
     public String toString() {
         return "PingWebSocketEvent{payloadLen=" + this.content.readableBytes() + '}';

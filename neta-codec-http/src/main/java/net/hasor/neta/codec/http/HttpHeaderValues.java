@@ -15,7 +15,9 @@
  */
 package net.hasor.neta.codec.http;
 /**
- * Standard HTTP header values.
+ * Standard HTTP header value constants.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public final class HttpHeaderValues {
     /** {@code "application/json"} */
@@ -30,7 +32,7 @@ public final class HttpHeaderValues {
     public static final String APPLICATION_XML                   = "application/xml";
     /** {@code "application/zstd"} */
     public static final String APPLICATION_ZSTD                  = "application/zstd";
-    /** {@code "attachment"} See {@link HttpHeaderNames#CONTENT_DISPOSITION} */
+    /** {@code "attachment"}, see {@link HttpHeaderNames#CONTENT_DISPOSITION}. */
     public static final String ATTACHMENT                        = "attachment";
     /** {@code "base64"} */
     public static final String BASE64                            = "base64";
@@ -54,11 +56,11 @@ public final class HttpHeaderValues {
     public static final String DEFLATE                           = "deflate";
     /** {@code "x-deflate"} */
     public static final String X_DEFLATE                         = "x-deflate";
-    /** {@code "file"} See {@link HttpHeaderNames#CONTENT_DISPOSITION} */
+    /** {@code "file"}, see {@link HttpHeaderNames#CONTENT_DISPOSITION}. */
     public static final String FILE                              = "file";
-    /** {@code "filename"} See {@link HttpHeaderNames#CONTENT_DISPOSITION} */
+    /** {@code "filename"}, see {@link HttpHeaderNames#CONTENT_DISPOSITION}. */
     public static final String FILENAME                          = "filename";
-    /** {@code "form-data"} See {@link HttpHeaderNames#CONTENT_DISPOSITION} */
+    /** {@code "form-data"}, see {@link HttpHeaderNames#CONTENT_DISPOSITION}. */
     public static final String FORM_DATA                         = "form-data";
     /** {@code "gzip"} */
     public static final String GZIP                              = "gzip";
@@ -88,7 +90,7 @@ public final class HttpHeaderValues {
     public static final String MULTIPART_MIXED                   = "multipart/mixed";
     /** {@code "must-revalidate"} */
     public static final String MUST_REVALIDATE                   = "must-revalidate";
-    /** {@code "name"} See {@link HttpHeaderNames#CONTENT_DISPOSITION} */
+    /** {@code "name"}, see {@link HttpHeaderNames#CONTENT_DISPOSITION}. */
     public static final String NAME                              = "name";
     /** {@code "no-cache"} */
     public static final String NO_CACHE                          = "no-cache";

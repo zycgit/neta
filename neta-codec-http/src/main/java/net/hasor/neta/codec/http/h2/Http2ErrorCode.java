@@ -15,10 +15,11 @@
  */
 package net.hasor.neta.codec.http.h2;
 /**
- * HTTP/2 error codes as defined in RFC 9113, Section 7.
+ * HTTP/2 error codes defined by RFC 9113 Section 7.
  * <p>
- * These are used in RST_STREAM and GOAWAY frames to indicate the reason
- * for terminating a stream or a connection.
+ * These error codes are used in RST_STREAM and GOAWAY frames to explain why a stream or connection was terminated.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 public final class Http2ErrorCode {
     /** Graceful shutdown. */
@@ -27,33 +28,37 @@ public final class Http2ErrorCode {
     public static final long PROTOCOL_ERROR      = 0x01;
     /** The endpoint detected an internal error. */
     public static final long INTERNAL_ERROR      = 0x02;
-    /** The endpoint detected that its peer is exhibiting flow-control errors. */
+    /** The endpoint detected a flow-control error from its peer. */
     public static final long FLOW_CONTROL_ERROR  = 0x03;
-    /** The endpoint sent a SETTINGS frame but did not receive ACK in time. */
+    /** The endpoint did not receive a timely ACK after sending a SETTINGS frame. */
     public static final long SETTINGS_TIMEOUT    = 0x04;
-    /** The endpoint received a frame after a stream was half-closed. */
+    /** The endpoint received a frame after the stream had been half-closed. */
     public static final long STREAM_CLOSED       = 0x05;
     /** The endpoint received a frame with an invalid size. */
     public static final long FRAME_SIZE_ERROR    = 0x06;
     /** The endpoint refused the stream. */
     public static final long REFUSED_STREAM      = 0x07;
-    /** Indicate that the stream is no longer needed. */
+    /** Indicates that the stream is no longer needed. */
     public static final long CANCEL              = 0x08;
-    /** HPACK header compression context is not being used. */
+    /** The HPACK header compression context is unusable. */
     public static final long COMPRESSION_ERROR   = 0x09;
-    /** The connection established in response to a CONNECT request was reset. */
+    /** The connection established by a CONNECT request has been reset. */
     public static final long CONNECT_ERROR       = 0x0a;
     /** The endpoint detected that its peer is generating excessive load. */
     public static final long ENHANCE_YOUR_CALM   = 0x0b;
-    /** The transport-layer security is not sufficient. */
+    /** The transport-layer security strength is insufficient. */
     public static final long INADEQUATE_SECURITY = 0x0c;
-    /** The endpoint requires HTTP/1.1 instead of HTTP/2. */
+    /** The endpoint requires HTTP/1.1 and refuses to continue with HTTP/2. */
     public static final long HTTP_1_1_REQUIRED   = 0x0d;
 
     private Http2ErrorCode() {
     }
 
-    /** Returns a human-readable name for the given error code. */
+    /**
+     * Returns a human-readable name for the given error code.
+     * @param code the error code
+     * @return the symbolic error code name
+     */
     public static String name(long code) {
         switch ((int) code) {
             case (int) NO_ERROR:

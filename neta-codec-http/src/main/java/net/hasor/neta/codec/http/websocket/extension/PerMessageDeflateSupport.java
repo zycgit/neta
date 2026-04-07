@@ -28,23 +28,42 @@ import net.hasor.neta.codec.http.HttpStatus;
 import net.hasor.neta.codec.http.websocket.*;
 
 /**
- * First-batch built-in extension support limited to RFC 6455 single-extension
- * {@code permessage-deflate} negotiation.
+ * Built-in support for the {@code permessage-deflate} websocket extension.
+ * <p>
+ * The current implementation only accepts a single negotiated extension under
+ * RFC 6455 framing and maps it to one runtime compressor/decompressor instance
+ * per websocket connection.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-04-07
  */
 public class PerMessageDeflateSupport implements WebSocketExtensionSupport {
     public static final  String                   EXTENSION_NAME = "permessage-deflate";
     private static final PerMessageDeflateSupport INSTANCE       = new PerMessageDeflateSupport();
     private static final byte[]                   DEFLATE_TAIL   = new byte[] { 0x00, 0x00, (byte) 0xFF, (byte) 0xFF };
 
+    /**
+     * Return the singleton support instance.
+     * @return singleton support instance
+     */
     public static PerMessageDeflateSupport instance() {
         return INSTANCE;
     }
 
+    /**
+     * Return the websocket extension name handled by this support.
+     * @return extension name
+     */
     @Override
     public String extensionName() {
         return EXTENSION_NAME;
     }
 
+    /**
+     * Select the server-side negotiated extension header.
+     * @param request handshake request snapshot
+     * @param proposedExtensions proposed extension header value
+     * @return negotiated extension header, or {@code null} when the extension is not enabled
+     */
     @Override
     public String selectServerExtensions(WebSocketHandshakeRequest request, String proposedExtensions) {
         if (request == null) {
@@ -64,6 +83,12 @@ public class PerMessageDeflateSupport implements WebSocketExtensionSupport {
         }
     }
 
+    /**
+     * Validate the extension result returned by the server to the client.
+     * @param version websocket version
+     * @param requestedExtensions extension header requested by the client
+     * @param negotiatedExtensions extension header returned by the server
+     */
     @Override
     public void validateClientExtensions(WebSocketVersion version, String requestedExtensions, String negotiatedExtensions) {
         verifyRfc6455(version, "websocket upgrade failed: built-in extension support is currently limited to RFC6455.");
@@ -79,12 +104,22 @@ public class PerMessageDeflateSupport implements WebSocketExtensionSupport {
         }
     }
 
+    /**
+     * Parse a negotiated extension header into a structured result.
+     * @param headerValue negotiated extension header value
+     * @return negotiated extension result, or {@code null} when no supported extension is present
+     */
     @Override
     public WebSocketExtensionResult parseNegotiatedExtension(String headerValue) {
         String negotiated = normalizeSinglePerMessageDeflate(headerValue, "websocket extension runtime initialization failed: built-in extension support currently accepts only one negotiated extension and it must be permessage-deflate.");
         return negotiated == null ? null : new WebSocketExtensionResult(EXTENSION_NAME);
     }
 
+    /**
+     * Create the runtime compressor/decompressor for the negotiated extension.
+     * @param negotiatedExtension negotiated extension result
+     * @return runtime extension instance
+     */
     @Override
     public WebSocketRuntimeExtension createRuntimeExtension(WebSocketExtensionResult negotiatedExtension) {
         if (negotiatedExtension == null) {

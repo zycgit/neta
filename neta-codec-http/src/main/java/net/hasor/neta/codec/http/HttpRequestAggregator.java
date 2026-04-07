@@ -20,49 +20,56 @@ import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.ProtoContext;
 
 /**
- * Aggregates staged request-side {@link HttpObject} sequences into {@link FullHttpRequest}.
+ * Aggregates request-related {@link HttpObject} streams into a {@link FullHttpRequest}.
  * <p>
- * Use this handler after {@link HttpRequestDecoder} when downstream code prefers complete
- * request objects instead of staged headers and body chunks.
+ * This handler consumes segmented request objects such as {@link HttpRequest},
+ * {@link HttpHeaders}, and {@link HttpContent}, and emits a fully aggregated request object.
  * <p>
- * pipeline view:
- * <pre>
- *   socket bytes
- *      -> HttpRequestDecoder
- *      -> HttpRequest + HttpHeaders + HttpContent ...
- *      -> HttpRequestAggregator
- *      -> FullHttpRequest
- * </pre>
- * <p>
- * For server pipelines this is usually the receive-side aggregation choice. If you want the
- * same idea packaged as a duplex node, use {@link HttpServerDuplexeAggregator}.
+ * Use it after {@link HttpRequestDecoder} or {@link HttpServerDuplexe} when downstream business
+ * logic only wants complete requests instead of processing the request line, header block, and
+ * message body in pieces.
+ * If both request aggregation and response aggregation are needed in the same duplex node, use
+ * {@link HttpServerDuplexeAggregator} instead.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-03-13
  */
 public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     private static final Logger logger = Logger.getLogger(HttpRequestAggregator.class);
 
+    /**
+     * Creates a request aggregator with the default maximum content length.
+     */
     public HttpRequestAggregator() {
         super();
     }
 
+    /**
+     * Creates a request aggregator with an explicit maximum content length.
+     * @param maxContentLength the maximum content length
+     */
     public HttpRequestAggregator(int maxContentLength) {
         super(maxContentLength);
     }
 
+    /**
+     * Returns whether the current object is a request start message.
+     */
     @Override
     protected boolean isStartMessage(HttpObject msg) {
         return msg instanceof HttpRequest;
     }
 
-    @Override
-    protected boolean isFullMessage(HttpObject msg) {
-        return msg instanceof FullHttpRequest;
-    }
-
+    /**
+     * Casts the start message to a request object.
+     */
     @Override
     protected HttpRequest castStartMessage(HttpObject msg) {
         return (HttpRequest) msg;
     }
 
+    /**
+     * Builds the aggregated full request.
+     */
     @Override
     protected HttpObject buildAggregatedMessage(HttpRequest message, ByteBuf aggregated, DefaultHttpHeaders headers) {
         DefaultFullHttpRequest fullReq = new DefaultFullHttpRequest(message.protocolVersion(), message.method(), message.uri(), aggregated, headers);
@@ -73,6 +80,9 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         return fullReq;
     }
 
+    /**
+     * Logs completion of request aggregation.
+     */
     @Override
     protected void logAggregated(ProtoContext context, HttpRequest message, int contentLength) {
         if (context.getConfig().isPrintLog()) {
@@ -81,13 +91,18 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
         }
     }
 
+    /**
+     * Returns the log prefix.
+     */
     @Override
     protected String logPrefix() {
         return "[HTTP-REQ-AGG]";
     }
 
     @Override
-    protected void onHeadersClosed(ProtoContext context, HttpRequest message, long contentLength) {
+    /**
+     * Validates content length after the header section closes and handles Expect semantics.
+     */ protected void onHeadersClosed(ProtoContext context, HttpRequest message, long contentLength) {
         if (contentLength > this.maxContentLength()) {
             this.sendAutoResponse(context, message, HttpStatus.REQUEST_ENTITY_TOO_LARGE);
             this.enterDiscardMode();
@@ -98,14 +113,18 @@ public class HttpRequestAggregator extends AbstractHttpAggregator<HttpRequest> {
     }
 
     @Override
-    protected boolean onContentTooLarge(ProtoContext context, HttpRequest message, int newLength) {
+    /**
+     * Sends an automatic response and enters discard mode when aggregated content exceeds the limit.
+     */ protected boolean onContentTooLarge(ProtoContext context, HttpRequest message, int newLength) {
         this.sendAutoResponse(context, message, HttpStatus.REQUEST_ENTITY_TOO_LARGE);
         this.enterDiscardMode();
         return true;
     }
 
     @Override
-    protected boolean handleProtocolError(ProtoContext context, HttpProtocolException e, boolean fromPipelineError) {
+    /**
+     * Handles protocol exceptions during request aggregation and auto-replies with an error when needed.
+     */ protected boolean handleProtocolError(ProtoContext context, HttpProtocolException e, boolean fromPipelineError) {
         HttpRequest request = this.currentMessage();
         if (request != null) {
             this.sendAutoResponse(context, request, e.status());

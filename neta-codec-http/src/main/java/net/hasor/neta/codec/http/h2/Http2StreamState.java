@@ -15,54 +15,54 @@
  */
 package net.hasor.neta.codec.http.h2;
 /**
- * HTTP/2 stream state machine as defined in RFC 9113, Section 5.1.
+ * HTTP/2 stream state machine defined by RFC 9113 Section 5.1.
  * <p>
- * Stream states and valid transitions:
+ * Legend:
  * <pre>
- *                      +--------+
- *              send PP |        | recv PP
- *             ,--------|  idle  |--------.
- *            /         |        |         \
- *           v          +--------+          v
- *    +----------+          |           +----------+
- *    |          |          | send H /  |          |
- *    | reserved |          | recv H    | reserved |
- *    | (local)  |          |           | (remote) |
- *    +----------+          v           +----------+
- *           |          +--------+           |
- *           |          |        |           |
- *           |          |  open  |           |
- *           |          |        |           |
- *           |          +--------+           |
- *           |         /   |     \           |
- *           v        /    |      \          v
- *    +----------+   v     |       v   +----------+
- *    |   half   |         |           |   half   |
- *    |  closed  |         |           |  closed  |
- *    | (remote) |         |           |  (local) |
- *    +----------+         |           +----------+
- *           |             |                |
- *           v             v                v
- *           +----------+---+----------+
- *                       |             |
- *                       |   closed    |
- *                       |             |
- *                       +-------------+
+ *   H  = HEADERS frame that opens the stream
+ *   PP = PUSH_PROMISE that reserves the stream
  * </pre>
+ * The main legal transitions are shown below:
+ * <pre>
+ *   +--------+ -- send H / recv H --> +--------------------+
+ *   |  idle  |                        |        open        |
+ *   +--------+ <-- send PP ---------- +--------------------+
+ *       |                                  |            |
+ *       | recv PP                          | send ES    | recv ES
+ *       v                                  v            v
+ *   +-------------------+          +----------------+  +-----------------+
+ *   | reserved (local)  |          | half-closed   |  | half-closed     |
+ *   | waiting recv H    |          |   (local)     |  |   (remote)      |
+ *   +-------------------+          +---------------+  +-----------------+
+ *       |                                  |                    |
+ *       | recv H                           | recv ES            | send ES
+ *       v                                  v                    v
+ *   +-----------------+                +------------------------------+
+ *   | half-closed     |--------------> |            closed            |
+ *   |   (remote)      |                +------------------------------+
+ *   +-----------------+
+ * </pre><pre>
+ *   +--------+ -- recv PP --> +--------------------+ -- send H --> +----------------+
+ *   |  idle  |                | reserved (remote)  |               | half-closed   |
+ *   +--------+                | waiting send H     |               |   (local)     |
+ *                             +--------------------+               +----------------+
+ * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-20
  */
 public enum Http2StreamState {
-    /** Stream has not been opened yet. */
+    /** The stream has not been opened yet. */
     IDLE,
-    /** Remote endpoint has reserved this stream via PUSH_PROMISE. */
+    /** The remote endpoint reserved the stream through PUSH_PROMISE. */
     RESERVED_LOCAL,
-    /** Local endpoint has reserved this stream via PUSH_PROMISE. */
+    /** The local endpoint reserved the stream through PUSH_PROMISE. */
     RESERVED_REMOTE,
-    /** Stream is open and can send/receive frames. */
+    /** The stream is open and can send or receive frames. */
     OPEN,
-    /** Local endpoint has sent END_STREAM; can only receive. */
+    /** The local endpoint has sent END_STREAM and may only continue receiving. */
     HALF_CLOSED_LOCAL,
-    /** Remote endpoint has sent END_STREAM; can only send. */
+    /** The remote endpoint has sent END_STREAM and may only continue sending. */
     HALF_CLOSED_REMOTE,
-    /** Stream is closed. */
+    /** The stream is closed. */
     CLOSED
 }

@@ -25,10 +25,10 @@ import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.codec.http.HttpHeaderValues;
 
 /**
- * Encodes a collection of {@link FileUpload} parts into a {@code multipart/form-data} body.
- * <p>The encoder produces a ready-to-use body byte array and the corresponding
- * {@code Content-Type} header value (which includes the boundary).
- * <h3>Usage</h3>
+ * Encodes a set of {@link FileUpload} parts into a {@code multipart/form-data} request body.
+ * <p>The encoder produces both a directly usable request-body byte array and the matching
+ * {@code Content-Type} header value that contains the boundary.
+ * <h3>Usage Example</h3>
  * <pre>
  *   MultipartEncoder encoder = new MultipartEncoder();
  *   encoder.addField("username", "alice");
@@ -36,23 +36,25 @@ import net.hasor.neta.codec.http.HttpHeaderValues;
  *   byte[] body    = encoder.encode();
  *   String ctValue = encoder.contentType(); // "multipart/form-data; boundary=..."
  * </pre>
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-02-18
  */
 public class MultipartEncoder {
     private static final String          CRLF  = "\r\n";
     private final        String          boundary;
     private final        Charset         charset;
-    // Track whether any binary (byte[]) part has been started
+    // Stores all part entries waiting to be encoded.
     private final        List<PartEntry> parts = new ArrayList<>();
 
-    /** Creates an encoder with a random UUID boundary and UTF-8 charset. */
+    /** Creates an encoder with a random UUID boundary and the UTF-8 charset. */
     public MultipartEncoder() {
         this(UUID.randomUUID().toString().replace("-", ""), StandardCharsets.UTF_8);
     }
 
     /**
      * Creates an encoder with the specified boundary and charset.
-     * @param boundary the multipart boundary (must not contain "--")
-     * @param charset charset used for encoding field names, filenames and text values
+     * @param boundary the multipart boundary; the current implementation writes delimiter lines with this raw value
+     * @param charset the charset used to encode field names, filenames, and text values
      */
     public MultipartEncoder(String boundary, Charset charset) {
         if (StringUtils.isBlank(boundary)) {
@@ -62,23 +64,23 @@ public class MultipartEncoder {
         this.charset = charset;
     }
 
-    /** Returns the boundary used by this encoder. */
+    /** Returns the boundary used by the current encoder. */
     public String boundary() {
         return boundary;
     }
 
     /**
-     * Returns the value of the {@code Content-Type} header for this multipart body,
-     * e.g. {@code "multipart/form-data; boundary=abc123"}.
+     * Returns the {@code Content-Type} header value corresponding to the current multipart request body,
+     * for example {@code "multipart/form-data; boundary=abc123"}.
      */
     public String contentType() {
         return HttpHeaderValues.MULTIPART_FORM_DATA + "; boundary=" + boundary;
     }
 
     /**
-     * Adds a plain text form field.
-     * @param name field name
-     * @param value field value (encoded with this encoder's charset)
+     * Adds a plain-text form field.
+     * @param name the field name
+     * @param value the field value, encoded with the current encoder charset
      */
     public MultipartEncoder addField(String name, String value) {
         parts.add(new PartEntry(name, null, null, ByteBuf.wrap(value.getBytes(charset))));
@@ -86,11 +88,11 @@ public class MultipartEncoder {
     }
 
     /**
-     * Adds a file upload part.
-     * @param fieldName HTML form field name
-     * @param filename original filename
-     * @param contentType MIME type of the file
-     * @param data raw file bytes
+     * Adds a file-upload part.
+     * @param fieldName the HTML form field name
+     * @param filename the original filename
+     * @param contentType the file MIME type
+     * @param data the raw file bytes
      */
     public MultipartEncoder addFile(String fieldName, String filename, String contentType, byte[] data) {
         parts.add(new PartEntry(fieldName, filename, contentType, ByteBuf.wrap(data)));
@@ -99,7 +101,7 @@ public class MultipartEncoder {
 
     /**
      * Adds a {@link FileUpload} part directly.
-     * The content ByteBuf is referenced directly without copying.
+     * The content ByteBuf is referenced directly and is not copied.
      */
     public MultipartEncoder addPart(FileUpload part) {
         parts.add(new PartEntry(part.name(), part.filename(), part.contentType(), part.content()));
@@ -107,18 +109,18 @@ public class MultipartEncoder {
     }
 
     /**
-     * Encodes all added parts and returns the complete multipart body as a {@link ByteBuf}.
-     * <p>Uses {@code getBuffer} (not {@code writeBuffer}) to read part data so that
-     * the source readerIndex is not advanced — multiple calls produce the same result.
-     * <p>Caller is responsible for freeing the returned ByteBuf.
+     * Encodes all added parts and returns the complete multipart request body as a {@link ByteBuf}.
+     * <p>This method reads part data through {@code getBuffer}, so the source buffer readerIndex is left unchanged,
+     * and repeated calls produce the same result.
+     * <p>The caller is responsible for releasing the returned ByteBuf.
      */
     public ByteBuf encodeToBuf() {
-        // Pre-cache boundary bytes to avoid per-part getBytes() calls
+        // Pre-cache boundary bytes to avoid repeated getBytes() calls for every part.
         byte[] boundaryPrefixBytes = ("--" + boundary + CRLF).getBytes(StandardCharsets.US_ASCII);
         byte[] crlfBytes = CRLF.getBytes(StandardCharsets.US_ASCII);
         byte[] finalBoundaryBytes = ("--" + boundary + "--" + CRLF).getBytes(StandardCharsets.US_ASCII);
 
-        // Estimate total size to minimize reallocations
+        // Estimate the total size to reduce reallocations as much as possible.
         int estimate = finalBoundaryBytes.length;
         for (PartEntry entry : parts) {
             estimate += boundaryPrefixBytes.length + 256 + entry.data.readableBytes() + crlfBytes.length * 2;
@@ -137,27 +139,28 @@ public class MultipartEncoder {
             }
             disp.append(CRLF);
             dst.writeString(disp.toString(), charset);
-            // Content-Type header (only for file parts)
+            // Content-Type header (needed only for file parts)
             if (entry.contentType != null) {
                 dst.writeString("Content-Type: " + entry.contentType + CRLF, StandardCharsets.US_ASCII);
             }
-            // Blank line
+            // Empty line
             dst.writeBytes(crlfBytes);
-            // Body — getBuffer does not advance source readerIndex (safe for multiple encode() calls)
+            // Body content. getBuffer does not advance the source readerIndex, so repeated encoding is safe.
             int bodyLen = entry.data.readableBytes();
             entry.data.getBuffer(0, dst, bodyLen);
-            // CRLF after body
+            // CRLF after the body content
             dst.writeBytes(crlfBytes);
         }
-        // Final boundary
+
+        // Closing boundary
         dst.writeBytes(finalBoundaryBytes);
         dst.markWriter();
         return dst;
     }
 
     /**
-     * Encodes all added parts and returns the complete multipart body as a byte array.
-     * Multiple calls produce the same result (parts are not cleared).
+     * Encodes all added parts and returns the complete multipart request body as a byte array.
+     * Repeated calls produce the same result, and the internal part list is not cleared.
      */
     public byte[] encode() {
         ByteBuf buf = encodeToBuf();
@@ -169,7 +172,7 @@ public class MultipartEncoder {
     }
 
     // -------------------------------------------------------------------------
-    // Internal
+    // Internal structure
     // -------------------------------------------------------------------------
 
     private static final class PartEntry {
