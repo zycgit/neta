@@ -25,12 +25,11 @@ import net.hasor.neta.codec.http.AbstractHttpTest;
 import net.hasor.neta.codec.http.HttpObject;
 
 public class AbstractWebSocketTest extends AbstractHttpTest {
-    protected static ProtoHandler<HttpObject, HttpObject> switchRouteOnHandshake(String targetRoute) {
+    protected static ProtoHandler<HttpObject, HttpObject> switchRouteOnHandshake(final ProtoRoutingControl routingControl, String targetRoute) {
         return new ThroughProtoHandler<HttpObject>() {
             @Override
             public boolean onEvent(ProtoContext context, SoEvent event) {
                 if (event.getData() instanceof WebSocketHandshakeEvent) {
-                    ProtoRoutingControl routingControl = context.context(ProtoRoutingControl.class);
                     if (routingControl != null) {
                         routingControl.switchRoute(targetRoute);
                     }

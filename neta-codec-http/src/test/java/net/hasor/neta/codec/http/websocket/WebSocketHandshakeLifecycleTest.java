@@ -46,7 +46,7 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
     }
 
     private static WebSocketContext webSocketContext(SoChannel<?> channel) {
-        return channel.findProtoContext(WebSocketContext.class);
+        return WebSocketRegistry.resolve(channel);
     }
 
     private static ProtoHandler<HttpObject, HttpObject> errorRecorder(List<Throwable> errors, AtomicInteger outboundCountAtError) {
@@ -518,6 +518,22 @@ public class WebSocketHandshakeLifecycleTest extends AbstractWebSocketTest {
             assertTrue(drainQueue(pipe.clientInbound()).isEmpty());
             assertEquals("/chat", webSocketContext(pipe.server()).requestPath());
             assertEquals("/chat", webSocketContext(pipe.client()).requestPath());
+        });
+    }
+
+    @Test
+    public void testServerReadyContextIsRemovedFromRegistryWhenChannelCloses() throws Throwable {
+        autoCloseNeta(neta -> {
+            VirtualPipe pipe = openVirtualPipe(neta, ctx -> ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13)), VrtSoConfig.asServer());
+
+            List<HttpObject> inbound = receiveAndIntBound(pipe, WebSocketUtils.createHandshake(WebSocketVersion.V13, "/chat"));
+            assertTrue(inbound.isEmpty());
+            assertTrue(WebSocketUtils.isReady(pipe.channel()));
+            assertNotNull(webSocketContext(pipe.channel()));
+
+            pipe.channel().close();
+            assertTrue(waitUntil(() -> pipe.channel().isClose(), 1000L));
+            assertNull(webSocketContext(pipe.channel()));
         });
     }
 }

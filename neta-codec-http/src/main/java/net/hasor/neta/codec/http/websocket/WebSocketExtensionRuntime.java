@@ -13,21 +13,20 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.websocket.extension;
+package net.hasor.neta.codec.http.websocket;
 import net.hasor.neta.channel.ProtoContext;
-import net.hasor.neta.codec.http.websocket.WebSocketFrame;
 
 /**
- * Runtime extension instance bound to one websocket connection.
+ * Runtime extension bound to one websocket connection.
  * <p>
  * Implementations decide whether they handle a given frame and may transform it
  * on the inbound or outbound side.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-23
  */
-public interface WebSocketRuntimeExtension {
+public interface WebSocketExtensionRuntime {
     /**
-     * Return the negotiated extension result that created this runtime instance.
+     * Return the negotiated extension result that created this runtime.
      * @return negotiated extension result
      */
     WebSocketExtensionResult negotiatedExtension();

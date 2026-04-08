@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.websocket.extension;
+package net.hasor.neta.codec.http.websocket;
 
 /**
  * Extension SPI that covers negotiation, validation, and runtime creation.
@@ -24,9 +24,9 @@ package net.hasor.neta.codec.http.websocket.extension;
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-23
  */
-public interface WebSocketExtensionSupport extends WebSocketServerExtensionSelector, WebSocketClientExtensionValidator {
+public interface WebSocketExtension extends WebSocketExtensionSelector, WebSocketExtensionValidator {
     /**
-     * Return the websocket extension name handled by this support object.
+     * Return the websocket extension name handled by this extension.
      * @return extension name
      */
     String extensionName();
@@ -39,9 +39,9 @@ public interface WebSocketExtensionSupport extends WebSocketServerExtensionSelec
     WebSocketExtensionResult parseNegotiatedExtension(String headerValue);
 
     /**
-     * Create the runtime extension for one negotiated extension result.
+     * Create the runtime instance for one negotiated extension result.
      * @param negotiatedExtension negotiated extension result
-     * @return runtime extension instance
+     * @return runtime instance
      */
-    WebSocketRuntimeExtension createRuntimeExtension(WebSocketExtensionResult negotiatedExtension);
+    WebSocketExtensionRuntime createRuntimeExtension(WebSocketExtensionResult negotiatedExtension);
 }

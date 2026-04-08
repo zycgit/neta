@@ -122,7 +122,7 @@ public class WebSocketFrameEncoderTest extends AbstractWebSocketTest {
     public void testFrameEncoderNoArgUsesHandshakeContextVersion() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V0, "/auto"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.client(WebSocketVersion.V0, "/auto"));
                 ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
             }, VrtSoConfig.asClient());
 
@@ -238,7 +238,7 @@ public class WebSocketFrameEncoderTest extends AbstractWebSocketTest {
     public void testFrameEncoderAllowsClientMandatoryExtensionCloseCodeWhenHandshakeContextIsReady() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
                 ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
             }, VrtSoConfig.asClient());
 
@@ -257,7 +257,7 @@ public class WebSocketFrameEncoderTest extends AbstractWebSocketTest {
     public void testFrameEncoderRejectsServerMandatoryExtensionCloseCodeWhenHandshakeContextIsReady() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
                 ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
             }, VrtSoConfig.asServer());
 
@@ -292,7 +292,7 @@ public class WebSocketFrameEncoderTest extends AbstractWebSocketTest {
     public void testFrameEncoderRejectsUnmaskedClientFrameWhenHandshakeContextIsReady() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
                 ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
             }, VrtSoConfig.asClient());
 
@@ -310,7 +310,7 @@ public class WebSocketFrameEncoderTest extends AbstractWebSocketTest {
     public void testFrameEncoderRejectsMaskedServerFrameWhenHandshakeContextIsReady() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
                 ctx.addLastEncoder("ws-frame", new WebSocketFrameEncoder());
             }, VrtSoConfig.asServer());
 

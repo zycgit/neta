@@ -39,7 +39,7 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
     }
 
     private WebSocketContext webSocketContext(SoChannel<?> channel) {
-        return channel.findProtoContext(WebSocketContext.class);
+        return WebSocketRegistry.resolve(channel);
     }
 
     private void completeHandshake(VirtualPipe pipe, WebSocketVersion version) throws Throwable {
@@ -65,10 +65,12 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
                 ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
                 ctx.addLast("ws-message", new WebSocketMessageDuplexer());
             }, ctx -> {
                 ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
                 ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
                 ctx.addLast("ws-message", new WebSocketMessageDuplexer());
             }, VrtTransfer.direct());
             completeHandshake(pipe, WebSocketVersion.V13);
@@ -103,10 +105,12 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
                 ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
                 ctx.addLast("ws-message", new WebSocketMessageDuplexer());
             }, ctx -> {
                 ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
                 ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
                 ctx.addLast("ws-message", new WebSocketMessageDuplexer());
             }, VrtTransfer.direct());
             completeHandshake(pipe, WebSocketVersion.V13);
@@ -141,10 +145,12 @@ public class WebSocketClientServerFlowTest extends AbstractWebSocketTest {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
                 ctx.addLast("ws-client", new WebSocketClientHandshakeDuplexer(WebSocketVersion.V13));
                 ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
                 ctx.addLast("ws-message", new WebSocketMessageDuplexer());
             }, ctx -> {
                 ctx.addLast("ws-server", new WebSocketServerHandshakeDuplexer(WebSocketVersion.V13));
                 ctx.addLast("ws-frame", new WebSocketFrameDuplexer(WebSocketVersion.V13));
+                ctx.addLast("ws-ext", new WebSocketExtensionDuplexer());
                 ctx.addLast("ws-message", new WebSocketMessageDuplexer());
             }, VrtTransfer.direct());
             completeHandshake(pipe, WebSocketVersion.V13);

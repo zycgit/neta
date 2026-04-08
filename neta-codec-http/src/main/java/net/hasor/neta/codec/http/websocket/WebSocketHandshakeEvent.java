@@ -16,7 +16,6 @@
 package net.hasor.neta.codec.http.websocket;
 import java.util.List;
 import net.hasor.neta.codec.http.AbstractHttpEvent;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
 
 /**
  * Event published after the websocket opening handshake completes.

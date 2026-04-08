@@ -13,20 +13,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.websocket.extension;
-import net.hasor.neta.codec.http.websocket.WebSocketHandshakeRequest;
+package net.hasor.neta.codec.http.websocket;
 
 /**
- * Server-side selector for websocket extension negotiation results.
+ * Client-side validator for websocket extension negotiation results.
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2023-10-23
  */
-public interface WebSocketServerExtensionSelector {
+public interface WebSocketExtensionValidator {
     /**
-     * Select the extension header returned by the server for the current handshake.
-     * @param request handshake request snapshot
-     * @param proposedExtensions proposed extension header value
-     * @return selected extension header, or {@code null} when no extension is enabled
+     * Validate the extension header returned by the server during the handshake.
+     * @param version websocket version
+     * @param requestedExtensions extension header originally requested by the client
+     * @param negotiatedExtensions extension header returned by the server
      */
-    String selectServerExtensions(WebSocketHandshakeRequest request, String proposedExtensions);
+    void validateClientExtensions(WebSocketVersion version, String requestedExtensions, String negotiatedExtensions);
 }

@@ -13,7 +13,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.websocket.extension;
+package net.hasor.neta.codec.http.websocket;
 import java.util.*;
 import net.hasor.cobble.StringUtils;
 

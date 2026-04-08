@@ -28,7 +28,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
     private static final String RFC6455_KEY = "dGhlIHNhbXBsZSBub25jZQ==";
 
     private static WebSocketContext webSocketContext(net.hasor.neta.channel.SoChannel<?> channel) {
-        return channel.findProtoContext(WebSocketContext.class);
+        return WebSocketRegistry.resolve(channel);
     }
 
     private static DefaultFullHttpResponse newUpgradeResponse(String key) {
@@ -70,7 +70,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
             HttpResponse response = (HttpResponse) outbound.get(0);
 
             assertTrue(inbound.isEmpty());
-            assertNull(pipe.channel().findProtoContext(WebSocketContext.class));
+            assertNull(WebSocketRegistry.resolve(pipe.channel()));
             assertEquals(3, outbound.size());
             assertEquals(400, response.status().code());
         });

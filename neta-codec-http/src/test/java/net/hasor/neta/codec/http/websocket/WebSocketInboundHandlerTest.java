@@ -394,7 +394,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             List<Object> serverEvents = new ArrayList<>();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.context(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
                 ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                 ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
                 ctx.addLastDecoder("events", recordEvents(serverEvents));
@@ -418,7 +418,7 @@ public class WebSocketInboundHandlerTest extends AbstractWebSocketTest {
         autoCloseNeta(neta -> {
             List<Object> clientEvents = new ArrayList<>();
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.context(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
                 ctx.addLastEncoder("ws-outbound", new WebSocketOutboundHandler());
                 ctx.addLastDecoder("ws-inbound", new WebSocketInboundHandler());
                 ctx.addLastDecoder("events", recordEvents(clientEvents));

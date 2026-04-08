@@ -16,9 +16,7 @@
 package net.hasor.neta.codec.http.websocket;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Base64;
-import java.util.Collections;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.bytebuf.ByteBufAllocator;
 import net.hasor.neta.codec.http.*;
@@ -288,88 +286,5 @@ public class WebSocketUtilsTest extends AbstractWebSocketTest {
         frame.release();
         frame.release();
         assertNull(frame.content());
-    }
-
-    @Test
-    public void testContextFromHandshakeBasic() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/chat", "graphql-transport-ws", null);
-
-        assertTrue(ctx.isReady());
-        assertTrue(ctx.isServer());
-        assertFalse(ctx.isClient());
-        assertEquals("/chat", ctx.requestPath());
-        assertEquals("graphql-transport-ws", ctx.subProtocol());
-        assertEquals(13, ctx.version());
-        assertNull(ctx.extensions());
-    }
-
-    @Test
-    public void testContextFromHandshakeWithExtensions() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/ws", null, "permessage-deflate, x-webkit-deflate-frame");
-        assertNull(ctx.subProtocol());
-        assertEquals("permessage-deflate, x-webkit-deflate-frame", ctx.extensions());
-    }
-
-    @Test
-    public void testContextFromHandshakeEmptyExtensions() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/ws", null, "");
-        assertNull(ctx.extensions());
-    }
-
-    @Test
-    public void testContextFromHandshakeNullExtensions() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/ws", null, null);
-        assertNull(ctx.extensions());
-    }
-
-    @Test
-    public void testContextFromHandshakeExplicitVersion() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake(WebSocketVersion.V8, "/chat", "mqtt", null);
-        assertEquals(8, ctx.version());
-        assertEquals("/chat", ctx.requestPath());
-        assertEquals("mqtt", ctx.subProtocol());
-        assertTrue(ctx.isServer());
-        assertTrue(ctx.isReady());
-    }
-
-    @Test
-    public void testContextFromHandshakeLegacyVersion() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake(WebSocketVersion.V0, "/legacy", null, "permessage-deflate");
-        assertEquals(0, ctx.version());
-        assertEquals("/legacy", ctx.requestPath());
-        assertEquals("permessage-deflate", ctx.extensions());
-    }
-
-    @Test
-    public void testContextConstructorClientSide() {
-        WebSocketContextImpl ctx = new WebSocketContextImpl(false, "mqtt", 13, "/mqtt", Collections.emptyList());
-        assertFalse(ctx.isServer());
-        assertTrue(ctx.isClient());
-        assertEquals("mqtt", ctx.subProtocol());
-        assertEquals("/mqtt", ctx.requestPath());
-    }
-
-    @Test
-    public void testContextConstructorWithExtensionList() {
-        WebSocketContextImpl ctx = new WebSocketContextImpl(true, null, 13, "/ws", Arrays.asList("permessage-deflate", "x-ext"));
-        assertEquals("permessage-deflate, x-ext", ctx.extensions());
-    }
-
-    @Test
-    public void testContextConstructorNullExtensionList() {
-        WebSocketContextImpl ctx = new WebSocketContextImpl(true, null, 13, "/ws", null);
-        assertNull(ctx.extensions());
-    }
-
-    @Test
-    public void testContextAlwaysReady() {
-        WebSocketContextImpl ctx = new WebSocketContextImpl(true, null, 13, "/", Collections.emptyList());
-        assertTrue(ctx.isReady());
-    }
-
-    @Test
-    public void testContextVersionRfc6455() {
-        WebSocketContextImpl ctx = WebSocketContextImpl.fromHandshake("/", null, null);
-        assertEquals(13, ctx.version());
     }
 }

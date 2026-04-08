@@ -144,8 +144,9 @@ public class RealAsServerTest extends AbstractWebSocketTest {
 
             neta.bind(new InetSocketAddress("127.0.0.1", port), ctx -> {
                 ctx.addLast("http-server", new HttpServerDuplexe());
+                final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
                 ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsDefault(BRANCH_HTTP, branchCtx -> {
-                    branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplexer(WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                    branchCtx.addLast("ws-upgrade", new WebSocketServerUpgradeRouteDuplexer(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                     branchCtx.addLastDecoder("ws-handshake-events", handshakeEventTap(serverEvents));
                     branchCtx.addLastDecoder("http-agg", new HttpRequestAggregator(1024 * 1024));
                 }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
@@ -153,6 +154,7 @@ public class RealAsServerTest extends AbstractWebSocketTest {
                     branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
                     branchCtx.addLastDecoder("ws-events", serverEventTap(serverEvents));
                 });
+                routingControl[0] = routing.control();
                 ctx.addLast("server-route", routing.build());
             }, SoConfig.TCP());
 

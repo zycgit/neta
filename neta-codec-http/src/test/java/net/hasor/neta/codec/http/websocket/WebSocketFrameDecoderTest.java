@@ -186,7 +186,7 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     public void testFrameDecoderRejectsUnmaskedClientFrameWhenRunningAsServer() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
             }, VrtSoConfig.asServer());
 
@@ -204,7 +204,7 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     public void testFrameDecoderRejectsMaskedServerFrameWhenRunningAsClient() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.client(WebSocketVersion.V13, "/chat"));
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
             }, VrtSoConfig.asClient());
 
@@ -222,7 +222,7 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     public void testFrameDecoderCanStartStreaming64BitPayloadBeforeReceivingFullBody() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.server(WebSocketVersion.V13, "/chat"));
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
             }, VrtSoConfig.asServer());
 
@@ -244,7 +244,7 @@ public class WebSocketFrameDecoderTest extends AbstractWebSocketTest {
     public void testFrameDecoderNoArgUsesHandshakeContextVersion() throws Throwable {
         autoCloseNeta(neta -> {
             VirtualPipe pipe = openVirtualPipe(neta, ctx -> {
-                ctx.rootContext(WebSocketContext.class, MockWebSocketContext.server(WebSocketVersion.V0, "/auto"));
+                WebSocketRegistry.bind(ctx, WebSocketRegistryKey.connectionScope(), MockWebSocketContext.server(WebSocketVersion.V0, "/auto"));
                 ctx.addLastDecoder("ws-frame", new WebSocketFrameDecoder());
             }, VrtSoConfig.asServer());
 

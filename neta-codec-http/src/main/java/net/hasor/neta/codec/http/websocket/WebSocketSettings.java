@@ -18,10 +18,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import net.hasor.neta.codec.http.websocket.extension.PerMessageDeflateSupport;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketClientExtensionValidator;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionSupport;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSelector;
+import net.hasor.cobble.StringUtils;
+import net.hasor.neta.codec.http.websocket.extensions.DeflateFrameSupport;
+import net.hasor.neta.codec.http.websocket.extensions.PerMessageDeflateSupport;
+import net.hasor.neta.codec.http.websocket.extensions.XWebkitDeflateFrameSupport;
 
 /**
  * Unified entry point for WebSocket settings.
@@ -32,38 +32,29 @@ import net.hasor.neta.codec.http.websocket.extension.WebSocketServerExtensionSel
  * @version : 2026-04-07
  */
 public class WebSocketSettings {
-    private final WebSocketVersion                  version;
-    private final WebSocketAutoHandshakeConfig      autoHandshakeConfig;
-    private final WebSocketServerExtensionSelector  serverExtensionSelector;
-    private final WebSocketClientExtensionValidator clientExtensionValidator;
-    private final WebSocketHandshakeAuthorizer      handshakeAuthorizer;
-    private final List<WebSocketExtensionSupport>   extensionSupports;
+    private final WebSocketVersion             version;
+    private       WebSocketAutoHandshakeConfig handshakeAutoConfig;
+    private       WebSocketHandshakeAuthorizer handshakeAuthorizer;
+    private final List<WebSocketExtension>     extensionSupports;
 
     /**
-     * Create a settings builder.
-     * @param version WebSocket version
-     * @return builder
-     */
-    public static Builder builder(WebSocketVersion version) {
-        return new Builder(version);
-    }
-
-    /**
-     * Create a settings object using default values.
+     * Create a settings object with default values.
      * @param version WebSocket version
      * @return settings object
      */
     public static WebSocketSettings of(WebSocketVersion version) {
-        return builder(version).build();
+        return new WebSocketSettings(version);
     }
 
-    private WebSocketSettings(Builder builder) {
-        this.version = builder.version;
-        this.autoHandshakeConfig = builder.autoHandshakeConfig;
-        this.serverExtensionSelector = builder.serverExtensionSelector;
-        this.clientExtensionValidator = builder.clientExtensionValidator;
-        this.handshakeAuthorizer = builder.handshakeAuthorizer;
-        this.extensionSupports = Collections.unmodifiableList(new ArrayList<>(builder.extensionSupports));
+    /**
+     * Create a settings object.
+     * @param version WebSocket version
+     * @return settings object
+     */
+    public WebSocketSettings(WebSocketVersion version) {
+        this.version = Objects.requireNonNull(version, "version is null");
+        this.handshakeAuthorizer = (event, c) -> c.accept();
+        this.extensionSupports = new ArrayList<>(1);
     }
 
     /**
@@ -77,21 +68,7 @@ public class WebSocketSettings {
      * Return the automatic handshake configuration.
      */
     public WebSocketAutoHandshakeConfig autoHandshakeConfig() {
-        return this.autoHandshakeConfig;
-    }
-
-    /**
-     * Return the server-side extension selector.
-     */
-    public WebSocketServerExtensionSelector serverExtensionSelector() {
-        return this.serverExtensionSelector;
-    }
-
-    /**
-     * Return the client-side extension validator.
-     */
-    public WebSocketClientExtensionValidator clientExtensionValidator() {
-        return this.clientExtensionValidator;
+        return this.handshakeAutoConfig;
     }
 
     /**
@@ -104,111 +81,91 @@ public class WebSocketSettings {
     /**
      * Return the list of registered extension support implementations.
      */
-    public List<WebSocketExtensionSupport> extensionSupports() {
-        return this.extensionSupports;
+    public List<WebSocketExtension> extensionSupports() {
+        return Collections.unmodifiableList(this.extensionSupports);
     }
 
     /**
-     * Builder for {@link WebSocketSettings}.
+     * Set the automatic handshake configuration.
+     * @param autoHandshakeConfig automatic handshake configuration
+     * @return current settings object
      */
-    public static class Builder {
-        private final WebSocketVersion                  version;
-        private       WebSocketAutoHandshakeConfig      autoHandshakeConfig;
-        private       WebSocketServerExtensionSelector  serverExtensionSelector;
-        private       WebSocketClientExtensionValidator clientExtensionValidator;
-        private       WebSocketHandshakeAuthorizer      handshakeAuthorizer;
-        private final List<WebSocketExtensionSupport>   extensionSupports = new ArrayList<>(1);
+    public WebSocketSettings autoHandshakeConfig(WebSocketAutoHandshakeConfig autoHandshakeConfig) {
+        this.handshakeAutoConfig = autoHandshakeConfig;
+        return this;
+    }
 
-        private Builder(WebSocketVersion version) {
-            this.version = Objects.requireNonNull(version, "version is null");
-            this.handshakeAuthorizer = (event, c) -> c.accept();
+    /**
+     * Set the handshake authorizer.
+     * @param handshakeAuthorizer handshake authorizer
+     * @return current settings object
+     */
+    public WebSocketSettings handshakeAuthorizer(WebSocketHandshakeAuthorizer handshakeAuthorizer) {
+        this.handshakeAuthorizer = handshakeAuthorizer != null ? handshakeAuthorizer : (event, c) -> c.accept();
+        return this;
+    }
+
+    /**
+     * Register an extension support implementation.
+     * @param extensionSupport extension support implementation
+     * @return current settings object
+     */
+    public WebSocketSettings extensionSupport(WebSocketExtension extensionSupport) {
+        this.registerExtensionSupport(extensionSupport);
+        return this;
+    }
+
+    /**
+     * Register an extension support implementation.
+     * @param extensionSupport extension support implementation
+     * @return current settings object
+     */
+    public WebSocketSettings addExtensionSupport(WebSocketExtension extensionSupport) {
+        return this.extensionSupport(extensionSupport);
+    }
+
+    /**
+     * Enable the built-in default permessage-deflate capability.
+     * @return current settings object
+     */
+    public WebSocketSettings usePerMessageDeflateDefaults() {
+        return this.addExtensionSupport(PerMessageDeflateSupport.instance());
+    }
+
+    /**
+     * Enable the built-in default deflate-frame capability.
+     * @return current settings object
+     */
+    public WebSocketSettings useDeflateFrameDefaults() {
+        return this.addExtensionSupport(DeflateFrameSupport.instance());
+    }
+
+    /**
+     * Enable the built-in default x-webkit-deflate-frame capability.
+     * @return current settings object
+     */
+    public WebSocketSettings useXWebkitDeflateFrameDefaults() {
+        return this.addExtensionSupport(XWebkitDeflateFrameSupport.instance());
+    }
+
+    private void registerExtensionSupport(WebSocketExtension extensionSupport) {
+        if (extensionSupport == null) {
+            return;
         }
 
-        /**
-         * Set the automatic handshake configuration.
-         * @param autoHandshakeConfig automatic handshake configuration
-         * @return current builder
-         */
-        public Builder autoHandshakeConfig(WebSocketAutoHandshakeConfig autoHandshakeConfig) {
-            this.autoHandshakeConfig = autoHandshakeConfig;
-            return this;
+        if (StringUtils.isBlank(extensionSupport.extensionName())) {
+            throw new IllegalArgumentException("extensionSupport.extensionName() is blank");
         }
 
-        /**
-         * Set the handshake authorizer.
-         * @param handshakeAuthorizer handshake authorizer
-         * @return current builder
-         */
-        public Builder handshakeAuthorizer(WebSocketHandshakeAuthorizer handshakeAuthorizer) {
-            this.handshakeAuthorizer = handshakeAuthorizer != null ? handshakeAuthorizer : (event, c) -> c.accept();
-            return this;
-        }
-
-        /**
-         * Set the server-side extension selector.
-         * @param serverExtensionSelector server-side extension selector
-         * @return current builder
-         */
-        public Builder serverExtensionSelector(WebSocketServerExtensionSelector serverExtensionSelector) {
-            this.serverExtensionSelector = serverExtensionSelector;
-
-            if (serverExtensionSelector instanceof WebSocketExtensionSupport) {
-                this.registerExtensionSupport((WebSocketExtensionSupport) serverExtensionSelector);
+        for (WebSocketExtension registered : this.extensionSupports) {
+            if (registered == extensionSupport) {
+                return;
             }
-
-            return this;
-        }
-
-        /**
-         * Set the client-side extension validator.
-         * @param clientExtensionValidator client-side extension validator
-         * @return current builder
-         */
-        public Builder clientExtensionValidator(WebSocketClientExtensionValidator clientExtensionValidator) {
-            this.clientExtensionValidator = clientExtensionValidator;
-
-            if (clientExtensionValidator instanceof WebSocketExtensionSupport) {
-                this.registerExtensionSupport((WebSocketExtensionSupport) clientExtensionValidator);
-            }
-
-            return this;
-        }
-
-        /**
-         * Register an extension support implementation.
-         * @param extensionSupport extension support implementation
-         * @return current builder
-         */
-        public Builder extensionSupport(WebSocketExtensionSupport extensionSupport) {
-            this.registerExtensionSupport(extensionSupport);
-            return this;
-        }
-
-        /**
-         * Enable the built-in default permessage-deflate configuration.
-         * @return current builder
-         */
-        public Builder usePerMessageDeflateDefaults() {
-            PerMessageDeflateSupport support = PerMessageDeflateSupport.instance();
-            this.serverExtensionSelector = support;
-            this.clientExtensionValidator = support;
-
-            this.registerExtensionSupport(support);
-            return this;
-        }
-
-        private void registerExtensionSupport(WebSocketExtensionSupport extensionSupport) {
-            if (extensionSupport != null && !this.extensionSupports.contains(extensionSupport)) {
-                this.extensionSupports.add(extensionSupport);
+            if (registered != null && StringUtils.equalsIgnoreCase(registered.extensionName(), extensionSupport.extensionName())) {
+                throw new IllegalArgumentException("duplicated websocket extension support: " + extensionSupport.extensionName());
             }
         }
 
-        /**
-         * Build the settings object.
-         * @return WebSocket settings
-         */
-        public WebSocketSettings build() {
-            return new WebSocketSettings(this);
-        }
+        this.extensionSupports.add(extensionSupport);
     }
 }

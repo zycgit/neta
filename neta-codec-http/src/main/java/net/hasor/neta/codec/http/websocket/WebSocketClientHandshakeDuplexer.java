@@ -15,7 +15,6 @@
  */
 package net.hasor.neta.codec.http.websocket;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
@@ -23,9 +22,6 @@ import net.hasor.cobble.logging.LoggerFactory;
 import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketClientExtensionValidator;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Client opening-handshake duplexer for WebSocket upgrades.
@@ -70,7 +66,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
      * @param autoHandshakeConfig auto-handshake request settings
      */
     public WebSocketClientHandshakeDuplexer(WebSocketVersion codecVersion, WebSocketAutoHandshakeConfig autoHandshakeConfig) {
-        this(WebSocketSettings.builder(codecVersion).autoHandshakeConfig(autoHandshakeConfig).build());
+        this(WebSocketSettings.of(codecVersion).autoHandshakeConfig(autoHandshakeConfig));
     }
 
     /**
@@ -315,7 +311,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 try {
                     int versionCode = acceptedVersion != null ? acceptedVersion.code() : 13;
                     List<WebSocketExtensionResult> extResults = WebSocketUtils.parseExtensions(extStr);
-                    List<WebSocketRuntimeExtension> runtimeExt = WebSocketUtils.resolveRuntimeExtensions(extResults, this.settings);
+                    List<WebSocketExtensionRuntime> runtimeExt = WebSocketUtils.resolveRuntimeExtensions(extResults, this.settings);
 
                     this.finishWebSocketUpgrade(context, new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt));
                     state.ready = true;
@@ -385,13 +381,31 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         validateSelectedSubProtocol(reqProtocols, selectedProtocol);
 
         String extStr = response.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
-        WebSocketClientExtensionValidator extValidator = this.settings.clientExtensionValidator();
-        if (extValidator == null) {
-            if (StringUtils.isNotBlank(extStr)) {
-                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: negotiated extensions are disabled by current settings.");
+        this.validateNegotiatedExtensions(reqExtensions, extStr);
+    }
+
+    private void validateNegotiatedExtensions(String requestedExtensions, String negotiatedExtensions) {
+        if (StringUtils.isBlank(negotiatedExtensions)) {
+            return;
+        }
+
+        List<WebSocketExtension> supports = this.settings.extensionSupports();
+        if (supports.isEmpty()) {
+            throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: negotiated extensions are disabled by current settings.");
+        }
+
+        List<WebSocketExtensionResult> requested = WebSocketUtils.parseExtensions(requestedExtensions);
+        List<WebSocketExtensionResult> negotiated = WebSocketUtils.parseExtensions(negotiatedExtensions);
+        this.ensureNoDuplicateExtensions(negotiated, "websocket upgrade failed: duplicated negotiated websocket extension: ");
+
+        for (WebSocketExtensionResult negotiatedItem : negotiated) {
+            WebSocketExtension support = this.findExtensionSupport(supports, negotiatedItem.name());
+            if (support == null) {
+                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: unsupported negotiated websocket extension: " + negotiatedItem.name());
             }
-        } else {
-            extValidator.validateClientExtensions(this.codecVersion, reqExtensions, extStr);
+
+            String requestedHeader = this.findSingleExtensionHeaderValue(requested, negotiatedItem.name(), "websocket upgrade failed: duplicated requested websocket extension: " + negotiatedItem.name());
+            support.validateClientExtensions(this.codecVersion, requestedHeader, negotiatedItem.asHeaderValue());
         }
     }
 
@@ -411,26 +425,6 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
         if (!requestedValues.contains(selectedValues.get(0))) {
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: server selected an unsupported websocket sub-protocol.");
         }
-    }
-
-    private static List<String> parseHeaderValues(String headerValue) {
-        if (StringUtils.isBlank(headerValue)) {
-            return Collections.emptyList();
-        }
-
-        String[] parts = headerValue.split(",");
-        List<String> values = new ArrayList<>(parts.length);
-        for (String part : parts) {
-            String value = part != null ? part.trim() : null;
-            if (StringUtils.isNotBlank(value)) {
-                values.add(value);
-            }
-        }
-
-        if (values.isEmpty()) {
-            return Collections.emptyList();
-        }
-        return values;
     }
 
     // tools

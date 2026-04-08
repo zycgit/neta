@@ -34,9 +34,6 @@ import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.cookie.Cookie;
 import net.hasor.neta.codec.http.cookie.CookieDecoder;
 import net.hasor.neta.codec.http.cookie.CookieEncoder;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionSupport;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Factory and validation helpers shared across the websocket codec pipeline.
@@ -78,15 +75,15 @@ public final class WebSocketUtils {
         return results.isEmpty() ? Collections.emptyList() : results;
     }
 
-    static List<WebSocketRuntimeExtension> resolveRuntimeExtensions(List<WebSocketExtensionResult> extensionResults, WebSocketSettings settings) {
+    static List<WebSocketExtensionRuntime> resolveRuntimeExtensions(List<WebSocketExtensionResult> extensionResults, WebSocketSettings settings) {
         if (settings == null || extensionResults == null || extensionResults.isEmpty()) {
             return Collections.emptyList();
         }
 
-        List<WebSocketRuntimeExtension> runtimeExtensions = new ArrayList<>(extensionResults.size());
+        List<WebSocketExtensionRuntime> runtimeExtensions = new ArrayList<>(extensionResults.size());
         for (WebSocketExtensionResult result : extensionResults) {
-            WebSocketRuntimeExtension runtimeExtension = null;
-            for (WebSocketExtensionSupport support : settings.extensionSupports()) {
+            WebSocketExtensionRuntime runtimeExtension = null;
+            for (WebSocketExtension support : settings.extensionSupports()) {
                 if (support == null || !StringUtils.equalsIgnoreCase(support.extensionName(), result.name())) {
                     continue;
                 }
@@ -116,12 +113,7 @@ public final class WebSocketUtils {
             return null;
         }
 
-        WebSocketContext webSocketContext = context.context(WebSocketContext.class);
-        if (webSocketContext == null || !webSocketContext.isReady()) {
-            webSocketContext = context.rootContext(WebSocketContext.class);
-        }
-
-        return webSocketContext != null && webSocketContext.isReady() ? webSocketContext : null;
+        return WebSocketRegistry.resolve(context);
     }
 
     /**
@@ -139,7 +131,7 @@ public final class WebSocketUtils {
      * @param context protocol context that may carry websocket state
      * @return initialized runtime extensions, or an empty list when none are active
      */
-    public static List<WebSocketRuntimeExtension> runtimeExtensions(ProtoContext context) {
+    public static List<WebSocketExtensionRuntime> runtimeExtensions(ProtoContext context) {
         WebSocketContext webSocketContext = readyContext(context);
         if (webSocketContext instanceof WebSocketContextImpl) {
             return ((WebSocketContextImpl) webSocketContext).runtimeList();
@@ -153,7 +145,11 @@ public final class WebSocketUtils {
      * @return {@code true} when the websocket handshake has completed
      */
     public static boolean isReady(SoChannel<?> channel) {
-        return channel != null && isReady(channel.findProtoContext(WebSocketContext.class));
+        if (channel == null) {
+            return false;
+        }
+
+        return isReady(WebSocketRegistry.resolve(channel));
     }
 
     /**

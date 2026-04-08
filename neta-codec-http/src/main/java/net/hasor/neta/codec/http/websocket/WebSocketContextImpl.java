@@ -17,8 +17,6 @@ package net.hasor.neta.codec.http.websocket;
 import java.util.Collections;
 import java.util.List;
 import net.hasor.cobble.StringUtils;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketExtensionResult;
-import net.hasor.neta.codec.http.websocket.extension.WebSocketRuntimeExtension;
 
 /**
  * Default implementation of {@link WebSocketContext}.
@@ -34,7 +32,7 @@ class WebSocketContextImpl implements WebSocketContext {
     private final int                             version;
     private final String                          requestPath;
     private final List<WebSocketExtensionResult>  extResults;
-    private final List<WebSocketRuntimeExtension> runExtensions;
+    private final List<WebSocketExtensionRuntime> runExtensions;
 
     /**
      * Create a new websocket context.
@@ -58,7 +56,7 @@ class WebSocketContextImpl implements WebSocketContext {
      * @param runExtensions runtime extension list
      */
     WebSocketContextImpl(boolean server, String subProtocol, int version, String requestPath,//
-            List<WebSocketExtensionResult> extResults, List<WebSocketRuntimeExtension> runExtensions) {
+            List<WebSocketExtensionResult> extResults, List<WebSocketExtensionRuntime> runExtensions) {
         this.server = server;
         this.subProtocol = subProtocol;
         this.version = version;
@@ -146,7 +144,7 @@ class WebSocketContextImpl implements WebSocketContext {
     /**
      * Return the runtime extensions installed on the current connection.
      */
-    public List<WebSocketRuntimeExtension> runtimeList() {
+    public List<WebSocketExtensionRuntime> runtimeList() {
         return this.runExtensions;
     }
 

@@ -13,13 +13,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.websocket.extension;
+package net.hasor.neta.codec.http.websocket;
 import java.util.List;
 import net.hasor.neta.channel.*;
-import net.hasor.neta.codec.http.websocket.WebSocketCode;
-import net.hasor.neta.codec.http.websocket.WebSocketFrame;
-import net.hasor.neta.codec.http.websocket.WebSocketProtocolViolationException;
-import net.hasor.neta.codec.http.websocket.WebSocketUtils;
 
 /**
  * Duplex layer that applies negotiated runtime websocket extensions.
@@ -143,8 +139,8 @@ public class WebSocketExtensionDuplexer implements ProtoDuplexer<WebSocketFrame,
 
     private WebSocketFrame applyInboundExtensions(ProtoContext context, WebSocketFrame frame) {
         WebSocketFrame current = frame;
-        List<WebSocketRuntimeExtension> runtimeExtensions = WebSocketUtils.runtimeExtensions(context);
-        for (WebSocketRuntimeExtension runtimeExtension : runtimeExtensions) {
+        List<WebSocketExtensionRuntime> runtimeExtensions = WebSocketUtils.runtimeExtensions(context);
+        for (WebSocketExtensionRuntime runtimeExtension : runtimeExtensions) {
             if (!runtimeExtension.handlesInboundFrame(current)) {
                 continue;
             }
@@ -165,7 +161,7 @@ public class WebSocketExtensionDuplexer implements ProtoDuplexer<WebSocketFrame,
 
     private WebSocketFrame applyOutboundExtensions(ProtoContext context, WebSocketFrame frame) {
         WebSocketFrame current = frame;
-        for (WebSocketRuntimeExtension runtimeExtension : WebSocketUtils.runtimeExtensions(context)) {
+        for (WebSocketExtensionRuntime runtimeExtension : WebSocketUtils.runtimeExtensions(context)) {
             WebSocketFrame encoded = runtimeExtension.encodeFrame(context, current);
             if (encoded != current) {
                 current.release();
@@ -176,12 +172,12 @@ public class WebSocketExtensionDuplexer implements ProtoDuplexer<WebSocketFrame,
         return current;
     }
 
-    private void validateNegotiatedRsv(WebSocketFrame frame, List<WebSocketRuntimeExtension> runtimeExtensions) {
+    private void validateNegotiatedRsv(WebSocketFrame frame, List<WebSocketExtensionRuntime> runtimeExtensions) {
         if (!frame.isRsv1() && !frame.isRsv2() && !frame.isRsv3()) {
             return;
         }
 
-        for (WebSocketRuntimeExtension runtimeExtension : runtimeExtensions) {
+        for (WebSocketExtensionRuntime runtimeExtension : runtimeExtensions) {
             if (runtimeExtension.handlesOutboundFrame(frame)) {
                 return;
             }
@@ -191,7 +187,7 @@ public class WebSocketExtensionDuplexer implements ProtoDuplexer<WebSocketFrame,
     }
 
     private void resetRuntimeExtensions(ProtoContext context, boolean close) {
-        for (WebSocketRuntimeExtension runtimeExtension : WebSocketUtils.runtimeExtensions(context)) {
+        for (WebSocketExtensionRuntime runtimeExtension : WebSocketUtils.runtimeExtensions(context)) {
             if (close) {
                 runtimeExtension.close();
             } else {

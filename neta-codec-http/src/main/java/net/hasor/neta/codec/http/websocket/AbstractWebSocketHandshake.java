@@ -17,7 +17,7 @@ package net.hasor.neta.codec.http.websocket;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.Base64;
+import java.util.*;
 import net.hasor.cobble.ExceptionUtils;
 import net.hasor.cobble.StringUtils;
 import net.hasor.cobble.logging.Logger;
@@ -142,6 +142,133 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
      */
     protected final boolean isHttpResponsePart(HttpObject msg) {
         return msg instanceof HttpResponse || msg instanceof HttpHeaders || msg instanceof HttpContent;
+    }
+
+    /**
+     * Split a comma-separated header into trimmed values.
+     * @param headerValue raw header value
+     * @return parsed values, or an empty list
+     */
+    protected final List<String> parseHeaderValues(String headerValue) {
+        if (StringUtils.isBlank(headerValue)) {
+            return Collections.emptyList();
+        }
+
+        String[] parts = headerValue.split(",");
+        List<String> values = new ArrayList<>(parts.length);
+        for (String part : parts) {
+            String value = part != null ? part.trim() : null;
+            if (StringUtils.isNotBlank(value)) {
+                values.add(value);
+            }
+        }
+
+        if (values.isEmpty()) {
+            return Collections.emptyList();
+        }
+        return values;
+    }
+
+    /**
+     * Locate one registered extension support by extension name.
+     * @param supports registered supports
+     * @param extensionName extension name to locate
+     * @return matching support, or {@code null}
+     */
+    protected final WebSocketExtension findExtensionSupport(List<WebSocketExtension> supports, String extensionName) {
+        if (supports == null || StringUtils.isBlank(extensionName)) {
+            return null;
+        }
+
+        for (WebSocketExtension support : supports) {
+            if (support != null && StringUtils.equalsIgnoreCase(extensionName, support.extensionName())) {
+                return support;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Extract the single header fragment for the specified extension name.
+     * @param items parsed extension items
+     * @param extensionName extension name to locate
+     * @param duplicatedMessage error used when duplicates exist
+     * @return single header fragment, or {@code null}
+     */
+    protected final String findSingleExtensionHeaderValue(List<WebSocketExtensionResult> items, String extensionName, String duplicatedMessage) {
+        if (items == null || items.isEmpty() || StringUtils.isBlank(extensionName)) {
+            return null;
+        }
+
+        String resolved = null;
+        for (WebSocketExtensionResult item : items) {
+            if (item == null || !StringUtils.equalsIgnoreCase(extensionName, item.name())) {
+                continue;
+            }
+            if (resolved != null) {
+                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, duplicatedMessage);
+            }
+            resolved = item.asHeaderValue();
+        }
+        return resolved;
+    }
+
+    /**
+     * Reject duplicated extension names in one parsed extension list.
+     * @param items parsed extension items
+     * @param duplicatedPrefix error prefix for duplicated names
+     */
+    protected final void ensureNoDuplicateExtensions(List<WebSocketExtensionResult> items, String duplicatedPrefix) {
+        if (items == null || items.isEmpty()) {
+            return;
+        }
+
+        Set<String> names = new HashSet<>();
+        for (WebSocketExtensionResult item : items) {
+            if (item == null || StringUtils.isBlank(item.name())) {
+                continue;
+            }
+
+            String normalized = item.name().toLowerCase();
+            if (!names.add(normalized)) {
+                throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, duplicatedPrefix + item.name());
+            }
+        }
+    }
+
+    /**
+     * Copy the handshake request while replacing the requested extension header.
+     * @param request original request snapshot
+     * @param requestedHeader one extension header fragment
+     * @return copied request snapshot
+     */
+    protected final WebSocketHandshakeRequest copyHandshakeRequest(WebSocketHandshakeRequest request, String requestedHeader) {
+        WebSocketHandshakeRequest copy = new WebSocketHandshakeRequest(request.version(), request.requestPath(), request.requestedProtocols(), requestedHeader, request.headers());
+        copy.streamId(request.streamId());
+        return copy;
+    }
+
+    /**
+     * Join header fragments back into one websocket extension header.
+     * @param headerValues header fragments to join
+     * @return normalized header value, or {@code null}
+     */
+    protected final String joinHeaderValues(List<String> headerValues) {
+        if (headerValues == null || headerValues.isEmpty()) {
+            return null;
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (String item : headerValues) {
+            if (StringUtils.isBlank(item)) {
+                continue;
+            }
+            if (sb.length() > 0) {
+                sb.append(", ");
+            }
+            sb.append(item);
+        }
+        return sb.length() == 0 ? null : sb.toString();
     }
 
     /**

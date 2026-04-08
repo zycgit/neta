@@ -175,9 +175,10 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                     // 1st. http basic
                     ctx.addLast("http-client", new HttpClientDuplexe());
                     // 2st. distribution
+                    final ProtoRoutingControl[] routingControl = new ProtoRoutingControl[1];
                     ProtoRoutingBuilder<Object, Object> routing = ProtoHelper.typedRoutingAsDefault(BRANCH_HTTP, branchCtx -> {
                         // - for HTTP
-                        branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplexer(WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
+                        branchCtx.addLast("ws-over-http", new WebSocketClientUpgradeRouteDuplexer(routingControl[0], WebSocketVersion.V13, HttpRouteKey.BRANCH_SOCKET));
                         branchCtx.addLastDecoder("resp-agg", new HttpResponseAggregator());
                     }).branchByInitializer(HttpRouteKey.BRANCH_SOCKET, branchCtx -> {
                         // - for WebSocket
@@ -185,6 +186,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                         branchCtx.addLast("ws-message", new WebSocketMessageDuplexer());
                         branchCtx.addLastDecoder("ws-event-tap", inboundEventTap(inbound));
                     });
+                    routingControl[0] = routing.control();
                     ctx.addLast("client-route", routing.build());
                 }, SoConfig.TCP());
                 channel.subscribe(PlayLoad::isInbound, SubscribeMode.SYNC, d -> {
