@@ -111,7 +111,7 @@ public class HttpSceneTest extends AbstractHttpTest {
                     new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.POST, "/upload"),//
                     new DefaultTrailerHttpHeaders().addHeader("X-Trail", "done"),//
                     new DefaultHttpContent(ascii("Wiki")),//
-                    DefaultLastHttpContent.EMPTY);
+                    new DefaultLastHttpContent(ByteBuf.EMPTY));
             assertEquals("POST /upload HTTP/1.1\r\n0\r\nX-Trail: done\r\n4\r\nWiki\r\n\r\n", text(parts));
         });
     }
@@ -127,7 +127,7 @@ public class HttpSceneTest extends AbstractHttpTest {
                     new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK),//
                     new DefaultTrailerHttpHeaders().addHeader("X-Trail", "done"),//
                     new DefaultHttpContent(ascii("Wiki")),//
-                    DefaultLastHttpContent.EMPTY);
+                    new DefaultLastHttpContent(ByteBuf.EMPTY));
             assertEquals("HTTP/1.1 200 OK\r\n0\r\nX-Trail: done\r\n4\r\nWiki\r\n\r\n", text(parts));
         });
     }

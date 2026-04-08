@@ -35,7 +35,7 @@ public class HttpResponseEncoderTest extends AbstractHttpTest {
                             Tuple.of("Server", "demo"), Tuple.of("Transfer-Encoding", HttpHeaderValues.CHUNKED)),//
                     new DefaultHttpContent(ascii("Wiki")),//
                     joinHeaders(DefaultTrailerHttpHeaders.class, Tuple.of("X-Trail", "done")),//
-                    DefaultLastHttpContent.EMPTY);
+                    new DefaultLastHttpContent(ByteBuf.EMPTY));
             assertEquals("HTTP/1.1 200 OK\r\nServer: demo\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\nX-Trail: done\r\n\r\n", text(parts));
         });
     }
@@ -98,7 +98,7 @@ public class HttpResponseEncoderTest extends AbstractHttpTest {
                     new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.OK),//
                     new DefaultLastHttpHeaders().addHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED),//
                     new DefaultHttpContent(ascii("Wiki")),//
-                    DefaultLastHttpContent.EMPTY);
+                    new DefaultLastHttpContent(ByteBuf.EMPTY));
             assertEquals("HTTP/1.1 200 OK\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(outbound));
         });
     }
@@ -115,7 +115,7 @@ public class HttpResponseEncoderTest extends AbstractHttpTest {
             headers.addHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
             DefaultHttpContent content = new DefaultHttpContent(ascii("Wiki"));
 
-            List<ByteBuf> outbound = sendAndOutBound(pipe, response, headers, content, DefaultLastHttpContent.EMPTY);
+            List<ByteBuf> outbound = sendAndOutBound(pipe, response, headers, content, new DefaultLastHttpContent(ByteBuf.EMPTY));
             assertEquals("HTTP/1.1 200 OK\r\ncontent-length: 4\r\n\r\nWiki", text(outbound));
         });
     }

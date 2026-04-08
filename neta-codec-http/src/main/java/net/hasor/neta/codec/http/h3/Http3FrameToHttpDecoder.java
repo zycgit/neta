@@ -22,18 +22,15 @@ import net.hasor.neta.channel.quic.QuicVarInt;
 import net.hasor.neta.codec.http.*;
 
 /**
- * HTTP/3 semantic decoder that converts {@link Http3Frame} objects into
- * standard {@link HttpObject} instances.
+ * HTTP/3 语义解码器，用于把 {@link Http3Frame} 对象转换为标准 {@link HttpObject} 实例。
  * <p>
- * This decoder handles QPACK header decompression, HTTP message creation,
- * and stream state management. It processes HEADERS, DATA, SETTINGS,
- * and GOAWAY frames.
+ * 该解码器负责 QPACK 头解压、HTTP 消息创建以及 stream 状态管理。双向 stream 上的
+ * HEADERS 和 DATA 会产出 {@link HttpObject}。单向 stream 上的 SETTINGS 和 GOAWAY 会更新连接状态或发布事件。
  * <p>
- * <b>Decode path:</b> {@code ByteBuf → Http3Frame → HttpObject}
+ * <b>解码路径：</b>{@code ByteBuf → Http3Frame → HttpObject}
  * <p>
- * All decoded messages are emitted as standard {@link HttpObject} types
- * ({@link HttpRequest}, {@link HttpResponse}, {@link HttpContent},
- * {@link LastHttpContent}), so the application layer is protocol-agnostic.
+ * 所有解码结果都会以标准 {@link HttpObject} 类型输出，包括 {@link HttpRequest}、{@link HttpResponse}、
+ * {@link HttpContent} 和 {@link LastHttpContent}，从而让应用层保持协议无关。
  * @see Http3FrameDecoder
  * @see Http3Frame
  */
@@ -45,18 +42,18 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     private final int     maxHeaderListSize;
 
     /**
-     * Creates a new HTTP/3 semantic decoder with default QPACK settings.
-     * @param serverMode true for server-side (expects requests), false for client-side (expects responses)
+     * 使用默认 QPACK settings 创建一个新的 HTTP/3 语义解码器。
+     * @param serverMode 为 {@code true} 表示服务端模式，期望接收请求；否则为客户端模式，期望接收响应
      */
     public Http3FrameToHttpDecoder(boolean serverMode) {
         this(serverMode, 4096, 65536);
     }
 
     /**
-     * Creates a new HTTP/3 semantic decoder with custom QPACK settings.
-     * @param serverMode true for server-side (expects requests), false for client-side (expects responses)
-     * @param maxTableSize maximum QPACK dynamic table size in bytes
-     * @param maxHeaderListSize maximum total size of all decoded headers
+     * 使用自定义 QPACK settings 创建一个新的 HTTP/3 语义解码器。
+     * @param serverMode 为 {@code true} 表示服务端模式，期望接收请求；否则为客户端模式，期望接收响应
+     * @param maxTableSize QPACK 动态表最大容量，单位为字节
+     * @param maxHeaderListSize 已解码头字段允许的最大总大小
      */
     public Http3FrameToHttpDecoder(boolean serverMode, int maxTableSize, int maxHeaderListSize) {
         this.serverMode = serverMode;
@@ -65,12 +62,16 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     @Override
-    public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
+    /**
+     * 初始化解码所需的连接级状态。
+     */ public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
         context.context(Http3DecoderContent.class, new Http3DecoderContent(maxTableSize, maxHeaderListSize));
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
+    /**
+     * 将入站 Http3Frame 解码为 HttpObject。
+     */ public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<HttpObject> dst) throws Throwable {
         Http3DecoderContent state = context.context(Http3DecoderContent.class);
         boolean isPrintLog = context.getConfig().isPrintLog();
 
@@ -94,7 +95,8 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     /**
-     * Processes a frame on a bidirectional request stream (HEADERS or DATA).
+     * 处理双向请求或响应 stream 上的 frame。
+     * 当前实现只识别 HEADERS 和 DATA。
      */
     private void processRequestFrame(ProtoContext context, Http3DecoderContent state, ProtoSndQueue<HttpObject> dst, Http3Frame frame, boolean isPrintLog) {
         long streamId = frame.streamId();
@@ -106,17 +108,17 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
         } else if (frame.type() == Http3FrameType.DATA) {
             processDataFrame(context, state, dst, stream, frame, isPrintLog);
         }
-        // PUSH_PROMISE, reserved/grease frames are silently ignored
+        // PUSH_PROMISE 以及保留或 grease frame 会被静默忽略。
     }
 
     /**
-     * Processes a HEADERS frame and emits HttpRequest, HttpResponse, or trailers.
+     * 处理 HEADERS frame，并输出 HttpRequest、HttpResponse 或 trailers。
      */
     private void processHeadersFrame(ProtoContext context, Http3DecoderContent state, ProtoSndQueue<HttpObject> dst, Http3Stream stream, Http3Frame frame, boolean isPrintLog) {
         HttpHeaders headers = state.decodeHeaders(frame.payload(), frame.payloadOffset(), frame.payloadLength());
 
         if (!stream.headersReceived()) {
-            // Initial headers - create request or response
+            // 初始头，创建请求或响应对象。
             stream.markHeadersReceived();
 
             if (serverMode) {
@@ -125,11 +127,11 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
                 emitHttpResponse(context, dst, stream, headers, isPrintLog);
             }
         } else {
-            // Trailers
+            // trailers。
             emitTrailers(context, state, dst, stream, headers, isPrintLog);
         }
 
-        // If FIN on initial HEADERS (no body): emit empty LastHttpContent
+        // 如果初始 HEADERS 同时带 FIN，说明没有消息体，需要补一个空的 LastHttpContent。
         if (frame.fin() && !stream.trailersReceived() && stream.state() == Http3StreamState.OPEN) {
             dst.offerMessage(new DefaultLastHttpContent(context.byteBufAllocator().buffer(0)));
             stream.state(Http3StreamState.HALF_CLOSED);
@@ -143,7 +145,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     /**
-     * Emits an HttpRequest from decoded HEADERS (server mode).
+     * 在服务端模式下，根据已解码的 HEADERS 输出 HttpRequest 与普通头字段对象。
      */
     private void emitHttpRequest(ProtoContext context, Http3DecoderContent state, ProtoSndQueue<HttpObject> dst, Http3Stream stream, HttpHeaders headers, boolean isPrintLog) {
         int httpStreamId = Math.toIntExact(stream.streamId());
@@ -161,10 +163,10 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
 
         HttpMethod httpMethod = HttpMethod.valueOf(method);
         DefaultHttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_3_0, httpMethod, path);
-    request.streamId(httpStreamId);
+        request.streamId(httpStreamId);
         DefaultLastHttpHeaders regularHeaders = new DefaultLastHttpHeaders();
 
-        // Copy non-pseudo headers
+        // 复制非伪头字段。
         for (String name : headers.headerNames()) {
             if (!StringUtils.startsWith(name, ":")) {
                 for (String value : headers.getValues(name)) {
@@ -173,7 +175,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
             }
         }
 
-        // Map pseudo-headers
+        // 映射伪头字段。
         if (StringUtils.isNotBlank(authority)) {
             regularHeaders.addHeader(HttpHeaderNames.HOST, authority);
         }
@@ -181,8 +183,10 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
             regularHeaders.addHeader(HttpHeaderNames.X_FORWARDED_PROTO, scheme);
         }
 
+        context.context(HttpVersion.class, request.protocolVersion());
+        context.context(HttpScope.class, HttpScope.STREAM);
         dst.offerMessage(request);
-    regularHeaders.streamId(httpStreamId);
+        regularHeaders.streamId(httpStreamId);
         dst.offerMessage(regularHeaders);
         state.offerResponseStreamId(stream.streamId());
 
@@ -193,7 +197,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     /**
-     * Emits an HttpResponse from decoded HEADERS (client mode).
+     * 在客户端模式下，根据已解码的 HEADERS 输出 HttpResponse 与普通头字段对象。
      */
     private void emitHttpResponse(ProtoContext context, ProtoSndQueue<HttpObject> dst, Http3Stream stream, HttpHeaders headers, boolean isPrintLog) {
         int httpStreamId = Math.toIntExact(stream.streamId());
@@ -205,7 +209,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
 
         HttpStatus status = HttpStatus.valueOf(statusCode);
         DefaultHttpResponse response = new DefaultHttpResponse(HttpVersion.HTTP_3_0, status);
-    response.streamId(httpStreamId);
+        response.streamId(httpStreamId);
         DefaultLastHttpHeaders regularHeaders = new DefaultLastHttpHeaders();
 
         for (String name : headers.headerNames()) {
@@ -216,8 +220,10 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
             }
         }
 
+        context.context(HttpVersion.class, response.protocolVersion());
+        context.context(HttpScope.class, HttpScope.STREAM);
         dst.offerMessage(response);
-    regularHeaders.streamId(httpStreamId);
+        regularHeaders.streamId(httpStreamId);
         dst.offerMessage(regularHeaders);
 
         if (isPrintLog) {
@@ -227,7 +233,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     /**
-     * Emits trailers as LastHttpContent.
+     * 以 LastHttpContent 的形式输出 trailers。
      */
     private void emitTrailers(ProtoContext context, Http3DecoderContent state, ProtoSndQueue<HttpObject> dst, Http3Stream stream, HttpHeaders headers, boolean isPrintLog) {
         int httpStreamId = Math.toIntExact(stream.streamId());
@@ -257,7 +263,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     /**
-     * Processes a DATA frame and emits HttpContent or LastHttpContent.
+     * 处理 DATA frame，并输出 HttpContent 或 LastHttpContent。
      */
     private void processDataFrame(ProtoContext context, Http3DecoderContent state, ProtoSndQueue<HttpObject> dst, Http3Stream stream, Http3Frame frame, boolean isPrintLog) {
         int httpStreamId = Math.toIntExact(stream.streamId());
@@ -292,7 +298,8 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     /**
-     * Processes a control frame (SETTINGS, GOAWAY) from a unidirectional stream.
+     * 处理当前实现按单向 stream 接收的控制 frame。
+     * 当前只识别 SETTINGS 和 GOAWAY。
      */
     private void processControlFrame(ProtoContext context, Http3DecoderContent state, Http3Frame frame, boolean isPrintLog) {
         if (frame.type() == Http3FrameType.SETTINGS) {
@@ -308,7 +315,7 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     /**
-     * Processes a SETTINGS frame payload and applies remote settings.
+     * 处理 SETTINGS frame 负载，并应用远端 settings。
      */
     private void processSettingsFrame(ProtoContext context, Http3DecoderContent state, Http3Frame frame, boolean isPrintLog) {
         byte[] data = frame.payload();
@@ -335,7 +342,9 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
         }
     }
 
-    /** Returns true if this is server mode. */
+    /**
+     * 如果当前为服务端模式，则返回 {@code true}。
+     */
     boolean isServerMode() {
         return this.serverMode;
     }
@@ -349,7 +358,9 @@ public class Http3FrameToHttpDecoder implements ProtoHandler<Http3Frame, HttpObj
     }
 
     @Override
-    public void onClose(ProtoContext context) {
+    /**
+     * 在连接关闭时释放解码状态中的资源。
+     */ public void onClose(ProtoContext context) {
         Http3DecoderContent state = context.context(Http3DecoderContent.class);
         if (state != null) {
             state.releaseAll();

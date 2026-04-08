@@ -18,22 +18,20 @@ import java.util.HashMap;
 import java.util.Map;
 
 /**
- * QPACK static table as defined in RFC 9204, Appendix A.
+ * RFC 9204 附录 A 定义的 QPACK 静态表。
  * <p>
- * The static table contains 99 pre-defined header fields that are commonly
- * used in HTTP/3. This table is identical for all connections and never changes.
- * Unlike HPACK's static table, QPACK's table is 0-indexed.
+ * 静态表包含 99 个 HTTP/3 中常用的预定义 header field。该表对所有连接都相同，且永不变化。
+ * 与 HPACK 静态表不同，QPACK 静态表使用 0 基索引。
  * <p>
- * Uses HashMap-based lookup for O(1) name and name+value matching
- * instead of O(99) linear scans.
+ * 这里使用基于 HashMap 的查找，将名称和名称+值匹配从 O(99) 线性扫描优化为 O(1)。
  */
 public final class QpackStaticTable {
-    /** Map from header name to first matching index (0-based). */
+    /** 从 header 名称映射到首个匹配索引的表，使用 0 基索引。 */
     private static final Map<String, Integer> NAME_INDEX_MAP;
-    /** Map from name+value key to exact matching index (0-based). */
+    /** 从名称+值组合键映射到精确匹配索引的表，使用 0 基索引。 */
     private static final Map<Long, Integer>   NAME_VALUE_INDEX_MAP;
 
-    /** The static table entries (0-indexed, per RFC 9204 Appendix A). */
+    /** 静态表条目，按 RFC 9204 附录 A 使用 0 基索引。 */
     private static final QpackHeaderField[] STATIC_TABLE = { new QpackHeaderField(":authority", ""),                                  // 0
             new QpackHeaderField(":path", "/"),                                      // 1
             new QpackHeaderField("age", "0"),                                        // 2
@@ -136,7 +134,7 @@ public final class QpackStaticTable {
     };
 
     static {
-        // Build HashMap indexes for O(1) lookup
+        // 构建 HashMap 索引，用于 O(1) 查找。
         NAME_INDEX_MAP = new HashMap<>(128);
         NAME_VALUE_INDEX_MAP = new HashMap<>(128);
         for (int i = 0; i < STATIC_TABLE.length; i++) {
@@ -153,27 +151,29 @@ public final class QpackStaticTable {
         return ((long) name.hashCode() << 32) | (value.hashCode() & 0xFFFFFFFFL);
     }
 
-    /** Returns the number of entries in the static table. */
+    /**
+     * 返回静态表中的条目数量。
+     */
     public static int length() {
         return STATIC_TABLE.length;
     }
 
     /**
-     * Returns the static table entry at the given index.
-     * @param index 0-based index
-     * @return the header field
-     * @throws IndexOutOfBoundsException if index is out of range
+     * 返回指定索引处的静态表条目。
+     * @param index 0 基索引
+     * @return header field 条目
+     * @throws IndexOutOfBoundsException 当索引越界时抛出
      */
     public static QpackHeaderField get(int index) {
         return STATIC_TABLE[index];
     }
 
     /**
-     * Finds the index of a header field in the static table.
-     * O(1) via HashMap; falls back to linear scan on hash collision.
-     * @param name the header name (lowercase)
-     * @param value the header value
-     * @return the index, or -1 if not found
+     * 查找某个 header field 在静态表中的索引。
+     * 正常情况下通过 HashMap 实现 O(1)；若发生哈希碰撞，则回退为线性扫描。
+     * @param name header 名称，小写
+     * @param value header 值
+     * @return 匹配索引，未命中时返回 -1
      */
     public static int findIndex(String name, String value) {
         long key = nameValueKey(name, value);
@@ -183,7 +183,7 @@ public final class QpackStaticTable {
             if (f.name().equals(name) && f.value().equals(value)) {
                 return idx;
             }
-            // Hash collision - fallback to linear scan (extremely rare)
+            // 哈希碰撞时回退为线性扫描，这种情况极少发生。
             for (int i = 0; i < STATIC_TABLE.length; i++) {
                 if (STATIC_TABLE[i].name().equals(name) && STATIC_TABLE[i].value().equals(value)) {
                     return i;
@@ -194,10 +194,10 @@ public final class QpackStaticTable {
     }
 
     /**
-     * Finds the index of a header name in the static table (name-only match).
-     * O(1) via HashMap.
-     * @param name the header name (lowercase)
-     * @return the index of the first match, or -1 if not found
+     * 查找某个 header 名称在静态表中的索引，只按名称匹配。
+     * 该查找通过 HashMap 实现 O(1)。
+     * @param name header 名称，小写
+     * @return 首个匹配索引，未命中时返回 -1
      */
     public static int findNameIndex(String name) {
         Integer idx = NAME_INDEX_MAP.get(name);

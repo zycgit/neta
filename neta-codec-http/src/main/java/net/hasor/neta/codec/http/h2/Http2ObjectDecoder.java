@@ -606,7 +606,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         if (stream != null && stream.isInitialHeadersEmitted()) {
             emitTrailerHeaders(state, dst, streamId, headers, endStream);
         } else {
-            emitInitialHeaders(state, dst, streamId, headers, endStream);
+            emitInitialHeaders(context, state, dst, streamId, headers, endStream);
             if (stream != null) {
                 stream.setInitialHeadersEmitted(true);
             }
@@ -624,7 +624,7 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
         this.fireEvent(context, Http2StreamCloseEvent.class, new Http2StreamCloseEvent(streamId, true).remote(true));
     }
 
-    private void emitInitialHeaders(Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
+    private void emitInitialHeaders(ProtoContext context, Http2DecoderContent state, ProtoSndQueue<HttpObject> dst, int streamId, HttpHeaders headers, boolean endStream) {
         LastHttpHeaders regularHeaders = new DefaultLastHttpHeaders();
         String status = headers.getString(HttpHeaderNames.PSEUDO_STATUS);
         state.setLastEmittedStreamId(streamId);
@@ -639,6 +639,8 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             response.streamId(streamId);
             regularHeaders.streamId(streamId);
 
+            context.context(HttpVersion.class, response.protocolVersion());
+            context.context(HttpScope.class, HttpScope.STREAM);
             dst.offerMessage(response);
             dst.offerMessage(regularHeaders);
         } else {
@@ -664,6 +666,8 @@ class Http2ObjectDecoder implements ProtoHandler<Http2Frame, HttpObject> {
             request.streamId(streamId);
             regularHeaders.streamId(streamId);
 
+            context.context(HttpVersion.class, request.protocolVersion());
+            context.context(HttpScope.class, HttpScope.STREAM);
             dst.offerMessage(request);
             dst.offerMessage(regularHeaders);
         }

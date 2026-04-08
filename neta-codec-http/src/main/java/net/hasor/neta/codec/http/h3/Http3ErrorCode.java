@@ -15,59 +15,63 @@
  */
 package net.hasor.neta.codec.http.h3;
 /**
- * HTTP/3 error codes as defined in RFC 9114, Section 8.1.
+ * RFC 9114 第 8.1 节定义的 HTTP/3 错误码。
  * <p>
- * These error codes are used in QUIC RESET_STREAM, STOP_SENDING, and
- * CONNECTION_CLOSE frames with type=0x1d (application protocol error).
+ * 这些错误码会用于 QUIC 的 RESET_STREAM、STOP_SENDING 以及类型为 0x1d 的 CONNECTION_CLOSE frame
+ * 中，用来表示应用层协议错误。
  */
 public final class Http3ErrorCode {
-    /** No error. This is used when the connection or stream needs to be closed, but there is no error to signal. */
+    /** 无错误。连接或 stream 需要关闭且没有具体错误可报告时使用。 */
     public static final long H3_NO_ERROR               = 0x0100;
-    /** Peer violated protocol requirements in a way not covered by more specific error codes. */
+    /** 对端违反了协议要求，当前条件未命中更具体的错误码范围。 */
     public static final long H3_GENERAL_PROTOCOL_ERROR = 0x0101;
-    /** An internal error has occurred in the HTTP stack. */
+    /** HTTP 协议栈内部发生错误。 */
     public static final long H3_INTERNAL_ERROR         = 0x0102;
-    /** The endpoint detected that its peer created a stream that it will not accept. */
+    /** 端点检测到对端创建了自己不会接受的 stream。 */
     public static final long H3_STREAM_CREATION_ERROR  = 0x0103;
-    /** A stream required by the HTTP/3 connection was closed or reset. */
+    /** HTTP/3 连接所必需的 stream 被关闭或重置。 */
     public static final long H3_CLOSED_CRITICAL_STREAM = 0x0104;
-    /** A frame was received that was not permitted in the current state or on the current stream. */
+    /** 收到了在当前状态或当前 stream 上不允许出现的 frame。 */
     public static final long H3_FRAME_UNEXPECTED       = 0x0105;
-    /** A frame that fails to satisfy layout requirements or exceeds the size limit was received. */
+    /** 收到了布局不合法或超出大小限制的 frame。 */
     public static final long H3_FRAME_ERROR            = 0x0106;
-    /** The endpoint detected that its peer is exhibiting excessive load. */
+    /** 端点检测到对端正在制造过高负载。 */
     public static final long H3_EXCESSIVE_LOAD         = 0x0107;
-    /** A Stream ID or Push ID was used incorrectly. */
+    /** Stream ID 或 Push ID 使用方式错误。 */
     public static final long H3_ID_ERROR               = 0x0108;
-    /** An endpoint detected an error in the payload of a SETTINGS frame. */
+    /** 端点检测到 SETTINGS frame 负载中存在错误。 */
     public static final long H3_SETTINGS_ERROR         = 0x0109;
-    /** No SETTINGS frame was received at the beginning of the control stream. */
+    /** 在 control stream 起始位置没有收到 SETTINGS frame。 */
     public static final long H3_MISSING_SETTINGS       = 0x010a;
-    /** A server rejected a request without performing any application processing. */
+    /** 服务端在未执行任何应用处理的情况下拒绝了请求。 */
     public static final long H3_REQUEST_REJECTED       = 0x010b;
-    /** The request or its response (including pushed response) is cancelled. */
+    /** 请求或其响应（包括 pushed response）已被取消。 */
     public static final long H3_REQUEST_CANCELLED      = 0x010c;
-    /** The client's stream terminated without containing a fully-formed request. */
+    /** 客户端 stream 在未形成完整请求的情况下终止。 */
     public static final long H3_REQUEST_INCOMPLETE     = 0x010d;
-    /** An HTTP message was malformed and cannot be processed. */
+    /** HTTP 消息格式错误，无法处理。 */
     public static final long H3_MESSAGE_ERROR          = 0x010e;
-    /** The TCP connection established in response to a CONNECT request was reset or abnormally closed. */
+    /** 针对 CONNECT 请求建立的 TCP 连接被重置或异常关闭。 */
     public static final long H3_CONNECT_ERROR          = 0x010f;
-    /** The requested operation cannot be served over HTTP/3. */
+    /** 请求的操作无法通过 HTTP/3 提供。 */
     public static final long H3_VERSION_FALLBACK       = 0x0110;
 
-    // QPACK error codes (RFC 9204, Section 6)
-    /** QPACK decompression failed. */
+    // QPACK 错误码，见 RFC 9204 第 6 节。
+    /** QPACK 解压失败。 */
     public static final long QPACK_DECOMPRESSION_FAILED = 0x0200;
-    /** QPACK encoder stream error. */
+    /** QPACK 编码器 stream 错误。 */
     public static final long QPACK_ENCODER_STREAM_ERROR = 0x0201;
-    /** QPACK decoder stream error. */
+    /** QPACK 解码器 stream 错误。 */
     public static final long QPACK_DECODER_STREAM_ERROR = 0x0202;
 
     private Http3ErrorCode() {
     }
 
-    /** Returns a human-readable name for the given error code. */
+    /**
+     * 返回指定错误码的可读名称。
+     * @param code 错误码
+     * @return 错误码名称
+     */
     public static String name(long code) {
         if (code == H3_NO_ERROR)
             return "H3_NO_ERROR";

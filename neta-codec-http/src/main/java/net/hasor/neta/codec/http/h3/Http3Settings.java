@@ -16,23 +16,21 @@
 package net.hasor.neta.codec.http.h3;
 
 /**
- * HTTP/3 settings as defined in RFC 9114, Section 7.2.4.1.
+ * RFC 9114 第 7.2.4.1 节定义的 HTTP/3 settings。
  * <p>
- * HTTP/3 settings are sent on the control stream at the start of a connection.
- * Unlike HTTP/2, HTTP/3 does not have flow-control settings (handled by QUIC)
- * and does not support server push enablement (always available).
+ * HTTP/3 的 settings 会在连接建立初期通过 control stream 发送。
+ * 与 HTTP/2 不同，HTTP/3 不包含流控 settings（由 QUIC 负责），也不提供 server push 开关。
  * <p>
- * Settings IDs defined by the formula 0x1f * N + 0x21 are reserved
- * and MUST be treated as unknown (greasing).
+ * 满足公式 0x1f * N + 0x21 的 settings ID 属于保留值，必须按未知值处理（greasing）。
  */
 public class Http3Settings {
-    /** QPACK maximum dynamic table capacity (0x01). Default: 0. */
+    /** QPACK 最大动态表容量（0x01），默认值为 0。 */
     public static final long SETTINGS_QPACK_MAX_TABLE_CAPACITY = 0x01;
-    /** Maximum value of header list size (0x06). Default: unlimited. */
+    /** header field section 最大大小（0x06），默认不限。 */
     public static final long SETTINGS_MAX_FIELD_SECTION_SIZE   = 0x06;
-    /** QPACK maximum blocked streams (0x07). Default: 0. */
+    /** QPACK 最大 blocked streams 数（0x07），默认值为 0。 */
     public static final long SETTINGS_QPACK_BLOCKED_STREAMS    = 0x07;
-    /** Enable connect protocol (0x08), per RFC 8441. Default: 0 (disabled). */
+    /** 启用 connect protocol（0x08，见 RFC 8441），默认值为 0（禁用）。 */
     public static final long SETTINGS_ENABLE_CONNECT_PROTOCOL  = 0x08;
 
     private long    qpackMaxTableCapacity = 0;
@@ -43,7 +41,10 @@ public class Http3Settings {
     public Http3Settings() {
     }
 
-    /** Copy constructor. */
+    /**
+     * 拷贝构造方法。
+     * @param other 源 settings
+     */
     public Http3Settings(Http3Settings other) {
         this.qpackMaxTableCapacity = other.qpackMaxTableCapacity;
         this.maxFieldSectionSize = other.maxFieldSectionSize;
@@ -52,53 +53,87 @@ public class Http3Settings {
     }
 
     /**
-     * Returns true if the setting ID is reserved (greasing).
-     * Reserved IDs: 0x1f * N + 0x21
+     * 判断 setting ID 是否为保留值（greasing）。
+     * 保留 ID 的规则为：0x1f * N + 0x21。
+     * @param id setting ID
+     * @return 命中保留规则时返回 {@code true}
      */
     public static boolean isReservedSetting(long id) {
         return id >= 0x21 && ((id - 0x21) % 0x1f) == 0;
     }
 
+    /**
+     * 返回 QPACK 最大表容量。
+     */
     public long qpackMaxTableCapacity() {
         return qpackMaxTableCapacity;
     }
 
+    /**
+     * 设置 QPACK 最大表容量。
+     * @param value 新值
+     * @return 当前 settings
+     */
     public Http3Settings qpackMaxTableCapacity(long value) {
         this.qpackMaxTableCapacity = value;
         return this;
     }
 
+    /**
+     * 返回最大 field section 大小。
+     */
     public long maxFieldSectionSize() {
         return maxFieldSectionSize;
     }
 
+    /**
+     * 设置最大 field section 大小。
+     * @param value 新值
+     * @return 当前 settings
+     */
     public Http3Settings maxFieldSectionSize(long value) {
         this.maxFieldSectionSize = value;
         return this;
     }
 
+    /**
+     * 返回 QPACK blocked streams 数。
+     */
     public long qpackBlockedStreams() {
         return qpackBlockedStreams;
     }
 
+    /**
+     * 设置 QPACK blocked streams 数。
+     * @param value 新值
+     * @return 当前 settings
+     */
     public Http3Settings qpackBlockedStreams(long value) {
         this.qpackBlockedStreams = value;
         return this;
     }
 
+    /**
+     * 返回是否启用 connect protocol。
+     */
     public boolean enableConnectProtocol() {
         return enableConnectProtocol;
     }
 
+    /**
+     * 设置是否启用 connect protocol。
+     * @param value 是否启用
+     * @return 当前 settings
+     */
     public Http3Settings enableConnectProtocol(boolean value) {
         this.enableConnectProtocol = value;
         return this;
     }
 
     /**
-     * Applies a setting by its ID.
-     * @param settingId the setting identifier
-     * @param value the setting value
+     * 按 setting ID 应用一个 setting。
+     * @param settingId setting 标识
+     * @param value setting 值
      */
     public void applySetting(long settingId, long value) {
         if (settingId == SETTINGS_QPACK_MAX_TABLE_CAPACITY) {

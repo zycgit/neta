@@ -21,15 +21,13 @@ import net.hasor.neta.channel.quic.QuicStreamChannel;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * A server-side HTTP/3 codec that combines frame-level and semantic-level
- * handlers into a single bidirectional handler.
+ * 服务端侧的 HTTP/3 编解码器，将 frame 层与语义层处理器组合为一个双向处理节点。
  * <p>
- * RCV direction: ByteBuf →[FrameDecoder]→ Http3Frame →[FrameToHttpDecoder]→ HttpObject<br>
- * SND direction: HttpObject →[HttpToFrameEncoder]→ Http3Frame →[FrameEncoder]→ ByteBuf
+ * RCV 方向：ByteBuf →[FrameDecoder]→ Http3Frame →[FrameToHttpDecoder]→ HttpObject<br>
+ * SND 方向：HttpObject →[HttpToFrameEncoder]→ Http3Frame →[FrameEncoder]→ ByteBuf
  * <p>
- * The output {@link HttpObject} types are identical to those produced by the HTTP/1.x
- * and HTTP/2 codecs, enabling protocol-agnostic application logic.
- * <p>Pipeline usage:</p>
+ * 输出的 {@link HttpObject} 类型与 HTTP/1.x 和 HTTP/2 编解码器保持一致，从而支持协议无关的应用逻辑。
+ * <p>pipeline 用法：</p>
  * <pre>
  *   ctx.addLast("h3", new Http3ServerDuplexe());
  *   ctx.addLastDecoder("aggregator", new HttpRequestAggregator(1048576));
@@ -43,7 +41,9 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     private final        Http3FrameEncoder       frameEncoder;
     private final        Http3FrameBridgeQueue   bridgeQueue = new Http3FrameBridgeQueue();
 
-    /** Creates a server-side HTTP/3 codec with default QPACK settings (tableSize=4096, maxHeaderListSize=65536). */
+    /**
+     * 使用默认 QPACK settings 创建服务端侧 HTTP/3 编解码器。
+     */
     public Http3ServerDuplexe() {
         this.frameDecoder = new Http3FrameDecoder(true);
         this.frameToHttpDecoder = new Http3FrameToHttpDecoder(true);
@@ -52,9 +52,9 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     /**
-     * Creates a server-side HTTP/3 codec with custom QPACK settings.
-     * @param maxTableSize maximum QPACK dynamic table size in bytes (default: 4096)
-     * @param maxHeaderListSize maximum total size of all decoded headers (default: 65536)
+     * 使用自定义 QPACK settings 创建服务端侧 HTTP/3 编解码器。
+     * @param maxTableSize QPACK 动态表最大容量，单位为字节
+     * @param maxHeaderListSize 已解码头字段允许的最大总大小
      */
     public Http3ServerDuplexe(int maxTableSize, int maxHeaderListSize) {
         this.frameDecoder = new Http3FrameDecoder(true);
@@ -63,7 +63,9 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         this.frameEncoder = new Http3FrameEncoder();
     }
 
-    /** Maps a semantic {@link Http3ResetEvent} error-code sentinel to the corresponding HTTP/3 application error code (RFC 9114 §8.1). */
+    /**
+     * 将语义层 {@link Http3ResetEvent} 的错误码哨兵值映射为对应的 HTTP/3 应用错误码，见 RFC 9114 第 8.1 节。
+     */
     private static long resolveH3ErrorCode(long code) {
         if (code == Http3ResetEvent.CANCEL) {
             return Http3ErrorCode.H3_REQUEST_CANCELLED;
@@ -72,13 +74,15 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
         } else if (code == Http3ResetEvent.REFUSED) {
             return Http3ErrorCode.H3_REQUEST_REJECTED;
         } else if (code < 0) {
-            return Http3ErrorCode.H3_INTERNAL_ERROR; // unknown sentinel → H3_INTERNAL_ERROR
+            return Http3ErrorCode.H3_INTERNAL_ERROR; // 未知哨兵值统一映射为 H3_INTERNAL_ERROR。
         }
         return code;
     }
 
     @Override
-    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
+    /**
+     * 初始化收发两侧的 HTTP/3 编解码链，并注册 Http3Context。
+     */ public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.frameDecoder.onInit(name, rcvSize, context);
         this.frameToHttpDecoder.onInit(name, rcvSize, context);
         this.httpToFrameEncoder.onInit(name, sndSize, context);
@@ -88,7 +92,9 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public void onActive(ProtoContext context) throws Throwable {
+    /**
+     * 传播激活事件到内部各处理器。
+     */ public void onActive(ProtoContext context) throws Throwable {
         this.frameDecoder.onActive(context);
         this.frameToHttpDecoder.onActive(context);
         this.httpToFrameEncoder.onActive(context);
@@ -96,18 +102,19 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
+    /**
+     * 按收发方向执行 HTTP/3 编解码流程。
+     */ public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
-            // RCV: ByteBuf → Http3Frame → HttpObject
+            // RCV：ByteBuf → Http3Frame → HttpObject。
             this.bridgeQueue.clear();
             this.frameDecoder.onMessage(context, rcvUp, this.bridgeQueue);
             this.frameToHttpDecoder.onMessage(context, this.bridgeQueue, rcvDown);
             return ProtoStatus.Next;
         } else {
-            // Poll the correct stream ID from the decoder's FIFO queue to ensure
-            // responses are associated with their matching request stream.
+            // 从解码器的 FIFO 队列中提取正确的 stream ID，确保响应关联到对应请求 stream。
             Http3DecoderContent decoderContent = context.context(Http3DecoderContent.class);
             long nextStreamId = decoderContent.pollResponseStreamId();
             if (nextStreamId >= 0) {
@@ -115,7 +122,7 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
                 encoderContent.setResponseStreamId(nextStreamId);
             }
 
-            // SND: HttpObject → Http3Frame → ByteBuf
+            // SND：HttpObject → Http3Frame → ByteBuf。
             this.bridgeQueue.clear();
             this.httpToFrameEncoder.onMessage(context, sndUp, this.bridgeQueue);
             this.frameEncoder.onMessage(context, this.bridgeQueue, sndDown);
@@ -125,11 +132,13 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+    /**
+     * 按方向处理错误。发送侧出错时，会尽量退化为当前 stream 的 QUIC RESET_STREAM。
+     */ public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
             return this.frameDecoder.onError(context, e, eh);
         } else {
-            // SND-side error: send QUIC RESET_STREAM on this stream only.
+            // 发送侧错误：尽量只对当前 stream 发送 QUIC RESET_STREAM。
             SoChannel<?> channel = context.getChannel();
             if (channel instanceof QuicStreamChannel) {
                 try {
@@ -144,7 +153,7 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
                     logger.warn("[H3-SND] ch=" + channel.getChannelId() + " encoding error, sent RESET_STREAM(H3_INTERNAL_ERROR): " + e.getMessage());
                     return ProtoStatus.Next;
                 } catch (Throwable t) {
-                    // Fall through to transport-level error handling
+                    // 如果发送 RESET_STREAM 失败，则继续走传输层默认错误处理。
                 }
             }
             return this.frameEncoder.onError(context, e, eh);
@@ -152,16 +161,19 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
+    /**
+     * 处理 HTTP/3 相关事件。
+     * 当前实现只消费 {@link Http3ResetEvent}。
+     */ public boolean onEvent(ProtoContext context, SoEvent event, boolean isRcv) throws Throwable {
         if (event.getEventType() == Http3ResetEvent.class) {
             Http3ResetEvent reset = (Http3ResetEvent) event.getData();
             long streamId = reset.streamId();
             long errorCode = resolveH3ErrorCode(reset.errorCode());
-            // Clean up stream state and orphaned response-queue entry
+            // 清理 stream 状态以及失配的响应队列条目。
             Http3DecoderContent decoderState = context.context(Http3DecoderContent.class);
             decoderState.closeStream(streamId);
             decoderState.removeFromResponseQueue(streamId);
-            // Delegate to the QUIC transport layer to send RESET_STREAM
+            // 委托 QUIC 传输层发送 RESET_STREAM。
             SoChannel<?> channel = context.getChannel();
             if (channel instanceof QuicStreamChannel) {
                 ((QuicStreamChannel) channel).sendReset(errorCode, 0L);
@@ -169,7 +181,7 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
             if (context.getConfig().isPrintLog()) {
                 logger.info("[H3-SND] ch=" + channel.getChannelId() + " RESET_STREAM errorCode=0x" + Long.toHexString(errorCode) + " (via Event)");
             }
-            return false; // event consumed
+            return false; // 当前事件已消费。
         }
         return true;
     }
@@ -177,7 +189,9 @@ public class Http3ServerDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     // ─── helpers ──────────────────────────────────────────────────────────────
 
     @Override
-    public void onClose(ProtoContext context) {
+    /**
+     * 关闭内部各处理器。
+     */ public void onClose(ProtoContext context) {
         this.frameDecoder.onClose(context);
         this.frameToHttpDecoder.onClose(context);
         this.httpToFrameEncoder.onClose(context);

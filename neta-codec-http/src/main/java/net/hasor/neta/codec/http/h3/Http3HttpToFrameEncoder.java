@@ -21,14 +21,12 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 
 /**
- * HTTP/3 semantic encoder that converts standard {@link HttpObject} instances
- * into {@link Http3Frame} objects with QPACK-compressed headers.
+ * HTTP/3 语义编码器，用于把标准 {@link HttpObject} 实例转换为带 QPACK 压缩头的 {@link Http3Frame} 对象。
  * <p>
- * This encoder handles pseudo-header mapping, QPACK header compression,
- * stream ID allocation, and FIN flag management. The resulting {@link Http3Frame}
- * objects are then serialized to wire format by {@link Http3FrameEncoder}.
+ * 该编码器负责伪头映射、QPACK 头压缩、请求 stream ID 分配、响应 stream ID 复用以及 FIN 标记管理。
+ * 生成的 {@link Http3Frame} 随后会由 {@link Http3FrameEncoder} 序列化为线格式。
  * <p>
- * <b>Encode path:</b> {@code HttpObject → Http3Frame → ByteBuf}
+ * <b>编码路径：</b>{@code HttpObject → Http3Frame → ByteBuf}
  * @see Http3FrameEncoder
  * @see Http3Frame
  */
@@ -39,17 +37,17 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
     private final        int        maxTableSize;
 
     /**
-     * Creates a new HTTP/3 semantic encoder with default QPACK settings.
-     * @param serverMode true for server-side, false for client-side
+     * 使用默认 QPACK settings 创建一个新的 HTTP/3 语义编码器。
+     * @param serverMode 为 {@code true} 表示服务端模式，否则为客户端模式
      */
     public Http3HttpToFrameEncoder(boolean serverMode) {
         this(serverMode, 4096);
     }
 
     /**
-     * Creates a new HTTP/3 semantic encoder with custom QPACK settings.
-     * @param serverMode true for server-side, false for client-side
-     * @param maxTableSize maximum QPACK dynamic table size in bytes
+     * 使用自定义 QPACK settings 创建一个新的 HTTP/3 语义编码器。
+     * @param serverMode 为 {@code true} 表示服务端模式，否则为客户端模式
+     * @param maxTableSize QPACK 动态表最大容量，单位为字节
      */
     public Http3HttpToFrameEncoder(boolean serverMode, int maxTableSize) {
         this.serverMode = serverMode;
@@ -57,12 +55,16 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
     }
 
     @Override
-    public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
+    /**
+     * 初始化编码器所需的连接级状态。
+     */ public void onInit(String name, int poolSize, ProtoContext context) throws Throwable {
         context.context(Http3EncoderContent.class, new Http3EncoderContent(serverMode, maxTableSize));
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Http3Frame> dst) throws Throwable {
+    /**
+     * 将出站 HttpObject 编码为 Http3Frame。
+     */ public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<HttpObject> src, ProtoSndQueue<Http3Frame> dst) throws Throwable {
         Http3EncoderContent state = context.context(Http3EncoderContent.class);
         boolean isPrintLog = context.getConfig().isPrintLog();
 
@@ -92,7 +94,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         return ProtoStatus.Next;
     }
 
-    /** Encodes a complete HTTP request (headers + body) as HEADERS + DATA frames. */
+    /**
+     * 将完整 HTTP 请求（头 + 体）编码为 HEADERS + DATA frame。
+     */
     private void encodeFullRequest(ProtoContext context, Http3EncoderContent state, FullHttpRequest request, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         if (!(request instanceof DefaultFullHttpRequest)) {
             throw new IllegalArgumentException("FullHttpRequest must be DefaultFullHttpRequest");
@@ -100,7 +104,7 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         DefaultFullHttpRequest fullRequest = (DefaultFullHttpRequest) request;
         long streamId = state.allocateNextStreamId();
 
-        // QPACK encode headers
+        // 使用 QPACK 编码请求头。
         state.beginHeaderEncode();
         state.encodeHeader(":method", request.method().name());
         state.encodeHeader(":path", request.uri());
@@ -131,7 +135,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         }
     }
 
-    /** Encodes a complete HTTP response (headers + body). */
+    /**
+     * 将完整 HTTP 响应（头 + 体）编码为对应的 HTTP/3 frame。
+     */
     private void encodeFullResponse(ProtoContext context, Http3EncoderContent state, FullHttpResponse response, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         if (!(response instanceof DefaultFullHttpResponse)) {
             throw new IllegalArgumentException("FullHttpResponse must be DefaultFullHttpResponse");
@@ -164,7 +170,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         }
     }
 
-    /** Encodes an HTTP request (headers only). */
+    /**
+     * 记录仅包含头部的 HTTP 请求起始信息，等待后续 {@link HttpHeaders} 输出 HEADERS frame。
+     */
     private void encodeRequest(ProtoContext context, Http3EncoderContent state, HttpRequest request, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         long streamId = state.allocateNextStreamId();
         state.beginRequest(streamId, request.method().name(), request.uri(), scheme.name());
@@ -175,7 +183,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         }
     }
 
-    /** Encodes an HTTP response (headers only). */
+    /**
+     * 记录仅包含头部的 HTTP 响应起始信息，等待后续 {@link HttpHeaders} 输出 HEADERS frame。
+     */
     private void encodeResponse(ProtoContext context, Http3EncoderContent state, HttpResponse response, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         state.consumeResponseStreamId();
         long streamId = state.currentStreamId();
@@ -187,7 +197,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         }
     }
 
-    /** Encodes one staged header block after the request/response start line. */
+    /**
+     * 把当前暂存的请求头或响应头编码为一个 HEADERS frame。
+     */
     private void encodeHeaders(ProtoContext context, Http3EncoderContent state, HttpHeaders headers, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         if (!state.hasPendingRequest() && !state.hasPendingResponse()) {
             return;
@@ -218,7 +230,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         }
     }
 
-    /** Encodes body content as a DATA frame. */
+    /**
+     * 将消息体内容编码为 DATA frame。
+     */
     private void encodeContent(ProtoContext context, Http3EncoderContent state, HttpContent content, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         ByteBuf body = content.content();
         if (body == null || body.readableBytes() == 0) {
@@ -237,7 +251,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         }
     }
 
-    /** Encodes last content as a DATA frame with FIN. */
+    /**
+     * 将最后一段内容编码为带 FIN 的 DATA frame。
+     */
     private void encodeLastContent(ProtoContext context, Http3EncoderContent state, LastHttpContent content, ProtoSndQueue<Http3Frame> dst, boolean isPrintLog) {
         long streamId = state.currentStreamId();
         ByteBuf body = content.content();
@@ -257,7 +273,9 @@ public class Http3HttpToFrameEncoder implements ProtoHandler<HttpObject, Http3Fr
         }
     }
 
-    /** Encodes non-pseudo headers into the QPACK encoder. */
+    /**
+     * 将非伪头字段编码进 QPACK 编码器。
+     */
     private void encodeNonPseudoHeaders(Http3EncoderContent state, HttpHeaders src) {
         if (src == null || src.headerSize() == 0) {
             return;

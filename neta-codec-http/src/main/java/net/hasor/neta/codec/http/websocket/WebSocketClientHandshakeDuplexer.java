@@ -133,7 +133,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             eh.clear();
 
             if (handshakeError.closeConnection()) {
-                context.getChannel().close();
+                InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
                 return ProtoStatus.Stop;
             }
 
@@ -300,7 +300,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 } catch (WebSocketHandshakeException e) {
                     logger.warn("Websocket client handshake protocol violation: " + e.getMessage());
                     this.resetHandshakeSession(state);
-                    context.getChannel().close();
+                    InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
                     return ProtoStatus.Next;
                 }
                 String extStr = state.responseParts.header(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
@@ -310,8 +310,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 // finsh handshake
                 try {
                     int versionCode = acceptedVersion != null ? acceptedVersion.code() : 13;
-                    List<WebSocketExtensionResult> extResults = WebSocketUtils.parseExtensions(extStr);
-                    List<WebSocketExtensionRuntime> runtimeExt = WebSocketUtils.resolveRuntimeExtensions(extResults, this.settings);
+                    List<WebSocketExtensionResult> extResults = InnelUtils.parseExtensions(extStr);
+                    List<WebSocketExtensionRuntime> runtimeExt = InnelUtils.resolveRuntimeExtensions(extResults, this.settings);
 
                     this.finishWebSocketUpgrade(context, new WebSocketContextImpl(false, subProtocol, versionCode, acceptedPath, extResults, runtimeExt));
                     state.ready = true;
@@ -319,7 +319,7 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
                 } catch (Throwable e) {
                     logger.error("Error occurred while finalizing websocket client handshake protocol state.", e);
                     this.resetHandshakeSession(state);
-                    context.getChannel().close();
+                    InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
                     return ProtoStatus.Next;
                 }
             } finally {
@@ -394,8 +394,8 @@ public class WebSocketClientHandshakeDuplexer extends AbstractWebSocketHandshake
             throw new WebSocketHandshakeException(HttpStatus.BAD_REQUEST, "websocket upgrade failed: negotiated extensions are disabled by current settings.");
         }
 
-        List<WebSocketExtensionResult> requested = WebSocketUtils.parseExtensions(requestedExtensions);
-        List<WebSocketExtensionResult> negotiated = WebSocketUtils.parseExtensions(negotiatedExtensions);
+        List<WebSocketExtensionResult> requested = InnelUtils.parseExtensions(requestedExtensions);
+        List<WebSocketExtensionResult> negotiated = InnelUtils.parseExtensions(negotiatedExtensions);
         this.ensureNoDuplicateExtensions(negotiated, "websocket upgrade failed: duplicated negotiated websocket extension: ");
 
         for (WebSocketExtensionResult negotiatedItem : negotiated) {

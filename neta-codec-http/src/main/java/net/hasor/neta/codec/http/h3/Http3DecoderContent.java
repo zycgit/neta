@@ -21,19 +21,16 @@ import java.util.Queue;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
- * Per-connection state container shared between {@link Http3FrameToHttpDecoder}
- * (writer / append path) and {@link Http3ServerDuplexe} (reader / poll path).
+ * 由 {@link Http3FrameToHttpDecoder} 与 {@link Http3ServerDuplexe} 共享的连接级状态容器。
  * <p>
- * Operations are grouped into four categories:
+ * 相关操作被划分为四类：
  * <ul>
- *   <li><b>init</b>  — constructor + one-time configuration injected by the Duplexe.</li>
- *   <li><b>append</b> — called exclusively by {@link Http3FrameToHttpDecoder} to populate
- *       state as frames arrive.</li>
- *   <li><b>poll</b>   — called exclusively by the Duplexe on the SND cycle to drain
- *       queued control data.</li>
- *   <li><b>release</b> — called on connection close to free resources.</li>
+ *   <li><b>init</b>：构造方法以及由 Duplexe 一次性注入的配置。</li>
+ *   <li><b>append</b>：仅由 {@link Http3FrameToHttpDecoder} 调用，用于在 frame 到达时补充状态。</li>
+ *   <li><b>poll</b>：仅由 Duplexe 在 SND 周期调用，用于提取排队的控制数据。</li>
+ *   <li><b>release</b>：在连接关闭时调用，用于释放资源。</li>
  * </ul>
- * All fields are private; no caller may access internal collections or sub-objects directly.
+ * 所有字段均为私有，调用方不得直接访问内部集合或子对象。
  */
 class Http3DecoderContent {
     private final QpackDecoder           qpackDecoder;
@@ -47,24 +44,32 @@ class Http3DecoderContent {
         this.settingsReceived = false;
     }
 
-    // ─── append (called by Http3FrameToHttpDecoder) ───────────────────────────────
+    // ─── append（由 Http3FrameToHttpDecoder 调用） ───────────────────────────────
 
-    /** Marks the SETTINGS frame as received. */
+    /**
+     * 标记 SETTINGS frame 已收到。
+     */
     void markSettingsReceived() {
         this.settingsReceived = true;
     }
 
-    /** Returns or creates the stream for the given stream ID. */
+    /**
+     * 返回指定 stream ID 对应的 stream；如不存在则创建。
+     */
     Http3Stream getOrCreateStream(long streamId) {
         return streams.computeIfAbsent(streamId, id -> new Http3Stream(id));
     }
 
-    /** Returns the stream for the given stream ID, or {@code null} if absent. */
+    /**
+     * 返回指定 stream ID 对应的 stream；如果不存在则返回 {@code null}。
+     */
     Http3Stream getStream(long streamId) {
         return streams.get(streamId);
     }
 
-    /** Closes and releases the stream for the given stream ID. */
+    /**
+     * 关闭并释放指定 stream ID 对应的 stream。
+     */
     void closeStream(long streamId) {
         Http3Stream stream = streams.remove(streamId);
         if (stream != null) {
@@ -73,24 +78,30 @@ class Http3DecoderContent {
         }
     }
 
-    /** Removes any pending response-stream-ID entry for the given stream from the FIFO queue. */
+    /**
+     * 从 FIFO 队列中移除指定 stream 对应的待响应 stream ID 条目。
+     */
     void removeFromResponseQueue(long streamId) {
         responseStreamIdQueue.removeIf(id -> id == streamId);
     }
 
-    /** Decodes a QPACK-compressed header block. */
+    /**
+     * 解码 QPACK 压缩后的 header block。
+     */
     HttpHeaders decodeHeaders(byte[] data, int offset, int length) {
         return qpackDecoder.decode(data, offset, length);
     }
 
-    /** Records a completed request stream ID for later response association. */
+    /**
+     * 记录一个可用于后续响应关联的请求 stream ID。
+     */
     void offerResponseStreamId(long streamId) {
         responseStreamIdQueue.offer(streamId);
     }
 
     /**
-     * Applies a remote SETTINGS parameter.
-     * Reserved settings are silently ignored per RFC 9114 §7.2.4.
+     * 应用一个远端 SETTINGS 参数。
+     * 保留 settings 会按 RFC 9114 第 7.2.4 节要求静默忽略。
      */
     void applyRemoteSetting(long settingId, long settingValue) {
         if (!Http3Settings.isReservedSetting(settingId)) {
@@ -98,22 +109,28 @@ class Http3DecoderContent {
         }
     }
 
-    // ─── poll (called by Duplexe on SND cycle) ────────────────────────────────────
+    // ─── poll（由 Duplexe 在 SND 周期调用） ────────────────────────────────────
 
-    /** Polls the next response stream ID. Returns -1 if the queue is empty. */
+    /**
+     * 提取下一个响应 stream ID；队列为空时返回 -1。
+     */
     long pollResponseStreamId() {
         Long id = this.responseStreamIdQueue.poll();
         return id != null ? id : -1;
     }
 
-    // ─── state view (read-only, for Http3ContextImpl) ────────────────────────────
+    // ─── state view（只读，供 Http3ContextImpl 使用） ────────────────────────────
 
-    /** Returns {@code true} if the SETTINGS frame has been received. */
+    /**
+     * 当 SETTINGS frame 已收到时返回 {@code true}。
+     */
     boolean isSettingsReceived() {
         return settingsReceived;
     }
 
-    /** Returns the highest stream ID currently tracked. */
+    /**
+     * 返回当前已跟踪的最大 stream ID。
+     */
     long lastStreamId() {
         long max = 0;
         for (Long id : this.streams.keySet()) {
@@ -124,24 +141,32 @@ class Http3DecoderContent {
         return max;
     }
 
-    /** Returns the remote peer's negotiated {@code SETTINGS_MAX_FIELD_SECTION_SIZE}. */
+    /**
+     * 返回与远端协商得到的 {@code SETTINGS_MAX_FIELD_SECTION_SIZE}。
+     */
     long maxFieldSectionSize() {
         return remoteSettings.maxFieldSectionSize();
     }
 
-    /** Returns the remote peer's negotiated {@code SETTINGS_QPACK_MAX_TABLE_CAPACITY}. */
+    /**
+     * 返回与远端协商得到的 {@code SETTINGS_QPACK_MAX_TABLE_CAPACITY}。
+     */
     long qpackMaxTableCapacity() {
         return remoteSettings.qpackMaxTableCapacity();
     }
 
-    /** Returns the remote peer's negotiated {@code SETTINGS_QPACK_BLOCKED_STREAMS}. */
+    /**
+     * 返回与远端协商得到的 {@code SETTINGS_QPACK_BLOCKED_STREAMS}。
+     */
     long qpackBlockedStreams() {
         return remoteSettings.qpackBlockedStreams();
     }
 
     // ─── release ───────────────────────────────────────────────────────────────────
 
-    /** Releases all stream resources on connection close. */
+    /**
+     * 在连接关闭时释放所有 stream 资源。
+     */
     void releaseAll() {
         for (Http3Stream stream : streams.values()) {
             stream.release();

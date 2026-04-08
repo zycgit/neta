@@ -15,8 +15,7 @@
  */
 package net.hasor.neta.codec.http.h3;
 /**
- * Represents a single header field (name-value pair) used in QPACK
- * header compression for HTTP/3.
+ * 表示 QPACK 头压缩中使用的单个 header field（名称-值对）。
  * @see QpackStaticTable
  * @see QpackDynamicTable
  */
@@ -24,22 +23,33 @@ public class QpackHeaderField {
     private final String name;
     private final String value;
 
+    /**
+     * 创建一个 header field。
+     * @param name 名称
+     * @param value 值
+     */
     public QpackHeaderField(String name, String value) {
         this.name = name;
         this.value = value;
     }
 
+    /**
+     * 返回名称。
+     */
     public String name() {
         return name;
     }
 
+    /**
+     * 返回值。
+     */
     public String value() {
         return value;
     }
 
     /**
-     * Returns the size of this header field as defined in RFC 9204, Section 3.2.1.
-     * Size = name length + value length + 32 (overhead).
+     * 返回该 header field 的大小，定义见 RFC 9204 第 3.2.1 节。
+     * 大小 = 名称长度 + 值长度 + 32（固定开销）。
      */
     public int size() {
         return name.length() + value.length() + 32;

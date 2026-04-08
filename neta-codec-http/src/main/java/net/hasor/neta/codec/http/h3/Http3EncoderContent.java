@@ -17,18 +17,16 @@ package net.hasor.neta.codec.http.h3;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Per-connection state container for {@link Http3HttpToFrameEncoder}.
+ * {@link Http3HttpToFrameEncoder} 使用的连接级状态容器。
  * <p>
- * Operations are grouped into four categories:
+ * 相关操作被划分为四类：
  * <ul>
- *   <li><b>init</b>   — constructor; all state is fully initialized at construction time.</li>
- *   <li><b>append</b> — called by the Encoder to build outbound frames (QPACK encoding,
- *       stream ID allocation).</li>
- *   <li><b>inject</b> — called by the Duplexe to set the current stream ID for server-mode
- *       responses before invoking the Encoder.</li>
- *   <li><b>release</b> — no resources to release (QPACK encoder is GC-eligible).</li>
+ *   <li><b>init</b>：构造方法，所有状态会在构造时完成初始化。</li>
+ *   <li><b>append</b>：由编码器调用，用于构建出站 frame，包括 QPACK 编码、请求 stream ID 分配和当前 stream 绑定。</li>
+ *   <li><b>inject</b>：由 Duplexe 调用，在服务端模式下于执行编码前设置当前响应的 stream ID。</li>
+ *   <li><b>release</b>：无额外资源需要释放，QPACK 编码器可由 GC 回收。</li>
  * </ul>
- * All fields are private; no caller may access internal sub-objects directly.
+ * 所有字段均为私有，调用方不得直接访问内部子对象。
  */
 class Http3EncoderContent {
     private final QpackEncoder qpackEncoder;
@@ -59,34 +57,40 @@ class Http3EncoderContent {
 
     // ─── preface / settings state ─────────────────────────────────────────────
 
-    /** Returns {@code true} if the initial SETTINGS have been sent. */
+    /**
+     * 当初始 SETTINGS 已发送时返回 {@code true}。
+     */
     boolean isSettingsSent() {
         return settingsSent;
     }
 
-    /** Marks the initial SETTINGS as sent. */
+    /**
+     * 标记初始 SETTINGS 已发送。
+     */
     void markSettingsSent() {
         this.settingsSent = true;
     }
 
     // ─── stream ID management ─────────────────────────────────────────────────
 
-    /** Returns the stream ID to use for the current outbound message. */
+    /**
+     * 返回当前出站消息应使用的 stream ID。
+     */
     long currentStreamId() {
         return currentStreamId;
     }
 
     /**
-     * Sets the stream ID for the next outbound response (server-mode injection by Duplexe).
-     * Must be called by the Duplexe before invoking the Encoder on the SND path.
+     * 设置下一个出站响应要使用的 stream ID，主要用于服务端模式下由 Duplexe 注入。
+     * 必须在 Duplexe 于 SND 路径调用编码器之前完成设置。
      */
     void setCurrentStreamId(long streamId) {
         this.currentStreamId = streamId;
     }
 
     /**
-     * Allocates and returns the next outbound stream ID for a new request (client mode).
-     * Client-initiated bidirectional streams use IDs: 0, 4, 8, ... (increments by 4).
+     * 为新的出站请求分配并返回下一个 stream ID，仅用于客户端模式。
+     * 客户端发起的双向 stream 使用 0、4、8…… 这类 ID，按 4 递增。
      */
     long allocateNextStreamId() {
         long id = nextStreamId.getAndAdd(4);
@@ -94,20 +98,24 @@ class Http3EncoderContent {
         return id;
     }
 
-    /** Returns the pending response stream ID, or -1 if none. */
+    /**
+     * 返回待处理的响应 stream ID；如果不存在则返回 -1。
+     */
     long responseStreamId() {
         return responseStreamId;
     }
 
-    /** Sets the response stream ID (injected by Duplexe from decoder's queue). */
+    /**
+     * 设置响应 stream ID，由 Duplexe 在发送服务端响应前注入。
+     */
     void setResponseStreamId(long streamId) {
         this.responseStreamId = streamId;
     }
 
     /**
-     * Consumes and returns the pending response stream ID.
-     * After consumption, the internal value resets to -1.
-     * @return the response stream ID, or -1 if none was pending
+     * 消费并返回待处理的响应 stream ID。
+     * 消费后内部值会重置为 -1。
+     * @return 响应 stream ID；如果没有则返回 -1
      */
     long consumeResponseStreamId() {
         long id = this.responseStreamId;
@@ -173,34 +181,38 @@ class Http3EncoderContent {
 
     // ─── QPACK header encoding ────────────────────────────────────────────────
 
-    /** Begins a new QPACK header-block encoding session. */
+    /**
+     * 开始一次新的 QPACK header-block 编码会话。
+     */
     void beginHeaderEncode() {
         qpackEncoder.beginEncode();
     }
 
-    /** Encodes a single header field into the current session. */
+    /**
+     * 在当前会话中编码单个头字段。
+     */
     void encodeHeader(String name, String value) {
         qpackEncoder.encodeHeaderDirect(name, value);
     }
 
     /**
-     * Returns the number of bytes encoded so far in the current session.
+     * 返回当前会话中已编码的字节数。
      */
     int headerEncodedLength() {
         return qpackEncoder.encodedLength();
     }
 
     /**
-     * Returns a reference to the internal encode buffer.
-     * Valid from index 0 to {@link #headerEncodedLength()} - 1.
+     * 返回内部编码缓冲区的引用。
+     * 有效范围为 0 到 {@link #headerEncodedLength()} - 1。
      */
     byte[] headerEncodedBuffer() {
         return qpackEncoder.encodedBuffer();
     }
 
     /**
-     * Finalises encoding and returns a copy of the complete QPACK-compressed header block.
-     * Must be called after {@link #beginHeaderEncode()} and all {@link #encodeHeader} calls.
+     * 完成编码并返回完整 QPACK 压缩 header block 的副本。
+     * 必须在 {@link #beginHeaderEncode()} 以及全部 {@link #encodeHeader} 调用之后执行。
      */
     byte[] finishHeaderEncode() {
         int len = qpackEncoder.encodedLength();

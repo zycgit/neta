@@ -35,6 +35,8 @@ public class HttpRequestDecoderTest extends AbstractHttpTest {
             assertEquals(HttpMethod.GET, ((HttpRequest) res.get(0)).method());
             assertEquals("/hello", ((HttpRequest) res.get(0)).uri());
             assertEquals("example.com", ((HttpHeaders) res.get(1)).getString(HttpHeaderNames.HOST));
+            assertEquals(HttpVersion.HTTP_1_1, pipe.channel().findProtoContext(HttpVersion.class));
+            assertEquals(HttpScope.CONNECTION, pipe.channel().findProtoContext(HttpScope.class));
         });
     }
 
@@ -219,7 +221,7 @@ public class HttpRequestDecoderTest extends AbstractHttpTest {
             assertEquals(HttpVersion.HTTP_1_1, ((HttpRequest) res.get(0)).protocolVersion());
             assertEquals("example.com", ((HttpHeaders) res.get(1)).getString(HttpHeaderNames.HOST));
             assertEquals(1, ((HttpHeaders) res.get(1)).headerSize());
-            assertNull(body((HttpContent) res.get(2)));
+            assertEquals("", body((HttpContent) res.get(2)));
         });
     }
 }

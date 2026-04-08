@@ -32,6 +32,8 @@ public class HttpResponseDecoderTest extends AbstractHttpTest {
             assertEquals(200, ((HttpResponse) res.get(0)).status().code());
             assertEquals("4", ((HttpHeaders) res.get(1)).getString(HttpHeaderNames.CONTENT_LENGTH));
             assertEquals("Wiki", body((HttpContent) res.get(2)));
+            assertEquals(HttpVersion.HTTP_1_1, pipe.channel().findProtoContext(HttpVersion.class));
+            assertEquals(HttpScope.CONNECTION, pipe.channel().findProtoContext(HttpScope.class));
         });
     }
 

@@ -60,6 +60,7 @@ public final class HttpVersion {
         if (minorVersion < 0) {
             throw new IllegalArgumentException("minorVersion must be >= 0");
         }
+
         this.protocolName = protocolName.toUpperCase();
         this.majorVersion = majorVersion;
         this.minorVersion = minorVersion;
@@ -107,6 +108,7 @@ public final class HttpVersion {
         if (dotIdx < 0) {
             throw new IllegalArgumentException("invalid version format: " + text);
         }
+
         try {
             int major = Integer.parseInt(versionPart.substring(0, dotIdx));
             int minor = Integer.parseInt(versionPart.substring(dotIdx + 1));
@@ -140,6 +142,7 @@ public final class HttpVersion {
         if (matches(text, "HTTP/3.0")) {
             return HTTP_3_0;
         }
+
         return valueOf(text.toString());
     }
 

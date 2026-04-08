@@ -20,14 +20,14 @@ import net.hasor.neta.codec.http.HttpHeaderTooLargeException;
 import net.hasor.neta.codec.http.HttpHeaders;
 
 /**
- * QPACK decoder for HTTP/3 header compression (RFC 9204).
+ * HTTP/3 头压缩所使用的 QPACK 解码器，定义见 RFC 9204。
  * <p>
- * Decodes QPACK-encoded field sections into {@link HttpHeaders}.
- * This decoder handles:
+ * 它负责把 QPACK 编码后的字段区段解码为 {@link HttpHeaders}。
+ * 当前解码器支持：
  * <ul>
- *   <li>Indexed field lines (static and dynamic table references)</li>
- *   <li>Literal field lines with name references</li>
- *   <li>Literal field lines without name references</li>
+ *   <li>索引字段行，包括静态表、动态表和 Post-Base 引用</li>
+ *   <li>带名称引用的字面量字段行，包括静态表、动态表和 Post-Base 名称引用</li>
+ *   <li>不带名称引用的字面量字段行</li>
  * </ul>
  * @see QpackStaticTable
  * @see QpackDynamicTable
@@ -36,49 +36,53 @@ public class QpackDecoder {
     private final QpackDynamicTable dynamicTable;
     private final int               maxHeaderListSize;
 
-    // Reusable decode result fields to avoid array allocations in hot paths
+    // 可复用的解码结果字段，避免热点路径上的数组分配。
     private int    decodedPos;
     private int    decodedInt;
     private String decodedString;
 
     /**
-     * Creates a new QPACK decoder.
-     * @param maxTableSize the maximum dynamic table size in bytes
-     * @param maxHeaderListSize the maximum allowed header list size
+     * 创建一个新的 QPACK 解码器。
+     * @param maxTableSize 动态表最大容量，单位为字节
+     * @param maxHeaderListSize header list 允许的最大大小
      */
     public QpackDecoder(int maxTableSize, int maxHeaderListSize) {
         this.dynamicTable = new QpackDynamicTable(maxTableSize);
         this.maxHeaderListSize = maxHeaderListSize;
     }
 
-    /** Creates a new QPACK decoder with default settings. */
+    /**
+     * 使用默认 settings 创建一个新的 QPACK 解码器。
+     */
     public QpackDecoder() {
         this(4096, 65536);
     }
 
-    /** Returns the dynamic table used by this decoder. */
+    /**
+     * 返回当前解码器使用的动态表。
+     */
     public QpackDynamicTable dynamicTable() {
         return dynamicTable;
     }
 
     /**
-     * Decodes a QPACK-encoded field section into HTTP headers.
-     * @param data the encoded bytes
-     * @param offset the starting offset
-     * @param length the number of bytes to decode
-     * @return the decoded headers
+     * 将 QPACK 编码后的字段区段解码为 HTTP 头。
+     * @param data 编码后的字节数组
+     * @param offset 起始偏移
+     * @param length 需要解码的字节数
+     * @return 解码后的 HTTP 头
      */
     public HttpHeaders decode(byte[] data, int offset, int length) {
         DefaultHttpHeaders headers = new DefaultHttpHeaders();
         int end = offset + length;
         int pos = offset;
 
-        // Decode Required Insert Count
+        // 解码 Required Insert Count。
         decodePrefixedInt(data, pos, 8);
         int requiredInsertCount = decodedInt;
         pos = decodedPos;
 
-        // Decode Sign bit + Delta Base
+        // 解码 Sign 位与 Delta Base。
         boolean sign = (data[pos] & 0x80) != 0;
         decodePrefixedInt(data, pos, 7);
         int deltaBase = decodedInt;
@@ -95,12 +99,12 @@ public class QpackDecoder {
 
         int totalSize = 0;
 
-        // Decode field lines
+        // 解码字段行。
         while (pos < end) {
             int firstByte = data[pos] & 0xFF;
 
             if ((firstByte & 0x80) != 0) {
-                // Indexed Field Line
+                // 索引字段行。
                 boolean isStatic = (firstByte & 0x40) != 0;
                 decodePrefixedInt(data, pos, 6);
                 int index = decodedInt;
@@ -113,7 +117,7 @@ public class QpackDecoder {
                     }
                     field = QpackStaticTable.get(index);
                 } else {
-                    // Dynamic table reference (absolute = base - index - 1 for post-base)
+                    // 动态表引用，绝对索引按 base - index - 1 计算。
                     int absIndex = base - index - 1;
                     field = dynamicTable.get(absIndex);
                 }
@@ -121,7 +125,7 @@ public class QpackDecoder {
                 headers.addHeader(field.name(), field.value());
                 totalSize += field.size();
             } else if ((firstByte & 0x40) != 0) {
-                // Literal Field Line With Name Reference
+                // 带名称引用的字面量字段行。
                 boolean isStatic = (firstByte & 0x10) != 0;
                 decodePrefixedInt(data, pos, 4);
                 int nameIndex = decodedInt;
@@ -145,13 +149,13 @@ public class QpackDecoder {
                 headers.addHeader(name, value);
                 totalSize += name.length() + value.length() + 32;
             } else if ((firstByte & 0x20) != 0) {
-                // Literal Field Line Without Name Reference
-                // 001 N H NameLen(3+) - name length starts in the first byte
+                // 不带名称引用的字面量字段行。
+                // 001 N H NameLen(3+)，名称长度从首字节开始编码。
                 decodePrefixedInt(data, pos, 3);
                 int nameLength = decodedInt;
                 pos = decodedPos;
 
-                // Read name directly from source array, avoiding intermediate byte[] copy
+                // 直接从源数组读取名称，避免中间 byte[] 拷贝。
                 String name = new String(data, pos, nameLength, StandardCharsets.UTF_8);
                 pos += nameLength;
 
@@ -162,7 +166,7 @@ public class QpackDecoder {
                 headers.addHeader(name, value);
                 totalSize += name.length() + value.length() + 32;
             } else if ((firstByte & 0x10) != 0) {
-                // Indexed Field Line With Post-Base Index
+                // 带 Post-Base 索引的索引字段行。
                 decodePrefixedInt(data, pos, 4);
                 int index = decodedInt;
                 pos = decodedPos;
@@ -172,7 +176,7 @@ public class QpackDecoder {
                 headers.addHeader(field.name(), field.value());
                 totalSize += field.size();
             } else {
-                // Literal Field Line With Post-Base Name Reference
+                // 带 Post-Base 名称引用的字面量字段行。
                 decodePrefixedInt(data, pos, 3);
                 int nameIndex = decodedInt;
                 pos = decodedPos;
@@ -197,11 +201,10 @@ public class QpackDecoder {
     }
 
     /**
-     * Decodes a QPACK prefix-encoded integer.
-     * @param data the encoded bytes
-     * @param offset the offset
-     * @param prefixBits the number of prefix bits
-     * @return a two-element array: [value, bytesConsumed]
+     * 解码 QPACK 前缀整数。
+     * @param data 编码字节数组
+     * @param offset 起始偏移
+     * @param prefixBits 前缀位数
      */
     private void decodePrefixedInt(byte[] data, int offset, int prefixBits) {
         int maxPrefix = (1 << prefixBits) - 1;
@@ -224,10 +227,10 @@ public class QpackDecoder {
     }
 
     /**
-     * Decodes a string literal at the given offset.
-     * Reads directly from the source byte[] to avoid intermediate byte[] allocation.
-     * @param data the encoded bytes
-     * @param offset the offset
+     * 从指定偏移位置解码字符串字面量。
+     * 为避免中间 byte[] 分配，这里会直接从源数组读取。
+     * @param data 编码字节数组
+     * @param offset 起始偏移
      */
     private void decodeStringLiteral(byte[] data, int offset) {
         boolean huffman = (data[offset] & 0x80) != 0;

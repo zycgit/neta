@@ -37,7 +37,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
                     new DefaultHttpContent(ascii("Wiki")),                                 //
                     new DefaultTrailerHttpHeaders()                                              //
                             .addHeader("X-Trail", "done"),                           //
-                    DefaultLastHttpContent.EMPTY);
+                    new DefaultLastHttpContent(ByteBuf.EMPTY));
 
             assertEquals("POST /upload HTTP/1.1\r\nHost: example.com\r\nTransfer-Encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\nX-Trail: done\r\n\r\n", text(parts));
         });
@@ -109,7 +109,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
             headers.addHeader(HttpHeaderNames.CONTENT_LENGTH, "4");
             DefaultHttpContent content = new DefaultHttpContent(body);
 
-            List<ByteBuf> outbound = sendAndOutBound(pipe, request, headers, content, DefaultLastHttpContent.EMPTY);
+            List<ByteBuf> outbound = sendAndOutBound(pipe, request, headers, content, new DefaultLastHttpContent(ByteBuf.EMPTY));
             assertEquals("POST /upload HTTP/1.1\r\nhost: example.com\r\ncontent-length: 4\r\n\r\nWiki", text(outbound));
         });
     }
@@ -126,7 +126,7 @@ public class HttpRequestEncoderTest extends AbstractHttpTest {
                     new DefaultLastHttpHeaders()//
                             .addHeader(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED), //
                     new DefaultHttpContent(ascii("Wiki")),//
-                    DefaultLastHttpContent.EMPTY);
+                    new DefaultLastHttpContent(ByteBuf.EMPTY));
             assertEquals("POST /upload HTTP/1.1\r\ntransfer-encoding: chunked\r\n\r\n4\r\nWiki\r\n0\r\n\r\n", text(outbound));
         });
     }

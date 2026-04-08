@@ -14,21 +14,18 @@
  * limitations under the License.
  */
 package net.hasor.neta.codec.http.h3;
-import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import net.hasor.cobble.function.Release;
-import net.hasor.cobble.io.IOUtils;
-import net.hasor.neta.bytebuf.ReferenceHolder;
 import net.hasor.neta.channel.ProtoRcvQueue;
 import net.hasor.neta.channel.ProtoSndQueue;
+import net.hasor.neta.channel.SoUtils;
 
 /**
- * A lightweight bridge queue that implements both {@link ProtoRcvQueue} and {@link ProtoSndQueue}.
+ * 一个轻量级桥接队列，同时实现了 {@link ProtoRcvQueue} 和 {@link ProtoSndQueue}。
  * <p>
- * Used internally by {@link Http3ServerDuplexe} and {@link Http3ClientDuplexe} to chain
- * two handlers with an intermediate {@link Http3Frame} buffer, enabling the pipeline:
+ * 它被 {@link Http3ServerDuplexe} 与 {@link Http3ClientDuplexe} 内部使用，用于在两个处理器之间通过
+ * 中间 {@link Http3Frame} 缓冲区串联处理链，形成如下 pipeline：
  * <pre>
  *   ByteBuf →[FrameDecoder]→ Http3Frame →[FrameToHttpDecoder]→ HttpObject
  * </pre>
@@ -36,28 +33,43 @@ import net.hasor.neta.channel.ProtoSndQueue;
 final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSndQueue<Http3Frame> {
     private final List<Http3Frame> list = new ArrayList<>();
 
+    /**
+     * 返回队列容量上限。
+     */
     @Override
     public int getCapacity() {
         return Integer.MAX_VALUE;
     }
 
+    /**
+     * 返回槽位容量上限。
+     */
     @Override
     public int slotSize() {
         return Integer.MAX_VALUE;
     }
 
+    /**
+     * 批量写入数组中的 frame。
+     */
     @Override
     public boolean offerMessage(Http3Frame[] offerList) {
         Collections.addAll(list, offerList);
         return true;
     }
 
+    /**
+     * 批量写入列表中的 frame。
+     */
     @Override
     public boolean offerMessage(List<Http3Frame> offerList) {
         list.addAll(offerList);
         return true;
     }
 
+    /**
+     * 将接收队列中的 frame 转移到当前桥接队列。
+     */
     @Override
     public boolean offerMessage(ProtoRcvQueue<Http3Frame> offerList) {
         while (offerList.hasMore()) {
@@ -66,11 +78,17 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
         return true;
     }
 
+    /**
+     * 返回当前排队的 frame 数量。
+     */
     @Override
     public int queueSize() {
         return list.size();
     }
 
+    /**
+     * 取出最多指定数量的 frame。
+     */
     @Override
     public List<Http3Frame> takeMessage(int cnt) {
         if (list.isEmpty()) {
@@ -82,6 +100,9 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
         return result;
     }
 
+    /**
+     * 窥视最多指定数量的 frame。
+     */
     @Override
     public List<Http3Frame> peekMessage(int cnt) {
         if (list.isEmpty()) {
@@ -91,32 +112,27 @@ final class Http3FrameBridgeQueue implements ProtoRcvQueue<Http3Frame>, ProtoSnd
         return new ArrayList<>(list.subList(0, take));
     }
 
+    /**
+     * 跳过并释放最多指定数量的 frame。
+     */
     @Override
     public void skipMessage(int cnt) {
         int skip = Math.min(cnt, list.size());
         if (skip > 0) {
             for (int i = 0; i < skip; i++) {
-                releaseOwned(list.get(i));
+                SoUtils.release(list.get(i));
             }
             list.subList(0, skip).clear();
         }
     }
 
-    /** Clears all frames from the queue. */
+    /**
+     * 清空队列中的全部 frame。
+     */
     void clear() {
         for (Http3Frame item : list) {
-            releaseOwned(item);
+            SoUtils.release(item);
         }
         list.clear();
-    }
-
-    private static void releaseOwned(Object item) {
-        if (item instanceof ReferenceHolder) {
-            ((ReferenceHolder) item).release();
-        } else if (item instanceof Release) {
-            ((Release) item).release();
-        } else if (item instanceof Closeable) {
-            IOUtils.closeQuietly((Closeable) item);
-        }
     }
 }

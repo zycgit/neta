@@ -15,15 +15,14 @@
  */
 package net.hasor.neta.codec.http.h3;
 /**
- * Protocol context interface for HTTP/3 connections.
+ * HTTP/3 连接的协议上下文接口。
  * <p>
- * HTTP/3 runs over QUIC. This context exposes HTTP/3–specific state
- * such as QPACK settings and stream information. Registered on
- * {@link net.hasor.neta.channel.ProtoContext} via
- * {@code context.context(Http3Context.class, impl)}.
+ * HTTP/3 运行在 QUIC 之上。该上下文会暴露 HTTP/3 特有状态，例如 QPACK settings 和 stream 信息。
+ * 它通过 {@code context.context(Http3Context.class, impl)} 注册到
+ * {@link net.hasor.neta.channel.ProtoContext}。
  * </p>
  * <p>
- * Usage in {@link net.hasor.neta.channel.ProtoRouting}:
+ * 在 {@link net.hasor.neta.channel.ProtoRouting} 中的用法：
  * <pre>{@code
  * (context, rcvUp, rcvDown) -> {
  *     Http3Context h3 = context.context(Http3Context.class);
@@ -37,33 +36,41 @@ package net.hasor.neta.codec.http.h3;
  * @version : 2024-01-15
  */
 public interface Http3Context {
-    /** Returns {@code true} when the HTTP/3 SETTINGS frame exchange is complete. */
+    /**
+     * 当已收到远端 SETTINGS frame 时返回 {@code true}。
+     */
     boolean isReady();
 
-    /** Returns {@code true} if this endpoint is the server side. */
+    /**
+     * 如果当前端点是服务端则返回 {@code true}。
+     */
     boolean isServer();
 
-    /** Returns {@code true} if this endpoint is the client side. */
+    /**
+     * 如果当前端点是客户端则返回 {@code true}。
+     */
     boolean isClient();
 
-    /** Returns the last stream ID observed or created by this endpoint. */
+    /**
+     * 返回当前仍在跟踪的最大 stream ID。
+     */
     long lastStreamId();
 
     /**
-     * Returns the SETTINGS_MAX_FIELD_SECTION_SIZE value from the remote peer,
-     * or -1 if not yet negotiated.
+     * 返回远端当前生效的 SETTINGS_MAX_FIELD_SECTION_SIZE 值。
+     * 未显式发送时保持 RFC 默认值 {@link Long#MAX_VALUE}。
      */
     long maxFieldSectionSize();
 
     /**
-     * Returns the QPACK_MAX_TABLE_CAPACITY value from the remote peer,
-     * or -1 if not yet negotiated.
+     * 返回远端当前生效的 QPACK_MAX_TABLE_CAPACITY 值。
+     * 未显式发送时保持 RFC 默认值 0。
      */
     long qpackMaxTableCapacity();
 
     /**
-     * Returns the QPACK_BLOCKED_STREAMS value from the remote peer,
-     * or -1 if not yet negotiated.
+     * 返回远端当前生效的 QPACK_BLOCKED_STREAMS 值。
+     * 未显式发送时保持 RFC 默认值 0。
      */
     long qpackBlockedStreams();
 }

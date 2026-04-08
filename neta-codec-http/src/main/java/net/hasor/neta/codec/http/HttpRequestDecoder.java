@@ -155,7 +155,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
                         httpCtx.req.initForHeaders();
-                        this.offerRequestObject(dst, reqCtx, requestLine, channelID, printLog);
+                        this.offerRequestObject(context, dst, reqCtx, requestLine, channelID, printLog);
 
                         reqCtx.decoderPhase = this.nextState(reqCtx);
                         break;
@@ -166,7 +166,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         if (headers == null) {
                             return ProtoStatus.Next;
                         }
-                        this.offerRequestObject(dst, reqCtx, headers, channelID, printLog);
+                        this.offerRequestObject(context, dst, reqCtx, headers, channelID, printLog);
                         this.updateRequestTransferMode(headers, reqCtx);
 
                         reqCtx.decoderPhase = this.nextState(reqCtx);
@@ -182,7 +182,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         if (content == null) {
                             return ProtoStatus.Next;
                         }
-                        this.offerRequestObject(dst, reqCtx, content, channelID, printLog);
+                        this.offerRequestObject(context, dst, reqCtx, content, channelID, printLog);
 
                         reqCtx.decoderPhase = this.nextState(reqCtx);
                         break;
@@ -200,7 +200,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         if (content == null) {
                             return ProtoStatus.Next;
                         }
-                        this.offerRequestObject(dst, reqCtx, content, channelID, printLog);
+                        this.offerRequestObject(context, dst, reqCtx, content, channelID, printLog);
 
                         reqCtx.decoderPhase = this.nextState(reqCtx);
                         break;
@@ -221,7 +221,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                         }
 
                         if (trailers.headerSize() > 0) {
-                            this.offerRequestObject(dst, reqCtx, trailers, channelID, printLog);
+                            this.offerRequestObject(context, dst, reqCtx, trailers, channelID, printLog);
                         }
                         reqCtx.decoderPhase = this.nextState(reqCtx);
                         break;
@@ -229,7 +229,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     // finish
                     case READ_END: {
                         if (reqCtx.emitEmptyEndContent) {
-                            this.offerRequestObject(dst, reqCtx, DefaultLastHttpContent.EMPTY, channelID, printLog);
+                            this.offerRequestObject(context, dst, reqCtx, new DefaultLastHttpContent(ByteBuf.EMPTY), channelID, printLog);
                         }
                         httpCtx.req.reset();
                         if (accumulator.readableBytes() == 0) {
@@ -242,7 +242,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                 }
             }
         } catch (HttpBadRequestException e) {
-            if (this.recoverBadRequest(reqCtx, dst, accumulator, channelID, printLog, e)) {
+            if (this.recoverBadRequest(context, reqCtx, dst, accumulator, channelID, printLog, e)) {
                 return ProtoStatus.Next;
             }
             throw e;
@@ -583,7 +583,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         }
     }
 
-    private boolean recoverBadRequest(HttpContext.RequestDecodeState reqCtx, ProtoSndQueue<HttpObject> dst, ByteBuf accumulator, long channelID, boolean printLog, HttpBadRequestException e) {
+    private boolean recoverBadRequest(ProtoContext context, HttpContext.RequestDecodeState reqCtx, ProtoSndQueue<HttpObject> dst, ByteBuf accumulator, long channelID, boolean printLog, HttpBadRequestException e) {
         if (reqCtx.currentMessage == null) {
             return false;
         }
@@ -595,7 +595,7 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
 
         DefaultLastHttpContent lastContent = new DefaultLastHttpContent(ByteBuf.EMPTY);
         lastContent.streamId(reqCtx.currentMessage.streamId());
-        this.offerRequestObject(dst, reqCtx, lastContent, channelID, printLog);
+        this.offerRequestObject(context, dst, reqCtx, lastContent, channelID, printLog);
 
         accumulator.clear();
         reqCtx.reset();
@@ -661,10 +661,15 @@ public class HttpRequestDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return null;
     }
 
-    private void offerRequestObject(ProtoSndQueue<HttpObject> dst, HttpContext.RequestDecodeState reqCtx, HttpObject httpObject, long channelID, boolean printLog) {
+    private void offerRequestObject(ProtoContext context, ProtoSndQueue<HttpObject> dst, HttpContext.RequestDecodeState reqCtx, HttpObject httpObject, long channelID, boolean printLog) {
         long packetSequence = ++reqCtx.packetSequence;
         if (printLog) {
             logger.info("[HTTP-REQ] channel=" + channelID + " packet=" + packetSequence + " type=" + packetType(httpObject) + " " + packetSummary(reqCtx, httpObject));
+        }
+        if (httpObject instanceof HttpRequest) {
+            HttpVersion version = ((HttpRequest) httpObject).protocolVersion();
+            context.context(HttpVersion.class, version);
+            context.context(HttpScope.class, HttpScope.CONNECTION);
         }
         dst.offerMessage(httpObject);
     }

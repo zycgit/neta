@@ -134,15 +134,15 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             }
 
             try {
-                this.rejectHandshake(context, state, handshakeError.status().code(), handshakeError.getMessage(), handshakeError.headers(), handshakeError.body());
+                this.rejectHandshake(context, state, handshakeError.status().code(), handshakeError.getMessage(), handshakeError.headers(), handshakeError.body(), handshakeError.closeConnection());
             } catch (Exception sendError) {
                 logger.error("Failed to send websocket handshake failure response.", sendError);
+                InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
             }
 
             this.resetHandshakeSession(state);
             eh.clear();
             if (handshakeError.closeConnection()) {
-                context.getChannel().close();
                 return ProtoStatus.Stop;
             } else {
                 return ProtoStatus.Next;
@@ -268,7 +268,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
                     callback.reject(HttpStatus.INTERNAL_SERVER_ERROR);
                     SoContextService soContext = (SoContextService) context.getSoContext();
                     soContext.notifyRcvChannelException(context.getChannel().getChannelId(), false, new SoException("websocket handshake authorizer failed", e));
-                    context.getChannel().close();
+                    InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
                 } finally {
                     callback.exitAuthorize();
                 }
@@ -477,7 +477,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         } catch (Throwable e) {
             logger.error("Error occurred while completing websocket handshake authorization.", e);
             resetHandshakeSession(state(context));
-            context.getChannel().close();
+            InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
         }
     }
 
@@ -490,7 +490,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         this.endAuthorizationPending(state);
 
         if (!allow) {
-            this.rejectHandshake(context, state, code, reasonPhrase, headers, body);
+            this.rejectHandshake(context, state, code, reasonPhrase, headers, body, false);
             this.resetHandshakeSession(state);
             return;
         }
@@ -500,22 +500,22 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             String negotiatedProtocol = responseHeaders.getString(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL);
             String negotiatedExtensions = responseHeaders.getString(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS);
             int versionCode = state.version != null ? state.version.code() : 13;
-            List<WebSocketExtensionResult> extensionResults = WebSocketUtils.parseExtensions(negotiatedExtensions);
+            List<WebSocketExtensionResult> extensionResults = InnelUtils.parseExtensions(negotiatedExtensions);
 
-            List<WebSocketExtensionRuntime> runtimeExtensions = WebSocketUtils.resolveRuntimeExtensions(extensionResults, this.settings);
+            List<WebSocketExtensionRuntime> runtimeExtensions = InnelUtils.resolveRuntimeExtensions(extensionResults, this.settings);
             WebSocketContextImpl socketContext = new WebSocketContextImpl(true, negotiatedProtocol, versionCode, state.path, extensionResults, runtimeExtensions);
 
             this.finishWebSocketUpgrade(context, socketContext);
             state.ready = true;
         } catch (WebSocketHandshakeException e) {
             logger.warn("Websocket server handshake protocol violation: " + e.getMessage());
-            this.rejectHandshake(context, state, e.status().code(), e.getMessage(), e.headers(), e.body());
+            this.rejectHandshake(context, state, e.status().code(), e.getMessage(), e.headers(), e.body(), false);
             this.resetHandshakeSession(state);
             return;
         } catch (Throwable e) {
             logger.error("Error occurred while finalizing websocket handshake protocol state.", e);
             this.resetHandshakeSession(state);
-            context.getChannel().close();
+            InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
             return;
         }
 
@@ -604,8 +604,8 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
             throw new IllegalStateException("handshakeRequest is null");
         }
 
-        List<WebSocketExtensionResult> requested = WebSocketUtils.parseExtensions(request.requestedExtensions());
-        List<WebSocketExtensionResult> negotiated = WebSocketUtils.parseExtensions(negotiatedExtensions);
+        List<WebSocketExtensionResult> requested = InnelUtils.parseExtensions(request.requestedExtensions());
+        List<WebSocketExtensionResult> negotiated = InnelUtils.parseExtensions(negotiatedExtensions);
         this.ensureNoDuplicateExtensions(negotiated, "websocket handshake failed: duplicated negotiated websocket extension: ");
 
         List<String> resolved = new ArrayList<>(negotiated.size());
@@ -626,7 +626,7 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
         return this.joinHeaderValues(resolved);
     }
 
-    private void rejectHandshake(ProtoContext context, ServerHandshakeState state, int code, String reasonPhrase, HttpHeaders headers, byte[] bodyBytes) {
+    private void rejectHandshake(ProtoContext context, ServerHandshakeState state, int code, String reasonPhrase, HttpHeaders headers, byte[] bodyBytes, boolean closeAfterSend) {
         ByteBuf body = ByteBuf.EMPTY;
         if (bodyBytes != null && bodyBytes.length > 0) {
             body = ByteBufAllocator.DEFAULT.buffer(bodyBytes.length, Integer.MAX_VALUE);
@@ -642,7 +642,11 @@ public class WebSocketServerHandshakeDuplexer extends AbstractWebSocketHandshake
 
         context.sendData(responseLine);
         context.sendData(responseHeaders);
-        context.sendData(new DefaultLastHttpContent(body).streamId(state.streamId));
+        if (closeAfterSend) {
+            InnelUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(new DefaultLastHttpContent(body).streamId(state.streamId)));
+        } else {
+            context.sendData(new DefaultLastHttpContent(body).streamId(state.streamId));
+        }
     }
 
     //

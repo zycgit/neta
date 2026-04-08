@@ -25,8 +25,6 @@ import net.hasor.neta.bytebuf.ByteBuf;
  * @version : 2026-02-18
  */
 public class DefaultLastHttpContent extends DefaultHttpContent implements LastHttpContent {
-    public static final LastHttpContent EMPTY = new DefaultLastHttpContent(ByteBuf.EMPTY);
-
     /**
      * Create a terminal content chunk with the specified payload.
      * @param content chunk payload

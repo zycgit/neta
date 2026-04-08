@@ -84,7 +84,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         Object eventData = event.getData();
         if (eventData instanceof WebSocketCloseEvent) {
             this.closeReceived = true;
-            WebSocketUtils.markCloseReceived(context);
+            InnelUtils.markCloseReceived(context);
             resetFragmentState();
         } else if (eventData instanceof PingWebSocketEvent) {
             PingWebSocketEvent pingEvent = (PingWebSocketEvent) eventData;
@@ -111,7 +111,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             }
 
             try {
-                if (this.closeReceived || WebSocketUtils.hasCloseReceived(context)) {
+                if (this.closeReceived || InnelUtils.hasCloseReceived(context)) {
                     continue;
                 }
                 handleFrame(context, frame, dst);
@@ -276,17 +276,17 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
     private void handleProtocolViolation(ProtoContext context, WebSocketFrame frame, WebSocketProtocolViolationException e) {
         this.closeReceived = true;
-        WebSocketUtils.markCloseReceived(context);
+        InnelUtils.markCloseReceived(context);
         resetState();
 
-        if (WebSocketUtils.hasCloseSent(context)) {
-            context.getChannel().close();
+        if (InnelUtils.hasCloseSent(context)) {
+            InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
             return;
         }
 
         WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, closePayload(e.closeStatusCode())).streamId(frame.streamId());
-        WebSocketUtils.markCloseSent(context);
-        WebSocketUtils.closeChannelAfterSend(context, context.sendData(closeReply));
+        InnelUtils.markCloseSent(context);
+        InnelUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
     }
 
     private static ByteBuf retainContent(ByteBuf content) {
@@ -312,27 +312,27 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
             if (reasonLen > 0) {
                 byte[] reasonBytes = new byte[reasonLen];
                 content.getBytes(2, reasonBytes, 0, reasonLen);
-                reason = WebSocketUtils.decodeUtf8(reasonBytes, "close frame reason must be valid UTF-8.");
+                reason = InnelUtils.decodeUtf8(reasonBytes, "close frame reason must be valid UTF-8.");
             }
         }
 
         this.closeReceived = true;
-        WebSocketUtils.markCloseReceived(context);
+        InnelUtils.markCloseReceived(context);
         resetFragmentState();
 
         WebSocketCloseEvent event = new WebSocketCloseEvent(statusCode, reason);
         event.streamId(frame.streamId());
         fireEvent(context, WebSocketCloseEvent.class, event);
 
-        if (WebSocketUtils.hasCloseSent(context)) {
-            context.getChannel().close();
+        if (InnelUtils.hasCloseSent(context)) {
+            InnelUtils.executeCloseAction(context, WebSocketCloseType.TERMINATE);
             return;
         }
 
         ByteBuf replyContent = buildCloseReplyContent(context, content);
         WebSocketMessage closeReply = InternalWebSocketMessage.of(WebSocketOpcode.CLOSE, replyContent).streamId(frame.streamId());
-        WebSocketUtils.markCloseSent(context);
-        WebSocketUtils.closeChannelAfterSend(context, context.sendData(closeReply));
+        InnelUtils.markCloseSent(context);
+        InnelUtils.executeCloseAction(context, WebSocketCloseType.SEND_CLOSE_AND_TERMINATE, context.sendData(closeReply));
     }
 
     private void sendControlEventFrame(ProtoContext context, HttpEvent event, ByteBuf content, boolean ping) {
@@ -470,7 +470,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
 
         int statusCode = ((content.getByte(0) & 0xFF) << 8) | (content.getByte(1) & 0xFF);
         try {
-            WebSocketUtils.validateCloseStatusCode(statusCode, resolveLocalClientMode(context));
+            InnelUtils.validateCloseStatusCode(statusCode, resolveLocalClientMode(context));
             return retainContent(content);
         } catch (WebSocketProtocolViolationException e) {
             return ByteBuf.EMPTY;
@@ -494,6 +494,6 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     public void onClose(ProtoContext context) {
         resetState();
         this.closeReceived = false;
-        WebSocketUtils.clearCloseState(context);
+        InnelUtils.clearCloseState(context);
     }
 }

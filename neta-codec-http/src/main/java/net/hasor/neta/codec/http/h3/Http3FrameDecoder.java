@@ -25,21 +25,17 @@ import net.hasor.neta.channel.quic.QuicStreamChannel;
 import net.hasor.neta.channel.quic.QuicVarInt;
 
 /**
- * HTTP/3 binary frame decoder that converts raw bytes ({@code ByteBuf}) into
- * {@link Http3Frame} objects.
+ * HTTP/3 二进制 frame 解码器，将原始字节（{@code ByteBuf}）转换为 {@link Http3Frame} 对象。
  * <p>
- * This decoder implements the HTTP/3 binary framing layer defined in RFC 9114.
- * It extracts QUIC stream metadata (stream ID, FIN flag), parses the
- * variable-length integer frame type and length, reads the payload, and emits
- * {@link Http3Frame} instances for downstream semantic processing by
- * {@link Http3FrameToHttpDecoder}.
+ * 该解码器实现了 RFC 9114 定义的 HTTP/3 二进制分帧层。
+ * 它会从 QUIC stream 通道或回退元数据中取得 stream ID 与 FIN 标记，解析可变长整数编码的 frame 类型和长度，读取负载，
+ * 并为下游的 {@link Http3FrameToHttpDecoder} 输出 {@link Http3Frame} 实例。
  * <p>
- * For unidirectional streams, the stream type (first varint) is parsed and
- * tracked per-stream to avoid re-reading on subsequent data chunks.
+ * 对于单向 stream，首个 varint 表示的 stream type 会按 stream 维度缓存，避免在后续数据块上重复读取。
  * <p>
- * <b>Decode path:</b> {@code ByteBuf → Http3Frame → HttpObject}
+ * <b>解码路径：</b>{@code ByteBuf → Http3Frame → HttpObject}
  * <p>
- * Frame format (RFC 9114, Section 7.1):
+ * frame 格式（RFC 9114 第 7.1 节）：
  * <pre>
  *   HTTP/3 Frame {
  *     Type (i),       — QUIC variable-length integer
@@ -54,28 +50,27 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
     private static final Logger logger = Logger.getLogger(Http3FrameDecoder.class);
 
     private final boolean         serverMode;
-    /** Fallback metadata queue for non-QUIC testing (streamId + fin). */
+    /** 非 QUIC 测试场景下使用的回退元数据队列，内容为 streamId + fin。 */
     private final Queue<long[]>   fallbackMeta           = new LinkedList<>();
-    /** Tracks unidirectional stream types to avoid re-reading on subsequent chunks. */
+    /** 记录单向 stream 的类型，避免后续数据块重复读取。 */
     private final Map<Long, Long> uniStreamTypes         = new HashMap<>();
     private       long            nonQuicStreamIdCounter = 0;
 
     /**
-     * Creates a new HTTP/3 binary frame decoder.
-     * @param serverMode true for server-side (expects requests), false for client-side
+     * 创建一个新的 HTTP/3 二进制 frame 解码器。
+     * @param serverMode 当前端点角色标记，供外层组件查询
      */
     public Http3FrameDecoder(boolean serverMode) {
         this.serverMode = serverMode;
     }
 
     /**
-     * Pre-loads stream metadata for the next incoming message (for non-QUIC usage).
+     * 为下一条入站消息预加载 stream 元数据，供非 QUIC 场景使用。
      * <p>
-     * When no {@link QuicStreamChannel} is available (e.g. in codec unit tests or
-     * over a VirtualChannel), this method can be used to supply per-message
-     * stream metadata that would normally come from the QUIC transport.
-     * @param streamId the QUIC stream ID
-     * @param fin true if this is the final data on the stream
+     * 当没有可用的 {@link QuicStreamChannel} 时，例如在编解码单元测试或 VirtualChannel 环境中，
+     * 可以通过该方法补充本应由 QUIC 传输层提供的每条消息元数据。
+     * @param streamId QUIC stream ID
+     * @param fin 是否为该 stream 的最后一段数据
      */
     public void pushFallbackMeta(long streamId, boolean fin) {
         fallbackMeta.offer(new long[] { streamId, fin ? 1 : 0 });
@@ -93,9 +88,9 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
                 continue;
             }
 
-            // Extract stream metadata
+            // 提取 stream 元数据。
             long streamId;
-            // Empty ByteBuf is the FIN signal delivered by QUIC after reassembly completes.
+            // 空 ByteBuf 表示 QUIC 在重组完成后交付的 FIN 信号。
             boolean fin = msg.readableBytes() == 0;
             if (streamChannel != null) {
                 streamId = streamChannel.getStreamId();
@@ -112,7 +107,7 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
             }
 
             int dataLen = msg.readableBytes();
-            // Empty ByteBuf is the FIN signal delivered by QUIC after reassembly completes.
+            // 空 ByteBuf 表示 QUIC 在重组完成后交付的 FIN 信号。
             if (dataLen == 0) {
                 if (fin) {
                     parseFrames(context, dst, streamId, new byte[0], 0, 0, true, isPrintLog);
@@ -124,7 +119,7 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
                 msg.getBytes(0, data, 0, dataLen);
             }
 
-            // Check if this is a unidirectional stream (bit 1 set in stream ID)
+            // 检查是否为单向 stream，stream ID 的第 1 位为 1 时表示单向。
             if ((streamId & 0x02) != 0) {
                 parseUnidirectionalStream(context, dst, streamId, data, 0, dataLen, isPrintLog);
             } else {
@@ -136,34 +131,34 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
     }
 
     /**
-     * Parses HTTP/3 frames from raw data and emits {@link Http3Frame} objects.
+     * 从原始数据中解析 HTTP/3 frame，并输出 {@link Http3Frame} 对象。
      * <p>
-     * Each frame consists of a varint type, varint length, and payload.
-     * The FIN flag is set only on the last frame in the data chunk.
+     * 每个 frame 都由 varint type、varint length 和 payload 组成。
+     * FIN 标记只会设置到当前数据块中的最后一个 frame 上。
      */
     private void parseFrames(ProtoContext context, ProtoSndQueue<Http3Frame> dst, long streamId, byte[] data, int offset, int length, boolean fin, boolean isPrintLog) {
         int pos = offset;
         int end = offset + length;
 
         while (pos < end) {
-            // Read frame type (variable-length int)
+            // 读取 frame 类型，可变长整数编码。
             long[] typeResult = QuicVarInt.decode(data, pos);
             long frameType = typeResult[0];
             pos += (int) typeResult[1];
 
-            // Read frame length (variable-length int)
+            // 读取 frame 长度，可变长整数编码。
             long[] lenResult = QuicVarInt.decode(data, pos);
             int frameLength = (int) lenResult[0];
             pos += (int) lenResult[1];
 
             if (pos + frameLength > end) {
-                break; // Incomplete frame - wait for more data
+                break; // frame 尚不完整，等待更多数据。
             }
 
-            // Determine if this is the last frame in the chunk
+            // 判断这是否为当前数据块中的最后一个 frame。
             boolean lastFrame = (pos + frameLength >= end) && fin;
 
-            // Extract payload
+            // 提取负载。
             byte[] payload = new byte[frameLength];
             if (frameLength > 0) {
                 System.arraycopy(data, pos, payload, 0, frameLength);
@@ -181,11 +176,10 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
     }
 
     /**
-     * Parses data on a unidirectional stream.
+     * 解析单向 stream 上的数据。
      * <p>
-     * On the first data chunk for a stream, the stream type varint is read
-     * and tracked. Subsequent chunks skip the stream type and parse frames
-     * directly, fixing the re-read bug in the original implementation.
+     * 对于某个 stream 的首个数据块，会先读取并记录 stream type varint。
+     * 后续数据块会跳过 stream type，并继续按通用 frame 格式解析负载。
      */
     private void parseUnidirectionalStream(ProtoContext context, ProtoSndQueue<Http3Frame> dst, long streamId, byte[] data, int offset, int length, boolean isPrintLog) {
         if (length == 0) {
@@ -198,7 +192,7 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
         // Check if we already know this stream's type
         Long knownType = uniStreamTypes.get(streamId);
         if (knownType == null) {
-            // First data on this unidirectional stream - read stream type varint
+            // 这是该单向 stream 的首个数据块，需要先读取 stream type varint。
             long[] typeResult = QuicVarInt.decode(data, pos);
             long streamType = typeResult[0];
             pos += (int) typeResult[1];
@@ -210,13 +204,15 @@ public class Http3FrameDecoder implements ProtoHandler<ByteBuf, Http3Frame> {
             }
         }
 
-        // Parse frames on this unidirectional stream (control stream uses same frame format)
+        // 在该单向 stream 上解析 frame，control stream 也遵循相同的 frame 格式。
         if (pos < end) {
             parseFrames(context, dst, streamId, data, pos, end - pos, false, isPrintLog);
         }
     }
 
-    /** Returns true if this is server mode. */
+    /**
+     * 如果当前为服务端模式，则返回 {@code true}。
+     */
     boolean isServerMode() {
         return this.serverMode;
     }

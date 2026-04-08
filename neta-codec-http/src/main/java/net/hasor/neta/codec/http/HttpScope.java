@@ -13,18 +13,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package net.hasor.neta.codec.http.h3;
-
-import net.hasor.neta.codec.http.HttpProtocolConnectionException;
+package net.hasor.neta.codec.http;
 
 /**
- * 当压缩后的头块无效，导致 QPACK 解码失败时抛出的异常。
+ * Describes whether the current HTTP semantic flow is connection-scoped or stream-scoped.
+ * <p>
+ * HTTP/1.x is connection-scoped. HTTP/2 and HTTP/3 are stream-scoped by default.
+ * @author 赵永春 (zyc@hasor.net)
+ * @version : 2026-04-08
  */
-public class QpackDecodingException extends HttpProtocolConnectionException {
-    /**
-     * 使用给定错误消息创建 QPACK 解码异常。
-     */
-    public QpackDecodingException(String message) {
-        super(Http3ErrorCode.QPACK_DECOMPRESSION_FAILED, message);
-    }
+public enum HttpScope {
+    CONNECTION,
+    STREAM
 }

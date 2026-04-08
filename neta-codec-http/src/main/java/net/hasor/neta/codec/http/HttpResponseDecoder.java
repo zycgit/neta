@@ -156,7 +156,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
 
-                        this.offerResponseObject(dst, respCtx, responseLine, channelID, printLog);
+                        this.offerResponseObject(context, dst, respCtx, responseLine, channelID, printLog);
 
                         respCtx.decoderPhase = this.nextState(respCtx);
                         break;
@@ -168,7 +168,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
 
-                        this.offerResponseObject(dst, respCtx, headers, channelID, printLog);
+                        this.offerResponseObject(context, dst, respCtx, headers, channelID, printLog);
                         this.updateResponseTransferMode(headers, respCtx);
 
                         respCtx.decoderPhase = this.nextState(respCtx);
@@ -185,7 +185,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
 
-                        this.offerResponseObject(dst, respCtx, content, channelID, printLog);
+                        this.offerResponseObject(context, dst, respCtx, content, channelID, printLog);
 
                         respCtx.decoderPhase = this.nextState(respCtx);
                         break;
@@ -198,7 +198,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
 
-                        this.offerResponseObject(dst, respCtx, content, channelID, printLog);
+                        this.offerResponseObject(context, dst, respCtx, content, channelID, printLog);
                         break;
                     }
                     case READ_CHUNK_SIZE: {
@@ -215,7 +215,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
 
-                        this.offerResponseObject(dst, respCtx, content, channelID, printLog);
+                        this.offerResponseObject(context, dst, respCtx, content, channelID, printLog);
 
                         respCtx.decoderPhase = this.nextState(respCtx);
                         break;
@@ -235,7 +235,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                             return ProtoStatus.Next;
                         }
                         if (trailers.headerSize() > 0) {
-                            this.offerResponseObject(dst, respCtx, trailers, channelID, printLog);
+                            this.offerResponseObject(context, dst, respCtx, trailers, channelID, printLog);
                         }
 
                         respCtx.decoderPhase = this.nextState(respCtx);
@@ -244,7 +244,7 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
                     // finish
                     case READ_END: {
                         if (respCtx.emitEmptyEndContent) {
-                            this.offerResponseObject(dst, respCtx, DefaultLastHttpContent.EMPTY, channelID, printLog);
+                            this.offerResponseObject(context, dst, respCtx, new DefaultLastHttpContent(ByteBuf.EMPTY), channelID, printLog);
                         }
                         httpCtx.resp.reset();
                         if (accumulator.readableBytes() == 0) {
@@ -678,10 +678,16 @@ public class HttpResponseDecoder implements ProtoHandler<ByteBuf, HttpObject> {
         return null;
     }
 
-    private void offerResponseObject(ProtoSndQueue<HttpObject> dst, HttpContext.ResponseDecodeState respCtx, HttpObject httpObject, long channelID, boolean printLog) {
+    private void offerResponseObject(ProtoContext context, ProtoSndQueue<HttpObject> dst, HttpContext.ResponseDecodeState respCtx, HttpObject httpObject, long channelID, boolean printLog) {
         long packetSequence = ++respCtx.packetSequence;
         if (printLog) {
             logger.info("[HTTP-RESP] channel=" + channelID + " packet=" + packetSequence + " type=" + packetType(httpObject) + " " + packetSummary(respCtx, httpObject));
+        }
+
+        if (httpObject instanceof HttpResponse) {
+            HttpVersion version = ((HttpResponse) httpObject).protocolVersion();
+            context.context(HttpVersion.class, version);
+            context.context(HttpScope.class, HttpScope.CONNECTION);
         }
         dst.offerMessage(httpObject);
     }

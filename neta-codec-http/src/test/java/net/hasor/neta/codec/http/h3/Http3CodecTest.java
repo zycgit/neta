@@ -1210,6 +1210,47 @@ public class Http3CodecTest {
         frameToHttp.onClose(decCtx);
     }
 
+    @Test
+    public void testSemanticDecoderInstallsHttpVersionAndScope() throws Throwable {
+        Http3HttpToFrameEncoder httpToFrame = new Http3HttpToFrameEncoder(false);
+        Http3FrameEncoder frameEncoder = new Http3FrameEncoder();
+        Http3FrameBridgeQueue encBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext encCtx = mockContext();
+        httpToFrame.onInit(name, poolSize, encCtx);
+        frameEncoder.onInit(name, poolSize, encCtx);
+
+        DefaultFullHttpRequest request = new DefaultFullHttpRequest(HttpVersion.HTTP_3_0, HttpMethod.GET, "/h3");
+        request.addHeader(HttpHeaderNames.HOST, "example.com");
+
+        SimpleProtoRcvQueue<HttpObject> encIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<ByteBuf> encOut = new SimpleProtoSndQueue<>();
+        encIn.add(request);
+        httpToFrame.onMessage(encCtx, encIn, encBridge);
+        frameEncoder.onMessage(encCtx, encBridge, encOut);
+
+        ByteBuf combined = combineAll(encOut);
+
+        Http3FrameDecoder frameDecoder = new Http3FrameDecoder(true);
+        Http3FrameToHttpDecoder decoder = new Http3FrameToHttpDecoder(true);
+        Http3FrameBridgeQueue decBridge = new Http3FrameBridgeQueue();
+
+        ProtoContext context = mockContext();
+        frameDecoder.onInit(name, poolSize, context);
+        decoder.onInit(name, poolSize, context);
+
+        SimpleProtoRcvQueue<ByteBuf> decIn = new SimpleProtoRcvQueue<>();
+        SimpleProtoSndQueue<HttpObject> decOut = new SimpleProtoSndQueue<>();
+        decIn.add(combined);
+
+        frameDecoder.pushFallbackMeta(0, true);
+        frameDecoder.onMessage(context, decIn, decBridge);
+        decoder.onMessage(context, decBridge, decOut);
+
+        assertEquals(HttpVersion.HTTP_3_0, context.context(HttpVersion.class));
+        assertEquals(HttpScope.STREAM, context.context(HttpScope.class));
+    }
+
     // ========================= Helper Methods =========================
 
     private static class SimpleProtoRcvQueue<T> implements ProtoRcvQueue<T> {

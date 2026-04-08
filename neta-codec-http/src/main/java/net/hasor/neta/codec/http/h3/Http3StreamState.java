@@ -16,20 +16,19 @@
 package net.hasor.neta.codec.http.h3;
 
 /**
- * HTTP/3 stream states for codec-level tracking.
+ * 供编解码层跟踪使用的 HTTP/3 stream 状态。
  * <p>
- * HTTP/3 streams map to QUIC streams. Each request/response exchange
- * uses a separate bidirectional QUIC stream. This enum tracks the
- * HTTP-layer state of each stream.
+ * HTTP/3 stream 会映射到底层 QUIC stream。每组请求/响应通常对应一个独立的双向 QUIC stream。
+ * 该枚举用于记录每个 stream 的 HTTP 层状态。
  * @see Http3Stream
  */
 public enum Http3StreamState {
-    /** Stream is created but no frames have been sent or received. */
+    /** stream 已创建，尚未收发任何 frame。 */
     IDLE,
-    /** HEADERS frame has been sent/received; awaiting more data or trailers. */
+    /** 已发送或接收 HEADERS frame，正在等待更多数据或 trailers。 */
     OPEN,
-    /** The request/response exchange is complete (FIN received/sent). */
+    /** 请求/响应交换已经完成，即已收到或发送 FIN。 */
     HALF_CLOSED,
-    /** Stream is fully closed. */
+    /** stream 已完全关闭。 */
     CLOSED
 }

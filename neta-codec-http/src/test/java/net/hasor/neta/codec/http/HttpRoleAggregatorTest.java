@@ -16,6 +16,7 @@
 package net.hasor.neta.codec.http;
 import java.util.List;
 import net.hasor.cobble.ref.Tuple;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import org.junit.Test;
 import static org.junit.Assert.*;
@@ -35,7 +36,7 @@ public class HttpRoleAggregatorTest extends AbstractHttpTest {
                             Tuple.of(HttpHeaderNames.TRANSFER_ENCODING, HttpHeaderValues.CHUNKED)),//
                     new DefaultHttpContent(ascii("Wiki")),//
                     joinHeaders(DefaultTrailerHttpHeaders.class, Tuple.of("X-Trail", "done")),//
-                    DefaultLastHttpContent.EMPTY);
+                    new DefaultLastHttpContent(ByteBuf.EMPTY));
 
             FullHttpRequest fullRequest = (FullHttpRequest) messages.get(0);
             assertEquals("/server", fullRequest.uri());

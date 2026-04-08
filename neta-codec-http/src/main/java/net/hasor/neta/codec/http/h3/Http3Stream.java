@@ -16,11 +16,10 @@
 package net.hasor.neta.codec.http.h3;
 
 /**
- * Represents a single HTTP/3 stream within a connection.
+ * 表示连接中的单个 HTTP/3 stream。
  * <p>
- * HTTP/3 uses QUIC streams for multiplexing. Each request/response pair
- * uses a separate bidirectional QUIC stream. This class tracks the
- * HTTP-layer state and accumulated header block for each stream.
+ * HTTP/3 使用 QUIC stream 进行多路复用。每一组请求/响应通常对应一个独立的双向 QUIC stream。
+ * 该类负责跟踪每个 stream 的 HTTP 层状态以及累计的 header block。
  * @see Http3StreamState
  */
 public class Http3Stream {
@@ -31,8 +30,8 @@ public class Http3Stream {
     private          boolean          trailersReceived;
 
     /**
-     * Creates a new HTTP/3 stream.
-     * @param streamId the QUIC stream identifier
+     * 创建一个新的 HTTP/3 stream。
+     * @param streamId QUIC stream 标识
      */
     public Http3Stream(long streamId) {
         this.streamId = streamId;
@@ -41,40 +40,67 @@ public class Http3Stream {
         this.trailersReceived = false;
     }
 
+    /**
+     * 返回 stream ID。
+     */
     public long streamId() {
         return streamId;
     }
 
+    /**
+     * 返回当前 stream 状态。
+     */
     public Http3StreamState state() {
         return state;
     }
 
+    /**
+     * 设置当前 stream 状态。
+     * @param state 新状态
+     */
     public void state(Http3StreamState state) {
         this.state = state;
     }
 
+    /**
+     * 返回是否已收到 headers。
+     */
     public boolean headersReceived() {
         return headersReceived;
     }
 
+    /**
+     * 标记已收到 headers。
+     */
     public void markHeadersReceived() {
         this.headersReceived = true;
     }
 
+    /**
+     * 返回是否已收到 trailers。
+     */
     public boolean trailersReceived() {
         return trailersReceived;
     }
 
+    /**
+     * 标记已收到 trailers。
+     */
     public void markTrailersReceived() {
         this.trailersReceived = true;
     }
 
-    /** Gets the accumulated header block bytes (for multi-frame header reassembly). */
+    /**
+     * 返回累计的 header block 字节，用于多 frame 的头块重组。
+     */
     public byte[] accumulatedHeaderBlock() {
         return accumulatedHeaderBlock;
     }
 
-    /** Appends header block data. */
+    /**
+     * 追加 header block 数据。
+     * @param data 要追加的数据
+     */
     public void appendHeaderBlock(byte[] data) {
         if (this.accumulatedHeaderBlock == null) {
             this.accumulatedHeaderBlock = data;
@@ -86,12 +112,16 @@ public class Http3Stream {
         }
     }
 
-    /** Clears the accumulated header block. */
+    /**
+     * 清空累计的 header block。
+     */
     public void clearHeaderBlock() {
         this.accumulatedHeaderBlock = null;
     }
 
-    /** Releases resources held by this stream. */
+    /**
+     * 释放当前 stream 持有的资源。
+     */
     public void release() {
         this.accumulatedHeaderBlock = null;
         this.state = Http3StreamState.CLOSED;

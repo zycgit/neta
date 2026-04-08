@@ -15,13 +15,12 @@
  */
 package net.hasor.neta.codec.http.h3;
 /**
- * QPACK dynamic table for HTTP/3 header compression (RFC 9204).
+ * 用于 HTTP/3 头压缩的 QPACK 动态表，定义见 RFC 9204。
  * <p>
- * Unlike HPACK, QPACK's dynamic table uses absolute indices and supports
- * out-of-order delivery across streams. Entries are referenced by absolute
- * index, and the encoder and decoder maintain separate copies of this table.
+ * 与 HPACK 不同，QPACK 动态表使用绝对索引，并支持跨 stream 的乱序交付。
+ * 条目通过绝对索引引用，编码端和解码端各自维护该表的一份副本。
  * <p>
- * The dynamic table is a FIFO queue of header fields bounded by a maximum size.
+ * 动态表本质上是一个带最大容量限制的 header field FIFO 队列。
  */
 public class QpackDynamicTable {
     private QpackHeaderField[] entries;
@@ -33,8 +32,8 @@ public class QpackDynamicTable {
     private int                insertCount;
 
     /**
-     * Creates a new QPACK dynamic table.
-     * @param maxSize the maximum size in bytes (sum of entry sizes)
+     * 创建一个新的 QPACK 动态表。
+     * @param maxSize 最大字节容量，也就是所有条目大小之和的上限
      */
     public QpackDynamicTable(int maxSize) {
         this.maxSize = maxSize;
@@ -46,31 +45,39 @@ public class QpackDynamicTable {
         this.insertCount = 0;
     }
 
-    /** Returns the number of entries in the dynamic table. */
+    /**
+     * 返回动态表中的条目数量。
+     */
     public int length() {
         return count;
     }
 
-    /** Returns the current total size of all entries. */
+    /**
+     * 返回当前所有条目的总大小。
+     */
     public int currentSize() {
         return currentSize;
     }
 
-    /** Returns the maximum allowed size. */
+    /**
+     * 返回允许的最大容量。
+     */
     public int maxSize() {
         return maxSize;
     }
 
-    /** Returns the total number of entries ever inserted (absolute index base). */
+    /**
+     * 返回历史累计插入条目数，也就是绝对索引的基准值。
+     */
     public int insertCount() {
         return insertCount;
     }
 
     /**
-     * Gets an entry by absolute index.
-     * @param absIndex the absolute index (0 = first ever inserted)
-     * @return the header field
-     * @throws IndexOutOfBoundsException if not available
+     * 按绝对索引获取条目。
+     * @param absIndex 绝对索引，0 表示历史上第一个插入的条目
+     * @return header field 条目
+     * @throws IndexOutOfBoundsException 当条目不可用时抛出
      */
     public QpackHeaderField get(int absIndex) {
         int relIndex = absIndex - (insertCount - count);
@@ -81,28 +88,28 @@ public class QpackDynamicTable {
     }
 
     /**
-     * Inserts a new entry at the end of the dynamic table.
-     * Evicts older entries if needed to stay within size limits.
-     * @param name the header name
-     * @param value the header value
+     * 在动态表尾部插入一个新条目。
+     * 如果容量超限，会先驱逐更旧的条目。
+     * @param name header 名称
+     * @param value header 值
      */
     public void insert(String name, String value) {
         QpackHeaderField field = new QpackHeaderField(name, value);
         int entrySize = field.size();
 
-        // Evict entries until there's room
+        // 持续驱逐旧条目，直到有足够空间。
         while (currentSize + entrySize > maxSize && count > 0) {
             evict();
         }
 
         if (entrySize > maxSize) {
-            // Entry is larger than table, just clear
+            // 单个条目已经超过表容量，直接清空表并放弃保存该条目。
             clear();
             insertCount++;
             return;
         }
 
-        // Grow array if needed
+        // 如有必要，扩容底层数组。
         if (count == entries.length) {
             grow();
         }
@@ -114,7 +121,9 @@ public class QpackDynamicTable {
         insertCount++;
     }
 
-    /** Evicts the oldest entry from the table. */
+    /**
+     * 驱逐最旧的条目。
+     */
     private void evict() {
         if (count == 0)
             return;
@@ -125,7 +134,10 @@ public class QpackDynamicTable {
         currentSize -= evicted.size();
     }
 
-    /** Sets the maximum table size, evicting entries as necessary. */
+    /**
+     * 设置最大表容量；必要时会驱逐旧条目。
+     * @param newMaxSize 新容量
+     */
     public void setMaxSize(int newMaxSize) {
         this.maxSize = newMaxSize;
         while (currentSize > maxSize && count > 0) {
@@ -133,7 +145,9 @@ public class QpackDynamicTable {
         }
     }
 
-    /** Clears all entries from the table. */
+    /**
+     * 清空表中的所有条目。
+     */
     public void clear() {
         head = 0;
         tail = 0;
@@ -142,7 +156,9 @@ public class QpackDynamicTable {
         entries = new QpackHeaderField[16];
     }
 
-    /** Doubles the internal array capacity. */
+    /**
+     * 将内部数组容量扩展为原来的两倍。
+     */
     private void grow() {
         QpackHeaderField[] newEntries = new QpackHeaderField[entries.length * 2];
         for (int i = 0; i < count; i++) {

@@ -18,6 +18,7 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.*;
 import net.hasor.neta.codec.http.real.websocket.EmbeddedWebSocketServer;
@@ -214,7 +215,7 @@ public class RealAsClientTest extends AbstractWebSocketTest {
                 handshake.setHeader(HttpHeaderNames.HOST, "127.0.0.1:" + port);
                 channel.sendData(new DefaultHttpRequest(handshake.protocolVersion(), handshake.method(), handshake.uri())).get();
                 channel.sendData(new DefaultLastHttpHeaders(handshake)).get();
-                channel.sendData(DefaultLastHttpContent.EMPTY).get();
+                channel.sendData(new DefaultLastHttpContent(ByteBuf.EMPTY)).get();
                 handshake.release();
                 assertTrue(waitUntil(() -> WebSocketUtils.isReady(channel), 5000L));
                 server.awaitOpen();

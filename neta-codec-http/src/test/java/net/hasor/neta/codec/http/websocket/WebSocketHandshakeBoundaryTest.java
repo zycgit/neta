@@ -19,6 +19,7 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Base64;
 import java.util.List;
+import net.hasor.neta.bytebuf.ByteBuf;
 import net.hasor.neta.channel.virtual.VrtSoConfig;
 import net.hasor.neta.codec.http.*;
 import org.junit.Test;
@@ -137,7 +138,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
             headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat");
             headers.setHeader(HttpHeaderNames.SEC_WEBSOCKET_EXTENSIONS, "permessage-deflate");
 
-            List<HttpObject> inbound = receiveAndIntBound(pipe, requestLine, headers, DefaultLastHttpContent.EMPTY);
+            List<HttpObject> inbound = receiveAndIntBound(pipe, requestLine, headers, new DefaultLastHttpContent(ByteBuf.EMPTY));
             List<Object> outbound = drainQueue(pipe.channelOutbound());
             HttpResponse response = (HttpResponse) outbound.get(0);
             WebSocketContext context = webSocketContext(pipe.channel());
@@ -167,7 +168,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
             requestHeaders.setHeader(HttpHeaderNames.SEC_WEBSOCKET_KEY, RFC6455_KEY);
             requestHeaders.setHeader(HttpHeaderNames.SEC_WEBSOCKET_VERSION, "13");
             requestHeaders.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat");
-            sendAndOutBound(pipe, requestLine, requestHeaders, DefaultLastHttpContent.EMPTY);
+            sendAndOutBound(pipe, requestLine, requestHeaders, new DefaultLastHttpContent(ByteBuf.EMPTY));
 
             DefaultHttpResponse responseLine = new DefaultHttpResponse(HttpVersion.HTTP_1_1, HttpStatus.SWITCHING_PROTOCOLS);
             DefaultLastHttpHeaders responseHeaders = new DefaultLastHttpHeaders();
@@ -176,7 +177,7 @@ public class WebSocketHandshakeBoundaryTest extends AbstractWebSocketTest {
             responseHeaders.setHeader(HttpHeaderNames.SEC_WEBSOCKET_ACCEPT, computeAcceptKey(RFC6455_KEY));
             responseHeaders.setHeader(HttpHeaderNames.SEC_WEBSOCKET_PROTOCOL, "chat");
 
-            List<HttpObject> inbound = receiveAndIntBound(pipe, responseLine, responseHeaders, DefaultLastHttpContent.EMPTY);
+            List<HttpObject> inbound = receiveAndIntBound(pipe, responseLine, responseHeaders, new DefaultLastHttpContent(ByteBuf.EMPTY));
             WebSocketContext context = webSocketContext(pipe.channel());
 
             assertTrue(inbound.isEmpty());

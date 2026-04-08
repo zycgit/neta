@@ -15,10 +15,9 @@
  */
 package net.hasor.neta.codec.http.h3;
 /**
- * Default implementation of {@link Http3Context} backed by the state
- * managed in {@link Http3DecoderContent}.
+ * {@link Http3Context} 的默认实现，底层状态由 {@link Http3DecoderContent} 管理。
  * <p>
- * Provides live read-only access to the HTTP/3 connection state.
+ * 该实现提供 HTTP/3 连接状态的实时只读访问。
  * @author 赵永春 (zyc@hasor.net)
  * @version : 2024-01-15
  */

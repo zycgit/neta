@@ -33,6 +33,10 @@ public class SoUtils {
 
     /** Release an owned object according to Neta ownership conventions. */
     public static void release(Object item) {
+        if (item == null) {
+            return;
+        }
+
         try {
             if (item instanceof ReferenceHolder) {
                 ((ReferenceHolder) item).release();

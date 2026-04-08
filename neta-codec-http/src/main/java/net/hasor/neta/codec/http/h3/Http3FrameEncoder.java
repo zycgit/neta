@@ -23,19 +23,17 @@ import net.hasor.neta.channel.quic.QuicStreamChannel;
 import net.hasor.neta.channel.quic.QuicVarInt;
 
 /**
- * HTTP/3 binary frame encoder that converts {@link Http3Frame} objects into
- * raw bytes ({@code ByteBuf}).
+ * HTTP/3 二进制 frame 编码器，将 {@link Http3Frame} 对象转换为原始字节（{@code ByteBuf}）。
  * <p>
- * This encoder serializes each {@link Http3Frame} using the HTTP/3 wire format:
- * varint type + varint length + payload. It also handles QUIC FIN signaling
- * by closing the stream channel when a frame with {@code fin=true} is written.
+ * 该编码器会按照 HTTP/3 线格式序列化每个 {@link Http3Frame}：varint type + varint length + payload。
+ * 当写出的 frame 带有 {@code fin=true} 且当前通道是 {@link QuicStreamChannel} 时，它会通过关闭当前 stream channel
+ * 传播 QUIC FIN 信号。
  * <p>
- * For non-QUIC channels (e.g. VrtChannel, testing), all frames are bundled
- * into a single ByteBuf to ensure atomic delivery.
+ * 对于非 QUIC 通道（例如 VrtChannel 或测试环境），所有 frame 会被打包进同一个 ByteBuf，以保证原子投递。
  * <p>
- * <b>Encode path:</b> {@code HttpObject → Http3Frame → ByteBuf}
+ * <b>编码路径：</b>{@code HttpObject → Http3Frame → ByteBuf}
  * <p>
- * Frame format (RFC 9114, Section 7.1):
+ * frame 格式（RFC 9114 第 7.1 节）：
  * <pre>
  *   HTTP/3 Frame {
  *     Type (i),       — QUIC variable-length integer
@@ -48,11 +46,14 @@ import net.hasor.neta.channel.quic.QuicVarInt;
  */
 public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
     private static final Logger logger    = Logger.getLogger(Http3FrameEncoder.class);
-    /** Reusable buffer for varint encoding to avoid per-frame allocation. */
+    /** 可复用的 varint 编码缓冲区，避免为每个 frame 单独分配。 */
     private final        byte[] varintBuf = new byte[16];
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
+    /**
+     * 将待发送的 HTTP/3 frame 编码为 ByteBuf。
+     * QUIC 通道按 frame 逐条输出，非 QUIC 通道按批次打包输出。
+     */ public ProtoStatus onMessage(ProtoContext context, ProtoRcvQueue<Http3Frame> src, ProtoSndQueue<ByteBuf> dst) throws Throwable {
         if (!src.hasMore()) {
             return ProtoStatus.Next;
         }
@@ -62,7 +63,7 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
         boolean isQuic = (ch instanceof QuicStreamChannel);
 
         if (isQuic) {
-            // QUIC mode: write each frame separately, signal FIN via channel close
+            // QUIC 模式：逐个写出 frame，并通过关闭 channel 传播 FIN。
             while (src.hasMore()) {
                 Http3Frame frame = src.takeMessage();
                 if (frame == null) {
@@ -74,7 +75,7 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
                 }
             }
         } else {
-            // Non-QUIC mode: bundle all frames into a single ByteBuf
+            // 非 QUIC 模式：把所有 frame 打包到同一个 ByteBuf。
             List<Http3Frame> frames = new ArrayList<>();
             while (src.hasMore()) {
                 Http3Frame frame = src.takeMessage();
@@ -91,8 +92,8 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
     }
 
     /**
-     * Writes a single HTTP/3 frame to the output.
-     * Serializes: varint type + varint length + payload.
+     * 将单个 HTTP/3 frame 写入输出。
+     * 序列化格式为：varint type + varint length + payload。
      */
     private void writeFrame(ProtoContext context, ProtoSndQueue<ByteBuf> dst, Http3Frame frame, boolean isPrintLog) {
         int typeLen = QuicVarInt.encodeTo(varintBuf, 0, frame.type());
@@ -114,12 +115,11 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
     }
 
     /**
-     * Bundles multiple HTTP/3 frames into a single ByteBuf for non-QUIC channels.
-     * This ensures VrtTransfer delivers all frames as one unit, allowing the decoder
-     * to process them together with a single fin=true.
+     * 为非 QUIC 通道把多个 HTTP/3 frame 打包进同一个 ByteBuf。
+     * 这样可以让测试或虚拟通道按一次入站数据投递整组 frame。
      */
     private void writeBundledFrames(ProtoContext context, ProtoSndQueue<ByteBuf> dst, List<Http3Frame> frames, boolean isPrintLog) {
-        // Calculate total size
+        // 计算总大小。
         int totalSize = 0;
         for (Http3Frame frame : frames) {
             totalSize += QuicVarInt.encodedLength(frame.type()) + QuicVarInt.encodedLength(frame.payloadLength()) + frame.payloadLength();
@@ -145,6 +145,6 @@ public class Http3FrameEncoder implements ProtoHandler<Http3Frame, ByteBuf> {
 
     @Override
     public void onClose(ProtoContext context) {
-        // No resources to clean up
+        // 无额外资源需要清理。
     }
 }

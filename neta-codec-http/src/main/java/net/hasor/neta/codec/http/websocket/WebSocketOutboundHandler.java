@@ -160,7 +160,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
             return WebSocketUtils.pongFrame(masked, maskingKey(masked), content);
         }
         if (opcode == WebSocketOpcode.CLOSE) {
-            WebSocketUtils.markCloseSent(context);
+            InnelUtils.markCloseSent(context);
             return WebSocketUtils.closeFrame(masked, maskingKey(masked), content);
         }
 

@@ -19,15 +19,13 @@ import net.hasor.neta.channel.*;
 import net.hasor.neta.codec.http.HttpObject;
 
 /**
- * A client-side HTTP/3 codec that combines frame-level and semantic-level
- * handlers into a single bidirectional handler.
+ * 客户端侧的 HTTP/3 编解码器，将 frame 层与语义层处理器组合为一个双向处理节点。
  * <p>
- * RCV direction: ByteBuf →[FrameDecoder]→ Http3Frame →[FrameToHttpDecoder]→ HttpObject<br>
- * SND direction: HttpObject →[HttpToFrameEncoder]→ Http3Frame →[FrameEncoder]→ ByteBuf
+ * RCV 方向：ByteBuf →[FrameDecoder]→ Http3Frame →[FrameToHttpDecoder]→ HttpObject<br>
+ * SND 方向：HttpObject →[HttpToFrameEncoder]→ Http3Frame →[FrameEncoder]→ ByteBuf
  * <p>
- * The output {@link HttpObject} types are identical to those produced by the HTTP/1.x
- * and HTTP/2 codecs, enabling protocol-agnostic application logic.
- * <p>Pipeline usage:</p>
+ * 输出的 {@link HttpObject} 类型与 HTTP/1.x 和 HTTP/2 编解码器保持一致，从而支持协议无关的应用逻辑。
+ * <p>pipeline 用法：</p>
  * <pre>
  *   ctx.addLast("h3", new Http3ClientDuplexe());
  *   ctx.addLastDecoder("aggregator", new HttpResponseAggregator(1048576));
@@ -40,7 +38,9 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     private final Http3FrameEncoder       frameEncoder;
     private final Http3FrameBridgeQueue   bridgeQueue = new Http3FrameBridgeQueue();
 
-    /** Creates a client-side HTTP/3 codec with default QPACK settings. */
+    /**
+     * 使用默认 QPACK settings 创建客户端侧 HTTP/3 编解码器。
+     */
     public Http3ClientDuplexe() {
         this.frameDecoder = new Http3FrameDecoder(false);
         this.frameToHttpDecoder = new Http3FrameToHttpDecoder(false);
@@ -49,9 +49,9 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     /**
-     * Creates a client-side HTTP/3 codec with custom QPACK settings.
-     * @param maxTableSize maximum QPACK dynamic table size in bytes (default: 4096)
-     * @param maxHeaderListSize maximum total size of all decoded headers (default: 65536)
+     * 使用自定义 QPACK settings 创建客户端侧 HTTP/3 编解码器。
+     * @param maxTableSize QPACK 动态表最大容量，单位为字节，默认值通常为 4096
+     * @param maxHeaderListSize 已解码头字段允许的最大总大小，默认值通常为 65536
      */
     public Http3ClientDuplexe(int maxTableSize, int maxHeaderListSize) {
         this.frameDecoder = new Http3FrameDecoder(false);
@@ -61,7 +61,9 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
+    /**
+     * 初始化收发两侧的 HTTP/3 编解码链，并注册 Http3Context。
+     */ public void onInit(String name, int rcvSize, int sndSize, ProtoContext context) throws Throwable {
         this.frameDecoder.onInit(name, rcvSize, context);
         this.frameToHttpDecoder.onInit(name, rcvSize, context);
         this.httpToFrameEncoder.onInit(name, sndSize, context);
@@ -71,7 +73,9 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public void onActive(ProtoContext context) throws Throwable {
+    /**
+     * 传播激活事件到内部各处理器。
+     */ public void onActive(ProtoContext context) throws Throwable {
         this.frameDecoder.onActive(context);
         this.frameToHttpDecoder.onActive(context);
         this.httpToFrameEncoder.onActive(context);
@@ -79,17 +83,19 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
+    /**
+     * 按收发方向执行 HTTP/3 编解码流程。
+     */ public ProtoStatus onMessage(ProtoContext context, boolean isRcv,       //
             ProtoRcvQueue<ByteBuf> rcvUp, ProtoSndQueue<HttpObject> rcvDown,//
             ProtoRcvQueue<HttpObject> sndUp, ProtoSndQueue<ByteBuf> sndDown) throws Throwable {
         if (isRcv) {
-            // RCV: ByteBuf → Http3Frame → HttpObject
+            // RCV：ByteBuf → Http3Frame → HttpObject。
             this.bridgeQueue.clear();
             this.frameDecoder.onMessage(context, rcvUp, this.bridgeQueue);
             this.frameToHttpDecoder.onMessage(context, this.bridgeQueue, rcvDown);
             return ProtoStatus.Next;
         } else {
-            // SND: HttpObject → Http3Frame → ByteBuf
+            // SND：HttpObject → Http3Frame → ByteBuf。
             this.bridgeQueue.clear();
             this.httpToFrameEncoder.onMessage(context, sndUp, this.bridgeQueue);
             this.frameEncoder.onMessage(context, this.bridgeQueue, sndDown);
@@ -98,7 +104,9 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
+    /**
+     * 按方向分发错误处理。
+     */ public ProtoStatus onError(ProtoContext context, boolean isRcv, Throwable e, ProtoExceptionHolder eh) throws Throwable {
         if (isRcv) {
             return this.frameDecoder.onError(context, e, eh);
         } else {
@@ -107,7 +115,9 @@ public class Http3ClientDuplexe implements ProtoDuplexer<ByteBuf, HttpObject, Ht
     }
 
     @Override
-    public void onClose(ProtoContext context) {
+    /**
+     * 关闭内部各处理器。
+     */ public void onClose(ProtoContext context) {
         this.frameDecoder.onClose(context);
         this.frameToHttpDecoder.onClose(context);
         this.httpToFrameEncoder.onClose(context);

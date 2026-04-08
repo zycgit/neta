@@ -77,6 +77,8 @@ public class Http2ObjectDecoderTest extends AbstractHttp2Test {
             assertEquals("/decode", request.uri());
             assertEquals("example.com", headersMessage.getString(HttpHeaderNames.HOST));
             assertEquals("done", dataMessage.content().readString(dataMessage.content().readableBytes(), StandardCharsets.US_ASCII));
+            assertEquals(HttpVersion.HTTP_2_0, pipe.channel().findProtoContext(HttpVersion.class));
+            assertEquals(HttpScope.STREAM, pipe.channel().findProtoContext(HttpScope.class));
         });
     }
 
