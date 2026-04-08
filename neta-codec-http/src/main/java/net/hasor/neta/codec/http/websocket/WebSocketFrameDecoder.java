@@ -153,7 +153,7 @@ public class WebSocketFrameDecoder implements ProtoHandler<HttpObject, WebSocket
             return this.defaultVersion;
         }
 
-        WebSocketContext wsContext = context.context(WebSocketContext.class);
+        WebSocketContext wsContext = WebSocketRegistry.resolve(context);
         if (wsContext != null) {
             WebSocketVersion detectedVersion = WebSocketVersion.of(wsContext.version());
             if (detectedVersion != null) {

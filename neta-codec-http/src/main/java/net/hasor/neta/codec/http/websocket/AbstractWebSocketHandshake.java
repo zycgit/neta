@@ -57,6 +57,20 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
     }
 
     /**
+     * Complete the websocket upgrade and install the handshake result context.
+     * Also enables HTTP pass-through mode and publishes the handshake-complete event on the receive side.
+     * @param context protocol context
+     * @param wsContext parsed websocket context
+     * @throws Throwable thrown if subsequent events fail to publish
+     */
+    protected final void finishWebSocketUpgrade(ProtoContext context, WebSocketContext wsContext) throws Throwable {
+        WebSocketRegistry.bind(context, WebSocketRegistryKey.connectionScope(), wsContext);
+
+        context.fireEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
+        context.fireEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(wsContext));
+    }
+
+    /**
      * Reset handshake state when an error occurs.
      */
     @Override
@@ -71,6 +85,8 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
     @Override
     public void onClose(ProtoContext context) {
         resetState(context);
+
+        WebSocketRegistry.remove(context, WebSocketRegistryKey.connectionScope());
     }
 
     /**
@@ -255,19 +271,5 @@ public abstract class AbstractWebSocketHandshake implements ProtoDuplexer<HttpOb
             }
         }
         return count;
-    }
-
-    /**
-     * Complete the websocket upgrade and install the handshake result context.
-     * Also enables HTTP pass-through mode and publishes the handshake-complete event on the receive side.
-     * @param context protocol context
-     * @param webSocketContext parsed websocket context
-     * @throws Throwable thrown if subsequent events fail to publish
-     */
-    protected final void finishWebSocketUpgrade(ProtoContext context, WebSocketContext webSocketContext) throws Throwable {
-        context.context(WebSocketContext.class, webSocketContext);
-        context.rootContext(WebSocketContext.class, webSocketContext);
-        context.fireEventSnd(HttpThroughEvent.class, HttpThroughEvent.enable());
-        context.fireEventRcv(WebSocketHandshakeEvent.class, new WebSocketHandshakeEvent(webSocketContext));
     }
 }

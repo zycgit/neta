@@ -467,6 +467,7 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
         if (content == null || content.readableBytes() == 0) {
             return ByteBuf.EMPTY;
         }
+
         int statusCode = ((content.getByte(0) & 0xFF) << 8) | (content.getByte(1) & 0xFF);
         try {
             WebSocketUtils.validateCloseStatusCode(statusCode, resolveLocalClientMode(context));
@@ -477,25 +478,13 @@ public class WebSocketInboundHandler implements ProtoHandler<WebSocketFrame, Web
     }
 
     private boolean resolveRemoteClientMode(ProtoContext context) {
-        WebSocketContext webSocketContext = resolveHandshakeContext(context);
+        WebSocketContext webSocketContext = WebSocketRegistry.resolve(context);
         return webSocketContext != null && webSocketContext.isServer();
     }
 
     private boolean resolveLocalClientMode(ProtoContext context) {
-        WebSocketContext webSocketContext = resolveHandshakeContext(context);
+        WebSocketContext webSocketContext = WebSocketRegistry.resolve(context);
         return webSocketContext != null && webSocketContext.isClient();
-    }
-
-    private WebSocketContext resolveHandshakeContext(ProtoContext context) {
-        WebSocketContext webSocketContext = context.context(WebSocketContext.class);
-        if (webSocketContext != null && webSocketContext.isReady()) {
-            return webSocketContext;
-        }
-        webSocketContext = context.rootContext(WebSocketContext.class);
-        if (webSocketContext != null && webSocketContext.isReady()) {
-            return webSocketContext;
-        }
-        return null;
     }
 
     /**

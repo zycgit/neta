@@ -305,7 +305,7 @@ public class WebSocketOutboundHandler implements ProtoHandler<WebSocketMessage, 
     }
 
     private WebSocketContext requireHandshakeContext(ProtoContext context) {
-        WebSocketContext wsContext = context.context(WebSocketContext.class);
+        WebSocketContext wsContext = WebSocketRegistry.resolve(context);
         if (wsContext != null && wsContext.isReady()) {
             return wsContext;
         }
